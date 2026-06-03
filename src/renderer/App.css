@@ -1,0 +1,599 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "highlight.js/styles/github-dark.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   Look — Ink Wash Design System
+   Oil-ink monochrome + frosted glass + line-drawing buttons
+   ============================================================ */
+
+/* ── Tokens: Light (paper) ── */
+:root {
+  --sidebar-width: 280px;
+
+  /* Ink palette — warm offset at oklch 85° / chroma 0.005 */
+  --ink-0:    oklch(0.985 0.002 85);
+  --ink-1:    oklch(0.96 0.003 85);
+  --ink-2:    oklch(0.89 0.003 85);
+  --ink-3:    oklch(0.78 0.002 85);
+  --ink-4:    oklch(0.62 0.002 85);
+  --ink-5:    oklch(0.42 0.002 85);
+  --ink-6:    oklch(0.28 0.002 85);
+  --ink-7:    oklch(0.16 0.002 85);
+  --ink-8:    oklch(0.09 0.002 85);
+  --ink-full: oklch(0.04 0.002 85);
+
+  /* shadcn semantic mapping */
+  --background: var(--ink-0);
+  --foreground: var(--ink-8);
+  --card: var(--ink-0);
+  --card-foreground: var(--ink-8);
+  --popover: var(--ink-0);
+  --popover-foreground: var(--ink-8);
+  --primary: var(--ink-8);
+  --primary-foreground: var(--ink-0);
+  --secondary: var(--ink-1);
+  --secondary-foreground: var(--ink-7);
+  --muted: var(--ink-1);
+  --muted-foreground: var(--ink-4);
+  --accent: var(--ink-1);
+  --accent-foreground: var(--ink-7);
+  --destructive: oklch(0.42 0.04 28);
+  --border: var(--ink-2);
+  --input: var(--ink-2);
+  --ring: var(--ink-6);
+
+  /* Charts — monochrome */
+  --chart-1: var(--ink-8);
+  --chart-2: var(--ink-6);
+  --chart-3: var(--ink-5);
+  --chart-4: var(--ink-4);
+  --chart-5: var(--ink-3);
+
+  --radius: 0.375rem;
+
+  /* Sidebar — frosted glass */
+  --sidebar: oklch(0.985 0.002 85 / 0.72);
+  --sidebar-foreground: var(--ink-8);
+  --sidebar-primary: var(--ink-8);
+  --sidebar-primary-foreground: var(--ink-0);
+  --sidebar-accent: oklch(0.09 0.002 85 / 0.06);
+  --sidebar-accent-foreground: var(--ink-8);
+  --sidebar-border: oklch(0.04 0.002 85 / 0.08);
+  --sidebar-ring: var(--ink-6);
+
+  /* Glass system */
+  --glass-bg:       oklch(0.985 0.002 85 / 0.66);
+  --glass-bg-strong: oklch(0.985 0.002 85 / 0.84);
+  --glass-border:    oklch(0.04 0.002 85 / 0.09);
+  --glass-highlight: oklch(1 0 0 / 0.88);
+  --glass-shadow:    oklch(0.04 0.002 85 / 0.08);
+
+  /* Hairline rules */
+  --hairline: oklch(0.04 0.002 85 / 0.1);
+
+  /* Inset drawer */
+  --drawer-bg: oklch(0.96 0.003 85 / 0.7);
+}
+
+/* ── Tokens: Dark (ink) ── */
+.dark {
+  --background: var(--ink-8);
+  --foreground: var(--ink-0);
+  --card: oklch(0.22 0.002 85);
+  --card-foreground: var(--ink-0);
+  --popover: oklch(0.22 0.002 85);
+  --popover-foreground: var(--ink-0);
+  --primary: var(--ink-0);
+  --primary-foreground: var(--ink-8);
+  --secondary: oklch(0.22 0.002 85);
+  --secondary-foreground: var(--ink-0);
+  --muted: oklch(0.22 0.002 85);
+  --muted-foreground: oklch(0.72 0.002 85);
+  --accent: oklch(0.26 0.002 85);
+  --accent-foreground: var(--ink-0);
+  --destructive: oklch(0.62 0.08 28);
+  --border: oklch(1 0 0 / 0.1);
+  --input: oklch(1 0 0 / 0.14);
+  --ring: oklch(0.86 0.002 85);
+
+  --sidebar: oklch(0.09 0.002 85 / 0.7);
+  --sidebar-foreground: var(--ink-0);
+  --sidebar-primary: var(--ink-0);
+  --sidebar-primary-foreground: var(--ink-8);
+  --sidebar-accent: oklch(1 0 0 / 0.08);
+  --sidebar-accent-foreground: var(--ink-0);
+  --sidebar-border: oklch(1 0 0 / 0.1);
+  --sidebar-ring: oklch(0.86 0.002 85);
+
+  --glass-bg:       oklch(0.14 0.002 85 / 0.6);
+  --glass-bg-strong: oklch(0.16 0.002 85 / 0.78);
+  --glass-border:    oklch(1 0 0 / 0.13);
+  --glass-highlight: oklch(1 0 0 / 0.1);
+  --glass-shadow:    oklch(0 0 0 / 0.3);
+  --hairline:        oklch(1 0 0 / 0.11);
+  --drawer-bg:       oklch(0.18 0.002 85 / 0.6);
+}
+
+/* ── Base ── */
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: 'Geist Variable', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+html {
+  overflow: hidden;
+}
+body {
+  margin: 0;
+  overflow: clip;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100vh;
+  overflow: clip;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* ── Scrollbar — minimal hairline ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ink-3); border-radius: 2.5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
+
+/* ============================================================
+   Application Shell — Marginal Wash
+   Pure background with gutter shadow at sidebar seam
+   ============================================================ */
+
+@layer components {
+  .app-shell {
+    background-color: var(--background);
+    /* Subtle book-spine shadow on the left edge where sidebar meets content */
+    box-shadow: inset 280px 0 120px -100px oklch(0.04 0.002 85 / 0.04);
+  }
+
+  /* ============================================================
+     Frosted Glass — Sidebar & Dialogs
+     ============================================================ */
+
+  .glass-panel {
+    background:
+      linear-gradient(180deg, var(--glass-highlight), transparent 38%),
+      var(--glass-bg);
+    border-color: var(--glass-border);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 16px 48px var(--glass-shadow);
+    backdrop-filter: blur(20px) saturate(1.25);
+    -webkit-backdrop-filter: blur(20px) saturate(1.25);
+  }
+
+  .glass-panel-strong {
+    background:
+      linear-gradient(180deg, var(--glass-highlight), transparent 42%),
+      var(--glass-bg-strong);
+    border-color: var(--glass-border);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 24px 64px var(--glass-shadow);
+  }
+
+  .glass-dialog {
+    background:
+      linear-gradient(180deg, var(--glass-highlight), transparent 38%),
+      var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 32px 80px var(--glass-shadow),
+      0 0 0 1px oklch(0.04 0.002 85 / 0.02);
+  }
+
+  /* ============================================================
+     Whisper Bubble — Light message bubbles
+     ============================================================ */
+
+  .whisper-bubble {
+    border: 1px solid var(--hairline);
+    background: var(--card);
+    box-shadow: 0 2px 8px oklch(0.04 0.002 85 / 0.04);
+  }
+
+  .whisper-bubble--user {
+    border-color: var(--ink-6);
+    background: var(--ink-8);
+    color: var(--ink-0);
+    box-shadow: 0 2px 12px oklch(0.04 0.002 85 / 0.1);
+  }
+
+  .whisper-bubble--assistant {
+    border-color: var(--hairline);
+    background:
+      linear-gradient(180deg, oklch(0.985 0.002 85 / 0.5), transparent 60%),
+      var(--card);
+  }
+
+  .message-prose {
+    line-height: 1.72;
+    word-break: break-word;
+  }
+
+  /* ============================================================
+     Inset Drawer — Thinking & Tool panels embedded in bubbles
+     ============================================================ */
+
+  .inset-drawer {
+    margin-top: 0.5rem;
+    border: 1px solid var(--hairline);
+    border-radius: calc(var(--radius) * 0.8);
+    background: var(--drawer-bg);
+    overflow: hidden;
+  }
+
+  .inset-drawer__trigger {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    text-align: left;
+    outline: none;
+    font-size: 0.6875rem;
+    color: var(--ink-5);
+    transition: color 140ms ease, background-color 140ms ease;
+  }
+
+  .inset-drawer__trigger:hover {
+    color: var(--ink-7);
+    background-color: oklch(0.04 0.002 85 / 0.03);
+  }
+
+  .inset-drawer__content {
+    border-top: 1px solid var(--hairline);
+    padding: 0.625rem 0.75rem;
+    max-height: 18rem;
+    overflow: auto;
+    font-size: 0.6875rem;
+    line-height: 1.6;
+    color: var(--ink-6);
+  }
+
+  .inset-drawer__content pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.625rem;
+    line-height: 1.55;
+  }
+
+  .inset-drawer__label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-5);
+    margin-bottom: 0.25rem;
+  }
+
+  /* ============================================================
+     Line-Drawing Buttons
+     ============================================================ */
+
+  .line-btn {
+    position: relative;
+    border: 1px solid var(--ink-3);
+    background: transparent;
+    color: var(--ink-7);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease,
+      color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .line-btn:hover {
+    border-color: var(--ink-6);
+    background: oklch(0.04 0.002 85 / 0.04);
+    color: var(--ink-8);
+    box-shadow: 0 0 0 1px oklch(0.04 0.002 85 / 0.06);
+  }
+
+  .line-btn:active {
+    background: oklch(0.04 0.002 85 / 0.08);
+    transform: translateY(1px);
+    transition-duration: 60ms;
+  }
+
+  .line-btn--filled {
+    border-color: var(--ink-8);
+    background: var(--ink-8);
+    color: var(--ink-0);
+  }
+
+  .line-btn--filled:hover {
+    border-color: var(--ink-full);
+    background: var(--ink-full);
+    color: var(--ink-0);
+  }
+
+  .line-btn--ghost {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink-5);
+  }
+
+  .line-btn--ghost:hover {
+    border-color: var(--hairline);
+    background: oklch(0.04 0.002 85 / 0.03);
+    color: var(--ink-7);
+  }
+
+  /* ============================================================
+     Pixel Agent Avatar — refined for ink wash
+     ============================================================ */
+
+  .pixel-agent-avatar {
+    border: 1px solid var(--hairline);
+    border-radius: calc(var(--radius) * 0.8);
+    background: var(--ink-1);
+    box-shadow:
+      inset 0 0 0 1px oklch(1 0 0 / 0.4),
+      0 4px 10px oklch(0.04 0.002 85 / 0.06);
+  }
+
+  .pixel-agent-avatar--xs  { width: 1.25rem;  height: 1.25rem; }
+  .pixel-agent-avatar--sm  { width: 1.75rem;  height: 1.75rem; }
+  .pixel-agent-avatar--md  { width: 2.25rem;  height: 2.25rem; }
+  .pixel-agent-avatar--lg  { width: 2.75rem;  height: 2.75rem; }
+
+  .pixel-agent-avatar--active {
+    background: var(--ink-8);
+    color: var(--ink-0);
+    border-color: var(--ink-7);
+    box-shadow:
+      inset 0 0 0 1px oklch(1 0 0 / 0.2),
+      0 4px 14px oklch(0.04 0.002 85 / 0.14);
+  }
+
+  .pixel-agent-avatar__fallback {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: transparent;
+    color: inherit;
+  }
+
+  .pixel-agent-avatar__grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    width: 58%;
+    height: 58%;
+    gap: 1px;
+  }
+
+  .pixel-agent-avatar__cell {
+    background: transparent;
+  }
+
+  .pixel-agent-avatar__cell--on {
+    background: currentColor;
+    box-shadow: 1px 1px 0 color-mix(in oklch, currentColor, transparent 72%);
+  }
+
+  .pixel-agent-avatar__initial {
+    position: absolute;
+    right: 2px;
+    bottom: 1px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.4375rem;
+    line-height: 1;
+    opacity: 0.45;
+  }
+
+  /* ============================================================
+     Status Mark — agent status indicator
+     ============================================================ */
+
+  .status-mark {
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    background: transparent;
+  }
+
+  .status-mark[data-status="thinking"],
+  .status-mark[data-status="working"] {
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        currentColor 0 1.5px,
+        transparent 1.5px 3px
+      );
+    animation: status-flicker 1.4s steps(3, end) infinite;
+  }
+
+  .status-mark[data-status="error"] {
+    background: currentColor;
+  }
+
+  /* ============================================================
+     Liquid Row — session list item
+     ============================================================ */
+
+  .liquid-row {
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: calc(var(--radius) * 1.2);
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .liquid-row:hover,
+  .liquid-row:focus-visible {
+    background: oklch(0.04 0.002 85 / 0.04);
+    border-color: var(--hairline);
+  }
+
+  .liquid-row[data-active="true"] {
+    background:
+      linear-gradient(180deg, var(--glass-highlight), transparent 54%),
+      oklch(0.04 0.002 85 / 0.06);
+    border-color: oklch(0.04 0.002 85 / 0.18);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 8px 20px oklch(0.04 0.002 85 / 0.07);
+  }
+
+  /* ============================================================
+     Tool Code Block — monospace result display
+     ============================================================ */
+
+  .tool-code-block {
+    background:
+      linear-gradient(to bottom, oklch(0.04 0.002 85 / 0.04), transparent),
+      oklch(0.04 0.002 85 / 0.02);
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* ============================================================
+     Hairline Card — subtle bordered card
+     ============================================================ */
+
+  .hairline-card {
+    border: 1px solid var(--hairline);
+    background: color-mix(in oklch, var(--card), var(--foreground) 1.5%);
+  }
+
+  /* ============================================================
+     Form Fields — line-drawing inputs
+     ============================================================ */
+
+  .line-input {
+    border: 1px solid var(--ink-2);
+    border-radius: var(--radius);
+    background: var(--ink-0);
+    color: var(--ink-8);
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.625rem;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .line-input:focus {
+    border-color: var(--ink-6);
+    box-shadow: 0 0 0 2px oklch(0.04 0.002 85 / 0.08);
+    outline: none;
+  }
+
+  .line-input::placeholder {
+    color: var(--ink-3);
+  }
+}
+
+/* ============================================================
+   Unlayered overrides (beats @layer utilities)
+   ============================================================ */
+
+/* Force glass-dialog background to take priority over bg-popover utility */
+.glass-dialog.glass-dialog {
+  background:
+    linear-gradient(180deg, var(--glass-highlight), transparent 38%),
+    var(--glass-bg-strong);
+}
+
+/* Dialog overlay — deeper shade in dark mode */
+.dark [data-slot="dialog-overlay"] {
+  background-color: oklch(0 0 0 / 0.5);
+}
+
+/* ── Animations ── */
+@keyframes status-flicker {
+  0%, 100% { opacity: 0.38; }
+  50%      { opacity: 1; }
+}
+
+@keyframes draw-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes drawer-expand {
+  from { max-height: 0; opacity: 0; }
+  to   { max-height: 20rem; opacity: 1; }
+}
+
+.animate-draw-in {
+  animation: draw-in 200ms ease both;
+}
+
+.animate-drawer-expand {
+  animation: drawer-expand 180ms ease both;
+}

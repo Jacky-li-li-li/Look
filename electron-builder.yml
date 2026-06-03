@@ -1,0 +1,30 @@
+// ============================================================
+// Electron Builder config
+// ============================================================
+
+module.exports = {
+  appId: "com.agent-harness.app",
+  productName: "Agent Harness",
+  directories: {
+    output: "release",
+    buildResources: "build",
+  },
+  files: [
+    "dist/**/*",
+    "node_modules/**/*",
+    "package.json",
+  ],
+  mac: {
+    icon: "icon.png",
+    category: "public.app-category.developer-tools",
+    target: ["dmg", "zip"],
+  },
+  win: {
+    icon: "icon.png",
+    target: ["nsis"],
+  },
+  linux: {
+    icon: "icon.png",
+    target: ["AppImage", "deb"],
+  },
+};

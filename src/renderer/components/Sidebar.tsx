@@ -1,0 +1,163 @@
+// ============================================================
+// Sidebar — Frosted Glass + Line-Drawing (Ink Wash, shadcn/ui)
+// ============================================================
+
+import React from "react";
+import { cn } from "@shared/lib/utils";
+import { Button } from "@shared/components/ui/button";
+import { ScrollArea } from "@shared/components/ui/scroll-area";
+import { Badge } from "@shared/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
+import { Separator } from "@shared/components/ui/separator";
+import { Plus, X, MessageSquare, Network, Settings } from "lucide-react";
+import type { AgentInfo } from "@shared/types";
+import { PixelAgentAvatar, getRoleLabel } from "./PixelAgentAvatar";
+
+interface SidebarProps {
+  agents: AgentInfo[];
+  activeAgentId: string | null;
+  onSelect: (agentId: string) => void;
+  onDestroy: (agentId: string) => void;
+  onCreateClick: () => void;
+  onQuickCreateChat: () => void;
+  onSettingsClick: () => void;
+}
+
+function isChatAgent(agent: AgentInfo) {
+  return agent.role === "chat" || agent.role === "coder" || agent.role === "custom";
+}
+function isOrchAgent(agent: AgentInfo) {
+  return !isChatAgent(agent);
+}
+
+function fmtCost(total: number): string {
+  if (total === 0) return "";
+  return total < 0.01 ? `$${total.toFixed(4)}` : `$${total.toFixed(2)}`;
+}
+function fmtTokens(n: number): string {
+  if (n === 0) return "";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return `${n}`;
+}
+
+export default function Sidebar({
+  agents, activeAgentId, onSelect, onDestroy, onCreateClick, onQuickCreateChat, onSettingsClick,
+}: SidebarProps) {
+  const [tab, setTab] = React.useState("chat");
+  const filteredAgents = agents.filter(tab === "chat" ? isChatAgent : isOrchAgent);
+  const chatCount = agents.filter(isChatAgent).length;
+  const orchCount = agents.filter(isOrchAgent).length;
+
+  return (
+    <aside className="flex h-full w-[260px] min-w-[260px] max-w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border bg-sidebar">
+      {/* Header */}
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
+        <div className="flex items-center gap-2.5">
+          <PixelAgentAvatar size="sm" active />
+          <span className="text-[13px] font-semibold">Agents</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Badge variant="outline" className="h-5 rounded-md px-1.5 font-mono text-[10px]">{agents.length}</Badge>
+          <Button size="icon" variant="ghost" className="size-7" onClick={onSettingsClick} aria-label="Settings">
+            <Settings className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={tab} onValueChange={setTab} className="shrink-0">
+        <TabsList className="h-9 w-full rounded-none border-b border-hairline bg-transparent px-2">
+          <TabsTrigger value="chat" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-accent">
+            <MessageSquare className="size-3" />
+            Chat
+            {chatCount > 0 && (
+              <Badge variant="secondary" className="ml-0.5 h-3.5 px-1 py-0 text-[9px]">{chatCount}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="orch" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-accent">
+            <Network className="size-3" />
+            Orch
+            {orchCount > 0 && (
+              <Badge variant="secondary" className="ml-0.5 h-3.5 px-1 py-0 text-[9px]">{orchCount}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <Separator />
+
+      {/* Actions */}
+      <div className="flex shrink-0 gap-1.5 px-2.5 py-2.5">
+        <Button variant="line" size="sm" className="h-8 flex-1 justify-start text-xs font-medium" onClick={tab === "chat" ? onQuickCreateChat : onCreateClick}>
+          <Plus data-icon="inline-start" className="size-3.5" />
+          New Agent
+        </Button>
+      </div>
+
+      {/* Agent list */}
+      <ScrollArea className="flex-1" type="always">
+        <div className="flex flex-col gap-1 px-2 pb-2">
+          {filteredAgents.map((agent) => {
+            const isActive = agent.id === activeAgentId;
+            return (
+              <div
+                key={agent.id}
+                role="button"
+                tabIndex={0}
+                data-active={isActive}
+                onClick={() => onSelect(agent.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(agent.id);
+                  }
+                }}
+                className={cn("liquid-row group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left outline-hidden")}
+              >
+                <PixelAgentAvatar role={agent.role} status={agent.status} size="sm" active={isActive} />
+
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] font-semibold">{agent.name}</div>
+                  <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+                    <span className="shrink-0">{getRoleLabel(agent.role)}</span>
+                    <span className="opacity-30">/</span>
+                    <span className="truncate font-mono text-[10px]">{agent.model?.split("/").pop()}</span>
+                  </div>
+                  {agent.usage.totalTokens > 0 && (
+                    <div className="mt-0.5 font-mono text-[9px] text-muted-foreground/60">
+                      {fmtTokens(agent.usage.totalTokens)}
+                      {agent.usage.cost.total > 0 && ` · ${fmtCost(agent.usage.cost.total)}`}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="status-mark" data-status={agent.status} />
+                  <Button
+                    variant="line-ghost"
+                    size="icon-xs"
+                    className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                    onClick={(event) => { event.stopPropagation(); onDestroy(agent.id); }}
+                    aria-label={`Destroy ${agent.name}`}
+                  >
+                    <X className="size-3" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+
+          {filteredAgents.length === 0 && (
+            <div className="mx-1 mt-3 rounded-lg border border-dashed border-hairline p-5 text-center text-[11px] text-muted-foreground">
+              <div className="mx-auto mb-2 flex justify-center">
+                <PixelAgentAvatar size="md" />
+              </div>
+              {tab === "chat" ? "No chat agents yet." : "No orchestration agents yet."}<br />Click + New Agent.
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </aside>
+  );
+}
