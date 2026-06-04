@@ -23,14 +23,14 @@ const api = {
   destroyAgent: (agentId) =>
     ipcRenderer.invoke("harness:invoke", { type: "agent:destroy", agentId }),
 
-  getHistory: (agentId) =>
-    ipcRenderer.invoke("harness:invoke", { type: "agent:get-history", agentId }),
-
   getModels: () =>
     ipcRenderer.invoke("harness:invoke", { type: "model:list" }),
 
   getProviders: () =>
     ipcRenderer.invoke("harness:invoke", { type: "model:providers" }),
+
+  getAgents: () =>
+    ipcRenderer.invoke("harness:invoke", { type: "agents:list" }),
 
   switchModel: (agentId, model) =>
     ipcRenderer.invoke("harness:invoke", { type: "agent:switch-model", agentId, model }),
@@ -43,6 +43,24 @@ const api = {
 
   setApiKey: (provider, key) =>
     ipcRenderer.invoke("harness:invoke", { type: "settings:set-api-key", provider, key }),
+
+  getGeneralSettings: () =>
+    ipcRenderer.invoke("harness:invoke", { type: "settings:general:get" }),
+
+  setGeneralSettings: (settings) =>
+    ipcRenderer.invoke("harness:invoke", { type: "settings:general:set", settings }),
+
+  resetGeneralSettings: () =>
+    ipcRenderer.invoke("harness:invoke", { type: "settings:general:reset" }),
+
+  getContextUsage: (agentId) =>
+    ipcRenderer.invoke("harness:invoke", { type: "context:usage", agentId }),
+
+  compressSession: (agentId) =>
+    ipcRenderer.invoke("harness:invoke", { type: "session:compress", agentId }),
+
+  renameAgent: (agentId, name) =>
+    ipcRenderer.invoke("harness:invoke", { type: "agent:rename", agentId, name }),
 };
 
 contextBridge.exposeInMainWorld("harness", api);

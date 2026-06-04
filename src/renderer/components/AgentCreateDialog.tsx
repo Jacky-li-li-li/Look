@@ -46,24 +46,28 @@ const ROLE_THINKING_DEFAULTS: Record<string, ThinkingLevel> = {
 const api = (window as any).harness;
 
 interface AgentCreateDialogProps {
+  /** Pre-fill the model field (e.g. from the currently active agent). */
+  defaultModel?: string;
   onCreate: (name: string, role: string, model?: string, thinkingLevel?: string) => void;
   onClose: () => void;
 }
 
-export default function AgentCreateDialog({ onCreate, onClose }: AgentCreateDialogProps) {
+export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: AgentCreateDialogProps) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("custom");
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState(defaultModel ?? "");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
   const [models, setModels] = useState<AvailableModel[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!api) return;
+    let cancelled = false;
     api.getModels().then((r: any) => {
-      if (r?.success) setModels(r.models);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+      if (!cancelled && r?.success) setModels(r.models);
+      if (!cancelled) setLoading(false);
+    }).catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {

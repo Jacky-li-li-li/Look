@@ -4,7 +4,7 @@
 
 module.exports = {
   appId: "com.agent-harness.app",
-  productName: "Agent Harness",
+  productName: "Look",
   directories: {
     output: "release",
     buildResources: "build",
@@ -14,13 +14,15 @@ module.exports = {
     "node_modules/**/*",
     "package.json",
   ],
+  // Ship icons alongside the app for each platform.
+  // build/ is the default buildResources dir, so paths are relative to it.
   mac: {
-    icon: "icon.png",
+    icon: "icon.icns", // multi-resolution Apple icon (16/32/64/128/256/512/1024)
     category: "public.app-category.developer-tools",
     target: ["dmg", "zip"],
   },
   win: {
-    icon: "icon.png",
+    icon: "icon.ico",
     target: ["nsis"],
   },
   linux: {

@@ -2,7 +2,7 @@
 // StreamingMarkdown — Markdown renderer with stream-friendly throttling
 // ============================================================
 
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useEffect, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -24,11 +24,15 @@ interface StreamingMarkdownProps {
 function CodeBlock({ language, children, ...props }: any) {
   const [copied, setCopied] = React.useState(false);
   const code = String(children).replace(/\n$/, "");
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -94,7 +98,7 @@ function Td({ children, ...props }: any) {
 // Main component
 // ============================================================
 
-export default function StreamingMarkdown({
+const StreamingMarkdown = memo(function StreamingMarkdown({
   content,
   isStreaming = false,
   className,
@@ -163,6 +167,10 @@ export default function StreamingMarkdown({
     },
   }), []);
 
+  // Memoize plugin arrays to avoid unnecessary ReactMarkdown re-renders
+  const remarkPlugins = useMemo(() => [remarkGfm], []);
+  const rehypePlugins = useMemo(() => [rehypeHighlight], []);
+
   // If empty, show nothing
   if (!throttledContent) {
     return isStreaming ? (
@@ -173,12 +181,14 @@ export default function StreamingMarkdown({
   return (
     <div className={cn("prose-sm prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground", className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
         components={components}
       >
         {throttledContent}
       </ReactMarkdown>
     </div>
   );
-}
+});
+
+export default StreamingMarkdown;

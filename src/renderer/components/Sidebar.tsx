@@ -2,7 +2,7 @@
 // Sidebar — Frosted Glass + Line-Drawing (Ink Wash, shadcn/ui)
 // ============================================================
 
-import React from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { cn } from "@shared/lib/utils";
 import { Button } from "@shared/components/ui/button";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
@@ -11,14 +11,18 @@ import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { Separator } from "@shared/components/ui/separator";
 import { Plus, X, MessageSquare, Network, Settings } from "lucide-react";
 import type { AgentInfo } from "@shared/types";
-import { PixelAgentAvatar, getRoleLabel } from "./PixelAgentAvatar";
+import { PixelAgentAvatar } from "./PixelAgentAvatar";
+
+const api = (window as any).harness;
 
 interface SidebarProps {
   agents: AgentInfo[];
   activeAgentId: string | null;
   onSelect: (agentId: string) => void;
   onDestroy: (agentId: string) => void;
-  onCreateClick: () => void;
+  /** Opens the Create dialog. Optional `defaultModel` is the model the
+   *  dialog should pre-select (e.g. the active agent's model). */
+  onCreateClick: (defaultModel?: string) => void;
   onQuickCreateChat: () => void;
   onSettingsClick: () => void;
 }
@@ -45,9 +49,34 @@ export default function Sidebar({
   agents, activeAgentId, onSelect, onDestroy, onCreateClick, onQuickCreateChat, onSettingsClick,
 }: SidebarProps) {
   const [tab, setTab] = React.useState("chat");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const editRef = useRef<HTMLInputElement>(null);
   const filteredAgents = agents.filter(tab === "chat" ? isChatAgent : isOrchAgent);
   const chatCount = agents.filter(isChatAgent).length;
   const orchCount = agents.filter(isOrchAgent).length;
+  // The active agent's model is the most-recently-used "configured" model;
+  // surface it as the default for new agents.
+  const activeAgent = agents.find(a => a.id === activeAgentId);
+
+  const handleDoubleClick = useCallback((agent: AgentInfo) => {
+    setEditingId(agent.id);
+    setEditValue(agent.name);
+    setTimeout(() => editRef.current?.select(), 0);
+  }, []);
+
+  const commitRename = useCallback(() => {
+    if (editingId && editValue.trim()) {
+      api?.renameAgent(editingId, editValue.trim());
+    }
+    setEditingId(null);
+    setEditValue("");
+  }, [editingId, editValue]);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") { commitRename(); }
+    if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
+  }, [commitRename]);
 
   return (
     <aside className="flex h-full w-[260px] min-w-[260px] max-w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border bg-sidebar">
@@ -89,15 +118,16 @@ export default function Sidebar({
 
       {/* Actions */}
       <div className="flex shrink-0 gap-1.5 px-2.5 py-2.5">
-        <Button variant="line" size="sm" className="h-8 flex-1 justify-start text-xs font-medium" onClick={tab === "chat" ? onQuickCreateChat : onCreateClick}>
+        <Button variant="line" size="sm" className="h-8 flex-1 justify-start text-xs font-medium"
+                onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)}>
           <Plus data-icon="inline-start" className="size-3.5" />
           New Agent
         </Button>
       </div>
 
       {/* Agent list */}
-      <ScrollArea className="flex-1" type="always">
-        <div className="flex flex-col gap-1 px-2 pb-2">
+      <ScrollArea className="flex-1 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
+        <div className="flex flex-col gap-1 px-2.5 pb-2">
           {filteredAgents.map((agent) => {
             const isActive = agent.id === activeAgentId;
             return (
@@ -105,25 +135,37 @@ export default function Sidebar({
                 key={agent.id}
                 role="button"
                 tabIndex={0}
-                data-active={isActive}
                 onClick={() => onSelect(agent.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelect(agent.id);
-                  }
-                }}
-                className={cn("liquid-row group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left outline-hidden")}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(agent.id); } }}
+                className={cn(
+                  "group flex w-full items-center gap-1.5 rounded-lg px-0 py-2.5 pl-1.5 text-left max-w-full",
+                  "border border-transparent transition-colors duration-150",
+                  "hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-hidden",
+                  isActive && "border-border bg-accent/60",
+                )}
               >
                 <PixelAgentAvatar role={agent.role} status={agent.status} size="sm" active={isActive} />
 
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] font-semibold">{agent.name}</div>
-                  <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                    <span className="shrink-0">{getRoleLabel(agent.role)}</span>
-                    <span className="opacity-30">/</span>
-                    <span className="truncate font-mono text-[10px]">{agent.model?.split("/").pop()}</span>
-                  </div>
+                  {editingId === agent.id ? (
+                    <input
+                      ref={editRef}
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={commitRename}
+                      onKeyDown={handleEditKeyDown}
+                      className="w-full bg-transparent text-[12px] font-semibold outline-none border-b border-border"
+                      maxLength={64}
+                    />
+                  ) : (
+                    <div
+                      className="truncate text-[12px] font-semibold"
+                      onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(agent); }}
+                      title={agent.name}
+                    >
+                      {agent.name}
+                    </div>
+                  )}
                   {agent.usage.totalTokens > 0 && (
                     <div className="mt-0.5 font-mono text-[9px] text-muted-foreground/60">
                       {fmtTokens(agent.usage.totalTokens)}

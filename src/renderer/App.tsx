@@ -6,6 +6,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo, AgentMessage, MainToRendererEvent, ThinkingLevel } from "@shared/types";
+
+interface SettingsProviderInfo {
+  id: string; name: string; hasKey: boolean; envVar: string; modelsAvailable: number;
+}
+import { ThemeProvider } from "next-themes";
 import { Separator } from "@shared/components/ui/separator";
 import { Badge } from "@shared/components/ui/badge";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
@@ -22,7 +27,12 @@ export default function App() {
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, AgentMessage[]>>({});
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [defaultModelForCreate, setDefaultModelForCreate] = useState<string | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(false);
+  // Cached provider settings — fetched once at app boot, not on each Settings open.
+  // Hoisting this out of SettingsDialog avoids the IPC + main-process model-registry
+  // walk (~16k line static list) on every dialog mount.
+  const [providerSettings, setProviderSettings] = useState<SettingsProviderInfo[]>([]);
 
   useEffect(() => {
     if (!api) {
@@ -116,9 +126,35 @@ export default function App() {
   useEffect(() => {
     if (!activeAgentId && agents.length > 0) {
       const chatAgent = agents.find(a => a.role === "chat");
-      setActiveAgentId(chatAgent?.id ?? agents[0].id);
+      if (chatAgent) {
+        setActiveAgentId(chatAgent.id);
+      }
+      // Don't fall back to agents[0] — it could be an orchestrator,
+      // which shouldn't be auto-selected for the chat tab.
     }
   }, [agents, activeAgentId]);
+
+  // Fetch provider settings once at app boot so opening Settings is instant.
+  useEffect(() => {
+    if (!api) return;
+    api.getSettings()
+      .then((r: any) => { if (r?.success) setProviderSettings(r.providers); })
+      .catch(() => {});
+  }, []);
+
+  // Pull initial agent list once on mount.
+  // The main process emits `agent:list` during AgentManager construction
+  // (loadPersistedAgents + default Orchestrator creation) — but those
+  // events fire before any IPC subscriber exists, so push-only is racy.
+  // This pull guarantees the sidebar has state on first render.
+  useEffect(() => {
+    if (!api) return;
+    api.getAgents()
+      .then((r: any) => {
+        if (r?.success && Array.isArray(r.agents)) setAgents(r.agents);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSendMessage = useCallback((text: string) => {
     if (!activeAgentId || !api) return;
@@ -145,8 +181,31 @@ export default function App() {
     setAgents(prev => prev.map(a => a.id === activeAgentId ? { ...a, model: newModel } : a));
   }, [activeAgentId]);
 
+  // Stable callback identities for Sidebar — prevents Sidebar re-renders
+  // when other App state (e.g. showSettings) changes.
   const activeAgent = agents.find(a => a.id === activeAgentId);
   const activeMessages = activeAgentId ? messages[activeAgentId] ?? [] : [];
+
+  const handleCreateClick = useCallback((defaultModel?: string) => {
+    setDefaultModelForCreate(defaultModel);
+    setShowCreateDialog(true);
+  }, []);
+  const handleSettingsClick = useCallback(() => setShowSettings(true), []);
+  const handleQuickCreateChat = useCallback(async () => {
+    if (!api) return;
+    // Inherit the active agent's model so "New Agent" doesn't silently
+    // snap back to the role default. Falls through to role default
+    // (in main process) if there's no active agent.
+    const r = await api.createAgent(
+      "聊天助手",
+      "chat",
+      activeAgent?.model,
+      undefined,
+      activeAgentId,
+    );
+    if (r?.success && r.agentId) setActiveAgentId(r.agentId);
+  }, [activeAgentId, activeAgent?.model]);
+  const handleCloseSettings = useCallback(() => setShowSettings(false), []);
 
   if (!api) {
     return (
@@ -162,21 +221,17 @@ export default function App() {
   }
 
   return (
-    <TooltipProvider>
-      <div className="app-shell flex h-screen overflow-hidden bg-background p-2">
+    <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
+      <TooltipProvider>
+        <div className="app-shell flex h-screen overflow-hidden bg-background p-2">
         <Sidebar
           agents={agents}
           activeAgentId={activeAgentId}
           onSelect={handleSelectAgent}
           onDestroy={handleDestroyAgent}
-          onCreateClick={() => setShowCreateDialog(true)}
-          onQuickCreateChat={() => {
-            if (!api) return;
-            api.createAgent("聊天助手", "chat", undefined, undefined, activeAgentId).then((r: any) => {
-              if (r?.success && r.agentId) setActiveAgentId(r.agentId);
-            });
-          }}
-          onSettingsClick={() => setShowSettings(true)}
+          onCreateClick={handleCreateClick}
+          onQuickCreateChat={handleQuickCreateChat}
+          onSettingsClick={handleSettingsClick}
         />
 
         <Separator orientation="vertical" className="mx-2 bg-transparent" />
@@ -219,10 +274,27 @@ export default function App() {
           )}
         </main>
 
-        {showCreateDialog && <AgentCreateDialog onCreate={handleCreateAgent} onClose={() => setShowCreateDialog(false)} />}
-        {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
-      </div>
-    </TooltipProvider>
+        {showCreateDialog && (
+          <AgentCreateDialog
+            defaultModel={defaultModelForCreate}
+            onCreate={handleCreateAgent}
+            onClose={() => {
+              setShowCreateDialog(false);
+              setDefaultModelForCreate(undefined);
+            }}
+          />
+        )}
+        {showSettings && (
+          <SettingsDialog
+            open={showSettings}
+            providers={providerSettings}
+            onProvidersChange={setProviderSettings}
+            onClose={handleCloseSettings}
+          />
+        )}
+        </div>
+      </TooltipProvider>
+    </ThemeProvider>
   );
 }
 

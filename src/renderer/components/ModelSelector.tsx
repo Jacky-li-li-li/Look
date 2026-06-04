@@ -24,7 +24,9 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged }:
 
   useEffect(() => {
     if (!api) return;
-    api.getModels().then((r: any) => { if (r?.success) setModels(r.models); });
+    let cancelled = false;
+    api.getModels().then((r: any) => { if (!cancelled && r?.success) setModels(r.models); });
+    return () => { cancelled = true; };
   }, []);
 
   const handleSwitch = useCallback(async (modelKey: string) => {
@@ -47,10 +49,10 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged }:
   const label = switching ? "…" : currentModel?.split("/").pop() ?? "Model";
 
   const trigger = (
-    <Button variant="line" size="sm" className="h-7 max-w-40 font-mono text-[11px]">
+    <Button variant="line" size="sm" className="group/selector h-7 max-w-40 font-mono text-[11px]">
       <Cpu data-icon="inline-start" className="size-3" />
-      {label}
-      <ChevronDown data-icon="inline-end" className="size-3" />
+      <span className="truncate">{label}</span>
+      <ChevronDown data-icon="inline-end" className="size-3 transition-transform duration-150 group-data-[state=open]/selector:rotate-180" />
     </Button>
   );
 
@@ -58,7 +60,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged }:
     <SimplePopover
       trigger={trigger}
       align="end"
-      className="glass-panel-strong w-72 max-h-80 overflow-y-auto rounded-lg p-1 shadow-md ring-1 ring-foreground/10"
+      className="glass-panel-strong w-72 overflow-y-auto rounded-xl border p-1 shadow-xl ring-1 ring-foreground/10"
     >
       {Object.entries(grouped).map(([provider, pModels], index, entries) => (
         <React.Fragment key={provider}>

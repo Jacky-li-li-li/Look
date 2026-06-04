@@ -3,6 +3,7 @@
 // ============================================================
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useTheme } from "next-themes";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@shared/components/ui/dialog";
@@ -25,18 +26,18 @@ const api = (window as any).harness;
 
 interface ProviderInfo {
   id: string; name: string; hasKey: boolean; envVar: string; modelsAvailable: number;
+  authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
+  envLabel?: string;
 }
 
-interface SettingsDialogProps { onClose: () => void; }
+interface SettingsDialogProps {
+  open: boolean;
+  providers: ProviderInfo[];
+  onProvidersChange: (providers: ProviderInfo[]) => void;
+  onClose: () => void;
+}
 
-const PROVIDER_ENV_VARS: Record<string, string> = {
-  anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY",
-  deepseek: "DEEPSEEK_API_KEY", google: "GEMINI_API_KEY",
-  mistral: "MISTRAL_API_KEY", groq: "GROQ_API_KEY",
-  cerebras: "CEREBRAS_API_KEY", xai: "XAI_API_KEY",
-  openrouter: "OPENROUTER_API_KEY", fireworks: "FIREWORKS_API_KEY",
-  together: "TOGETHER_API_KEY",
-};
+
 
 const THINKING_LEVELS = ["off", "low", "medium", "high"] as const;
 
@@ -57,30 +58,43 @@ function SettingRow({ label, desc, id, children }: {
   );
 }
 
-export default function SettingsDialog({ onClose }: SettingsDialogProps) {
-  const [theme, setTheme] = useState("dark");
+function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: SettingsDialogProps) {
+  const { theme, setTheme } = useTheme();
   const [language, setLanguage] = useState("en");
   const [thinkingLevel, setThinkingLevel] = useState("medium");
   const [autoCollapse, setAutoCollapse] = useState(true);
+  const [autoCompress, setAutoCompress] = useState(false);
+  const [compressThreshold, setCompressThreshold] = useState(60);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Load persisted settings on mount
+  useEffect(() => {
+    if (!api) return;
+    api.getGeneralSettings().then((r: any) => {
+      if (r?.success && r.settings) {
+        if (r.settings.language) setLanguage(r.settings.language);
+        if (r.settings.defaultThinkingLevel) setThinkingLevel(r.settings.defaultThinkingLevel);
+        if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
+        if (r.settings.autoCompress !== undefined) setAutoCompress(r.settings.autoCompress);
+        if (r.settings.compressThreshold !== undefined) setCompressThreshold(r.settings.compressThreshold);
+        setSettingsLoaded(true);
+      }
+    }).catch(() => setSettingsLoaded(true));
+  }, []);
+
   const [editing, setEditing] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const appVersion = "0.1.0";
+  // Reset inline editing state when dialog opens
+  useEffect(() => { setEditing(null); setKeyInput(""); setShowKey(false); }, [open]);
 
-  const fetchProviders = useCallback(() => {
-    if (!api) { setLoading(false); return; }
-    api.getSettings().then((r: any) => {
-      if (r?.success) setProviders(r.providers);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
+  const appVersion = "1.0.0";
 
-  useEffect(() => { fetchProviders(); }, [fetchProviders]);
+  // Providers are now hoisted to App.tsx and passed in as a prop — avoids the
+  // IPC + main-process model-registry walk on every dialog open.
+  const loading = providers.length === 0 && !!api;
 
   const handleSave = async () => {
     if (!editing || !api || !keyInput.trim()) return;
@@ -88,7 +102,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
     try {
       const result = await api.setApiKey(editing, keyInput.trim());
       if (result?.success) {
-        setProviders(result.providers);
+        onProvidersChange(result.providers);
         toast.success(`${editing} key updated`);
       }
     } catch (e: any) { toast.error(e?.message ?? "Failed to save key"); }
@@ -100,21 +114,37 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
     if (!api) return;
     try {
       const result = await api.setApiKey(providerId, "");
-      if (result?.success) { setProviders(result.providers); toast.success(`${providerId} key removed`); }
+      if (result?.success) { onProvidersChange(result.providers); toast.success(`${providerId} key removed`); }
     } catch (e: any) { toast.error(e?.message ?? "Failed to clear key"); }
   };
 
+  // Persist settings to main process
+  const persistSettings = useCallback((partial: Record<string, any>) => {
+    if (!api) return;
+    api.setGeneralSettings(partial).catch(() => {});
+  }, []);
+
   const handleResetDefaults = () => {
-    setTheme("dark"); setLanguage("en"); setThinkingLevel("medium"); setAutoCollapse(true);
+    if (api) api.resetGeneralSettings().then((r: any) => {
+      if (r?.success && r.settings) {
+        setLanguage(r.settings.language ?? "en");
+        setThinkingLevel(r.settings.defaultThinkingLevel ?? "medium");
+        setAutoCollapse(r.settings.autoCollapse ?? true);
+        setAutoCompress(r.settings.autoCompress ?? false);
+        setCompressThreshold(r.settings.compressThreshold ?? 60);
+      }
+    });
+    setTheme("dark");
     toast.success("Settings reset to defaults");
   };
 
   const configured = providers.filter(p => p.hasKey).length;
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="flex max-h-[82vh] flex-col sm:max-w-lg"
+        forceMount
+        className="flex max-h-[82vh] flex-col sm:max-w-xl data-[state=closed]:hidden"
         showCloseButton
       >
         <DialogHeader>
@@ -162,7 +192,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
                     </div>
                   </SettingRow>
                   <SettingRow id="language" label="Language" desc="Interface language">
-                    <Select value={language} onValueChange={setLanguage}>
+                    <Select value={language} onValueChange={(v) => { setLanguage(v); persistSettings({ language: v }); }}>
                       <SelectTrigger id="language" size="sm" className="w-[110px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -187,7 +217,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
                 </CardHeader>
                 <CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
                   <SettingRow id="thinking" label="Default Thinking" desc="Reasoning depth for new agents">
-                    <Select value={thinkingLevel} onValueChange={setThinkingLevel}>
+                    <Select value={thinkingLevel} onValueChange={(v) => { setThinkingLevel(v); persistSettings({ defaultThinkingLevel: v }); }}>
                       <SelectTrigger id="thinking" size="sm" className="w-[100px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -199,7 +229,40 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
                     </Select>
                   </SettingRow>
                   <SettingRow id="autoclp" label="Auto-collapse" desc="Collapse steps after completion">
-                    <Switch id="autoclp" size="sm" checked={autoCollapse} onCheckedChange={setAutoCollapse} />
+                    <Switch id="autoclp" size="sm" checked={autoCollapse} onCheckedChange={(v) => { setAutoCollapse(v); persistSettings({ autoCollapse: v }); }} />
+                  </SettingRow>
+                </CardContent>
+              </Card>
+
+              <Card size="sm">
+                <CardHeader className="border-b border-hairline px-4 py-2.5">
+                  <CardTitle className="flex items-center gap-1.5 text-[13px]">
+                    <Zap className="size-3.5 text-muted-foreground" />
+                    Compression
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
+                  <SettingRow id="autocompress" label="Auto-compress" desc="Compact context when threshold reached">
+                    <Switch id="autocompress" size="sm" checked={autoCompress} onCheckedChange={(v) => { setAutoCompress(v); persistSettings({ autoCompress: v }); }} />
+                  </SettingRow>
+                  <SettingRow id="compressThreshold" label="Compress at" desc={`Auto-compress when context exceeds ${compressThreshold}%`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="compressThreshold"
+                        type="range"
+                        min={40}
+                        max={95}
+                        step={5}
+                        value={compressThreshold}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setCompressThreshold(v);
+                          persistSettings({ compressThreshold: v });
+                        }}
+                        className="w-20 h-1.5 cursor-pointer accent-foreground appearance-none rounded-full bg-muted-foreground/20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground"
+                      />
+                      <span className="w-8 text-right text-[11px] font-mono tabular-nums text-muted-foreground">{compressThreshold}%</span>
+                    </div>
                   </SettingRow>
                 </CardContent>
               </Card>
@@ -214,6 +277,10 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
               <div className="flex flex-col gap-0.5 pr-1">
                 {providers.map((p) => {
                   const isEditing = editing === p.id;
+                  // A provider may have a working key (e.g. shell env var) but
+                  // still be "unconfigured" from the app's perspective. Show
+                  // a small hint in that case so the user knows why.
+                  const envOnly = !p.hasKey && p.authSource === "environment";
                   return (
                     <div key={p.id}>
                       {/* Provider row */}
@@ -229,6 +296,10 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
                             {p.hasKey ? (
                               <Badge variant="outline" className="h-4.5 gap-1 px-1.5 text-[10px]">
                                 <Check className="size-2.5" />{p.modelsAvailable}
+                              </Badge>
+                            ) : envOnly ? (
+                              <Badge variant="secondary" className="h-4.5 gap-1 px-1.5 text-[10px]" title={p.envLabel ? `Detected from $${p.envLabel} in environment` : "Detected from environment"}>
+                                env
                               </Badge>
                             ) : (
                               <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px]">—</Badge>
@@ -284,7 +355,7 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
                             </Button>
                           </div>
                           <p className="mt-1.5 text-[10px] text-muted-foreground">
-                            Or set <code className="rounded bg-muted px-1 font-mono text-[10px]">export {PROVIDER_ENV_VARS[p.id]}=...</code>
+                            Or set <code className="rounded bg-muted px-1 font-mono text-[10px]">export {p.envVar}=...</code>
                           </p>
                         </div>
                       )}
@@ -329,10 +400,13 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
             Reset
           </Button>
           <Button variant="line-filled" size="sm" className="h-7 text-[11px]" onClick={onClose}>
-            Done
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          Done
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
   );
 }
+
+const SettingsDialog = React.memo(SettingsDialogImpl);
+export default SettingsDialog;

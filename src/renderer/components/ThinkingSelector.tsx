@@ -31,17 +31,16 @@ export default function ThinkingSelector({ agentId, currentLevel, onChanged }: T
   }, []);
 
   const current = LEVELS.find(l => l.value === currentLevel) ?? LEVELS[0];
-  const isActive = currentLevel !== "off";
 
   const trigger = (
     <Button
-      variant={isActive ? "line-filled" : "line"}
+      variant="line"
       size="sm"
-      className="h-7 font-mono text-[11px]"
+      className="group/selector h-7 font-mono text-[11px]"
     >
       <Brain data-icon="inline-start" className="size-3" />
       {current.label}
-      <ChevronDown data-icon="inline-end" className="size-3" />
+      <ChevronDown data-icon="inline-end" className="size-3 transition-transform duration-150 group-data-[state=open]/selector:rotate-180" />
     </Button>
   );
 
@@ -49,7 +48,7 @@ export default function ThinkingSelector({ agentId, currentLevel, onChanged }: T
     <SimplePopover
       trigger={trigger}
       align="end"
-      className="glass-panel-strong w-56 rounded-lg p-1 shadow-md ring-1 ring-foreground/10"
+      className="glass-panel-strong w-56 overflow-y-auto rounded-xl border p-1 shadow-xl ring-1 ring-foreground/10"
     >
       {LEVELS.map(l => (
         <button

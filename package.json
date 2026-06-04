@@ -9,15 +9,15 @@
     "dev:renderer": "vite",
     "dev:main": "npm run build:main && electron dist/main/index.js",
     "build": "npm run build:main && npm run build:renderer",
-    "build:main": "tsc -p tsconfig.main.json && cp src/main/preload.js dist/main/preload.js",
+    "build:main": "tsc -p tsconfig.main.json && cp src/main/preload.js dist/main/preload.js && mkdir -p dist/main/assets && cp -f src/main/assets/*.png dist/main/assets/",
     "build:renderer": "vite build",
     "start": "electron dist/main/index.js",
     "package": "npm run build && electron-builder"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "latest",
-    "@earendil-works/pi-ai": "latest",
-    "@earendil-works/pi-coding-agent": "latest",
+    "@earendil-works/pi-agent-core": "^0.78.0",
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@tailwindcss/vite": "^4.3.0",
     "class-variance-authority": "^0.7.1",
@@ -29,7 +29,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
-    "react-scan": "^0.5.7",
+
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.10.0",
@@ -42,6 +42,7 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "react-scan": "^0.5.7",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",

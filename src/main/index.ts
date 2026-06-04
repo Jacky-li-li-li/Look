@@ -39,8 +39,10 @@ function setupProcessBoundary() {
   };
 
   // Patch console to survive EPIPE (Electron has no real terminal)
+  const _log = console.log.bind(console);
   const _warn = console.warn.bind(console);
   const _error = console.error.bind(console);
+  console.log = (...args: any[]) => { try { _log(...args); } catch { safeWrite("info", ...args); } };
   console.warn = (...args: any[]) => { try { _warn(...args); } catch { safeWrite("warn", ...args); } };
   console.error = (...args: any[]) => { try { _error(...args); } catch { safeWrite("error", ...args); } };
 
@@ -80,7 +82,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     title: "Look",
-    icon: path.join(__dirname, "../../icon-512.png"),
+    icon: path.join(__dirname, "assets/icon-512.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -106,40 +108,40 @@ function createWindow(): void {
 // ============================================================
 
 async function initAgentManager(): Promise<void> {
-  agentManager = new AgentManager();
+  agentManager = new AgentManager(process.cwd());
 
-  // Load API keys (pi's AuthStorage pattern)
-  if (process.env.ANTHROPIC_API_KEY) {
-    agentManager.setApiKey("anthropic", process.env.ANTHROPIC_API_KEY);
-    console.log("[Look] Anthropic API key loaded from env");
-  }
-  if (process.env.OPENAI_API_KEY) {
-    agentManager.setApiKey("openai", process.env.OPENAI_API_KEY);
-    console.log("[Look] OpenAI API key loaded from env");
-  }
+  // Restore agents from ~/.look/ (async — must complete before checking listAgents)
+  await agentManager.restoreWorkspace();
 
-  // Create default agents: Chat (primary) + Orchestrator
-  console.log("[Look] Creating default agents...");
-  try {
-    const chatId = await agentManager.createAgent({
-      name: "通用助手",
-      role: "chat" as AgentRole,
-    });
-    console.log(`[Look] ✅ Chat agent created: ${chatId}`);
+  // NOTE: We deliberately do NOT auto-load ANTHROPIC_API_KEY / OPENAI_API_KEY
+  // (or any other env var) into runtime auth here. Doing so makes the Settings
+  // UI and the model selector lie — they would show providers the user never
+  // configured as "configured". Users set keys via the Settings UI, which
+  // persists to ~/.pi/agent/auth.json. Env vars are still discoverable as a
+  // fallback by pi's getApiKey() (priority 4), so they remain usable at call
+  // time, just not advertised in the UI.
 
-    const orchId = await agentManager.createAgent({
-      name: "Orchestrator",
-      role: "orchestrator" as AgentRole,
-    });
-    console.log(`[Look] ✅ Orchestrator created: ${orchId}`);
-  } catch (err: any) {
-    console.error("[Look] ❌ Failed to create agents:", err.message);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("agent:event", {
-        type: "error",
-        message: `Failed to create agents: ${err.message}. Check API key and network.`,
+  // Only create default Orchestrator if no agents were restored from disk
+  const existingAgents = agentManager.listAgents();
+  if (existingAgents.length === 0) {
+    console.log("[Look] Creating default Orchestrator...");
+    try {
+      const orchId = await agentManager.createAgent({
+        name: "Orchestrator",
+        role: "orchestrator" as AgentRole,
       });
+      console.log(`[Look] ✅ Orchestrator created: ${orchId}`);
+    } catch (err: any) {
+      console.error("[Look] ❌ Failed to create Orchestrator:", err.message);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("agent:event", {
+          type: "error",
+          message: `Failed to create Orchestrator: ${err.message}. Check API key and network.`,
+        });
+      }
     }
+  } else {
+    console.log(`[Look] Restored ${existingAgents.length} agent(s), skipping default creation`);
   }
 
   if (mainWindow) {
@@ -157,7 +159,7 @@ app.whenReady().then(async () => {
 
   // Set Dock icon on macOS (PNG supported since Electron 20+)
   if (process.platform === "darwin" && app.dock) {
-    const iconPath = path.join(__dirname, "../../icon-512.png");
+    const iconPath = path.join(__dirname, "assets/icon-512.png");
     app.dock.setIcon(iconPath);
   }
 

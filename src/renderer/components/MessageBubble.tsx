@@ -2,7 +2,7 @@
 // MessageBubble — Whisper Bubbles + Inset Drawers (Ink Wash)
 // ============================================================
 
-import React from "react";
+import React, { memo } from "react";
 import { cn } from "@shared/lib/utils";
 import { UserRound, Settings2 } from "lucide-react";
 import type { AgentMessage, AgentRole } from "@shared/types";
@@ -18,7 +18,7 @@ interface MessageBubbleProps {
   agentName?: string;
 }
 
-export default function MessageBubble({ message, agentRole, agentName }: MessageBubbleProps) {
+const MessageBubble = memo(function MessageBubble({ message, agentRole, agentName }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
 
@@ -82,4 +82,6 @@ export default function MessageBubble({ message, agentRole, agentName }: Message
       </div>
     </div>
   );
-}
+})
+
+export default MessageBubble;

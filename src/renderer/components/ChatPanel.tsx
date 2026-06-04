@@ -10,6 +10,7 @@ import type { AgentMessage, AgentRole, AgentStatus } from "@shared/types";
 import MessageBubble from "./MessageBubble";
 import ThinkingSelector from "./ThinkingSelector";
 import ModelSelector from "./ModelSelector";
+import ContextRing from "./ContextRing";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 interface ChatPanelProps {
@@ -33,8 +34,14 @@ export default function ChatPanel({
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const rafRef = useRef<number>();
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // Batch scroll to bottom via rAF — avoids forced layout on every streaming delta
+  useEffect(() => {
+    cancelAnimationFrame(rafRef.current!);
+    rafRef.current = requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ block: "end" }));
+    return () => cancelAnimationFrame(rafRef.current!);
+  }, [messages]);
   useEffect(() => { inputRef.current?.focus(); }, [agentId]);
 
   // Merge consecutive assistant messages (pi may split thinking/tools/output across turns)
@@ -107,12 +114,13 @@ export default function ChatPanel({
             placeholder={isBusy ? "Agent is working..." : `Message ${agentName ?? "agent"}…`}
             rows={2}
             disabled={isBusy}
-            className="min-h-16 resize-none border-0 bg-transparent px-3 py-2.5 text-[13px] shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
+            className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
           />
-          <div className="flex items-center gap-1.5 px-2 pb-2">
+          <div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
             <ModelSelector agentId={agentId} currentModel={currentModel} onModelChanged={onModelChange} />
             <ThinkingSelector agentId={agentId} currentLevel={currentThinking} onChanged={onThinkingChange} />
             <div className="flex-1" />
+            <ContextRing agentId={agentId} />
             <Button
               variant={input.trim() && !isBusy ? "line-filled" : "line"}
               size="icon-sm"

@@ -63,45 +63,18 @@ async function handleRendererInvoke(
 
     // === Model switching ===
     case "agent:switch-model": {
-      const info = agentManager.getAgentInfo(data.agentId);
-      if (!info) return { success: false, error: "Agent not found" };
-
-      const oldMessages = agentManager.getMessages(data.agentId);
-      await agentManager.destroyAgent(data.agentId);
-
-      const newId = await agentManager.createAgent({
-        name: info.name,
-        role: info.role as AgentRole,
-        model: data.model,
-        thinkingLevel: info.thinkingLevel as ThinkingLevel,
-      });
-
-      // Restore context
-      const contextSummary = oldMessages
-        .filter(m => m.role !== "system")
-        .slice(-10)
-        .map(m => `[${m.role}]: ${m.content.slice(0, 200)}`)
-        .join("\n");
-
-      if (contextSummary) {
-        await agentManager.sendMessage(newId,
-          `[Session restored with new model]\n\n${contextSummary}\n\nContinue from here.`
-        );
+      try {
+        await agentManager.setModel(data.agentId, data.model);
+        return { success: true };
+      } catch (e: any) {
+        return { success: false, error: e?.message ?? "Failed to switch model" };
       }
-
-      return { success: true, agentId: newId, previousId: data.agentId };
     }
 
     // === Thinking level ===
     case "agent:update-thinking": {
       agentManager.setThinkingLevel(data.agentId, data.level as ThinkingLevel);
       return { success: true };
-    }
-
-    // === History ===
-    case "agent:get-history": {
-      const messages = agentManager.getMessages(data.agentId);
-      return { success: true, messages };
     }
 
     // === Model discovery ===
@@ -115,6 +88,15 @@ async function handleRendererInvoke(
       return { success: true, providers };
     }
 
+    // === Agent discovery (initial state pull) ===
+    case "agents:list": {
+      // Snapshot of the current agent list. Renderer should call this
+      // once on mount to recover state it would otherwise miss via
+      // push-only events (e.g. agent:list fires during AgentManager
+      // construction, before any IPC subscriber exists).
+      return { success: true, agents: agentManager.listAgents() };
+    }
+
     // === Settings ===
     case "settings:get": {
       const providers = await agentManager.getProviderSettings();
@@ -125,6 +107,35 @@ async function handleRendererInvoke(
       agentManager.setApiKey(data.provider, data.key);
       const providers = await agentManager.getProviderSettings();
       return { success: true, providers };
+    }
+
+    case "settings:general:get": {
+      return { success: true, settings: agentManager.getGeneralSettings() };
+    }
+
+    case "settings:general:set": {
+      const settings = agentManager.updateGeneralSettings(data.settings ?? {});
+      return { success: true, settings };
+    }
+
+    case "settings:general:reset": {
+      return { success: true, settings: agentManager.resetGeneralSettings() };
+    }
+
+    // === Context usage & compression ===
+    case "context:usage": {
+      const usage = agentManager.getContextUsage(data.agentId);
+      return { success: true, usage };
+    }
+
+    case "session:compress": {
+      await agentManager.compressSession(data.agentId);
+      return { success: true };
+    }
+
+    case "agent:rename": {
+      agentManager.renameAgent(data.agentId, data.name);
+      return { success: true };
     }
 
     // === Permission ===

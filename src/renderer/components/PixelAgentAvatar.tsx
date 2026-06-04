@@ -2,6 +2,7 @@
 // PixelAgentAvatar — 5×5 pixel patterns (Ink Wash, shadcn)
 // ============================================================
 
+import React from "react";
 import { Avatar, AvatarFallback } from "@shared/components/ui/avatar";
 import { cn } from "@shared/lib/utils";
 import type { AgentRole, AgentStatus } from "@shared/types";
@@ -104,7 +105,7 @@ interface PixelAgentAvatarProps {
   className?: string;
 }
 
-export function PixelAgentAvatar({
+export const PixelAgentAvatar = React.memo(function PixelAgentAvatar({
   role = "custom",
   status = "idle",
   size = "md",
@@ -145,7 +146,7 @@ export function PixelAgentAvatar({
       </AvatarFallback>
     </Avatar>
   );
-}
+});
 
 export function getRoleLabel(role: string): string {
   return ROLE_LABEL[role] ?? role;

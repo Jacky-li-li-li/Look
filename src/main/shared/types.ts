@@ -89,6 +89,15 @@ export interface ToolCallRecord {
   status: "pending" | "running" | "success" | "error";
 }
 
+/** Context usage info for the ring indicator */
+export interface ContextUsageInfo {
+  percentage: number;
+  usedTokens: number;
+  totalTokens: number;
+  level: "safe" | "warning" | "critical";
+  compacting: boolean;
+}
+
 // ============================================================
 // Events (Main ↔ Renderer)
 // ============================================================
@@ -109,7 +118,9 @@ export type MainToRendererEvent =
   | { type: "agent:history"; agentId: string; messages: AgentMessage[] }
   | { type: "agent:usage-update"; agentId: string; usage: UsageSnapshot }
   | { type: "permission:request"; requestId: string; agentId: string; toolName: string; args: Record<string, unknown>; reason: string }
-  | { type: "error"; agentId?: string; message: string };
+  | { type: "error"; agentId?: string; message: string }
+  | { type: "agent:context-usage"; agentId: string; usage: ContextUsageInfo }
+  | { type: "agent:compacting"; agentId: string; compacting: boolean };
 
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =
@@ -122,8 +133,15 @@ export type RendererToMainEvent =
   | { type: "permission:response"; requestId: string; allowed: boolean }
   | { type: "model:list" }
   | { type: "model:providers" }
+  | { type: "agents:list" }
   | { type: "settings:get" }
   | { type: "settings:set-api-key"; provider: string; key: string }
+  | { type: "settings:general:get" }
+  | { type: "context:usage"; agentId: string }
+  | { type: "session:compress"; agentId: string }
+  | { type: "agent:rename"; agentId: string; name: string }
+  | { type: "settings:general:set"; settings: Partial<{ language: "en" | "zh" | "ja"; defaultThinkingLevel: ThinkingLevel; autoCollapse: boolean; autoCompress: boolean; compressThreshold: number }> }
+  | { type: "settings:general:reset" }
   | { type: "app:ready" };
 
 // ============================================================
