@@ -16,7 +16,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import fs from "fs";
+import fs, { existsSync } from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { getRoleDefaults, getRoleSystemPrompt, getRoleTools } from "./agents/roles.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
@@ -40,9 +40,11 @@ import type {
 	ContextUsageInfo,
 	MainToRendererEvent,
 	PermissionMode,
+	TaskNode,
 	ThinkingLevel,
 	UsageSnapshot,
 } from "./shared/types.js";
+import { getLookProjectSkillsDir } from "./skills/skill-loader.js";
 import { createOrchestrationTools } from "./tools/orchestration.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 
@@ -1259,7 +1261,45 @@ export class AgentManager {
 	// This is invoked once per agent at session creation.
 	// ============================================================
 
-	private buildResourceLoader(opts: { systemPrompt: string; agentId: string }): DefaultResourceLoader {
+	private buildResourceLoader(opts: {
+		systemPrompt: string;
+		agentId: string;
+		task?: TaskNode;
+	}): DefaultResourceLoader {
+		// v0.3 skills: feed the SDK the project's `<root>/.look/skills/`
+		// directory. Combined with the SDK's `agentDir: getLookDir()`
+		// default, the loader picks up both project-level and global
+		// `~/.look/skills/` skills. The SDK then auto-injects them into
+		// each worker's system prompt via `buildSystemPrompt` (we don't
+		// need to call `formatSkillsForPrompt` ourselves — see
+		// `node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js`).
+		const projectSkillsDir = getLookProjectSkillsDir(this.cwd);
+		const hasProjectSkills = existsSync(projectSkillsDir);
+
+		// v0.3 skills scoping: when the orchestrator (v0.2, not yet
+		// implemented) spawns a worker with a `task.allowedSkills`
+		// constraint, narrow the visible set. The SDK's
+		// `formatSkillsForPrompt` already filters out skills with
+		// `disable-model-invocation: true` — we only add the optional
+		// allowed-list on top.
+		const allowed = opts.task?.allowedSkills;
+		const skillsOverride =
+			allowed === undefined
+				? undefined
+				: (result: { skills: Array<{ name: string }>; diagnostics: unknown[] }) => {
+						const allow = new Set(allowed);
+						return {
+							...result,
+							skills: result.skills.filter((s) => allow.has(s.name)),
+						};
+					};
+		// SDK's skillsOverride signature uses the SDK's own Skill and
+		// ResourceDiagnostic types; we use a narrow in-house shape and
+		// cast to satisfy the SDK option type. Runtime contract is
+		// preserved: we only filter `skills` by name and forward
+		// `diagnostics` unchanged.
+		const skillsOverrideForSdk = skillsOverride as any;
+
 		return new DefaultResourceLoader({
 			cwd: this.cwd,
 			// Resource discovery (extensions / skills / prompts / themes /
@@ -1269,6 +1309,11 @@ export class AgentManager {
 			// `~/.pi/agent/`, which is what the `pi` CLI uses — we don't
 			// want to inherit that scope.
 			agentDir: getLookDir(),
+			// v0.3: feed project-level skills into the SDK's loader so
+			// they get auto-injected into worker system prompts.
+			...(hasProjectSkills ? { additionalSkillPaths: [projectSkillsDir] } : {}),
+			// v0.3: optional allowed-list for orchestrator-spawned workers.
+			...(skillsOverrideForSdk ? { skillsOverride: skillsOverrideForSdk } : {}),
 			systemPromptOverride: () => opts.systemPrompt,
 			extensionFactories: [
 				(pi: any) => {

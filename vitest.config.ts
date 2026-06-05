@@ -15,6 +15,7 @@ export default defineConfig({
 			"test-migrate-settings.ts",
 			"test-smoke-init.ts",
 			"test-session-lifecycle.ts",
+			"test-skills-loader.ts",
 		],
 		environment: "node",
 		testTimeout: 30_000,

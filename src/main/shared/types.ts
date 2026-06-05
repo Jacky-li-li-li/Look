@@ -294,6 +294,44 @@ export type RendererToMainEvent =
 	| { type: "app:ready" };
 
 // ============================================================
+// Orchestrator — v0.2 / v0.3 types
+//
+// Full v0.2 (state machine, retry policy, leader decision, deps)
+// lands in a separate change. This file declares the *minimal*
+// TaskNode shape that downstream modules (currently: the skills
+// loader) need. Fields are added incrementally.
+// ============================================================
+
+/**
+ * Task node in the orchestrator's task graph.
+ *
+ * v0.2 fields (state, retry_policy, deps, branch_from_entry) are
+ * TODO — see `docs/orchestrator-design.md` (not yet written).
+ *
+ * v0.3 fields (this commit):
+ *   - allowedSkills: scope which skills a worker can see
+ */
+export interface TaskNode {
+	/** Human-readable description of what this task should accomplish. */
+	description?: string;
+
+	// ── v0.3 skills scoping ───────────────────────────────────
+	/**
+	 * Restrict which skills the spawned worker can see.
+	 * - `null` / `undefined` → all non-hidden skills visible
+	 *   (subject to RoleConfig.defaultSkills if set)
+	 * - `[]` → no skills (force pure LLM reasoning)
+	 * - `["foo", "bar"]` → whitelist (intersected with the worker's
+	 *   role defaultSkills)
+	 *
+	 * Skills with `disable-model-invocation: true` are always
+	 * hidden from worker system prompts — they can only be
+	 * invoked explicitly by the orchestrator via /skill:name.
+	 */
+	allowedSkills?: string[] | null;
+}
+
+// ============================================================
 // Tool & Pipeline types
 // ============================================================
 

@@ -21,6 +21,13 @@ export interface RoleConfig {
 	tools: string[] | null;
 	/** Empty string = no role system prompt injected (chat mode). */
 	systemPrompt: string;
+	/**
+	 * Skills auto-attached to workers of this role. Intersection
+	 * with the task's `allowedSkills` is what actually gets loaded.
+	 * Empty array = no auto-attached skills (worker only sees
+	 * whatever the task explicitly allows).
+	 */
+	defaultSkills?: string[];
 }
 
 /**
