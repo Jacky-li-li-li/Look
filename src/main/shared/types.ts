@@ -291,6 +291,11 @@ export type RendererToMainEvent =
 			}>;
 	  }
 	| { type: "settings:general:reset" }
+	// ---- v0.3 skills IPC ----
+	| { type: "skills:list" }
+	| { type: "skills:invoke"; agentId: string; skillName: string; args?: string }
+	| { type: "skills:import-paths"; paths: string[] }
+	| { type: "skills:detect-common" }
 	| { type: "app:ready" };
 
 // ============================================================

@@ -16,7 +16,10 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import fs, { existsSync } from "fs";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import path, { join } from "node:path";
+import fs from "node:fs";
 import { v4 as uuidv4 } from "uuid";
 import { getRoleDefaults, getRoleSystemPrompt, getRoleTools } from "./agents/roles.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
@@ -29,6 +32,7 @@ import {
 	getLookDir,
 	getModelsPath,
 	getSessionsDir,
+	getSettingsPath,
 	getUiSettingsPath,
 } from "./shared/look-storage.js";
 import { convertPiMessage } from "./shared/message-convert.js";
@@ -45,6 +49,13 @@ import type {
 	UsageSnapshot,
 } from "./shared/types.js";
 import { getLookProjectSkillsDir } from "./skills/skill-loader.js";
+import {
+	findSkill,
+	formatInvocation,
+	invalidateSkillCache,
+	listAllSkills,
+	type LoadedSkills,
+} from "./skills/skill-loader.js";
 import { createOrchestrationTools } from "./tools/orchestration.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 
@@ -474,6 +485,146 @@ export class AgentManager {
 	}
 	async resetGeneralSettings(): Promise<UserSettings> {
 		return this.userSettings.reset();
+	}
+
+	// ============================================================
+	// v0.3 Skills — IPC surface
+	//
+	// These four methods back the renderer-side `/skill:name` slash
+	// menu and the "Import from Claude/Cursor/Codex/Copilot" affordance.
+	// Skill *loading* and *system-prompt injection* are handled by the
+	// pi SDK (DefaultResourceLoader + buildSystemPrompt) — Look just
+	// exposes the metadata + the write paths.
+	// ============================================================
+
+	/**
+	 * Snapshot of all skills visible to this project for the renderer
+	 * to render in the slash menu. Combines:
+	 *   - Look's project + global skills (`~/.look/skills/`,
+	 *     `<root>/.look/skills/`)
+	 *   - User-imported paths from `settings.json.skills`
+	 *   - Diagnostics (validation warnings, name collisions)
+	 */
+	listSkillsForUI(): {
+		skills: LoadedSkills["skills"];
+		diagnostics: LoadedSkills["diagnostics"];
+		importedPaths: string[];
+	} {
+		const loaded = listAllSkills(this.cwd);
+		return {
+			skills: loaded.skills,
+			diagnostics: loaded.diagnostics,
+			importedPaths: this.readImportedSkillPaths(),
+		};
+	}
+
+	/**
+	 * Trigger a skill on a worker agent. Builds a `/skill:name <args>`
+	 * prompt via the pi-agent-core `formatSkillInvocation` helper and
+	 * sends it as a normal user message. The worker follows the skill
+	 * instructions on its next turn.
+	 */
+	async invokeSkill(agentId: string, skillName: string, args?: string): Promise<{ success: boolean; error?: string }> {
+		const skill = findSkill(this.cwd, skillName);
+		if (!skill) {
+			return { success: false, error: `Skill "${skillName}" not found` };
+		}
+		if (skill.disableModelInvocation) {
+			return { success: false, error: `Skill "${skillName}" is hidden from the worker; cannot invoke via /skill:` };
+		}
+		const prompt = formatInvocation(skill, args);
+		await this.sendMessage(agentId, prompt);
+		return { success: true };
+	}
+
+	/**
+	 * Add one or more `skillPaths` to `~/.look/settings.json.skills`.
+	 * Used by the renderer's "Import from <tool>" affordance to make
+	 * Claude Code / Cursor / Codex / Copilot skills available in Look.
+	 *
+	 * We write the file directly because the SDK's `SettingsManager`
+	 * doesn't expose a setter for the `skills` field — the field is
+	 * consumed by `DefaultResourceLoader` but only via the loaded
+	 * JSON, not as a typed property.
+	 */
+	async importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }> {
+		try {
+			const settingsPath = join(getLookDir(), "settings.json");
+			let raw: Record<string, unknown> = {};
+			if (fs.existsSync(settingsPath)) {
+				try {
+					raw = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+				} catch {
+					raw = {};
+				}
+			}
+			const existing = Array.isArray(raw.skills) ? (raw.skills as unknown[]) : [];
+			// De-dup (preserve order, prefer earliest). Expand `~` and
+			// drop non-existent paths so we don't pollute the file.
+			const seen = new Set<string>();
+			const merged: string[] = [];
+			for (const p of [...existing, ...paths]) {
+				if (typeof p !== "string") continue;
+				const expanded = p.startsWith("~") ? join(homedir(), p.slice(1)) : p;
+				if (!existsSync(expanded)) continue;
+				if (seen.has(expanded)) continue;
+				seen.add(expanded);
+				merged.push(expanded);
+			}
+			raw.skills = merged;
+			fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+			fs.writeFileSync(settingsPath, JSON.stringify(raw, null, 2));
+			invalidateSkillCache();
+			return { success: true, importedCount: merged.length };
+		} catch (e: unknown) {
+			const msg = e instanceof Error ? e.message : String(e);
+			return { success: false, importedCount: 0, error: msg };
+		}
+	}
+
+	/**
+	 * Scan well-known third-party skill directories (Claude Code,
+	 * Cursor, OpenAI Codex, GitHub Copilot) and report which exist.
+	 * Renderer uses this to render the "Import from ..." chips in
+	 * the slash menu. We only check — never auto-import.
+	 */
+	detectCommonSkillPaths(): Array<{ tool: string; path: string; exists: boolean; skillCount: number }> {
+		const home = homedir();
+		const candidates: Array<{ tool: string; dir: string }> = [
+			{ tool: "Claude Code", dir: join(home, ".claude", "skills") },
+			{ tool: "Cursor", dir: join(home, ".cursor", "skills") },
+			{ tool: "OpenAI Codex", dir: join(home, ".codex", "skills") },
+			{ tool: "GitHub Copilot", dir: join(home, ".config", "github-copilot", "skills") },
+		];
+		return candidates.map((c) => {
+			const exists = existsSync(c.dir);
+			let skillCount = 0;
+			if (exists) {
+				try {
+					// Shallow count of immediate child dirs containing SKILL.md
+					skillCount = fs
+						.readdirSync(c.dir, { withFileTypes: true })
+						.filter((e) => e.isDirectory() && existsSync(join(c.dir, e.name, "SKILL.md"))).length;
+				} catch {
+					skillCount = 0;
+				}
+			}
+			return { tool: c.tool, path: c.dir, exists, skillCount };
+		});
+	}
+
+	// Internal: read the `skills` array from settings.json for the
+	// `listSkillsForUI` snapshot. SettingsManager doesn't expose a
+	// typed getter, so we read the file directly.
+	private readImportedSkillPaths(): string[] {
+		try {
+			const settingsPath = path.join(getLookDir(), "settings.json");
+			if (!fs.existsSync(settingsPath)) return [];
+			const raw = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+			return Array.isArray(raw.skills) ? (raw.skills as string[]) : [];
+		} catch {
+			return [];
+		}
 	}
 
 	// ============================================================

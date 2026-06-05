@@ -28,6 +28,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Skill } from "@earendil-works/pi-coding-agent";
 import { loadSkills } from "@earendil-works/pi-coding-agent";
+// `formatSkillInvocation` lives in pi-agent-core (the harness layer),
+// not in pi-coding-agent's top-level exports. Re-export it here so
+// the renderer / IPC layer doesn't have to know about the split.
+import { formatSkillInvocation as _formatSkillInvocation } from "@earendil-works/pi-agent-core";
 
 // Re-export pi's Skill type so downstream code doesn't need to
 // import from the SDK directly.
@@ -118,6 +122,19 @@ export function findSkill(projectRoot: string, name: string): Skill | undefined 
 /** Get just the diagnostics (e.g. for the startup banner). */
 export function getSkillDiagnostics(projectRoot: string): SkillDiagnostic[] {
 	return listAllSkills(projectRoot).diagnostics;
+}
+
+/** Format a `/skill:name <args>` invocation prompt. Used by the
+ *  /skill:name IPC handler (`skills:invoke`). The result is a
+ *  plain string the caller can hand to `agentManager.sendMessage`
+ *  to drive the worker. */
+export function formatInvocation(skill: Skill, args?: string): string {
+	// The pi-coding-agent and pi-agent-core `Skill` types are
+	// structurally compatible but TS sees them as distinct nominal
+	// types. The runtime contract is identical (the core layer just
+	// adds a `content` field the loader doesn't fill). Cast through
+	// `unknown` to bridge without a type assertion at the call site.
+	return _formatSkillInvocation(skill as unknown as Parameters<typeof _formatSkillInvocation>[0], args);
 }
 
 // ── File-system watcher (invalidate cache on change) ──

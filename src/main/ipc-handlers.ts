@@ -193,6 +193,25 @@ async function handleRendererInvoke(data: RendererToMainEvent, agentManager: Age
 			return { success: true, mode: data.mode };
 		}
 
+		// === v0.3 Skills ===
+		// Powers the renderer's `/skill:name` slash menu and the
+		// "Import from Claude / Cursor / Codex / Copilot" affordance.
+		case "skills:list": {
+			return { success: true, ...agentManager.listSkillsForUI() };
+		}
+
+		case "skills:invoke": {
+			return await agentManager.invokeSkill(data.agentId, data.skillName, data.args);
+		}
+
+		case "skills:import-paths": {
+			return await agentManager.importSkillPaths(data.paths);
+		}
+
+		case "skills:detect-common": {
+			return { success: true, detected: agentManager.detectCommonSkillPaths() };
+		}
+
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };
 	}
