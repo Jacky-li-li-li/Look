@@ -53,6 +53,39 @@ interface LookAPI {
 		agentId: string,
 		mode: "ask" | "plan" | "allow",
 	): Promise<{ success: boolean; mode?: string; error?: string }>;
+	// ---- v0.3 skills ----
+	listSkills(): Promise<{
+		success: boolean;
+		skills?: SkillEntry[];
+		diagnostics?: SkillDiagnostic[];
+		importedPaths?: string[];
+		error?: string;
+	}>;
+	invokeSkill(
+		agentId: string,
+		skillName: string,
+		args?: string,
+	): Promise<{ success: boolean; error?: string }>;
+	importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }>;
+	detectCommonSkillPaths(): Promise<{
+		success: boolean;
+		detected?: Array<{ tool: string; path: string; exists: boolean; skillCount: number }>;
+	}>;
+}
+
+interface SkillEntry {
+	name: string;
+	description: string;
+	filePath: string;
+	baseDir: string;
+	source: "user" | "project" | "path";
+	disableModelInvocation: boolean;
+}
+
+interface SkillDiagnostic {
+	type: "warning" | "collision";
+	message: string;
+	path?: string;
 }
 
 /** @deprecated use `LookAPI` instead — kept for back-compat with `window.harness`. */

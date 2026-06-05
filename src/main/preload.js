@@ -84,6 +84,16 @@ const api = {
 
   setPermissionMode: (agentId, mode) =>
     ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", agentId, mode }),
+
+  // ---- v0.3 skills ----
+  listSkills: () =>
+    ipcRenderer.invoke("look:invoke", { type: "skills:list" }),
+  invokeSkill: (agentId, skillName, args) =>
+    ipcRenderer.invoke("look:invoke", { type: "skills:invoke", agentId, skillName, args }),
+  importSkillPaths: (paths) =>
+    ipcRenderer.invoke("look:invoke", { type: "skills:import-paths", paths }),
+  detectCommonSkillPaths: () =>
+    ipcRenderer.invoke("look:invoke", { type: "skills:detect-common" }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

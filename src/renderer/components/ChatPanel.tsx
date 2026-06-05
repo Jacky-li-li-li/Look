@@ -7,12 +7,13 @@ import { Textarea } from "@shared/components/ui/textarea";
 import type { AgentMessage, AgentRole, AgentStatus, PermissionMode } from "@shared/types";
 import { MessageSquare, Send, Square } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ContextRing from "./ContextRing";
 import MessageBubble from "./MessageBubble";
 import ModelSelector from "./ModelSelector";
 import { PermissionModeSelector } from "./PermissionModeSelector";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
+import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
 import ThinkingSelector from "./ThinkingSelector";
 
 interface ChatPanelProps {
@@ -59,6 +60,76 @@ export default function ChatPanel({
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const rafRef = useRef<number | undefined>(undefined);
 
+	// ---- v0.3 skills: lazy-load + slash menu state ----
+	// We fetch the skill list once per agent mount. The main process
+	// caches by projectRoot + invalidates on FS change, so re-fetching
+	// in dev hot-reload is fine and cheap.
+	const [skills, setSkills] = useState<SkillEntry[]>([]);
+	const [importedPaths, setImportedPaths] = useState<string[]>([]);
+	const [detected, setDetected] = useState<CommonSkillPath[]>([]);
+	const [slashIndex, setSlashIndex] = useState(0);
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const [list, det] = await Promise.all([window.look.listSkills(), window.look.detectCommonSkillPaths()]);
+				if (cancelled) return;
+				if (list.success) {
+					setSkills(list.skills ?? []);
+					setImportedPaths(list.importedPaths ?? []);
+				}
+				if (det.success) {
+					setDetected(det.detected ?? []);
+				}
+			} catch {
+				// Non-fatal: the slash menu just won't have data.
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+	// Slash menu visibility — true when the input looks like `/xxx`
+	// without any whitespace (so mid-sentence `/` doesn't trigger).
+	const slashOpen = useMemo(() => /^\/[^\s]*$/.test(input), [input]);
+	// Reset index whenever the menu re-opens.
+	useEffect(() => {
+		if (slashOpen) setSlashIndex(0);
+	}, [slashOpen]);
+	// Compute pickable count so handleSlashMenuKey can wrap-around.
+	const visibleSkills = useMemo(() => skills.filter((s) => !s.disableModelInvocation), [skills]);
+	const importableDetected = useMemo(
+		() => detected.filter((d) => d.exists && !importedPaths.includes(d.path)),
+		[detected, importedPaths],
+	);
+	const pickableCount = visibleSkills.length + importableDetected.length;
+	// Commit a chosen skill name into the input.
+	const commitSlashSelection = useCallback(
+		(index: number) => {
+			if (index < visibleSkills.length) {
+				const s = visibleSkills[index];
+				if (s) setInput(`/skill:${s.name} `);
+			} else {
+				const i = index - visibleSkills.length;
+				const d = importableDetected[i];
+				if (d) void importDetected(d);
+			}
+		},
+		[visibleSkills, importableDetected],
+	);
+	const importDetected = useCallback(async (d: CommonSkillPath) => {
+		const res = await window.look.importSkillPaths([d.path]);
+		if (res.success) {
+			// Refetch skills + detection to reflect the new path.
+			const [list, det] = await Promise.all([window.look.listSkills(), window.look.detectCommonSkillPaths()]);
+			if (list.success) {
+				setSkills(list.skills ?? []);
+				setImportedPaths(list.importedPaths ?? []);
+			}
+			if (det.success) setDetected(det.detected ?? []);
+		}
+	}, []);
+
 	// Batch scroll to bottom via rAF — avoids forced layout on every streaming delta
 	useEffect(() => {
 		cancelAnimationFrame(rafRef.current!);
@@ -97,6 +168,24 @@ export default function ChatPanel({
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
+		// v0.3 skills: let the slash menu handle ↑↓ Enter Esc first
+		// when it's open. `handleSlashMenuKey` returns true when it
+		// consumed the event.
+		if (
+			slashOpen &&
+			handleSlashMenuKey(e, { open: true, selectedIndex: slashIndex, pickableCount }, (next) => {
+				setSlashIndex(next.selectedIndex);
+				if (!next.open) {
+					// Esc — clear the slash token.
+					setInput("");
+				}
+			})
+		) {
+			if (e.key === "Enter") {
+				commitSlashSelection(slashIndex);
+			}
+			return;
+		}
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			handleSend();
@@ -130,13 +219,35 @@ export default function ChatPanel({
 			</div>
 
 			<div className="shrink-0 border-t border-hairline bg-background/70 px-4 py-2.5 backdrop-blur-md">
-				<div className="mx-auto max-w-[52rem] rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
+				<div className="relative mx-auto max-w-[52rem] rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
+					{/* v0.3: /skill:name slash menu — absolute-positioned
+					    above the textarea. Absolute so it doesn't push
+					    the messages area when it opens. */}
+					{slashOpen ? (
+						<SkillSlashMenu
+							skills={skills}
+							importedPaths={importedPaths}
+							detected={detected}
+							selectedIndex={slashIndex}
+							onSelectedIndexChange={setSlashIndex}
+							onSelectSkill={(s) => setInput(`/skill:${s.name} `)}
+							onImportFrom={(d) => void importDetected(d)}
+							onImportRequest={() => {
+								// Placeholder: a real "custom path" picker
+								// could live in Settings. For now, just
+								// close the slash token and let the user
+								// drop a SKILL.md into ~/.look/skills/.
+								setInput("");
+							}}
+							onClose={() => setInput("")}
+						/>
+					) : null}
 					<Textarea
 						ref={inputRef}
 						value={input}
 						onChange={(e) => setInput(e.target.value)}
 						onKeyDown={handleKeyDown}
-						placeholder={isBusy ? "Agent is working..." : `Message ${agentName ?? "agent"}…`}
+						placeholder={isBusy ? "Agent is working..." : `Message ${agentName ?? "agent"}… (type / for skills)`}
 						rows={2}
 						disabled={isBusy}
 						className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
