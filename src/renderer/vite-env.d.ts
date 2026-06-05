@@ -10,50 +10,72 @@
  * external code still consuming `window.harness`.
  */
 interface LookAPI {
-  send(event: any): void;
-  invoke(event: any): Promise<any>;
-  onEvent(callback: (event: any) => void): () => void;
-  sendMessage(agentId: string, message: string): Promise<any>;
-  createAgent(name: string, role: string, model?: string, thinkingLevel?: string, parentAgentId?: string): Promise<any>;
-  destroyAgent(agentId: string): Promise<any>;
-  getHistory(agentId: string): Promise<any>;
-  getModels(): Promise<any>;
-  getProviders(): Promise<any>;
-  getAgents(): Promise<{ success: boolean; agents?: AgentInfo[]; error?: string }>;
-  switchModel(agentId: string, model: string): Promise<any>;
-  updateThinking(agentId: string, level: string): Promise<any>;
-  abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
-  getSettings(): Promise<any>;
-  setApiKey(provider: string, key: string): Promise<any>;
-  testApiKey(provider: string, key: string): Promise<{ success: boolean; result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } }>;
-  getGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
-  setGeneralSettings(settings: Partial<GeneralSettings>): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
-  resetGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
-  respondPermission(decision: { action: "allow" } | { action: "deny"; reason?: string } | { action: "edit"; args: Record<string, unknown> }): Promise<{ success: boolean; requestId?: string; action?: string; error?: string }>;
-  setPermissionMode(agentId: string, mode: "ask" | "plan" | "allow"): Promise<{ success: boolean; mode?: string; error?: string }>;
+	send(event: any): void;
+	invoke(event: any): Promise<any>;
+	onEvent(callback: (event: any) => void): () => void;
+	sendMessage(agentId: string, message: string): Promise<any>;
+	createAgent(
+		name: string,
+		role: string,
+		model?: string,
+		thinkingLevel?: string,
+		parentAgentId?: string,
+	): Promise<any>;
+	destroyAgent(agentId: string): Promise<any>;
+	getHistory(agentId: string): Promise<any>;
+	getModels(): Promise<any>;
+	getProviders(): Promise<any>;
+	getAgents(): Promise<{ success: boolean; agents?: AgentInfo[]; error?: string }>;
+	switchModel(agentId: string, model: string): Promise<any>;
+	updateThinking(agentId: string, level: string): Promise<any>;
+	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
+	getSettings(): Promise<any>;
+	setApiKey(provider: string, key: string): Promise<any>;
+	testApiKey(
+		provider: string,
+		key: string,
+	): Promise<{
+		success: boolean;
+		result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string };
+	}>;
+	getGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
+	setGeneralSettings(
+		settings: Partial<GeneralSettings>,
+	): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
+	resetGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
+	respondPermission(
+		decision:
+			| { action: "allow" }
+			| { action: "deny"; reason?: string }
+			| { action: "edit"; args: Record<string, unknown> },
+	): Promise<{ success: boolean; requestId?: string; action?: string; error?: string }>;
+	setPermissionMode(
+		agentId: string,
+		mode: "ask" | "plan" | "allow",
+	): Promise<{ success: boolean; mode?: string; error?: string }>;
 }
 
 /** @deprecated use `LookAPI` instead — kept for back-compat with `window.harness`. */
 type HarnessAPI = LookAPI;
 
 interface GeneralSettings {
-  language: "en" | "zh" | "ja";
-  defaultThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-  autoCollapse: boolean;
-  autoCompress: boolean;
-  compressThreshold: number;
-  /** Most recent model the user picked in the bottom-bar ModelSelector.
-   *  Used by quick-create to seed new chat agents with the user's
-   *  current pick. null = "no preference" (main picks first available). */
-  preferredModel: string | null;
+	language: "en" | "zh" | "ja";
+	defaultThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+	autoCollapse: boolean;
+	autoCompress: boolean;
+	compressThreshold: number;
+	/** Most recent model the user picked in the bottom-bar ModelSelector.
+	 *  Used by quick-create to seed new chat agents with the user's
+	 *  current pick. null = "no preference" (main picks first available). */
+	preferredModel: string | null;
 }
 
 declare global {
-  interface Window {
-    look: LookAPI;
-    /** @deprecated use `window.look` instead. */
-    harness: HarnessAPI;
-  }
+	interface Window {
+		look: LookAPI;
+		/** @deprecated use `window.look` instead. */
+		harness: HarnessAPI;
+	}
 }
 
 export {};

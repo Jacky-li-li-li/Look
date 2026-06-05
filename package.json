@@ -12,7 +12,13 @@
     "build:main": "tsc -p tsconfig.main.json && cp src/main/preload.js dist/main/preload.js && mkdir -p dist/main/assets && cp -f src/main/assets/*.png dist/main/assets/",
     "build:renderer": "vite build",
     "start": "electron dist/main/index.js",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "lint": "biome check src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts",
+    "lint:fix": "biome check --write --unsafe src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts",
+    "format": "biome format --write src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts",
+    "check": "biome check src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json --noEmit && npm test"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.78.0",
@@ -29,7 +35,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
-
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.10.0",
@@ -42,7 +47,7 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "react-scan": "^0.5.7",
+    "@biomejs/biome": "2.3.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",
@@ -50,7 +55,9 @@
     "concurrently": "^9.0.0",
     "electron": "^35.7.5",
     "electron-builder": "^25.0.0",
+    "react-scan": "^0.5.7",
     "typescript": "^5.6.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "3.2.4"
   }
 }

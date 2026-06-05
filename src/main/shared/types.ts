@@ -5,15 +5,15 @@
 
 /** Agent role template */
 export type AgentRole =
-  | "chat"        // 通用聊天 agent
-  | "orchestrator"
-  | "coder"
-  | "reviewer"
-  | "crawler"
-  | "cleaner"
-  | "analyst"
-  | "reporter"
-  | "custom";
+	| "chat" // 通用聊天 agent
+	| "orchestrator"
+	| "coder"
+	| "reviewer"
+	| "crawler"
+	| "cleaner"
+	| "analyst"
+	| "reporter"
+	| "custom";
 
 /** Agent status */
 export type AgentStatus = "idle" | "thinking" | "working" | "error" | "destroyed";
@@ -37,90 +37,90 @@ export type PermissionMode = "ask" | "plan" | "allow";
  * apply to the tool's input before letting pi run it.
  */
 export type PermissionDecision =
-  | { action: "allow" }
-  | { action: "deny"; reason: string }
-  | { action: "edit"; args: Record<string, unknown> };
+	| { action: "allow" }
+	| { action: "deny"; reason: string }
+	| { action: "edit"; args: Record<string, unknown> };
 
 /** Pi thinking level — matches pi's built-in levels */
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 /** Token usage and cost snapshot */
 export interface UsageSnapshot {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  totalTokens: number;
-  cost: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-    total: number;
-  };
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadTokens: number;
+	cacheWriteTokens: number;
+	totalTokens: number;
+	cost: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		total: number;
+	};
 }
 
 /** Agent definition (config, not runtime) */
 export interface AgentDefinition {
-  id: string;
-  name: string;
-  role: AgentRole;
-  model: string;
-  thinkingLevel: ThinkingLevel;
-  systemPrompt: string;
-  tools: string[];
-  isDefault: boolean;
+	id: string;
+	name: string;
+	role: AgentRole;
+	model: string;
+	thinkingLevel: ThinkingLevel;
+	systemPrompt: string;
+	tools: string[];
+	isDefault: boolean;
 }
 
 /** Runtime agent info sent to renderer */
 export interface AgentInfo {
-  id: string;
-  name: string;
-  role: AgentRole;
-  model: string;
-  thinkingLevel: ThinkingLevel;
-  status: AgentStatus;
-  messageCount: number;
-  createdAt: number;
-  /** Cumulative token usage */
-  usage: UsageSnapshot;
-  /** Fallback model chain (provider/model-id) */
-  fallbackModels: string[];
-  /** Per-agent permission mode. Defaults to "ask". */
-  permissionMode: PermissionMode;
+	id: string;
+	name: string;
+	role: AgentRole;
+	model: string;
+	thinkingLevel: ThinkingLevel;
+	status: AgentStatus;
+	messageCount: number;
+	createdAt: number;
+	/** Cumulative token usage */
+	usage: UsageSnapshot;
+	/** Fallback model chain (provider/model-id) */
+	fallbackModels: string[];
+	/** Per-agent permission mode. Defaults to "ask". */
+	permissionMode: PermissionMode;
 }
 
 /** A single message in an agent's conversation */
 export interface AgentMessage {
-  id: string;
-  agentId: string;
-  role: "user" | "assistant" | "tool" | "system";
-  content: string;
-  thinking?: string;
-  toolCalls?: ToolCallRecord[];
-  timestamp: number;
-  isStreaming?: boolean;
-  /** Token usage for this message (assistant messages only) */
-  usage?: UsageSnapshot;
+	id: string;
+	agentId: string;
+	role: "user" | "assistant" | "tool" | "system";
+	content: string;
+	thinking?: string;
+	toolCalls?: ToolCallRecord[];
+	timestamp: number;
+	isStreaming?: boolean;
+	/** Token usage for this message (assistant messages only) */
+	usage?: UsageSnapshot;
 }
 
 /** Record of a tool call */
 export interface ToolCallRecord {
-  callId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-  result?: string;
-  isError?: boolean;
-  status: "pending" | "running" | "success" | "error";
+	callId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result?: string;
+	isError?: boolean;
+	status: "pending" | "running" | "success" | "error";
 }
 
 /** Context usage info for the ring indicator */
 export interface ContextUsageInfo {
-  percentage: number;
-  usedTokens: number;
-  totalTokens: number;
-  level: "safe" | "warning" | "critical";
-  compacting: boolean;
+	percentage: number;
+	usedTokens: number;
+	totalTokens: number;
+	level: "safe" | "warning" | "critical";
+	compacting: boolean;
 }
 
 // ============================================================
@@ -144,75 +144,82 @@ type WithAgentId<T> = T & { agentId: string };
 
 /** Events sent from main process to renderer */
 export type MainToRendererEvent =
-  // ---- pi session events (mirrored, prefixed with `agent:`) ----
-  | WithAgentId<{ type: "agent:agent_start" }>
-  | WithAgentId<{ type: "agent:agent_end"; messages: AgentMessage[]; willRetry: boolean }>
-  | WithAgentId<{ type: "agent:turn_start" }>
-  | WithAgentId<{ type: "agent:turn_end"; message: AgentMessage; toolResults: unknown[] }>
-  | WithAgentId<{ type: "agent:message_start"; message: AgentMessage }>
-  | WithAgentId<{
-      type: "agent:message_update";
-      message: AgentMessage;
-      assistantMessageEvent: AssistantMessageEventUnion;
-    }>
-  | WithAgentId<{ type: "agent:message_end"; message: AgentMessage }>
-  | WithAgentId<{
-      type: "agent:tool_execution_start";
-      toolCallId: string;
-      toolName: string;
-      args: Record<string, unknown>;
-    }>
-  | WithAgentId<{
-      type: "agent:tool_execution_update";
-      toolCallId: string;
-      toolName: string;
-      args: Record<string, unknown>;
-      partialResult: { content: Array<{ type: string; text?: string }>; details?: unknown };
-    }>
-  | WithAgentId<{
-      type: "agent:tool_execution_end";
-      toolCallId: string;
-      toolName: string;
-      result: unknown;
-      isError: boolean;
-    }>
-  | WithAgentId<{ type: "agent:queue_update"; steering: readonly string[]; followUp: readonly string[] }>
-  | WithAgentId<{ type: "agent:compaction_start"; reason: "manual" | "threshold" | "overflow" }>
-  | WithAgentId<{
-      type: "agent:compaction_end";
-      reason: "manual" | "threshold" | "overflow";
-      result: unknown;
-      aborted: boolean;
-      willRetry: boolean;
-      errorMessage?: string;
-    }>
-  | WithAgentId<{
-      type: "agent:auto_retry_start";
-      attempt: number;
-      maxAttempts: number;
-      delayMs: number;
-      errorMessage: string;
-    }>
-  | WithAgentId<{ type: "agent:auto_retry_end"; success: boolean; attempt: number; finalError?: string }>
-  | WithAgentId<{ type: "agent:session_info_changed"; name: string | undefined }>
-  | WithAgentId<{ type: "agent:thinking_level_changed"; level: ThinkingLevel }>
-  // ---- Look-specific events (no pi equivalent) ----
-  | WithAgentId<{ type: "agent:list"; agents: AgentInfo[] }>
-  | WithAgentId<{ type: "agent:created"; agent: AgentInfo }>
-  | WithAgentId<{ type: "agent:destroyed" }>
-  | WithAgentId<{ type: "agent:updated"; agent: AgentInfo }>
-  // Emitted once after createAgent when the primary model was
-  // unavailable and resolveModel picked a fallback. Lets the
-  // renderer surface a "switched to X" toast (P-未5).
-  | WithAgentId<{ type: "agent:model-fallback"; primary: string; resolved: string; triedChain: string[] }>
-  | WithAgentId<{ type: "agent:status"; status: AgentStatus }>
-  | WithAgentId<{ type: "agent:context-usage"; usage: ContextUsageInfo }>
-  | WithAgentId<{ type: "agent:usage-update"; usage: UsageSnapshot }>
-  | WithAgentId<{ type: "agent:history"; messages: AgentMessage[] }>
-  | WithAgentId<{ type: "agent:compacting"; compacting: boolean }>
-  | { type: "permission:ask"; requestId: string; agentId: string; toolName: string; args: Record<string, unknown>; reason: string }
-  | WithAgentId<{ type: "agent:permission-mode"; mode: PermissionMode }>
-  | { type: "error"; agentId?: string; message: string };
+	// ---- pi session events (mirrored, prefixed with `agent:`) ----
+	| WithAgentId<{ type: "agent:agent_start" }>
+	| WithAgentId<{ type: "agent:agent_end"; messages: AgentMessage[]; willRetry: boolean }>
+	| WithAgentId<{ type: "agent:turn_start" }>
+	| WithAgentId<{ type: "agent:turn_end"; message: AgentMessage; toolResults: unknown[] }>
+	| WithAgentId<{ type: "agent:message_start"; message: AgentMessage }>
+	| WithAgentId<{
+			type: "agent:message_update";
+			message: AgentMessage;
+			assistantMessageEvent: AssistantMessageEventUnion;
+	  }>
+	| WithAgentId<{ type: "agent:message_end"; message: AgentMessage }>
+	| WithAgentId<{
+			type: "agent:tool_execution_start";
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+	  }>
+	| WithAgentId<{
+			type: "agent:tool_execution_update";
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+			partialResult: { content: Array<{ type: string; text?: string }>; details?: unknown };
+	  }>
+	| WithAgentId<{
+			type: "agent:tool_execution_end";
+			toolCallId: string;
+			toolName: string;
+			result: unknown;
+			isError: boolean;
+	  }>
+	| WithAgentId<{ type: "agent:queue_update"; steering: readonly string[]; followUp: readonly string[] }>
+	| WithAgentId<{ type: "agent:compaction_start"; reason: "manual" | "threshold" | "overflow" }>
+	| WithAgentId<{
+			type: "agent:compaction_end";
+			reason: "manual" | "threshold" | "overflow";
+			result: unknown;
+			aborted: boolean;
+			willRetry: boolean;
+			errorMessage?: string;
+	  }>
+	| WithAgentId<{
+			type: "agent:auto_retry_start";
+			attempt: number;
+			maxAttempts: number;
+			delayMs: number;
+			errorMessage: string;
+	  }>
+	| WithAgentId<{ type: "agent:auto_retry_end"; success: boolean; attempt: number; finalError?: string }>
+	| WithAgentId<{ type: "agent:session_info_changed"; name: string | undefined }>
+	| WithAgentId<{ type: "agent:thinking_level_changed"; level: ThinkingLevel }>
+	// ---- Look-specific events (no pi equivalent) ----
+	| WithAgentId<{ type: "agent:list"; agents: AgentInfo[] }>
+	| WithAgentId<{ type: "agent:created"; agent: AgentInfo }>
+	| WithAgentId<{ type: "agent:destroyed" }>
+	| WithAgentId<{ type: "agent:updated"; agent: AgentInfo }>
+	// Emitted once after createAgent when the primary model was
+	// unavailable and resolveModel picked a fallback. Lets the
+	// renderer surface a "switched to X" toast (P-未5).
+	| WithAgentId<{ type: "agent:model-fallback"; primary: string; resolved: string; triedChain: string[] }>
+	| WithAgentId<{ type: "agent:status"; status: AgentStatus }>
+	| WithAgentId<{ type: "agent:context-usage"; usage: ContextUsageInfo }>
+	| WithAgentId<{ type: "agent:usage-update"; usage: UsageSnapshot }>
+	| WithAgentId<{ type: "agent:history"; messages: AgentMessage[] }>
+	| WithAgentId<{ type: "agent:compacting"; compacting: boolean }>
+	| {
+			type: "permission:ask";
+			requestId: string;
+			agentId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+			reason: string;
+	  }
+	| WithAgentId<{ type: "agent:permission-mode"; mode: PermissionMode }>
+	| { type: "error"; agentId?: string; message: string };
 
 /**
  * Subset of pi's AssistantMessageEvent delta types that Look
@@ -222,73 +229,96 @@ export type MainToRendererEvent =
  * internal type changes.
  */
 export type AssistantMessageEventUnion =
-  | { type: "text_start"; contentIndex: number; partial: unknown }
-  | { type: "text_delta"; contentIndex: number; delta: string; partial: unknown }
-  | { type: "text_end"; contentIndex: number; content: string; partial: unknown }
-  | { type: "thinking_start"; contentIndex: number; partial: unknown }
-  | { type: "thinking_delta"; contentIndex: number; delta: string; partial: unknown }
-  | { type: "thinking_end"; contentIndex: number; content: string; partial: unknown }
-  | { type: "toolcall_start"; contentIndex: number; partial: unknown }
-  | { type: "toolcall_delta"; contentIndex: number; delta: string; partial: unknown }
-  | { type: "toolcall_end"; contentIndex: number; toolCall: unknown; partial: unknown }
-  | { type: "start"; partial: unknown }
-  | { type: "done"; reason: "stop" | "length" | "toolUse" | "error" | "aborted"; partial: unknown }
-  | { type: "error"; reason: "aborted" | "error"; partial: unknown };
+	| { type: "text_start"; contentIndex: number; partial: unknown }
+	| { type: "text_delta"; contentIndex: number; delta: string; partial: unknown }
+	| { type: "text_end"; contentIndex: number; content: string; partial: unknown }
+	| { type: "thinking_start"; contentIndex: number; partial: unknown }
+	| { type: "thinking_delta"; contentIndex: number; delta: string; partial: unknown }
+	| { type: "thinking_end"; contentIndex: number; content: string; partial: unknown }
+	| { type: "toolcall_start"; contentIndex: number; partial: unknown }
+	| { type: "toolcall_delta"; contentIndex: number; delta: string; partial: unknown }
+	| { type: "toolcall_end"; contentIndex: number; toolCall: unknown; partial: unknown }
+	| { type: "start"; partial: unknown }
+	| { type: "done"; reason: "stop" | "length" | "toolUse" | "error" | "aborted"; partial: unknown }
+	| { type: "error"; reason: "aborted" | "error"; partial: unknown };
 
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =
-  | { type: "agent:send-message"; agentId: string; message: string; targetAgentId?: string }
-  | { type: "agent:create"; name: string; role: AgentRole; thinkingLevel?: ThinkingLevel; model?: string; parentAgentId?: string }
-  | { type: "agent:destroy"; agentId: string }
-  | { type: "agent:switch-model"; agentId: string; model: string }
-  | { type: "agent:update-thinking"; agentId: string; level: ThinkingLevel }
-  | { type: "agent:get-history"; agentId: string }
-  | { type: "permission:response"; action: "allow" | "deny" | "edit"; requestId: string; reason?: string; args?: Record<string, unknown> }
-  | { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
-  | { type: "model:list" }
-  | { type: "model:providers" }
-  | { type: "agents:list" }
-  | { type: "settings:get" }
-  | { type: "settings:get-api-key"; provider: string }
-  | { type: "settings:set-api-key"; provider: string; key: string }
-  | { type: "settings:test-api-key"; provider: string; key: string }
-  | { type: "settings:general:get" }
-  | { type: "context:usage"; agentId: string }
-  | { type: "session:compress"; agentId: string }
-  | { type: "agent:rename"; agentId: string; name: string }
-  // P2-2: renderer → main "stop the current turn" signal. Matches
-  // the new agent:abort case in ipc-handlers.ts.
-  | { type: "agent:abort"; agentId: string }
-  | { type: "settings:general:set"; settings: Partial<{ language: "en" | "zh" | "ja"; defaultThinkingLevel: ThinkingLevel; autoCollapse: boolean; autoCompress: boolean; compressThreshold: number; preferredModel: string | null }> }
-  | { type: "settings:general:reset" }
-  | { type: "app:ready" };
+	| { type: "agent:send-message"; agentId: string; message: string; targetAgentId?: string }
+	| {
+			type: "agent:create";
+			name: string;
+			role: AgentRole;
+			thinkingLevel?: ThinkingLevel;
+			model?: string;
+			parentAgentId?: string;
+	  }
+	| { type: "agent:destroy"; agentId: string }
+	| { type: "agent:switch-model"; agentId: string; model: string }
+	| { type: "agent:update-thinking"; agentId: string; level: ThinkingLevel }
+	| { type: "agent:get-history"; agentId: string }
+	| {
+			type: "permission:response";
+			action: "allow" | "deny" | "edit";
+			requestId: string;
+			reason?: string;
+			args?: Record<string, unknown>;
+	  }
+	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
+	| { type: "model:list" }
+	| { type: "model:providers" }
+	| { type: "agents:list" }
+	| { type: "settings:get" }
+	| { type: "settings:get-api-key"; provider: string }
+	| { type: "settings:set-api-key"; provider: string; key: string }
+	| { type: "settings:test-api-key"; provider: string; key: string }
+	| { type: "settings:general:get" }
+	| { type: "context:usage"; agentId: string }
+	| { type: "session:compress"; agentId: string }
+	| { type: "agent:rename"; agentId: string; name: string }
+	// P2-2: renderer → main "stop the current turn" signal. Matches
+	// the new agent:abort case in ipc-handlers.ts.
+	| { type: "agent:abort"; agentId: string }
+	| {
+			type: "settings:general:set";
+			settings: Partial<{
+				language: "en" | "zh" | "ja";
+				defaultThinkingLevel: ThinkingLevel;
+				autoCollapse: boolean;
+				autoCompress: boolean;
+				compressThreshold: number;
+				preferredModel: string | null;
+			}>;
+	  }
+	| { type: "settings:general:reset" }
+	| { type: "app:ready" };
 
 // ============================================================
 // Tool & Pipeline types
 // ============================================================
 
 export interface ToolSpec {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  roles: AgentRole[];
+	name: string;
+	description: string;
+	parameters: Record<string, unknown>;
+	roles: AgentRole[];
 }
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {
-  provider: string;
-  id: string;
-  name: string;
-  reasoning: boolean;
-  contextWindow: number;
-  maxTokens: number;
-  cost: { input: number; output: number };
+	provider: string;
+	id: string;
+	name: string;
+	reasoning: boolean;
+	contextWindow: number;
+	maxTokens: number;
+	cost: { input: number; output: number };
 }
 
 /** Provider info */
 export interface ProviderInfo {
-  id: string;
-  name: string;
-  hasCredentials: boolean;
-  models: string[];
+	id: string;
+	name: string;
+	hasCredentials: boolean;
+	models: string[];
 }
