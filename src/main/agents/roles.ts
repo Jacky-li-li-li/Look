@@ -10,11 +10,16 @@ export interface RoleConfig {
   label: string;
   emoji: string;
   description: string;
-  defaultModel: string;
+  /** null = "no role-default" — the createAgent flow will pick the
+   *  first user-configured model at runtime. */
+  defaultModel: string | null;
   defaultThinkingLevel: ThinkingLevel;
-  /** Fallback models in priority order — tried if primary model fails */
+  /** Fallback models in priority order — tried if primary model fails.
+   *  Empty for "no role-default fallback" (chat mode). */
   fallbackModels: string[];
-  tools: string[];
+  /** null = "all built-in tools"; array = explicit subset. */
+  tools: string[] | null;
+  /** Empty string = no role system prompt injected (chat mode). */
   systemPrompt: string;
 }
 
@@ -28,15 +33,17 @@ export const ROLE_CONFIGS: Record<AgentRole, RoleConfig> = {
     role: "chat",
     label: "通用助手",
     emoji: "💬",
-    description: "通用聊天 agent，支持读文件、运行命令、写代码等基础工具。",
-    defaultModel: "anthropic/claude-sonnet-4-20250514",
+    // No role preset — the model is chosen by the user at runtime
+    // (see the bottom-of-input ModelSelector). `defaultModel: null`
+    // signals "no role-default; pick the first user-configured model"
+    // at createAgent time. Tools/system-prompt are likewise "blank
+    // workstation" so chat agents behave as a generic workbench.
+    description: "通用 agent — 所有内置工具全开，模型由用户在底部选择。",
+    defaultModel: null,
     defaultThinkingLevel: "medium",
-    fallbackModels: [
-      "anthropic/claude-opus-4-5",
-      "openai/gpt-4o",
-    ],
-    tools: ["read", "bash", "write", "edit", "grep", "find", "ls"],
-    systemPrompt: `You are a helpful AI assistant. You have access to filesystem tools (read, write, edit, bash) to help with tasks. Be concise and effective.`,
+    fallbackModels: [],
+    tools: null,
+    systemPrompt: "",
   },
 
   orchestrator: {
@@ -181,12 +188,17 @@ Be concise but thorough. Show the user what's happening at each step.`,
   },
 };
 
-/** Get the tool list for a given role */
-export function getRoleTools(role: AgentRole): string[] {
+/** Get the tool list for a given role.
+ *
+ *  Returns `null` (sentinel for "all built-in tools") if the role
+ *  config says so — the caller (AgentManager) interprets null as
+ *  "open up the full set of built-ins". */
+export function getRoleTools(role: AgentRole): string[] | null {
   return ROLE_CONFIGS[role]?.tools ?? ROLE_CONFIGS.custom.tools;
 }
 
-/** Get system prompt for a given role */
+/** Get system prompt for a given role. Empty string = "no role
+ *  preset; let the user (or runtime) decide". */
 export function getRoleSystemPrompt(role: AgentRole): string {
   return ROLE_CONFIGS[role]?.systemPrompt ?? ROLE_CONFIGS.custom.systemPrompt;
 }
@@ -201,9 +213,10 @@ export function listRoles(): { role: AgentRole; label: string; emoji: string; de
   }));
 }
 
-/** Get default config for a role (model, thinking, fallbacks) */
+/** Get default config for a role (model, thinking, fallbacks).
+ *  `model` may be null ("no role-default; pick first user-configured"). */
 export function getRoleDefaults(role: AgentRole): {
-  model: string;
+  model: string | null;
   thinkingLevel: ThinkingLevel;
   fallbackModels: string[];
 } {

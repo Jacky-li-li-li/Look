@@ -13,7 +13,7 @@ import { Plus, X, MessageSquare, Network, Settings } from "lucide-react";
 import type { AgentInfo } from "@shared/types";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
-const api = (window as any).harness;
+const api = (window as any).look;
 
 interface SidebarProps {
   agents: AgentInfo[];
@@ -27,11 +27,18 @@ interface SidebarProps {
   onSettingsClick: () => void;
 }
 
-function isChatAgent(agent: AgentInfo) {
-  return agent.role === "chat" || agent.role === "coder" || agent.role === "custom";
+// Chat tab = "通用工作台". Only agents that are intentionally
+// blank-slate belong here. coder/custom are user-defined roles
+// with their own workflow — they go to Orch so the user can manage
+// them as separate entities, not mixed in with chat assistants.
+// Edit this set when adding a new role that should appear in the
+// chat tab; otherwise leave it as `new Set(["chat"])`.
+const CHAT_TAB_ROLES: ReadonlySet<AgentInfo["role"]> = new Set(["chat"]);
+function isChatAgent(agent: AgentInfo): boolean {
+  return CHAT_TAB_ROLES.has(agent.role);
 }
-function isOrchAgent(agent: AgentInfo) {
-  return !isChatAgent(agent);
+function isOrchAgent(agent: AgentInfo): boolean {
+  return !CHAT_TAB_ROLES.has(agent.role);
 }
 
 function fmtCost(total: number): string {
@@ -96,15 +103,15 @@ export default function Sidebar({
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="shrink-0">
-        <TabsList className="h-9 w-full rounded-none border-b border-hairline bg-transparent px-2">
-          <TabsTrigger value="chat" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-accent">
+        <TabsList className="h-10 w-full rounded-none border-b border-hairline bg-transparent px-2">
+          <TabsTrigger value="chat" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-border">
             <MessageSquare className="size-3" />
             Chat
             {chatCount > 0 && (
               <Badge variant="secondary" className="ml-0.5 h-3.5 px-1 py-0 text-[9px]">{chatCount}</Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="orch" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-accent">
+          <TabsTrigger value="orch" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-border">
             <Network className="size-3" />
             Orch
             {orchCount > 0 && (

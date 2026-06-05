@@ -58,11 +58,19 @@ export default function SimplePopover({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Use the panel's real measured size if it's mounted, else fall
-    // back to the consumer's preferred estimate so the first frame is
-    // close enough to pick a sensible placement.
-    const panelH = panelRef.current?.offsetHeight ?? preferredHeight;
-    const panelW = panelRef.current?.offsetWidth ?? 288;
+    // Use the panel's real measured size if it's mounted and has any
+    // height, else fall back to the consumer's preferred estimate so
+    // the first frame is close enough to pick a sensible placement.
+    //
+    // Why `||` instead of `??`: on the very first measurement, the
+    // panel may exist but contain only padding (children still empty
+    // while async data is loading) — e.g. 8px. We want any
+    // sub-preferredHeight value to fall back to the estimate, not just
+    // null/undefined.
+    const measuredH = panelRef.current?.offsetHeight ?? 0;
+    const measuredW = panelRef.current?.offsetWidth ?? 0;
+    const panelH = measuredH > 0 ? measuredH : preferredHeight;
+    const panelW = measuredW > 0 ? measuredW : 288;
 
     const spaceAbove = rect.top - VIEWPORT_MARGIN;
     const spaceBelow = vh - rect.bottom - VIEWPORT_MARGIN;
@@ -109,6 +117,29 @@ export default function SimplePopover({
     return () => {
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+    };
+  }, [open, computePosition]);
+
+  // Watch the panel's intrinsic size and re-compute position when it
+  // changes. Critical for popovers whose children are async-loaded
+  // (e.g. ModelSelector fetching `models` from main): the first
+  // measurement sees an empty panel and clamps maxHeight to
+  // MIN_PANEL_H. When the data arrives, the panel grows and we need
+  // to re-evaluate placement + maxHeight without requiring the user
+  // to close and re-open.
+  useEffect(() => {
+    if (!open || !panelRef.current) return;
+    const panel = panelRef.current;
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setPosition(computePosition()));
+    };
+    const ro = new ResizeObserver(update);
+    ro.observe(panel);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
     };
   }, [open, computePosition]);
 

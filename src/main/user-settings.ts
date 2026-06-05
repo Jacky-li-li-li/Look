@@ -20,6 +20,12 @@ export interface UserSettings {
   autoCollapse: boolean;
   autoCompress: boolean;
   compressThreshold: number;
+  /** The model the user most recently picked in the bottom-bar
+   *  ModelSelector. null = "no preference; pick the first configured".
+   *  Used by App.handleQuickCreateChat to seed new chat agents
+   *  with the user's current pick so they don't snap back to a
+   *  role default. */
+  preferredModel: string | null;
 }
 
 const DEFAULTS: UserSettings = {
@@ -28,6 +34,7 @@ const DEFAULTS: UserSettings = {
   autoCollapse: true,
   autoCompress: false,
   compressThreshold: 60,
+  preferredModel: null,
 };
 
 const SETTINGS_PATH = getSettingsPath();

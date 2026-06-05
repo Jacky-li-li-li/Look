@@ -3,3 +3,7 @@ dist/
 .DS_Store
 *.log
 .pi/
+# Claude / Codex local settings — not part of the project
+.claude/
+# Throwaway probes — kept locally for debugging, not part of the codebase
+_probe.ts

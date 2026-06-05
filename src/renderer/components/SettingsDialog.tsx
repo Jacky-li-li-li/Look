@@ -16,13 +16,13 @@ import { Switch } from "@shared/components/ui/switch";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from "@shared/components/ui/select";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@shared/components/ui/collapsible";
 import {
-  Check, Key, Eye, EyeOff, X, Sun, Moon, Palette, Zap, Trash2, Cpu, Settings,
+  Check, Key, Eye, EyeOff, X, Sun, Moon, Palette, Zap, Trash2, Cpu, Settings, Loader2, AlertCircle, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@shared/lib/utils";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
-const api = (window as any).harness;
+const api = (window as any).look;
 
 interface ProviderInfo {
   id: string; name: string; hasKey: boolean; envVar: string; modelsAvailable: number;
@@ -35,6 +35,8 @@ interface SettingsDialogProps {
   providers: ProviderInfo[];
   onProvidersChange: (providers: ProviderInfo[]) => void;
   onClose: () => void;
+  /** Which tab to show on open. Defaults to "general". */
+  defaultTab?: "general" | "api-keys" | "about";
 }
 
 
@@ -58,7 +60,7 @@ function SettingRow({ label, desc, id, children }: {
   );
 }
 
-function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: SettingsDialogProps) {
+function SettingsDialogImpl({ open, providers, onProvidersChange, onClose, defaultTab = "general" }: SettingsDialogProps) {
   const { theme, setTheme } = useTheme();
   const [language, setLanguage] = useState("en");
   const [thinkingLevel, setThinkingLevel] = useState("medium");
@@ -66,6 +68,11 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
   const [autoCompress, setAutoCompress] = useState(false);
   const [compressThreshold, setCompressThreshold] = useState(60);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  // Controlled tab — re-syncs to the requested default each time the
+  // dialog opens (handled by the parent remounting via the `open`
+  // gate, but we also reset on prop change to be safe).
+  const [tab, setTab] = useState<string>(defaultTab);
+  useEffect(() => { setTab(defaultTab); }, [defaultTab]);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -86,6 +93,15 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
   const [keyInput, setKeyInput] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingKey, setLoadingKey] = useState(false);
+  // Per-provider self-test status. Lives only for the session — we don't
+  // persist verification state because provider keys can be revoked server-
+  // side at any time.
+  const [testStatus, setTestStatus] = useState<Record<string, "ok" | "error" | "skipped" | null>>({});
+  // Confirm-save dialog: shown when the self-test failed but the user
+  // still wants to write the key (network blip, key rotated upstream,
+  // etc.).
+  const [forceSave, setForceSave] = useState<{ provider: string; key: string; reason: string; status: number } | null>(null);
 
   // Reset inline editing state when dialog opens
   useEffect(() => { setEditing(null); setKeyInput(""); setShowKey(false); }, [open]);
@@ -98,14 +114,69 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
 
   const handleSave = async () => {
     if (!editing || !api || !keyInput.trim()) return;
+    const providerId = editing;
+    const key = keyInput.trim();
     setSaving(true);
+    // Run the live self-test first. Three outcomes:
+    //   - ok       → save immediately, mark green
+    //   - skipped  → no test config for this provider; save with neutral mark
+    //   - error    → ask the user before saving (network blip? stale key?)
+    let testResult: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } | null = null;
     try {
-      const result = await api.setApiKey(editing, keyInput.trim());
+      const r = await api.testApiKey(providerId, key);
+      if (r?.success) testResult = r.result;
+    } catch { /* swallow — fall through to "no test result" branch */ }
+    if (!testResult || (testResult.ok === undefined && !testResult.skipped)) {
+      // No result at all (IPC failed) — treat as skipped, save anyway.
+      testResult = { skipped: true, reason: "Self-test unavailable" };
+    }
+    if (testResult.ok === true) {
+      await persistKey(providerId, key);
+      setTestStatus(prev => ({ ...prev, [providerId]: "ok" }));
+      closeEditor();
+      return;
+    }
+    if (testResult.skipped) {
+      await persistKey(providerId, key);
+      setTestStatus(prev => ({ ...prev, [providerId]: "skipped" }));
+      closeEditor();
+      return;
+    }
+    // Failed — show confirm dialog before saving.
+    setSaving(false);
+    setForceSave({
+      provider: providerId,
+      key,
+      reason: testResult.error ?? "Unknown error",
+      status: testResult.status ?? 0,
+    });
+  };
+
+  const persistKey = async (providerId: string, key: string) => {
+    if (!api) return;
+    try {
+      const result = await api.setApiKey(providerId, key);
       if (result?.success) {
         onProvidersChange(result.providers);
-        toast.success(`${editing} key updated`);
+        toast.success(`${providerId} key updated`);
+      } else {
+        toast.error(result?.error ?? "Failed to save key");
       }
     } catch (e: any) { toast.error(e?.message ?? "Failed to save key"); }
+  };
+
+  const handleForceSave = async () => {
+    if (!forceSave) return;
+    const { provider, key, reason } = forceSave;
+    setForceSave(null);
+    setSaving(true);
+    await persistKey(provider, key);
+    setTestStatus(prev => ({ ...prev, [provider]: "error" }));
+    toast.warning(`${provider} saved despite failed self-test: ${reason}`);
+    closeEditor();
+  };
+
+  const closeEditor = () => {
     setSaving(false);
     setEditing(null); setKeyInput(""); setShowKey(false);
   };
@@ -154,7 +225,7 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col">
+        <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
           <TabsList className="w-full shrink-0">
             <TabsTrigger value="general" className="flex-1">
               <Palette data-icon="inline-start" className="size-3.5" />
@@ -281,6 +352,7 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
                   // still be "unconfigured" from the app's perspective. Show
                   // a small hint in that case so the user knows why.
                   const envOnly = !p.hasKey && p.authSource === "environment";
+                  const ts = testStatus[p.id];
                   return (
                     <div key={p.id}>
                       {/* Provider row */}
@@ -304,6 +376,24 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
                             ) : (
                               <Badge variant="secondary" className="h-4.5 px-1.5 text-[10px]">—</Badge>
                             )}
+                            {/* Live self-test status pill — green when the
+                                last saved key passed the live check, red when
+                                it failed, neutral otherwise. */}
+                            {ts === "ok" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400" title="Last saved key passed live self-test">
+                                <ShieldCheck className="size-2.5" />Verified
+                              </span>
+                            )}
+                            {ts === "error" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400" title="Last saved key failed live self-test">
+                                <AlertCircle className="size-2.5" />Failed
+                              </span>
+                            )}
+                            {ts === "skipped" && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400" title="Saved without self-test (no probe configured for this provider)">
+                                Untested
+                              </span>
+                            )}
                           </div>
                           <code className="mt-0.5 block text-[10px] text-muted-foreground font-mono">{p.envVar}</code>
                         </div>
@@ -312,9 +402,23 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
                             variant={isEditing ? "line-filled" : p.hasKey ? "line" : "line-filled"}
                             size="xs"
                             className="h-7 text-[11px]"
-                            onClick={() => {
-                              if (isEditing) { setEditing(null); setKeyInput(""); }
-                              else { setEditing(p.id); setKeyInput(""); setShowKey(false); }
+                            onClick={async () => {
+                              if (isEditing) { setEditing(null); setKeyInput(""); setShowKey(false); }
+                              else {
+                                setEditing(p.id);
+                                setShowKey(false);
+                                if (p.hasKey && api) {
+                                  setLoadingKey(true);
+                                  setKeyInput("");
+                                  try {
+                                    const r = await api.getApiKey(p.id);
+                                    if (r?.success && r.key) setKeyInput(r.key);
+                                  } catch { /* leave empty */ }
+                                  setLoadingKey(false);
+                                } else {
+                                  setKeyInput("");
+                                }
+                              }
                             }}
                           >
                             <Key data-icon="inline-start" className="size-3" />
@@ -342,8 +446,9 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
                                   if (e.key === "Enter") handleSave();
                                   if (e.key === "Escape") { setEditing(null); setKeyInput(""); setShowKey(false); }
                                 }}
-                                placeholder="sk-..."
+                                placeholder={loadingKey ? "Loading…" : "sk-..."}
                                 autoFocus
+                                disabled={loadingKey}
                                 className="pr-9 font-mono text-[12px] h-8"
                               />
                               <Button variant="ghost" size="icon" className="absolute right-0 top-0 size-8" onClick={() => setShowKey(!showKey)} tabIndex={-1}>
@@ -351,7 +456,17 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
                               </Button>
                             </div>
                             <Button variant="line-filled" size="sm" className="h-8 text-[11px]" onClick={handleSave} disabled={saving || !keyInput.trim()}>
-                              {saving ? "Saving…" : "Save"}
+                              {saving ? (
+                                <>
+                                  <Loader2 data-icon="inline-start" className="size-3 animate-spin" />
+                                  Testing…
+                                </>
+                              ) : (
+                                <>
+                                  <ShieldCheck data-icon="inline-start" className="size-3" />
+                                  Save
+                                </>
+                              )}
                             </Button>
                           </div>
                           <p className="mt-1.5 text-[10px] text-muted-foreground">
@@ -404,6 +519,39 @@ function SettingsDialogImpl({ open, providers, onProvidersChange, onClose }: Set
         </Button>
       </DialogFooter>
     </DialogContent>
+
+    {/* Confirm-save-after-failed-test dialog. Stays separate from the
+        main settings dialog so the user can review the error in a
+        focused surface and explicitly opt in to saving anyway. */}
+    <Dialog open={forceSave !== null} onOpenChange={(o) => !o && setForceSave(null)}>
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+            <AlertCircle className="size-4" />
+            Self-test failed for {forceSave?.provider}
+          </DialogTitle>
+          <DialogDescription>
+            Look couldn't verify this key against the provider's API.
+            {forceSave?.status ? ` Provider returned HTTP ${forceSave.status}.` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-md border border-rose-500/30 bg-rose-500/5 px-3 py-2 font-mono text-[11px] text-rose-700 dark:text-rose-300">
+          {forceSave?.reason}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          You can still save the key — but the provider will likely reject
+          requests until you replace it with a working one.
+        </p>
+        <DialogFooter className="gap-2">
+          <Button variant="line" size="sm" onClick={() => setForceSave(null)}>
+            Cancel
+          </Button>
+          <Button variant="line-filled" size="sm" onClick={handleForceSave}>
+            Save anyway
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </Dialog>
   );
 }

@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@shared/lib/utils";
 import type { ContextUsageInfo } from "@shared/types";
 
-const api = (window as any).harness;
+const api = (window as any).look;
 
 interface ContextRingProps {
   agentId: string;

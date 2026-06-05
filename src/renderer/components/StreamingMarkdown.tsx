@@ -24,7 +24,7 @@ interface StreamingMarkdownProps {
 function CodeBlock({ language, children, ...props }: any) {
   const [copied, setCopied] = React.useState(false);
   const code = String(children).replace(/\n$/, "");
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 

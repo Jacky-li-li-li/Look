@@ -5,12 +5,13 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Button } from "@shared/components/ui/button";
 import { Textarea } from "@shared/components/ui/textarea";
-import { Send, MessageSquare } from "lucide-react";
-import type { AgentMessage, AgentRole, AgentStatus } from "@shared/types";
+import { Send, MessageSquare, Square } from "lucide-react";
+import type { AgentMessage, AgentRole, AgentStatus, PermissionMode } from "@shared/types";
 import MessageBubble from "./MessageBubble";
 import ThinkingSelector from "./ThinkingSelector";
 import ModelSelector from "./ModelSelector";
 import ContextRing from "./ContextRing";
+import { PermissionModeSelector } from "./PermissionModeSelector";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 interface ChatPanelProps {
@@ -21,20 +22,31 @@ interface ChatPanelProps {
   agentStatus: AgentStatus;
   currentModel: string;
   currentThinking: string;
+  currentPermissionMode: PermissionMode;
   onSend: (text: string) => void;
   onThinkingChange: (level: string) => void;
   onModelChange: (model: string) => void;
+  onPermissionModeChange: (mode: PermissionMode) => void;
+  /** Fired when an empty ModelSelector CTA asks to open API key settings. */
+  onRequestApiKeys?: () => void;
+  /**
+   * Fired when the user clicks the Stop button (visible while the
+   * agent is busy). Maps to `agent:abort` IPC; safe to call when
+   * not streaming (no-op on the main-process side).
+   */
+  onAbort?: () => void;
 }
 
 export default function ChatPanel({
   agentId, agentRole, agentName, messages, agentStatus,
-  currentModel, currentThinking,
-  onSend, onThinkingChange, onModelChange,
+  currentModel, currentThinking, currentPermissionMode,
+  onSend, onThinkingChange, onModelChange, onPermissionModeChange,
+  onRequestApiKeys, onAbort,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
 
   // Batch scroll to bottom via rAF — avoids forced layout on every streaming delta
   useEffect(() => {
@@ -117,19 +129,38 @@ export default function ChatPanel({
             className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
           />
           <div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
-            <ModelSelector agentId={agentId} currentModel={currentModel} onModelChanged={onModelChange} />
+            <ModelSelector agentId={agentId} currentModel={currentModel} onModelChanged={onModelChange} onRequestApiKeys={onRequestApiKeys} />
             <ThinkingSelector agentId={agentId} currentLevel={currentThinking} onChanged={onThinkingChange} />
+            <PermissionModeSelector mode={currentPermissionMode} onChange={onPermissionModeChange} />
             <div className="flex-1" />
             <ContextRing agentId={agentId} />
-            <Button
-              variant={input.trim() && !isBusy ? "line-filled" : "line"}
-              size="icon-sm"
-              onClick={handleSend}
-              disabled={!input.trim() || isBusy}
-              aria-label="Send message"
-            >
-              <Send data-icon="inline-start" className="size-3.5" />
-            </Button>
+            {isBusy ? (
+              // P2-2: Stop button replaces Send while the agent is
+              // busy. Click → onAbort → agent:abort IPC → m.session.abort().
+              // We deliberately do NOT show a confirmation — Stop is
+              // always recoverable (user can re-prompt), so a
+              // confirmation adds friction without real value.
+              <Button
+                variant="line"
+                size="icon-sm"
+                onClick={onAbort}
+                aria-label="Stop agent"
+                title="Stop"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Square data-icon="inline-start" className="size-3 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                variant={input.trim() ? "line-filled" : "line"}
+                size="icon-sm"
+                onClick={handleSend}
+                disabled={!input.trim()}
+                aria-label="Send message"
+              >
+                <Send data-icon="inline-start" className="size-3.5" />
+              </Button>
+            )}
           </div>
         </div>
       </div>

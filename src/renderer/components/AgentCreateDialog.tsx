@@ -43,7 +43,7 @@ const ROLE_THINKING_DEFAULTS: Record<string, ThinkingLevel> = {
   reviewer: "off", custom: "medium",
 };
 
-const api = (window as any).harness;
+const api = (window as any).look;
 
 interface AgentCreateDialogProps {
   /** Pre-fill the model field (e.g. from the currently active agent). */

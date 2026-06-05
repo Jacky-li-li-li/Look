@@ -122,3 +122,31 @@ npm run dev:main       # 终端2: Electron
 - `session.subscribe()` — 事件流处理
 - `DefaultResourceLoader` — system prompt 注入
 - `defineTool()` — 自定义工具注册
+
+## Chat Mode 通用约定（project 内部约定）
+
+`chat` role 是"通用工作台"——**没有 role preset**，所有"用户的选择"都是真正的配置：
+
+| 字段 | 值 | 含义 |
+|---|---|---|
+| `defaultModel` | `null` | 不预设——`createAgent` 走 `firstAvailableModelKey()` |
+| `fallbackModels` | `[]` | 不用 role 静态 fallback——由 `createAgent` 动态构建（role static + 用户已配 models + firstAvailableKey 末位兜底） |
+| `tools` | `null` | "全开内置工具"（null 是 sentinel，`createAgent` 内部展开为默认 7 个） |
+| `systemPrompt` | `""` | 不注入 role preset——用户在 UI 里自己决定风格 |
+
+`getRoleTools` / `getRoleDefaults` 返回类型是 `string[] \| null` / `string \| null`——**null 是"无 role 默认"信号**，不是"传错了"。
+
+测试用 mock auth storage：`(m as any).authStorage = mock;` 绕过构造器注入（ts 类型擦除允许改 private 字段，运行时 OK）。`resolveModel` 内部用 `isUserConfigured(provider)` 跳过 unconfigured entries——`setModel` 同样要预检。
+
+## Tab 路由（Chat vs Orch）
+
+`Sidebar.isChatAgent` 用显式枚举 `CHAT_TAB_ROLES = new Set(["chat"])`，**不要用负定义**（`!isChatAgent`）。coder / custom / orchestrator 全部走 Orch tab——chat 是唯一"通用工作台"。
+
+新加 role 时先想清楚它属于哪个 tab——属于 Chat 的加进 `CHAT_TAB_ROLES`；属于 Orch 的不动。Custom 也是 Orch（用户自定，不混进 chat）。
+
+## pi SDK 重要 API 行为
+
+- `m.session.prompt(text, options?)` —— **streaming 时必须传 `options.streamingBehavior`**（`"steer"` 插队 / `"followUp"` 排队），否则 SDK 抛 "streaming and no streamingBehavior specified"。`sendMessage` 用 `steer` 行为：用户在 streaming 时发新消息会插到当前 turn 之后。
+- `m.session.isStreaming` —— `boolean` getter，用来判定走哪条 prompt path。
+- `m.session.abort()` —— fire-and-forget。**不要主动改 status**——让 SDK 的 tool_execution_end / message_end 事件流自然把 status 拉回 idle，UI 状态机才一致。
+- `m.session.steer(text)` / `followUp(text)` —— 独立 API 存在，但**优先用 `prompt(text, { streamingBehavior })`**（更声明式，少一个分支）。

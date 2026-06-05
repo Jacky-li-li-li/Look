@@ -53,7 +53,7 @@ function setupProcessBoundary() {
     }
     safeWrite("fatal", "Uncaught exception:", err.message, err.stack ?? "");
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("agent:event", {
+      mainWindow.webContents.send("look:event", {
         type: "error",
         message: `Process error: ${err.message}`,
       });
@@ -63,7 +63,7 @@ function setupProcessBoundary() {
   process.on("unhandledRejection", (reason: any) => {
     safeWrite("fatal", "Unhandled rejection:", reason?.message ?? reason);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("agent:event", {
+      mainWindow.webContents.send("look:event", {
         type: "error",
         message: `Unhandled rejection: ${reason?.message ?? String(reason)}`,
       });
@@ -134,7 +134,7 @@ async function initAgentManager(): Promise<void> {
     } catch (err: any) {
       console.error("[Look] ❌ Failed to create Orchestrator:", err.message);
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("agent:event", {
+        mainWindow.webContents.send("look:event", {
           type: "error",
           message: `Failed to create Orchestrator: ${err.message}. Check API key and network.`,
         });

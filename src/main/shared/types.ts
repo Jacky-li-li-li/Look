@@ -18,6 +18,29 @@ export type AgentRole =
 /** Agent status */
 export type AgentStatus = "idle" | "thinking" | "working" | "error" | "destroyed";
 
+/**
+ * Per-agent permission mode. Controls how the permission gate
+ * handles tool calls for this agent.
+ *
+ * - `ask` (default): every gate-flagged tool pops a dialog
+ * - `plan`: only read-only tools (`read`/`grep`/`find`/`ls`) are
+ *   allowed; everything else is blocked without asking
+ * - `allow`: every tool is silently allowed (use only for trusted
+ *   agents / scripted workflows)
+ */
+export type PermissionMode = "ask" | "plan" | "allow";
+
+/**
+ * User response to a permission ask. Mirrors the three buttons in
+ * the PermissionDialog (Allow / Allow with edits / Deny). The
+ * `edit` variant carries the patched args the main process should
+ * apply to the tool's input before letting pi run it.
+ */
+export type PermissionDecision =
+  | { action: "allow" }
+  | { action: "deny"; reason: string }
+  | { action: "edit"; args: Record<string, unknown> };
+
 /** Pi thinking level — matches pi's built-in levels */
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
@@ -63,6 +86,8 @@ export interface AgentInfo {
   usage: UsageSnapshot;
   /** Fallback model chain (provider/model-id) */
   fallbackModels: string[];
+  /** Per-agent permission mode. Defaults to "ask". */
+  permissionMode: PermissionMode;
 }
 
 /** A single message in an agent's conversation */
@@ -100,27 +125,115 @@ export interface ContextUsageInfo {
 
 // ============================================================
 // Events (Main ↔ Renderer)
+//
+// `MainToRendererEvent` names mirror pi SDK AgentSessionEvent
+// (see @earendil-works/pi-coding-agent/dist/core/agent-session.d.ts)
+// with an `agent:` namespace prefix added by Look. Payloads use the
+// SAME field names as pi's events so we can pass them through
+// without translation. Look-specific events (list/created/destroyed/
+// updated/permission:request/error/context-usage/compacting) are
+// kept as-is — they have no pi equivalent.
 // ============================================================
+
+/**
+ * Every event from main carries an `agentId` so the renderer can
+ * correlate. Events not scoped to a single agent (rare — e.g.
+ * `agent:list`) have an empty string.
+ */
+type WithAgentId<T> = T & { agentId: string };
 
 /** Events sent from main process to renderer */
 export type MainToRendererEvent =
-  | { type: "agent:list"; agents: AgentInfo[] }
-  | { type: "agent:created"; agent: AgentInfo }
-  | { type: "agent:destroyed"; agentId: string }
-  | { type: "agent:updated"; agent: AgentInfo }
-  | { type: "agent:status"; agentId: string; status: AgentStatus }
-  | { type: "agent:message"; message: AgentMessage }
-  | { type: "agent:message-update"; agentId: string; messageId: string; delta: string; deltaType: "text" | "thinking" }
-  | { type: "agent:message-end"; agentId: string; messageId: string; content: string; thinking: string }
-  | { type: "agent:tool-start"; agentId: string; messageId: string; toolCall: ToolCallRecord }
-  | { type: "agent:tool-update"; agentId: string; messageId: string; callId: string; partial: string }
-  | { type: "agent:tool-end"; agentId: string; messageId: string; callId: string; result: string; isError: boolean }
-  | { type: "agent:history"; agentId: string; messages: AgentMessage[] }
-  | { type: "agent:usage-update"; agentId: string; usage: UsageSnapshot }
-  | { type: "permission:request"; requestId: string; agentId: string; toolName: string; args: Record<string, unknown>; reason: string }
-  | { type: "error"; agentId?: string; message: string }
-  | { type: "agent:context-usage"; agentId: string; usage: ContextUsageInfo }
-  | { type: "agent:compacting"; agentId: string; compacting: boolean };
+  // ---- pi session events (mirrored, prefixed with `agent:`) ----
+  | WithAgentId<{ type: "agent:agent_start" }>
+  | WithAgentId<{ type: "agent:agent_end"; messages: AgentMessage[]; willRetry: boolean }>
+  | WithAgentId<{ type: "agent:turn_start" }>
+  | WithAgentId<{ type: "agent:turn_end"; message: AgentMessage; toolResults: unknown[] }>
+  | WithAgentId<{ type: "agent:message_start"; message: AgentMessage }>
+  | WithAgentId<{
+      type: "agent:message_update";
+      message: AgentMessage;
+      assistantMessageEvent: AssistantMessageEventUnion;
+    }>
+  | WithAgentId<{ type: "agent:message_end"; message: AgentMessage }>
+  | WithAgentId<{
+      type: "agent:tool_execution_start";
+      toolCallId: string;
+      toolName: string;
+      args: Record<string, unknown>;
+    }>
+  | WithAgentId<{
+      type: "agent:tool_execution_update";
+      toolCallId: string;
+      toolName: string;
+      args: Record<string, unknown>;
+      partialResult: { content: Array<{ type: string; text?: string }>; details?: unknown };
+    }>
+  | WithAgentId<{
+      type: "agent:tool_execution_end";
+      toolCallId: string;
+      toolName: string;
+      result: unknown;
+      isError: boolean;
+    }>
+  | WithAgentId<{ type: "agent:queue_update"; steering: readonly string[]; followUp: readonly string[] }>
+  | WithAgentId<{ type: "agent:compaction_start"; reason: "manual" | "threshold" | "overflow" }>
+  | WithAgentId<{
+      type: "agent:compaction_end";
+      reason: "manual" | "threshold" | "overflow";
+      result: unknown;
+      aborted: boolean;
+      willRetry: boolean;
+      errorMessage?: string;
+    }>
+  | WithAgentId<{
+      type: "agent:auto_retry_start";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      errorMessage: string;
+    }>
+  | WithAgentId<{ type: "agent:auto_retry_end"; success: boolean; attempt: number; finalError?: string }>
+  | WithAgentId<{ type: "agent:session_info_changed"; name: string | undefined }>
+  | WithAgentId<{ type: "agent:thinking_level_changed"; level: ThinkingLevel }>
+  // ---- Look-specific events (no pi equivalent) ----
+  | WithAgentId<{ type: "agent:list"; agents: AgentInfo[] }>
+  | WithAgentId<{ type: "agent:created"; agent: AgentInfo }>
+  | WithAgentId<{ type: "agent:destroyed" }>
+  | WithAgentId<{ type: "agent:updated"; agent: AgentInfo }>
+  // Emitted once after createAgent when the primary model was
+  // unavailable and resolveModel picked a fallback. Lets the
+  // renderer surface a "switched to X" toast (P-未5).
+  | WithAgentId<{ type: "agent:model-fallback"; primary: string; resolved: string; triedChain: string[] }>
+  | WithAgentId<{ type: "agent:status"; status: AgentStatus }>
+  | WithAgentId<{ type: "agent:context-usage"; usage: ContextUsageInfo }>
+  | WithAgentId<{ type: "agent:usage-update"; usage: UsageSnapshot }>
+  | WithAgentId<{ type: "agent:history"; messages: AgentMessage[] }>
+  | WithAgentId<{ type: "agent:compacting"; compacting: boolean }>
+  | { type: "permission:ask"; requestId: string; agentId: string; toolName: string; args: Record<string, unknown>; reason: string }
+  | WithAgentId<{ type: "agent:permission-mode"; mode: PermissionMode }>
+  | { type: "error"; agentId?: string; message: string };
+
+/**
+ * Subset of pi's AssistantMessageEvent delta types that Look
+ * cares about. We don't import from `@earendil-works/pi-ai` here
+ * because AgentSessionEvent already encodes the structure we need
+ * and we want to keep `MainToRendererEvent` decoupled from pi's
+ * internal type changes.
+ */
+export type AssistantMessageEventUnion =
+  | { type: "text_start"; contentIndex: number; partial: unknown }
+  | { type: "text_delta"; contentIndex: number; delta: string; partial: unknown }
+  | { type: "text_end"; contentIndex: number; content: string; partial: unknown }
+  | { type: "thinking_start"; contentIndex: number; partial: unknown }
+  | { type: "thinking_delta"; contentIndex: number; delta: string; partial: unknown }
+  | { type: "thinking_end"; contentIndex: number; content: string; partial: unknown }
+  | { type: "toolcall_start"; contentIndex: number; partial: unknown }
+  | { type: "toolcall_delta"; contentIndex: number; delta: string; partial: unknown }
+  | { type: "toolcall_end"; contentIndex: number; toolCall: unknown; partial: unknown }
+  | { type: "start"; partial: unknown }
+  | { type: "done"; reason: "stop" | "length" | "toolUse" | "error" | "aborted"; partial: unknown }
+  | { type: "error"; reason: "aborted" | "error"; partial: unknown };
 
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =
@@ -130,17 +243,23 @@ export type RendererToMainEvent =
   | { type: "agent:switch-model"; agentId: string; model: string }
   | { type: "agent:update-thinking"; agentId: string; level: ThinkingLevel }
   | { type: "agent:get-history"; agentId: string }
-  | { type: "permission:response"; requestId: string; allowed: boolean }
+  | { type: "permission:response"; action: "allow" | "deny" | "edit"; requestId: string; reason?: string; args?: Record<string, unknown> }
+  | { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
   | { type: "model:list" }
   | { type: "model:providers" }
   | { type: "agents:list" }
   | { type: "settings:get" }
+  | { type: "settings:get-api-key"; provider: string }
   | { type: "settings:set-api-key"; provider: string; key: string }
+  | { type: "settings:test-api-key"; provider: string; key: string }
   | { type: "settings:general:get" }
   | { type: "context:usage"; agentId: string }
   | { type: "session:compress"; agentId: string }
   | { type: "agent:rename"; agentId: string; name: string }
-  | { type: "settings:general:set"; settings: Partial<{ language: "en" | "zh" | "ja"; defaultThinkingLevel: ThinkingLevel; autoCollapse: boolean; autoCompress: boolean; compressThreshold: number }> }
+  // P2-2: renderer → main "stop the current turn" signal. Matches
+  // the new agent:abort case in ipc-handlers.ts.
+  | { type: "agent:abort"; agentId: string }
+  | { type: "settings:general:set"; settings: Partial<{ language: "en" | "zh" | "ja"; defaultThinkingLevel: ThinkingLevel; autoCollapse: boolean; autoCompress: boolean; compressThreshold: number; preferredModel: string | null }> }
   | { type: "settings:general:reset" }
   | { type: "app:ready" };
 
