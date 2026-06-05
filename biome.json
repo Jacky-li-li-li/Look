@@ -36,12 +36,6 @@
     "includes": [
       "src/**/*.ts",
       "src/**/*.tsx",
-      "test-p-not-1-and-4.ts",
-      "test-p-not-2-and-5.ts",
-      "test-p1-p2-2-steer-abort.ts",
-      "test-migrate-settings.ts",
-      "test-smoke-init.ts",
-      "test-session-lifecycle.ts",
       "!**/node_modules/**",
       "!**/dist/**",
       "!**/release/**"

@@ -15,10 +15,10 @@
     "package": "npm run build && electron-builder",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "lint": "biome check src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts",
-    "lint:fix": "biome check --write --unsafe src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts",
-    "format": "biome format --write src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts",
-    "check": "biome check src test-p-not-1-and-4.ts test-p-not-2-and-5.ts test-p1-p2-2-steer-abort.ts test-migrate-settings.ts test-smoke-init.ts test-session-lifecycle.ts && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json --noEmit && npm test"
+    "lint": "biome check src",
+    "lint:fix": "biome check --write --unsafe src",
+    "format": "biome format --write src",
+    "check": "biome check src && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json --noEmit && npm test"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.78.0",
