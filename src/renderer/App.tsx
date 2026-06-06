@@ -2,7 +2,16 @@
 // App — Ink Wash Design System (shadcn/ui)
 // ============================================================
 
-import type { AgentInfo, AgentMessage, MainToRendererEvent, ThinkingLevel, ToolCallRecord } from "@shared/types";
+import type {
+	AgentInfo,
+	MainToRendererEvent,
+	PiContentBlock,
+	PiMessage,
+	PiTextBlock,
+	PiThinkingBlock,
+	PiToolCallBlock,
+	ThinkingLevel,
+} from "@shared/types";
 import { FolderOpen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -32,7 +41,7 @@ const api = (window as any).look;
 export default function App() {
 	const [agents, setAgents] = useState<AgentInfo[]>([]);
 	const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
-	const [messages, setMessages] = useState<Record<string, AgentMessage[]>>({});
+	const [messages, setMessages] = useState<Record<string, PiMessage[]>>({});
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
 	const [defaultModelForCreate, setDefaultModelForCreate] = useState<string | undefined>(undefined);
 	const [showSettings, setShowSettings] = useState(false);
@@ -180,17 +189,36 @@ export default function App() {
 				// main process also adds the message to its local store
 				// (see `handleLookSideEffect`). Renderer just appends.
 				case "agent:message_start": {
-					const msg = event.message as any; // pi AgentMessage is a discriminated union
+					const msg = event.message as any; // raw pi SDK message pass-through
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
-						// Map pi's message to UI shape (id, agentId, role, content, thinking, toolCalls, timestamp, isStreaming).
-						const ui: AgentMessage = {
+						const makeContentBlocks = (content: unknown): PiContentBlock[] => {
+							if (Array.isArray(content)) {
+								return content.map((b: any): PiContentBlock => {
+									if (b.type === "toolCall") {
+										return {
+											type: "toolCall",
+											id: b.id ?? "",
+											name: b.name ?? "unknown",
+											arguments: b.arguments ?? {},
+											status: "pending",
+											result: "",
+											isError: false,
+										} satisfies PiToolCallBlock;
+									}
+									return { ...b, active: true } as PiTextBlock | PiThinkingBlock;
+								});
+							}
+							if (typeof content === "string" && content.length > 0) {
+								return [{ type: "text", text: content, active: false }];
+							}
+							return [];
+						};
+						const ui: PiMessage = {
 							id: msg.id ?? `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
 							agentId: event.agentId,
-							role: msg.role ?? "assistant",
-							content: extractText(msg.content),
-							thinking: extractThinking(msg.content),
-							toolCalls: extractToolCalls(msg.content),
+							role: msg.role === "toolResult" ? "tool" : (msg.role ?? "assistant"),
+							contentBlocks: makeContentBlocks(msg.content),
 							timestamp: msg.timestamp ?? Date.now(),
 							isStreaming: true,
 						};
@@ -201,15 +229,13 @@ export default function App() {
 				}
 				case "agent:message_update": {
 					// pi's `message_update` carries a delta in `assistantMessageEvent`.
-					// We apply it to the matching streaming message in the store.
+					// We apply it to the matching streaming message's contentBlocks.
 					const evt = event.assistantMessageEvent;
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
-						// Find the streaming message (pi sends message.id when available)
 						const msgId = (event.message as any)?.id;
 						let idx = msgId ? msgs.findIndex((m) => m.id === msgId) : -1;
 						if (idx < 0) {
-							// Fallback: last streaming message
 							idx = msgs.length - 1;
 							for (let i = msgs.length - 1; i >= 0; i--)
 								if (msgs[i].isStreaming) {
@@ -218,31 +244,51 @@ export default function App() {
 								}
 						}
 						if (idx < 0) return prev;
+						const blocks = [...msgs[idx].contentBlocks];
 						if (evt.type === "text_delta") {
-							msgs[idx] = { ...msgs[idx], content: (msgs[idx].content ?? "") + evt.delta };
+							let block = [...blocks].reverse().find((b) => b.type === "text" && b.active === true) as
+								| PiTextBlock
+								| undefined;
+							if (!block) {
+								block = { type: "text", text: "", active: true };
+								blocks.push(block);
+							}
+							block.text += evt.delta;
 						} else if (evt.type === "thinking_delta") {
-							msgs[idx] = { ...msgs[idx], thinking: (msgs[idx].thinking ?? "") + evt.delta };
+							let block = [...blocks].reverse().find((b) => b.type === "thinking" && b.active === true) as
+								| PiThinkingBlock
+								| undefined;
+							if (!block) {
+								block = { type: "thinking", thinking: "", active: true };
+								blocks.push(block);
+							}
+							block.thinking += evt.delta;
 						} else if (evt.type === "toolcall_end") {
 							const tc = (evt as any).toolCall;
 							if (tc) {
-								const newTc: ToolCallRecord = {
-									callId: tc.id ?? "",
-									toolName: tc.name ?? "unknown",
-									args: tc.arguments ?? {},
-									status: "success",
+								blocks.push({
+									type: "toolCall",
+									id: tc.id ?? "",
+									name: tc.name ?? "unknown",
+									arguments: tc.arguments ?? {},
+									status: "pending",
 									result: "",
 									isError: false,
-								};
-								msgs[idx] = { ...msgs[idx], toolCalls: [...(msgs[idx].toolCalls ?? []), newTc] };
+								} satisfies PiToolCallBlock);
 							}
+						} else if (evt.type === "text_end") {
+							for (const b of blocks) if (b.type === "text" && b.active) b.active = false;
+						} else if (evt.type === "thinking_end") {
+							for (const b of blocks) if (b.type === "thinking" && b.active) b.active = false;
 						}
+						msgs[idx] = { ...msgs[idx], contentBlocks: blocks };
 						return { ...prev, [event.agentId]: msgs };
 					});
 					break;
 				}
 				case "agent:message_end": {
 					// Final state: replace streaming message with the completed one.
-					const finalMsg = event.message as any;
+					const finalMsg = event.message as any; // raw pi SDK message pass-through
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
 						let idx = msgs.length - 1;
@@ -252,11 +298,25 @@ export default function App() {
 								break;
 							}
 						if (idx < 0) return prev;
+						const blocks: PiContentBlock[] = Array.isArray(finalMsg.content)
+							? finalMsg.content.map((b: any): PiContentBlock => {
+									if (b.type === "toolCall") {
+										return {
+											type: "toolCall",
+											id: b.id ?? "",
+											name: b.name ?? "unknown",
+											arguments: b.arguments ?? {},
+											status: "pending",
+											result: "",
+											isError: false,
+										} satisfies PiToolCallBlock;
+									}
+									return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
+								})
+							: msgs[idx].contentBlocks;
 						msgs[idx] = {
 							...msgs[idx],
-							content: extractText(finalMsg.content),
-							thinking: extractThinking(finalMsg.content),
-							toolCalls: extractToolCalls(finalMsg.content),
+							contentBlocks: blocks,
 							isStreaming: false,
 							timestamp: finalMsg.timestamp ?? msgs[idx].timestamp,
 						};
@@ -267,7 +327,7 @@ export default function App() {
 				case "agent:tool_execution_start":
 				case "agent:tool_execution_update":
 				case "agent:tool_execution_end": {
-					// Mirror pi's tool-call lifecycle into the UI's toolCalls list.
+					// Mirror pi's tool-call lifecycle into the matching content block.
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
 						let idx = msgs.length - 1;
@@ -277,30 +337,28 @@ export default function App() {
 								break;
 							}
 						if (idx < 0) return prev;
-						const existing = msgs[idx].toolCalls ?? [];
+						const blocks = [...msgs[idx].contentBlocks];
 						const callId = event.toolCallId;
-						const newCalls = [...existing];
-						const foundIdx = newCalls.findIndex((tc) => tc.callId === callId);
+						const foundIdx = blocks.findIndex((b) => b.type === "toolCall" && b.id === callId);
 						if (event.type === "agent:tool_execution_start") {
 							if (foundIdx < 0) {
-								newCalls.push({
-									callId,
-									toolName: event.toolName,
-									args: event.args ?? {},
+								blocks.push({
+									type: "toolCall",
+									id: callId,
+									name: event.toolName,
+									arguments: event.args ?? {},
 									status: "running",
 									result: "",
 									isError: false,
-								});
+								} satisfies PiToolCallBlock);
 							} else {
-								newCalls[foundIdx] = { ...newCalls[foundIdx], status: "running" };
+								(blocks[foundIdx] as PiToolCallBlock).status = "running";
 							}
 						} else if (event.type === "agent:tool_execution_update") {
 							const partial = (event.partialResult as any)?.content?.[0]?.text ?? "";
 							if (foundIdx >= 0) {
-								newCalls[foundIdx] = {
-									...newCalls[foundIdx],
-									result: (newCalls[foundIdx].result ?? "") + partial,
-								};
+								const b = blocks[foundIdx] as PiToolCallBlock;
+								blocks[foundIdx] = { ...b, result: (b.result ?? "") + partial };
 							}
 						} else {
 							// tool_execution_end
@@ -309,24 +367,25 @@ export default function App() {
 									? event.result
 									: ((event.result as any)?.content?.[0]?.text ?? JSON.stringify(event.result));
 							if (foundIdx >= 0) {
-								newCalls[foundIdx] = {
-									...newCalls[foundIdx],
+								blocks[foundIdx] = {
+									...blocks[foundIdx],
 									status: event.isError ? "error" : "success",
 									result: resultStr,
 									isError: event.isError,
-								};
+								} as PiToolCallBlock;
 							} else {
-								newCalls.push({
-									callId,
-									toolName: event.toolName,
-									args: {},
+								blocks.push({
+									type: "toolCall",
+									id: callId,
+									name: event.toolName,
+									arguments: {},
 									status: event.isError ? "error" : "success",
 									result: resultStr,
 									isError: event.isError,
-								});
+								} satisfies PiToolCallBlock);
 							}
 						}
-						msgs[idx] = { ...msgs[idx], toolCalls: newCalls };
+						msgs[idx] = { ...msgs[idx], contentBlocks: blocks };
 						return { ...prev, [event.agentId]: msgs };
 					});
 					break;
@@ -396,7 +455,7 @@ export default function App() {
 						const next = { ...prev };
 						for (const [agentId, msgs] of Object.entries(r.history)) {
 							if (Array.isArray(msgs) && msgs.length > 0 && (next[agentId] ?? []).length === 0) {
-								next[agentId] = msgs;
+								next[agentId] = msgs as PiMessage[];
 							}
 						}
 						return next;
@@ -467,18 +526,29 @@ export default function App() {
 		},
 		[activeAgentId],
 	);
-	const handleModelChanged = useCallback(
-		(newModel: string) => {
-			setUserPreferredModel(newModel); // remember for next quick-create
-			setAgents((prev) => prev.map((a) => (a.id === activeAgentId ? { ...a, model: newModel } : a)));
-			// Persist across app restarts. Fire-and-forget; if the IPC fails
-			// we keep the in-memory pick and try again on the next switch.
-			if (api) {
-				api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
-			}
-		},
-		[activeAgentId],
-	);
+	const handleModelChanged = useCallback((newModel: string) => {
+		// The `agent:updated` event from main (emitted right after
+		// `m.session.setModel()` + `m.info.model = modelKey`) is
+		// the authoritative path for updating the agent's model in
+		// `agents` state — see App.tsx's `agent:updated` handler.
+		// We must NOT do a second `setAgents` here keyed on
+		// `activeAgentId`: that field can drift between the
+		// user's click and the IPC roundtrip's completion, and
+		// the stale id would silently clobber whatever agent the
+		// user has since navigated to.
+		//
+		// What this callback *does* own is renderer-only state
+		// that the main process can't see: the user's preferred
+		// model for the next quick-create, and the persisted
+		// general setting.
+		setUserPreferredModel(newModel); // remember for next quick-create
+		// Persist across app restarts. Fire-and-forget; if the IPC
+		// fails we keep the in-memory pick and try again on the
+		// next switch.
+		if (api) {
+			api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
+		}
+	}, []);
 
 	// Stable callback identities for Sidebar — prevents Sidebar re-renders
 	// when other App state (e.g. showSettings) changes.
@@ -684,41 +754,4 @@ export default function App() {
 			</TooltipProvider>
 		</ThemeProvider>
 	);
-}
-
-// ── pi message content-block extractors ──
-// pi stores AssistantMessage.content as `[{ type: "text", text }, { type: "thinking", thinking }, { type: "toolCall", ... }]`.
-// The UI's AgentMessage wants plain strings + a toolCalls list.
-
-function extractText(content: unknown): string {
-	if (typeof content === "string") return content;
-	if (Array.isArray(content)) {
-		return content
-			.filter((b: any) => b?.type === "text")
-			.map((b: any) => b.text ?? "")
-			.join("");
-	}
-	return "";
-}
-
-function extractThinking(content: unknown): string {
-	if (!Array.isArray(content)) return "";
-	return content
-		.filter((b: any) => b?.type === "thinking")
-		.map((b: any) => b.thinking ?? "")
-		.join("");
-}
-
-function extractToolCalls(content: unknown): ToolCallRecord[] {
-	if (!Array.isArray(content)) return [];
-	return content
-		.filter((b: any) => b?.type === "toolCall")
-		.map((b: any) => ({
-			callId: b.id ?? "",
-			toolName: b.name ?? "unknown",
-			args: b.arguments ?? {},
-			status: "success" as const,
-			result: "",
-			isError: false,
-		}));
 }

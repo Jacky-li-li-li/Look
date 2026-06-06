@@ -62,11 +62,27 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 
 	const handleSwitch = useCallback(
 		async (modelKey: string) => {
+			// Snapshot the agent we're switching *now*. The user can
+			// switch agents mid-flight: ChatPanel passes a new
+			// `agentId` prop when the active agent changes, and the
+			// `onModelChanged` callback we close over is bound to
+			// *that* new agent's state. Without this snapshot, the
+			// awaiting handler would fire `onChange` against the
+			// wrong agent after the user clicked away.
+			const targetAgentId = agentId;
 			const { currentModel: cur, onModelChanged: onChange } = latestPropsRef.current;
 			if (modelKey === cur) return;
 			setSwitching(true);
 			try {
-				const result = await api.switchModel(agentId, modelKey);
+				const result = await api.switchModel(targetAgentId, modelKey);
+				// Re-check at the top of the callback: if the user
+				// switched agents *during* the await, the `onChange`
+				// in the ref now belongs to a different agent and
+				// calling it would clobber that agent's state. Skip
+				// the notification — the new agent's selector is
+				// already showing the right model via the
+				// `agent:updated` event from main.
+				if (latestPropsRef.current.onModelChanged !== onChange) return;
 				if (result?.success) {
 					onChange?.(modelKey);
 					setOpen(false);

@@ -78,13 +78,32 @@ export default function Sidebar({
 		setTimeout(() => editRef.current?.select(), 0);
 	}, []);
 
-	const commitRename = useCallback(() => {
-		if (editingId && editValue.trim()) {
-			api?.renameAgent(editingId, editValue.trim());
-		}
+	const cancelRename = useCallback(() => {
+		// Discard the in-progress edit. Used by Esc and by blur (clicking
+		// elsewhere in the sidebar). Only Enter explicitly commits — this
+		// matches Finder's rename UX and prevents the data-loss case
+		// where a half-typed buffer gets auto-saved when the user clicks
+		// away intending to cancel.
 		setEditingId(null);
 		setEditValue("");
-	}, [editingId, editValue]);
+	}, []);
+
+	const commitRename = useCallback(() => {
+		// Read the current edit buffer straight from the agents list so
+		// we don't race with a state update that's still pending. Skip
+		// the API call when nothing has actually changed (the user
+		// pressed Enter without editing, or the trimmed name matches
+		// the agent's existing name) — saves a round-trip and avoids
+		// re-renders for no-op renames.
+		if (!editingId) return;
+		const original = agents.find((a) => a.id === editingId)?.name;
+		if (original === undefined) return;
+		const trimmed = editValue.trim();
+		if (trimmed.length > 0 && trimmed !== original) {
+			api?.renameAgent(editingId, trimmed);
+		}
+		cancelRename();
+	}, [editingId, editValue, agents, cancelRename]);
 
 	const handleEditKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
@@ -191,7 +210,7 @@ export default function Sidebar({
 											ref={editRef}
 											value={editValue}
 											onChange={(e) => setEditValue(e.target.value)}
-											onBlur={commitRename}
+											onBlur={cancelRename}
 											onKeyDown={handleEditKeyDown}
 											className="w-full bg-transparent text-[12px] font-semibold outline-none border-b border-border"
 											maxLength={64}

@@ -3,37 +3,60 @@
 //
 // Two variants with very different constraints:
 //
-//   - `active` — about-to-fire inside the ChatPanel input
-//     overlay. The overlay is rendered ON TOP of a transparent
-//     <textarea> whose caret the user actually sees. Because
-//     the textarea has no idea the chip exists, it computes
-//     caret X from its own character widths only. Any chip
-//     decoration that adds layout width (background, padding,
-//     border, icon, gap, even a different font family) will
-//     push the overlay text to the right of where the textarea
-//     thinks it is, and the caret will end up "inside" the chip
-//     — invisible behind its background for the first few
-//     characters, then suddenly visible at what looks like the
-//     "first character" (chip end).
+//   - `active` — rendered *over* a transparent <textarea> in the
+//     ChatPanel input overlay. The textarea computes caret X from
+//     its own character metrics, so any layout box that *widens*
+//     the overlay characters (padding, border, icon-as-glyph, even
+//     a different font weight) shifts the overlay text to the
+//     right of where the textarea thinks it is — the caret ends
+//     up "inside" the chip and invisible behind it.
 //
-//     Fix: render the active chip as a PURE inline span — same
-//     font, no padding, no border, no icon. Visual identity
-//     comes from underline + higher opacity. Zero layout
-//     impact → caret position 1:1 with the textarea.
+//     What we *can* safely use, because they don't widen a glyph:
+//       • background-color    (fills the box under the glyph)
+//       • color               (recolors the existing glyph)
+//       • text-decoration     (the underline is drawn as part of
+//         the glyph itself; browsers know its width)
+//       • box-shadow (inset)  (paints inside the box; doesn't
+//         affect width, doesn't shift the overlay)
 //
-//     IMPORTANT: do NOT use `font-medium` on the active
-//     variant. The project uses the Geist Variable font, where
-//     different `wght` axis values produce different glyph
-//     advance widths. Weight 500 (font-medium) renders text
-//     wider than weight 400 (normal), which would shift the
-//     overlay text relative to the textarea and break caret
-//     alignment.
+//     What we *must not* use:
+//       • border-*, padding-* — extra layout boxes widen the run
+//       • font-medium / font-bold — Geist Variable advances differ
+//         by weight; 500 vs 400 shifts the overlay text relative
+//         to the textarea's measuring and breaks caret alignment
+//       • italic — Geist Variable has a separate italic family
+//         (see @fontsource-variable/geist/wght-italic.css) whose
+//         advance widths differ from the roman face. Looks
+//         identical in shape, but the metrics aren't.
+//       • inline SVG icons — every icon needs at least 1em width
+//       • border-transparent "placeholder" borders — same widening
+//         as a real border
 //
-//   - `static` — post-send inside a message bubble. The
-//     bubble isn't a <textarea>; there's no caret to align.
-//     Here we keep the Badge chip for a clear "this was a
-//     skill invocation" affordance, matching other chips in
-//     the app.
+//     Visual recipe (the "skill is queued" affordance):
+//       1. text-transparent  — overlay characters don't re-paint
+//                              the textarea's own text (avoids
+//                              double-print on top of textarea
+//                              text — the original "bold/garbled"
+//                              glitch).
+//       2. inset box-shadow  — paints the *full* advance box
+//                              including side bearings. Plain
+//                              `background-color` only fills the
+//                              ink trap and notches in around
+//                              narrow letters (`i`, `l`, `:`,
+//                              `f`, `s`); the earlier screenshot
+//                              showed `/skill:find-skills` with
+//                              a wash that broke at the colon
+//                              and the `f`/`s` ends. `inset`
+//                              stops the wash from spilling out
+//                              to the characters before `/` and
+//                              after the name.
+//       3. wavy 2px underline — visual "this is special" hook;
+//                              browser accounts for it in glyph
+//                              metrics so advance doesn't change.
+//
+//   - `static` — post-send inside a message bubble. No caret to
+//     align, so we use the full Badge treatment (icon, padding,
+//     border) for an unambiguous "this was a skill" chip.
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
@@ -51,22 +74,31 @@ export function SkillTag({ name, variant = "static", className, prefixed = true 
 	const label = (prefixed ? `/skill:` : "") + name;
 
 	if (variant === "active") {
-		// Pure inline span — no Badge, no padding, no border, no
-		// icon, no font swap. Must match the surrounding overlay
-		// text metrics (text-[13px] leading-relaxed) so the caret
-		// in the underlying textarea lines up 1:1 with the rendered
-		// text. Visual cue: dotted underline.
-		//
-		// IMPORTANT: do NOT use `font-medium` here. The Geist
-		// Variable font produces different glyph advance widths
-		// at weight 500 vs 400, which would shift the overlay
-		// text relative to the textarea's measuring and break
-		// caret alignment. Dotted underline + `text-primary`
-		// (100% opacity vs the overlay's `text-foreground/90`)
-		// provide visual distinction without affecting width.
+		// Pure inline span. The visual layer is a 15% wash of the
+		// current text color, painted via `inset` box-shadow so the
+		// whole advance box is covered (including side bearings —
+		// see the long writeup at the top of this file for why a
+		// plain background-color would notch in around narrow
+		// letters like `i` and `:`). The wash is declared inline
+		// with `color-mix(in oklch, currentColor 15%, transparent)`
+		// rather than a CSS custom property, because Tailwind v4's
+		// @source-tracked file parser trips on `color-mix(...)`
+		// declared as a utility (raises a "reading 'kind'" build
+		// error in the dev server's `generate:serve` phase). An
+		// inline `style` value bypasses the Tailwind parser
+		// entirely — the value is handed straight to the browser.
+		// `currentColor` tracks the theme: in light mode the
+		// foreground token resolves to a near-black ink, in dark
+		// mode to near-white, so the wash stays legible in both.
 		return (
 			<span
-				className={["underline decoration-current decoration-dotted underline-offset-4", className]
+				style={{
+					boxShadow: "inset 0 0 0 4px color-mix(in oklch, currentColor 15%, transparent)",
+				}}
+				className={[
+					"inline decoration-primary decoration-wavy decoration-2 underline-offset-4 text-transparent",
+					className,
+				]
 					.filter(Boolean)
 					.join(" ")}
 			>

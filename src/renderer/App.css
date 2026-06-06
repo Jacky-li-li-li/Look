@@ -18,8 +18,6 @@
    Look — Ink Wash Design System
    Oil-ink monochrome + frosted glass + line-drawing buttons
    ============================================================ */
-
-/* ── Tokens: Light (paper) ── */
 :root {
   --sidebar-width: 280px;
 
@@ -641,3 +639,4 @@ body {
 .animate-drawer-expand {
   animation: drawer-expand 180ms ease both;
 }
+

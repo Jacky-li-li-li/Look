@@ -5,7 +5,16 @@
 import { Button } from "@shared/components/ui/button";
 import { Textarea } from "@shared/components/ui/textarea";
 import { cn } from "@shared/lib/utils";
-import type { AgentMessage, AgentRole, AgentStatus, PermissionMode } from "@shared/types";
+import type {
+	AgentRole,
+	AgentStatus,
+	PermissionMode,
+	PiChunk,
+	PiContentBlock,
+	PiMessage,
+	PiTextBlock,
+	PiToolCallBlock,
+} from "@shared/types";
 import { MessageSquare, Send, Square } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -14,6 +23,7 @@ import MessageBubble from "./MessageBubble";
 import ModelSelector from "./ModelSelector";
 import { PermissionModeSelector } from "./PermissionModeSelector";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
+import SkillOverlaySegments from "./SkillOverlaySegments";
 import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
 import ThinkingSelector from "./ThinkingSelector";
 
@@ -21,7 +31,7 @@ interface ChatPanelProps {
 	agentId: string;
 	agentRole?: AgentRole;
 	agentName?: string;
-	messages: AgentMessage[];
+	messages: PiMessage[];
 	/**
 	 * SDK-authoritative queue snapshot for this agent. Driven by
 	 * `agent:queue_update` events from the main process (which
@@ -71,7 +81,6 @@ export default function ChatPanel({
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const rafRef = useRef<number | undefined>(undefined);
-	const composingRef = useRef(false); // track IME composition state
 
 	// ---- v0.3 skills: lazy-load + slash menu state ----
 	// We fetch the skill list once per agent mount. The main process
@@ -156,12 +165,6 @@ export default function ChatPanel({
 		[filteredSkills, importableDetected, importDetected],
 	);
 
-	// Batch scroll to bottom via rAF — avoids forced layout on every streaming delta
-	useEffect(() => {
-		cancelAnimationFrame(rafRef.current!);
-		rafRef.current = requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ block: "end" }));
-		return () => cancelAnimationFrame(rafRef.current!);
-	}, []);
 	useEffect(() => {
 		inputRef.current?.focus();
 	}, []);
@@ -191,14 +194,12 @@ export default function ChatPanel({
 	// Tool-result messages are NOT standalone bubbles — they attach to the
 	// most recent pending toolCall in the most recent assistant chunk.
 	const displayMessages = useMemo(() => {
-		const merged: AgentMessage[] = [];
+		const merged: PiMessage[] = [];
 
 		/** Attach a tool result to the FIFO-pending toolCall in the last assistant.
 		 *  Searches backwards through merged[], then **forward** through chunks
 		 *  (oldest chunk first) so the pending toolCall from the earliest-assigned
-		 *  tool block gets its result first — matching the SDK's emit order:
-		 *  assistant emits blocks sequentially → tools from earlier blocks
-		 *  have their results arrive earlier on average. */
+		 *  tool block gets its result first — matching the SDK's emit order. */
 		function attachToolResult(resultText: string) {
 			for (let i = merged.length - 1; i >= 0; i--) {
 				const a = merged[i];
@@ -206,27 +207,29 @@ export default function ChatPanel({
 
 				const chunks = a.assistantChunks;
 				if (chunks) {
-					// Forward-chunk search: oldest chunk's pending toolCall first
 					for (let c = 0; c < chunks.length; c++) {
 						const chunk = chunks[c];
-						if (!chunk.toolCalls) continue;
-						const pendingIdx = chunk.toolCalls.findIndex((tc) => !tc.result);
+						const pendingIdx = chunk.contentBlocks.findIndex(
+							(b) => b.type === "toolCall" && !(b as PiToolCallBlock).result,
+						);
 						if (pendingIdx >= 0) {
-							const newTCs = chunk.toolCalls.slice();
-							newTCs[pendingIdx] = { ...newTCs[pendingIdx], result: resultText, isError: false };
-							chunks[c] = { ...chunk, toolCalls: newTCs };
+							const newBlocks = chunk.contentBlocks.slice();
+							const tb = { ...(newBlocks[pendingIdx] as PiToolCallBlock), result: resultText, isError: false };
+							newBlocks[pendingIdx] = tb;
+							chunks[c] = { contentBlocks: newBlocks };
 							merged[i] = { ...a, assistantChunks: chunks.slice() };
 							return true;
 						}
 					}
 				} else {
-					// Legacy flat toolCalls
-					if (!a.toolCalls) continue;
-					const pendingIdx = a.toolCalls.findIndex((tc) => !tc.result);
+					const pendingIdx = a.contentBlocks.findIndex(
+						(b) => b.type === "toolCall" && !(b as PiToolCallBlock).result,
+					);
 					if (pendingIdx >= 0) {
-						const newTCs = a.toolCalls.slice();
-						newTCs[pendingIdx] = { ...newTCs[pendingIdx], result: resultText, isError: false };
-						merged[i] = { ...a, toolCalls: newTCs };
+						const newBlocks = a.contentBlocks.slice();
+						const tb = { ...(newBlocks[pendingIdx] as PiToolCallBlock), result: resultText, isError: false };
+						newBlocks[pendingIdx] = tb;
+						merged[i] = { ...a, contentBlocks: newBlocks };
 						return true;
 					}
 				}
@@ -235,54 +238,38 @@ export default function ChatPanel({
 		}
 
 		for (const msg of messages) {
+			if (!msg.contentBlocks) continue;
 			if (msg.role === "tool") {
-				const resultText = msg.content;
+				const resultText = msg.contentBlocks
+					.filter((b) => b.type === "text")
+					.map((b) => (b as PiTextBlock).text)
+					.join("\n");
 				if (!resultText) continue;
 				attachToolResult(resultText);
-				continue; // do NOT push tool message as its own element
+				continue;
 			}
 
 			const last = merged[merged.length - 1];
 
 			if (last && last.role === "assistant" && msg.role === "assistant") {
-				// ── Consecutive assistant → push as a new CHUNK ──
-				// Preserve each assistant message as its own chunk so the UI can
-				// render them as separate blocks under ONE agent label.
-
-				// Deduplicate toolCalls by callId
-				const newToolCalls = (msg.toolCalls ?? []).map((tc) => ({
-					...tc,
-					result: tc.result ?? "",
-					isError: tc.isError ?? false,
-				}));
-
-				const existingChunks = last.assistantChunks ?? [
-					{
-						content: last.content,
-						thinking: last.thinking,
-						toolCalls: last.toolCalls,
-					},
-				];
-
-				existingChunks.push({
-					content: msg.content || "",
-					thinking: msg.thinking,
-					toolCalls: newToolCalls.length > 0 ? newToolCalls : undefined,
+				// Consecutive assistant → push as a new CHUNK
+				const newBlocks = msg.contentBlocks.map((b) => {
+					if (b.type === "toolCall") {
+						const t = b as PiToolCallBlock;
+						return { ...t, result: t.result ?? "", isError: t.isError ?? false };
+					}
+					return b;
 				});
 
-				// Keep the legacy content/toolCalls for simpler components that
-				// don't understand chunks. `last.content` is the *last* chunk's
-				// text (for collapsing empty assistant texts into previous).
-				const allContent = existingChunks
-					.map((c) => c.content)
-					.filter(Boolean)
-					.join("\n\n");
-				const flatToolCalls = existingChunks.flatMap((c) => c.toolCalls ?? []);
+				const existingChunks: PiChunk[] = last.assistantChunks ?? [{ contentBlocks: last.contentBlocks }];
+
+				existingChunks.push({ contentBlocks: newBlocks });
+
+				const allBlocks: PiContentBlock[] = existingChunks.flatMap((c) => c.contentBlocks);
 
 				merged[merged.length - 1] = {
 					...last,
-					content: allContent,
-					toolCalls: flatToolCalls.length > 0 ? flatToolCalls : undefined,
+					contentBlocks: allBlocks,
 					assistantChunks: existingChunks,
 					isStreaming: msg.isStreaming ?? last.isStreaming,
 				};
@@ -290,23 +277,48 @@ export default function ChatPanel({
 				merged.push(msg);
 			}
 		}
-		// Hide last N user messages when the SDK queue is non-empty
-		// (they show in the drawer instead). N = steering + followUp —
-		// matches the drawer's depth display.
-		const hideCount = queue.steering.length + queue.followUp.length;
-		if (hideCount > 0) {
-			const hideIndices = new Set<number>();
-			let remaining = hideCount;
-			for (let i = merged.length - 1; i >= 0 && remaining > 0; i--) {
-				if (merged[i].role === "user") {
-					hideIndices.add(i);
-					remaining--;
-				}
-			}
-			return merged.filter((_, i) => !hideIndices.has(i));
-		}
+		// chat is the source of truth for the user — every message they
+		// sent (and the assistant replies, tool calls, etc) lives here.
+		// The SDK's `agent:queue_update` event projects the in-flight
+		// `steerQueue` / `followUpQueue` *as preview strings* for the
+		// drawer only. When the SDK drains a queued message, it emits
+		// `message_start` + `message_end` with the real `AgentMessage` —
+		// so the chat transcript already shows the user message by the
+		// time the drawer empties.
+		//
+		// The previous implementation tried to *hide* the last N chat
+		// rows whenever the queue depth was N, on the assumption that
+		// "the drawer shows them". That was a category error:
+		//   • The drawer shows *pending* text the user has typed but
+		//     the SDK hasn't yet emitted a `message_start` for.
+		//   • The chat shows *emitted* `AgentMessage` objects.
+		//   • Hiding the chat row for "drawer depth" N also hides
+		//     *historical* user messages whenever the queue ever
+		//     reaches depth N (which it does whenever the user clicks
+		//     send while the agent is busy). That's the visual glitch
+		//     the original fix here was masking.
+		//
+		// The right behavior is: chat is the authoritative transcript
+		// (don't touch it), drawer is a separate preview pane (the
+		// `queue.steering.length + queue.followUp.length` already drives
+		// its height/visibility at the JSX site below). The two
+		// windows are visually adjacent but render fully independently.
 		return merged;
-	}, [messages, queue.steering.length, queue.followUp.length]);
+	}, [messages]);
+
+	// Auto-scroll to bottom on every visible-list mutation. Placed
+	// *after* the useMemo that defines `displayMessages` so the
+	// biome ignore is honest — the array reference is in scope, and
+	// the effect body doesn't actually use it (it just needs a
+	// "list changed" trigger). Listing it in the deps array is the
+	// canonical way to express "re-run when this array's identity
+	// changes" in React 18.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: identity-only trigger, see comment above
+	useEffect(() => {
+		cancelAnimationFrame(rafRef.current!);
+		rafRef.current = requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ block: "end" }));
+		return () => cancelAnimationFrame(rafRef.current!);
+	}, [displayMessages]);
 
 	const handleSend = () => {
 		const text = input.trim();
@@ -339,7 +351,7 @@ export default function ChatPanel({
 			}
 			return;
 		}
-		if (e.key === "Enter" && !e.shiftKey && !composingRef.current) {
+		if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as KeyboardEvent).isComposing) {
 			e.preventDefault();
 			handleSend();
 		}
@@ -431,25 +443,56 @@ export default function ChatPanel({
 							onClose={() => setInput("")}
 						/>
 					) : null}
-					<Textarea
-						ref={inputRef}
-						value={input}
-						onChange={(e) => setInput(e.target.value)}
-						onKeyDown={handleKeyDown}
-						onCompositionStart={() => {
-							composingRef.current = true;
-						}}
-						onCompositionEnd={() => {
-							composingRef.current = false;
-						}}
-						placeholder={
-							isBusy
-								? "Agent is working… (Enter to queue message)"
-								: `Message ${agentName ?? "agent"}… (type / for skills)`
-						}
-						rows={2}
-						className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
-					/>
+					{/* Active skill highlight overlay — sits *behind* the
+					    textarea in z-order so the textarea's own text and
+					    selection highlight stay on top. The grid trick
+					    (both children pinned to row 1 col 1) makes the
+					    overlay and textarea occupy the *same* box, so the
+					    overlay's intrinsic height tracks the textarea as
+					    it grows. The overlay paints `/skill:foo` runs
+					    with an inset box-shadow via .skill-active-highlight
+					    (App.css); the textarea's own characters sit on
+					    top of that tint (the textarea is `bg-transparent`)
+					    and the textarea's selection highlight is
+					    unaffected (it renders above any background,
+					    including the overlay's).
+
+					    Caret-safety rules (see SkillTag.tsx file header):
+					      • text-transparent on the overlay characters
+					        (both the bare spans and the SkillTag run)
+					        so the textarea's own text is the only thing
+					        the user reads
+					      • pointer-events-none so focus stays on the
+					        textarea
+					      • same font, size, line-height, padding, wrap
+					        settings as the textarea class
+					      • box-shadow (inset) is the only decoration
+					        on the skill run; it doesn't widen the box,
+					        so caret alignment is preserved. */}
+					<div className="grid grid-cols-1 grid-rows-1">
+						{!slashOpen && input.length > 0 ? (
+							<div
+								aria-hidden
+								className="pointer-events-none col-start-1 row-start-1 overflow-hidden whitespace-pre-wrap break-words bg-transparent px-3 py-2.5 text-[13px] leading-relaxed text-transparent"
+							>
+								<SkillOverlaySegments content={input} />
+							</div>
+						) : null}
+						<Textarea
+							ref={inputRef}
+							value={input}
+							onChange={(e) => setInput(e.target.value)}
+							onKeyDown={handleKeyDown}
+							placeholder={
+								isBusy
+									? "Agent is working… (Enter to queue message)"
+									: `Message ${agentName ?? "agent"}… (type / for skills)`
+							}
+							rows={2}
+							style={{ gridArea: "1 / 1" }}
+							className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] leading-relaxed shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
+						/>
+					</div>
 					<div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
 						<ModelSelector
 							agentId={agentId}

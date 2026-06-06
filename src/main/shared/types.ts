@@ -92,7 +92,63 @@ export interface AgentInfo {
 	sessionFilePath?: string;
 }
 
-/** A sub-chunk of an assistant message (for multi-step turn display) */
+// ============================================================
+// Pi Content Block Types — directly map pi SDK content blocks
+// ============================================================
+
+/** pi SDK text block + streaming flag */
+export interface PiTextBlock {
+	type: "text";
+	text: string;
+	active?: boolean;
+}
+
+/** pi SDK thinking block + streaming flag */
+export interface PiThinkingBlock {
+	type: "thinking";
+	thinking: string;
+	redacted?: boolean;
+	active?: boolean;
+}
+
+/** pi SDK toolCall block + runtime state injected by tool_execution events */
+export interface PiToolCallBlock {
+	type: "toolCall";
+	id: string;
+	name: string;
+	arguments: Record<string, any>;
+	status: "pending" | "running" | "success" | "error";
+	result?: string;
+	isError?: boolean;
+}
+
+/** Union of all pi content block types with runtime extensions */
+export type PiContentBlock = PiTextBlock | PiThinkingBlock | PiToolCallBlock;
+
+/**
+ * Replaces AgentMessage. Stores pi SDK content blocks directly.
+ */
+export interface PiMessage {
+	id: string;
+	agentId: string;
+	role: "user" | "assistant" | "tool" | "system";
+	contentBlocks: PiContentBlock[];
+	timestamp: number;
+	isStreaming?: boolean;
+	usage?: UsageSnapshot;
+	assistantChunks?: PiChunk[];
+}
+
+/** One reasoning step within a merged multi-turn assistant reply */
+export interface PiChunk {
+	contentBlocks: PiContentBlock[];
+}
+
+// ============================================================
+// Legacy types
+// ============================================================
+
+/** @deprecated Use PiChunk instead. */
 export interface AssistantChunk {
 	content: string;
 	thinking?: string;
@@ -157,16 +213,16 @@ type WithAgentId<T> = T & { agentId: string };
 export type MainToRendererEvent =
 	// ---- pi session events (mirrored, prefixed with `agent:`) ----
 	| WithAgentId<{ type: "agent:agent_start" }>
-	| WithAgentId<{ type: "agent:agent_end"; messages: AgentMessage[]; willRetry: boolean }>
+	| WithAgentId<{ type: "agent:agent_end"; messages: PiMessage[]; willRetry: boolean }>
 	| WithAgentId<{ type: "agent:turn_start" }>
-	| WithAgentId<{ type: "agent:turn_end"; message: AgentMessage; toolResults: unknown[] }>
-	| WithAgentId<{ type: "agent:message_start"; message: AgentMessage }>
+	| WithAgentId<{ type: "agent:turn_end"; message: PiMessage; toolResults: unknown[] }>
+	| WithAgentId<{ type: "agent:message_start"; message: PiMessage }>
 	| WithAgentId<{
 			type: "agent:message_update";
-			message: AgentMessage;
+			message: PiMessage;
 			assistantMessageEvent: AssistantMessageEventUnion;
 	  }>
-	| WithAgentId<{ type: "agent:message_end"; message: AgentMessage }>
+	| WithAgentId<{ type: "agent:message_end"; message: PiMessage }>
 	| WithAgentId<{
 			type: "agent:tool_execution_start";
 			toolCallId: string;
@@ -219,7 +275,7 @@ export type MainToRendererEvent =
 	| WithAgentId<{ type: "agent:status"; status: AgentStatus }>
 	| WithAgentId<{ type: "agent:context-usage"; usage: ContextUsageInfo }>
 	| WithAgentId<{ type: "agent:usage-update"; usage: UsageSnapshot }>
-	| WithAgentId<{ type: "agent:history"; messages: AgentMessage[] }>
+	| WithAgentId<{ type: "agent:history"; messages: PiMessage[] }>
 	| WithAgentId<{ type: "agent:compacting"; compacting: boolean }>
 	| {
 			type: "permission:ask";

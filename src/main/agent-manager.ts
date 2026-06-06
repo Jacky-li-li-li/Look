@@ -36,12 +36,16 @@ import {
 import { convertPiMessage } from "./shared/message-convert.js";
 import type {
 	AgentInfo,
-	AgentMessage,
 	AgentRole,
 	AgentStatus,
 	ContextUsageInfo,
 	MainToRendererEvent,
 	PermissionMode,
+	PiContentBlock,
+	PiMessage,
+	PiTextBlock,
+	PiThinkingBlock,
+	PiToolCallBlock,
 	TaskNode,
 	ThinkingLevel,
 	UsageSnapshot,
@@ -95,7 +99,7 @@ export interface CreateAgentOptions {
 interface ManagedAgent {
 	info: AgentInfo;
 	session: AgentSession;
-	messages: AgentMessage[];
+	messages: PiMessage[];
 	unsubscribe: () => void;
 	resolveWaits?: (() => void)[];
 	/** Per-agent permission mode (ask / plan / allow). */
@@ -234,7 +238,7 @@ export class AgentManager {
 				// the user has abandoned. getBranch() walks from the current
 				// leaf to root, which is what we want for a linear conversation.
 				const branch = sm.getBranch();
-				const uiMessages: AgentMessage[] = [];
+				const uiMessages: PiMessage[] = [];
 				for (const e of branch) {
 					if (e.type !== "message") continue;
 					const msg = e.message;
@@ -247,6 +251,29 @@ export class AgentManager {
 					)
 						continue;
 					uiMessages.push(convertPiMessage(msg, id, e.id));
+				}
+
+				// Backfill toolCall blocks with toolResult isError/result
+				for (const tmsg of uiMessages) {
+					if (tmsg.role !== "tool") continue;
+					const tcId = (tmsg as any)._toolCallId as string | undefined;
+					const isErr = (tmsg as any)._isError as boolean | undefined;
+					if (!tcId) continue;
+					for (const am of uiMessages) {
+						if (am.role !== "assistant") continue;
+						const block = am.contentBlocks.find(
+							(b) => b.type === "toolCall" && (b as PiToolCallBlock).id === tcId,
+						) as PiToolCallBlock | undefined;
+						if (!block) continue;
+						block.result =
+							(tmsg as any).contentBlocks
+								?.filter((bb: any) => bb.type === "text")
+								.map((bb: any) => bb.text ?? "")
+								.join("\n") ?? "";
+						block.isError = isErr ?? false;
+						block.status = isErr ? "error" : "success";
+						break;
+					}
 				}
 
 				// Pre-flight the persisted model: the user may have removed
@@ -918,7 +945,12 @@ export class AgentManager {
 			id: uuidv4(),
 			agentId: id,
 			role: "system",
-			content: `Agent "${options.name}" [${options.role}] started. Model: ${resolvedId}, Thinking: ${thinkingLevel}${fallbackNote}${modelWarn}`,
+			contentBlocks: [
+				{
+					type: "text",
+					text: `Agent "${options.name}" [${options.role}] started. Model: ${resolvedId}, Thinking: ${thinkingLevel}${fallbackNote}${modelWarn}`,
+				},
+			],
 			timestamp: Date.now(),
 		});
 
@@ -998,9 +1030,9 @@ export class AgentManager {
 	 * landing the agent in `this.agents`, or after a StrictMode double-
 	 * mount has discarded the result.
 	 */
-	listAgentsWithHistory(): { agents: AgentInfo[]; history: Record<string, AgentMessage[]> } {
+	listAgentsWithHistory(): { agents: AgentInfo[]; history: Record<string, PiMessage[]> } {
 		const agents = this.listAgents();
-		const history: Record<string, AgentMessage[]> = {};
+		const history: Record<string, PiMessage[]> = {};
 		for (const a of this.agents.values()) {
 			if (a.messages.length > 0) history[a.info.id] = a.messages;
 		}
@@ -1114,7 +1146,11 @@ export class AgentManager {
 			(m.resolveWaits ??= []).push(() => {
 				clearTimeout(t);
 				const last = [...m.messages].reverse().find((x) => x.role === "assistant");
-				resolve(last?.content ?? "(no response)");
+				const text = last?.contentBlocks
+					?.filter((b: PiContentBlock) => b.type === "text")
+					.map((b) => (b as PiTextBlock).text ?? "")
+					.join("\n");
+				resolve(text || "(no response)");
 			});
 			this.sendMessage(agentId, question);
 		});
@@ -1294,8 +1330,46 @@ export class AgentManager {
 				if (!evt) break;
 				const sm = [...m.messages].reverse().find((x) => x.isStreaming);
 				if (!sm) break;
-				if (evt.type === "text_delta") sm.content += evt.delta;
-				else if (evt.type === "thinking_delta") sm.thinking = (sm.thinking ?? "") + evt.delta;
+				if (evt.type === "text_delta") {
+					let block = [...sm.contentBlocks]
+						.reverse()
+						.find((b) => b.type === "text" && (b as PiTextBlock).active === true) as PiTextBlock | undefined;
+					if (!block) {
+						block = { type: "text", text: "", active: true };
+						sm.contentBlocks.push(block);
+					}
+					block.text += evt.delta;
+				} else if (evt.type === "thinking_delta") {
+					let block = [...sm.contentBlocks]
+						.reverse()
+						.find((b) => b.type === "thinking" && (b as PiThinkingBlock).active === true) as
+						| PiThinkingBlock
+						| undefined;
+					if (!block) {
+						block = { type: "thinking", thinking: "", active: true };
+						sm.contentBlocks.push(block);
+					}
+					block.thinking += evt.delta;
+				} else if (evt.type === "text_end") {
+					for (const b of sm.contentBlocks)
+						if (b.type === "text" && (b as PiTextBlock).active) (b as PiTextBlock).active = false;
+				} else if (evt.type === "thinking_end") {
+					for (const b of sm.contentBlocks)
+						if (b.type === "thinking" && (b as PiThinkingBlock).active) (b as PiThinkingBlock).active = false;
+				} else if (evt.type === "toolcall_end") {
+					const tc = (evt as any).toolCall;
+					if (tc) {
+						sm.contentBlocks.push({
+							type: "toolCall",
+							id: tc.id ?? "",
+							name: tc.name ?? "unknown",
+							arguments: tc.arguments ?? {},
+							status: "pending",
+							result: "",
+							isError: false,
+						});
+					}
+				}
 				break;
 			}
 			case "message_end": {
@@ -1350,15 +1424,27 @@ export class AgentManager {
 					[...m.messages].reverse().find((x) => x.isStreaming && x.role === "assistant") ??
 					[...m.messages].reverse().find((x) => x.role === "assistant");
 				if (tm) {
-					tm.toolCalls = [
-						...(tm.toolCalls ?? []),
-						{
-							callId: event.toolCallId,
-							toolName: event.toolName,
-							args: event.args ?? {},
+					const block = tm.contentBlocks.find(
+						(b) =>
+							b.type === "toolCall" &&
+							((b as PiToolCallBlock).id === event.toolCallId ||
+								((b as PiToolCallBlock).status === "pending" && !(b as PiToolCallBlock).id)),
+					) as PiToolCallBlock | undefined;
+					if (!block) {
+						tm.contentBlocks.push({
+							type: "toolCall",
+							id: event.toolCallId,
+							name: event.toolName,
+							arguments: event.args ?? {},
 							status: "running",
-						},
-					];
+							result: "",
+							isError: false,
+						});
+					} else {
+						block.status = "running";
+						block.name = event.toolName || block.name;
+						if (event.args) block.arguments = event.args;
+					}
 				}
 				const perm = checkPermission(event.toolName, event.args ?? {}, m.info.role);
 				if (perm.action === "deny") {
@@ -1386,16 +1472,23 @@ export class AgentManager {
 				break;
 			}
 			case "tool_execution_end": {
-				// Sync final state into the local tool-call record.
 				const tm = [...m.messages]
 					.reverse()
-					.find((x) => x.role === "assistant" && x.toolCalls?.some((t) => t.callId === event.toolCallId));
+					.find(
+						(x) =>
+							x.role === "assistant" &&
+							x.contentBlocks.some(
+								(b) => b.type === "toolCall" && (b as PiToolCallBlock).id === event.toolCallId,
+							),
+					);
 				if (tm) {
-					const tc = tm.toolCalls?.find((t) => t.callId === event.toolCallId);
-					if (tc) {
-						tc.status = event.isError ? "error" : "success";
-						tc.result = typeof event.result === "string" ? event.result : JSON.stringify(event.result);
-						tc.isError = event.isError;
+					const block = tm.contentBlocks.find(
+						(b) => b.type === "toolCall" && (b as PiToolCallBlock).id === event.toolCallId,
+					) as PiToolCallBlock | undefined;
+					if (block) {
+						block.status = event.isError ? "error" : "success";
+						block.result = typeof event.result === "string" ? event.result : JSON.stringify(event.result);
+						block.isError = event.isError;
 					}
 				}
 				break;
@@ -1507,7 +1600,7 @@ export class AgentManager {
 	 *     m.messages feeds getMessages() / listAgentsWithHistory() /
 	 *     the persisted-agents restore path.
 	 */
-	private addMessage(agentId: string, msg: AgentMessage): void {
+	private addMessage(agentId: string, msg: PiMessage): void {
 		const m = this.agents.get(agentId);
 		if (!m) return;
 		m.messages.push(msg);

@@ -3,7 +3,14 @@
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
-import type { AgentMessage, AgentRole } from "@shared/types";
+import type {
+	AgentRole,
+	PiContentBlock,
+	PiMessage,
+	PiTextBlock,
+	PiThinkingBlock,
+	PiToolCallBlock,
+} from "@shared/types";
 import { Settings2, UserRound } from "lucide-react";
 import { memo } from "react";
 import ExecutionProcess from "./ExecutionProcess";
@@ -13,9 +20,55 @@ import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
 
 interface MessageBubbleProps {
-	message: AgentMessage;
+	message: PiMessage;
 	agentRole?: AgentRole;
 	agentName?: string;
+}
+
+/** Render content blocks inside a whisper bubble — shared between single-chunk and multi-chunk paths. */
+function ContentBlocks({ blocks, isStreaming }: { blocks: PiContentBlock[]; isStreaming: boolean }) {
+	const thinkingBlocks = blocks.filter((b) => b.type === "thinking") as PiThinkingBlock[];
+	const toolCallBlocks = blocks.filter((b) => b.type === "toolCall") as PiToolCallBlock[];
+	const textBlocks = blocks.filter((b) => b.type === "text") as PiTextBlock[];
+	const hasOutput = textBlocks.some((b) => b.text.length > 0);
+	const thinkingText = thinkingBlocks.map((b) => b.thinking).join("");
+	const outputText = textBlocks.map((b) => b.text).join("");
+
+	return (
+		<>
+			<ExecutionProcess
+				thinking={thinkingText || undefined}
+				toolCalls={toolCallBlocks.map((tc) => ({
+					callId: tc.id,
+					toolName: tc.name,
+					status: tc.status,
+				}))}
+				hasOutput={hasOutput}
+			>
+				{thinkingText && <ThinkingPanel thinking={thinkingText} />}
+				{toolCallBlocks.length > 0 &&
+					toolCallBlocks.map((tc) => (
+						<ToolCallCard
+							key={tc.id}
+							toolCall={{
+								callId: tc.id,
+								toolName: tc.name,
+								args: tc.arguments,
+								status: tc.status,
+								result: tc.result,
+								isError: tc.isError,
+							}}
+						/>
+					))}
+			</ExecutionProcess>
+
+			{outputText && (
+				<div className="message-prose">
+					<SkillAwareContent content={outputText} isStreaming={isStreaming} />
+				</div>
+			)}
+		</>
+	);
 }
 
 const MessageBubble = memo(function MessageBubble({ message, agentRole, agentName }: MessageBubbleProps) {
@@ -23,11 +76,15 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 	const isSystem = message.role === "system";
 
 	if (isSystem) {
+		const sysText = message.contentBlocks
+			.filter((b) => b.type === "text")
+			.map((b) => (b as PiTextBlock).text)
+			.join("");
 		return (
 			<div className="flex justify-center py-1">
 				<span className="inline-flex max-w-[78%] items-center gap-1.5 rounded-md border border-dashed border-hairline bg-background/50 px-3 py-1.5 text-[11px] text-muted-foreground">
 					<Settings2 className="size-3" />
-					<span className="truncate">{message.content}</span>
+					<span className="truncate">{sysText}</span>
 				</span>
 			</div>
 		);
@@ -56,7 +113,7 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 					{message.isStreaming && <span className="status-mark" data-status="thinking" />}
 				</div>
 
-				{/* Whisper bubble — complete message: thinking → tools → output */}
+				{/* Whisper bubble */}
 				{message.assistantChunks && message.assistantChunks.length > 0 ? (
 					/* ── Multi-chunk: separate blocks under ONE label ── */
 					<div className="flex flex-col gap-3">
@@ -71,35 +128,15 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 										"border-l-2 border-primary/30",
 								)}
 							>
-								{/* Chunk-level 执行过程 */}
-								<ExecutionProcess
-									thinking={chunk.thinking}
-									toolCalls={chunk.toolCalls?.map((tc) => ({
-										callId: tc.callId,
-										toolName: tc.toolName,
-										status: tc.status,
-									}))}
-									hasOutput={!!chunk.content}
-								>
-									{chunk.thinking && <ThinkingPanel thinking={chunk.thinking} />}
-									{chunk.toolCalls &&
-										chunk.toolCalls.length > 0 &&
-										chunk.toolCalls.map((tc) => <ToolCallCard key={tc.callId} toolCall={tc} />)}
-								</ExecutionProcess>
-
-								{chunk.content && (
-									<div className="message-prose">
-										<SkillAwareContent
-											content={chunk.content}
-											isStreaming={message.isStreaming && ci === message.assistantChunks!.length - 1}
-										/>
-									</div>
-								)}
+								<ContentBlocks
+									blocks={chunk.contentBlocks}
+									isStreaming={!!message.isStreaming && ci === message.assistantChunks!.length - 1}
+								/>
 							</div>
 						))}
 					</div>
 				) : (
-					/* ── Single-chunk (legacy / user message path) ── */
+					/* ── Single-chunk ── */
 					<div
 						className={cn(
 							"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
@@ -107,26 +144,7 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 							!isUser && "whisper-bubble--assistant w-full",
 						)}
 					>
-						{/* 执行过程 — wraps thinking + tools, auto-collapses when output arrives */}
-						<ExecutionProcess
-							thinking={message.thinking}
-							toolCalls={message.toolCalls?.map((tc) => ({
-								callId: tc.callId,
-								toolName: tc.toolName,
-								status: tc.status,
-							}))}
-							hasOutput={!!message.content}
-						>
-							{message.thinking && <ThinkingPanel thinking={message.thinking} />}
-							{message.toolCalls &&
-								message.toolCalls.length > 0 &&
-								message.toolCalls.map((tc) => <ToolCallCard key={tc.callId} toolCall={tc} />)}
-						</ExecutionProcess>
-
-						{/* Output — SkillAwareContent renders /skill:name / <skill> blocks as compact SkillTag chips */}
-						<div className="message-prose">
-							<SkillAwareContent content={message.content} isStreaming={message.isStreaming ?? false} />
-						</div>
+						<ContentBlocks blocks={message.contentBlocks} isStreaming={message.isStreaming ?? false} />
 					</div>
 				)}
 			</div>

@@ -1,105 +1,104 @@
 // ============================================================
-// Message Converter — pi SDK AgentMessage ↔ UI AgentMessage
+// Message Converter — pi SDK message → PiMessage (pass-through)
 // ============================================================
 
-import type { AgentMessage } from "./types.js";
+import type { PiContentBlock, PiMessage, UsageSnapshot } from "./types.js";
 
-/**
- * Convert a pi AgentMessage (from session entries) into UI-displayable format.
- *
- * pi stores messages as structured content blocks:
- *   AssistantMessage.content = [{ type: "text", text }, { type: "thinking", thinking }, ...]
- *
- * Our UI expects:
- *   { role, content: string, thinking: string, toolCalls: [...] }
- */
-export function convertPiMessage(piMsg: any, agentId: string, msgId: string): AgentMessage {
+export function convertPiMessage(piMsg: any, agentId: string, msgId: string): PiMessage {
 	const piRole: string = piMsg.role ?? "";
 
-	// User message
 	if (piRole === "user") {
+		const text =
+			typeof piMsg.content === "string"
+				? piMsg.content
+				: Array.isArray(piMsg.content)
+					? piMsg.content
+							.filter((b: any) => b.type === "text")
+							.map((b: any) => b.text)
+							.join("\n")
+					: "";
 		return {
 			id: msgId,
 			agentId,
 			role: "user",
-			content: extractText(piMsg.content),
+			contentBlocks: [{ type: "text", text }],
 			timestamp: piMsg.timestamp ?? Date.now(),
 		};
 	}
 
-	// Assistant message
 	if (piRole === "assistant") {
-		const blocks = Array.isArray(piMsg.content) ? piMsg.content : [];
+		const blocks: PiContentBlock[] = Array.isArray(piMsg.content)
+			? piMsg.content.map((b: any): PiContentBlock => {
+					if (b.type === "toolCall") {
+						return {
+							type: "toolCall",
+							id: b.id ?? "",
+							name: b.name ?? "unknown",
+							arguments: b.arguments ?? {},
+							status: "pending",
+							result: "",
+							isError: false,
+						};
+					}
+					return { ...b, active: false };
+				})
+			: [];
 		return {
 			id: msgId,
 			agentId,
 			role: "assistant",
-			content: blocks
-				.filter((b: any) => b.type === "text")
-				.map((b: any) => b.text)
-				.join(""),
-			thinking: blocks
-				.filter((b: any) => b.type === "thinking")
-				.map((b: any) => b.thinking)
-				.join(""),
-			toolCalls: blocks
-				.filter((b: any) => b.type === "toolCall")
-				.map((b: any) => ({
-					callId: b.id ?? "",
-					toolName: b.name ?? "unknown",
-					args: b.arguments ?? {},
-					result: "",
-					isError: false,
-					status: "success" as const,
-				})),
+			contentBlocks: blocks,
 			timestamp: piMsg.timestamp ?? Date.now(),
-			usage: piMsg.usage
-				? {
-						inputTokens: piMsg.usage.input ?? 0,
-						outputTokens: piMsg.usage.output ?? 0,
-						cacheReadTokens: piMsg.usage.cacheRead ?? 0,
-						cacheWriteTokens: piMsg.usage.cacheWrite ?? 0,
-						totalTokens: piMsg.usage.totalTokens ?? 0,
-						cost: {
-							input: piMsg.usage.cost?.input ?? 0,
-							output: piMsg.usage.cost?.output ?? 0,
-							cacheRead: piMsg.usage.cost?.cacheRead ?? 0,
-							cacheWrite: piMsg.usage.cost?.cacheWrite ?? 0,
-							total: piMsg.usage.cost?.total ?? 0,
-						},
-					}
-				: undefined,
+			usage: piMsg.usage ? usageFromPi(piMsg.usage) : undefined,
 		};
 	}
 
-	// Tool result — displayed as a tool message
 	if (piRole === "toolResult") {
+		const text = Array.isArray(piMsg.content)
+			? piMsg.content
+					.filter((b: any) => b.type === "text")
+					.map((b: any) => b.text)
+					.join("\n")
+			: typeof piMsg.content === "string"
+				? piMsg.content
+				: "";
 		return {
 			id: msgId,
 			agentId,
 			role: "tool",
-			content: extractText(piMsg.content),
+			contentBlocks: [{ type: "text", text }],
 			timestamp: piMsg.timestamp ?? Date.now(),
+			...({ _toolCallId: piMsg.toolCallId, _toolName: piMsg.toolName, _isError: piMsg.isError } as any),
 		};
 	}
 
-	// Fallback (system, custom, etc.)
 	return {
 		id: msgId,
 		agentId,
 		role: "system",
-		content: typeof piMsg.content === "string" ? piMsg.content : JSON.stringify(piMsg.content ?? piMsg),
+		contentBlocks:
+			typeof piMsg.content === "string"
+				? [{ type: "text", text: piMsg.content }]
+				: Array.isArray(piMsg.content)
+					? piMsg.content.map((b: any) => ({ ...b }))
+					: [{ type: "text", text: JSON.stringify(piMsg.content ?? piMsg) }],
 		timestamp: piMsg.timestamp ?? Date.now(),
 	};
 }
 
-function extractText(content: any): string {
-	if (typeof content === "string") return content;
-	if (Array.isArray(content)) {
-		return content
-			.filter((b: any) => b.type === "text")
-			.map((b: any) => b.text)
-			.join("\n");
-	}
-	return "";
+function usageFromPi(u: any): UsageSnapshot {
+	return {
+		inputTokens: u.input ?? 0,
+		outputTokens: u.output ?? 0,
+		cacheReadTokens: u.cacheRead ?? 0,
+		cacheWriteTokens: u.cacheWrite ?? 0,
+		totalTokens: u.totalTokens ?? 0,
+		cost: {
+			input: u.cost?.input ?? 0,
+			output: u.cost?.output ?? 0,
+			cacheRead: u.cost?.cacheRead ?? 0,
+			cacheWrite: u.cost?.cacheWrite ?? 0,
+			total: u.cost?.total ?? 0,
+		},
+	};
 }
