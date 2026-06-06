@@ -386,17 +386,17 @@ function SettingsDialogImpl({
 				</DialogHeader>
 
 				<Tabs value={tab} onValueChange={setTab} orientation="vertical" className="flex min-h-0 flex-1 gap-4">
-					<TabsList className="!h-full !justify-start w-44 shrink-0 flex-col items-stretch gap-1 rounded-lg border border-hairline bg-muted/30 p-1.5">
+					<TabsList className="!h-full !justify-start w-44 shrink-0 flex-col items-stretch rounded-none border-r border-hairline bg-transparent p-0 gap-0">
 						<TabsTrigger
 							value="general"
-							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<Palette className="size-3.5" />
 							General
 						</TabsTrigger>
 						<TabsTrigger
 							value="api-keys"
-							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<Key className="size-3.5" />
 							<span className="flex-1 text-left">API Keys</span>
@@ -408,14 +408,14 @@ function SettingsDialogImpl({
 						</TabsTrigger>
 						<TabsTrigger
 							value="chat-prompt"
-							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<MessageSquare className="size-3.5" />
 							Chat Prompt
 						</TabsTrigger>
 						<TabsTrigger
 							value="about"
-							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<Zap className="size-3.5" />
 							About

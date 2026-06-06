@@ -4,6 +4,44 @@
 
 import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
+
+/**
+ * Auto-close unclosed fenced code blocks (```) so ReactMarkdown
+ * never receives partial fences during streaming.  Without this,
+ * every ~80ms throttle tick would pass content like
+ * "```python\nprint('hel" (no closing ```), and ReactMarkdown
+ * would render the raw ``` markers until the closing fence arrived.
+ *
+ * The fix: count lines that start with ```.  An odd count means
+ * a fence is open but not closed → append a closing ```.
+ *
+ * Edge case: code content that itself has ``` at column 0 on its
+ * own line would throw the count off, but (a) models rarely
+ * output such code, (b) the next throttle tick fixes it, and
+ * (c) it's strictly better than showing raw ``` to the user on
+ * every streaming tick.
+ */
+function autoCloseCodeFences(text: string): string {
+	let open = false;
+	let i = 0;
+	while (i < text.length) {
+		const nl = text.indexOf("\n", i);
+		const lineEnd = nl === -1 ? text.length : nl + 1;
+		const lineLen = nl === -1 ? text.length - i : nl - i;
+		// Check if this line starts with ```
+		if (lineLen >= 3) {
+			const c0 = text.charCodeAt(i);
+			const c1 = text.charCodeAt(i + 1);
+			const c2 = text.charCodeAt(i + 2);
+			if (c0 === 0x60 && c1 === 0x60 && c2 === 0x60) {
+				open = !open;
+			}
+		}
+		i = lineEnd;
+	}
+	return open ? `${text}\n\`\`\`` : text;
+}
+
 import { Check, Copy } from "lucide-react";
 import React, { memo, useEffect, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
@@ -215,9 +253,13 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 		return isStreaming ? <span className="inline-block w-2 h-4 bg-primary animate-pulse rounded-xs ml-0.5" /> : null;
 	}
 
+	// Fix: auto-close unclosed fenced code blocks so ReactMarkdown
+	// always receives complete blocks during streaming — no raw ``` in view.
+	const displayContent = autoCloseCodeFences(throttledContent);
+
 	const markdown = (
 		<ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
-			{throttledContent}
+			{displayContent}
 		</ReactMarkdown>
 	);
 

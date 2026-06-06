@@ -49,7 +49,7 @@ export interface LoadedSkills {
 
 let cache: LoadedSkills | null = null;
 let cachedProjectRoot: string | null = null;
-let watcher: ReturnType<typeof watch> | null = null;
+let _watcher: ReturnType<typeof watch> | null = null;
 
 /** Look's project-level skills directory: `<projectRoot>/.look/skills/`. */
 export function getLookProjectSkillsDir(projectRoot: string): string {
@@ -186,7 +186,7 @@ export function invalidateSkillCache(): void {
 		}
 	}
 	watchers.length = 0;
-	watcher = null;
+	_watcher = null;
 }
 
 /** Find a single skill by name. Returns undefined if not found. */
@@ -258,5 +258,5 @@ function startWatching(projectRoot: string): void {
 	}
 	// Keep the legacy single-handle ref pointing at the first watcher
 	// so `invalidateSkillCache()`'s cleanup logic keeps working.
-	watcher = watchers[0]?.handle ?? null;
+	_watcher = watchers[0]?.handle ?? null;
 }

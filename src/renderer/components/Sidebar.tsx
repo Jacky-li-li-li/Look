@@ -5,7 +5,6 @@
 import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
-import { Separator } from "@shared/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo } from "@shared/types";
@@ -120,42 +119,29 @@ export default function Sidebar({
 
 	return (
 		<aside className="flex h-full w-[260px] min-w-[260px] max-w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border bg-sidebar">
-			{/* Header */}
-			<div className="flex h-14 shrink-0 items-center justify-between border-b border-hairline px-4">
-				<div className="flex items-center gap-3">
-					<PixelAgentAvatar size="sm" active />
-					<span className="text-[14px] font-semibold">Agents</span>
-				</div>
-				<div className="flex items-center gap-1">
-					<Button size="icon" variant="ghost" className="size-7" onClick={onSettingsClick} aria-label="Settings">
-						<Settings className="size-3.5" />
-					</Button>
-				</div>
-			</div>
-
-			{/* Tabs */}
+			{/* Tabs — Underline style (matches Settings API Keys) */}
 			<Tabs value={tab} onValueChange={setTab} className="shrink-0">
-				<TabsList className="w-full rounded-none bg-transparent px-3 gap-2 pt-3 pb-3">
+				<TabsList className="w-full h-auto rounded-none bg-transparent gap-0 px-3 border-b border-hairline">
 					<TabsTrigger
 						value="chat"
-						className="flex-1 gap-1.5 py-3 text-[12px] font-medium text-muted-foreground transition-colors rounded-md border border-hairline bg-muted/30 hover:bg-muted/50 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15 data-[state=active]:text-foreground"
+						className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
 					>
-						<MessageSquare />
+						<MessageSquare className="size-4" />
 						Chat
 						{chatCount > 0 && (
-							<Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+							<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 								{chatCount}
 							</Badge>
 						)}
 					</TabsTrigger>
 					<TabsTrigger
 						value="orch"
-						className="flex-1 gap-1.5 py-3 text-[12px] font-medium text-muted-foreground transition-colors rounded-md border border-hairline bg-muted/30 hover:bg-muted/50 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15 data-[state=active]:text-foreground"
+						className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
 					>
-						<Network />
+						<Network className="size-4" />
 						Orch
 						{orchCount > 0 && (
-							<Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
+							<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 								{orchCount}
 							</Badge>
 						)}
@@ -264,6 +250,19 @@ export default function Sidebar({
 					)}
 				</div>
 			</ScrollArea>
+
+			{/* Footer — Settings */}
+			<div className="flex shrink-0 items-center border-t border-hairline px-3 py-2.5">
+				<Button
+					variant="line"
+					size="default"
+					className="h-10 flex-1 justify-start gap-2 text-[12px] font-medium"
+					onClick={onSettingsClick}
+				>
+					<Settings className="size-4" />
+					Settings
+				</Button>
+			</div>
 		</aside>
 	);
 }
