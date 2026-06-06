@@ -3,8 +3,9 @@
 // Bridges Electron IPC between renderer and AgentManager
 // ============================================================
 
-import { type BrowserWindow, ipcMain } from "electron";
+import { type BrowserWindow, dialog, ipcMain } from "electron";
 import type { AgentManager } from "./agent-manager.js";
+import { getSessionsDir } from "./shared/look-storage.js";
 import type { AgentRole, MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 
 export function registerIpcHandlers(agentManager: AgentManager, mainWindow: BrowserWindow): void {
@@ -22,7 +23,7 @@ export function registerIpcHandlers(agentManager: AgentManager, mainWindow: Brow
 
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
-		return handleRendererInvoke(data, agentManager);
+		return handleRendererInvoke(data, agentManager, mainWindow);
 	});
 }
 
@@ -33,7 +34,11 @@ function handleRendererEvent(data: RendererToMainEvent, _agentManager: AgentMana
 	}
 }
 
-async function handleRendererInvoke(data: RendererToMainEvent, agentManager: AgentManager): Promise<any> {
+async function handleRendererInvoke(
+	data: RendererToMainEvent,
+	agentManager: AgentManager,
+	mainWindow: BrowserWindow,
+): Promise<any> {
 	switch (data.type) {
 		// === Agent messaging ===
 		case "agent:send-message": {
@@ -135,6 +140,16 @@ async function handleRendererInvoke(data: RendererToMainEvent, agentManager: Age
 			return { success: true, result };
 		}
 
+		case "settings:test-env-key": {
+			const result = await agentManager.testEnvKey(data.provider);
+			return { success: true, result };
+		}
+
+		case "settings:get-verified-env": {
+			const envProviders = await agentManager.getVerifiedEnvProviders();
+			return { success: true, providers: envProviders };
+		}
+
 		case "settings:general:get": {
 			return { success: true, settings: agentManager.getGeneralSettings() };
 		}
@@ -210,6 +225,42 @@ async function handleRendererInvoke(data: RendererToMainEvent, agentManager: Age
 
 		case "skills:detect-common": {
 			return { success: true, detected: agentManager.detectCommonSkillPaths() };
+		}
+
+		// === OS native dialogs ===
+		// Wraps `dialog.showOpenDialog` so the renderer (in sandbox)
+		// can prompt the user to pick a skills directory. Returns
+		// `{ success, path?, canceled }` so callers can distinguish
+		// "user pressed Cancel" from "no window available".
+		case "dialog:open-directory": {
+			if (mainWindow.isDestroyed()) {
+				return { success: false, canceled: true, error: "Main window unavailable" };
+			}
+			const result = await dialog.showOpenDialog(mainWindow, {
+				title: "Select a skills directory",
+				properties: ["openDirectory", "createDirectory"],
+			});
+			if (result.canceled || result.filePaths.length === 0) {
+				return { success: false, canceled: true };
+			}
+			return { success: true, path: result.filePaths[0] };
+		}
+
+		// === OS shell ===
+		case "shell:reveal-in-finder": {
+			const { shell } = await import("electron");
+			shell.showItemInFolder(data.path);
+			return { success: true };
+		}
+
+		// Opens the session storage directory (~/.look/sessions/) in the OS
+		// file manager (Finder / Explorer). This is where all session .jsonl
+		// files for each agent are persisted.
+		case "shell:open-project-folder": {
+			const { shell } = await import("electron");
+			const sessionsDir = getSessionsDir();
+			shell.openPath(sessionsDir);
+			return { success: true, path: sessionsDir };
 		}
 
 		default:

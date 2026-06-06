@@ -111,9 +111,9 @@ export default function ContextRing({ agentId, onUsageChange }: ContextRingProps
 		<button
 			type="button"
 			onClick={handleClick}
-			disabled={usage.compacting || usage.percentage < 5}
+			disabled={usage.compacting || usage.percentage < 1}
 			className={cn(
-				"group relative flex size-7 items-center justify-center rounded-md transition-colors",
+				"group relative flex size-7 items-center justify-center rounded-md transition-colors border border-hairline",
 				"hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed",
 				pulsing && "animate-pulse",
 			)}
@@ -131,7 +131,7 @@ export default function ContextRing({ agentId, onUsageChange }: ContextRingProps
 					r={RING_RADIUS}
 					fill="none"
 					strokeWidth={STROKE_WIDTH}
-					className="stroke-muted-foreground/15"
+					className="stroke-muted-foreground/40"
 				/>
 				{/* Usage arc */}
 				<circle

@@ -57,6 +57,15 @@ const api = {
   testApiKey: (provider, key) =>
     ipcRenderer.invoke("look:invoke", { type: "settings:test-api-key", provider, key }),
 
+  // Test the env-var credential for a provider (no key arg — the
+  // main process reads it from process.env itself, so the renderer
+  // never has to know the variable name).
+  testEnvKey: (provider) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:test-env-key", provider }),
+
+  getVerifiedEnvProviders: () =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:get-verified-env" }),
+
   setApiKey: (provider, key) =>
     ipcRenderer.invoke("look:invoke", { type: "settings:set-api-key", provider, key }),
 
@@ -94,6 +103,22 @@ const api = {
     ipcRenderer.invoke("look:invoke", { type: "skills:import-paths", paths }),
   detectCommonSkillPaths: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:detect-common" }),
+
+  // ---- OS native dialogs ----
+  // Returns { success, path?, canceled?, error? }. The renderer
+  // is sandboxed, so it can't call `dialog.showOpenDialog` itself.
+  openDirectoryDialog: () =>
+    ipcRenderer.invoke("look:invoke", { type: "dialog:open-directory" }),
+
+  // ---- OS shell ----
+  // Reveal a file in the OS file manager (Finder / Explorer / etc).
+  revealInFinder: (path) =>
+    ipcRenderer.invoke("look:invoke", { type: "shell:reveal-in-finder", path }),
+
+  // Opens the sessions directory (~/.look/sessions/) in the OS file manager.
+  // Contains all session .jsonl files for each agent.
+  openProjectFolder: () =>
+    ipcRenderer.invoke("look:invoke", { type: "shell:open-project-folder" }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

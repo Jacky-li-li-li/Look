@@ -43,14 +43,32 @@ export const ROLE_CONFIGS: Record<AgentRole, RoleConfig> = {
 		// No role preset — the model is chosen by the user at runtime
 		// (see the bottom-of-input ModelSelector). `defaultModel: null`
 		// signals "no role-default; pick the first user-configured model"
-		// at createAgent time. Tools/system-prompt are likewise "blank
-		// workstation" so chat agents behave as a generic workbench.
+		// at createAgent time. Tools are likewise "blank workstation" so
+		// chat agents behave as a generic workbench.
+		//
+		// We DO inject a minimal system prompt (overridable by the
+		// user's chatSystemPrompt setting in agent-manager.sendMessage
+		// path) because without it the LLM defaults to echoing tool
+		// results back to the user verbatim — which is wrong for any
+		// tool that returns documentation (read a SKILL.md → LLM pastes
+		// the whole doc into its reply). The two rules below steer the
+		// model toward "consume the result, then answer in your own
+		// words".
 		description: "通用 agent — 所有内置工具全开，模型由用户在底部选择。",
 		defaultModel: null,
 		defaultThinkingLevel: "medium",
 		fallbackModels: [],
 		tools: null,
-		systemPrompt: "",
+		systemPrompt: `You are a helpful assistant with access to tools.
+
+Tool usage:
+- Tool results are private to your reasoning. Do NOT echo them
+  verbatim to the user — synthesize a concise answer instead.
+- Only show tool output directly when the user explicitly asks
+  (e.g. "show me the file" or "display the document").
+
+Response style:
+- Be concise. Prefer a short answer with a clear next step.`,
 	},
 
 	orchestrator: {

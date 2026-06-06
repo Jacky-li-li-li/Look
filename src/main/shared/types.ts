@@ -88,6 +88,15 @@ export interface AgentInfo {
 	fallbackModels: string[];
 	/** Per-agent permission mode. Defaults to "ask". */
 	permissionMode: PermissionMode;
+	/** Path to the session JSONL file (~/.look/sessions/...). */
+	sessionFilePath?: string;
+}
+
+/** A sub-chunk of an assistant message (for multi-step turn display) */
+export interface AssistantChunk {
+	content: string;
+	thinking?: string;
+	toolCalls?: ToolCallRecord[];
 }
 
 /** A single message in an agent's conversation */
@@ -98,6 +107,8 @@ export interface AgentMessage {
 	content: string;
 	thinking?: string;
 	toolCalls?: ToolCallRecord[];
+	/** Multi-step chunks — when present, render as separate blocks under ONE agent label */
+	assistantChunks?: AssistantChunk[];
 	timestamp: number;
 	isStreaming?: boolean;
 	/** Token usage for this message (assistant messages only) */
@@ -272,6 +283,8 @@ export type RendererToMainEvent =
 	| { type: "settings:get-api-key"; provider: string }
 	| { type: "settings:set-api-key"; provider: string; key: string }
 	| { type: "settings:test-api-key"; provider: string; key: string }
+	| { type: "settings:test-env-key"; provider: string }
+	| { type: "settings:get-verified-env" }
 	| { type: "settings:general:get" }
 	| { type: "context:usage"; agentId: string }
 	| { type: "session:compress"; agentId: string }
@@ -288,6 +301,7 @@ export type RendererToMainEvent =
 				autoCompress: boolean;
 				compressThreshold: number;
 				preferredModel: string | null;
+				chatSystemPrompt: string;
 			}>;
 	  }
 	| { type: "settings:general:reset" }
@@ -296,6 +310,11 @@ export type RendererToMainEvent =
 	| { type: "skills:invoke"; agentId: string; skillName: string; args?: string }
 	| { type: "skills:import-paths"; paths: string[] }
 	| { type: "skills:detect-common" }
+	// ---- OS native dialogs (renderer → main) ----
+	| { type: "dialog:open-directory" }
+	| { type: "shell:reveal-in-finder"; path: string }
+	// ---- OS shell: open project root in file manager ----
+	| { type: "shell:open-project-folder" }
 	| { type: "app:ready" };
 
 // ============================================================

@@ -17,12 +17,22 @@ import { ChevronRight, FileCode2, FolderGit2, Sparkles } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 
+/**
+ * Mirrors pi SDK's `Skill` shape (from @earendil-works/pi-coding-agent).
+ * The legacy `source: "user" | "project" | "path"` field is left as
+ * a hint for callers that want to read it directly, but the
+ * authoritative value lives on `sourceInfo.source` (a free-form
+ * `string` — see `sourceBadge`).
+ */
 export interface SkillEntry {
 	name: string;
 	description: string;
 	filePath: string;
 	baseDir: string;
-	source: "user" | "project" | "path";
+	/** @deprecated Read `sourceInfo.source` instead. */
+	source?: "user" | "project" | "path" | (string & {});
+	/** pi SDK's per-skill provenance. Always present at runtime. */
+	sourceInfo?: { source: string; scope?: string; origin?: string; baseDir?: string };
 	disableModelInvocation: boolean;
 }
 
@@ -61,10 +71,23 @@ interface SkillSlashMenuProps {
 	onImportRequest: () => void;
 	/** Esc / click-outside. */
 	onClose: () => void;
+	/** Optional search term typed after \`/\`. When set and no skills match,
+	 *  a contextual empty message is shown instead of the generic one. */
+	searchTerm?: string;
 }
 
-/** Map source → compact label + emoji used in the list header. */
-function sourceBadge(source: SkillEntry["source"]): { label: string; glyph: string } {
+/**
+ * Map a skill's source → compact label + emoji used in the list header.
+ *
+ * Accepts `string | undefined` because the runtime value comes from
+ * pi SDK's `Skill.sourceInfo.source: string` — not the typed
+ * `SkillEntry["source"]` union. The two diverge when a skill's
+ * underlying path doesn't classify cleanly as user/project/path
+ * (e.g. `~/.agents/skills/`, package-discovered skills). Unknown
+ * values fall back to a generic 📦 badge rather than crashing
+ * the slash menu.
+ */
+function sourceBadge(source: string | undefined): { label: string; glyph: string } {
 	switch (source) {
 		case "user":
 			return { label: "global", glyph: "🏠" };
@@ -72,13 +95,16 @@ function sourceBadge(source: SkillEntry["source"]): { label: string; glyph: stri
 			return { label: "project", glyph: "📁" };
 		case "path":
 			return { label: "imported", glyph: "🔗" };
+		case "package":
+			return { label: "package", glyph: "📦" };
+		default:
+			return { label: "skill", glyph: "📦" };
 	}
 }
 
 /** Render a single pickable row. Pure presentation. */
 function MenuRow({
 	active,
-	leadingGlyph,
 	label,
 	hint,
 	badge,
@@ -88,7 +114,6 @@ function MenuRow({
 	rowRef,
 }: {
 	active: boolean;
-	leadingGlyph: React.ReactNode;
 	label: string;
 	hint?: string;
 	badge?: string;
@@ -104,12 +129,13 @@ function MenuRow({
 			onClick={onClick}
 			onMouseEnter={onMouseEnter}
 			className={[
-				"flex w-full items-start gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors",
-				active ? "bg-accent/15 text-foreground" : "text-foreground/85 hover:bg-accent/10",
+				"flex w-full items-start gap-2 rounded-md px-2.5 py-1.5 text-left transition-all",
+				active
+					? "border-2 dark:border-accent/70 border-black/50 bg-accent/15 text-foreground shadow-sm"
+					: "border-2 border-transparent text-foreground/85 hover:bg-accent/10",
 				dim ? "opacity-50" : "",
 			].join(" ")}
 		>
-			<span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[12px]">{leadingGlyph}</span>
 			<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 				<span className="flex items-center gap-1.5">
 					<span className="truncate font-mono text-[12px] font-medium">{label}</span>
@@ -126,8 +152,17 @@ function MenuRow({
 }
 
 export function SkillSlashMenu(props: SkillSlashMenuProps) {
-	const { skills, importedPaths, detected, selectedIndex, onSelectSkill, onImportFrom, onImportRequest, onClose } =
-		props;
+	const {
+		skills,
+		importedPaths,
+		detected,
+		selectedIndex,
+		onSelectSkill,
+		onImportFrom,
+		onImportRequest,
+		onClose,
+		searchTerm,
+	} = props;
 	const menuRef = useRef<HTMLDivElement>(null);
 
 	// Click-outside dismiss
@@ -192,7 +227,7 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 				<Sparkles className="size-3" />
 				<span>Available skills</span>
 				<span className="ml-auto rounded-sm border border-hairline bg-background/40 px-1 py-px text-[9px]">
-					{visible.length} · ↑↓ Enter · Esc
+					{visible.length} · ↑↓ Tab · Esc
 				</span>
 			</div>
 
@@ -201,21 +236,32 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 				{visible.length === 0 ? (
 					<div className="flex flex-col items-center gap-1 px-3 py-6 text-center">
 						<FileCode2 className="size-5 text-muted-foreground/60" />
-						<div className="text-[11.5px] text-muted-foreground">No skills available yet.</div>
+						<div className="text-[11.5px] text-muted-foreground">
+							{searchTerm ? `No skills matching "${searchTerm}"` : "No skills available yet."}
+						</div>
 						<div className="text-[10px] text-muted-foreground/70">
-							Drop a <span className="font-mono">SKILL.md</span> into{" "}
-							<span className="font-mono">~/.look/skills/</span> to get started.
+							{searchTerm ? (
+								"Try a different keyword or type / to see all skills."
+							) : (
+								<>
+									Drop a <span className="font-mono">SKILL.md</span> into{" "}
+									<span className="font-mono">~/.look/skills/</span> to get started.
+								</>
+							)}
 						</div>
 					</div>
 				) : (
 					visible.map((skill, i) => {
-						const badge = sourceBadge(skill.source);
+						// Read source from the SDK's `sourceInfo` first,
+						// then fall back to the legacy `source` field.
+						// Either may be undefined; `sourceBadge` handles it.
+						const src = skill.sourceInfo?.source ?? skill.source;
+						const badge = sourceBadge(src);
 						return (
 							<MenuRow
 								key={`skill-${skill.name}`}
 								rowRef={setRowRef(i)}
 								active={current?.kind === "skill" && clampedIndex === i}
-								leadingGlyph={<span>{badge.glyph}</span>}
 								label={skill.name}
 								hint={skill.description}
 								badge={badge.label}
@@ -323,7 +369,7 @@ export function handleSlashMenuKey(
 		});
 		return true;
 	}
-	if (e.key === "Enter") {
+	if (e.key === "Tab") {
 		// Let parent commit the current selection; we just signal "handled".
 		e.preventDefault();
 		return true;

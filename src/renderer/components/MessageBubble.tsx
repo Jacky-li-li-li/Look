@@ -8,7 +8,7 @@ import { Settings2, UserRound } from "lucide-react";
 import { memo } from "react";
 import ExecutionProcess from "./ExecutionProcess";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
-import StreamingMarkdown from "./StreamingMarkdown";
+import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
 
@@ -57,39 +57,78 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 				</div>
 
 				{/* Whisper bubble — complete message: thinking → tools → output */}
-				<div
-					className={cn(
-						"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
-						isUser && "whisper-bubble--user",
-						!isUser && "whisper-bubble--assistant w-full",
-					)}
-				>
-					{/* 执行过程 — wraps thinking + tools, auto-collapses when output arrives */}
-					<ExecutionProcess
-						thinking={message.thinking}
-						toolCalls={message.toolCalls?.map((tc) => ({
-							callId: tc.callId,
-							toolName: tc.toolName,
-							status: tc.status,
-						}))}
-						hasOutput={!!message.content}
-					>
-						{message.thinking && <ThinkingPanel thinking={message.thinking} />}
-						{message.toolCalls &&
-							message.toolCalls.length > 0 &&
-							message.toolCalls.map((tc) => <ToolCallCard key={tc.callId} toolCall={tc} />)}
-					</ExecutionProcess>
+				{message.assistantChunks && message.assistantChunks.length > 0 ? (
+					/* ── Multi-chunk: separate blocks under ONE label ── */
+					<div className="flex flex-col gap-3">
+						{message.assistantChunks.map((chunk, ci) => (
+							<div
+								key={ci}
+								className={cn(
+									"whisper-bubble whisper-bubble--assistant flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed w-full",
+									// Last chunk gets a subtle left-accent to indicate it's the final answer
+									ci === message.assistantChunks!.length - 1 &&
+										message.assistantChunks!.length > 1 &&
+										"border-l-2 border-primary/30",
+								)}
+							>
+								{/* Chunk-level 执行过程 */}
+								<ExecutionProcess
+									thinking={chunk.thinking}
+									toolCalls={chunk.toolCalls?.map((tc) => ({
+										callId: tc.callId,
+										toolName: tc.toolName,
+										status: tc.status,
+									}))}
+									hasOutput={!!chunk.content}
+								>
+									{chunk.thinking && <ThinkingPanel thinking={chunk.thinking} />}
+									{chunk.toolCalls &&
+										chunk.toolCalls.length > 0 &&
+										chunk.toolCalls.map((tc) => <ToolCallCard key={tc.callId} toolCall={tc} />)}
+								</ExecutionProcess>
 
-					{/* Output */}
+								{chunk.content && (
+									<div className="message-prose">
+										<SkillAwareContent
+											content={chunk.content}
+											isStreaming={message.isStreaming && ci === message.assistantChunks!.length - 1}
+										/>
+									</div>
+								)}
+							</div>
+						))}
+					</div>
+				) : (
+					/* ── Single-chunk (legacy / user message path) ── */
 					<div
 						className={cn(
-							"message-prose",
-							message.isStreaming && "after:ml-0.5 after:animate-pulse after:content-['▊']",
+							"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
+							isUser && "whisper-bubble--user",
+							!isUser && "whisper-bubble--assistant w-full",
 						)}
 					>
-						<StreamingMarkdown content={message.content} isStreaming={message.isStreaming ?? false} />
+						{/* 执行过程 — wraps thinking + tools, auto-collapses when output arrives */}
+						<ExecutionProcess
+							thinking={message.thinking}
+							toolCalls={message.toolCalls?.map((tc) => ({
+								callId: tc.callId,
+								toolName: tc.toolName,
+								status: tc.status,
+							}))}
+							hasOutput={!!message.content}
+						>
+							{message.thinking && <ThinkingPanel thinking={message.thinking} />}
+							{message.toolCalls &&
+								message.toolCalls.length > 0 &&
+								message.toolCalls.map((tc) => <ToolCallCard key={tc.callId} toolCall={tc} />)}
+						</ExecutionProcess>
+
+						{/* Output — SkillAwareContent renders /skill:name / <skill> blocks as compact SkillTag chips */}
+						<div className="message-prose">
+							<SkillAwareContent content={message.content} isStreaming={message.isStreaming ?? false} />
+						</div>
 					</div>
-				</div>
+				)}
 			</div>
 		</div>
 	);

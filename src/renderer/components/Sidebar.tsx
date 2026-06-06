@@ -102,15 +102,12 @@ export default function Sidebar({
 	return (
 		<aside className="flex h-full w-[260px] min-w-[260px] max-w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border bg-sidebar">
 			{/* Header */}
-			<div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
-				<div className="flex items-center gap-2.5">
+			<div className="flex h-14 shrink-0 items-center justify-between border-b border-hairline px-4">
+				<div className="flex items-center gap-3">
 					<PixelAgentAvatar size="sm" active />
-					<span className="text-[13px] font-semibold">Agents</span>
+					<span className="text-[14px] font-semibold">Agents</span>
 				</div>
 				<div className="flex items-center gap-1">
-					<Badge variant="outline" className="h-5 rounded-md px-1.5 font-mono text-[10px]">
-						{agents.length}
-					</Badge>
 					<Button size="icon" variant="ghost" className="size-7" onClick={onSettingsClick} aria-label="Settings">
 						<Settings className="size-3.5" />
 					</Button>
@@ -119,21 +116,27 @@ export default function Sidebar({
 
 			{/* Tabs */}
 			<Tabs value={tab} onValueChange={setTab} className="shrink-0">
-				<TabsList className="h-10 w-full rounded-none border-b border-hairline bg-transparent px-2">
-					<TabsTrigger value="chat" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-border">
-						<MessageSquare className="size-3" />
+				<TabsList className="w-full rounded-none border-b border-hairline bg-transparent px-3">
+					<TabsTrigger
+						value="chat"
+						className="relative flex-1 gap-1.5 py-3 text-[11px] font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:inset-x-2 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-foreground"
+					>
+						<MessageSquare className="size-3.5" />
 						Chat
 						{chatCount > 0 && (
-							<Badge variant="secondary" className="ml-0.5 h-3.5 px-1 py-0 text-[9px]">
+							<Badge variant="secondary" className="ml-auto h-4 rounded-sm px-1.5 text-[9px]">
 								{chatCount}
 							</Badge>
 						)}
 					</TabsTrigger>
-					<TabsTrigger value="orch" className="flex-1 gap-1.5 text-[11px] data-[state=active]:bg-border">
-						<Network className="size-3" />
+					<TabsTrigger
+						value="orch"
+						className="relative flex-1 gap-1.5 py-3 text-[11px] font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:inset-x-2 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-foreground"
+					>
+						<Network className="size-3.5" />
 						Orch
 						{orchCount > 0 && (
-							<Badge variant="secondary" className="ml-0.5 h-3.5 px-1 py-0 text-[9px]">
+							<Badge variant="secondary" className="ml-auto h-4 rounded-sm px-1.5 text-[9px]">
 								{orchCount}
 							</Badge>
 						)}
@@ -144,21 +147,21 @@ export default function Sidebar({
 			<Separator />
 
 			{/* Actions */}
-			<div className="flex shrink-0 gap-1.5 px-2.5 py-2.5">
+			<div className="flex shrink-0 gap-1.5 px-3 py-3">
 				<Button
 					variant="line"
 					size="sm"
-					className="h-8 flex-1 justify-start text-xs font-medium"
+					className="h-10 flex-1 justify-start text-[12px] font-medium"
 					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)}
 				>
-					<Plus data-icon="inline-start" className="size-3.5" />
+					<Plus data-icon="inline-start" className="size-4" />
 					New Agent
 				</Button>
 			</div>
 
 			{/* Agent list */}
-			<ScrollArea className="flex-1 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
-				<div className="flex flex-col gap-1 px-2.5 pb-2">
+			<ScrollArea className="flex-1 min-h-0 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
+				<div className="flex flex-col gap-1.5 px-3 pb-3">
 					{filteredAgents.map((agent) => {
 						const isActive = agent.id === activeAgentId;
 						return (
@@ -174,7 +177,7 @@ export default function Sidebar({
 									}
 								}}
 								className={cn(
-									"group flex w-full items-center gap-1.5 rounded-lg px-0 py-2.5 pl-1.5 text-left max-w-full",
+									"group flex w-full items-center gap-2.5 rounded-lg px-0 py-3.5 pl-2 text-left max-w-full",
 									"border border-transparent transition-colors duration-150",
 									"hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-hidden",
 									isActive && "border-border bg-accent/60",
@@ -195,7 +198,7 @@ export default function Sidebar({
 										/>
 									) : (
 										<div
-											className="truncate text-[12px] font-semibold"
+											className="truncate text-[13px] font-semibold"
 											onDoubleClick={(e) => {
 												e.stopPropagation();
 												handleDoubleClick(agent);
@@ -206,7 +209,7 @@ export default function Sidebar({
 										</div>
 									)}
 									{agent.usage.totalTokens > 0 && (
-										<div className="mt-0.5 font-mono text-[9px] text-muted-foreground/60">
+										<div className="mt-1 font-mono text-[10px] text-muted-foreground/60">
 											{fmtTokens(agent.usage.totalTokens)}
 											{agent.usage.cost.total > 0 && ` · ${fmtCost(agent.usage.cost.total)}`}
 										</div>
@@ -225,7 +228,7 @@ export default function Sidebar({
 										}}
 										aria-label={`Destroy ${agent.name}`}
 									>
-										<X className="size-3" />
+										<X className="size-3.5" />
 									</Button>
 								</div>
 							</div>

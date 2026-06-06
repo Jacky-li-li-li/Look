@@ -2,8 +2,8 @@
 // App — Ink Wash Design System (shadcn/ui)
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
 import type { AgentInfo, AgentMessage, MainToRendererEvent, ThinkingLevel, ToolCallRecord } from "@shared/types";
+import { FolderOpen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { showError } from "./lib/ipc";
@@ -16,7 +16,7 @@ interface SettingsProviderInfo {
 	modelsAvailable: number;
 }
 
-import { Badge } from "@shared/components/ui/badge";
+import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
@@ -36,7 +36,7 @@ export default function App() {
 	const [showCreateDialog, setShowCreateDialog] = useState(false);
 	const [defaultModelForCreate, setDefaultModelForCreate] = useState<string | undefined>(undefined);
 	const [showSettings, setShowSettings] = useState(false);
-	const [settingsTab, setSettingsTab] = useState<"general" | "api-keys" | "about">("general");
+	const [settingsTab, setSettingsTab] = useState<"general" | "api-keys" | "chat-prompt" | "about">("general");
 	// Cached provider settings — fetched once at app boot, not on each Settings open.
 	// Hoisting this out of SettingsDialog avoids the IPC + main-process model-registry
 	// walk (~16k line static list) on every dialog mount.
@@ -46,6 +46,15 @@ export default function App() {
 	const [pendingAsks, setPendingAsks] = useState<PermissionRequest[]>([]);
 	const pendingAsk = pendingAsks[0] ?? null;
 	const pendingQueueDepth = pendingAsks.length;
+	// Per-agent SDK queue snapshot. Driven by `agent:queue_update`
+	// events emitted by the main process (which in turn is
+	// mirroring pi SDK's internal _steeringMessages /
+	// _followUpMessages). The ChatPanel reads this for the
+	// "Queued" drawer instead of maintaining its own fake
+	// queue state — that way the drawer survives agent
+	// switches, app restarts (via the persisted snapshot), and
+	// aborts (via session.clearQueue() → queue_update).
+	const [queues, setQueues] = useState<Record<string, { steering: string[]; followUp: string[] }>>({});
 	// The model the user most recently picked in the bottom-bar
 	// ModelSelector. Persisted in-memory only (lost on reload —
 	// v1.5 will move this into user-settings.ts).
@@ -144,6 +153,21 @@ export default function App() {
 					toast(`Permission mode: ${event.mode}`, { duration: 1500 });
 					break;
 				}
+				case "agent:queue_update": {
+					// SDK-authoritative queue snapshot. The main process
+					// forwards this from pi's _emitQueueUpdate(); the SDK
+					// itself mutates the queue on prompt-with-streaming,
+					// steer, followUp, and clearQueue. We snapshot the
+					// arrays so React re-renders on every change.
+					setQueues((prev) => ({
+						...prev,
+						[event.agentId]: {
+							steering: [...event.steering],
+							followUp: [...event.followUp],
+						},
+					}));
+					break;
+				}
 				case "error": {
 					toast.error(event.agentId ? `[${event.agentId.slice(0, 6)}] ${event.message}` : event.message, {
 						duration: 5000,
@@ -221,9 +245,10 @@ export default function App() {
 					const finalMsg = event.message as any;
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
-						const idx = msgs.length - 1;
+						let idx = msgs.length - 1;
 						for (let i = msgs.length - 1; i >= 0; i--)
 							if (msgs[i].isStreaming) {
+								idx = i;
 								break;
 							}
 						if (idx < 0) return prev;
@@ -245,8 +270,12 @@ export default function App() {
 					// Mirror pi's tool-call lifecycle into the UI's toolCalls list.
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
-						const idx = msgs.length - 1;
-						for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].isStreaming) break;
+						let idx = msgs.length - 1;
+						for (let i = msgs.length - 1; i >= 0; i--)
+							if (msgs[i].isStreaming) {
+								idx = i;
+								break;
+							}
 						if (idx < 0) return prev;
 						const existing = msgs[idx].toolCalls ?? [];
 						const callId = event.toolCallId;
@@ -483,6 +512,20 @@ export default function App() {
 	}, [activeAgentId, activeAgent?.model, userPreferredModel]);
 	const handleCloseSettings = useCallback(() => setShowSettings(false), []);
 
+	// Opens the project root directory in the OS file manager (Finder).
+	const handleOpenProjectFolder = useCallback(() => {
+		try {
+			const fn = api?.openProjectFolder;
+			if (typeof fn !== "function") {
+				toast.error("API not available — restart the app to reload preload.");
+				return;
+			}
+			fn().catch((err: any) => toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`));
+		} catch (err: any) {
+			toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`);
+		}
+	}, []);
+
 	// Permission dialog — drain the head of the queue, send the
 	// decision to main, and let the next ask take over. Decisions
 	// are sent best-effort: a broken IPC dismisses the dialog so the
@@ -565,9 +608,20 @@ export default function App() {
 										<div className="min-w-0">
 											<div className="flex min-w-0 items-center gap-2">
 												<h1 className="truncate text-[13px] font-semibold">{activeAgent.name}</h1>
-												<StatusBadge status={activeAgent.status} />
 											</div>
 										</div>
+									</div>
+									<div className="flex items-center gap-1">
+										<Button
+											size="icon"
+											variant="ghost"
+											className="size-7"
+											onClick={handleOpenProjectFolder}
+											aria-label="Open session storage"
+											title="Open project folder"
+										>
+											<FolderOpen className="size-3.5" />
+										</Button>
 									</div>
 								</header>
 
@@ -576,6 +630,7 @@ export default function App() {
 									agentRole={activeAgent.role}
 									agentName={activeAgent.name}
 									messages={activeMessages}
+									queue={queues[activeAgent.id] ?? { steering: [], followUp: [] }}
 									agentStatus={activeAgent.status}
 									currentModel={activeAgent.model}
 									currentThinking={activeAgent.thinkingLevel}
@@ -628,21 +683,6 @@ export default function App() {
 				</div>
 			</TooltipProvider>
 		</ThemeProvider>
-	);
-}
-
-// ── Helpers ──
-
-function StatusBadge({ status }: { status: string }) {
-	const variant = status === "error" ? "destructive" : "outline";
-	return (
-		<Badge
-			variant={variant as any}
-			className={cn("h-5 gap-1 rounded-md px-1.5 font-mono text-[9px] uppercase tracking-wider")}
-		>
-			<span className="status-mark" data-status={status} />
-			{status}
-		</Badge>
 	);
 }
 

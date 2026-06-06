@@ -6,6 +6,9 @@
 // mapping agentId → sessionFile.
 // ============================================================
 
+import fs, { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import path, { join } from "node:path";
 import { findEnvKeys, getModel } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
@@ -16,10 +19,6 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import path, { join } from "node:path";
-import fs from "node:fs";
 import { v4 as uuidv4 } from "uuid";
 import { getRoleDefaults, getRoleSystemPrompt, getRoleTools } from "./agents/roles.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
@@ -32,7 +31,6 @@ import {
 	getLookDir,
 	getModelsPath,
 	getSessionsDir,
-	getSettingsPath,
 	getUiSettingsPath,
 } from "./shared/look-storage.js";
 import { convertPiMessage } from "./shared/message-convert.js";
@@ -48,13 +46,13 @@ import type {
 	ThinkingLevel,
 	UsageSnapshot,
 } from "./shared/types.js";
-import { getLookProjectSkillsDir } from "./skills/skill-loader.js";
 import {
 	findSkill,
 	formatInvocation,
+	getLookProjectSkillsDir,
 	invalidateSkillCache,
-	listAllSkills,
 	type LoadedSkills,
+	listAllSkills,
 } from "./skills/skill-loader.js";
 import { createOrchestrationTools } from "./tools/orchestration.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
@@ -196,6 +194,7 @@ export class AgentManager {
 					thinkingLevel: m.info.thinkingLevel,
 					sessionFile: m.session.sessionFile ?? undefined,
 					permissionMode: m.permissionMode,
+					usage: m.info.usage,
 				})),
 			};
 			fs.writeFileSync(this.agentsIndexPath, JSON.stringify(data, null, 2));
@@ -277,6 +276,44 @@ export class AgentManager {
 					}
 				}
 
+				// Recalculate cumulative token usage from persisted messages.
+				// pi SDK persists usage per-message in the JSONL session file,
+				// so we reconstruct the agent-level total by walking all
+				// assistant messages. This is the source of truth — entry.usage
+				// (if present) is only used as a fallback for agents whose
+				// messages happen to carry no usage data.
+				const cumUsage: UsageSnapshot = { ...EMPTY_USAGE };
+				let hasMessageUsage = false;
+				for (const msg of uiMessages) {
+					if (msg.role !== "assistant" || !msg.usage) continue;
+					hasMessageUsage = true;
+					const u = msg.usage;
+					cumUsage.inputTokens += u.inputTokens;
+					cumUsage.outputTokens += u.outputTokens;
+					cumUsage.cacheReadTokens += u.cacheReadTokens;
+					cumUsage.cacheWriteTokens += u.cacheWriteTokens;
+					cumUsage.totalTokens += u.totalTokens;
+					cumUsage.cost.input += u.cost.input;
+					cumUsage.cost.output += u.cost.output;
+					cumUsage.cost.cacheRead += u.cost.cacheRead;
+					cumUsage.cost.cacheWrite += u.cost.cacheWrite;
+					cumUsage.cost.total += u.cost.total;
+				}
+				// Fallback: if no message had usage (e.g. very old sessions),
+				// use whatever was in the index file.
+				if (!hasMessageUsage && entry.usage) {
+					Object.assign(cumUsage, entry.usage);
+				}
+
+				// Restore last-context-tokens from the last assistant message.
+				// This seeds the context ring so it shows the correct usage
+				// immediately on restart, rather than showing 0% until the
+				// next message_end arrives.
+				const lastAssistantWithUsage = [...uiMessages].reverse().find((m) => m.role === "assistant" && m.usage);
+				if (lastAssistantWithUsage?.usage) {
+					this.lastContextTokens.set(id, lastAssistantWithUsage.usage.inputTokens);
+				}
+
 				// Build agent info
 				const info: AgentInfo = {
 					id,
@@ -287,7 +324,7 @@ export class AgentManager {
 					status: "idle",
 					messageCount: uiMessages.length,
 					createdAt: Date.now(),
-					usage: { ...EMPTY_USAGE },
+					usage: cumUsage,
 					fallbackModels: [],
 					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
 				};
@@ -298,7 +335,11 @@ export class AgentManager {
 				const roleToolNames = getRoleTools(info.role); // string[] | null
 				// null = "all built-in tools" (chat mode restored from disk)
 				const toolNames: string[] = roleToolNames ?? [...BUILTIN_TOOL_NAMES];
-				const systemPrompt = getRoleSystemPrompt(info.role);
+				let systemPrompt = getRoleSystemPrompt(info.role);
+				if (info.role === "chat") {
+					const custom = this.userSettings.getAll().chatSystemPrompt;
+					if (custom) systemPrompt = custom;
+				}
 				const customTools = this.buildCustomTools(toolNames, id);
 
 				const resourceLoader = this.buildResourceLoader({
@@ -346,6 +387,7 @@ export class AgentManager {
 				};
 
 				this.agents.set(id, managed);
+				this.agentUsage.set(id, { ...cumUsage });
 				loaded++;
 			}
 
@@ -389,8 +431,45 @@ export class AgentManager {
 		return testApiKey(provider, key);
 	}
 
+	/**
+	 * Self-test an env-var credential for a provider. Reads the
+	 * env var and runs the same probe as testApiKey.
+	 */
+	async testEnvKey(provider: string) {
+		const { findEnvKeys } = await import("@earendil-works/pi-ai");
+		const { testApiKey } = await import("./provider-validator.js");
+		const envVar = findEnvKeys(provider)?.[0];
+		if (!envVar) return { skipped: true, reason: `No env var known for "${provider}"` };
+		const key = process.env[envVar];
+		if (!key) return { skipped: true, reason: `${envVar} is not set` };
+		return testApiKey(provider, key);
+	}
+
+	/** Return provider IDs whose env-var credential is available. */
+	async getVerifiedEnvProviders(): Promise<string[]> {
+		const { findEnvKeys } = await import("@earendil-works/pi-ai");
+		const allModels = this.modelRegistry.getAll();
+		const seen = new Set<string>();
+		const providers: string[] = [];
+		for (const m of allModels) {
+			if (seen.has(m.provider)) continue;
+			seen.add(m.provider);
+			const status = this.authStorage.getAuthStatus(m.provider);
+			if (status.source !== "environment") continue;
+			const envVar = findEnvKeys(m.provider)?.[0];
+			if (!envVar || !process.env[envVar]) continue;
+			providers.push(m.provider);
+		}
+		return providers;
+	}
+
 	private isUserConfigured(provider: string): boolean {
 		return this.authStorage.getAuthStatus(provider).source === "stored";
+	}
+
+	/** Returns the project root directory path. */
+	getProjectRoot(): string {
+		return this.cwd;
 	}
 
 	/**
@@ -667,14 +746,32 @@ export class AgentManager {
 		const m = this.agents.get(agentId);
 		if (!m) return undefined;
 		let cw = 128000;
+
+		// Context window from the model registry.
+		// For providers not in pi SDK's built-in registry (e.g.
+		// deepseek), the user can add a custom model entry to
+		// ~/.look/models.json via the Settings UI.
 		const ms = m.info.model;
 		if (ms) {
 			const [p, ...parts] = ms.includes("/") ? ms.split("/") : ["anthropic", ms];
 			const mdl = this.lookupModel(p, parts.join("/"));
 			if (mdl?.contextWindow) cw = mdl.contextWindow;
 		}
-		const used = this.lastContextTokens.get(agentId) ?? 0;
-		const pct = Math.min(100, Math.round((used / cw) * 100));
+
+		// Use the input tokens from the most recent assistant response.
+		// Each request sends the full conversation history, so input
+		// tokens reflect the current context size.  Fall back to
+		// cumulative totalTokens when per-message input is empty
+		// (e.g. after restore from disk on a fresh agent).
+		let used = this.lastContextTokens.get(agentId) ?? 0;
+		if (used === 0) {
+			const cum = this.agentUsage.get(agentId);
+			if (cum && cum.totalTokens > 0) {
+				used = Math.round(cum.totalTokens * 0.5);
+			}
+		}
+
+		const pct = Math.min(100, Math.max(0, Math.round((used / cw) * 100)));
 		return {
 			percentage: pct,
 			usedTokens: used,
@@ -750,8 +847,13 @@ export class AgentManager {
 		if (!model) throw new Error(`Model not found: ${resolvedId}`);
 
 		const customTools = this.buildCustomTools(toolNames, id);
+		let systemPrompt = getRoleSystemPrompt(options.role);
+		if (options.role === "chat") {
+			const custom = this.userSettings.getAll().chatSystemPrompt;
+			if (custom) systemPrompt = custom;
+		}
 		const resourceLoader = this.buildResourceLoader({
-			systemPrompt: getRoleSystemPrompt(options.role),
+			systemPrompt,
 			agentId: id,
 		});
 		await resourceLoader.reload();
@@ -927,15 +1029,17 @@ export class AgentManager {
 			this.emit({ type: "error", agentId, message: `Agent ${agentId} not found` });
 			return;
 		}
-		this.updateStatus(agentId, "thinking");
-		const userMsg: AgentMessage = {
-			id: uuidv4(),
-			agentId,
-			role: "user",
-			content: fromAgentId ? `[@${fromAgentId}] ${text}` : text,
-			timestamp: Date.now(),
-		};
-		this.addMessage(agentId, userMsg);
+		// We do NOT pre-pend the user message to m.messages here — the
+		// SDK emits user message_start + message_end itself, and the
+		// renderer reads that event stream directly via the
+		// pass-through in handleSessionEvent. m.messages is populated
+		// at message_end with the SDK's real message (see
+		// handleLookSideEffect).
+		//
+		// We also do NOT force status to "thinking" here. The SDK's
+		// own agent_start event drives the status transition; forcing
+		// it from sendMessage would race against in-flight tool calls
+		// (status: "working" → "thinking" flicker).
 		try {
 			// If the agent is already streaming, queue the new message as a
 			// "steer" so it interrupts the current turn after the next
@@ -980,8 +1084,22 @@ export class AgentManager {
 			return;
 		}
 		if (!m.session) return;
-		if (!m.session.isStreaming) return; // nothing to abort
+		if (!m.session.isStreaming) {
+			// Not actively streaming, but the user may still have
+			// queued messages they want to drop (e.g. queued during
+			// a tool call that just returned). clearQueue() is a
+			// no-op when nothing is queued.
+			m.session.clearQueue();
+			return;
+		}
 		try {
+			// Clear the SDK's steering + follow-up queues before
+			// aborting. The SDK emits a fresh queue_update event
+			// (steering = [], followUp = []) from clearQueue, which
+			// the renderer's queue drawer syncs off — so the drawer
+			// empties in lockstep with the SDK's authoritative
+			// state, not via a local clear.
+			m.session.clearQueue();
 			await m.session.abort();
 		} catch (err: any) {
 			this.emit({ type: "error", agentId, message: `Abort failed: ${err.message}` });
@@ -1115,6 +1233,14 @@ export class AgentManager {
 		// also arrive; we don't want a double emit.
 		if (this.isLocallyBlocked(agentId, event)) return;
 
+		// Look-internal bookkeeping (m.messages bookkeeping, status,
+		// usage tracking) runs in handleLookSideEffect above. The
+		// event itself is passed through to the renderer with an
+		// `agent:` prefix — the renderer reads message_start /
+		// message_update / message_end from THIS stream, so we must
+		// NOT also synthesize a message_start from addMessage (that
+		// would race with the SDK's real event and break id
+		// correlation in the UI).
 		this.emit(this.toRendererEvent(agentId, event));
 	}
 
@@ -1150,21 +1276,13 @@ export class AgentManager {
 
 		switch (event.type) {
 			case "message_start": {
-				// Persist a streaming placeholder for assistant messages so
-				// the renderer can render incrementally without a second
-				// message_start for user/tool messages.
-				if (event.message?.role === "assistant") {
-					this.addMessage(agentId, {
-						id: uuidv4(),
-						agentId,
-						role: "assistant",
-						content: "",
-						thinking: "",
-						timestamp: Date.now(),
-						isStreaming: true,
-						toolCalls: [],
-					});
-				}
+				// m.messages is populated at message_end with the SDK's
+				// finalized message (real id, real content, real usage).
+				// No placeholder is needed here — the renderer reads the
+				// SDK's real message_start event via the pass-through in
+				// handleSessionEvent. Synthesizing a placeholder from
+				// addMessage would race with the SDK's event and break
+				// message-id correlation in the UI.
 				break;
 			}
 			case "message_update": {
@@ -1182,8 +1300,20 @@ export class AgentManager {
 			}
 			case "message_end": {
 				const msg = event.message;
-				const sm = [...m.messages].reverse().find((x) => x.isStreaming);
-				if (sm) sm.isStreaming = false;
+				// Push the SDK's finalized message (real id, real content,
+				// real usage) into m.messages so getMessages() /
+				// listAgentsWithHistory() / the persisted-agents restore
+				// path see it. The renderer reads message_end from the
+				// pass-through, not from this bookkeeping. We dedupe by
+				// id because the SDK may replay the same event after a
+				// retry — without the check, m.messages would grow
+				// monotonically across retries.
+				if (msg && (msg.role === "user" || msg.role === "assistant" || msg.role === "toolResult")) {
+					const realId = (msg as any).id ?? `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+					if (!m.messages.some((x) => x.id === realId)) {
+						this.addMessage(agentId, convertPiMessage(msg, agentId, realId));
+					}
+				}
 				if (msg?.role === "assistant" && msg.usage) this.trackUsage(agentId, msg.usage);
 				m.info.messageCount = m.messages.length;
 
@@ -1208,17 +1338,9 @@ export class AgentManager {
 					this.saveIndex();
 				}
 
-				// Context ring + auto-compact (Look-specific)
+				// Context ring (Look-specific)
 				const ctx = this.getContextUsage(agentId);
 				if (ctx) this.emit({ type: "agent:context-usage", agentId, usage: ctx });
-				const s = this.userSettings.getAll();
-				if (s.autoCompress && ctx && ctx.percentage >= s.compressThreshold) {
-					const lp = this.lastCompactPct.get(agentId);
-					if (lp === undefined || lp < s.compressThreshold) {
-						this.lastCompactPct.set(agentId, ctx.percentage);
-						this.compressSession(agentId);
-					}
-				}
 				break;
 			}
 			case "tool_execution_start": {
@@ -1288,6 +1410,24 @@ export class AgentManager {
 					fn();
 				});
 				m.resolveWaits = undefined;
+
+				// Auto-compress after the agent loop finishes.
+				// (triggering on message_end is too early — status is still
+				// "thinking" so compressSession's guard returns immediately.)
+				// At this point pi SDK's internal _checkCompaction has already
+				// run in _handlePostAgentRun, so prepareCompaction() will
+				// detect "already compacted" and skip if the SDK handled it.
+				const s = this.userSettings.getAll();
+				if (s.autoCompress) {
+					const ctx = this.getContextUsage(agentId);
+					if (ctx && ctx.percentage >= s.compressThreshold) {
+						const lp = this.lastCompactPct.get(agentId);
+						if (lp === undefined || lp < s.compressThreshold) {
+							this.lastCompactPct.set(agentId, ctx.percentage);
+							this.compressSession(agentId);
+						}
+					}
+				}
 				break;
 			}
 			case "compaction_start": {
@@ -1351,28 +1491,27 @@ export class AgentManager {
 	}
 
 	/**
-	 * Append a message to an agent's local store and (for assistant
-	 * role) emit `agent:message_start` so the renderer can render
-	 * the streaming placeholder. We mirror pi's `message_start` event
-	 * here instead of inventing a Look-only `agent:message` event.
+	 * Append a message to an agent's local store. This is a pure
+	 * bookkeeping call — it does NOT emit a renderer-facing event.
+	 *
+	 * The renderer reads message_start / message_end from the SDK's
+	 * own event stream (see handleSessionEvent + toRendererEvent),
+	 * not from a synthetic Look-only event. Emitting one here would
+	 * race with the SDK's real event and break message-id correlation
+	 * in the UI (the placeholder's uuidv4 id never matches the SDK's
+	 * final id).
+	 *
+	 * Callers:
+	 *   - handleLookSideEffect's `message_end` — pushes the SDK's
+	 *     finalized message (real id, real content, real usage) so
+	 *     m.messages feeds getMessages() / listAgentsWithHistory() /
+	 *     the persisted-agents restore path.
 	 */
 	private addMessage(agentId: string, msg: AgentMessage): void {
 		const m = this.agents.get(agentId);
 		if (!m) return;
 		m.messages.push(msg);
 		m.info.messageCount = m.messages.length;
-		// For assistant messages, emit a pass-through event so the
-		// renderer can pick up the streaming placeholder. Other roles
-		// (user / tool / system) don't go through the message_start
-		// pipeline; they're appended directly to the UI store by
-		// other code paths (sendMessage, tool result handler, etc.).
-		if (msg.role === "assistant") {
-			this.emit({
-				type: "agent:message_start",
-				agentId,
-				message: msg as any, // pi's AgentMessage is a superset of UI shape
-			});
-		}
 	}
 
 	private emitAgentList(): void {

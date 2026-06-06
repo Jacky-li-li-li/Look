@@ -61,11 +61,7 @@ interface LookAPI {
 		importedPaths?: string[];
 		error?: string;
 	}>;
-	invokeSkill(
-		agentId: string,
-		skillName: string,
-		args?: string,
-	): Promise<{ success: boolean; error?: string }>;
+	invokeSkill(agentId: string, skillName: string, args?: string): Promise<{ success: boolean; error?: string }>;
 	importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }>;
 	detectCommonSkillPaths(): Promise<{
 		success: boolean;
@@ -101,6 +97,8 @@ interface GeneralSettings {
 	 *  Used by quick-create to seed new chat agents with the user's
 	 *  current pick. null = "no preference" (main picks first available). */
 	preferredModel: string | null;
+	/** Custom system prompt for new chat sessions. Empty = use SDK default. */
+	chatSystemPrompt: string;
 }
 
 declare global {

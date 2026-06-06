@@ -41,6 +41,9 @@ export interface UserSettings {
 	 *  with the user's current pick so they don't snap back to a
 	 *  role default. */
 	preferredModel: string | null;
+	/** Custom system prompt for new chat sessions. Empty string =
+	 *  use pi SDK's default coding assistant prompt. */
+	chatSystemPrompt: string;
 }
 
 const DEFAULTS: UserSettings = {
@@ -50,6 +53,7 @@ const DEFAULTS: UserSettings = {
 	autoCompress: false,
 	compressThreshold: 60,
 	preferredModel: null,
+	chatSystemPrompt: "",
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -64,6 +68,7 @@ interface UiSettings {
 	autoCollapse: boolean;
 	autoCompress: boolean;
 	compressThreshold: number;
+	chatSystemPrompt: string;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -71,6 +76,7 @@ const UI_DEFAULTS: UiSettings = {
 	autoCollapse: DEFAULTS.autoCollapse,
 	autoCompress: DEFAULTS.autoCompress,
 	compressThreshold: DEFAULTS.compressThreshold,
+	chatSystemPrompt: DEFAULTS.chatSystemPrompt,
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -170,6 +176,7 @@ export class UserSettingsStore {
 		if (partial.autoCollapse !== undefined) uiPartial.autoCollapse = partial.autoCollapse;
 		if (partial.autoCompress !== undefined) uiPartial.autoCompress = partial.autoCompress;
 		if (partial.compressThreshold !== undefined) uiPartial.compressThreshold = partial.compressThreshold;
+		if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

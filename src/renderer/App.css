@@ -268,10 +268,23 @@ body {
   }
 
   .whisper-bubble--user {
-    border-color: var(--ink-6);
-    background: var(--ink-8);
-    color: var(--ink-0);
-    box-shadow: 0 2px 12px oklch(0.04 0.002 85 / 0.1);
+    /* Light mode: soft gray bubble on paper — "ink on rice paper" reversed,
+       emphatic but not the stark primary black that fought the canvas. */
+    border-color: var(--ink-2);
+    background: var(--ink-1);
+    color: var(--ink-7);
+    box-shadow: 0 2px 12px oklch(0.04 0.002 85 / 0.08);
+  }
+
+  .dark .whisper-bubble--user {
+    /* Dark mode: medium-light bubble on dark canvas — subtle enough
+       to feel cohesive with the ink theme, light enough to clearly
+       read and to distinguish user from assistant. The old `--ink-0`
+       (98.5 % lightness) was jarring on the `--ink-8` background. */
+    border-color: var(--ink-5);
+    background: var(--ink-6);
+    color: var(--ink-1);
+    box-shadow: 0 2px 12px oklch(0 0 0 / 0.28);
   }
 
   .whisper-bubble--assistant {

@@ -26,6 +26,8 @@ interface SimplePopoverProps {
 	/** Estimated panel height in px — used to decide flip direction
 	 *  before the panel mounts. Defaults to 280. */
 	preferredHeight?: number;
+	/** Called whenever the popover opens or closes. */
+	onOpenChange?: (open: boolean) => void;
 }
 
 interface PopoverPosition {
@@ -46,11 +48,16 @@ export default function SimplePopover({
 	align = "start",
 	className = "",
 	preferredHeight = 280,
+	onOpenChange,
 }: SimplePopoverProps) {
 	const [open, setOpen] = useState(false);
 	const [position, setPosition] = useState<PopoverPosition | null>(null);
 	const triggerRef = useRef<HTMLDivElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		onOpenChange?.(open);
+	}, [open, onOpenChange]);
 
 	const computePosition = useCallback((): PopoverPosition | null => {
 		const triggerEl = triggerRef.current;
@@ -202,7 +209,6 @@ export default function SimplePopover({
 									}
 								: { top: 0, left: 0 }
 						}
-						onClick={() => setOpen(false)}
 					>
 						{children}
 					</div>,

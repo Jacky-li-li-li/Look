@@ -15,6 +15,8 @@ interface StreamingMarkdownProps {
 	content: string;
 	isStreaming?: boolean;
 	className?: string;
+	/** When true, paragraphs render as <span> so content flows inline with siblings. */
+	inline?: boolean;
 }
 
 // ============================================================
@@ -102,6 +104,7 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 	content,
 	isStreaming = false,
 	className,
+	inline = false,
 }: StreamingMarkdownProps) {
 	// Throttle content during streaming to avoid re-parsing on every token
 	const throttledContent = useThrottle(content, 80, isStreaming);
@@ -109,6 +112,12 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 	// Memo components to avoid recreating on each render
 	const components = useMemo(
 		() => ({
+			// When inline, render paragraphs as <span> so content flows with siblings;
+			// otherwise fall back to a real <p> (never undefined — react-markdown can't
+			// accept an undefined component override and would throw "Element type is invalid").
+			p({ children, ...props }: any) {
+				return inline ? <span {...props}>{children}</span> : <p {...props}>{children}</p>;
+			},
 			code({ node, inline, className, children, ...props }: any) {
 				const match = /language-(\w+)/.exec(className || "");
 				if (!inline && match) {
@@ -194,7 +203,7 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 				);
 			},
 		}),
-		[],
+		[inline],
 	);
 
 	// Memoize plugin arrays to avoid unnecessary ReactMarkdown re-renders
@@ -206,6 +215,16 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 		return isStreaming ? <span className="inline-block w-2 h-4 bg-primary animate-pulse rounded-xs ml-0.5" /> : null;
 	}
 
+	const markdown = (
+		<ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
+			{throttledContent}
+		</ReactMarkdown>
+	);
+
+	if (inline) {
+		return <span className={cn("contents", className)}>{markdown}</span>;
+	}
+
 	return (
 		<div
 			className={cn(
@@ -213,9 +232,7 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 				className,
 			)}
 		>
-			<ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
-				{throttledContent}
-			</ReactMarkdown>
+			{markdown}
 		</div>
 	);
 });

@@ -172,6 +172,32 @@ async function initAgentManager(): Promise<void> {
 
 	if (mainWindow) {
 		registerIpcHandlers(agentManager, mainWindow);
+
+		// Push current agent + history state after IPC handlers are
+		// registered. The initial `emitAgentList()` inside
+		// `loadPersistedAgents` fires before the handler is registered,
+		// so the renderer never sees it. If the renderer also called
+		// `api.getAgents()` before `ipcMain.handle("look:invoke")` was
+		// set up, the invoke fails silently (`.catch(showError)`) and
+		// no retry happens. Without this push, the renderer stays
+		// permanently empty — no agents, no messages.
+		const snapshot = agentManager.listAgentsWithHistory();
+		if (snapshot.agents.length > 0) {
+			mainWindow.webContents.send("look:event", {
+				type: "agent:list" as const,
+				agentId: "",
+				agents: snapshot.agents,
+			});
+			for (const [agentId, msgs] of Object.entries(snapshot.history)) {
+				if (msgs.length > 0) {
+					mainWindow.webContents.send("look:event", {
+						type: "agent:history" as const,
+						agentId,
+						messages: msgs,
+					});
+				}
+			}
+		}
 		console.log("[Look] IPC handlers registered");
 	}
 }
