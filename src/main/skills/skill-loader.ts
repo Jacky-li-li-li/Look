@@ -75,6 +75,8 @@ export function getLookProjectSkillsDir(projectRoot: string): string {
  *        - `~/.cursor/skills/`             — Cursor
  *        - `~/.codex/skills/`              — OpenAI Codex
  *        - `~/.config/github-copilot/skills/` — GitHub Copilot
+ *        - `~/.hermes/skills/`             — Hermes Agent
+ *        - `~/.pi/skills/`                 — pi SDK native
  *   6. `~/.look/settings.json#skills`     — user-added via "Import
  *      from …" chip or "+ Add a custom skill path" dialog
  *
@@ -97,6 +99,8 @@ export function gatherSkillPaths(projectRoot: string): string[] {
 		{ path: join(home, ".cursor", "skills"), source: "cursor" },
 		{ path: join(home, ".codex", "skills"), source: "codex" },
 		{ path: join(home, ".config", "github-copilot", "skills"), source: "copilot" },
+		{ path: join(home, ".hermes", "skills"), source: "hermes" },
+		{ path: join(home, ".pi", "skills"), source: "pi" },
 	];
 
 	// Add user-imported paths from settings.json (last — lowest priority).
@@ -169,14 +173,20 @@ export function listAllSkills(projectRoot: string): LoadedSkills {
 }
 
 /** Clear the cached skill list. Call when user changes a setting
- *  that affects which paths to scan. */
+ *  that affects which paths to scan. Also closes all active FS
+ *  watchers to prevent resource leaks. */
 export function invalidateSkillCache(): void {
 	cache = null;
 	cachedProjectRoot = null;
-	if (watcher) {
-		watcher.close();
-		watcher = null;
+	for (const w of watchers) {
+		try {
+			w.handle.close();
+		} catch {
+			// Already closed — ignore.
+		}
 	}
+	watchers.length = 0;
+	watcher = null;
 }
 
 /** Find a single skill by name. Returns undefined if not found. */

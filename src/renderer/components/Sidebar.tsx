@@ -135,35 +135,33 @@ export default function Sidebar({
 
 			{/* Tabs */}
 			<Tabs value={tab} onValueChange={setTab} className="shrink-0">
-				<TabsList className="w-full rounded-none border-b border-hairline bg-transparent px-3">
+				<TabsList className="w-full rounded-none bg-transparent px-3 gap-2 pt-3 pb-3">
 					<TabsTrigger
 						value="chat"
-						className="relative flex-1 gap-1.5 py-3 text-[11px] font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:inset-x-2 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-foreground"
+						className="flex-1 gap-1.5 py-3 text-[12px] font-medium text-muted-foreground transition-colors rounded-md border border-hairline bg-muted/30 hover:bg-muted/50 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15 data-[state=active]:text-foreground"
 					>
-						<MessageSquare className="size-3.5" />
+						<MessageSquare />
 						Chat
 						{chatCount > 0 && (
-							<Badge variant="secondary" className="ml-auto h-4 rounded-sm px-1.5 text-[9px]">
+							<Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
 								{chatCount}
 							</Badge>
 						)}
 					</TabsTrigger>
 					<TabsTrigger
 						value="orch"
-						className="relative flex-1 gap-1.5 py-3 text-[11px] font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:inset-x-2 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-foreground"
+						className="flex-1 gap-1.5 py-3 text-[12px] font-medium text-muted-foreground transition-colors rounded-md border border-hairline bg-muted/30 hover:bg-muted/50 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15 data-[state=active]:text-foreground"
 					>
-						<Network className="size-3.5" />
+						<Network />
 						Orch
 						{orchCount > 0 && (
-							<Badge variant="secondary" className="ml-auto h-4 rounded-sm px-1.5 text-[9px]">
+							<Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px]">
 								{orchCount}
 							</Badge>
 						)}
 					</TabsTrigger>
 				</TabsList>
 			</Tabs>
-
-			<Separator />
 
 			{/* Actions */}
 			<div className="flex shrink-0 gap-1.5 px-3 py-3">
@@ -173,7 +171,7 @@ export default function Sidebar({
 					className="h-10 flex-1 justify-start text-[12px] font-medium"
 					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)}
 				>
-					<Plus data-icon="inline-start" className="size-4" />
+					<Plus className="size-4" />
 					New Agent
 				</Button>
 			</div>

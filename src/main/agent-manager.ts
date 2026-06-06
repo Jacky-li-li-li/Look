@@ -53,7 +53,7 @@ import type {
 import {
 	findSkill,
 	formatInvocation,
-	getLookProjectSkillsDir,
+	gatherSkillPaths,
 	invalidateSkillCache,
 	type LoadedSkills,
 	listAllSkills,
@@ -701,6 +701,8 @@ export class AgentManager {
 			{ tool: "Cursor", dir: join(home, ".cursor", "skills") },
 			{ tool: "OpenAI Codex", dir: join(home, ".codex", "skills") },
 			{ tool: "GitHub Copilot", dir: join(home, ".config", "github-copilot", "skills") },
+			{ tool: "Hermes Agent", dir: join(home, ".hermes", "skills") },
+			{ tool: "pi SDK", dir: join(home, ".pi", "skills") },
 		];
 		return candidates.map((c) => {
 			const exists = existsSync(c.dir);
@@ -1649,22 +1651,19 @@ export class AgentManager {
 		agentId: string;
 		task?: TaskNode;
 	}): DefaultResourceLoader {
-		// v0.3 skills: feed the SDK the project's `<root>/.look/skills/`
-		// directory. Combined with the SDK's `agentDir: getLookDir()`
-		// default, the loader picks up both project-level and global
-		// `~/.look/skills/` skills. The SDK then auto-injects them into
-		// each worker's system prompt via `buildSystemPrompt` (we don't
-		// need to call `formatSkillsForPrompt` ourselves — see
-		// `node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js`).
-		const projectSkillsDir = getLookProjectSkillsDir(this.cwd);
-		const hasProjectSkills = existsSync(projectSkillsDir);
+		// v0.3 skills: feed ALL discovered skill paths into the SDK's
+		// resource loader so agent sessions see the same skills as the
+		// UI's slash menu. gatherSkillPaths() returns all paths that
+		// actually exist on disk (Look project + user, agentskills.io,
+		// Claude Code, Cursor, Codex, Copilot, Hermes Agent, pi SDK,
+		// and user-imported paths from settings.json).
+		const skillPaths = gatherSkillPaths(this.cwd);
 
-		// v0.3 skills scoping: when the orchestrator (v0.2, not yet
-		// implemented) spawns a worker with a `task.allowedSkills`
-		// constraint, narrow the visible set. The SDK's
-		// `formatSkillsForPrompt` already filters out skills with
-		// `disable-model-invocation: true` — we only add the optional
-		// allowed-list on top.
+		// v0.3 skills scoping: when the orchestrator spawns a worker
+		// with a `task.allowedSkills` constraint, narrow the visible
+		// set. The SDK's `formatSkillsForPrompt` already filters out
+		// skills with `disable-model-invocation: true` — we only add
+		// the optional allowed-list on top.
 		const allowed = opts.task?.allowedSkills;
 		const skillsOverride =
 			allowed === undefined
@@ -1692,12 +1691,13 @@ export class AgentManager {
 			// `~/.pi/agent/`, which is what the `pi` CLI uses — we don't
 			// want to inherit that scope.
 			agentDir: getLookDir(),
-			// v0.3: feed project-level skills into the SDK's loader so
+			// v0.3: feed all discovered skill paths into the SDK's loader so
 			// they get auto-injected into worker system prompts.
-			...(hasProjectSkills ? { additionalSkillPaths: [projectSkillsDir] } : {}),
+			...(skillPaths.length > 0 ? { additionalSkillPaths: skillPaths } : {}),
 			// v0.3: optional allowed-list for orchestrator-spawned workers.
 			...(skillsOverrideForSdk ? { skillsOverride: skillsOverrideForSdk } : {}),
 			systemPromptOverride: () => opts.systemPrompt,
+			appendSystemPromptOverride: () => [],
 			extensionFactories: [
 				(pi: any) => {
 					// Closure captures the agentId this loader is bound to.

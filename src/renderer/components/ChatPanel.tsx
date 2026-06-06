@@ -360,7 +360,7 @@ export default function ChatPanel({
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="flex-1 overflow-y-auto">
-				<div className="mx-auto flex w-full max-w-[52rem] flex-col gap-5 px-5 py-5">
+				<div className="flex w-full flex-col gap-5 px-5 py-5">
 					{displayMessages.length === 0 ? (
 						<div className="flex min-h-[52vh] flex-col items-center justify-center gap-4 text-center">
 							<div className="relative">
@@ -392,7 +392,7 @@ export default function ChatPanel({
 					queue.steering.length + queue.followUp.length > 0 ? "max-h-56 opacity-100" : "max-h-0 opacity-0",
 				)}
 			>
-				<div className="mx-auto w-full max-w-[52rem] px-5 py-2">
+				<div className="w-full px-5 py-2">
 					<div className="mb-1.5 flex items-center gap-2">
 						<span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
 							Queued
@@ -418,8 +418,8 @@ export default function ChatPanel({
 				</div>
 			</div>
 
-			<div className="shrink-0 border-t border-hairline bg-background/70 px-4 py-2.5 backdrop-blur-md">
-				<div className="relative mx-auto max-w-[52rem] rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
+			<div className="shrink-0 border-t border-hairline bg-background/70 px-5 py-2.5 backdrop-blur-md">
+				<div className="relative rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
 					{/* v0.3: /skill:name slash menu — absolute-positioned
 					    above the textarea. Absolute so it doesn't push
 					    the messages area when it opens. */}

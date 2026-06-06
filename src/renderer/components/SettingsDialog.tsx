@@ -387,11 +387,17 @@ function SettingsDialogImpl({
 
 				<Tabs value={tab} onValueChange={setTab} orientation="vertical" className="flex min-h-0 flex-1 gap-4">
 					<TabsList className="!h-full !justify-start w-44 shrink-0 flex-col items-stretch gap-1 rounded-lg border border-hairline bg-muted/30 p-1.5">
-						<TabsTrigger value="general" className="!h-auto !flex-none w-full justify-start gap-2 px-2.5">
+						<TabsTrigger
+							value="general"
+							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+						>
 							<Palette className="size-3.5" />
 							General
 						</TabsTrigger>
-						<TabsTrigger value="api-keys" className="!h-auto !flex-none w-full justify-start gap-2 px-2.5">
+						<TabsTrigger
+							value="api-keys"
+							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+						>
 							<Key className="size-3.5" />
 							<span className="flex-1 text-left">API Keys</span>
 							{configured > 0 && (
@@ -400,11 +406,17 @@ function SettingsDialogImpl({
 								</Badge>
 							)}
 						</TabsTrigger>
-						<TabsTrigger value="chat-prompt" className="!h-auto !flex-none w-full justify-start gap-2 px-2.5">
+						<TabsTrigger
+							value="chat-prompt"
+							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+						>
 							<MessageSquare className="size-3.5" />
 							Chat Prompt
 						</TabsTrigger>
-						<TabsTrigger value="about" className="!h-auto !flex-none w-full justify-start gap-2 px-2.5">
+						<TabsTrigger
+							value="about"
+							className="!h-auto !flex-none w-full justify-start gap-2 px-2.5 border border-hairline data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border-foreground/15"
+						>
 							<Zap className="size-3.5" />
 							About
 						</TabsTrigger>

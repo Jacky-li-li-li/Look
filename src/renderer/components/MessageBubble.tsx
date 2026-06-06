@@ -11,7 +11,7 @@ import type {
 	PiThinkingBlock,
 	PiToolCallBlock,
 } from "@shared/types";
-import { Settings2, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import { memo } from "react";
 import ExecutionProcess from "./ExecutionProcess";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
@@ -73,22 +73,6 @@ function ContentBlocks({ blocks, isStreaming }: { blocks: PiContentBlock[]; isSt
 
 const MessageBubble = memo(function MessageBubble({ message, agentRole, agentName }: MessageBubbleProps) {
 	const isUser = message.role === "user";
-	const isSystem = message.role === "system";
-
-	if (isSystem) {
-		const sysText = message.contentBlocks
-			.filter((b) => b.type === "text")
-			.map((b) => (b as PiTextBlock).text)
-			.join("");
-		return (
-			<div className="flex justify-center py-1">
-				<span className="inline-flex max-w-[78%] items-center gap-1.5 rounded-md border border-dashed border-hairline bg-background/50 px-3 py-1.5 text-[11px] text-muted-foreground">
-					<Settings2 className="size-3" />
-					<span className="truncate">{sysText}</span>
-				</span>
-			</div>
-		);
-	}
 
 	return (
 		<div

@@ -165,15 +165,22 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 	} = props;
 	const menuRef = useRef<HTMLDivElement>(null);
 
-	// Click-outside dismiss
+	// Click-outside dismiss.
+	// Uses `click` (not `mousedown`) because clicking a scrollbar
+	// fires `mousedown` on the scrollable container — which would
+	// close the menu the instant the user tries to scroll. `click`
+	// does NOT fire on scrollbar interactions in any major browser,
+	// so the user can scroll the messages area freely while the
+	// slash menu stays open. Real outside clicks (on empty space,
+	// other buttons, etc.) fire `click` after mouseup as expected.
 	useEffect(() => {
-		const onDocDown = (e: MouseEvent) => {
+		const onDocClick = (e: MouseEvent) => {
 			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
 				onClose();
 			}
 		};
-		document.addEventListener("mousedown", onDocDown);
-		return () => document.removeEventListener("mousedown", onDocDown);
+		document.addEventListener("click", onDocClick);
+		return () => document.removeEventListener("click", onDocClick);
 	}, [onClose]);
 
 	// Filter out hidden (disableModelInvocation) skills — workers can't
