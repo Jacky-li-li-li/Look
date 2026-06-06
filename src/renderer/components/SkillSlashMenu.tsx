@@ -234,7 +234,7 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 				<Sparkles className="size-3" />
 				<span>Available skills</span>
 				<span className="ml-auto rounded-sm border border-hairline bg-background/40 px-1 py-px text-[9px]">
-					{visible.length} · ↑↓ Tab · Esc
+					{visible.length} · ↑↓ Enter · Esc
 				</span>
 			</div>
 
@@ -374,6 +374,11 @@ export function handleSlashMenuKey(
 			open: true,
 			selectedIndex: (state.selectedIndex - 1 + state.pickableCount) % state.pickableCount,
 		});
+		return true;
+	}
+	if (e.key === "Enter") {
+		// Let parent commit the current selection; we just signal "handled".
+		e.preventDefault();
 		return true;
 	}
 	if (e.key === "Tab") {
