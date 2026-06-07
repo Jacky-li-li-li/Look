@@ -22,6 +22,7 @@ import {
 	projectsAtom,
 	providerSettingsAtom,
 	queuesAtomFamily,
+	recentlyCompletedAtom,
 	removeAgentAtoms,
 	userPreferredModelAtom,
 } from "./atoms";
@@ -70,10 +71,18 @@ export function initIpcHandlers(api: any): () => void {
 				break;
 
 			case "agent:destroyed": {
-				appStore.set(agentsAtom, appStore.get(agentsAtom).filter((a) => a.id !== event.agentId));
+				appStore.set(
+					agentsAtom,
+					appStore.get(agentsAtom).filter((a) => a.id !== event.agentId),
+				);
 				if (appStore.get(activeAgentIdAtom) === event.agentId) {
 					appStore.set(activeAgentIdAtom, null);
 				}
+				// Clean up recently completed tracking
+				appStore.set(
+					recentlyCompletedAtom,
+					appStore.get(recentlyCompletedAtom).filter((id) => id !== event.agentId),
+				);
 				removeAgentAtoms(event.agentId);
 				break;
 			}
@@ -88,9 +97,7 @@ export function initIpcHandlers(api: any): () => void {
 			case "agent:model-fallback": {
 				const triedCount = event.triedChain?.length ?? 0;
 				const description =
-					triedCount > 1
-						? t("toast.triedModels", { count: triedCount, resolved: event.resolved })
-						: undefined;
+					triedCount > 1 ? t("toast.triedModels", { count: triedCount, resolved: event.resolved }) : undefined;
 				toast.warning(t("toast.modelUnavailable", { primary: event.primary, resolved: event.resolved }), {
 					description,
 					duration: 5000,
@@ -103,6 +110,16 @@ export function initIpcHandlers(api: any): () => void {
 					agentsAtom,
 					appStore.get(agentsAtom).map((a) => (a.id === event.agentId ? { ...a, status: event.status } : a)),
 				);
+				// Clear "recently completed" when agent starts running again
+				if (event.status === "thinking" || event.status === "working") {
+					const prev = appStore.get(recentlyCompletedAtom);
+					if (prev.includes(event.agentId)) {
+						appStore.set(
+							recentlyCompletedAtom,
+							prev.filter((id) => id !== event.agentId),
+						);
+					}
+				}
 				break;
 
 			case "agent:usage-update":
@@ -134,9 +151,7 @@ export function initIpcHandlers(api: any): () => void {
 			case "agent:permission-mode": {
 				appStore.set(
 					agentsAtom,
-					appStore.get(agentsAtom).map((a) =>
-						a.id === event.agentId ? { ...a, permissionMode: event.mode } : a,
-					),
+					appStore.get(agentsAtom).map((a) => (a.id === event.agentId ? { ...a, permissionMode: event.mode } : a)),
 				);
 				toast.success(t("toast.permissionMode", { mode: event.mode }), { duration: 1500 });
 				break;
@@ -183,6 +198,17 @@ export function initIpcHandlers(api: any): () => void {
 				break;
 			}
 
+			case "agent:agent_end": {
+				if (!event.willRetry) {
+					const prev = appStore.get(recentlyCompletedAtom);
+					appStore.set(recentlyCompletedAtom, [
+						...prev.filter((id) => id !== event.agentId),
+						event.agentId,
+					]);
+				}
+				break;
+			}
+
 			// ---- pi session events (mirrored with `agent:` prefix) ----
 			case "agent:message_start": {
 				const msg = event.message as any;
@@ -212,7 +238,10 @@ export function initIpcHandlers(api: any): () => void {
 				if (idx < 0) {
 					idx = msgs.length - 1;
 					for (let i = msgs.length - 1; i >= 0; i--)
-						if (msgs[i].isStreaming) { idx = i; break; }
+						if (msgs[i].isStreaming) {
+							idx = i;
+							break;
+						}
 				}
 				if (idx < 0) break;
 				const rawContent = (event.message as any)?.content;
@@ -227,13 +256,15 @@ export function initIpcHandlers(api: any): () => void {
 				const msgs = [...appStore.get(messagesAtomFamily(event.agentId))];
 				let idx = msgs.length - 1;
 				for (let i = msgs.length - 1; i >= 0; i--)
-					if (msgs[i].isStreaming) { idx = i; break; }
+					if (msgs[i].isStreaming) {
+						idx = i;
+						break;
+					}
 				if (idx < 0) break;
 				const oldBlocks = msgs[idx].contentBlocks;
 				const blocks: PiContentBlock[] = Array.isArray(finalMsg.content)
 					? finalMsg.content.map((b: any): PiContentBlock => {
-							if (b.type !== "toolCall")
-								return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
+							if (b.type !== "toolCall") return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
 							const oldBlock = oldBlocks.find(
 								(ob) => ob.type === "toolCall" && (ob as PiToolCallBlock).id === b.id,
 							) as PiToolCallBlock | undefined;
@@ -264,7 +295,10 @@ export function initIpcHandlers(api: any): () => void {
 				const msgs = [...appStore.get(messagesAtomFamily(event.agentId))];
 				let idx = msgs.length - 1;
 				for (let i = msgs.length - 1; i >= 0; i--)
-					if (msgs[i].isStreaming) { idx = i; break; }
+					if (msgs[i].isStreaming) {
+						idx = i;
+						break;
+					}
 				if (idx < 0) break;
 				const blocks = [...msgs[idx].contentBlocks];
 				const callId = event.toolCallId;
@@ -272,8 +306,13 @@ export function initIpcHandlers(api: any): () => void {
 				if (event.type === "agent:tool_execution_start") {
 					if (foundIdx < 0) {
 						blocks.push({
-							type: "toolCall", id: callId, name: event.toolName,
-							arguments: event.args ?? {}, status: "running", result: "", isError: false,
+							type: "toolCall",
+							id: callId,
+							name: event.toolName,
+							arguments: event.args ?? {},
+							status: "running",
+							result: "",
+							isError: false,
 						} satisfies PiToolCallBlock);
 					} else {
 						(blocks[foundIdx] as PiToolCallBlock).status = "running";
@@ -299,9 +338,13 @@ export function initIpcHandlers(api: any): () => void {
 						} as PiToolCallBlock;
 					} else {
 						blocks.push({
-							type: "toolCall", id: callId, name: event.toolName,
-							arguments: {}, status: event.isError ? "error" : "success",
-							result: resultStr, isError: event.isError,
+							type: "toolCall",
+							id: callId,
+							name: event.toolName,
+							arguments: {},
+							status: event.isError ? "error" : "success",
+							result: resultStr,
+							isError: event.isError,
 						} satisfies PiToolCallBlock);
 					}
 				}
@@ -337,7 +380,9 @@ function _autoSelectAgent(): void {
 export async function initAppData(api: any): Promise<void> {
 	// 1. Fetch provider settings once at boot (fire-and-forget).
 	api.getSettings()
-		.then((r: any) => { if (r?.success) appStore.set(providerSettingsAtom, r.providers); })
+		.then((r: any) => {
+			if (r?.success) appStore.set(providerSettingsAtom, r.providers);
+		})
 		.catch(() => {});
 
 	// 2. Load persisted general settings (fire-and-forget).

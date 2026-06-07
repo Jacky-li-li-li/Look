@@ -133,7 +133,9 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 				// don't trigger animation thrashing. Collects multiple tool
 				// completions into a single frame.
 				collapseTimerRef.current = setTimeout(() => setOpen(false), 300);
-				return () => { if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current); };
+				return () => {
+					if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+				};
 			}
 			prevStatus.current = curr;
 		}
@@ -154,66 +156,66 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 		<div>
 			<div className="inset-drawer">
 				<button
-						className={cn("inset-drawer__trigger", !hasBody && "cursor-default")}
-						disabled={!hasBody}
-						onClick={() => {
-							if (hasBody) {
-								userManuallyToggled.current = true;
-								setOpen((v) => !v);
-							}
-						}}
-					>
-						<ChevronRight
-							className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")}
-						/>
-						<StatusIcon status={toolCall.status} />
-						<span className="shrink-0 font-mono text-[11px] font-medium text-foreground">
-							{toolCall.toolName}
-						</span>
-						<span className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground">
-							{toolSummary || argsPreview || t("tool.noArgs")}
-						</span>
-						{statSuffix && (
-							<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
-						)}
-						<Badge variant={statusVariant as any} className="h-5 shrink-0 rounded px-1.5 font-mono text-[9px]">
-							{toolCall.status}
-						</Badge>
-					</button>
-				
+					className={cn("inset-drawer__trigger", !hasBody && "cursor-default")}
+					disabled={!hasBody}
+					onClick={() => {
+						if (hasBody) {
+							userManuallyToggled.current = true;
+							setOpen((v) => !v);
+						}
+					}}
+				>
+					<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
+					<StatusIcon status={toolCall.status} />
+					<span className="shrink-0 font-mono text-[11px] font-medium text-foreground">{toolCall.toolName}</span>
+					<span className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground">
+						{toolSummary || argsPreview || t("tool.noArgs")}
+					</span>
+					{statSuffix && (
+						<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
+					)}
+					<Badge variant={statusVariant as any} className="h-5 shrink-0 rounded px-1.5 font-mono text-[9px]">
+						{toolCall.status}
+					</Badge>
+				</button>
 
 				{hasBody && (
-					<div className="grid transition-all duration-200 ease-out" style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}>
+					<div
+						className="grid transition-all duration-200 ease-out"
+						style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}
+					>
 						<div className="overflow-hidden">
 							<div className="inset-drawer__content">
-							<div className="flex flex-col gap-3 text-[10px] leading-relaxed">
-								<section className="flex flex-col gap-1">
-									<span className="inset-drawer__label text-foreground">{t("tool.arguments")}</span>
-									<pre className="whitespace-pre-wrap break-all text-muted-foreground">{argsJson || "{}"}</pre>
-								</section>
-								{toolCall.result && (
+								<div className="flex flex-col gap-3 text-[10px] leading-relaxed">
 									<section className="flex flex-col gap-1">
-										<span className="inset-drawer__label text-foreground">
-											{toolCall.isError ? t("tool.error") : t("tool.result")}
-											{resultTooLong && (
-												<span className="ml-1 text-[9px] text-muted-foreground">
-													({toolCall.result.length} 字符)
-												</span>
-											)}
-										</span>
-										<pre
-											className={cn(
-												"whitespace-pre-wrap break-words max-h-64 overflow-y-auto",
-												toolCall.isError ? "text-destructive" : "text-muted-foreground",
-											)}
-										>
-											{toolCall.result}
+										<span className="inset-drawer__label text-foreground">{t("tool.arguments")}</span>
+										<pre className="whitespace-pre-wrap break-all text-muted-foreground">
+											{argsJson || "{}"}
 										</pre>
 									</section>
-								)}
+									{toolCall.result && (
+										<section className="flex flex-col gap-1">
+											<span className="inset-drawer__label text-foreground">
+												{toolCall.isError ? t("tool.error") : t("tool.result")}
+												{resultTooLong && (
+													<span className="ml-1 text-[9px] text-muted-foreground">
+														({toolCall.result.length} 字符)
+													</span>
+												)}
+											</span>
+											<pre
+												className={cn(
+													"whitespace-pre-wrap break-words max-h-64 overflow-y-auto",
+													toolCall.isError ? "text-destructive" : "text-muted-foreground",
+												)}
+											>
+												{toolCall.result}
+											</pre>
+										</section>
+									)}
+								</div>
 							</div>
 						</div>
-					</div>
 					</div>
 				)}
 			</div>
@@ -240,10 +242,5 @@ function safeJson(value: unknown): string {
 export default React.memo(ToolCallCard, (prev, next) => {
 	const a = prev.toolCall;
 	const b = next.toolCall;
-	return (
-		a.callId === b.callId &&
-		a.status === b.status &&
-		a.isError === b.isError &&
-		a.result === b.result
-	);
+	return a.callId === b.callId && a.status === b.status && a.isError === b.isError && a.result === b.result;
 });

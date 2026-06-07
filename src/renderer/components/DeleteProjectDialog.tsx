@@ -3,13 +3,7 @@
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@shared/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@shared/components/ui/dialog";
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -74,10 +68,7 @@ export default function DeleteProjectDialog({
 					<Button variant="line" onClick={handleCancel}>
 						{t("common.cancel", "Cancel")}
 					</Button>
-					<Button
-						onClick={handleConfirm}
-						className="bg-red-600 text-white hover:bg-red-700"
-					>
+					<Button onClick={handleConfirm} className="bg-red-600 text-white hover:bg-red-700">
 						{t("project.deleteConfirmButton", "Delete")}
 					</Button>
 				</DialogFooter>

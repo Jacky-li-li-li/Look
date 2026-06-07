@@ -35,6 +35,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useThrottle } from "../hooks/useThrottle";
 import { getCachedHighlighter } from "../lib/highlighter";
+import MermaidBlock from "./MermaidBlock";
 
 interface StreamingMarkdownProps {
 	content: string;
@@ -48,7 +49,13 @@ interface StreamingMarkdownProps {
 // ShikiCodeBlock — syntax-highlighted code block via Shiki
 // ============================================================
 
-const ShikiCodeBlock = memo(function ShikiCodeBlock({ language, children }: { language: string; children: React.ReactNode }) {
+const ShikiCodeBlock = memo(function ShikiCodeBlock({
+	language,
+	children,
+}: {
+	language: string;
+	children: React.ReactNode;
+}) {
 	const [copied, setCopied] = useState(false);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const code = String(children).replace(/\n$/, "");
@@ -80,9 +87,7 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({ language, children }: { la
 	return (
 		<div className="group relative my-3 rounded-lg border bg-muted/30 overflow-hidden">
 			<div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/50">
-				<span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-					{lang}
-				</span>
+				<span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{lang}</span>
 				<Button
 					variant="ghost"
 					size="icon"
@@ -144,38 +149,101 @@ function Td({ children, ...props }: any) {
 
 const remarkPlugins = [remarkGfm];
 
-
 // ---- Pre-built component maps (zero per-instance allocation) ----
-function BlockP({ children, ...props }: any) { return <p {...props}>{children}</p>; }
-function InlineP({ children, ...props }: any) { return <span {...props}>{children}</span>; }
+function BlockP({ children, ...props }: any) {
+	return <p {...props}>{children}</p>;
+}
+function InlineP({ children, ...props }: any) {
+	return <span {...props}>{children}</span>;
+}
 function CodeRenderer({ node, inline: isInline, className: cls, children, ...props }: any) {
 	const match = /language-(\w+)/.exec(cls || "");
-	if (!isInline && match) { return <ShikiCodeBlock language={match[1]}>{children}</ShikiCodeBlock>; }
+	if (!isInline && match) {
+		const lang = match[1];
+		if (lang === "mermaid") {
+			return <MermaidBlock>{children}</MermaidBlock>;
+		}
+		return <ShikiCodeBlock language={lang}>{children}</ShikiCodeBlock>;
+	}
 	return <InlineCode {...props}>{children}</InlineCode>;
 }
-function PreRenderer({ children }: any) { return <>{children}</>; }
+function PreRenderer({ children }: any) {
+	return <>{children}</>;
+}
 function MarkdownA({ children, href, ...props }: any) {
-	return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline decoration-blue-400/30 hover:decoration-blue-400 transition-colors" {...props}>{children}</a>;
+	return (
+		<a
+			href={href}
+			target="_blank"
+			rel="noopener noreferrer"
+			className="text-blue-400 underline decoration-blue-400/30 hover:decoration-blue-400 transition-colors"
+			{...props}
+		>
+			{children}
+		</a>
+	);
 }
 function MarkdownBlockquote({ children, ...props }: any) {
-	return <blockquote className="my-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground" {...props}>{children}</blockquote>;
+	return (
+		<blockquote className="my-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground" {...props}>
+			{children}
+		</blockquote>
+	);
 }
-function MarkdownHr(props: any) { return <hr className="my-4 border-border" {...props} />; }
+function MarkdownHr(props: any) {
+	return <hr className="my-4 border-border" {...props} />;
+}
 function MarkdownUl({ children, ...props }: any) {
-	return <ul className="my-2 ml-4 list-disc space-y-1" {...props}>{children}</ul>;
+	return (
+		<ul className="my-2 ml-4 list-disc space-y-1" {...props}>
+			{children}
+		</ul>
+	);
 }
 function MarkdownOl({ children, ...props }: any) {
-	return <ol className="my-2 ml-4 list-decimal space-y-1" {...props}>{children}</ol>;
+	return (
+		<ol className="my-2 ml-4 list-decimal space-y-1" {...props}>
+			{children}
+		</ol>
+	);
 }
-function MarkdownH1({ children, ...props }: any) { return <h1 className="mt-4 mb-2 text-lg font-bold" {...props}>{children}</h1>; }
-function MarkdownH2({ children, ...props }: any) { return <h2 className="mt-3 mb-1.5 text-base font-semibold" {...props}>{children}</h2>; }
-function MarkdownH3({ children, ...props }: any) { return <h3 className="mt-2 mb-1 text-sm font-semibold" {...props}>{children}</h3>; }
+function MarkdownH1({ children, ...props }: any) {
+	return (
+		<h1 className="mt-4 mb-2 text-lg font-bold" {...props}>
+			{children}
+		</h1>
+	);
+}
+function MarkdownH2({ children, ...props }: any) {
+	return (
+		<h2 className="mt-3 mb-1.5 text-base font-semibold" {...props}>
+			{children}
+		</h2>
+	);
+}
+function MarkdownH3({ children, ...props }: any) {
+	return (
+		<h3 className="mt-2 mb-1 text-sm font-semibold" {...props}>
+			{children}
+		</h3>
+	);
+}
 
 const COMPONENTS_BLOCK = {
-	p: BlockP, code: CodeRenderer, pre: PreRenderer,
-	table: Table, th: Th, td: Td,
-	a: MarkdownA, blockquote: MarkdownBlockquote, hr: MarkdownHr,
-	ul: MarkdownUl, ol: MarkdownOl, h1: MarkdownH1, h2: MarkdownH2, h3: MarkdownH3,
+	p: BlockP,
+	code: CodeRenderer,
+	pre: PreRenderer,
+	table: Table,
+	th: Th,
+	td: Td,
+	a: MarkdownA,
+	blockquote: MarkdownBlockquote,
+	hr: MarkdownHr,
+	ul: MarkdownUl,
+	ol: MarkdownOl,
+	h1: MarkdownH1,
+	h2: MarkdownH2,
+	h3: MarkdownH3,
 } as const;
 
 const COMPONENTS_INLINE = { ...COMPONENTS_BLOCK, p: InlineP } as const;
@@ -211,7 +279,7 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 	return (
 		<div
 			className={cn(
-				"prose-sm prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground",
+				"prose-sm dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-td:text-foreground prose-th:text-foreground prose-blockquote:text-foreground prose-code:text-foreground",
 				className,
 			)}
 		>

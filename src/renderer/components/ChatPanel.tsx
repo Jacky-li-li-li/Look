@@ -306,7 +306,37 @@ const ChatPanel = memo(function ChatPanel({
 		return merged;
 	}, [messages]);
 
-	// ---- Virtuoso scroll-to-bottom ----
+	// Track whether an initial scroll-to-bottom is needed.
+	// Reset on agentId change so session switch re-scrolls;
+	// also covers page refresh where agentId stays fixed but
+	// messages load asynchronously (effect watches length too).
+	const needsInitialScrollRef = useRef(true);
+	useEffect(() => {
+		needsInitialScrollRef.current = true;
+	}, [agentId]);
+
+	// Initial scroll-to-bottom — fires on session switch AND on
+	// first data load after refresh. Double rAF lets Virtuoso
+	// measure item heights (which happen after the first paint)
+	// before we scroll, avoiding the "stuck at top" glitch.
+	useEffect(() => {
+		if (!needsInitialScrollRef.current) return;
+		if (displayMessages.length === 0) return;
+		needsInitialScrollRef.current = false;
+
+		let raf1 = 0;
+		let raf2 = 0;
+		raf1 = requestAnimationFrame(() => {
+			raf2 = requestAnimationFrame(() => {
+				virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end" });
+			});
+		});
+		return () => {
+			cancelAnimationFrame(raf1);
+			cancelAnimationFrame(raf2);
+		};
+	}, [agentId, displayMessages.length]);
+
 	const handleScrollToBottom = () => {
 		virtuosoRef.current?.scrollToIndex({ index: displayMessages.length - 1, behavior: "smooth" });
 		setShowScrollBtn(false);
@@ -350,39 +380,41 @@ const ChatPanel = memo(function ChatPanel({
 	};
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">				{displayMessages.length === 0 ? (
-					<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-						<div className="relative">
-							<PixelAgentAvatar role={agentRole} status={agentStatus} size="lg" />
-							<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
-						</div>
-						<div className="flex flex-col gap-1">
-							<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>
-							<p className="text-[11px] text-muted-foreground">Start with a direct task for this agent.</p>
-						</div>
+		<div className="flex min-h-0 flex-1 flex-col">
+			{" "}
+			{displayMessages.length === 0 ? (
+				<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+					<div className="relative">
+						<PixelAgentAvatar role={agentRole} status={agentStatus} size="lg" />
+						<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
 					</div>
-				) : (
-					<Virtuoso
-						ref={virtuosoRef}
-						data={displayMessages}
-						followOutput="smooth"
-						atBottomStateChange={(atBottom) => setShowScrollBtn(!atBottom)}
-						className="flex-1"
-						itemContent={(_index, msg) => (
-							<div className="flex w-full flex-col gap-5 px-5 py-2.5">
-								<MessageBubble
-									key={msg.id}
-									message={msg}
-									agentRole={agentRole}
-									agentName={agentName}
-									autoCollapse={autoCollapse}
-								/>
-							</div>
-						)}
-					/>
-				)}
-
-
+					<div className="flex flex-col gap-1">
+						<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>
+						<p className="text-[11px] text-muted-foreground">Start with a direct task for this agent.</p>
+					</div>
+				</div>
+			) : (
+				<Virtuoso
+					key={agentId}
+					ref={virtuosoRef}
+					data={displayMessages}
+					initialTopMostItemIndex={displayMessages.length - 1}
+					followOutput="smooth"
+					atBottomStateChange={(atBottom) => setShowScrollBtn(!atBottom)}
+					className="flex-1"
+					itemContent={(_index, msg) => (
+						<div className="flex w-full flex-col gap-5 px-5 py-2.5">
+							<MessageBubble
+								key={msg.id}
+								message={msg}
+								agentRole={agentRole}
+								agentName={agentName}
+								autoCollapse={autoCollapse}
+							/>
+						</div>
+					)}
+				/>
+			)}
 			{/* Floating scroll-to-bottom button — sits at the bottom of the message area */}
 			<div className="relative shrink-0 h-0 z-10">
 				<button
@@ -399,7 +431,6 @@ const ChatPanel = memo(function ChatPanel({
 					<ChevronDown className="size-4 text-muted-foreground" />
 				</button>
 			</div>
-
 			{/* Queue drawer — slides up when the SDK's queue is non-empty.
 			    The list comes from the `queue` prop (driven by
 			    `agent:queue_update` events forwarded from pi's
@@ -436,7 +467,6 @@ const ChatPanel = memo(function ChatPanel({
 					</div>
 				</div>
 			</div>
-
 			<div className="shrink-0 border-t border-hairline bg-background/70 px-5 py-2.5 backdrop-blur-md">
 				<div className="relative rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
 					{/* v0.3: /skill:name slash menu — absolute-positioned
@@ -557,6 +587,6 @@ const ChatPanel = memo(function ChatPanel({
 			</div>
 		</div>
 	);
-	});
+});
 
 export default ChatPanel;

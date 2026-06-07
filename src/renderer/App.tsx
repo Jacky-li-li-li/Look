@@ -85,18 +85,20 @@ export default function App() {
 	const handleSelectProject = useCallback((projectId: string) => {
 		if (!api) return;
 		appStore.set(activeProjectIdAtom, projectId);
-		api.switchProject(projectId).then((r: any) => {
-			if (r?.success) {
-				if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
-				if (r.history) {
-					for (const [agentId, msgs] of Object.entries(r.history)) {
-						if (Array.isArray(msgs) && msgs.length > 0) {
-							appStore.set(messagesAtomFamily(agentId), msgs as any);
+		api.switchProject(projectId)
+			.then((r: any) => {
+				if (r?.success) {
+					if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
+					if (r.history) {
+						for (const [agentId, msgs] of Object.entries(r.history)) {
+							if (Array.isArray(msgs) && msgs.length > 0) {
+								appStore.set(messagesAtomFamily(agentId), msgs as any);
+							}
 						}
 					}
 				}
-			}
-		}).catch(() => {});
+			})
+			.catch(() => {});
 		// Persist last active project
 		api.setGeneralSettings({}).catch(() => {});
 	}, []);
@@ -115,7 +117,13 @@ export default function App() {
 			if (r.isDuplicate) {
 				toast("Project already open", { description: "Switched to existing project." });
 			}
-			appStore.set(projectsAtom, await api.listProjects().then((pr: any) => pr?.projects ?? []).catch(() => []));
+			appStore.set(
+				projectsAtom,
+				await api
+					.listProjects()
+					.then((pr: any) => pr?.projects ?? [])
+					.catch(() => []),
+			);
 			// Pull agents for new project
 			const ar = await api.getAgents().catch(() => null);
 			if (ar?.success) {
@@ -149,9 +157,11 @@ export default function App() {
 		api.confirmDeleteProject(p.projectId, true);
 		appStore.set(pendingDeleteProjectAtom, null);
 		// Refresh
-		api.listProjects().then((r: any) => {
-			if (r?.success) appStore.set(projectsAtom, r.projects);
-		}).catch(() => {});
+		api.listProjects()
+			.then((r: any) => {
+				if (r?.success) appStore.set(projectsAtom, r.projects);
+			})
+			.catch(() => {});
 	}, []);
 
 	// ---- Callbacks: use appStore.get() to read latest value, avoiding stale closures ----
@@ -195,7 +205,10 @@ export default function App() {
 		await api.updateThinking(id, level);
 		// Optimistic update (agent:updated IPC also fires).
 		const agents = appStore.get(agentsAtom);
-		appStore.set(agentsAtom, agents.map((a) => (a.id === id ? { ...a, thinkingLevel: level as ThinkingLevel } : a)));
+		appStore.set(
+			agentsAtom,
+			agents.map((a) => (a.id === id ? { ...a, thinkingLevel: level as ThinkingLevel } : a)),
+		);
 	}, []);
 
 	const handleModelChanged = useCallback((newModel: string) => {
@@ -280,7 +293,10 @@ export default function App() {
 		const id = appStore.get(activeAgentIdAtom);
 		if (!id) return;
 		const agents = appStore.get(agentsAtom);
-		appStore.set(agentsAtom, agents.map((a) => (a.id === id ? { ...a, permissionMode: mode } : a)));
+		appStore.set(
+			agentsAtom,
+			agents.map((a) => (a.id === id ? { ...a, permissionMode: mode } : a)),
+		);
 		api.setPermissionMode(id, mode);
 	}, []);
 
@@ -309,7 +325,9 @@ export default function App() {
 			if (asks.length > 0 && asks[0].requestId === head.requestId) {
 				appStore.set(pendingAsksAtom, asks.slice(1));
 			}
-			api.respondPermission({ action: "deny", requestId: head.requestId, reason: "Timed out (30s)" }).catch(() => {});
+			api.respondPermission({ action: "deny", requestId: head.requestId, reason: "Timed out (30s)" }).catch(
+				() => {},
+			);
 			toast(t("permission.timedOut", { toolName: head.toolName }), { description: head.reason, duration: 3000 });
 		}, 30_000);
 		return () => clearTimeout(timer);
@@ -350,8 +368,8 @@ export default function App() {
 
 					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
 						{!api ? null : projects.length === 0 ? (
-						<WelcomeScreen onOpenProject={handleOpenProject} />
-					) : activeAgent ? (
+							<WelcomeScreen onOpenProject={handleOpenProject} />
+						) : activeAgent ? (
 							<>
 								<header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-hairline px-4">
 									<div className="flex min-w-0 items-center gap-3">
@@ -413,24 +431,24 @@ export default function App() {
 						/>
 					)}
 					{newProjectCwd && (
-					<NewProjectDialog
-						open={!!newProjectCwd}
-						cwd={newProjectCwd}
-						onClose={() => setNewProjectCwd(null)}
-						onCreated={handleProjectCreated}
-					/>
-				)}
-				{pendingDelete && (
-					<DeleteProjectDialog
-						open={!!pendingDelete}
-						projectId={pendingDelete.projectId}
-						projectName={pendingDelete.projectName}
-						agentCount={pendingDelete.agentCount}
-						onClose={handleDeleteProjectCancelled}
-						onDeleted={handleDeleteProjectConfirmed}
-					/>
-				)}
-				{showSettings && (
+						<NewProjectDialog
+							open={!!newProjectCwd}
+							cwd={newProjectCwd}
+							onClose={() => setNewProjectCwd(null)}
+							onCreated={handleProjectCreated}
+						/>
+					)}
+					{pendingDelete && (
+						<DeleteProjectDialog
+							open={!!pendingDelete}
+							projectId={pendingDelete.projectId}
+							projectName={pendingDelete.projectName}
+							agentCount={pendingDelete.agentCount}
+							onClose={handleDeleteProjectCancelled}
+							onDeleted={handleDeleteProjectConfirmed}
+						/>
+					)}
+					{showSettings && (
 						<SettingsDialog
 							open={showSettings}
 							providers={providerSettings}

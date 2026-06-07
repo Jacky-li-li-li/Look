@@ -2,6 +2,15 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@plugin "@tailwindcss/typography";
+/* Mermaid diagram SVGs — fill container width, height auto from aspect ratio.
+   Mermaid hardcodes width/height on the <svg>; we override both so the diagram
+   never leaves a large blank gap when it's more compact than the code view. */
+.mermaid-diagram svg {
+	max-width: 100% !important;
+	height: auto !important;
+}
+
 /* Shiki code output — override background/padding to match app theme */
 .shiki-code-output .shiki {
 	background: transparent !important;
@@ -505,6 +514,70 @@ body {
   }
   .status-mark[data-status="error"] {
     background: oklch(0.55 0.2 20);
+  }
+
+  /* ============================================================
+     Session Card Status — Running / Completed Borders
+     ============================================================ */
+
+  @property --flow-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes flow-rotate {
+    to { --flow-angle: 360deg; }
+  }
+
+  /* Running — animated flowing green border (pseudo-element overlay) */
+  [data-running][data-agent-status]:not([data-agent-status="idle"]) {
+    position: relative;
+    border-color: transparent !important;
+    z-index: 0;
+  }
+  [data-running][data-agent-status]:not([data-agent-status="idle"])::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--flow-angle, 0deg),
+      transparent 0deg,
+      oklch(0.6 0.18 150 / 0.9) 90deg,
+      transparent 180deg,
+      oklch(0.6 0.18 150 / 0.9) 270deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: flow-rotate 2s linear infinite;
+    z-index: -1;
+  }
+  /* Bright overlay on hover so the flow effect is always visible */
+  [data-running][data-agent-status]:not([data-agent-status="idle"]):hover::before {
+    background: conic-gradient(
+      from var(--flow-angle, 0deg),
+      transparent 0deg,
+      oklch(0.65 0.22 150) 90deg,
+      transparent 180deg,
+      oklch(0.65 0.22 150) 270deg,
+      transparent 360deg
+    );
+  }
+
+  /* Completed — static green border (box-shadow avoids layer conflicts) */
+  [data-completed] {
+    box-shadow: inset 0 0 0 1px oklch(0.55 0.15 150 / 0.6);
+    border-color: transparent !important;
+  }
+  [data-completed]:hover {
+    box-shadow: inset 0 0 0 1px oklch(0.55 0.15 150 / 0.8);
   }
 
   /* ============================================================

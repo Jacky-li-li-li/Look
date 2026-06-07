@@ -37,7 +37,9 @@ npx vitest --run <name-fragment>     # Run a single test file by name fragment
 
 ## Architecture
 
-This is **Look** — a multi-agent orchestration desktop app built with Electron + React + the [pi SDK](https://github.com/earendil-works/pi-mono). The pi SDK (`@earendil-works/pi-*`) provides the agent runtime: model registry, session management, tool execution, retry, and event streaming. Look layers a multi-agent system on top.
+This is **Look** — a multi-agent orchestration desktop app built on the [pi SDK](https://github.com/earendil-works/pi-mono), with Electron + React as its desktop shell, developed by **Jackyyyyyy**. Look is dedicated to multi-agent collaboration. Its core design philosophy: complex tasks are automatically decomposed, each task is assigned to a dedicated agent, agents run independently while sharing context, and they work together seamlessly to deliver high-quality results.
+
+The pi SDK (`@earendil-works/pi-*`) provides the agent runtime: model registry, session management, tool execution, retry, and event streaming. Look layers a multi-agent system on top.
 
 ### Dual TypeScript Setup
 

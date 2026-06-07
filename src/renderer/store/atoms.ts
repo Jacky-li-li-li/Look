@@ -9,6 +9,23 @@ export const agentsAtom = atom<AgentInfo[]>([]);
 
 export const activeAgentIdAtom = atom<string | null>(null);
 
+/**
+ * Tracks which agents have just completed a session successfully.
+ * Used by Sidebar to show a green border indicator.
+ * Cleared when user clicks/selects the agent.
+ */
+export const recentlyCompletedAtom = atom<string[]>([]);
+
+/** Derived: set of currently running agent IDs (thinking/working) */
+export const runningAgentsAtom = atom<Set<string>>((get) => {
+	const agents = get(agentsAtom);
+	return new Set(
+		agents
+			.filter((a) => a.status === "thinking" || a.status === "working")
+			.map((a) => a.id),
+	);
+});
+
 // ---- Project data ----
 
 export const projectsAtom = atom<ProjectInfo[]>([]);

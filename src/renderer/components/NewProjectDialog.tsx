@@ -4,13 +4,7 @@
 
 import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@shared/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@shared/components/ui/dialog";
 import { Input } from "@shared/components/ui/input";
 import { FolderOpen } from "lucide-react";
 import { useState } from "react";
@@ -91,9 +85,7 @@ export default function NewProjectDialog({ open, cwd, onClose, onCreated }: NewP
 						)}
 					</div>
 
-					{error && (
-						<p className="text-xs text-red-500">{error}</p>
-					)}
+					{error && <p className="text-xs text-red-500">{error}</p>}
 				</div>
 
 				<DialogFooter>

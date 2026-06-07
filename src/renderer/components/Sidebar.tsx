@@ -10,9 +10,18 @@ import { cn } from "@shared/lib/utils";
 import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { MessageSquare, Network, Plus, Settings, X } from "lucide-react";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { activeAgentIdAtom, activeProjectAtom, activeProjectIdAtom, agentsAtom, projectsAtom } from "../store/atoms";
+import {
+	activeAgentIdAtom,
+	activeProjectAtom,
+	activeProjectIdAtom,
+	agentsAtom,
+	projectsAtom,
+	recentlyCompletedAtom,
+	runningAgentsAtom,
+} from "../store/atoms";
+import { appStore } from "../store/ipcHandler";
 import ProjectSelector from "./ProjectSelector";
 
 const api = (window as any).look;
@@ -78,6 +87,8 @@ export default function Sidebar({
 	const projects = useAtomValue(projectsAtom);
 	const activeProjectId = useAtomValue(activeProjectIdAtom);
 	const activeProject = useAtomValue(activeProjectAtom);
+	const recentlyCompleted = useAtomValue(recentlyCompletedAtom);
+	const runningAgents = useAtomValue(runningAgentsAtom);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const editRef = useRef<HTMLInputElement>(null);
@@ -87,6 +98,39 @@ export default function Sidebar({
 	const activeAgent = agents.find((a) => a.id === activeAgentId);
 	const projectValid = !activeProjectId || (activeProject?.valid ?? false);
 	const hasActiveProject = activeProjectId !== null;
+
+	// Auto-switch tab + scroll active card into view.
+	// Two effects so tab switch happens first, then the re-render exposes the
+	// card in the DOM, and the second effect scrolls it into view.
+	useEffect(() => {
+		const agent = agents.find((a) => a.id === activeAgentId);
+		if (agent && !isChatAgent(agent)) setTab("orch");
+		else if (agent && isChatAgent(agent)) setTab("chat");
+	}, [activeAgentId]);
+
+	useEffect(() => {
+		if (!activeAgentId) return;
+		const raf = requestAnimationFrame(() => {
+			document
+				.querySelector(`[data-agent-id="${activeAgentId}"]`)
+				?.scrollIntoView({ behavior: "instant", block: "nearest" });
+		});
+		return () => cancelAnimationFrame(raf);
+	}, [activeAgentId, tab]);
+
+	// Auto-scroll to the bottom when a new agent is appended (not replaced).
+	const listEndRef = useRef<HTMLDivElement>(null);
+	const prevIdsRef = useRef<Set<string>>(new Set(filteredAgents.map((a) => a.id)));
+	useEffect(() => {
+		const prevIds = prevIdsRef.current;
+		const newIds = filteredAgents.map((a) => a.id);
+		// Only scroll when the list grew and overlaps with the previous set
+		// (appending), not when it's a wholesale replacement (tab/project switch).
+		if (newIds.length > prevIds.size && newIds.some((id) => prevIds.has(id))) {
+			listEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+		}
+		prevIdsRef.current = new Set(newIds);
+	}, [filteredAgents]);
 
 	const handleDoubleClick = useCallback((agent: AgentInfo) => {
 		setEditingId(agent.id);
@@ -127,7 +171,13 @@ export default function Sidebar({
 
 	return (
 		<aside className="flex h-full w-[260px] min-w-[260px] max-w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border bg-sidebar">
-			<ProjectSelector projects={projects} activeProjectId={activeProjectId} onSelectProject={onSelectProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} />
+			<ProjectSelector
+				projects={projects}
+				activeProjectId={activeProjectId}
+				onSelectProject={onSelectProject}
+				onCreateProject={onCreateProject}
+				onDeleteProject={onDeleteProject}
+			/>
 			<Tabs value={tab} onValueChange={setTab} className="shrink-0">
 				<TabsList className="w-full h-auto rounded-none bg-transparent gap-0 px-3 border-b border-hairline">
 					<TabsTrigger
@@ -162,7 +212,8 @@ export default function Sidebar({
 					variant="line"
 					size="sm"
 					className="h-10 flex-1 justify-start text-[12px] font-medium"
-					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)} disabled={!hasActiveProject || !projectValid}
+					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)}
+					disabled={!hasActiveProject || !projectValid}
 				>
 					<Plus className="size-4" />
 					{t("sidebar.newAgent")}
@@ -171,7 +222,8 @@ export default function Sidebar({
 
 			{!projectValid && activeProjectId && (
 				<div className="mx-3 mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-					{"⚠ " + t("project.pathMissing", "Project path does not exist. The folder may have been moved or deleted.")}
+					{"⚠ " +
+						t("project.pathMissing", "Project path does not exist. The folder may have been moved or deleted.")}
 				</div>
 			)}
 			<ScrollArea className="flex-1 min-h-0 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
@@ -181,12 +233,33 @@ export default function Sidebar({
 						return (
 							<div
 								key={agent.id}
+								data-agent-id={agent.id}
+								data-agent-status={agent.status}
+								data-running={runningAgents.has(agent.id) || undefined}
+								data-completed={
+									recentlyCompleted.includes(agent.id) ? "" : undefined
+								}
 								role="button"
 								tabIndex={0}
-								onClick={() => onSelect(agent.id)}
+								onClick={() => {
+									// Clear the "recently completed" flag on click
+									if (recentlyCompleted.includes(agent.id)) {
+										appStore.set(
+											recentlyCompletedAtom,
+											recentlyCompleted.filter((id) => id !== agent.id),
+										);
+									}
+									onSelect(agent.id);
+								}}
 								onKeyDown={(e) => {
 									if (e.key === "Enter" || e.key === " ") {
 										e.preventDefault();
+										if (recentlyCompleted.includes(agent.id)) {
+											appStore.set(
+												recentlyCompletedAtom,
+												recentlyCompleted.filter((id) => id !== agent.id),
+											);
+										}
 										onSelect(agent.id);
 									}
 								}}
@@ -194,10 +267,10 @@ export default function Sidebar({
 									"group flex w-full items-center gap-2.5 rounded-lg px-0 py-3.5 pl-2 text-left max-w-full",
 									"border border-transparent transition-colors duration-150",
 									"hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-hidden",
-									isActive && "border-border bg-accent/60",
+									isActive && !runningAgents.has(agent.id) && "border-border bg-accent/60",
 								)}
 							>
-							<div className="min-w-0 flex-1">
+								<div className="min-w-0 flex-1">
 									{editingId === agent.id ? (
 										<input
 											ref={editRef}
@@ -252,11 +325,16 @@ export default function Sidebar({
 
 					{filteredAgents.length === 0 && (
 						<div className="mx-1 mt-3 rounded-lg border border-dashed border-hairline p-5 text-center text-[11px] text-muted-foreground">
-							{!hasActiveProject ? t("sidebar.pleaseOpenProject", "Please open a project first") : (tab === "chat" ? t("sidebar.noChatAgents") : t("sidebar.noOrchAgents"))}
+							{!hasActiveProject
+								? t("sidebar.pleaseOpenProject", "Please open a project first")
+								: tab === "chat"
+									? t("sidebar.noChatAgents")
+									: t("sidebar.noOrchAgents")}
 							<br />
 							{t("sidebar.clickNewAgent")}
 						</div>
 					)}
+					<div ref={listEndRef} />
 				</div>
 			</ScrollArea>
 

@@ -82,10 +82,7 @@ export default function ProjectSelector({
 								onSelect={() => {
 									if (p.valid) onSelectProject(p.id);
 								}}
-								className={cn(
-									"flex items-center gap-2 px-2 py-1.5",
-									!p.valid && "opacity-50 cursor-default",
-								)}
+								className={cn("flex items-center gap-2 px-2 py-1.5", !p.valid && "opacity-50 cursor-default")}
 							>
 								{p.valid ? (
 									<Folder className="size-4 shrink-0 text-muted-foreground" />
@@ -98,9 +95,7 @@ export default function ProjectSelector({
 										{shortenPath(p.cwd, homedir)}
 									</div>
 								</div>
-								{p.id === activeProjectId && (
-									<Check className="size-3.5 shrink-0 text-foreground" />
-								)}
+								{p.id === activeProjectId && <Check className="size-3.5 shrink-0 text-foreground" />}
 								<button
 									type="button"
 									className="ml-auto flex shrink-0 items-center justify-center rounded p-0.5 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"

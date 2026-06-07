@@ -45,9 +45,7 @@ export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: T
 					setOpen((v) => !v);
 				}}
 			>
-				<ChevronRight
-					className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")}
-				/>
+				<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
 				<Brain className="size-3.5 shrink-0 text-blue-400" />
 				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
 				<span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">

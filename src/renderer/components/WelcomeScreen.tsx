@@ -20,9 +20,7 @@ export default function WelcomeScreen({ onOpenProject }: WelcomeScreenProps) {
 				<div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/30">
 					<FolderOpen className="size-8 text-muted-foreground" />
 				</div>
-				<h2 className="text-xl font-semibold tracking-tight">
-					{t("welcome.title", "Welcome to Look")}
-				</h2>
+				<h2 className="text-xl font-semibold tracking-tight">{t("welcome.title", "Welcome to Look")}</h2>
 				<p className="max-w-sm text-sm text-muted-foreground">
 					{t(
 						"welcome.description",

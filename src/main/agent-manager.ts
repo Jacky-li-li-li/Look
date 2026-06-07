@@ -7,6 +7,7 @@
 // ============================================================
 
 import fs, { existsSync } from "node:fs";
+import { request as httpsRequest } from "node:https";
 import { homedir } from "node:os";
 import path, { join } from "node:path";
 import { findEnvKeys, getModel } from "@earendil-works/pi-ai";
@@ -129,6 +130,147 @@ function envVarForProvider(provider: string): string {
 	return `${provider.toUpperCase().replace(/-/g, "_")}_API_KEY`;
 }
 
+/** 从 pi SDK 消息中提取纯文本内容 */
+function extractTextFromPiMessage(msg: any): string {
+	if (typeof msg.content === "string") return msg.content.trim();
+	if (Array.isArray(msg.content)) {
+		return msg.content
+			.filter((b: any) => b.type === "text")
+			.map((b: any) => b.text)
+			.join("\n")
+			.trim();
+	}
+	return "";
+}
+
+// ---- 标题生成 API 调用 ----
+// 不维护硬编码的 Provider → Base URL 映射，直接复用 pi SDK 的路由机制：
+// pi SDK 通过环境变量 {PROVIDER}_BASE_URL / ANTHROPIC_BASE_URL / OPENAI_BASE_URL 来路由。
+// 我们按同样优先级解析，保证与会话中实际使用的模型端点一致。
+
+/** 根据 Base URL 自动检测 API 风格 */
+function detectApiStyle(baseUrl: string): "anthropic" | "openai" | "google" {
+	if (baseUrl.includes("/anthropic")) return "anthropic";
+	if (baseUrl.includes("generativelanguage.googleapis.com")) return "google";
+	return "openai";
+}
+
+/**
+ * 解析 Provider 的 Base URL，与会话模型路由保持一致的优先级：
+ *   1. {PROVIDER}_BASE_URL   （如 DEEPSEEK_BASE_URL）
+ *   2. ANTHROPIC_BASE_URL     （Anthropic 协议通用端点，如指向 DeepSeek 兼容 API）
+ *   3. OPENAI_BASE_URL        （OpenAI 协议通用端点）
+ *   4. https://api.{provider}.com
+ */
+function resolveBaseUrl(provider: string): string {
+	const envKey = `${provider.toUpperCase().replace(/-/g, "_")}_BASE_URL`;
+	if (process.env[envKey]) return process.env[envKey]!;
+	if (process.env.ANTHROPIC_BASE_URL) return process.env.ANTHROPIC_BASE_URL;
+	if (process.env.OPENAI_BASE_URL) return process.env.OPENAI_BASE_URL;
+	return `https://api.${provider}.com`;
+}
+
+/** 从 API 响应中提取标题文本 */
+function parseTitleFromResponse(apiStyle: "anthropic" | "openai" | "google", data: any): string | null {
+	if (apiStyle === "anthropic") {
+		// 优先取 text 类型，兼容 thinking 模型（deepseek v4 等）
+		for (const block of data?.content ?? []) {
+			if (block.type === "text" && block.text) return block.text;
+			if (block.type === "thinking" && block.thinking) return block.thinking;
+		}
+		return null;
+	}
+	if (apiStyle === "google") {
+		return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+	}
+	// OpenAI 风格
+	return data?.choices?.[0]?.message?.content ?? null;
+}
+
+/**
+ * 调用 AI API 生成标题（非流式）
+ *
+ * 根据 Base URL 自动检测 API 风格（Anthropic / OpenAI / Google），
+ * 同一 Provider 可能通过不同端点暴露不同风格的 API。
+ */
+function callTitleApi(
+	baseUrl: string,
+	apiKey: string,
+	modelId: string,
+	prompt: string,
+): Promise<string | null> {
+	const style = detectApiStyle(baseUrl);
+
+	if (style === "anthropic") {
+		return callAnthropicTitleApi(baseUrl, apiKey, modelId, prompt);
+	}
+	if (style === "google") {
+		return callGoogleTitleApi(baseUrl, apiKey, modelId, prompt);
+	}
+	return callOpenAITitleApi(baseUrl, apiKey, modelId, prompt);
+}
+
+async function callAnthropicTitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
+	const url = `${baseUrl}/messages`;
+	const body = JSON.stringify({
+		model: modelId,
+		max_tokens: 128,
+		thinking: { type: "disabled" },
+		messages: [{ role: "user", content: prompt }],
+	});
+	const data = await httpPostJson(url, { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body);
+	return data ? parseTitleFromResponse("anthropic", data) : null;
+}
+
+async function callOpenAITitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
+	const url = `${baseUrl}/chat/completions`;
+	const body = JSON.stringify({
+		model: modelId,
+		max_tokens: 64,
+		messages: [{ role: "user", content: prompt }],
+	});
+	const data = await httpPostJson(url, { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" }, body);
+	return data ? parseTitleFromResponse("openai", data) : null;
+}
+
+async function callGoogleTitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
+	const url = `${baseUrl}/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
+	const body = JSON.stringify({
+		contents: [{ parts: [{ text: prompt }] }],
+		generationConfig: { maxOutputTokens: 64 },
+	});
+	const data = await httpPostJson(url, { "content-type": "application/json" }, body);
+	return data ? parseTitleFromResponse("google", data) : null;
+}
+
+/** HTTP POST + JSON 解析，任何错误返回 null */
+function httpPostJson(url: string, headers: Record<string, string>, body: string): Promise<any> {
+	return new Promise((resolve) => {
+		const { hostname, pathname, search, port } = new URL(url);
+		const path = pathname + search;
+		const req = httpsRequest(
+			{ hostname, port: port || 443, path, method: "POST", headers },
+			(res) => {
+				let data = "";
+				res.setEncoding("utf-8");
+				res.on("data", (chunk: string) => { data += chunk; });
+				res.on("end", () => {
+					if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+						try { resolve(JSON.parse(data)); } catch { resolve(null); }
+					} else {
+						resolve(null);
+					}
+				});
+			},
+		);
+		const timer = setTimeout(() => { req.destroy(); resolve(null); }, 15_000);
+		req.on("error", () => { clearTimeout(timer); resolve(null); });
+		req.on("close", () => clearTimeout(timer));
+		req.write(body);
+		req.end();
+	});
+}
+
 const EMPTY_USAGE: UsageSnapshot = {
 	inputTokens: 0,
 	outputTokens: 0,
@@ -137,6 +279,19 @@ const EMPTY_USAGE: UsageSnapshot = {
 	totalTokens: 0,
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
+
+/** 默认 Chat Agent 名称 — 标题为此名称的会话在首次回复后自动生成标题 */
+const DEFAULT_CHAT_NAME = "聊天助手";
+
+/** 标题生成 Prompt */
+const TITLE_PROMPT =
+	"根据用户的第一条消息，总结用户在问什么或者想要解决什么问题，生成一个简短的对话标题（10字以内）。只输出标题，不要有任何其他内容、标点符号或引号。如果消息内容过短或无明确主题，直接使用原始消息作为标题。\n\n用户消息：";
+
+/** 短消息阈值：低于此长度直接使用原文作为标题 */
+const SHORT_MESSAGE_THRESHOLD = 4;
+
+/** 最大标题长度 */
+const MAX_TITLE_LENGTH = 20;
 
 // ============================================================
 // AgentManager
@@ -154,6 +309,8 @@ export class AgentManager {
 	private agentUsage = new Map<string, UsageSnapshot>();
 	private lastContextTokens = new Map<string, number>();
 	private lastCompactPct = new Map<string, number>();
+	private firstUserMessage = new Map<string, string>();
+	private titleInFlight = new Set<string>();
 	private agentsIndexPath: string;
 	private projectsIndexPath: string;
 
@@ -306,9 +463,7 @@ export class AgentManager {
 		if (!mp) return;
 
 		// Count agents for confirmation dialog
-		const projectAgents = Array.from(this.agents.entries()).filter(
-			([, m]) => m.info.projectId === projectId,
-		);
+		const projectAgents = Array.from(this.agents.entries()).filter(([, m]) => m.info.projectId === projectId);
 
 		// Send confirmation request to renderer
 		this.emit({
@@ -847,30 +1002,21 @@ export class AgentManager {
 
 	getGeneralSettings(): UserSettings {
 		return (
-		this.getProjectSettings()
-		?? new UserSettingsStore(
-			SettingsManager.create(process.cwd(), getLookDir()),
-			getUiSettingsPath(),
-		)
-	).getAll();
+			this.getProjectSettings() ??
+			new UserSettingsStore(SettingsManager.create(process.cwd(), getLookDir()), getUiSettingsPath())
+		).getAll();
 	}
 	async updateGeneralSettings(partial: Partial<UserSettings>): Promise<UserSettings> {
 		return (
-		this.getProjectSettings()
-		?? new UserSettingsStore(
-			SettingsManager.create(process.cwd(), getLookDir()),
-			getUiSettingsPath(),
-		)
-	).update(partial);
+			this.getProjectSettings() ??
+			new UserSettingsStore(SettingsManager.create(process.cwd(), getLookDir()), getUiSettingsPath())
+		).update(partial);
 	}
 	async resetGeneralSettings(): Promise<UserSettings> {
 		return (
-		this.getProjectSettings()
-		?? new UserSettingsStore(
-			SettingsManager.create(process.cwd(), getLookDir()),
-			getUiSettingsPath(),
-		)
-	).reset();
+			this.getProjectSettings() ??
+			new UserSettingsStore(SettingsManager.create(process.cwd(), getLookDir()), getUiSettingsPath())
+		).reset();
 	}
 
 	// ============================================================
@@ -1337,6 +1483,75 @@ export class AgentManager {
 		this.emitAgentList();
 	}
 
+	/**
+	 * 调用 AI 生成对话标题（非流式）
+	 *
+	 * 使用与 Agent 相同的渠道和模型，发送非流式请求，
+	 * 让模型根据用户第一条消息生成简短标题。
+	 */
+	private async generateTitle(userMessage: string, provider: string, modelId: string): Promise<string | null> {
+		// 短消息直接使用原文作为标题
+		const trimmed = userMessage.trim();
+		if (trimmed.length <= SHORT_MESSAGE_THRESHOLD) {
+			return trimmed.slice(0, MAX_TITLE_LENGTH);
+		}
+
+		const apiKey = this.getApiKey(provider);
+		if (!apiKey) {
+			return null;
+		}
+
+		const baseUrl = resolveBaseUrl(provider);
+		const prompt = TITLE_PROMPT + userMessage;
+
+		try {
+			const result = await callTitleApi(baseUrl, apiKey, modelId, prompt);
+			if (!result) return null;
+			// 清理引号和书名号
+			const cleaned = result.trim().replace(/^["'""''「《]+|["'""''」》]+$/g, "").trim();
+			return cleaned.slice(0, MAX_TITLE_LENGTH) || null;
+		} catch (err) {
+			return null;
+		}
+	}
+
+	/**
+	 * 流完成后自动生成标题
+	 *
+	 * 如果 Agent 标题仍为默认值 "聊天助手"，自动调用标题生成。
+	 */
+	private autoGenerateTitle(agentId: string): void {
+		const m = this.agents.get(agentId);
+		if (!m) {
+			return;
+		}
+		if (m.info.name !== DEFAULT_CHAT_NAME) {
+			return;
+		}
+
+		// 防重：标题生成已在进行中
+		if (this.titleInFlight.has(agentId)) {
+			return;
+		}
+
+		const userMessage = this.firstUserMessage.get(agentId);
+		if (!userMessage) {
+			return;
+		}
+
+		const [p, ...parts] = m.info.model.includes("/") ? m.info.model.split("/") : ["anthropic", m.info.model];
+		const modelId = parts.join("/");
+		this.titleInFlight.add(agentId);
+
+		this.generateTitle(userMessage, p, modelId).then((title) => {
+			this.titleInFlight.delete(agentId);
+			if (!title || title === DEFAULT_CHAT_NAME) return;
+			this.renameAgent(agentId, title);
+		}).catch((err) => {
+			this.titleInFlight.delete(agentId);
+		});
+	}
+
 	// ============================================================
 	// Messaging
 	// ============================================================
@@ -1677,6 +1892,16 @@ export class AgentManager {
 				if (msg?.role === "assistant" && msg.usage) this.trackUsage(agentId, msg.usage);
 				m.info.messageCount = m.messages.length;
 
+				// 记录首条用户消息并立即启动标题生成（与 AI 回复并行）
+				if (msg?.role === "user" && !this.firstUserMessage.has(agentId)) {
+					const text = extractTextFromPiMessage(msg);
+					if (text) {
+						this.firstUserMessage.set(agentId, text);
+						// 不等 assistant 回复完成，标题 API 调用与回复并行
+						this.autoGenerateTitle(agentId);
+					}
+				}
+
 				// Commit the agent to `agents.json` only once the SDK has
 				// flushed a session.jsonl to disk. The SDK has a lazy-flush
 				// policy: the file is only created when the FIRST assistant
@@ -1696,6 +1921,12 @@ export class AgentManager {
 				const sessionFile = m.session.sessionFile;
 				if (sessionFile && fs.existsSync(sessionFile)) {
 					this.saveIndex();
+				}
+
+				// 首次 assistant 回复到达后自动生成标题。
+				// 不绑在 sessionFile 上——pi SDK 异步落盘，事件发射时文件未必已写完。
+				if (msg?.role === "assistant") {
+					this.autoGenerateTitle(agentId);
 				}
 
 				// Context ring (Look-specific)
