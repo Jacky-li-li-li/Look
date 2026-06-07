@@ -45,14 +45,14 @@
     "env": "环境变量",
     "apiKey": "API 密钥",
     "setKey": "设置密钥",
-    "keyUpdated": "{provider} 密钥已更新",
-    "keyRemoved": "{provider} 密钥已清除",
+    "keyUpdated": "{{provider}} 密钥已更新",
+    "keyRemoved": "{{provider}} 密钥已清除",
     "testKey": "测试",
     "clearKey": "清除",
     "selfTestFailed": "自检失败",
-    "envKeyVerified": "{provider} 环境密钥验证通过",
-    "failedSelfTest": "{provider} 自检失败但已保存: {reason}",
-    "authSourceEnv": "从环境变量 {env} 检测到",
+    "envKeyVerified": "{{provider}} 环境密钥验证通过",
+    "failedSelfTest": "{{provider}} 自检失败但已保存: {{reason}}",
+    "authSourceEnv": "从环境变量 {{env}} 检测到",
     "authSourceRuntime": "运行时提供",
     "authSourceConfig": "通过 ~/.pi/agent/models.json 配置",
     "authSourceAuto": "自动配置",
@@ -96,8 +96,8 @@
     "reasoning": "推理",
     "expanded": "展开",
     "collapsed": "已折叠",
-    "steps": "{count} 步",
-    "steps_plural": "{count} 步"
+    "steps": "{{count}} 步",
+    "steps_plural": "{{count}} 步"
   },
   "permission": {
     "title": "权限请求",
@@ -110,24 +110,27 @@
     "deny": "拒绝",
     "allowWithEdits": "编辑后允许",
     "allowEdited": "允许（已编辑）",
-    "more": "+{count} 更多",
-    "timedOut": "超时 — 已拒绝: {toolName}"
+    "more": "+{{count}} 更多",
+    "timedOut": "超时 — 已拒绝: {{toolName}}"
   },
   "tool": {
     "arguments": "参数",
     "result": "结果",
     "error": "错误",
     "noArgs": "无参数",
-    "readSummary": "读取 {path}（{lines} 行, {size}）",
-    "largeOutputSummary": "{preview}（{lines} 行, {chars} 字符）"
+    "readSummary": "读取 {{path}}（{{lines}} 行, {{size}}）",
+    "largeOutputSummary": "{{preview}}（{{lines}} 行, {{chars}} 字符）",
+    "statLines": "{{n}} 行",
+    "statMatches": "{{n}} 处",
+    "statEntries": "{{n}} 项"
   },
   "toast": {
-    "modelUnavailable": "模型不可用: {primary}。已切换到 {resolved}。",
-    "triedModels": "尝试了 {count} 个模型。当前使用 {resolved}。",
+    "modelUnavailable": "模型不可用: {{primary}}。已切换到 {{resolved}}。",
+    "triedModels": "尝试了 {{count}} 个模型。当前使用 {{resolved}}。",
     "noHarness": "Harness API 不可用。请在 Electron 中运行。",
     "modelSwitchFailed": "切换模型失败",
-    "permissionMode": "权限模式: {mode}",
-    "error": "[{id}] {message}",
+    "permissionMode": "权限模式: {{mode}}",
+    "error": "[{{id}}] {{message}}",
     "configFirstModel": "配置第一个模型吧",
     "configFirstModelDesc": "在 API 密钥里添加一个 provider 的 key 即可使用"
   }

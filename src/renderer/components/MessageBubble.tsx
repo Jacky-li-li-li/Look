@@ -14,7 +14,6 @@ import type {
 import { UserRound } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
-import ExecutionProcess from "./ExecutionProcess";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
@@ -24,33 +23,40 @@ interface MessageBubbleProps {
 	message: PiMessage;
 	agentRole?: AgentRole;
 	agentName?: string;
+	autoCollapse: boolean;
 }
 
-/** Render content blocks inside a whisper bubble — shared between single-chunk and multi-chunk paths. */
-function ContentBlocks({ blocks, isStreaming }: { blocks: PiContentBlock[]; isStreaming: boolean }) {
-	const thinkingBlocks = blocks.filter((b) => b.type === "thinking") as PiThinkingBlock[];
-	const toolCallBlocks = blocks.filter((b) => b.type === "toolCall") as PiToolCallBlock[];
-	const textBlocks = blocks.filter((b) => b.type === "text") as PiTextBlock[];
-	const hasOutput = textBlocks.some((b) => b.text.length > 0);
-	const thinkingText = thinkingBlocks.map((b) => b.thinking).join("");
-	const outputText = textBlocks.map((b) => b.text).join("");
-
+/** Render content blocks in pi SDK order (thinking → toolCall → text).
+ *  No ExecutionProcess wrapping — each block type is independently rendered. */
+function ContentBlocks({
+	blocks,
+	isStreaming,
+	autoCollapse,
+}: {
+	blocks: PiContentBlock[];
+	isStreaming: boolean;
+	autoCollapse: boolean;
+}) {
 	return (
-		<>
-			<ExecutionProcess
-				thinking={thinkingText || undefined}
-				toolCalls={toolCallBlocks.map((tc) => ({
-					callId: tc.id,
-					toolName: tc.name,
-					status: tc.status,
-				}))}
-				hasOutput={hasOutput}
-			>
-				{thinkingText && <ThinkingPanel thinking={thinkingText} />}
-				{toolCallBlocks.length > 0 &&
-					toolCallBlocks.map((tc) => (
+		<div className="flex flex-col gap-2">
+			{blocks.map((block, i) => {
+				if (block.type === "thinking") {
+					const tb = block as PiThinkingBlock;
+					if (!tb.thinking) return null;
+					return (
+						<ThinkingPanel
+							key={`t-${i}`}
+							thinking={tb.thinking}
+							isStreaming={isStreaming}
+							autoCollapse={autoCollapse}
+						/>
+					);
+				}
+				if (block.type === "toolCall") {
+					const tc = block as PiToolCallBlock;
+					return (
 						<ToolCallCard
-							key={tc.id}
+							key={tc.id || `tc-${i}`}
 							toolCall={{
 								callId: tc.id,
 								toolName: tc.name,
@@ -60,19 +66,24 @@ function ContentBlocks({ blocks, isStreaming }: { blocks: PiContentBlock[]; isSt
 								isError: tc.isError,
 							}}
 						/>
-					))}
-			</ExecutionProcess>
-
-			{outputText && (
-				<div className="message-prose">
-					<SkillAwareContent content={outputText} isStreaming={isStreaming} />
-				</div>
-			)}
-		</>
+					);
+				}
+				if (block.type === "text") {
+					const tb = block as PiTextBlock;
+					if (!tb.text) return null;
+					return (
+						<div key={`text-${i}`} className="message-prose">
+							<SkillAwareContent content={tb.text} isStreaming={isStreaming} />
+						</div>
+					);
+				}
+				return null;
+			})}
+		</div>
 	);
 }
 
-const MessageBubble = memo(function MessageBubble({ message, agentRole, agentName }: MessageBubbleProps) {
+const MessageBubble = memo(function MessageBubble({ message, agentRole, agentName, autoCollapse }: MessageBubbleProps) {
 	const { t } = useTranslation();
 	const isUser = message.role === "user";
 
@@ -119,6 +130,7 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 								<ContentBlocks
 									blocks={chunk.contentBlocks}
 									isStreaming={!!message.isStreaming && ci === message.assistantChunks!.length - 1}
+									autoCollapse={autoCollapse}
 								/>
 							</div>
 						))}
@@ -132,7 +144,11 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 							!isUser && "whisper-bubble--assistant w-full",
 						)}
 					>
-						<ContentBlocks blocks={message.contentBlocks} isStreaming={message.isStreaming ?? false} />
+						<ContentBlocks
+							blocks={message.contentBlocks}
+							isStreaming={message.isStreaming ?? false}
+							autoCollapse={autoCollapse}
+						/>
 					</div>
 				)}
 			</div>

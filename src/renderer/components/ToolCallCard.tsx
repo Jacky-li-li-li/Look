@@ -1,5 +1,7 @@
 // ============================================================
 // ToolCallCard — Inset Drawer (Ink Wash, shadcn/ui)
+// Auto-expands while a tool is running, auto-collapses on
+// completion. Manual toggle overrides until next status change.
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
@@ -17,67 +19,159 @@ interface ToolCallCardProps {
 /** Threshold: tool result text longer than this shows a summary + "show more" button */
 const RESULT_SUMMARY_LIMIT = 500;
 
-function formatResultSummary(
+/** Home dir injected by preload — used to shorten absolute paths to ~/…. */
+const HOME_DIR = typeof window !== "undefined" ? (window.look?.homedir ?? "") : "";
+
+function shortenPath(p: string): string {
+	if (!p) return p;
+	if (HOME_DIR && (p === HOME_DIR || p.startsWith(`${HOME_DIR}/`))) {
+		return `~${p.slice(HOME_DIR.length)}`;
+	}
+	return p;
+}
+
+function argStr(args: Record<string, unknown>, ...keys: string[]): string {
+	for (const k of keys) {
+		const v = args?.[k];
+		if (typeof v === "string" && v.length > 0) return v;
+	}
+	return "";
+}
+
+/**
+ * The title-row summary for a tool call. Mirrors pi sdk's `renderCall`:
+ * "tool name + primary args" (command / path / pattern), NOT a line/char
+ * count. Built from `args`, so it is available in every status
+ * (pending/running/success/error). Returns "" to fall back to argsPreview.
+ */
+function formatToolSummary(toolCall: ToolCallRecord): string {
+	const a = toolCall.args ?? {};
+	switch (toolCall.toolName) {
+		case "bash": {
+			const cmd = argStr(a, "command").replace(/\s+/g, " ").trim();
+			const timeout = typeof a.timeout === "number" ? ` (timeout ${a.timeout}s)` : "";
+			return cmd ? `$ ${cmd}${timeout}` : "$ …";
+		}
+		case "read": {
+			const p = shortenPath(argStr(a, "path", "file_path"));
+			const offset = typeof a.offset === "number" ? a.offset : undefined;
+			const limit = typeof a.limit === "number" ? a.limit : undefined;
+			const range = offset !== undefined ? `:${offset}${limit !== undefined ? `-${offset + limit - 1}` : ""}` : "";
+			return `${p}${range}`;
+		}
+		case "write":
+		case "edit":
+			return shortenPath(argStr(a, "path", "file_path"));
+		case "grep": {
+			const pattern = argStr(a, "pattern");
+			const inPath = shortenPath(argStr(a, "path")) || ".";
+			const glob = argStr(a, "glob") ? ` (${argStr(a, "glob")})` : "";
+			return `/${pattern}/ in ${inPath}${glob}`;
+		}
+		case "ls":
+			return shortenPath(argStr(a, "path")) || ".";
+		case "find": {
+			const pattern = argStr(a, "pattern");
+			const inPath = shortenPath(argStr(a, "path")) || ".";
+			return `${pattern} in ${inPath}`;
+		}
+		default:
+			return "";
+	}
+}
+
+/**
+ * A compact result-stat suffix shown only after success (collapsed view
+ * can't see the result body, so we surface a tiny stat in the title).
+ * Returns "" when there is nothing meaningful to show.
+ */
+function formatStatSuffix(
 	toolCall: ToolCallRecord,
 	t: (key: string, vars?: Record<string, string | number>) => string,
-): string | null {
-	const { toolName, result } = toolCall;
-	if (!result || result.length === 0) return null;
-
-	// For `read` tool: show path + size summary instead of full content
-	if (toolName === "read") {
-		const path = String(toolCall.args?.path ?? "?");
-		const lines = result.split("\n").length;
-		const bytes = result.length;
-		const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-		return t("tool.readSummary", { path, lines, size: kb });
+): string {
+	const { toolName, result, status } = toolCall;
+	if (status !== "success" || !result) return "";
+	const trimmed = result.trim();
+	switch (toolName) {
+		case "bash":
+			return ` · ${t("tool.statLines", { n: result.split("\n").length })}`;
+		case "read": {
+			const bytes = result.length;
+			return ` · ${bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`}`;
+		}
+		case "grep": {
+			const n = !trimmed || trimmed === "No matches found" ? 0 : trimmed.split("\n").length;
+			return ` · ${t("tool.statMatches", { n })}`;
+		}
+		case "ls":
+			return ` · ${t("tool.statEntries", { n: trimmed ? trimmed.split("\n").length : 0 })}`;
+		default:
+			return "";
 	}
-
-	// For other tools with large output: show first line + size
-	if (result.length > RESULT_SUMMARY_LIMIT) {
-		const firstLine = result.split("\n")[0]?.slice(0, 120) ?? "";
-		const lines = result.split("\n").length;
-		const suffix = firstLine.length < result.split("\n")[0]!.length ? "…" : "";
-		return t("tool.largeOutputSummary", { preview: `${firstLine}${suffix}`, lines, chars: result.length });
-	}
-
-	return null; // short enough to show inline
 }
 
 export default function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { t } = useTranslation();
-	const [open, setOpen] = React.useState(false);
+	// Auto open when running, auto close on completion
+	const [open, setOpen] = React.useState(toolCall.status === "running");
+	const prevStatus = React.useRef(toolCall.status);
+	const userManuallyToggled = React.useRef(false);
+
+	// Track status transitions for auto-expand/collapse
+	React.useEffect(() => {
+		const prev = prevStatus.current;
+		const curr = toolCall.status;
+
+		if (prev !== curr) {
+			if (curr === "running") {
+				// Auto-expand when tool starts running, reset manual override
+				userManuallyToggled.current = false;
+				setOpen(true);
+			} else if ((curr === "success" || curr === "error") && !userManuallyToggled.current) {
+				// Auto-collapse on completion
+				setOpen(false);
+			}
+			prevStatus.current = curr;
+		}
+	}, [toolCall.status]);
 
 	const argsJson = safeJson(toolCall.args);
 	const argsPreview = argsJson.slice(0, 80);
 	const hasBody = (toolCall.result && toolCall.result.length > 0) || argsPreview.length > 0;
 
-	const resultSummary = !open ? formatResultSummary(toolCall, t) : null;
+	const toolSummary = formatToolSummary(toolCall);
+	const statSuffix = !open ? formatStatSuffix(toolCall, t) : "";
 	const resultTooLong = toolCall.result ? toolCall.result.length > RESULT_SUMMARY_LIMIT : false;
 
 	const statusVariant =
 		toolCall.status === "success" ? "outline" : toolCall.status === "error" ? "destructive" : "secondary";
 
 	return (
-		<Collapsible open={open} onOpenChange={setOpen}>
+		<Collapsible open={open}>
 			<div className="inset-drawer">
 				<CollapsibleTrigger asChild>
-					<button className={cn("inset-drawer__trigger", !hasBody && "cursor-default")} disabled={!hasBody}>
+					<button
+						className={cn("inset-drawer__trigger", !hasBody && "cursor-default")}
+						disabled={!hasBody}
+						onClick={() => {
+							if (hasBody) {
+								userManuallyToggled.current = true;
+								setOpen((v) => !v);
+							}
+						}}
+					>
 						<ChevronRight
 							className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")}
 						/>
 						<StatusIcon status={toolCall.status} />
-						<span className="min-w-0 flex-1 truncate text-left font-mono text-[11px] font-medium text-foreground">
+						<span className="shrink-0 font-mono text-[11px] font-medium text-foreground">
 							{toolCall.toolName}
 						</span>
-						{resultSummary ? (
-							<span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground max-w-64">
-								{resultSummary}
-							</span>
-						) : (
-							<span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground max-w-32">
-								{argsPreview || t("tool.noArgs")}
-							</span>
+						<span className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground">
+							{toolSummary || argsPreview || t("tool.noArgs")}
+						</span>
+						{statSuffix && (
+							<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
 						)}
 						<Badge variant={statusVariant as any} className="h-5 shrink-0 rounded px-1.5 font-mono text-[9px]">
 							{toolCall.status}

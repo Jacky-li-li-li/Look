@@ -35,9 +35,9 @@ export function convertPiMessage(piMsg: any, agentId: string, msgId: string): Pi
 							id: b.id ?? "",
 							name: b.name ?? "unknown",
 							arguments: b.arguments ?? {},
-							status: "pending",
-							result: "",
-							isError: false,
+							status: b.status ?? (b.result ? (b.isError ? "error" : "success") : "pending"),
+							result: b.result ?? "",
+							isError: b.isError ?? false,
 						};
 					}
 					return { ...b, active: false };

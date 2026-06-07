@@ -9,6 +9,11 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const api = {
+  // User home directory, exposed as a sync constant so the renderer can
+  // shorten absolute paths to ~/… (matches pi sdk's path display). In a
+  // sandboxed preload we can't require("os"), but process.env is available.
+  homedir: process.env.HOME || process.env.USERPROFILE || "",
+
   send: (event) => ipcRenderer.send("look:event", event),
   invoke: (event) => ipcRenderer.invoke("look:invoke", event),
 

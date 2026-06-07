@@ -45,14 +45,14 @@
     "env": "Environment",
     "apiKey": "API Key",
     "setKey": "Set Key",
-    "keyUpdated": "{provider} key updated",
-    "keyRemoved": "{provider} key removed",
+    "keyUpdated": "{{provider}} key updated",
+    "keyRemoved": "{{provider}} key removed",
     "testKey": "Test",
     "clearKey": "Clear",
     "selfTestFailed": "Self-test failed",
-    "envKeyVerified": "{provider} env key verified",
-    "failedSelfTest": "{provider} saved despite failed self-test: {reason}",
-    "authSourceEnv": "Detected from {env} in environment",
+    "envKeyVerified": "{{provider}} env key verified",
+    "failedSelfTest": "{{provider}} saved despite failed self-test: {{reason}}",
+    "authSourceEnv": "Detected from {{env}} in environment",
     "authSourceRuntime": "Provided at runtime",
     "authSourceConfig": "Configured via ~/.pi/agent/models.json",
     "authSourceAuto": "Auto-configured",
@@ -96,8 +96,8 @@
     "reasoning": "Reasoning",
     "expanded": "Expanded",
     "collapsed": "Collapsed",
-    "steps": "{count} step",
-    "steps_plural": "{count} steps"
+    "steps": "{{count}} step",
+    "steps_plural": "{{count}} steps"
   },
   "permission": {
     "title": "Permission requested",
@@ -110,24 +110,27 @@
     "deny": "Deny",
     "allowWithEdits": "Allow with edits",
     "allowEdited": "Allow edited",
-    "more": "+{count} more",
-    "timedOut": "Timed out — denied: {toolName}"
+    "more": "+{{count}} more",
+    "timedOut": "Timed out — denied: {{toolName}}"
   },
   "tool": {
     "arguments": "Arguments",
     "result": "Result",
     "error": "Error",
     "noArgs": "no args",
-    "readSummary": "Read {path} ({lines} lines, {size})",
-    "largeOutputSummary": "{preview} ({lines} lines, {chars} chars)"
+    "readSummary": "Read {{path}} ({{lines}} lines, {{size}})",
+    "largeOutputSummary": "{{preview}} ({{lines}} lines, {{chars}} chars)",
+    "statLines": "{{n}} lines",
+    "statMatches": "{{n}} matches",
+    "statEntries": "{{n}} items"
   },
   "toast": {
-    "modelUnavailable": "Model unavailable: {primary}. Switched to {resolved}.",
-    "triedModels": "Tried {count} models in chain. Now using {resolved}.",
+    "modelUnavailable": "Model unavailable: {{primary}}. Switched to {{resolved}}.",
+    "triedModels": "Tried {{count}} models in chain. Now using {{resolved}}.",
     "noHarness": "Harness API not available. Run in Electron.",
     "modelSwitchFailed": "Failed to switch model",
-    "permissionMode": "Permission mode: {mode}",
-    "error": "[{id}] {message}",
+    "permissionMode": "Permission mode: {{mode}}",
+    "error": "[{{id}}] {{message}}",
     "configFirstModel": "Configure your first model",
     "configFirstModelDesc": "Add a provider API key in Settings to get started"
   }

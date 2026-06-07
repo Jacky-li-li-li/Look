@@ -45,14 +45,14 @@
     "env": "環境変数",
     "apiKey": "API キー",
     "setKey": "キーを設定",
-    "keyUpdated": "{provider} キーを更新しました",
-    "keyRemoved": "{provider} キーを削除しました",
+    "keyUpdated": "{{provider}} キーを更新しました",
+    "keyRemoved": "{{provider}} キーを削除しました",
     "testKey": "テスト",
     "clearKey": "クリア",
     "selfTestFailed": "セルフテストに失敗しました",
-    "envKeyVerified": "{provider} 環境キーを確認しました",
-    "failedSelfTest": "{provider} セルフテスト失敗しましたが保存されました: {reason}",
-    "authSourceEnv": "環境変数 {env} から検出",
+    "envKeyVerified": "{{provider}} 環境キーを確認しました",
+    "failedSelfTest": "{{provider}} セルフテスト失敗しましたが保存されました: {{reason}}",
+    "authSourceEnv": "環境変数 {{env}} から検出",
     "authSourceRuntime": "ランタイムで提供",
     "authSourceConfig": "~/.pi/agent/models.json で設定",
     "authSourceAuto": "自動設定",
@@ -96,8 +96,8 @@
     "reasoning": "推論",
     "expanded": "展開中",
     "collapsed": "折りたたみ済み",
-    "steps": "{count} ステップ",
-    "steps_plural": "{count} ステップ"
+    "steps": "{{count}} ステップ",
+    "steps_plural": "{{count}} ステップ"
   },
   "permission": {
     "title": "権限リクエスト",
@@ -110,24 +110,27 @@
     "deny": "拒否",
     "allowWithEdits": "編集して許可",
     "allowEdited": "許可（編集済み）",
-    "more": "+{count} 件",
-    "timedOut": "タイムアウト — 拒否されました: {toolName}"
+    "more": "+{{count}} 件",
+    "timedOut": "タイムアウト — 拒否されました: {{toolName}}"
   },
   "tool": {
     "arguments": "引数",
     "result": "結果",
     "error": "エラー",
     "noArgs": "引数なし",
-    "readSummary": "{path} を読み取り（{lines} 行, {size}）",
-    "largeOutputSummary": "{preview}（{lines} 行, {chars} 文字）"
+    "readSummary": "{{path}} を読み取り（{{lines}} 行, {{size}}）",
+    "largeOutputSummary": "{{preview}}（{{lines}} 行, {{chars}} 文字）",
+    "statLines": "{{n}} 行",
+    "statMatches": "{{n}} 件",
+    "statEntries": "{{n}} 件"
   },
   "toast": {
-    "modelUnavailable": "モデルが利用できません: {primary}。{resolved} に切り替えました。",
-    "triedModels": "{count} 個のモデルを試行しました。現在 {resolved} を使用中。",
+    "modelUnavailable": "モデルが利用できません: {{primary}}。{{resolved}} に切り替えました。",
+    "triedModels": "{{count}} 個のモデルを試行しました。現在 {{resolved}} を使用中。",
     "noHarness": "Harness API が利用できません。Electron で実行してください。",
     "modelSwitchFailed": "モデルの切り替えに失敗しました",
-    "permissionMode": "権限モード: {mode}",
-    "error": "[{id}] {message}",
+    "permissionMode": "権限モード: {{mode}}",
+    "error": "[{{id}}] {{message}}",
     "configFirstModel": "最初のモデルを設定",
     "configFirstModelDesc": "設定でプロバイダーの API キーを追加してください"
   }

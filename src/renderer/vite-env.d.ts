@@ -10,6 +10,9 @@
  * external code still consuming `window.harness`.
  */
 interface LookAPI {
+	/** User home directory, injected by preload. Used to shorten absolute
+	 *  paths to ~/… in tool-call summaries. Empty string if unavailable. */
+	homedir: string;
 	send(event: any): void;
 	invoke(event: any): Promise<any>;
 	onEvent(callback: (event: any) => void): () => void;

@@ -40,6 +40,23 @@ import Sidebar from "./components/Sidebar";
 
 const api = (window as any).look;
 
+/** Shared: convert a raw pi SDK content block to Look's PiContentBlock.
+ *  Used by message_start, message_update, and message_end handlers. */
+function sdkBlockToPiBlock(b: any): PiContentBlock {
+	if (b.type === "toolCall") {
+		return {
+			type: "toolCall",
+			id: b.id ?? "",
+			name: b.name ?? "unknown",
+			arguments: b.arguments ?? {},
+			status: b.status ?? (b.result ? (b.isError ? "error" : "success") : "pending"),
+			result: b.result ?? "",
+			isError: b.isError ?? false,
+		} satisfies PiToolCallBlock;
+	}
+	return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
+}
+
 export default function App() {
 	const { t } = useTranslation();
 	const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -67,6 +84,8 @@ export default function App() {
 	// switches, app restarts (via the persisted snapshot), and
 	// aborts (via session.clearQueue() → queue_update).
 	const [queues, setQueues] = useState<Record<string, { steering: string[]; followUp: string[] }>>({});
+	// autoCollapse: auto-fold thinking panel when text starts streaming
+	const [autoCollapse, setAutoCollapse] = useState(true);
 	// The model the user most recently picked in the bottom-bar
 	// ModelSelector. Persisted in-memory only (lost on reload —
 	// v1.5 will move this into user-settings.ts).
@@ -192,36 +211,19 @@ export default function App() {
 				// main process also adds the message to its local store
 				// (see `handleLookSideEffect`). Renderer just appends.
 				case "agent:message_start": {
-					const msg = event.message as any; // raw pi SDK message pass-through
+					const msg = event.message as any;
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
-						const makeContentBlocks = (content: unknown): PiContentBlock[] => {
-							if (Array.isArray(content)) {
-								return content.map((b: any): PiContentBlock => {
-									if (b.type === "toolCall") {
-										return {
-											type: "toolCall",
-											id: b.id ?? "",
-											name: b.name ?? "unknown",
-											arguments: b.arguments ?? {},
-											status: "pending",
-											result: "",
-											isError: false,
-										} satisfies PiToolCallBlock;
-									}
-									return { ...b, active: true } as PiTextBlock | PiThinkingBlock;
-								});
-							}
-							if (typeof content === "string" && content.length > 0) {
-								return [{ type: "text", text: content, active: false }];
-							}
-							return [];
-						};
+						const blocks: PiContentBlock[] = Array.isArray(msg.content)
+							? msg.content.map(sdkBlockToPiBlock)
+							: typeof msg.content === "string" && msg.content.length > 0
+								? [{ type: "text", text: msg.content, active: false }]
+								: [];
 						const ui: PiMessage = {
 							id: msg.id ?? `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
 							agentId: event.agentId,
 							role: msg.role === "toolResult" ? "tool" : (msg.role ?? "assistant"),
-							contentBlocks: makeContentBlocks(msg.content),
+							contentBlocks: blocks,
 							timestamp: msg.timestamp ?? Date.now(),
 							isStreaming: true,
 						};
@@ -231,9 +233,9 @@ export default function App() {
 					break;
 				}
 				case "agent:message_update": {
-					// pi's `message_update` carries a delta in `assistantMessageEvent`.
-					// We apply it to the matching streaming message's contentBlocks.
-					const evt = event.assistantMessageEvent;
+					// Use pi SDK's event.message.content snapshot directly instead of
+					// manual delta accumulation. The SDK already tracks partial.content
+					// internally — we just read the complete state from each update.
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
 						const msgId = (event.message as any)?.id;
@@ -247,51 +249,19 @@ export default function App() {
 								}
 						}
 						if (idx < 0) return prev;
-						const blocks = [...msgs[idx].contentBlocks];
-						if (evt.type === "text_delta") {
-							let block = [...blocks].reverse().find((b) => b.type === "text" && b.active === true) as
-								| PiTextBlock
-								| undefined;
-							if (!block) {
-								block = { type: "text", text: "", active: true };
-								blocks.push(block);
-							}
-							block.text += evt.delta;
-						} else if (evt.type === "thinking_delta") {
-							let block = [...blocks].reverse().find((b) => b.type === "thinking" && b.active === true) as
-								| PiThinkingBlock
-								| undefined;
-							if (!block) {
-								block = { type: "thinking", thinking: "", active: true };
-								blocks.push(block);
-							}
-							block.thinking += evt.delta;
-						} else if (evt.type === "toolcall_end") {
-							const tc = (evt as any).toolCall;
-							if (tc) {
-								blocks.push({
-									type: "toolCall",
-									id: tc.id ?? "",
-									name: tc.name ?? "unknown",
-									arguments: tc.arguments ?? {},
-									status: "pending",
-									result: "",
-									isError: false,
-								} satisfies PiToolCallBlock);
-							}
-						} else if (evt.type === "text_end") {
-							for (const b of blocks) if (b.type === "text" && b.active) b.active = false;
-						} else if (evt.type === "thinking_end") {
-							for (const b of blocks) if (b.type === "thinking" && b.active) b.active = false;
-						}
-						msgs[idx] = { ...msgs[idx], contentBlocks: blocks };
+						const rawContent = (event.message as any)?.content;
+						if (!Array.isArray(rawContent)) return prev;
+						msgs[idx] = { ...msgs[idx], contentBlocks: rawContent.map(sdkBlockToPiBlock) };
 						return { ...prev, [event.agentId]: msgs };
 					});
 					break;
 				}
 				case "agent:message_end": {
 					// Final state: replace streaming message with the completed one.
-					const finalMsg = event.message as any; // raw pi SDK message pass-through
+					// Preserve toolCall block runtime state (status/result/isError) that
+					// was baked in by tool_execution_end — the SDK's content blocks don't
+					// carry execution state and would clobber it back to "pending"/"".
+					const finalMsg = event.message as any;
 					setMessages((prev) => {
 						const msgs = [...(prev[event.agentId] ?? [])];
 						let idx = msgs.length - 1;
@@ -301,22 +271,25 @@ export default function App() {
 								break;
 							}
 						if (idx < 0) return prev;
+						const oldBlocks = msgs[idx].contentBlocks;
 						const blocks: PiContentBlock[] = Array.isArray(finalMsg.content)
 							? finalMsg.content.map((b: any): PiContentBlock => {
-									if (b.type === "toolCall") {
-										return {
-											type: "toolCall",
-											id: b.id ?? "",
-											name: b.name ?? "unknown",
-											arguments: b.arguments ?? {},
-											status: "pending",
-											result: "",
-											isError: false,
-										} satisfies PiToolCallBlock;
-									}
-									return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
+									if (b.type !== "toolCall") return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
+									// Preserve runtime state from existing blocks (set by tool_execution_end)
+									const oldBlock = oldBlocks.find(
+										(ob) => ob.type === "toolCall" && (ob as PiToolCallBlock).id === b.id,
+									) as PiToolCallBlock | undefined;
+									return {
+										type: "toolCall",
+										id: b.id ?? "",
+										name: b.name ?? "unknown",
+										arguments: b.arguments ?? {},
+										status: oldBlock?.status ?? "pending",
+										result: oldBlock?.result ?? "",
+										isError: oldBlock?.isError ?? false,
+									} satisfies PiToolCallBlock;
 								})
-							: msgs[idx].contentBlocks;
+							: oldBlocks;
 						msgs[idx] = {
 							...msgs[idx],
 							contentBlocks: blocks,
@@ -386,6 +359,7 @@ export default function App() {
 									result: resultStr,
 									isError: event.isError,
 								} satisfies PiToolCallBlock);
+								console.log("[look-trace] pushed new block (foundIdx<0)");
 							}
 						}
 						msgs[idx] = { ...msgs[idx], contentBlocks: blocks };
@@ -423,13 +397,14 @@ export default function App() {
 			.catch(showError);
 	}, []);
 
-	// Initialize i18n language from persisted settings on mount.
+	// Initialize i18n language + autoCollapse from persisted settings on mount.
 	useEffect(() => {
 		if (!api) return;
 		api.getGeneralSettings()
 			.then((r: any) => {
-				if (r?.success && r.settings?.language) {
-					i18n.changeLanguage(r.settings.language);
+				if (r?.success && r.settings) {
+					if (r.settings.language) i18n.changeLanguage(r.settings.language);
+					if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
 				}
 			})
 			.catch(() => {});
@@ -715,6 +690,7 @@ export default function App() {
 									agentRole={activeAgent.role}
 									agentName={activeAgent.name}
 									messages={activeMessages}
+									autoCollapse={autoCollapse}
 									queue={queues[activeAgent.id] ?? { steering: [], followUp: [] }}
 									agentStatus={activeAgent.status}
 									currentModel={activeAgent.model}

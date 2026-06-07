@@ -33,6 +33,7 @@ interface ChatPanelProps {
 	agentRole?: AgentRole;
 	agentName?: string;
 	messages: PiMessage[];
+	autoCollapse: boolean;
 	/**
 	 * SDK-authoritative queue snapshot for this agent. Driven by
 	 * `agent:queue_update` events from the main process (which
@@ -53,19 +54,18 @@ interface ChatPanelProps {
 	onPermissionModeChange: (mode: PermissionMode) => void;
 	/** Fired when an empty ModelSelector CTA asks to open API key settings. */
 	onRequestApiKeys?: () => void;
-	/**
-	 * Fired when the user clicks the Stop button (visible while the
+	/** Fired when the user clicks the Stop button (visible while the
 	 * agent is busy). Maps to `agent:abort` IPC; safe to call when
 	 * not streaming (no-op on the main-process side).
 	 */
 	onAbort?: () => void;
 }
-
 export default function ChatPanel({
 	agentId,
 	agentRole,
 	agentName,
 	messages,
+	autoCollapse,
 	queue,
 	agentStatus,
 	currentModel,
@@ -188,13 +188,6 @@ export default function ChatPanel({
 		onAbort?.();
 	};
 
-	// Merge ALL consecutive assistant messages into one bubble per user message.
-	// Each assistant message becomes a separate "chunk" so the UI can show
-	// multi-step reasoning (e.g. "Let me read first" → tools → "Now I'll explain")
-	// under a **single** agent label, instead of merging all text into one blob.
-	//
-	// Tool-result messages are NOT standalone bubbles — they attach to the
-	// most recent pending toolCall in the most recent assistant chunk.
 	const displayMessages = useMemo(() => {
 		const merged: PiMessage[] = [];
 
@@ -305,6 +298,7 @@ export default function ChatPanel({
 		// `queue.steering.length + queue.followUp.length` already drives
 		// its height/visibility at the JSX site below). The two
 		// windows are visually adjacent but render fully independently.
+
 		return merged;
 	}, [messages]);
 
@@ -376,7 +370,13 @@ export default function ChatPanel({
 						</div>
 					) : (
 						displayMessages.map((msg) => (
-							<MessageBubble key={msg.id} message={msg} agentRole={agentRole} agentName={agentName} />
+							<MessageBubble
+								key={msg.id}
+								message={msg}
+								agentRole={agentRole}
+								agentName={agentName}
+								autoCollapse={autoCollapse}
+							/>
 						))
 					)}
 					<div ref={bottomRef} />
