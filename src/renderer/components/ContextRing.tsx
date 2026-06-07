@@ -5,12 +5,13 @@
 
 import { cn } from "@shared/lib/utils";
 import type { ContextUsageInfo } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useState } from "react";
+import { activeAgentIdAtom } from "../store/atoms";
 
 const api = (window as any).look;
 
 interface ContextRingProps {
-	agentId: string;
 	onUsageChange?: (usage: ContextUsageInfo) => void;
 }
 
@@ -20,7 +21,8 @@ const VIEWBOX_SIZE = 28;
 const CENTER = VIEWBOX_SIZE / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-export default function ContextRing({ agentId, onUsageChange }: ContextRingProps) {
+export default function ContextRing({ onUsageChange }: ContextRingProps) {
+	const agentId = useAtomValue(activeAgentIdAtom) ?? "";
 	const [usage, setUsage] = useState<ContextUsageInfo>({
 		percentage: 0,
 		usedTokens: 0,

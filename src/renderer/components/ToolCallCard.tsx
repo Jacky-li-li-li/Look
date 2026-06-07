@@ -5,7 +5,6 @@
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@shared/components/ui/collapsible";
 import { cn } from "@shared/lib/utils";
 import type { ToolCallRecord } from "@shared/types";
 import { Check, ChevronRight, Loader2, Wrench, X } from "lucide-react";
@@ -152,10 +151,9 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 		toolCall.status === "success" ? "outline" : toolCall.status === "error" ? "destructive" : "secondary";
 
 	return (
-		<Collapsible open={open}>
+		<div>
 			<div className="inset-drawer">
-				<CollapsibleTrigger asChild>
-					<button
+				<button
 						className={cn("inset-drawer__trigger", !hasBody && "cursor-default")}
 						disabled={!hasBody}
 						onClick={() => {
@@ -182,11 +180,12 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 							{toolCall.status}
 						</Badge>
 					</button>
-				</CollapsibleTrigger>
+				
 
 				{hasBody && (
-					<CollapsibleContent>
-						<div className="inset-drawer__content">
+					<div className="grid transition-all duration-200 ease-out" style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}>
+						<div className="overflow-hidden">
+							<div className="inset-drawer__content">
 							<div className="flex flex-col gap-3 text-[10px] leading-relaxed">
 								<section className="flex flex-col gap-1">
 									<span className="inset-drawer__label text-foreground">{t("tool.arguments")}</span>
@@ -214,10 +213,11 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 								)}
 							</div>
 						</div>
-					</CollapsibleContent>
+					</div>
+					</div>
 				)}
 			</div>
-		</Collapsible>
+		</div>
 	);
 }
 

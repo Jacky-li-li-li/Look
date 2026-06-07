@@ -17,7 +17,8 @@ import type {
 } from "@shared/types";
 import { ChevronDown, MessageSquare, Send, Square } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useTranslation } from "react-i18next";
 import ContextRing from "./ContextRing";
 import MessageBubble from "./MessageBubble";
@@ -60,7 +61,7 @@ interface ChatPanelProps {
 	 */
 	onAbort?: () => void;
 }
-export default function ChatPanel({
+const ChatPanel = memo(function ChatPanel({
 	agentId,
 	agentRole,
 	agentName,
@@ -80,11 +81,8 @@ export default function ChatPanel({
 }: ChatPanelProps) {
 	const { t } = useTranslation();
 	const [input, setInput] = useState("");
-	const scrollRef = useRef<HTMLDivElement>(null);
-	const bottomRef = useRef<HTMLDivElement>(null);
+	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
-	const rafRef = useRef<number | undefined>(undefined);
-	const isStickyRef = useRef(true); // user is near the bottom → auto-scroll
 	const [showScrollBtn, setShowScrollBtn] = useState(false);
 
 	// ---- v0.3 skills: lazy-load + slash menu state ----
@@ -308,47 +306,9 @@ export default function ChatPanel({
 		return merged;
 	}, [messages]);
 
-	// ---- Sticky auto-scroll ----
-	// Only auto-scroll to bottom when the user is already near the
-	// bottom (within 48px threshold). If they scrolled up to read
-	// earlier messages, we don't interrupt them. The isStickyRef
-	// is updated on every scroll event and read inside the effect
-	// so the effect doesn't need to track it as a dependency.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: identity-only trigger for displayMessages; isStickyRef is read inside
-	useEffect(() => {
-		if (!isStickyRef.current || !scrollRef.current) return;
-		cancelAnimationFrame(rafRef.current!);
-		rafRef.current = requestAnimationFrame(() => {
-			if (scrollRef.current) {
-				scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-			}
-		});
-		return () => cancelAnimationFrame(rafRef.current!);
-	}, [displayMessages]);
-
-	// On mount / restart, always scroll to bottom after the initial
-	// render settles. The sticky-effect above is skipped if the user
-	// hasn't triggered a scroll event yet, so this provides the
-	// initial scroll-to-bottom that loads the user at the latest message.
-	// We use a 0-timeout to yield for the layout pass.
-	const hasInitiallyScrolled = useRef(false);
-	useEffect(() => {
-		if (hasInitiallyScrolled.current) return;
-		if (!scrollRef.current) return;
-		if (displayMessages.length === 0) return;
-		hasInitiallyScrolled.current = true;
-		requestAnimationFrame(() => {
-			if (scrollRef.current) {
-				scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-			}
-		});
-	}, [displayMessages]);
-
+	// ---- Virtuoso scroll-to-bottom ----
 	const handleScrollToBottom = () => {
-		if (scrollRef.current) {
-			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-		}
-		isStickyRef.current = true;
+		virtuosoRef.current?.scrollToIndex({ index: displayMessages.length - 1, behavior: "smooth" });
 		setShowScrollBtn(false);
 	};
 
@@ -390,53 +350,38 @@ export default function ChatPanel({
 	};
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<div
-				ref={scrollRef}
-				className="flex-1 overflow-y-auto"
-				onScroll={() => {
-					const el = scrollRef.current;
-					if (!el) return;
-					// Within 48px of the bottom → sticky, auto-scroll on next update.
-					// Past 48px → not sticky, user is reading earlier content.
-					const wasSticky = isStickyRef.current;
-					isStickyRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-					setShowScrollBtn(!isStickyRef.current);
-					// Cancel any in-flight RAF if user breaks away from the bottom,
-					// preventing the race: onScroll → isStickyRef=false, but a
-					// pending RAF from a recent content-update effect could still
-					// fire ~16ms later and yank the user back to bottom.
-					if (wasSticky && !isStickyRef.current) {
-						cancelAnimationFrame(rafRef.current!);
-					}
-				}}
-			>
-				<div className="flex w-full flex-col gap-5 px-5 py-5">
-					{displayMessages.length === 0 ? (
-						<div className="flex min-h-[52vh] flex-col items-center justify-center gap-4 text-center">
-							<div className="relative">
-								<PixelAgentAvatar role={agentRole} status={agentStatus} size="lg" />
-								<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
-							</div>
-							<div className="flex flex-col gap-1">
-								<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>
-								<p className="text-[11px] text-muted-foreground">Start with a direct task for this agent.</p>
-							</div>
+		<div className="flex min-h-0 flex-1 flex-col">				{displayMessages.length === 0 ? (
+					<div className="flex min-h-[52vh] flex-col items-center justify-center gap-4 text-center">
+						<div className="relative">
+							<PixelAgentAvatar role={agentRole} status={agentStatus} size="lg" />
+							<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
 						</div>
-					) : (
-						displayMessages.map((msg) => (
-							<MessageBubble
-								key={msg.id}
-								message={msg}
-								agentRole={agentRole}
-								agentName={agentName}
-								autoCollapse={autoCollapse}
-							/>
-						))
-					)}
-					<div ref={bottomRef} />
-				</div>
-			</div>
+						<div className="flex flex-col gap-1">
+							<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>
+							<p className="text-[11px] text-muted-foreground">Start with a direct task for this agent.</p>
+						</div>
+					</div>
+				) : (
+					<Virtuoso
+						ref={virtuosoRef}
+						data={displayMessages}
+						followOutput="smooth"
+						atBottomStateChange={(atBottom) => setShowScrollBtn(!atBottom)}
+						className="flex-1"
+						itemContent={(_index, msg) => (
+							<div className="flex w-full flex-col gap-5 px-5 py-2.5">
+								<MessageBubble
+									key={msg.id}
+									message={msg}
+									agentRole={agentRole}
+									agentName={agentName}
+									autoCollapse={autoCollapse}
+								/>
+							</div>
+						)}
+					/>
+				)}
+
 
 			{/* Floating scroll-to-bottom button — sits at the bottom of the message area */}
 			<div className="relative shrink-0 h-0 z-10">
@@ -573,7 +518,7 @@ export default function ChatPanel({
 						<ThinkingSelector agentId={agentId} currentLevel={currentThinking} onChanged={onThinkingChange} />
 						<PermissionModeSelector mode={currentPermissionMode} onChange={onPermissionModeChange} />
 						<div className="flex-1" />
-						<ContextRing agentId={agentId} />
+						<ContextRing />
 						{isBusy ? (
 							<>
 								<Button
@@ -612,4 +557,6 @@ export default function ChatPanel({
 			</div>
 		</div>
 	);
-}
+	});
+
+export default ChatPanel;

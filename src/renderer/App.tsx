@@ -1,596 +1,151 @@
 // ============================================================
 // App — Ink Wash Design System (shadcn/ui)
+//
+// Post-Jotai: all core state lives in atoms (store/atoms.ts).
+// IPC events are handled outside React by store/ipcHandler.ts.
+// Components subscribe only to the atoms they care about, so e.g.
+// agent:usage-update only re-renders the Sidebar row, not ChatPanel.
 // ============================================================
 
-import type {
-	AgentInfo,
-	MainToRendererEvent,
-	PiContentBlock,
-	PiMessage,
-	PiTextBlock,
-	PiThinkingBlock,
-	PiToolCallBlock,
-	ThinkingLevel,
-} from "@shared/types";
+import type { PermissionMode, ThinkingLevel } from "@shared/types";
 import { FolderOpen } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import i18n from "./i18n";
-import { showError } from "./lib/ipc";
-
-interface SettingsProviderInfo {
-	id: string;
-	name: string;
-	hasKey: boolean;
-	envVar: string;
-	modelsAvailable: number;
-}
 
 import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
+import { useAtomValue } from "jotai";
 import { ThemeProvider } from "next-themes";
 import AgentCreateDialog from "./components/AgentCreateDialog";
 import ChatPanel from "./components/ChatPanel";
-import { PermissionDialog, type PermissionRequest } from "./components/PermissionDialog";
+import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import SettingsDialog from "./components/SettingsDialog";
 import Sidebar from "./components/Sidebar";
+import { preloadHighlighter } from "./lib/highlighter";
+import {
+	activeAgentAtom,
+	activeAgentIdAtom,
+	agentsAtom,
+	autoCollapseAtom,
+	defaultModelForCreateAtom,
+	messagesAtomFamily,
+	pendingAsksAtom,
+	providerSettingsAtom,
+	queuesAtomFamily,
+	showCreateDialogAtom,
+	showSettingsAtom,
+	settingsTabAtom,
+	userPreferredModelAtom,
+} from "./store/atoms";
+import { appStore } from "./store/ipcHandler";
+
+preloadHighlighter();
 
 const api = (window as any).look;
 
-/** Shared: convert a raw pi SDK content block to Look's PiContentBlock.
- *  Used by message_start, message_update, and message_end handlers. */
-function sdkBlockToPiBlock(b: any): PiContentBlock {
-	if (b.type === "toolCall") {
-		return {
-			type: "toolCall",
-			id: b.id ?? "",
-			name: b.name ?? "unknown",
-			arguments: b.arguments ?? {},
-			status: b.status ?? (b.result ? (b.isError ? "error" : "success") : "pending"),
-			result: b.result ?? "",
-			isError: b.isError ?? false,
-		} satisfies PiToolCallBlock;
-	}
-	return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
-}
-
 export default function App() {
 	const { t } = useTranslation();
-	const [agents, setAgents] = useState<AgentInfo[]>([]);
-	const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
-	const [messages, setMessages] = useState<Record<string, PiMessage[]>>({});
-	const [showCreateDialog, setShowCreateDialog] = useState(false);
-	const [defaultModelForCreate, setDefaultModelForCreate] = useState<string | undefined>(undefined);
-	const [showSettings, setShowSettings] = useState(false);
-	const [settingsTab, setSettingsTab] = useState<"general" | "api-keys" | "chat-prompt" | "about">("general");
-	// Cached provider settings — fetched once at app boot, not on each Settings open.
-	// Hoisting this out of SettingsDialog avoids the IPC + main-process model-registry
-	// walk (~16k line static list) on every dialog mount.
-	const [providerSettings, setProviderSettings] = useState<SettingsProviderInfo[]>([]);
-	// Permission dialog queue. The head is shown; the rest are
-	// hidden until the head is decided (or times out).
-	const [pendingAsks, setPendingAsks] = useState<PermissionRequest[]>([]);
+
+	// ---- Read atoms ----
+	const activeAgent = useAtomValue(activeAgentAtom);
+	const autoCollapse = useAtomValue(autoCollapseAtom);
+	const showCreateDialog = useAtomValue(showCreateDialogAtom);
+	const defaultModelForCreate = useAtomValue(defaultModelForCreateAtom);
+	const showSettings = useAtomValue(showSettingsAtom);
+	const settingsTab = useAtomValue(settingsTabAtom);
+	const providerSettings = useAtomValue(providerSettingsAtom);
+	const pendingAsks = useAtomValue(pendingAsksAtom);
 	const pendingAsk = pendingAsks[0] ?? null;
 	const pendingQueueDepth = pendingAsks.length;
-	// Per-agent SDK queue snapshot. Driven by `agent:queue_update`
-	// events emitted by the main process (which in turn is
-	// mirroring pi SDK's internal _steeringMessages /
-	// _followUpMessages). The ChatPanel reads this for the
-	// "Queued" drawer instead of maintaining its own fake
-	// queue state — that way the drawer survives agent
-	// switches, app restarts (via the persisted snapshot), and
-	// aborts (via session.clearQueue() → queue_update).
-	const [queues, setQueues] = useState<Record<string, { steering: string[]; followUp: string[] }>>({});
-	// autoCollapse: auto-fold thinking panel when text starts streaming
-	const [autoCollapse, setAutoCollapse] = useState(true);
-	// The model the user most recently picked in the bottom-bar
-	// ModelSelector. Persisted in-memory only (lost on reload —
-	// v1.5 will move this into user-settings.ts).
-	// Used by handleQuickCreateChat as the default for a new
-	// chat-mode agent so newly-spawned sessions follow the user's
-	// current pick without an extra "choose a model" step.
-	const [userPreferredModel, setUserPreferredModel] = useState<string | null>(null);
 
-	// Live handle to the currently selected agent. The event listener
-	// below captures this ref so the switch-case handler always sees
-	// the latest activeAgentId even though onEvent is registered
-	// exactly once. Pre-P2-1, the useEffect included activeAgentId in
-	// its deps, which tore down and rebuilt the IPC subscription on
-	// every agent switch — both a perf hit and a stale-closure risk
-	// (the old callback could route events to a deleted agent).
-	const activeAgentIdRef = useRef<string | null>(null);
-	useEffect(() => {
-		activeAgentIdRef.current = activeAgentId;
-	}, [activeAgentId]);
-	// ↑ a tiny inline hook to mirror state → ref.
-	const lastActiveAgentIdRef = useRef<string | null>(null);
+	// Messages and queue for the active agent (atomFamily).
+	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	const activeMessages = useAtomValue(messagesAtomFamily(activeAgentId ?? ""));
+	const activeQueue = useAtomValue(queuesAtomFamily(activeAgentId ?? ""));
 
-	useEffect(() => {
-		if (!api) {
-			toast.error(t("toast.noHarness"));
-			return;
-		}
+	// ---- Callbacks: use appStore.get() to read latest value, avoiding stale closures ----
 
-		// P2-1: register the IPC subscription exactly once. The handler
-		// reads the current activeAgentId through `activeAgentIdRef` so
-		// it never holds a stale closure over state. Pre-P2-1 this
-		// effect re-ran on every activeAgentId change, tearing down and
-		// rebuilding the subscription and risking event loss.
-		const unsub = api.onEvent((event: MainToRendererEvent) => {
-			switch (event.type) {
-				// ---- Look-specific list / status events ----
-				case "agent:list":
-					setAgents(event.agents);
-					break;
-				case "agent:created":
-					setAgents((prev) => [...prev, event.agent]);
-					break;
-				case "agent:destroyed":
-					setAgents((prev) => prev.filter((a) => a.id !== event.agentId));
-					// Use the ref (latest) instead of the closure-captured
-					// activeAgentId — see the activeAgentIdRef comment above.
-					if (activeAgentIdRef.current === event.agentId) setActiveAgentId(null);
-					break;
-				case "agent:updated":
-					setAgents((prev) => prev.map((a) => (a.id === event.agent.id ? event.agent : a)));
-					break;
-				case "agent:model-fallback": {
-					const triedCount = event.triedChain?.length ?? 0;
-					const description =
-						triedCount > 1 ? t("toast.triedModels", { count: triedCount, resolved: event.resolved }) : undefined;
-					toast.warning(t("toast.modelUnavailable", { primary: event.primary, resolved: event.resolved }), {
-						description,
-						duration: 5000,
-					});
-					break;
-				}
-				case "agent:status":
-					setAgents((prev) => prev.map((a) => (a.id === event.agentId ? { ...a, status: event.status } : a)));
-					break;
-				case "agent:usage-update":
-					setAgents((prev) => prev.map((a) => (a.id === event.agentId ? { ...a, usage: event.usage } : a)));
-					break;
-				case "agent:history": {
-					setMessages((prev) => ({ ...prev, [event.agentId]: event.messages }));
-					break;
-				}
-				case "permission:ask": {
-					// Real pre-execution gate: pi is suspended on this ask.
-					// Queue it (renderer shows one at a time).
-					setPendingAsks((prev) => [
-						...prev,
-						{
-							requestId: event.requestId,
-							agentId: event.agentId,
-							toolName: event.toolName,
-							args: event.args,
-							reason: event.reason,
-						},
-					]);
-					break;
-				}
-				case "agent:permission-mode": {
-					// Sync the agent's permission mode from main.
-					setAgents((prev) =>
-						prev.map((a) => (a.id === event.agentId ? { ...a, permissionMode: event.mode } : a)),
-					);
-					toast.success(t("toast.permissionMode", { mode: event.mode }), { duration: 1500 });
-					break;
-				}
-				case "agent:queue_update": {
-					// SDK-authoritative queue snapshot. The main process
-					// forwards this from pi's _emitQueueUpdate(); the SDK
-					// itself mutates the queue on prompt-with-streaming,
-					// steer, followUp, and clearQueue. We snapshot the
-					// arrays so React re-renders on every change.
-					setQueues((prev) => ({
-						...prev,
-						[event.agentId]: {
-							steering: [...event.steering],
-							followUp: [...event.followUp],
-						},
-					}));
-					break;
-				}
-				case "error": {
-					toast.error(
-						event.agentId
-							? t("toast.error", { id: event.agentId.slice(0, 6), message: event.message })
-							: event.message,
-						{
-							duration: 5000,
-						},
-					);
-					break;
-				}
-
-				// ---- pi session events (mirrored with `agent:` prefix) ----
-				// pi's `message_start` carries the full message object; the
-				// main process also adds the message to its local store
-				// (see `handleLookSideEffect`). Renderer just appends.
-				case "agent:message_start": {
-					const msg = event.message as any;
-					setMessages((prev) => {
-						const msgs = [...(prev[event.agentId] ?? [])];
-						const blocks: PiContentBlock[] = Array.isArray(msg.content)
-							? msg.content.map(sdkBlockToPiBlock)
-							: typeof msg.content === "string" && msg.content.length > 0
-								? [{ type: "text", text: msg.content, active: false }]
-								: [];
-						const ui: PiMessage = {
-							id: msg.id ?? `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-							agentId: event.agentId,
-							role: msg.role === "toolResult" ? "tool" : (msg.role ?? "assistant"),
-							contentBlocks: blocks,
-							timestamp: msg.timestamp ?? Date.now(),
-							isStreaming: true,
-						};
-						msgs.push(ui);
-						return { ...prev, [event.agentId]: msgs };
-					});
-					break;
-				}
-				case "agent:message_update": {
-					// Use pi SDK's event.message.content snapshot directly instead of
-					// manual delta accumulation. The SDK already tracks partial.content
-					// internally — we just read the complete state from each update.
-					setMessages((prev) => {
-						const msgs = [...(prev[event.agentId] ?? [])];
-						const msgId = (event.message as any)?.id;
-						let idx = msgId ? msgs.findIndex((m) => m.id === msgId) : -1;
-						if (idx < 0) {
-							idx = msgs.length - 1;
-							for (let i = msgs.length - 1; i >= 0; i--)
-								if (msgs[i].isStreaming) {
-									idx = i;
-									break;
-								}
-						}
-						if (idx < 0) return prev;
-						const rawContent = (event.message as any)?.content;
-						if (!Array.isArray(rawContent)) return prev;
-						msgs[idx] = { ...msgs[idx], contentBlocks: rawContent.map(sdkBlockToPiBlock) };
-						return { ...prev, [event.agentId]: msgs };
-					});
-					break;
-				}
-				case "agent:message_end": {
-					// Final state: replace streaming message with the completed one.
-					// Preserve toolCall block runtime state (status/result/isError) that
-					// was baked in by tool_execution_end — the SDK's content blocks don't
-					// carry execution state and would clobber it back to "pending"/"".
-					const finalMsg = event.message as any;
-					setMessages((prev) => {
-						const msgs = [...(prev[event.agentId] ?? [])];
-						let idx = msgs.length - 1;
-						for (let i = msgs.length - 1; i >= 0; i--)
-							if (msgs[i].isStreaming) {
-								idx = i;
-								break;
-							}
-						if (idx < 0) return prev;
-						const oldBlocks = msgs[idx].contentBlocks;
-						const blocks: PiContentBlock[] = Array.isArray(finalMsg.content)
-							? finalMsg.content.map((b: any): PiContentBlock => {
-									if (b.type !== "toolCall") return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
-									// Preserve runtime state from existing blocks (set by tool_execution_end)
-									const oldBlock = oldBlocks.find(
-										(ob) => ob.type === "toolCall" && (ob as PiToolCallBlock).id === b.id,
-									) as PiToolCallBlock | undefined;
-									return {
-										type: "toolCall",
-										id: b.id ?? "",
-										name: b.name ?? "unknown",
-										arguments: b.arguments ?? {},
-										status: oldBlock?.status ?? "pending",
-										result: oldBlock?.result ?? "",
-										isError: oldBlock?.isError ?? false,
-									} satisfies PiToolCallBlock;
-								})
-							: oldBlocks;
-						msgs[idx] = {
-							...msgs[idx],
-							contentBlocks: blocks,
-							isStreaming: false,
-							timestamp: finalMsg.timestamp ?? msgs[idx].timestamp,
-						};
-						return { ...prev, [event.agentId]: msgs };
-					});
-					break;
-				}
-				case "agent:tool_execution_start":
-				case "agent:tool_execution_update":
-				case "agent:tool_execution_end": {
-					// Mirror pi's tool-call lifecycle into the matching content block.
-					setMessages((prev) => {
-						const msgs = [...(prev[event.agentId] ?? [])];
-						let idx = msgs.length - 1;
-						for (let i = msgs.length - 1; i >= 0; i--)
-							if (msgs[i].isStreaming) {
-								idx = i;
-								break;
-							}
-						if (idx < 0) return prev;
-						const blocks = [...msgs[idx].contentBlocks];
-						const callId = event.toolCallId;
-						const foundIdx = blocks.findIndex((b) => b.type === "toolCall" && b.id === callId);
-						if (event.type === "agent:tool_execution_start") {
-							if (foundIdx < 0) {
-								blocks.push({
-									type: "toolCall",
-									id: callId,
-									name: event.toolName,
-									arguments: event.args ?? {},
-									status: "running",
-									result: "",
-									isError: false,
-								} satisfies PiToolCallBlock);
-							} else {
-								(blocks[foundIdx] as PiToolCallBlock).status = "running";
-							}
-						} else if (event.type === "agent:tool_execution_update") {
-							const partial = (event.partialResult as any)?.content?.[0]?.text ?? "";
-							if (foundIdx >= 0) {
-								const b = blocks[foundIdx] as PiToolCallBlock;
-								blocks[foundIdx] = { ...b, result: (b.result ?? "") + partial };
-							}
-						} else {
-							// tool_execution_end
-							const resultStr =
-								typeof event.result === "string"
-									? event.result
-									: ((event.result as any)?.content?.[0]?.text ?? JSON.stringify(event.result));
-							if (foundIdx >= 0) {
-								blocks[foundIdx] = {
-									...blocks[foundIdx],
-									status: event.isError ? "error" : "success",
-									result: resultStr,
-									isError: event.isError,
-								} as PiToolCallBlock;
-							} else {
-								blocks.push({
-									type: "toolCall",
-									id: callId,
-									name: event.toolName,
-									arguments: {},
-									status: event.isError ? "error" : "success",
-									result: resultStr,
-									isError: event.isError,
-								} satisfies PiToolCallBlock);
-								console.log("[look-trace] pushed new block (foundIdx<0)");
-							}
-						}
-						msgs[idx] = { ...msgs[idx], contentBlocks: blocks };
-						return { ...prev, [event.agentId]: msgs };
-					});
-					break;
-				}
-			}
-		});
-
-		return unsub;
-		// P2-1: empty deps — we want the IPC subscription to live for
-		// the entire component lifetime. Per-state reads go through
-		// refs (activeAgentIdRef) to avoid stale closures. t is stable from react-i18next.
-	}, [t]);
-
-	useEffect(() => {
-		if (!activeAgentId && agents.length > 0) {
-			// Try restoring the last active agent from settings first
-			const lastId = lastActiveAgentIdRef.current;
-			if (lastId && agents.some((a) => a.id === lastId)) {
-				setActiveAgentId(lastId);
-				return;
-			}
-			const chatAgent = agents.find((a) => a.role === "chat");
-			if (chatAgent) {
-				setActiveAgentId(chatAgent.id);
-			}
-			// Don't fall back to agents[0] — it could be an orchestrator,
-			// which shouldn't be auto-selected for the chat tab.
-		}
-	}, [agents, activeAgentId]);
-
-	// Persist the active agent ID whenever the user switches agents.
-	// Debounce with a 500ms delay to avoid writing on every rapid click.
-	useEffect(() => {
-		if (!api || !activeAgentId) return;
-		const timer = setTimeout(() => {
-			api.setGeneralSettings({ lastActiveAgentId: activeAgentId }).catch(() => {});
-		}, 500);
-		return () => clearTimeout(timer);
-	}, [activeAgentId]);
-
-	// Fetch provider settings once at app boot so opening Settings is instant.
-	useEffect(() => {
-		if (!api) return;
-		api.getSettings()
-			.then((r: any) => {
-				if (r?.success) setProviderSettings(r.providers);
-			})
-			.catch(showError);
+	const handleSendMessage = useCallback((text: string) => {
+		const id = appStore.get(activeAgentIdAtom);
+		if (!id || !api) return;
+		api.sendMessage(id, text);
 	}, []);
 
-	// Initialize i18n language + autoCollapse + lastActiveAgentId from persisted settings on mount.
-	useEffect(() => {
-		if (!api) return;
-		api.getGeneralSettings()
-			.then((r: any) => {
-				if (r?.success && r.settings) {
-					if (r.settings.language) i18n.changeLanguage(r.settings.language);
-					if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
-					if (r.settings.lastActiveAgentId) lastActiveAgentIdRef.current = r.settings.lastActiveAgentId;
-				}
-			})
-			.catch(() => {});
+	const handleSelectAgent = useCallback((agentId: string) => {
+		appStore.set(activeAgentIdAtom, agentId);
 	}, []);
 
-	// Load the persisted "user preferred model" so the bottom-bar
-	// ModelSelector and the next + New Agent can pick it up across
-	// app restarts. Chat mode uses this as the seed when the active
-	// agent has no model of its own.
-	useEffect(() => {
+	const handleCreateAgent = useCallback(async (name: string, role: string, model?: string, thinkingLevel?: string) => {
 		if (!api) return;
-		api.getGeneralSettings()
-			.then((r: any) => {
-				if (r?.success && r.settings?.preferredModel) {
-					setUserPreferredModel(r.settings.preferredModel);
-				}
-			})
-			.catch(showError);
+		const parentId = appStore.get(activeAgentIdAtom);
+		const result = await api.createAgent(name, role, model, thinkingLevel, parentId);
+		if (result?.success && result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
+		appStore.set(showCreateDialogAtom, false);
 	}, []);
 
-	// Pull initial agent list + restored history in a single roundtrip
-	// on mount. The main process bundles agents and history in one IPC
-	// response (see AgentManager.listAgentsWithHistory + ipc-handlers
-	// `agents:list`) to eliminate the race that the old two-step
-	// getAgents + getHistory pull suffered from under React StrictMode.
-	useEffect(() => {
-		if (!api) return;
-		let cancelled = false;
-		api.getAgents()
-			.then((r: any) => {
-				if (cancelled || !r?.success) return;
-				if (Array.isArray(r.agents)) setAgents(r.agents);
-				if (r.history && typeof r.history === "object") {
-					// Only adopt restored history for agents that the renderer
-					// doesn't already have messages for. The live `agent:message`
-					// push stream is the source of truth for in-flight messages.
-					setMessages((prev) => {
-						const next = { ...prev };
-						for (const [agentId, msgs] of Object.entries(r.history)) {
-							if (Array.isArray(msgs) && msgs.length > 0 && (next[agentId] ?? []).length === 0) {
-								next[agentId] = msgs as PiMessage[];
-							}
-						}
-						return next;
-					});
-				}
-			})
-			.catch(showError);
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	// Permission ask: 30s default-deny timer. If the user doesn't
-	// respond, the head of the queue is auto-denied (fail-closed).
-	useEffect(() => {
-		if (!pendingAsk) return;
-		const head = pendingAsk;
-		const timer = setTimeout(() => {
-			setPendingAsks((prev) => (prev.length > 0 && prev[0].requestId === head.requestId ? prev.slice(1) : prev));
-			api.respondPermission({ action: "deny", requestId: head.requestId, reason: "Timed out (30s)" }).catch(
-				() => {},
-			);
-			toast(t("permission.timedOut", { toolName: head.toolName }), { description: head.reason, duration: 3000 });
-		}, 30_000);
-		return () => clearTimeout(timer);
-	}, [pendingAsk, t]);
-
-	const handleSendMessage = useCallback(
-		(text: string) => {
-			if (!activeAgentId || !api) return;
-			api.sendMessage(activeAgentId, text);
-		},
-		[activeAgentId],
-	);
-
-	const handleSelectAgent = useCallback((agentId: string) => setActiveAgentId(agentId), []);
-	const handleCreateAgent = useCallback(
-		async (name: string, role: string, model?: string, thinkingLevel?: string) => {
-			if (!api) return;
-			const result = await api.createAgent(name, role, model, thinkingLevel, activeAgentId);
-			if (result?.success && result.agentId) setActiveAgentId(result.agentId);
-			setShowCreateDialog(false);
-		},
-		[activeAgentId],
-	);
 	const handleDestroyAgent = useCallback(async (agentId: string) => {
 		if (!api) return;
 		await api.destroyAgent(agentId);
 	}, []);
-	// P2-2: Stop button handler — calls the new agent:abort IPC.
-	// The agent's status naturally rolls back to idle via the SDK
-	// event stream, so we don't need to optimistically update state.
+
 	const handleAbortAgent = useCallback(async () => {
-		if (!api || !activeAgentId) return;
+		const id = appStore.get(activeAgentIdAtom);
+		if (!api || !id) return;
 		try {
-			await api.abortAgent(activeAgentId);
+			await api.abortAgent(id);
 		} catch (err: any) {
 			toast.error(`Stop failed: ${err?.message ?? "unknown"}`);
 		}
-	}, [activeAgentId]);
-	const handleThinkingChange = useCallback(
-		async (level: string) => {
-			if (!activeAgentId || !api) return;
-			await api.updateThinking(activeAgentId, level);
-			setAgents((prev) =>
-				prev.map((a) => (a.id === activeAgentId ? { ...a, thinkingLevel: level as ThinkingLevel } : a)),
-			);
-		},
-		[activeAgentId],
-	);
-	const handleModelChanged = useCallback((newModel: string) => {
-		// The `agent:updated` event from main (emitted right after
-		// `m.session.setModel()` + `m.info.model = modelKey`) is
-		// the authoritative path for updating the agent's model in
-		// `agents` state — see App.tsx's `agent:updated` handler.
-		// We must NOT do a second `setAgents` here keyed on
-		// `activeAgentId`: that field can drift between the
-		// user's click and the IPC roundtrip's completion, and
-		// the stale id would silently clobber whatever agent the
-		// user has since navigated to.
-		//
-		// What this callback *does* own is renderer-only state
-		// that the main process can't see: the user's preferred
-		// model for the next quick-create, and the persisted
-		// general setting.
-		setUserPreferredModel(newModel); // remember for next quick-create
-		// Persist across app restarts. Fire-and-forget; if the IPC
-		// fails we keep the in-memory pick and try again on the
-		// next switch.
-		if (api) {
-			api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
-		}
 	}, []);
 
-	// Stable callback identities for Sidebar — prevents Sidebar re-renders
-	// when other App state (e.g. showSettings) changes.
-	const activeAgent = agents.find((a) => a.id === activeAgentId);
-	const activeMessages = activeAgentId ? (messages[activeAgentId] ?? []) : [];
+	const handleThinkingChange = useCallback(async (level: string) => {
+		const id = appStore.get(activeAgentIdAtom);
+		if (!id || !api) return;
+		await api.updateThinking(id, level);
+		// Optimistic update (agent:updated IPC also fires).
+		const agents = appStore.get(agentsAtom);
+		appStore.set(agentsAtom, agents.map((a) => (a.id === id ? { ...a, thinkingLevel: level as ThinkingLevel } : a)));
+	}, []);
+
+	const handleModelChanged = useCallback((newModel: string) => {
+		appStore.set(userPreferredModelAtom, newModel);
+		if (api) api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
+	}, []);
 
 	const handleCreateClick = useCallback((defaultModel?: string) => {
-		setDefaultModelForCreate(defaultModel);
-		setShowCreateDialog(true);
+		if (defaultModel !== undefined) appStore.set(defaultModelForCreateAtom, defaultModel);
+		appStore.set(showCreateDialogAtom, true);
 	}, []);
+
 	const handleSettingsClick = useCallback(() => {
-		setSettingsTab("general");
-		setShowSettings(true);
+		appStore.set(settingsTabAtom, "general");
+		appStore.set(showSettingsAtom, true);
 	}, []);
-	// Opened from inside the chat panel (e.g. ModelSelector's empty
-	// state) — jumps straight to the API keys tab.
+
 	const handleRequestApiKeys = useCallback(() => {
-		setSettingsTab("api-keys");
-		setShowSettings(true);
+		appStore.set(settingsTabAtom, "api-keys");
+		appStore.set(showSettingsAtom, true);
 	}, []);
+
 	const handleQuickCreateChat = useCallback(async () => {
 		if (!api) return;
-		// Chat mode is a "blank workstation" — no role default. Pick
-		// the most-specific model we can:
-		//   1. the active agent's current model (inherit in-place)
-		//   2. the model the user most recently picked in the bottom bar
-		//   3. undefined → main process falls through to firstAvailableModelKey()
-		const seedModel = activeAgent?.model ?? userPreferredModel ?? undefined;
-		const r = await api.createAgent("聊天助手", "chat", seedModel, undefined, activeAgentId);
-		if (r?.success && r.agentId) setActiveAgentId(r.agentId);
-	}, [activeAgentId, activeAgent?.model, userPreferredModel]);
-	const handleCloseSettings = useCallback(() => setShowSettings(false), []);
+		const agent = appStore.get(activeAgentAtom);
+		const prefModel = appStore.get(userPreferredModelAtom);
+		const seedModel = agent?.model ?? prefModel ?? undefined;
+		const parentId = appStore.get(activeAgentIdAtom);
+		const r = await api.createAgent("聊天助手", "chat", seedModel, undefined, parentId);
+		if (r?.success && r.agentId) appStore.set(activeAgentIdAtom, r.agentId);
+	}, []);
 
-	// Opens the project root directory in the OS file manager (Finder).
+	const handleCloseSettings = useCallback(() => appStore.set(showSettingsAtom, false), []);
+	const handleCloseCreateDialog = useCallback(() => {
+		appStore.set(showCreateDialogAtom, false);
+		appStore.set(defaultModelForCreateAtom, undefined);
+	}, []);
+
 	const handleOpenProjectFolder = useCallback(() => {
 		try {
 			const fn = api?.openProjectFolder;
@@ -604,31 +159,27 @@ export default function App() {
 		}
 	}, []);
 
-	// Permission dialog — drain the head of the queue, send the
-	// decision to main, and let the next ask take over. Decisions
-	// are sent best-effort: a broken IPC dismisses the dialog so the
-	// user isn't stranded.
+	// ---- Permission dialog ----
+
 	const drainAsk = useCallback(
 		(action: "allow" | "deny" | "edit", extras?: { reason?: string; args?: Record<string, unknown> }) => {
-			setPendingAsks((prev) => {
-				if (prev.length === 0) return prev;
-				const [head, ...rest] = prev;
-				// Fire-and-forget — main process resolves the ask.
-				api.respondPermission({ action, requestId: head.requestId, ...extras })
-					.then((r: any) => {
-						if (!r?.success) {
-							toast.error(`Permission response failed: ${r?.error ?? "unknown"}`);
-						} else if (action === "allow") {
-							toast.success(`Allowed: ${head.toolName}`, { duration: 1500 });
-						} else if (action === "deny") {
-							toast(`Denied: ${head.toolName}`, { description: head.reason, duration: 2000 });
-						} else {
-							toast.success(`Allowed (edited): ${head.toolName}`, { duration: 1500 });
-						}
-					})
-					.catch(() => toast.error("Failed to send permission response"));
-				return rest;
-			});
+			const asks = appStore.get(pendingAsksAtom);
+			if (asks.length === 0) return;
+			const [head, ...rest] = asks;
+			appStore.set(pendingAsksAtom, rest);
+			api.respondPermission({ action, requestId: head.requestId, ...extras })
+				.then((r: any) => {
+					if (!r?.success) {
+						toast.error(`Permission response failed: ${r?.error ?? "unknown"}`);
+					} else if (action === "allow") {
+						toast.success(`Allowed: ${head.toolName}`, { duration: 1500 });
+					} else if (action === "deny") {
+						toast(`Denied: ${head.toolName}`, { description: head.reason, duration: 2000 });
+					} else {
+						toast.success(`Allowed (edited): ${head.toolName}`, { duration: 1500 });
+					}
+				})
+				.catch(() => toast.error("Failed to send permission response"));
 		},
 		[],
 	);
@@ -637,15 +188,41 @@ export default function App() {
 	const handlePermissionDeny = useCallback(() => drainAsk("deny"), [drainAsk]);
 	const handlePermissionEdit = useCallback((args: Record<string, unknown>) => drainAsk("edit", { args }), [drainAsk]);
 
-	// Permission mode change for the active agent.
-	const handlePermissionModeChange = useCallback(
-		(mode: "ask" | "plan" | "allow") => {
-			if (!activeAgentId) return;
-			setAgents((prev) => prev.map((a) => (a.id === activeAgentId ? { ...a, permissionMode: mode } : a)));
-			api.setPermissionMode(activeAgentId, mode);
-		},
-		[activeAgentId],
-	);
+	const handlePermissionModeChange = useCallback((mode: PermissionMode) => {
+		const id = appStore.get(activeAgentIdAtom);
+		if (!id) return;
+		const agents = appStore.get(agentsAtom);
+		appStore.set(agentsAtom, agents.map((a) => (a.id === id ? { ...a, permissionMode: mode } : a)));
+		api.setPermissionMode(id, mode);
+	}, []);
+
+	// ---- Side effects ----
+
+	// Persist active agent ID with debounce.
+	useEffect(() => {
+		if (!api || !activeAgentId) return;
+		const timer = setTimeout(() => {
+			api.setGeneralSettings({ lastActiveAgentId: activeAgentId }).catch(() => {});
+		}, 500);
+		return () => clearTimeout(timer);
+	}, [activeAgentId]);
+
+	// Permission ask: 30s default-deny timer.
+	useEffect(() => {
+		if (!pendingAsk) return;
+		const head = pendingAsk;
+		const timer = setTimeout(() => {
+			const asks = appStore.get(pendingAsksAtom);
+			if (asks.length > 0 && asks[0].requestId === head.requestId) {
+				appStore.set(pendingAsksAtom, asks.slice(1));
+			}
+			api.respondPermission({ action: "deny", requestId: head.requestId, reason: "Timed out (30s)" }).catch(() => {});
+			toast(t("permission.timedOut", { toolName: head.toolName }), { description: head.reason, duration: 3000 });
+		}, 30_000);
+		return () => clearTimeout(timer);
+	}, [pendingAsk, t]);
+
+	// ---- Render ----
 
 	if (!api) {
 		return (
@@ -666,8 +243,6 @@ export default function App() {
 			<TooltipProvider>
 				<div className="app-shell flex h-screen overflow-hidden bg-background p-2">
 					<Sidebar
-						agents={agents}
-						activeAgentId={activeAgentId}
 						onSelect={handleSelectAgent}
 						onDestroy={handleDestroyAgent}
 						onCreateClick={handleCreateClick}
@@ -709,7 +284,7 @@ export default function App() {
 									agentName={activeAgent.name}
 									messages={activeMessages}
 									autoCollapse={autoCollapse}
-									queue={queues[activeAgent.id] ?? { steering: [], followUp: [] }}
+									queue={activeQueue}
 									agentStatus={activeAgent.status}
 									currentModel={activeAgent.model}
 									currentThinking={activeAgent.thinkingLevel}
@@ -736,17 +311,14 @@ export default function App() {
 						<AgentCreateDialog
 							defaultModel={defaultModelForCreate}
 							onCreate={handleCreateAgent}
-							onClose={() => {
-								setShowCreateDialog(false);
-								setDefaultModelForCreate(undefined);
-							}}
+							onClose={handleCloseCreateDialog}
 						/>
 					)}
 					{showSettings && (
 						<SettingsDialog
 							open={showSettings}
 							providers={providerSettings}
-							onProvidersChange={setProviderSettings}
+							onProvidersChange={(ps) => appStore.set(providerSettingsAtom, ps)}
 							onClose={handleCloseSettings}
 							defaultTab={settingsTab}
 						/>

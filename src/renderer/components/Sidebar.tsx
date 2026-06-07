@@ -8,15 +8,15 @@ import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { MessageSquare, Network, Plus, Settings, X } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { activeAgentIdAtom, agentsAtom } from "../store/atoms";
 
 const api = (window as any).look;
 
 interface SidebarProps {
-	agents: AgentInfo[];
-	activeAgentId: string | null;
 	onSelect: (agentId: string) => void;
 	onDestroy: (agentId: string) => void;
 	/** Opens the Create dialog. Optional `defaultModel` is the model the
@@ -57,8 +57,6 @@ function fmtRelativeTime(ts: number): string {
 }
 
 export default function Sidebar({
-	agents,
-	activeAgentId,
 	onSelect,
 	onDestroy,
 	onCreateClick,
@@ -67,6 +65,8 @@ export default function Sidebar({
 }: SidebarProps) {
 	const { t } = useTranslation();
 	const [tab, setTab] = React.useState("chat");
+	const agents = useAtomValue(agentsAtom);
+	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const editRef = useRef<HTMLInputElement>(null);

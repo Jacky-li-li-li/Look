@@ -2,7 +2,19 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
-@import "highlight.js/styles/github-dark.css";
+/* Shiki code output — override background/padding to match app theme */
+.shiki-code-output .shiki {
+	background: transparent !important;
+	overflow-x: auto;
+	padding: 0.75rem;
+	font-size: 12px;
+	line-height: 1.625;
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+.shiki-code-output .shiki code {
+	font-family: inherit;
+	font-size: inherit;
+}
 
 /* Tailwind v4's auto source detection only scans files under the Vite root
  * (src/renderer). The shadcn/ui primitives live in src/main/shared, so we

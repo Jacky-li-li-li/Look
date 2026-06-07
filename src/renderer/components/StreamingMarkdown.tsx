@@ -1,5 +1,5 @@
 // ============================================================
-// StreamingMarkdown — Markdown renderer with stream-friendly throttling
+// StreamingMarkdown — Markdown renderer with Shiki syntax highlighting
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
@@ -7,19 +7,7 @@ import { cn } from "@shared/lib/utils";
 
 /**
  * Auto-close unclosed fenced code blocks (```) so ReactMarkdown
- * never receives partial fences during streaming.  Without this,
- * every ~80ms throttle tick would pass content like
- * "```python\nprint('hel" (no closing ```), and ReactMarkdown
- * would render the raw ``` markers until the closing fence arrived.
- *
- * The fix: count lines that start with ```.  An odd count means
- * a fence is open but not closed → append a closing ```.
- *
- * Edge case: code content that itself has ``` at column 0 on its
- * own line would throw the count off, but (a) models rarely
- * output such code, (b) the next throttle tick fixes it, and
- * (c) it's strictly better than showing raw ``` to the user on
- * every streaming tick.
+ * never receives partial fences during streaming.
  */
 function autoCloseCodeFences(text: string): string {
 	let open = false;
@@ -28,7 +16,6 @@ function autoCloseCodeFences(text: string): string {
 		const nl = text.indexOf("\n", i);
 		const lineEnd = nl === -1 ? text.length : nl + 1;
 		const lineLen = nl === -1 ? text.length - i : nl - i;
-		// Check if this line starts with ```
 		if (lineLen >= 3) {
 			const c0 = text.charCodeAt(i);
 			const c1 = text.charCodeAt(i + 1);
@@ -43,11 +30,11 @@ function autoCloseCodeFences(text: string): string {
 }
 
 import { Check, Copy } from "lucide-react";
-import React, { memo, useEffect, useMemo, useRef } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { useThrottle } from "../hooks/useThrottle";
+import { getCachedHighlighter } from "../lib/highlighter";
 
 interface StreamingMarkdownProps {
 	content: string;
@@ -58,13 +45,28 @@ interface StreamingMarkdownProps {
 }
 
 // ============================================================
-// Custom components
+// ShikiCodeBlock — syntax-highlighted code block via Shiki
 // ============================================================
 
-function CodeBlock({ language, children, ...props }: any) {
-	const [copied, setCopied] = React.useState(false);
-	const code = String(children).replace(/\n$/, "");
+const ShikiCodeBlock = memo(function ShikiCodeBlock({ language, children }: { language: string; children: React.ReactNode }) {
+	const [copied, setCopied] = useState(false);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const code = String(children).replace(/\n$/, "");
+	const lang = language || "text";
+
+	// Synchronous highlight via useMemo — no useState + useEffect, reducing
+	// hook profiling overhead in dev mode. Highlighter is preloaded at app
+	// startup so getCachedHighlighter() is always non-null after first paint.
+	const html = useMemo(() => {
+		const h = getCachedHighlighter();
+		if (!h) return null;
+		const safeLang = h.getLoadedLanguages().includes(lang) ? lang : "text";
+		try {
+			return h.codeToHtml(code, { lang: safeLang, theme: "github-dark" });
+		} catch {
+			return null;
+		}
+	}, [code, lang]);
 
 	useEffect(() => () => clearTimeout(timerRef.current), []);
 
@@ -77,10 +79,9 @@ function CodeBlock({ language, children, ...props }: any) {
 
 	return (
 		<div className="group relative my-3 rounded-lg border bg-muted/30 overflow-hidden">
-			{/* Header bar */}
 			<div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/50">
 				<span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-					{language || "text"}
+					{lang}
 				</span>
 				<Button
 					variant="ghost"
@@ -92,13 +93,16 @@ function CodeBlock({ language, children, ...props }: any) {
 					{copied ? <Check className="size-3 text-green-400" /> : <Copy className="size-3" />}
 				</Button>
 			</div>
-			{/* Code */}
-			<pre className="overflow-x-auto p-3 text-[12px] leading-relaxed font-mono">
-				<code className={`language-${language || "text"}`}>{code}</code>
-			</pre>
+			{html ? (
+				<div className="shiki-code-output" dangerouslySetInnerHTML={{ __html: html }} />
+			) : (
+				<pre className="overflow-x-auto p-3 text-[12px] leading-relaxed font-mono">
+					<code>{code}</code>
+				</pre>
+			)}
 		</div>
 	);
-}
+});
 
 function InlineCode({ children, ...props }: any) {
 	return (
@@ -138,127 +142,64 @@ function Td({ children, ...props }: any) {
 // Main component
 // ============================================================
 
+const remarkPlugins = [remarkGfm];
+
+
+// ---- Pre-built component maps (zero per-instance allocation) ----
+function BlockP({ children, ...props }: any) { return <p {...props}>{children}</p>; }
+function InlineP({ children, ...props }: any) { return <span {...props}>{children}</span>; }
+function CodeRenderer({ node, inline: isInline, className: cls, children, ...props }: any) {
+	const match = /language-(\w+)/.exec(cls || "");
+	if (!isInline && match) { return <ShikiCodeBlock language={match[1]}>{children}</ShikiCodeBlock>; }
+	return <InlineCode {...props}>{children}</InlineCode>;
+}
+function PreRenderer({ children }: any) { return <>{children}</>; }
+function MarkdownA({ children, href, ...props }: any) {
+	return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline decoration-blue-400/30 hover:decoration-blue-400 transition-colors" {...props}>{children}</a>;
+}
+function MarkdownBlockquote({ children, ...props }: any) {
+	return <blockquote className="my-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground" {...props}>{children}</blockquote>;
+}
+function MarkdownHr(props: any) { return <hr className="my-4 border-border" {...props} />; }
+function MarkdownUl({ children, ...props }: any) {
+	return <ul className="my-2 ml-4 list-disc space-y-1" {...props}>{children}</ul>;
+}
+function MarkdownOl({ children, ...props }: any) {
+	return <ol className="my-2 ml-4 list-decimal space-y-1" {...props}>{children}</ol>;
+}
+function MarkdownH1({ children, ...props }: any) { return <h1 className="mt-4 mb-2 text-lg font-bold" {...props}>{children}</h1>; }
+function MarkdownH2({ children, ...props }: any) { return <h2 className="mt-3 mb-1.5 text-base font-semibold" {...props}>{children}</h2>; }
+function MarkdownH3({ children, ...props }: any) { return <h3 className="mt-2 mb-1 text-sm font-semibold" {...props}>{children}</h3>; }
+
+const COMPONENTS_BLOCK = {
+	p: BlockP, code: CodeRenderer, pre: PreRenderer,
+	table: Table, th: Th, td: Td,
+	a: MarkdownA, blockquote: MarkdownBlockquote, hr: MarkdownHr,
+	ul: MarkdownUl, ol: MarkdownOl, h1: MarkdownH1, h2: MarkdownH2, h3: MarkdownH3,
+} as const;
+
+const COMPONENTS_INLINE = { ...COMPONENTS_BLOCK, p: InlineP } as const;
 const StreamingMarkdown = memo(function StreamingMarkdown({
 	content,
 	isStreaming = false,
 	className,
 	inline = false,
 }: StreamingMarkdownProps) {
-	// Throttle content during streaming to avoid re-parsing on every token
 	const throttledContent = useThrottle(content, 80, isStreaming);
 
-	// Memo components to avoid recreating on each render
-	const components = useMemo(
-		() => ({
-			// When inline, render paragraphs as <span> so content flows with siblings;
-			// otherwise fall back to a real <p> (never undefined — react-markdown can't
-			// accept an undefined component override and would throw "Element type is invalid").
-			p({ children, ...props }: any) {
-				return inline ? <span {...props}>{children}</span> : <p {...props}>{children}</p>;
-			},
-			code({ node, inline, className, children, ...props }: any) {
-				const match = /language-(\w+)/.exec(className || "");
-				if (!inline && match) {
-					return (
-						<CodeBlock language={match[1]} {...props}>
-							{children}
-						</CodeBlock>
-					);
-				}
-				return <InlineCode {...props}>{children}</InlineCode>;
-			},
-			pre({ children }: any) {
-				// ReactMarkdown wraps code in pre — pass through for our custom CodeBlock
-				return <>{children}</>;
-			},
-			table: Table,
-			th: Th,
-			td: Td,
-			// Style links
-			a({ children, href, ...props }: any) {
-				return (
-					<a
-						href={href}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-blue-400 underline decoration-blue-400/30 hover:decoration-blue-400 transition-colors"
-						{...props}
-					>
-						{children}
-					</a>
-				);
-			},
-			// Style blockquotes
-			blockquote({ children, ...props }: any) {
-				return (
-					<blockquote
-						className="my-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground"
-						{...props}
-					>
-						{children}
-					</blockquote>
-				);
-			},
-			// Horizontal rule
-			hr(props: any) {
-				return <hr className="my-4 border-border" {...props} />;
-			},
-			// Lists
-			ul({ children, ...props }: any) {
-				return (
-					<ul className="my-2 ml-4 list-disc space-y-1" {...props}>
-						{children}
-					</ul>
-				);
-			},
-			ol({ children, ...props }: any) {
-				return (
-					<ol className="my-2 ml-4 list-decimal space-y-1" {...props}>
-						{children}
-					</ol>
-				);
-			},
-			// Headings
-			h1({ children, ...props }: any) {
-				return (
-					<h1 className="mt-4 mb-2 text-lg font-bold" {...props}>
-						{children}
-					</h1>
-				);
-			},
-			h2({ children, ...props }: any) {
-				return (
-					<h2 className="mt-3 mb-1.5 text-base font-semibold" {...props}>
-						{children}
-					</h2>
-				);
-			},
-			h3({ children, ...props }: any) {
-				return (
-					<h3 className="mt-2 mb-1 text-sm font-semibold" {...props}>
-						{children}
-					</h3>
-				);
-			},
-		}),
-		[inline],
-	);
+	// Pick the pre-built component map — zero allocation per instance.
+	const components = inline ? COMPONENTS_INLINE : COMPONENTS_BLOCK;
 
-	// Memoize plugin arrays to avoid unnecessary ReactMarkdown re-renders
-	const remarkPlugins = useMemo(() => [remarkGfm], []);
-	const rehypePlugins = useMemo(() => [rehypeHighlight], []);
+	// No rehypePlugins needed — Shiki handles syntax highlighting directly in ShikiCodeBlock.
 
-	// If empty, show nothing
 	if (!throttledContent) {
 		return isStreaming ? <span className="inline-block w-2 h-4 bg-primary animate-pulse rounded-xs ml-0.5" /> : null;
 	}
 
-	// Fix: auto-close unclosed fenced code blocks so ReactMarkdown
-	// always receives complete blocks during streaming — no raw ``` in view.
 	const displayContent = autoCloseCodeFences(throttledContent);
 
 	const markdown = (
-		<ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
+		<ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
 			{displayContent}
 		</ReactMarkdown>
 	);
