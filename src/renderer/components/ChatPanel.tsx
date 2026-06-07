@@ -15,7 +15,7 @@ import type {
 	PiTextBlock,
 	PiToolCallBlock,
 } from "@shared/types";
-import { MessageSquare, Send, Square } from "lucide-react";
+import { ChevronDown, MessageSquare, Send, Square } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -80,9 +80,12 @@ export default function ChatPanel({
 }: ChatPanelProps) {
 	const { t } = useTranslation();
 	const [input, setInput] = useState("");
+	const scrollRef = useRef<HTMLDivElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const rafRef = useRef<number | undefined>(undefined);
+	const isStickyRef = useRef(true); // user is near the bottom → auto-scroll
+	const [showScrollBtn, setShowScrollBtn] = useState(false);
 
 	// ---- v0.3 skills: lazy-load + slash menu state ----
 	// We fetch the skill list once per agent mount. The main process
@@ -302,19 +305,31 @@ export default function ChatPanel({
 		return merged;
 	}, [messages]);
 
-	// Auto-scroll to bottom on every visible-list mutation. Placed
-	// *after* the useMemo that defines `displayMessages` so the
-	// biome ignore is honest — the array reference is in scope, and
-	// the effect body doesn't actually use it (it just needs a
-	// "list changed" trigger). Listing it in the deps array is the
-	// canonical way to express "re-run when this array's identity
-	// changes" in React 18.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: identity-only trigger, see comment above
+	// ---- Sticky auto-scroll ----
+	// Only auto-scroll to bottom when the user is already near the
+	// bottom (within 48px threshold). If they scrolled up to read
+	// earlier messages, we don't interrupt them. The isStickyRef
+	// is updated on every scroll event and read inside the effect
+	// so the effect doesn't need to track it as a dependency.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: identity-only trigger for displayMessages; isStickyRef is read inside
 	useEffect(() => {
+		if (!isStickyRef.current || !scrollRef.current) return;
 		cancelAnimationFrame(rafRef.current!);
-		rafRef.current = requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ block: "end" }));
+		rafRef.current = requestAnimationFrame(() => {
+			if (scrollRef.current) {
+				scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+			}
+		});
 		return () => cancelAnimationFrame(rafRef.current!);
 	}, [displayMessages]);
+
+	const handleScrollToBottom = () => {
+		if (scrollRef.current) {
+			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+		}
+		isStickyRef.current = true;
+		setShowScrollBtn(false);
+	};
 
 	const handleSend = () => {
 		const text = input.trim();
@@ -355,7 +370,26 @@ export default function ChatPanel({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="flex-1 overflow-y-auto">
+			<div
+				ref={scrollRef}
+				className="flex-1 overflow-y-auto"
+				onScroll={() => {
+					const el = scrollRef.current;
+					if (!el) return;
+					// Within 48px of the bottom → sticky, auto-scroll on next update.
+					// Past 48px → not sticky, user is reading earlier content.
+					const wasSticky = isStickyRef.current;
+					isStickyRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+					setShowScrollBtn(!isStickyRef.current);
+					// Cancel any in-flight RAF if user breaks away from the bottom,
+					// preventing the race: onScroll → isStickyRef=false, but a
+					// pending RAF from a recent content-update effect could still
+					// fire ~16ms later and yank the user back to bottom.
+					if (wasSticky && !isStickyRef.current) {
+						cancelAnimationFrame(rafRef.current!);
+					}
+				}}
+			>
 				<div className="flex w-full flex-col gap-5 px-5 py-5">
 					{displayMessages.length === 0 ? (
 						<div className="flex min-h-[52vh] flex-col items-center justify-center gap-4 text-center">
@@ -381,6 +415,23 @@ export default function ChatPanel({
 					)}
 					<div ref={bottomRef} />
 				</div>
+			</div>
+
+			{/* Floating scroll-to-bottom button — sits at the bottom of the message area */}
+			<div className="relative shrink-0 h-0 z-10">
+				<button
+					onClick={handleScrollToBottom}
+					className={cn(
+						"absolute bottom-0 right-4 flex size-8 items-center justify-center rounded-full border border-hairline bg-card shadow-md backdrop-blur-sm transition-all duration-200",
+						showScrollBtn
+							? "translate-y-0 opacity-100 pointer-events-auto"
+							: "translate-y-3 opacity-0 pointer-events-none",
+					)}
+					aria-label="Scroll to bottom"
+					title="Scroll to bottom"
+				>
+					<ChevronDown className="size-4 text-muted-foreground" />
+				</button>
 			</div>
 
 			{/* Queue drawer — slides up when the SDK's queue is non-empty.
