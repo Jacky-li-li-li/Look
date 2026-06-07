@@ -199,6 +199,7 @@ export class AgentManager {
 					sessionFile: m.session.sessionFile ?? undefined,
 					permissionMode: m.permissionMode,
 					usage: m.info.usage,
+					createdAt: m.info.createdAt,
 				})),
 			};
 			fs.writeFileSync(this.agentsIndexPath, JSON.stringify(data, null, 2));
@@ -350,7 +351,7 @@ export class AgentManager {
 					thinkingLevel: entry.thinkingLevel ?? "medium",
 					status: "idle",
 					messageCount: uiMessages.length,
-					createdAt: Date.now(),
+					createdAt: entry.createdAt ?? Date.now(),
 					usage: cumUsage,
 					fallbackModels: [],
 					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",

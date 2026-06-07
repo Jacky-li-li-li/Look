@@ -110,12 +110,13 @@ function formatStatSuffix(
 	}
 }
 
-export default function ToolCallCard({ toolCall }: ToolCallCardProps) {
+function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { t } = useTranslation();
 	// Auto open when running, auto close on completion
 	const [open, setOpen] = React.useState(toolCall.status === "running");
 	const prevStatus = React.useRef(toolCall.status);
 	const userManuallyToggled = React.useRef(false);
+	const collapseTimerRef = React.useRef<ReturnType<typeof setTimeout>>(undefined as any);
 
 	// Track status transitions for auto-expand/collapse
 	React.useEffect(() => {
@@ -125,11 +126,15 @@ export default function ToolCallCard({ toolCall }: ToolCallCardProps) {
 		if (prev !== curr) {
 			if (curr === "running") {
 				// Auto-expand when tool starts running, reset manual override
+				if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
 				userManuallyToggled.current = false;
 				setOpen(true);
 			} else if ((curr === "success" || curr === "error") && !userManuallyToggled.current) {
-				// Auto-collapse on completion
-				setOpen(false);
+				// Debounce auto-collapse by 300ms so rapid status transitions
+				// don't trigger animation thrashing. Collects multiple tool
+				// completions into a single frame.
+				collapseTimerRef.current = setTimeout(() => setOpen(false), 300);
+				return () => { if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current); };
 			}
 			prevStatus.current = curr;
 		}
@@ -231,3 +236,14 @@ function safeJson(value: unknown): string {
 		return String(value);
 	}
 }
+
+export default React.memo(ToolCallCard, (prev, next) => {
+	const a = prev.toolCall;
+	const b = next.toolCall;
+	return (
+		a.callId === b.callId &&
+		a.status === b.status &&
+		a.isError === b.isError &&
+		a.result === b.result
+	);
+});

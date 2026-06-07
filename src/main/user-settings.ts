@@ -44,6 +44,8 @@ export interface UserSettings {
 	/** Custom system prompt for new chat sessions. Empty string =
 	 *  use pi SDK's default coding assistant prompt. */
 	chatSystemPrompt: string;
+	/** Last active agent ID to restore on restart. */
+	lastActiveAgentId: string;
 }
 
 const DEFAULTS: UserSettings = {
@@ -54,6 +56,7 @@ const DEFAULTS: UserSettings = {
 	compressThreshold: 60,
 	preferredModel: null,
 	chatSystemPrompt: "",
+	lastActiveAgentId: "",
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -69,6 +72,8 @@ interface UiSettings {
 	autoCompress: boolean;
 	compressThreshold: number;
 	chatSystemPrompt: string;
+	/** Last active agent ID to restore on restart. */
+	lastActiveAgentId: string;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -77,6 +82,7 @@ const UI_DEFAULTS: UiSettings = {
 	autoCompress: DEFAULTS.autoCompress,
 	compressThreshold: DEFAULTS.compressThreshold,
 	chatSystemPrompt: DEFAULTS.chatSystemPrompt,
+	lastActiveAgentId: "",
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -177,6 +183,7 @@ export class UserSettingsStore {
 		if (partial.autoCompress !== undefined) uiPartial.autoCompress = partial.autoCompress;
 		if (partial.compressThreshold !== undefined) uiPartial.compressThreshold = partial.compressThreshold;
 		if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
+		if (partial.lastActiveAgentId !== undefined) uiPartial.lastActiveAgentId = partial.lastActiveAgentId;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

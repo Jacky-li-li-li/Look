@@ -11,7 +11,6 @@ import type { AgentInfo } from "@shared/types";
 import { MessageSquare, Network, Plus, Settings, X } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const api = (window as any).look;
 
@@ -44,6 +43,17 @@ function fmtTokens(n: number): string {
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
 	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
 	return `${n}`;
+}
+function fmtRelativeTime(ts: number): string {
+	const diff = Date.now() - ts;
+	const seconds = Math.floor(diff / 1000);
+	if (seconds < 60) return "now";
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h`;
+	const days = Math.floor(hours / 24);
+	return `${days}D`;
 }
 
 export default function Sidebar({
@@ -90,9 +100,11 @@ export default function Sidebar({
 	const handleEditKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
 			if (e.key === "Enter") {
+				e.stopPropagation();
 				commitRename();
 			}
 			if (e.key === "Escape") {
+				e.stopPropagation();
 				setEditingId(null);
 				setEditValue("");
 			}
@@ -166,9 +178,7 @@ export default function Sidebar({
 									isActive && "border-border bg-accent/60",
 								)}
 							>
-								<PixelAgentAvatar role={agent.role} status={agent.status} size="sm" active={isActive} />
-
-								<div className="min-w-0 flex-1">
+							<div className="min-w-0 flex-1">
 									{editingId === agent.id ? (
 										<input
 											ref={editRef}
@@ -204,14 +214,17 @@ export default function Sidebar({
 									<Button
 										variant="line-ghost"
 										size="icon-xs"
-										className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+										className="relative transition-opacity duration-150"
 										onClick={(event) => {
 											event.stopPropagation();
 											onDestroy(agent.id);
 										}}
 										aria-label={`Destroy ${agent.name}`}
 									>
-										<X className="size-3.5" />
+										<span className="transition-opacity duration-150 group-hover:opacity-0 text-[10px] font-mono">
+											{fmtRelativeTime(agent.createdAt)}
+										</span>
+										<X className="size-3.5 absolute transition-opacity duration-150 opacity-0 group-hover:opacity-100" />
 									</Button>
 								</div>
 							</div>
@@ -220,9 +233,6 @@ export default function Sidebar({
 
 					{filteredAgents.length === 0 && (
 						<div className="mx-1 mt-3 rounded-lg border border-dashed border-hairline p-5 text-center text-[11px] text-muted-foreground">
-							<div className="mx-auto mb-2 flex justify-center">
-								<PixelAgentAvatar size="md" />
-							</div>
 							{tab === "chat" ? t("sidebar.noChatAgents") : t("sidebar.noOrchAgents")}
 							<br />
 							{t("sidebar.clickNewAgent")}

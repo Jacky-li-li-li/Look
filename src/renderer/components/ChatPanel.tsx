@@ -237,6 +237,9 @@ export default function ChatPanel({
 
 		for (const msg of messages) {
 			if (!msg.contentBlocks) continue;
+			// Skip internal system messages (agent startup info) — they're
+			// only meaningful to the agent's context, not the user.
+			if (msg.role === "system") continue;
 			if (msg.role === "tool") {
 				const resultText = msg.contentBlocks
 					.filter((b) => b.type === "text")
@@ -321,6 +324,24 @@ export default function ChatPanel({
 			}
 		});
 		return () => cancelAnimationFrame(rafRef.current!);
+	}, [displayMessages]);
+
+	// On mount / restart, always scroll to bottom after the initial
+	// render settles. The sticky-effect above is skipped if the user
+	// hasn't triggered a scroll event yet, so this provides the
+	// initial scroll-to-bottom that loads the user at the latest message.
+	// We use a 0-timeout to yield for the layout pass.
+	const hasInitiallyScrolled = useRef(false);
+	useEffect(() => {
+		if (hasInitiallyScrolled.current) return;
+		if (!scrollRef.current) return;
+		if (displayMessages.length === 0) return;
+		hasInitiallyScrolled.current = true;
+		requestAnimationFrame(() => {
+			if (scrollRef.current) {
+				scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+			}
+		});
 	}, [displayMessages]);
 
 	const handleScrollToBottom = () => {

@@ -106,6 +106,7 @@ export default function App() {
 		activeAgentIdRef.current = activeAgentId;
 	}, [activeAgentId]);
 	// ↑ a tiny inline hook to mirror state → ref.
+	const lastActiveAgentIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		if (!api) {
@@ -378,6 +379,12 @@ export default function App() {
 
 	useEffect(() => {
 		if (!activeAgentId && agents.length > 0) {
+			// Try restoring the last active agent from settings first
+			const lastId = lastActiveAgentIdRef.current;
+			if (lastId && agents.some((a) => a.id === lastId)) {
+				setActiveAgentId(lastId);
+				return;
+			}
 			const chatAgent = agents.find((a) => a.role === "chat");
 			if (chatAgent) {
 				setActiveAgentId(chatAgent.id);
@@ -386,6 +393,16 @@ export default function App() {
 			// which shouldn't be auto-selected for the chat tab.
 		}
 	}, [agents, activeAgentId]);
+
+	// Persist the active agent ID whenever the user switches agents.
+	// Debounce with a 500ms delay to avoid writing on every rapid click.
+	useEffect(() => {
+		if (!api || !activeAgentId) return;
+		const timer = setTimeout(() => {
+			api.setGeneralSettings({ lastActiveAgentId: activeAgentId }).catch(() => {});
+		}, 500);
+		return () => clearTimeout(timer);
+	}, [activeAgentId]);
 
 	// Fetch provider settings once at app boot so opening Settings is instant.
 	useEffect(() => {
@@ -397,7 +414,7 @@ export default function App() {
 			.catch(showError);
 	}, []);
 
-	// Initialize i18n language + autoCollapse from persisted settings on mount.
+	// Initialize i18n language + autoCollapse + lastActiveAgentId from persisted settings on mount.
 	useEffect(() => {
 		if (!api) return;
 		api.getGeneralSettings()
@@ -405,6 +422,7 @@ export default function App() {
 				if (r?.success && r.settings) {
 					if (r.settings.language) i18n.changeLanguage(r.settings.language);
 					if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
+					if (r.settings.lastActiveAgentId) lastActiveAgentIdRef.current = r.settings.lastActiveAgentId;
 				}
 			})
 			.catch(() => {});
