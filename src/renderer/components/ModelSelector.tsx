@@ -2,6 +2,7 @@
 // ModelSelector — Centered dialog for picking a model (Ink Wash)
 // ============================================================
 
+import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
@@ -9,6 +10,7 @@ import type { AvailableModel } from "@shared/types";
 import { ArrowRight, Check, ChevronDown, Cpu, Key, Terminal } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ProviderIcon } from "./ProviderIcon";
 
 const api = (window as any).look;
 
@@ -39,12 +41,16 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 
 	const fetchProvidersAndModels = useCallback(async () => {
 		if (!api) return;
-		const [m, p, v] = await Promise.all([api.getModels(), api.getProviders(), api.getVerifiedEnvProviders?.()]);
+		// Use getSettings (not getProviders) because it returns the
+		// `hasKey` + `authSource` fields the tab-splitter needs.
+		// `getProviders` returns `hasCredentials`, so reading `hasKey`
+		// from it always gives `undefined` → empty list on both tabs.
+		const [m, s, v] = await Promise.all([api.getModels(), api.getSettings(), api.getVerifiedEnvProviders?.()]);
 		if (m?.success) setModels(m.models);
 		if (v?.success) setVerifiedEnv(new Set(v.providers));
-		if (p?.success) {
+		if (s?.success) {
 			const map: Record<string, ProviderSource> = {};
-			for (const prov of p.providers as ProviderLite[]) {
+			for (const prov of s.providers as ProviderLite[]) {
 				if (prov.hasKey) {
 					map[prov.id] = "api";
 				} else if (prov.authSource && prov.authSource !== "fallback") {
@@ -104,6 +110,13 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
 	const label = switching ? "…" : (currentModelObj?.name ?? currentModel?.split("/").pop() ?? "Model");
 
+	// Default the active tab to whichever side has content. If the
+	// user only configured env-var credentials, the "API Keys" tab
+	// would otherwise open to an empty list and the user would think
+	// the dialog is broken. Re-evaluated each time the data refreshes
+	// (key forces remount when the loaded-model count changes).
+	const defaultTab = apiModels.length > 0 ? "api" : "env";
+
 	return (
 		<Dialog
 			open={open}
@@ -144,31 +157,42 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 							</button>
 						</div>
 					) : (
-						<Tabs defaultValue="api" className="flex flex-col">
-							<TabsList className="w-full shrink-0 rounded-none border-b border-t bg-transparent px-3">
-								<TabsTrigger value="api" className="!h-auto !flex-none flex-1 gap-1.5 py-2 text-[11px]">
-									<Key className="size-3" />
+						<Tabs
+							key={`${apiModels.length}-${envModels.length}`}
+							defaultValue={defaultTab}
+							className="flex flex-col"
+						>
+							{/* Underline tabs — matches Sidebar Chat/Orch */}
+							<TabsList className="w-full h-auto rounded-none bg-transparent gap-0 px-3 border-b border-hairline">
+								<TabsTrigger
+									value="api"
+									className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
+								>
+									<Key className="size-4" />
 									API Keys
 									{apiModels.length > 0 && (
-										<span className="ml-auto rounded-full bg-muted-foreground/15 px-1.5 text-[9px] tabular-nums">
+										<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 											{apiModels.length}
-										</span>
+										</Badge>
 									)}
 								</TabsTrigger>
-								<TabsTrigger value="env" className="!h-auto !flex-none flex-1 gap-1.5 py-2 text-[11px]">
-									<Terminal className="size-3" />
+								<TabsTrigger
+									value="env"
+									className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
+								>
+									<Terminal className="size-4" />
 									Environment
 									{envModels.length > 0 && (
-										<span className="ml-auto rounded-full bg-muted-foreground/15 px-1.5 text-[9px] tabular-nums">
+										<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 											{envModels.length}
-										</span>
+										</Badge>
 									)}
 								</TabsTrigger>
 							</TabsList>
-							<TabsContent value="api" className="max-h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
+							<TabsContent value="api" className="h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
 								<ModelList models={apiModels} currentModel={currentModel} onSwitch={handleSwitch} />
 							</TabsContent>
-							<TabsContent value="env" className="max-h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
+							<TabsContent value="env" className="h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
 								<ModelList models={envModels} currentModel={currentModel} onSwitch={handleSwitch} />
 							</TabsContent>
 						</Tabs>
@@ -200,8 +224,9 @@ function ModelList({
 		<>
 			{Object.entries(grouped).map(([provider, pModels], index, entries) => (
 				<React.Fragment key={provider}>
-					<div className="px-3 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-						{provider}
+					<div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+						<ProviderIcon id={provider} className="size-3" />
+						<span>{provider}</span>
 					</div>
 					<div>
 						{pModels.map((m) => {
