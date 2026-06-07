@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { showError } from "../lib/ipc";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
@@ -102,35 +103,30 @@ function SettingRow({
 }
 
 // ── Auth-source label helper for the env sub-tab ──
-// Maps the pi SDK auth source to a short badge label and a hover
-// title. The user can't edit these (they're set outside the app),
-// but they should be able to tell *why* the credential exists.
-function authSourceLabel(source: string, envLabel?: string): { label: string; title: string } {
+function authSourceLabel(
+	source: string,
+	envLabel: string | undefined,
+	t: (key: string, vars?: Record<string, string>) => string,
+): { label: string; title: string } {
 	switch (source) {
 		case "environment":
 			return {
 				label: "env",
-				title: envLabel ? `Detected from $${envLabel} in environment` : "Detected from environment",
+				title: envLabel
+					? t("settings.authSourceEnv", { env: `$${envLabel}` })
+					: t("settings.authSourceEnv", { env: "environment" }),
 			};
 		case "runtime":
-			return { label: "runtime", title: "Provided at runtime" };
+			return { label: "runtime", title: t("settings.authSourceRuntime") };
 		case "models_json_key":
 		case "models_json_command":
-			return {
-				label: "models.json",
-				title: "Configured via ~/.pi/agent/models.json",
-			};
+			return { label: "models.json", title: t("settings.authSourceConfig") };
 		default:
-			return { label: "auto", title: `Auto-configured (${source})` };
+			return { label: "auto", title: t("settings.authSourceAuto") };
 	}
 }
 
-// ── Right-side content panel — symmetric border container matching the
-//    left sidebar so the settings page reads as "two framed panels".
-//    Owns its own scroll (overflow-y-auto + min-h-0) so the border
-//    stays intact top-to-bottom and the scrollbar sits inside the
-//    framed panel rather than at the TabsContent edge. Callers pass
-//    their own gap / alignment via className. ──
+// ── Right-side content panel ──
 function ContentPanel({ children, className }: { children: React.ReactNode; className?: string }) {
 	return (
 		<div
@@ -151,6 +147,7 @@ function SettingsDialogImpl({
 	onClose,
 	defaultTab = "general",
 }: SettingsDialogProps) {
+	const { t, i18n } = useTranslation();
 	const { theme, setTheme } = useTheme();
 	const [language, setLanguage] = useState("en");
 	const [thinkingLevel, setThinkingLevel] = useState("medium");
@@ -159,9 +156,6 @@ function SettingsDialogImpl({
 	const [compressThreshold, setCompressThreshold] = useState(60);
 	const [chatSystemPrompt, setChatSystemPrompt] = useState("");
 	const [_settingsLoaded, setSettingsLoaded] = useState(false);
-	// Controlled tab — re-syncs to the requested default each time the
-	// dialog opens (handled by the parent remounting via the `open`
-	// gate, but we also reset on prop change to be safe).
 	const [tab, setTab] = useState<string>(defaultTab);
 	useEffect(() => {
 		setTab(defaultTab);
@@ -190,17 +184,8 @@ function SettingsDialogImpl({
 	const [showKey, setShowKey] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [loadingKey, setLoadingKey] = useState(false);
-	// Per-provider self-test status. Lives only for the session — we don't
-	// persist verification state because provider keys can be revoked server-
-	// side at any time.
 	const [testStatus, setTestStatus] = useState<Record<string, TestVerdict>>({});
-	// env-var self-test status. Same lifetime as testStatus but kept
-	// separate so the env sub-tab can show its own verified badge
-	// without colliding with stored-key verdicts.
 	const [envTestStatus, setEnvTestStatus] = useState<Record<string, TestVerdict>>({});
-	// Confirm-save dialog: shown when the self-test failed but the user
-	// still wants to write the key (network blip, key rotated upstream,
-	// etc.).
 	const [forceSave, setForceSave] = useState<{ provider: string; key: string; reason: string; status: number } | null>(
 		null,
 	);
@@ -214,8 +199,6 @@ function SettingsDialogImpl({
 
 	const appVersion = "1.0.0";
 
-	// Providers are now hoisted to App.tsx and passed in as a prop — avoids the
-	// IPC + main-process model-registry walk on every dialog open.
 	const loading = providers.length === 0 && !!api;
 
 	const handleSave = async () => {
@@ -223,10 +206,6 @@ function SettingsDialogImpl({
 		const providerId = editing;
 		const key = keyInput.trim();
 		setSaving(true);
-		// Run the live self-test first. Three outcomes:
-		//   - ok       → save immediately, mark green
-		//   - skipped  → no test config for this provider; save with neutral mark
-		//   - error    → ask the user before saving (network blip? stale key?)
 		let testResult: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } | null =
 			null;
 		try {
@@ -236,7 +215,6 @@ function SettingsDialogImpl({
 			/* swallow — fall through to "no test result" branch */
 		}
 		if (!testResult || (testResult.ok === undefined && !testResult.skipped)) {
-			// No result at all (IPC failed) — treat as skipped, save anyway.
 			testResult = { skipped: true, reason: "Self-test unavailable" };
 		}
 		if (testResult.ok === true) {
@@ -251,7 +229,6 @@ function SettingsDialogImpl({
 			closeEditor();
 			return;
 		}
-		// Failed — show confirm dialog before saving.
 		setSaving(false);
 		setForceSave({
 			provider: providerId,
@@ -267,12 +244,12 @@ function SettingsDialogImpl({
 			const result = await api.setApiKey(providerId, key);
 			if (result?.success) {
 				onProvidersChange(result.providers);
-				toast.success(`${providerId} key updated`);
+				toast.success(t("settings.keyUpdated", { provider: providerId }));
 			} else {
-				toast.error(result?.error ?? "Failed to save key");
+				toast.error(result?.error ?? t("settings.selfTestFailed"));
 			}
 		} catch (e: any) {
-			toast.error(e?.message ?? "Failed to save key");
+			toast.error(e?.message ?? t("settings.selfTestFailed"));
 		}
 	};
 
@@ -283,7 +260,7 @@ function SettingsDialogImpl({
 		setSaving(true);
 		await persistKey(provider, key);
 		setTestStatus((prev) => ({ ...prev, [provider]: { verdict: "error", reason } }));
-		toast.warning(`${provider} saved despite failed self-test: ${reason}`);
+		toast.warning(t("settings.failedSelfTest", { provider, reason }));
 		closeEditor();
 	};
 
@@ -300,27 +277,24 @@ function SettingsDialogImpl({
 			const result = await api.setApiKey(providerId, "");
 			if (result?.success) {
 				onProvidersChange(result.providers);
-				toast.success(`${providerId} key removed`);
+				toast.success(t("settings.keyRemoved", { provider: providerId }));
 			}
 		} catch (e: any) {
-			toast.error(e?.message ?? "Failed to clear key");
+			toast.error(e?.message ?? t("settings.selfTestFailed"));
 		}
 	};
 
-	// Probe the env-var credential for a provider (read-only path — no
-	// key argument, the main process reads process.env itself). Used by
-	// the env sub-tab's Test button.
 	const handleTestEnv = async (providerId: string) => {
 		if (!api) return;
 		const r = await api.testEnvKey(providerId);
 		if (!r?.success) {
-			toast.error("Self-test failed");
+			toast.error(t("settings.selfTestFailed"));
 			return;
 		}
 		const result = r.result;
 		if (result.ok) {
 			setEnvTestStatus((prev) => ({ ...prev, [providerId]: { verdict: "ok" } }));
-			toast.success(`${providerId} env key verified`);
+			toast.success(t("settings.envKeyVerified", { provider: providerId }));
 		} else if (result.skipped) {
 			setEnvTestStatus((prev) => ({ ...prev, [providerId]: { verdict: "skipped", reason: result.reason } }));
 			toast.info(result.reason);
@@ -336,21 +310,6 @@ function SettingsDialogImpl({
 		api.setGeneralSettings(partial).catch(showError);
 	}, []);
 
-	// Provider splits by credential source. Used by the API Keys
-	// sub-tabs (stored/unconfigured = editable, env = read-only) and
-	// to compute the count badges in the sub-tab triggers.
-	//
-	// "API Key" sub-tab — everything the user can ACT on:
-	//   * user explicitly saved a key (`hasKey === true`)
-	//   * OR no auth at all (no authSource, or source === "fallback").
-	//     These need a "Set Key" button so the user can self-adapt
-	//     every built-in provider pi-ai supports, not just the ones
-	//     the SDK happened to auto-detect.
-	//
-	// "env" sub-tab — read-only auto-detected credentials:
-	//   * environment (shell env var) / runtime / models_json_*.
-	//     These have a real credential the SDK can use, but the user
-	//     didn't put it in the app, so we only let them Test it.
 	const storedProviders = providers.filter((p) => p.hasKey || !p.authSource || p.authSource === "fallback");
 	const envProviders = providers.filter((p) => !p.hasKey && p.authSource && p.authSource !== "fallback");
 	const storedCount = storedProviders.length;
@@ -361,6 +320,7 @@ function SettingsDialogImpl({
 			api.resetGeneralSettings().then((r: any) => {
 				if (r?.success && r.settings) {
 					setLanguage(r.settings.language ?? "en");
+					i18n.changeLanguage(r.settings.language ?? "en");
 					setThinkingLevel(r.settings.defaultThinkingLevel ?? "medium");
 					setAutoCollapse(r.settings.autoCollapse ?? true);
 					setAutoCompress(r.settings.autoCompress ?? false);
@@ -369,7 +329,7 @@ function SettingsDialogImpl({
 				}
 			});
 		setTheme("dark");
-		toast.success("Settings reset to defaults");
+		toast.success(t("settings.resetDone"));
 	};
 
 	const configured = providers.filter((p) => p.hasKey).length;
@@ -382,8 +342,8 @@ function SettingsDialogImpl({
 				showCloseButton
 			>
 				<DialogHeader>
-					<DialogTitle>Settings</DialogTitle>
-					<DialogDescription>Customize appearance, manage API keys, and more.</DialogDescription>
+					<DialogTitle>{t("settings.title")}</DialogTitle>
+					<DialogDescription>{t("settings.description")}</DialogDescription>
 				</DialogHeader>
 
 				<Tabs value={tab} onValueChange={setTab} orientation="vertical" className="flex min-h-0 flex-1 gap-4">
@@ -393,14 +353,14 @@ function SettingsDialogImpl({
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<Palette className="size-3.5" />
-							General
+							{t("settings.general")}
 						</TabsTrigger>
 						<TabsTrigger
 							value="api-keys"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<Key className="size-3.5" />
-							<span className="flex-1 text-left">API Keys</span>
+							<span className="flex-1 text-left">{t("settings.apiKeys")}</span>
 							{configured > 0 && (
 								<Badge variant="secondary" className="ml-auto h-4 px-1.5 text-[9px]">
 									{configured}
@@ -412,14 +372,14 @@ function SettingsDialogImpl({
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<MessageSquare className="size-3.5" />
-							Chat Prompt
+							{t("settings.chatPrompt")}
 						</TabsTrigger>
 						<TabsTrigger
 							value="about"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
 							<Zap className="size-3.5" />
-							About
+							{t("settings.about")}
 						</TabsTrigger>
 					</TabsList>
 
@@ -430,11 +390,15 @@ function SettingsDialogImpl({
 								<CardHeader className="border-b border-hairline px-4 py-2.5">
 									<CardTitle className="flex items-center gap-1.5 text-[13px]">
 										<Sun className="size-3.5 text-muted-foreground" />
-										Appearance
+										{t("settings.appearance")}
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
-									<SettingRow id="theme" label="Theme" desc={theme === "dark" ? "Dark mode" : "Light mode"}>
+									<SettingRow
+										id="theme"
+										label={t("settings.theme")}
+										desc={theme === "dark" ? t("settings.darkMode") : t("settings.lightMode")}
+									>
 										<div className="flex items-center gap-1.5">
 											<Sun className="size-3.5 text-muted-foreground" />
 											<Switch
@@ -446,11 +410,16 @@ function SettingsDialogImpl({
 											<Moon className="size-3.5 text-muted-foreground" />
 										</div>
 									</SettingRow>
-									<SettingRow id="language" label="Language" desc="Interface language">
+									<SettingRow
+										id="language"
+										label={t("settings.language")}
+										desc={t("settings.interfaceLanguage")}
+									>
 										<Select
 											value={language}
 											onValueChange={(v) => {
 												setLanguage(v);
+												i18n.changeLanguage(v);
 												persistSettings({ language: v });
 											}}
 										>
@@ -473,11 +442,15 @@ function SettingsDialogImpl({
 								<CardHeader className="border-b border-hairline px-4 py-2.5">
 									<CardTitle className="flex items-center gap-1.5 text-[13px]">
 										<Cpu className="size-3.5 text-muted-foreground" />
-										Behavior
+										{t("settings.behavior")}
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
-									<SettingRow id="thinking" label="Default Thinking" desc="Reasoning depth for new agents">
+									<SettingRow
+										id="thinking"
+										label={t("settings.defaultThinking")}
+										desc={t("settings.thinkingDesc")}
+									>
 										<Select
 											value={thinkingLevel}
 											onValueChange={(v) => {
@@ -499,7 +472,11 @@ function SettingsDialogImpl({
 											</SelectContent>
 										</Select>
 									</SettingRow>
-									<SettingRow id="autoclp" label="Auto-collapse" desc="Collapse steps after completion">
+									<SettingRow
+										id="autoclp"
+										label={t("settings.autoCollapse")}
+										desc={t("settings.autoCollapseDesc")}
+									>
 										<Switch
 											id="autoclp"
 											size="sm"
@@ -517,14 +494,14 @@ function SettingsDialogImpl({
 								<CardHeader className="border-b border-hairline px-4 py-2.5">
 									<CardTitle className="flex items-center gap-1.5 text-[13px]">
 										<Zap className="size-3.5 text-muted-foreground" />
-										Compression
+										{t("settings.autoCompress")}
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
 									<SettingRow
 										id="autocompress"
-										label="Auto-compress"
-										desc="Compact context when threshold reached"
+										label={t("settings.autoCompress")}
+										desc={t("settings.autoCompressDesc")}
 									>
 										<Switch
 											id="autocompress"
@@ -538,8 +515,8 @@ function SettingsDialogImpl({
 									</SettingRow>
 									<SettingRow
 										id="compressThreshold"
-										label="Compress at"
-										desc={`Auto-compress when context exceeds ${compressThreshold}%`}
+										label={t("settings.compressThreshold")}
+										desc={t("settings.compressThresholdDesc")}
 									>
 										<div className="flex items-center gap-2">
 											<input
@@ -571,15 +548,14 @@ function SettingsDialogImpl({
 						<ContentPanel className="gap-3">
 							<div className="flex flex-col gap-3">
 								<div className="flex flex-col gap-0.5">
-									<h3 className="text-[13px] font-medium leading-none">Chat System Prompt</h3>
+									<h3 className="text-[13px] font-medium leading-none">{t("settings.chatSystemPrompt")}</h3>
 									<span className="text-[11px] text-muted-foreground leading-tight">
-										Custom instructions for new chat sessions. Leave empty to use the pi SDK default coding
-										assistant prompt.
+										{t("settings.chatSystemPromptDesc")}
 									</span>
 								</div>
 								<Textarea
 									id="chatSystemPrompt"
-									placeholder="Leave empty to use the pi SDK default coding assistant prompt."
+									placeholder={t("settings.chatSystemPromptPlaceholder")}
 									value={chatSystemPrompt}
 									onChange={(e) => setChatSystemPrompt(e.target.value)}
 									onBlur={() => persistSettings({ chatSystemPrompt })}
@@ -594,15 +570,10 @@ function SettingsDialogImpl({
 						{loading ? (
 							<ContentPanel>
 								<div className="flex items-center justify-center py-12 text-[12px] text-muted-foreground">
-									Loading providers…
+									{t("common.loading")}
 								</div>
 							</ContentPanel>
 						) : (
-							// Nested tabs split credentials by source — stored keys
-							// (editable) vs env-detected (read-only + Test). Single
-							// ContentPanel hosts the sticky tab header + the
-							// scrollable list. The tab header sticks to the top
-							// of the panel so the list scrolls under it.
 							<ContentPanel className="overflow-hidden p-0">
 								<Tabs defaultValue="api-key" className="flex h-full min-h-0 flex-col">
 									<TabsList className="!flex !h-auto !justify-start sticky top-0 z-10 w-full self-stretch gap-0 rounded-none border-b border-hairline bg-popover/80 px-0 py-0 backdrop-blur">
@@ -611,7 +582,7 @@ function SettingsDialogImpl({
 											className="!h-auto !flex-none !justify-start gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground"
 										>
 											<Key className="size-3.5" />
-											API Key
+											{t("settings.apiKey")}
 											{storedCount > 0 && (
 												<Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px]">
 													{storedCount}
@@ -623,7 +594,7 @@ function SettingsDialogImpl({
 											className="!h-auto !flex-none !justify-start gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground"
 										>
 											<Terminal className="size-3.5" />
-											env
+											{t("settings.env")}
 											{envCount > 0 && (
 												<Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px]">
 													{envCount}
@@ -668,7 +639,8 @@ function SettingsDialogImpl({
 																	{ts?.verdict === "ok" && (
 																		<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
 																			<ShieldCheck className="size-2.5" />
-																			Verified
+																			{t("settings.envKeyVerified").replace(/\{.*?\}/g, "") ||
+																				"Verified"}
 																		</span>
 																	)}
 																	{ts?.verdict === "error" && (
@@ -725,7 +697,7 @@ function SettingsDialogImpl({
 																	}}
 																>
 																	<Key data-icon="inline-start" className="size-3" />
-																	{isEditing ? "Cancel" : "Edit"}
+																	{isEditing ? t("common.cancel") : t("settings.setKey")}
 																</Button>
 																{!isEditing && (
 																	<Button
@@ -756,7 +728,7 @@ function SettingsDialogImpl({
 																					setShowKey(false);
 																				}
 																			}}
-																			placeholder={loadingKey ? "Loading…" : "sk-..."}
+																			placeholder={loadingKey ? t("common.loading") : "sk-..."}
 																			autoFocus
 																			disabled={loadingKey}
 																			className="h-8 pr-9 font-mono text-[12px]"
@@ -788,12 +760,12 @@ function SettingsDialogImpl({
 																					data-icon="inline-start"
 																					className="size-3 animate-spin"
 																				/>
-																				Testing…
+																				{t("settings.testKey")}…
 																			</>
 																		) : (
 																			<>
 																				<ShieldCheck data-icon="inline-start" className="size-3" />
-																				Save
+																				{t("common.save")}
 																			</>
 																		)}
 																	</Button>
@@ -811,7 +783,7 @@ function SettingsDialogImpl({
 											})}
 											{storedProviders.length === 0 && (
 												<p className="py-8 text-center text-[12px] text-muted-foreground">
-													No API keys configured. Add one to get started.
+													{t("settings.setKey")} — No API keys configured.
 												</p>
 											)}
 										</div>
@@ -825,7 +797,7 @@ function SettingsDialogImpl({
 										<div className="flex flex-col gap-0.5 p-3">
 											{envProviders.map((p) => {
 												const ts = envTestStatus[p.id];
-												const src = authSourceLabel(p.authSource ?? "", p.envLabel);
+												const src = authSourceLabel(p.authSource ?? "", p.envLabel, t);
 												return (
 													<div
 														key={p.id}
@@ -834,11 +806,6 @@ function SettingsDialogImpl({
 														<div className="flex items-center justify-between gap-3 px-3 py-2">
 															<div className="min-w-0 flex-1">
 																<div className="flex items-center gap-2 text-[13px] font-medium">
-																	{/* Sky dot — not green. env credentials are
-																    auto-detected (shell var / runtime / models.json),
-																    not user-saved, so the status colour must
-																    differ from the stored-key green dot to avoid
-																    implying "I configured this". */}
 																	<span className="size-2 shrink-0 rounded-full bg-sky-500" />
 																	<ProviderIcon id={p.id} className="size-4 shrink-0" />
 																	{p.name}
@@ -887,7 +854,7 @@ function SettingsDialogImpl({
 																	onClick={() => handleTestEnv(p.id)}
 																>
 																	<ShieldCheck data-icon="inline-start" className="size-3" />
-																	Test
+																	{t("settings.testKey")}
 																</Button>
 															</div>
 														</div>
@@ -896,7 +863,7 @@ function SettingsDialogImpl({
 											})}
 											{envProviders.length === 0 && (
 												<p className="py-8 text-center text-[12px] text-muted-foreground">
-													No env credentials detected. Set provider env vars in your shell to use them.
+													No env credentials detected.
 												</p>
 											)}
 										</div>
@@ -937,17 +904,15 @@ function SettingsDialogImpl({
 
 				<DialogFooter className="shrink-0 sm:justify-between">
 					<Button variant="line" size="sm" className="h-7 text-[11px]" onClick={handleResetDefaults}>
-						Reset
+						{t("settings.resetDefaults")}
 					</Button>
 					<Button variant="line-filled" size="sm" className="h-7 text-[11px]" onClick={onClose}>
-						Done
+						{t("common.close")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
 
-			{/* Confirm-save-after-failed-test dialog. Stays separate from the
-        main settings dialog so the user can review the error in a
-        focused surface and explicitly opt in to saving anyway. */}
+			{/* Confirm-save-after-failed-test dialog */}
 			<Dialog open={forceSave !== null} onOpenChange={(o) => !o && setForceSave(null)}>
 				<DialogContent className="sm:max-w-md" showCloseButton={false}>
 					<DialogHeader>
@@ -969,7 +934,7 @@ function SettingsDialogImpl({
 					</p>
 					<DialogFooter className="gap-2">
 						<Button variant="line" size="sm" onClick={() => setForceSave(null)}>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button variant="line-filled" size="sm" onClick={handleForceSave}>
 							Save anyway

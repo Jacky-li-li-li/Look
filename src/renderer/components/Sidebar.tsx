@@ -10,6 +10,7 @@ import { cn } from "@shared/lib/utils";
 import type { AgentInfo } from "@shared/types";
 import { MessageSquare, Network, Plus, Settings, X } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const api = (window as any).look;
@@ -26,12 +27,6 @@ interface SidebarProps {
 	onSettingsClick: () => void;
 }
 
-// Chat tab = "通用工作台". Only agents that are intentionally
-// blank-slate belong here. coder/custom are user-defined roles
-// with their own workflow — they go to Orch so the user can manage
-// them as separate entities, not mixed in with chat assistants.
-// Edit this set when adding a new role that should appear in the
-// chat tab; otherwise leave it as `new Set(["chat"])`.
 const CHAT_TAB_ROLES: ReadonlySet<AgentInfo["role"]> = new Set(["chat"]);
 function isChatAgent(agent: AgentInfo): boolean {
 	return CHAT_TAB_ROLES.has(agent.role);
@@ -60,6 +55,7 @@ export default function Sidebar({
 	onQuickCreateChat,
 	onSettingsClick,
 }: SidebarProps) {
+	const { t } = useTranslation();
 	const [tab, setTab] = React.useState("chat");
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
@@ -67,8 +63,6 @@ export default function Sidebar({
 	const filteredAgents = agents.filter(tab === "chat" ? isChatAgent : isOrchAgent);
 	const chatCount = agents.filter(isChatAgent).length;
 	const orchCount = agents.filter(isOrchAgent).length;
-	// The active agent's model is the most-recently-used "configured" model;
-	// surface it as the default for new agents.
 	const activeAgent = agents.find((a) => a.id === activeAgentId);
 
 	const handleDoubleClick = useCallback((agent: AgentInfo) => {
@@ -78,22 +72,11 @@ export default function Sidebar({
 	}, []);
 
 	const cancelRename = useCallback(() => {
-		// Discard the in-progress edit. Used by Esc and by blur (clicking
-		// elsewhere in the sidebar). Only Enter explicitly commits — this
-		// matches Finder's rename UX and prevents the data-loss case
-		// where a half-typed buffer gets auto-saved when the user clicks
-		// away intending to cancel.
 		setEditingId(null);
 		setEditValue("");
 	}, []);
 
 	const commitRename = useCallback(() => {
-		// Read the current edit buffer straight from the agents list so
-		// we don't race with a state update that's still pending. Skip
-		// the API call when nothing has actually changed (the user
-		// pressed Enter without editing, or the trimmed name matches
-		// the agent's existing name) — saves a round-trip and avoids
-		// re-renders for no-op renames.
 		if (!editingId) return;
 		const original = agents.find((a) => a.id === editingId)?.name;
 		if (original === undefined) return;
@@ -119,7 +102,6 @@ export default function Sidebar({
 
 	return (
 		<aside className="flex h-full w-[260px] min-w-[260px] max-w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border bg-sidebar">
-			{/* Tabs — Underline style (matches Settings API Keys) */}
 			<Tabs value={tab} onValueChange={setTab} className="shrink-0">
 				<TabsList className="w-full h-auto rounded-none bg-transparent gap-0 px-3 border-b border-hairline">
 					<TabsTrigger
@@ -127,7 +109,7 @@ export default function Sidebar({
 						className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
 					>
 						<MessageSquare className="size-4" />
-						Chat
+						{t("sidebar.chat")}
 						{chatCount > 0 && (
 							<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 								{chatCount}
@@ -139,7 +121,7 @@ export default function Sidebar({
 						className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
 					>
 						<Network className="size-4" />
-						Orch
+						{t("sidebar.orch")}
 						{orchCount > 0 && (
 							<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 								{orchCount}
@@ -149,7 +131,6 @@ export default function Sidebar({
 				</TabsList>
 			</Tabs>
 
-			{/* Actions */}
 			<div className="flex shrink-0 gap-1.5 px-3 py-3">
 				<Button
 					variant="line"
@@ -158,11 +139,10 @@ export default function Sidebar({
 					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)}
 				>
 					<Plus className="size-4" />
-					New Agent
+					{t("sidebar.newAgent")}
 				</Button>
 			</div>
 
-			{/* Agent list */}
 			<ScrollArea className="flex-1 min-h-0 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
 				<div className="flex flex-col gap-1.5 px-3 pb-3">
 					{filteredAgents.map((agent) => {
@@ -243,15 +223,14 @@ export default function Sidebar({
 							<div className="mx-auto mb-2 flex justify-center">
 								<PixelAgentAvatar size="md" />
 							</div>
-							{tab === "chat" ? "No chat agents yet." : "No orchestration agents yet."}
+							{tab === "chat" ? t("sidebar.noChatAgents") : t("sidebar.noOrchAgents")}
 							<br />
-							Click + New Agent.
+							{t("sidebar.clickNewAgent")}
 						</div>
 					)}
 				</div>
 			</ScrollArea>
 
-			{/* Footer — Settings */}
 			<div className="flex shrink-0 items-center border-t border-hairline px-3 py-2.5">
 				<Button
 					variant="line"
@@ -260,7 +239,7 @@ export default function Sidebar({
 					onClick={onSettingsClick}
 				>
 					<Settings className="size-4" />
-					Settings
+					{t("sidebar.settings")}
 				</Button>
 			</div>
 		</aside>

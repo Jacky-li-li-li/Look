@@ -8,6 +8,7 @@ import { cn } from "@shared/lib/utils";
 import type { ToolCallRecord } from "@shared/types";
 import { Check, ChevronRight, Loader2, Wrench, X } from "lucide-react";
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 interface ToolCallCardProps {
 	toolCall: ToolCallRecord;
@@ -16,7 +17,10 @@ interface ToolCallCardProps {
 /** Threshold: tool result text longer than this shows a summary + "show more" button */
 const RESULT_SUMMARY_LIMIT = 500;
 
-function formatResultSummary(toolCall: ToolCallRecord): string | null {
+function formatResultSummary(
+	toolCall: ToolCallRecord,
+	t: (key: string, vars?: Record<string, string | number>) => string,
+): string | null {
 	const { toolName, result } = toolCall;
 	if (!result || result.length === 0) return null;
 
@@ -26,7 +30,7 @@ function formatResultSummary(toolCall: ToolCallRecord): string | null {
 		const lines = result.split("\n").length;
 		const bytes = result.length;
 		const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-		return `读取 ${path}（${lines} 行, ${kb}）`;
+		return t("tool.readSummary", { path, lines, size: kb });
 	}
 
 	// For other tools with large output: show first line + size
@@ -34,21 +38,21 @@ function formatResultSummary(toolCall: ToolCallRecord): string | null {
 		const firstLine = result.split("\n")[0]?.slice(0, 120) ?? "";
 		const lines = result.split("\n").length;
 		const suffix = firstLine.length < result.split("\n")[0]!.length ? "…" : "";
-		return `${firstLine}${suffix}（${lines} 行, ${result.length} 字符）`;
+		return t("tool.largeOutputSummary", { preview: `${firstLine}${suffix}`, lines, chars: result.length });
 	}
 
 	return null; // short enough to show inline
 }
 
 export default function ToolCallCard({ toolCall }: ToolCallCardProps) {
+	const { t } = useTranslation();
 	const [open, setOpen] = React.useState(false);
 
 	const argsJson = safeJson(toolCall.args);
 	const argsPreview = argsJson.slice(0, 80);
 	const hasBody = (toolCall.result && toolCall.result.length > 0) || argsPreview.length > 0;
 
-	// For read/bash tools with large output, show inline summary when collapsed
-	const resultSummary = !open ? formatResultSummary(toolCall) : null;
+	const resultSummary = !open ? formatResultSummary(toolCall, t) : null;
 	const resultTooLong = toolCall.result ? toolCall.result.length > RESULT_SUMMARY_LIMIT : false;
 
 	const statusVariant =
@@ -72,7 +76,7 @@ export default function ToolCallCard({ toolCall }: ToolCallCardProps) {
 							</span>
 						) : (
 							<span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground max-w-32">
-								{argsPreview || "no args"}
+								{argsPreview || t("tool.noArgs")}
 							</span>
 						)}
 						<Badge variant={statusVariant as any} className="h-5 shrink-0 rounded px-1.5 font-mono text-[9px]">
@@ -86,16 +90,16 @@ export default function ToolCallCard({ toolCall }: ToolCallCardProps) {
 						<div className="inset-drawer__content">
 							<div className="flex flex-col gap-3 text-[10px] leading-relaxed">
 								<section className="flex flex-col gap-1">
-									<span className="inset-drawer__label text-foreground">Arguments</span>
+									<span className="inset-drawer__label text-foreground">{t("tool.arguments")}</span>
 									<pre className="whitespace-pre-wrap break-all text-muted-foreground">{argsJson || "{}"}</pre>
 								</section>
 								{toolCall.result && (
 									<section className="flex flex-col gap-1">
 										<span className="inset-drawer__label text-foreground">
-											{toolCall.isError ? "Error" : "Result"}
+											{toolCall.isError ? t("tool.error") : t("tool.result")}
 											{resultTooLong && (
 												<span className="ml-1 text-[9px] text-muted-foreground">
-													（{toolCall.result.length} 字符）
+													({toolCall.result.length} 字符)
 												</span>
 											)}
 										</span>

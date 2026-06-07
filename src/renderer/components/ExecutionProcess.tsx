@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@shared/com
 import { cn } from "@shared/lib/utils";
 import { ChevronRight, ListTree } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface ExecutionProcessProps {
 	thinking?: string;
@@ -15,6 +16,7 @@ interface ExecutionProcessProps {
 }
 
 export default function ExecutionProcess({ thinking, toolCalls, hasOutput, children }: ExecutionProcessProps) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(true);
 	const autoCollapsed = React.useRef(false);
 
@@ -30,7 +32,7 @@ export default function ExecutionProcess({ thinking, toolCalls, hasOutput, child
 	if (stepCount === 0) return null;
 
 	const steps: string[] = [];
-	if (thinking) steps.push("💭 Reasoning");
+	if (thinking) steps.push(`💭 ${t("execution.reasoning")}`);
 	toolCalls?.forEach((tc) => {
 		const icon = tc.status === "success" ? "✅" : tc.status === "error" ? "❌" : tc.status === "running" ? "⟳" : "🔧";
 		steps.push(`${icon} ${tc.toolName}`);
@@ -45,11 +47,13 @@ export default function ExecutionProcess({ thinking, toolCalls, hasOutput, child
 							className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")}
 						/>
 						<ListTree className="size-3.5 shrink-0 text-amber-400" />
-						<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">执行过程</span>
+						<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">
+							{t("execution.executionProcess")}
+						</span>
 						<span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-							{stepCount} step{stepCount > 1 ? "s" : ""}
+							{t("execution.steps", { count: stepCount })}
 							&nbsp;·&nbsp;
-							{open ? "展开" : "已折叠"}
+							{open ? t("execution.expanded") : t("execution.collapsed")}
 						</span>
 					</button>
 				</CollapsibleTrigger>

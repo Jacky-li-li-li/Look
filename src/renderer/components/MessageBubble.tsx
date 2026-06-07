@@ -13,6 +13,7 @@ import type {
 } from "@shared/types";
 import { UserRound } from "lucide-react";
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import ExecutionProcess from "./ExecutionProcess";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import SkillAwareContent from "./SkillAwareContent";
@@ -72,6 +73,7 @@ function ContentBlocks({ blocks, isStreaming }: { blocks: PiContentBlock[]; isSt
 }
 
 const MessageBubble = memo(function MessageBubble({ message, agentRole, agentName }: MessageBubbleProps) {
+	const { t } = useTranslation();
 	const isUser = message.role === "user";
 
 	return (
@@ -93,7 +95,9 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 				<div
 					className={cn("mb-1 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}
 				>
-					<span className="font-medium uppercase tracking-wider">{isUser ? "You" : (agentName ?? "Agent")}</span>
+					<span className="font-medium uppercase tracking-wider">
+						{isUser ? t("chat.you") : (agentName ?? t("chat.agent"))}
+					</span>
 					{message.isStreaming && <span className="status-mark" data-status="thinking" />}
 				</div>
 

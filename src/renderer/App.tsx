@@ -14,7 +14,9 @@ import type {
 } from "@shared/types";
 import { FolderOpen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import i18n from "./i18n";
 import { showError } from "./lib/ipc";
 
 interface SettingsProviderInfo {
@@ -39,6 +41,7 @@ import Sidebar from "./components/Sidebar";
 const api = (window as any).look;
 
 export default function App() {
+	const { t } = useTranslation();
 	const [agents, setAgents] = useState<AgentInfo[]>([]);
 	const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
 	const [messages, setMessages] = useState<Record<string, PiMessage[]>>({});
@@ -87,7 +90,7 @@ export default function App() {
 
 	useEffect(() => {
 		if (!api) {
-			toast.error("Harness API not available. Run in Electron.");
+			toast.error(t("toast.noHarness"));
 			return;
 		}
 
@@ -115,15 +118,10 @@ export default function App() {
 					setAgents((prev) => prev.map((a) => (a.id === event.agent.id ? event.agent : a)));
 					break;
 				case "agent:model-fallback": {
-					// The user asked for an explicit, non-ambiguous signal when
-					// the primary model was unavailable and a fallback kicked in.
-					// Show as a warning toast (sonner) — distinct from error
-					// toasts so the user can tell "fell back successfully"
-					// from "switch failed".
 					const triedCount = event.triedChain?.length ?? 0;
 					const description =
-						triedCount > 1 ? `Tried ${triedCount} models in chain. Now using ${event.resolved}.` : undefined;
-					toast.warning(`Model unavailable: ${event.primary}. Switched to ${event.resolved}.`, {
+						triedCount > 1 ? t("toast.triedModels", { count: triedCount, resolved: event.resolved }) : undefined;
+					toast.warning(t("toast.modelUnavailable", { primary: event.primary, resolved: event.resolved }), {
 						description,
 						duration: 5000,
 					});
@@ -159,7 +157,7 @@ export default function App() {
 					setAgents((prev) =>
 						prev.map((a) => (a.id === event.agentId ? { ...a, permissionMode: event.mode } : a)),
 					);
-					toast(`Permission mode: ${event.mode}`, { duration: 1500 });
+					toast.success(t("toast.permissionMode", { mode: event.mode }), { duration: 1500 });
 					break;
 				}
 				case "agent:queue_update": {
@@ -178,9 +176,14 @@ export default function App() {
 					break;
 				}
 				case "error": {
-					toast.error(event.agentId ? `[${event.agentId.slice(0, 6)}] ${event.message}` : event.message, {
-						duration: 5000,
-					});
+					toast.error(
+						event.agentId
+							? t("toast.error", { id: event.agentId.slice(0, 6), message: event.message })
+							: event.message,
+						{
+							duration: 5000,
+						},
+					);
 					break;
 				}
 
@@ -396,8 +399,8 @@ export default function App() {
 		return unsub;
 		// P2-1: empty deps — we want the IPC subscription to live for
 		// the entire component lifetime. Per-state reads go through
-		// refs (activeAgentIdRef) to avoid stale closures.
-	}, []);
+		// refs (activeAgentIdRef) to avoid stale closures. t is stable from react-i18next.
+	}, [t]);
 
 	useEffect(() => {
 		if (!activeAgentId && agents.length > 0) {
@@ -418,6 +421,18 @@ export default function App() {
 				if (r?.success) setProviderSettings(r.providers);
 			})
 			.catch(showError);
+	}, []);
+
+	// Initialize i18n language from persisted settings on mount.
+	useEffect(() => {
+		if (!api) return;
+		api.getGeneralSettings()
+			.then((r: any) => {
+				if (r?.success && r.settings?.language) {
+					i18n.changeLanguage(r.settings.language);
+				}
+			})
+			.catch(() => {});
 	}, []);
 
 	// Load the persisted "user preferred model" so the bottom-bar
@@ -473,15 +488,15 @@ export default function App() {
 	useEffect(() => {
 		if (!pendingAsk) return;
 		const head = pendingAsk;
-		const t = setTimeout(() => {
+		const timer = setTimeout(() => {
 			setPendingAsks((prev) => (prev.length > 0 && prev[0].requestId === head.requestId ? prev.slice(1) : prev));
 			api.respondPermission({ action: "deny", requestId: head.requestId, reason: "Timed out (30s)" }).catch(
 				() => {},
 			);
-			toast(`Timed out — denied: ${head.toolName}`, { description: head.reason, duration: 3000 });
+			toast(t("permission.timedOut", { toolName: head.toolName }), { description: head.reason, duration: 3000 });
 		}, 30_000);
-		return () => clearTimeout(t);
-	}, [pendingAsk]);
+		return () => clearTimeout(timer);
+	}, [pendingAsk, t]);
 
 	const handleSendMessage = useCallback(
 		(text: string) => {

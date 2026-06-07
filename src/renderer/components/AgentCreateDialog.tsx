@@ -26,6 +26,7 @@ import {
 import type { AvailableModel, ThinkingLevel } from "@shared/types";
 import { AlertCircle, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const ROLE_OPTIONS = [
@@ -62,13 +63,13 @@ const ROLE_THINKING_DEFAULTS: Record<string, ThinkingLevel> = {
 const api = (window as any).look;
 
 interface AgentCreateDialogProps {
-	/** Pre-fill the model field (e.g. from the currently active agent). */
 	defaultModel?: string;
 	onCreate: (name: string, role: string, model?: string, thinkingLevel?: string) => void;
 	onClose: () => void;
 }
 
 export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: AgentCreateDialogProps) {
+	const { t } = useTranslation();
 	const [name, setName] = useState("");
 	const [role, setRole] = useState("custom");
 	const [model, setModel] = useState(defaultModel ?? "");
@@ -109,15 +110,15 @@ export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: A
 					<div className="flex items-center gap-3">
 						<PixelAgentAvatar role={role} size="md" active />
 						<div>
-							<DialogTitle>Create Agent</DialogTitle>
-							<DialogDescription>Configure role, thinking depth, and model.</DialogDescription>
+							<DialogTitle>{t("agent.createTitle")}</DialogTitle>
+							<DialogDescription>{t("agent.createDesc")}</DialogDescription>
 						</div>
 					</div>
 				</DialogHeader>
 
 				<div className="flex flex-col gap-4">
 					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="name">Name</Label>
+						<Label htmlFor="name">{t("agent.namePlaceholder")}</Label>
 						<Input
 							id="name"
 							value={name}
@@ -129,7 +130,7 @@ export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: A
 					</div>
 
 					<div className="flex flex-col gap-1.5">
-						<Label>Role</Label>
+						<Label>{t("agent.role")}</Label>
 						<Select value={role} onValueChange={setRole}>
 							<SelectTrigger className="w-full bg-background/50">
 								<SelectValue />
@@ -150,7 +151,7 @@ export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: A
 					</div>
 
 					<div className="flex flex-col gap-1.5">
-						<Label>Thinking</Label>
+						<Label>{t("agent.thinking")}</Label>
 						<Select value={thinkingLevel} onValueChange={(v) => setThinkingLevel(v as ThinkingLevel)}>
 							<SelectTrigger className="w-full bg-background/50">
 								<SelectValue />
@@ -169,10 +170,10 @@ export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: A
 
 					<div className="flex flex-col gap-1.5">
 						<div className="flex items-center justify-between gap-2">
-							<Label>Model</Label>
+							<Label>{t("agent.model")}</Label>
 							{loading && (
 								<Badge variant="outline" className="h-5 rounded font-mono text-[10px]">
-									Loading
+									{t("common.loading")}
 								</Badge>
 							)}
 						</div>
@@ -194,7 +195,7 @@ export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: A
 														<span className="truncate">{m.name}</span>
 														{m.reasoning && (
 															<span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-																think
+																{t("agent.modelThink")}
 															</span>
 														)}
 													</span>
@@ -210,15 +211,14 @@ export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: A
 					{models.length === 0 && !loading && (
 						<p className="flex items-start gap-2 rounded-md border border-dashed border-hairline bg-background/40 p-3 text-[11px] text-muted-foreground">
 							<AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-							No API keys configured. Set one in Settings or use{" "}
-							<code className="rounded bg-muted px-1 font-mono text-[10px]">export ANTHROPIC_API_KEY=...</code>
+							{t("agent.noModels")}
 						</p>
 					)}
 				</div>
 
 				<DialogFooter className="glass-panel -mx-4 -mb-4 border-t border-hairline">
 					<Button variant="line" onClick={onClose}>
-						Cancel
+						{t("common.cancel")}
 					</Button>
 					<Button
 						variant="line-filled"
@@ -226,7 +226,7 @@ export default function AgentCreateDialog({ defaultModel, onCreate, onClose }: A
 						disabled={!name.trim()}
 					>
 						<Plus data-icon="inline-start" />
-						Create
+						{t("agent.create")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

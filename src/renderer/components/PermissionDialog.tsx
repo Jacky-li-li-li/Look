@@ -1,15 +1,5 @@
 // ============================================================
 // PermissionDialog — Question panel for the permission gate.
-//
-// Shown when the main process's extension hook wants user input
-// for a tool call. Three actions:
-//   - Allow:          run with current args
-//   - Allow + edit:   run with patched args (path-only editor for v1)
-//   - Deny:           block, surface the reason to the agent
-//
-// If a second `permission:ask` arrives while the user is deciding
-// the first, the renderer queues it and shows the next one as soon
-// as the current one is decided (or times out, default deny).
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
@@ -25,6 +15,7 @@ import {
 import { Input } from "@shared/components/ui/input";
 import { ChevronRight, Edit3, FileText, Hash, ShieldCheck, ShieldX, Terminal } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface PermissionRequest {
 	requestId: string;
@@ -36,7 +27,6 @@ export interface PermissionRequest {
 
 interface PermissionDialogProps {
 	request: PermissionRequest | null;
-	/** Total queue size, including the one being shown (>1 → "N more"). */
 	queueDepth?: number;
 	onAllow: () => void;
 	onDeny: () => void;
@@ -62,10 +52,10 @@ function defaultArgSummary(_toolName: string, args: Record<string, unknown>): st
 }
 
 export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onEdit }: PermissionDialogProps) {
+	const { t } = useTranslation();
 	const [editMode, setEditMode] = useState(false);
 	const [pathValue, setPathValue] = useState("");
 
-	// Reset edit state when a new request arrives.
 	useEffect(() => {
 		if (request) {
 			setEditMode(false);
@@ -91,14 +81,14 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 								<span className="flex size-7 items-center justify-center rounded-md border border-hairline bg-muted/40 text-foreground">
 									{toolIcon(request.toolName)}
 								</span>
-								<DialogTitle>Permission requested</DialogTitle>
+								<DialogTitle>{t("permission.title")}</DialogTitle>
 								{queueDepth > 1 && (
 									<Badge variant="outline" className="ml-auto font-mono text-[10px]">
-										+{queueDepth - 1} more
+										{t("permission.more", { count: queueDepth - 1 })}
 									</Badge>
 								)}
 							</div>
-							<DialogDescription>Agent wants to run a tool that the permission gate flagged.</DialogDescription>
+							<DialogDescription>{t("permission.description")}</DialogDescription>
 						</DialogHeader>
 
 						<div className="flex flex-col gap-3 -mt-1">
@@ -112,7 +102,7 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 
 							<div className="rounded-md border border-hairline bg-muted/30 px-3 py-2">
 								<div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-									Reason
+									{t("permission.reason")}
 								</div>
 								<div className="mt-0.5 text-[12px] text-foreground">{request.reason}</div>
 							</div>
@@ -120,7 +110,7 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 							{editMode && canEdit ? (
 								<div className="rounded-md border border-hairline bg-muted/30 px-3 py-2">
 									<div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-										Edit path
+										{t("permission.editPath")}
 									</div>
 									<Input
 										value={pathValue}
@@ -129,13 +119,13 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 										autoFocus
 									/>
 									<div className="mt-1 text-[10px] text-muted-foreground">
-										Other arguments will be preserved.
+										{t("permission.otherArgsPreserved")}
 									</div>
 								</div>
 							) : (
 								<div className="rounded-md border border-hairline bg-muted/30 px-3 py-2">
 									<div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-										Arguments
+										{t("permission.arguments")}
 									</div>
 									<pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-foreground/80">
 										{defaultArgSummary(request.toolName, request.args)}
@@ -146,11 +136,11 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 
 						<DialogFooter className="-mx-4 -mb-4 mt-2">
 							<Button variant="outline" size="sm" onClick={onDeny} className="gap-1.5">
-								<ShieldX className="size-3.5" /> Deny
+								<ShieldX className="size-3.5" /> {t("permission.deny")}
 							</Button>
 							{canEdit && !editMode && (
 								<Button variant="outline" size="sm" onClick={() => setEditMode(true)} className="gap-1.5">
-									<Edit3 className="size-3.5" /> Allow with edits
+									<Edit3 className="size-3.5" /> {t("permission.allowWithEdits")}
 									<ChevronRight className="size-3" />
 								</Button>
 							)}
@@ -161,11 +151,11 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 									onClick={() => onEdit({ path: pathValue })}
 									className="gap-1.5"
 								>
-									<ShieldCheck className="size-3.5" /> Allow edited
+									<ShieldCheck className="size-3.5" /> {t("permission.allowEdited")}
 								</Button>
 							) : (
 								<Button variant="line" size="sm" onClick={onAllow} className="gap-1.5">
-									<ShieldCheck className="size-3.5" /> Allow
+									<ShieldCheck className="size-3.5" /> {t("permission.allow")}
 								</Button>
 							)}
 						</DialogFooter>

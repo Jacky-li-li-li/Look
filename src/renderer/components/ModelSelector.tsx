@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/
 import type { AvailableModel } from "@shared/types";
 import { ArrowRight, Check, ChevronDown, Cpu, Key, Terminal } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "./ProviderIcon";
 
@@ -31,6 +32,7 @@ interface ProviderLite {
 }
 
 export default function ModelSelector({ agentId, currentModel, onModelChanged, onRequestApiKeys }: ModelSelectorProps) {
+	const { t } = useTranslation();
 	const [models, setModels] = useState<AvailableModel[]>([]);
 	const [providerSource, setProviderSource] = useState<Record<string, ProviderSource>>({});
 	const [switching, setSwitching] = useState(false);
@@ -93,22 +95,22 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 					onChange?.(modelKey);
 					setOpen(false);
 				} else {
-					toast.error(result?.error ?? "Failed to switch model");
+					toast.error(result?.error ?? t("toast.modelSwitchFailed"));
 				}
 			} catch (err: any) {
-				toast.error(err?.message ?? "Failed to switch model");
+				toast.error(err?.message ?? t("toast.modelSwitchFailed"));
 			} finally {
 				setSwitching(false);
 			}
 		},
-		[agentId],
+		[agentId, t],
 	);
 
 	const apiModels = models.filter((m) => providerSource[m.provider] === "api");
 	const envModels = models.filter((m) => providerSource[m.provider] === "env" && verifiedEnv.has(m.provider));
 
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
-	const label = switching ? "…" : (currentModelObj?.name ?? currentModel?.split("/").pop() ?? "Model");
+	const label = switching ? "…" : (currentModelObj?.name ?? currentModel?.split("/").pop() ?? t("agent.model"));
 
 	// Default the active tab to whichever side has content. If the
 	// user only configured env-var credentials, the "API Keys" tab
@@ -137,7 +139,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 			</DialogTrigger>
 			<DialogContent className="max-w-xl p-0" showCloseButton>
 				<DialogHeader className="px-4 pt-3 pb-0">
-					<DialogTitle className="text-[13px] font-semibold">Switch model</DialogTitle>
+					<DialogTitle className="text-[13px] font-semibold">{t("agent.switchModel")}</DialogTitle>
 				</DialogHeader>
 				<div className="min-h-0">
 					{models.length === 0 ? (
@@ -148,10 +150,8 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 								className="group/empty flex w-full cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-[12px] outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
 							>
 								<span className="flex flex-col gap-0.5">
-									<span className="font-medium text-foreground">配置第一个模型吧</span>
-									<span className="text-[10px] text-muted-foreground">
-										在 API Keys 里添加一个 provider 的 key 即可使用
-									</span>
+									<span className="font-medium text-foreground">{t("toast.configFirstModel")}</span>
+									<span className="text-[10px] text-muted-foreground">{t("toast.configFirstModelDesc")}</span>
 								</span>
 								<ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover/empty:translate-x-0.5 group-hover/empty:text-foreground" />
 							</button>
@@ -169,7 +169,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 									className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
 								>
 									<Key className="size-4" />
-									API Keys
+									{t("agent.apiKeys")}
 									{apiModels.length > 0 && (
 										<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 											{apiModels.length}
@@ -181,7 +181,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 									className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
 								>
 									<Terminal className="size-4" />
-									Environment
+									{t("agent.environment")}
 									{envModels.length > 0 && (
 										<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
 											{envModels.length}
@@ -190,10 +190,10 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 								</TabsTrigger>
 							</TabsList>
 							<TabsContent value="api" className="h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
-								<ModelList models={apiModels} currentModel={currentModel} onSwitch={handleSwitch} />
+								<ModelList models={apiModels} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
 							</TabsContent>
 							<TabsContent value="env" className="h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
-								<ModelList models={envModels} currentModel={currentModel} onSwitch={handleSwitch} />
+								<ModelList models={envModels} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
 							</TabsContent>
 						</Tabs>
 					)}
@@ -207,13 +207,15 @@ function ModelList({
 	models,
 	currentModel,
 	onSwitch,
+	t,
 }: {
 	models: AvailableModel[];
 	currentModel: string;
 	onSwitch: (k: string) => void;
+	t: (key: string) => string;
 }) {
 	if (models.length === 0) {
-		return <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">No models in this category.</p>;
+		return <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">{t("agent.noModelsCategory")}</p>;
 	}
 	const grouped: Record<string, AvailableModel[]> = {};
 	for (const m of models) {
@@ -245,7 +247,8 @@ function ModelList({
 										{isActive && <Check className="ml-1 inline size-3" />}
 									</span>
 									<span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-										{m.reasoning ? "think" : "base"} / {(m.contextWindow / 1000).toFixed(0)}K
+										{m.reasoning ? t("agent.modelThink") : t("agent.modelBase")} /{" "}
+										{(m.contextWindow / 1000).toFixed(0)}K
 									</span>
 								</button>
 							);

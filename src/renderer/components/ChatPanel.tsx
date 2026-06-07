@@ -18,6 +18,7 @@ import type {
 import { MessageSquare, Send, Square } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ContextRing from "./ContextRing";
 import MessageBubble from "./MessageBubble";
 import ModelSelector from "./ModelSelector";
@@ -77,6 +78,7 @@ export default function ChatPanel({
 	onRequestApiKeys,
 	onAbort,
 }: ChatPanelProps) {
+	const { t } = useTranslation();
 	const [input, setInput] = useState("");
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -368,7 +370,7 @@ export default function ChatPanel({
 								<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
 							</div>
 							<div className="flex flex-col gap-1">
-								<h3 className="text-[13px] font-semibold text-foreground">No messages yet</h3>
+								<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>
 								<p className="text-[11px] text-muted-foreground">Start with a direct task for this agent.</p>
 							</div>
 						</div>
@@ -395,7 +397,7 @@ export default function ChatPanel({
 				<div className="w-full px-5 py-2">
 					<div className="mb-1.5 flex items-center gap-2">
 						<span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-							Queued
+							{t("chat.queued")}
 						</span>
 						<span className="text-[10px] tabular-nums text-muted-foreground/40">
 							{queue.steering.length + queue.followUp.length}
@@ -483,11 +485,7 @@ export default function ChatPanel({
 							value={input}
 							onChange={(e) => setInput(e.target.value)}
 							onKeyDown={handleKeyDown}
-							placeholder={
-								isBusy
-									? "Agent is working… (Enter to queue message)"
-									: `Message ${agentName ?? "agent"}… (type / for skills)`
-							}
+							placeholder={isBusy ? `${t("chat.send")}… (Enter to queue)` : `${t("chat.placeholder")}`}
 							rows={2}
 							style={{ gridArea: "1 / 1" }}
 							className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] leading-relaxed shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
@@ -510,8 +508,8 @@ export default function ChatPanel({
 									variant="line"
 									size="icon-sm"
 									onClick={handleAbort}
-									aria-label="Stop agent"
-									title="Stop"
+									aria-label={t("chat.stop")}
+									title={t("chat.stop")}
 									className="text-muted-foreground hover:text-destructive"
 								>
 									<Square data-icon="inline-start" className="size-3 fill-current" />
@@ -521,7 +519,7 @@ export default function ChatPanel({
 									size="icon-sm"
 									onClick={handleSend}
 									disabled={!input.trim()}
-									aria-label="Queue message"
+									aria-label={t("chat.send")}
 								>
 									<Send data-icon="inline-start" className="size-3.5" />
 								</Button>
@@ -532,7 +530,7 @@ export default function ChatPanel({
 								size="icon-sm"
 								onClick={handleSend}
 								disabled={!input.trim()}
-								aria-label="Send message"
+								aria-label={t("chat.send")}
 							>
 								<Send data-icon="inline-start" className="size-3.5" />
 							</Button>
