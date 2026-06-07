@@ -49,6 +49,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { showError } from "../lib/ipc";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
+import { ProviderIcon } from "./ProviderIcon";
 
 const api = (window as any).look;
 
@@ -658,6 +659,7 @@ function SettingsDialogImpl({
 																			p.hasKey ? "bg-emerald-500" : "bg-muted-foreground/30",
 																		)}
 																	/>
+																	<ProviderIcon id={p.id} className="size-4 shrink-0" />
 																	{p.name}
 																	<Badge variant="outline" className="h-4.5 gap-1 px-1.5 text-[10px]">
 																		<Check className="size-2.5" />
@@ -833,11 +835,12 @@ function SettingsDialogImpl({
 															<div className="min-w-0 flex-1">
 																<div className="flex items-center gap-2 text-[13px] font-medium">
 																	{/* Sky dot — not green. env credentials are
-																	    auto-detected (shell var / runtime / models.json),
-																	    not user-saved, so the status colour must
-																	    differ from the stored-key green dot to avoid
-																	    implying "I configured this". */}
+																    auto-detected (shell var / runtime / models.json),
+																    not user-saved, so the status colour must
+																    differ from the stored-key green dot to avoid
+																    implying "I configured this". */}
 																	<span className="size-2 shrink-0 rounded-full bg-sky-500" />
+																	<ProviderIcon id={p.id} className="size-4 shrink-0" />
 																	{p.name}
 																	<Badge
 																		variant="secondary"
