@@ -30,6 +30,7 @@ import {
 	getAuthPath,
 	getLookDir,
 	getModelsPath,
+	getProjectsIndexPath,
 	getSessionsDir,
 	getUiSettingsPath,
 } from "./shared/look-storage.js";
@@ -46,6 +47,7 @@ import type {
 	PiTextBlock,
 	PiThinkingBlock,
 	PiToolCallBlock,
+	ProjectInfo,
 	TaskNode,
 	ThinkingLevel,
 	UsageSnapshot,
@@ -106,6 +108,12 @@ interface ManagedAgent {
 	permissionMode: PermissionMode;
 }
 
+interface ManagedProject {
+	info: ProjectInfo;
+	settingsManager: SettingsManager;
+	userSettings: UserSettingsStore;
+}
+
 export type EventCallback = (event: MainToRendererEvent) => void;
 
 /**
@@ -136,20 +144,20 @@ const EMPTY_USAGE: UsageSnapshot = {
 
 export class AgentManager {
 	private agents = new Map<string, ManagedAgent>();
+	private projects = new Map<string, ManagedProject>();
+	private activeProjectId: string | null = null;
 	private eventCallbacks: EventCallback[] = [];
 	private permissionAsk = new PermissionAskService((event) => this.emit(event));
 	private authStorage: AuthStorage;
 	private modelRegistry: ModelRegistry;
-	private userSettings: UserSettingsStore;
-	private cwd: string;
 
 	private agentUsage = new Map<string, UsageSnapshot>();
 	private lastContextTokens = new Map<string, number>();
 	private lastCompactPct = new Map<string, number>();
 	private agentsIndexPath: string;
+	private projectsIndexPath: string;
 
-	constructor(cwd?: string) {
-		this.cwd = cwd ?? process.cwd();
+	constructor() {
 		ensureLookDir();
 
 		// One-shot legacy settings migration: rewrites the old
@@ -166,14 +174,263 @@ export class AgentManager {
 
 		this.authStorage = AuthStorage.create(getAuthPath());
 		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
-		// UserSettingsStore's SDK fields (thinkingLevel / preferredModel)
-		// ride on the SDK's `~/.look/settings.json`; its UI fields
-		// (language / autoCollapse / autoCompress / compressThreshold)
-		// live in a sibling `~/.look/ui-settings.json` since the SDK
-		// schema doesn't carry them.
-		const settingsManager = SettingsManager.create(this.cwd, getLookDir());
-		this.userSettings = new UserSettingsStore(settingsManager, getUiSettingsPath());
 		this.agentsIndexPath = getAgentsIndexPath();
+		this.projectsIndexPath = getProjectsIndexPath();
+	}
+
+	// ============================================================
+	// Project management
+	// ============================================================
+
+	/** Load projects from ~/.look/projects.json. Validates cwd existence. */
+	async loadProjects(): Promise<ProjectInfo[]> {
+		try {
+			if (fs.existsSync(this.projectsIndexPath)) {
+				const raw = JSON.parse(fs.readFileSync(this.projectsIndexPath, "utf-8"));
+				const items: ProjectInfo[] = raw.projects ?? [];
+				for (const p of items) {
+					p.valid = fs.existsSync(p.cwd);
+					if (p.valid) {
+						const sm = SettingsManager.create(p.cwd, getLookDir());
+						const us = new UserSettingsStore(sm, getUiSettingsPath());
+						this.projects.set(p.id, { info: p, settingsManager: sm, userSettings: us });
+					} else {
+						// Still add invalid projects so they appear greyed out in UI
+						const sm = SettingsManager.create(process.cwd(), getLookDir());
+						const us = new UserSettingsStore(sm, getUiSettingsPath());
+						this.projects.set(p.id, { info: p, settingsManager: sm, userSettings: us });
+					}
+				}
+				return items;
+			}
+		} catch (err) {
+			console.error("[Look] Failed to load projects:", err);
+		}
+		return [];
+	}
+
+	private saveProjects(): void {
+		try {
+			const data = {
+				projects: Array.from(this.projects.values()).map((mp) => ({
+					id: mp.info.id,
+					name: mp.info.name,
+					cwd: mp.info.cwd,
+					createdAt: mp.info.createdAt,
+				})),
+			};
+			fs.writeFileSync(this.projectsIndexPath, JSON.stringify(data, null, 2));
+		} catch (err) {
+			console.error("[Look] Failed to persist projects:", err);
+		}
+	}
+
+	/** Create a new project. Checks for duplicate cwd, auto-deduplicates names. */
+	createProject(cwd: string, name?: string): { project: ProjectInfo; isDuplicate: boolean } {
+		// Guard: duplicate cwd
+		for (const [, mp] of this.projects) {
+			if (mp.info.cwd === cwd) {
+				// Switch to existing project
+				this.setActiveProject(mp.info.id);
+				return { project: mp.info, isDuplicate: true };
+			}
+		}
+
+		let finalName = name ?? path.basename(cwd);
+		// Auto-deduplicate names
+		const existingNames = new Set(Array.from(this.projects.values()).map((mp) => mp.info.name));
+		if (existingNames.has(finalName)) {
+			let n = 2;
+			while (existingNames.has(`${finalName} (${n})`)) {
+				n++;
+			}
+			finalName = `${finalName} (${n})`;
+		}
+
+		const id = uuidv4().slice(0, 8);
+		const info: ProjectInfo = {
+			id,
+			name: finalName,
+			cwd,
+			createdAt: Date.now(),
+			valid: fs.existsSync(cwd),
+		};
+
+		// For new projects, inherit global settings as baseline
+		// Use a global SettingsManager to copy defaults, then create per-project one
+		const sm = SettingsManager.create(cwd, getLookDir());
+		const us = new UserSettingsStore(sm, getUiSettingsPath());
+		// Copy global defaults into project settings
+		const globalDefaults = new UserSettingsStore(
+			SettingsManager.create(process.cwd(), getLookDir()),
+			getUiSettingsPath(),
+		);
+		const globalAll = globalDefaults.getAll();
+		us.update({
+			defaultThinkingLevel: globalAll.defaultThinkingLevel,
+			preferredModel: globalAll.preferredModel,
+			autoCollapse: globalAll.autoCollapse,
+			autoCompress: globalAll.autoCompress,
+			compressThreshold: globalAll.compressThreshold,
+			chatSystemPrompt: globalAll.chatSystemPrompt,
+		});
+
+		this.projects.set(id, { info, settingsManager: sm, userSettings: us });
+		this.saveProjects();
+		this.setActiveProject(id);
+		return { project: info, isDuplicate: false };
+	}
+
+	/** Switch the active project. Emits filtered agent list + history to renderer. */
+	setActiveProject(projectId: string): void {
+		const mp = this.projects.get(projectId);
+		if (!mp) {
+			console.warn(`[Look] setActiveProject: project ${projectId} not found`);
+			return;
+		}
+		this.activeProjectId = projectId;
+		this.emitProjectList();
+		this.emit({ type: "project:active-changed", projectId });
+		this.emitAgentList();
+		// Push history for agents in this project
+		for (const [id, m] of this.agents) {
+			if (m.info.projectId === projectId) {
+				this.emit({ type: "agent:history", agentId: id, messages: m.messages });
+			}
+		}
+	}
+
+	/** Delete a project and all its agents. Requires UI confirmation via IPC. */
+	async deleteProject(projectId: string): Promise<void> {
+		const mp = this.projects.get(projectId);
+		if (!mp) return;
+
+		// Count agents for confirmation dialog
+		const projectAgents = Array.from(this.agents.entries()).filter(
+			([, m]) => m.info.projectId === projectId,
+		);
+
+		// Send confirmation request to renderer
+		this.emit({
+			type: "project:confirm-delete",
+			projectId,
+			projectName: mp.info.name,
+			agentCount: projectAgents.length,
+		});
+		// The actual deletion happens when renderer responds via project:confirm-delete-response
+	}
+
+	/** Execute project deletion after user confirmation. */
+	async executeDeleteProject(projectId: string): Promise<void> {
+		// Destroy all agents in this project
+		const agentIds = Array.from(this.agents.entries())
+			.filter(([, m]) => m.info.projectId === projectId)
+			.map(([id]) => id);
+		for (const agentId of agentIds) {
+			await this.destroyAgent(agentId);
+		}
+
+		this.projects.delete(projectId);
+		if (this.activeProjectId === projectId) {
+			this.activeProjectId = null;
+			// Try to switch to first valid project
+			const firstValid = Array.from(this.projects.values()).find((mp) => mp.info.valid);
+			if (firstValid) {
+				this.activeProjectId = firstValid.info.id;
+			}
+		}
+		this.saveProjects();
+		this.emitProjectList();
+		if (this.activeProjectId) {
+			this.emitAgentList();
+		}
+	}
+
+	/** Migrate legacy agents (no projectId) to projects. One-shot backward compat. */
+	private migrateLegacyAgents(): void {
+		const orphans = Array.from(this.agents.entries()).filter(([, m]) => !m.info.projectId);
+		if (orphans.length === 0) return;
+
+		console.log(`[Look] Migrating ${orphans.length} legacy agents to projects...`);
+
+		// Group by cwd (read from session header)
+		const cwdGroups = new Map<string, Array<[string, ManagedAgent]>>();
+		for (const [id, m] of orphans) {
+			const sessionFile = m.session.sessionFile;
+			let agentCwd = process.cwd(); // fallback
+			if (sessionFile && fs.existsSync(sessionFile)) {
+				try {
+					const content = fs.readFileSync(sessionFile, "utf-8");
+					const lines = content.trim().split("\n");
+					if (lines.length > 0) {
+						const header = JSON.parse(lines[0]);
+						if (header.cwd) agentCwd = header.cwd;
+					}
+				} catch {
+					// Keep fallback cwd
+				}
+			}
+			const group = cwdGroups.get(agentCwd) ?? [];
+			group.push([id, m]);
+			cwdGroups.set(agentCwd, group);
+		}
+
+		// Create project for each cwd group
+		for (const [cwd, agentPairs] of cwdGroups) {
+			const folderName = path.basename(cwd);
+			const result = this.createProject(cwd, `Imported: ${folderName}`);
+			if (result.isDuplicate) {
+				// Project already exists from a previous migration step
+			}
+			const projectId = result.project.id;
+			for (const [id, m] of agentPairs) {
+				m.info.projectId = projectId;
+			}
+		}
+
+		this.saveIndex();
+		this.saveProjects();
+	}
+
+	// ---- Project accessors ----
+
+	getActiveProject(): ProjectInfo | null {
+		if (!this.activeProjectId) return null;
+		return this.projects.get(this.activeProjectId)?.info ?? null;
+	}
+
+	getActiveProjectCwd(): string {
+		const project = this.getActiveProject();
+		if (!project) throw new Error("No active project. Select a project folder first.");
+		if (!project.valid) throw new Error(`Project path does not exist: ${project.cwd}`);
+		return project.cwd;
+	}
+
+	getAgentCwd(agentId: string): string {
+		const m = this.agents.get(agentId);
+		if (!m?.info.projectId) return process.cwd(); // fallback for edge cases
+		const mp = this.projects.get(m.info.projectId);
+		return mp?.info.cwd ?? process.cwd();
+	}
+
+	getProjectSettings(projectId?: string): UserSettingsStore | null {
+		const pid = projectId ?? this.activeProjectId;
+		if (!pid) return null;
+		return this.projects.get(pid)?.userSettings ?? null;
+	}
+
+	listProjects(): ProjectInfo[] {
+		const all = Array.from(this.projects.values()).map((mp) => mp.info);
+		// Sort: valid first, then by name
+		all.sort((a, b) => {
+			if (a.valid !== b.valid) return a.valid ? -1 : 1;
+			return a.name.localeCompare(b.name);
+		});
+		return all;
+	}
+
+	private emitProjectList(): void {
+		this.emit({ type: "project:list", projects: this.listProjects(), activeProjectId: this.activeProjectId });
 	}
 
 	/** Must be called after construction (async). Restores agents from ~/.look/. */
@@ -200,6 +457,7 @@ export class AgentManager {
 					permissionMode: m.permissionMode,
 					usage: m.info.usage,
 					createdAt: m.info.createdAt,
+					projectId: m.info.projectId,
 				})),
 			};
 			fs.writeFileSync(this.agentsIndexPath, JSON.stringify(data, null, 2));
@@ -355,6 +613,7 @@ export class AgentManager {
 					usage: cumUsage,
 					fallbackModels: [],
 					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
+					projectId: entry.projectId,
 				};
 
 				// Rebuild live pi session from the opened session file
@@ -365,7 +624,7 @@ export class AgentManager {
 				const toolNames: string[] = roleToolNames ?? [...BUILTIN_TOOL_NAMES];
 				let systemPrompt = getRoleSystemPrompt(info.role);
 				if (info.role === "chat") {
-					const custom = this.userSettings.getAll().chatSystemPrompt;
+					const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
 					if (custom) systemPrompt = custom;
 				}
 				const customTools = this.buildCustomTools(toolNames, id);
@@ -379,7 +638,7 @@ export class AgentManager {
 				const allToolNames = resolveToolNames(roleToolNames, customTools);
 
 				const { session } = await createAgentSession({
-					cwd: this.cwd,
+					cwd: this.getAgentCwd(id),
 					authStorage: this.authStorage,
 					modelRegistry: this.modelRegistry,
 					sessionManager: sm,
@@ -423,6 +682,8 @@ export class AgentManager {
 				console.log(`[Look] Restored ${loaded} agent(s) from ~/.look/`);
 				this.emitAgentList();
 			}
+			// Run one-shot legacy migration for agents without projectId
+			this.migrateLegacyAgents();
 			return loaded;
 		} catch (err) {
 			console.error("[Look] Failed to load agents:", err);
@@ -495,9 +756,9 @@ export class AgentManager {
 		return this.authStorage.getAuthStatus(provider).source === "stored";
 	}
 
-	/** Returns the project root directory path. */
+	/** Returns the active project's root directory path. */
 	getProjectRoot(): string {
-		return this.cwd;
+		return this.getActiveProjectCwd();
 	}
 
 	/**
@@ -585,13 +846,31 @@ export class AgentManager {
 	}
 
 	getGeneralSettings(): UserSettings {
-		return this.userSettings.getAll();
+		return (
+		this.getProjectSettings()
+		?? new UserSettingsStore(
+			SettingsManager.create(process.cwd(), getLookDir()),
+			getUiSettingsPath(),
+		)
+	).getAll();
 	}
 	async updateGeneralSettings(partial: Partial<UserSettings>): Promise<UserSettings> {
-		return this.userSettings.update(partial);
+		return (
+		this.getProjectSettings()
+		?? new UserSettingsStore(
+			SettingsManager.create(process.cwd(), getLookDir()),
+			getUiSettingsPath(),
+		)
+	).update(partial);
 	}
 	async resetGeneralSettings(): Promise<UserSettings> {
-		return this.userSettings.reset();
+		return (
+		this.getProjectSettings()
+		?? new UserSettingsStore(
+			SettingsManager.create(process.cwd(), getLookDir()),
+			getUiSettingsPath(),
+		)
+	).reset();
 	}
 
 	// ============================================================
@@ -617,7 +896,7 @@ export class AgentManager {
 		diagnostics: LoadedSkills["diagnostics"];
 		importedPaths: string[];
 	} {
-		const loaded = listAllSkills(this.cwd);
+		const loaded = listAllSkills(this.getActiveProjectCwd());
 		return {
 			skills: loaded.skills,
 			diagnostics: loaded.diagnostics,
@@ -632,7 +911,7 @@ export class AgentManager {
 	 * instructions on its next turn.
 	 */
 	async invokeSkill(agentId: string, skillName: string, args?: string): Promise<{ success: boolean; error?: string }> {
-		const skill = findSkill(this.cwd, skillName);
+		const skill = findSkill(this.getActiveProjectCwd(), skillName);
 		if (!skill) {
 			return { success: false, error: `Skill "${skillName}" not found` };
 		}
@@ -829,7 +1108,7 @@ export class AgentManager {
 	async createAgent(options: CreateAgentOptions): Promise<string> {
 		const defaults = getRoleDefaults(options.role);
 		const parentAgent = options.parentAgentId ? this.agents.get(options.parentAgentId)?.info : undefined;
-		const userDef = this.userSettings.getAll().defaultThinkingLevel;
+		const userDef = this.getProjectSettings()?.getAll().defaultThinkingLevel;
 		const thinkingLevel = options.thinkingLevel ?? parentAgent?.thinkingLevel ?? userDef ?? defaults.thinkingLevel;
 
 		// ---- Resolve primary model ----
@@ -879,7 +1158,7 @@ export class AgentManager {
 		const customTools = this.buildCustomTools(toolNames, id);
 		let systemPrompt = getRoleSystemPrompt(options.role);
 		if (options.role === "chat") {
-			const custom = this.userSettings.getAll().chatSystemPrompt;
+			const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
 			if (custom) systemPrompt = custom;
 		}
 		const resourceLoader = this.buildResourceLoader({
@@ -889,7 +1168,8 @@ export class AgentManager {
 		await resourceLoader.reload();
 
 		// pi native persistence: SessionManager.create writes to ~/.look/sessions/
-		const sm = SessionManager.create(this.cwd, getSessionsDir());
+		const projectCwd = this.getActiveProjectCwd();
+		const sm = SessionManager.create(projectCwd, getSessionsDir());
 		// Intentional: a brand-new agent with no messages is NOT a
 		// valid conversation. We deliberately do NOT seed an empty
 		// session.jsonl here — the SDK's lazy-flush means the file
@@ -905,7 +1185,7 @@ export class AgentManager {
 		const allToolNames = resolveToolNames(roleToolNames, customTools);
 
 		const { session, modelFallbackMessage } = await createAgentSession({
-			cwd: this.cwd,
+			cwd: projectCwd,
 			authStorage: this.authStorage,
 			modelRegistry: this.modelRegistry,
 			model,
@@ -931,6 +1211,7 @@ export class AgentManager {
 			usage: { ...EMPTY_USAGE },
 			fallbackModels,
 			permissionMode: "ask",
+			projectId: this.activeProjectId ?? undefined,
 		};
 
 		const managed: ManagedAgent = {
@@ -1022,7 +1303,9 @@ export class AgentManager {
 		return this.agents.get(agentId)?.info;
 	}
 	listAgents() {
-		return Array.from(this.agents.values()).map((a) => ({ ...a.info }));
+		const all = Array.from(this.agents.values()).map((a) => ({ ...a.info }));
+		if (!this.activeProjectId) return [];
+		return all.filter((a) => a.projectId === this.activeProjectId);
 	}
 
 	/**
@@ -1513,7 +1796,7 @@ export class AgentManager {
 				// At this point pi SDK's internal _checkCompaction has already
 				// run in _handlePostAgentRun, so prepareCompaction() will
 				// detect "already compacted" and skip if the SDK handled it.
-				const s = this.userSettings.getAll();
+				const s = this.getProjectSettings()?.getAll() ?? ({} as UserSettings);
 				if (s.autoCompress) {
 					const ctx = this.getContextUsage(agentId);
 					if (ctx && ctx.percentage >= s.compressThreshold) {
@@ -1658,7 +1941,7 @@ export class AgentManager {
 		// actually exist on disk (Look project + user, agentskills.io,
 		// Claude Code, Cursor, Codex, Copilot, Hermes Agent, pi SDK,
 		// and user-imported paths from settings.json).
-		const skillPaths = gatherSkillPaths(this.cwd);
+		const skillPaths = gatherSkillPaths(this.getAgentCwd(opts.agentId));
 
 		// v0.3 skills scoping: when the orchestrator spawns a worker
 		// with a `task.allowedSkills` constraint, narrow the visible
@@ -1684,7 +1967,7 @@ export class AgentManager {
 		const skillsOverrideForSdk = skillsOverride as any;
 
 		return new DefaultResourceLoader({
-			cwd: this.cwd,
+			cwd: this.getAgentCwd(opts.agentId),
 			// Resource discovery (extensions / skills / prompts / themes /
 			// context files) lives under `~/.look/` so it lines up with
 			// our AuthStorage / ModelRegistry / SessionManager paths.

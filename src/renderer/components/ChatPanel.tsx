@@ -351,7 +351,7 @@ const ChatPanel = memo(function ChatPanel({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">				{displayMessages.length === 0 ? (
-					<div className="flex min-h-[52vh] flex-col items-center justify-center gap-4 text-center">
+					<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
 						<div className="relative">
 							<PixelAgentAvatar role={agentRole} status={agentStatus} size="lg" />
 							<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />

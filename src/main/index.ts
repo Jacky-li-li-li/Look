@@ -7,7 +7,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { AgentManager } from "./agent-manager.js";
 import { registerIpcHandlers } from "./ipc-handlers.js";
-import type { AgentRole } from "./shared/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,77 +133,77 @@ function createWindow(): void {
 // ============================================================
 
 async function initAgentManager(): Promise<void> {
-	agentManager = new AgentManager(process.cwd());
+	agentManager = new AgentManager();
 
-	// Restore agents from ~/.look/ (async — must complete before checking listAgents)
+	// Load projects first, then restore agents
+	await agentManager.loadProjects();
 	await agentManager.restoreWorkspace();
 
-	// NOTE: We deliberately do NOT auto-load ANTHROPIC_API_KEY / OPENAI_API_KEY
-	// (or any other env var) into runtime auth here. Doing so makes the Settings
-	// UI and the model selector lie — they would show providers the user never
-	// configured as "configured". Users set keys via the Settings UI, which
-	// persists to ~/.pi/agent/auth.json. Env vars are still discoverable as a
-	// fallback by pi's getApiKey() (priority 4), so they remain usable at call
-	// time, just not advertised in the UI.
-
-	// Only create default Orchestrator if no agents were restored from disk
-	const existingAgents = agentManager.listAgents();
-	if (existingAgents.length === 0) {
-		console.log("[Look] Creating default Orchestrator...");
-		try {
-			const orchId = await agentManager.createAgent({
-				name: "Orchestrator",
-				role: "orchestrator" as AgentRole,
-			});
-			console.log(`[Look] ✅ Orchestrator created: ${orchId}`);
-		} catch (err: any) {
-			console.error("[Look] ❌ Failed to create Orchestrator:", err.message);
-			if (mainWindow && !mainWindow.isDestroyed()) {
-				mainWindow.webContents.send("look:event", {
-					type: "error",
-					message: `Failed to create Orchestrator: ${err.message}. Check API key and network.`,
-				});
-			}
+	// Restore last active project from UI settings
+	let lastActiveProjectId: string | null = null;
+	try {
+		const { getUiSettingsPath } = await import("./shared/look-storage.js");
+		const fs = await import("node:fs");
+		const uiPath = getUiSettingsPath();
+		if (fs.existsSync(uiPath)) {
+			const uiSettings = JSON.parse(fs.readFileSync(uiPath, "utf-8"));
+			lastActiveProjectId = uiSettings.lastActiveProjectId ?? null;
 		}
-	} else {
-		console.log(`[Look] Restored ${existingAgents.length} agent(s), skipping default creation`);
+	} catch {
+		// Ignore errors reading UI settings
 	}
+
+	// Set active project
+	const projects = agentManager.listProjects();
+	if (lastActiveProjectId && projects.some((p: any) => p.id === lastActiveProjectId)) {
+		agentManager.setActiveProject(lastActiveProjectId);
+		console.log(`[Look] Restored active project: ${lastActiveProjectId}`);
+	} else if (projects.length > 0) {
+		const firstValid = projects.find((p: any) => p.valid);
+		if (firstValid) {
+			agentManager.setActiveProject(firstValid.id);
+			console.log(`[Look] Activated first valid project: ${firstValid.id}`);
+		}
+	}
+
+	// The app requires the user to select a project folder first
+	// before any agent can be created. No auto-creation of default agents.
 
 	if (mainWindow) {
 		registerIpcHandlers(agentManager, mainWindow);
 
-		// Push current agent + history state after IPC handlers are
-		// registered. The initial `emitAgentList()` inside
-		// `loadPersistedAgents` fires before the handler is registered,
-		// so the renderer never sees it. If the renderer also called
-		// `api.getAgents()` before `ipcMain.handle("look:invoke")` was
-		// set up, the invoke fails silently (`.catch(showError)`) and
-		// no retry happens. Without this push, the renderer stays
-		// permanently empty — no agents, no messages.
-		const snapshot = agentManager.listAgentsWithHistory();
-		if (snapshot.agents.length > 0) {
-			mainWindow.webContents.send("look:event", {
-				type: "agent:list" as const,
-				agentId: "",
-				agents: snapshot.agents,
-			});
-			for (const [agentId, msgs] of Object.entries(snapshot.history)) {
-				if (msgs.length > 0) {
-					mainWindow.webContents.send("look:event", {
-						type: "agent:history" as const,
-						agentId,
-						messages: msgs,
-					});
+		// Push initial state: projects + agents + history
+		const allProjects = agentManager.listProjects();
+		const activeProject = agentManager.getActiveProject();
+		mainWindow.webContents.send("look:event", {
+			type: "project:list" as const,
+			projects: allProjects,
+			activeProjectId: activeProject?.id ?? null,
+		});
+
+		if (activeProject) {
+			const snapshot = agentManager.listAgentsWithHistory();
+			if (snapshot.agents.length > 0) {
+				mainWindow.webContents.send("look:event", {
+					type: "agent:list" as const,
+					agentId: "",
+					agents: snapshot.agents,
+				});
+				for (const [agentId, msgs] of Object.entries(snapshot.history)) {
+					if (msgs.length > 0) {
+						mainWindow.webContents.send("look:event", {
+							type: "agent:history" as const,
+							agentId,
+							messages: msgs,
+						});
+					}
 				}
 			}
 		}
+
 		console.log("[Look] IPC handlers registered");
 	}
 }
-
-// ============================================================
-// App Lifecycle
-// ============================================================
 
 app.whenReady().then(async () => {
 	setupProcessBoundary();
@@ -225,13 +224,10 @@ app.whenReady().then(async () => {
 	});
 });
 
-app.on("window-all-closed", async () => {
-	if (agentManager) {
-		const agents = agentManager.listAgents();
-		for (const agent of agents) {
-			await agentManager.destroyAgent(agent.id);
-		}
-	}
+app.on("window-all-closed", () => {
+	// pi SDK auto-saves session state on every turn. We do NOT
+	// destroy agents here — listAgents() now filters by active
+	// project and would miss agents in other projects.
 	if (process.platform !== "darwin") {
 		app.quit();
 	}

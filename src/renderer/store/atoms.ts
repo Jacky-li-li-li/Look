@@ -1,6 +1,6 @@
 import { atom } from "jotai";
-import { atomFamily } from "jotai/utils";
-import type { AgentInfo, PiMessage } from "@shared/types";
+import { atomFamily } from "jotai-family";
+import type { AgentInfo, PiMessage, ProjectInfo } from "@shared/types";
 import type { PermissionRequest } from "../components/PermissionDialog";
 
 // ---- Core data ----
@@ -8,6 +8,19 @@ import type { PermissionRequest } from "../components/PermissionDialog";
 export const agentsAtom = atom<AgentInfo[]>([]);
 
 export const activeAgentIdAtom = atom<string | null>(null);
+
+// ---- Project data ----
+
+export const projectsAtom = atom<ProjectInfo[]>([]);
+
+export const activeProjectIdAtom = atom<string | null>(null);
+
+/** Pending delete confirmation: project info + agent count from main process. */
+export const pendingDeleteProjectAtom = atom<{
+	projectId: string;
+	projectName: string;
+	agentCount: number;
+} | null>(null);
 
 /** Per-agent message history. atomFamily creates one atom per agentId. */
 export const messagesAtomFamily = atomFamily((_agentId: string) => atom<PiMessage[]>([]));
@@ -42,6 +55,13 @@ export const activeAgentAtom = atom((get) => {
 	const agents = get(agentsAtom);
 	const id = get(activeAgentIdAtom);
 	return id ? (agents.find((a) => a.id === id) ?? null) : null;
+});
+
+/** Currently active project object — derived from projects list + activeProjectId. */
+export const activeProjectAtom = atom((get) => {
+	const projects = get(projectsAtom);
+	const id = get(activeProjectIdAtom);
+	return id ? (projects.find((p) => p.id === id) ?? null) : null;
 });
 
 // ---- Provider settings cache (fetched once at boot) ----

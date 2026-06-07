@@ -3,6 +3,19 @@
 // Used by both main process and renderer
 // ============================================================
 
+// ============================================================
+// Project types (cwd-based project management)
+// ============================================================
+
+/** Project info — represents a workspace folder */
+export interface ProjectInfo {
+	id: string; // 8-char uuid
+	name: string; // display name, derived from folder name
+	cwd: string; // absolute path to project directory
+	createdAt: number;
+	valid: boolean; // whether cwd exists on disk (false if moved/deleted)
+}
+
 /** Agent role template */
 export type AgentRole =
 	| "chat" // 通用聊天 agent
@@ -90,6 +103,8 @@ export interface AgentInfo {
 	permissionMode: PermissionMode;
 	/** Path to the session JSONL file (~/.look/sessions/...). */
 	sessionFilePath?: string;
+	/** Project this agent belongs to. undefined for legacy agents before migration. */
+	projectId?: string;
 }
 
 // ============================================================
@@ -286,7 +301,11 @@ export type MainToRendererEvent =
 			reason: string;
 	  }
 	| WithAgentId<{ type: "agent:permission-mode"; mode: PermissionMode }>
-	| { type: "error"; agentId?: string; message: string };
+	| { type: "error"; agentId?: string; message: string }
+	// ---- Project events ----
+	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
+	| { type: "project:active-changed"; projectId: string }
+	| { type: "project:confirm-delete"; projectId: string; projectName: string; agentCount: number };
 
 /**
  * Subset of pi's AssistantMessageEvent delta types that Look
@@ -371,7 +390,14 @@ export type RendererToMainEvent =
 	| { type: "shell:reveal-in-finder"; path: string }
 	// ---- OS shell: open project root in file manager ----
 	| { type: "shell:open-project-folder" }
-	| { type: "app:ready" };
+	| { type: "app:ready" }
+	// ---- Project CRUD ----
+	| { type: "project:list" }
+	| { type: "project:create"; cwd: string; name?: string }
+	| { type: "project:switch"; projectId: string }
+	| { type: "project:delete"; projectId: string }
+	| { type: "project:confirm-delete-response"; projectId: string; confirmed: boolean }
+	| { type: "project:get-active" };
 
 // ============================================================
 // Orchestrator — v0.2 / v0.3 types

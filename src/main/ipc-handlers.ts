@@ -5,7 +5,7 @@
 
 import { type BrowserWindow, dialog, ipcMain } from "electron";
 import type { AgentManager } from "./agent-manager.js";
-import { getSessionsDir } from "./shared/look-storage.js";
+import { getProjectsIndexPath, getSessionsDir } from "./shared/look-storage.js";
 import type { AgentRole, MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 
 export function registerIpcHandlers(agentManager: AgentManager, mainWindow: BrowserWindow): void {
@@ -261,6 +261,46 @@ async function handleRendererInvoke(
 			const sessionsDir = getSessionsDir();
 			shell.openPath(sessionsDir);
 			return { success: true, path: sessionsDir };
+		}
+
+		// === Project management ===
+		case "project:list": {
+			const projects = agentManager.listProjects();
+			const activeProject = agentManager.getActiveProject();
+			return { success: true, projects, activeProjectId: activeProject?.id ?? null };
+		}
+
+		case "project:create": {
+			const result = agentManager.createProject(data.cwd, data.name);
+			return {
+				success: true,
+				project: result.project,
+				isDuplicate: result.isDuplicate,
+			};
+		}
+
+		case "project:switch": {
+			agentManager.setActiveProject(data.projectId);
+			// After switching, return the agents for this project
+			const snapshot = agentManager.listAgentsWithHistory();
+			return { success: true, agents: snapshot.agents, history: snapshot.history };
+		}
+
+		case "project:delete": {
+			await agentManager.deleteProject(data.projectId);
+			return { success: true };
+		}
+
+		case "project:confirm-delete-response": {
+			if (data.confirmed) {
+				await (agentManager as any).executeDeleteProject(data.projectId);
+			}
+			return { success: true };
+		}
+
+		case "project:get-active": {
+			const active = agentManager.getActiveProject();
+			return { success: true, project: active };
 		}
 
 		default:

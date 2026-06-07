@@ -6,7 +6,8 @@
 //
 // Structure:
 //   ~/.look/
-//   ├── agents.json       → Agent index: [{ id, name, role, sessionFile }]
+//   ├── agents.json       → Agent index: [{ id, name, role, sessionFile, projectId }]
+//   ├── projects.json     → Project index: [{ id, name, cwd }]
 //   ├── auth.json         → pi AuthStorage
 //   ├── models.json       → pi ModelRegistry
 //   ├── settings.json     → User preferences
@@ -28,6 +29,11 @@ export function getLookDir(): string {
 /** Lightweight index: agent id → sessionFile mapping */
 export function getAgentsIndexPath(): string {
 	return path.join(LOOK_DIR, "agents.json");
+}
+
+/** Project index: project id → cwd mapping */
+export function getProjectsIndexPath(): string {
+	return path.join(LOOK_DIR, "projects.json");
 }
 
 /** API key storage (pi SDK AuthStorage) */

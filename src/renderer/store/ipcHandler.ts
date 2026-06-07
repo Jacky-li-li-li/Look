@@ -13,10 +13,13 @@ import { toast } from "sonner";
 import i18n from "../i18n";
 import {
 	activeAgentIdAtom,
+	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
 	messagesAtomFamily,
 	pendingAsksAtom,
+	pendingDeleteProjectAtom,
+	projectsAtom,
 	providerSettingsAtom,
 	queuesAtomFamily,
 	removeAgentAtoms,
@@ -143,6 +146,29 @@ export function initIpcHandlers(api: any): () => void {
 				appStore.set(queuesAtomFamily(event.agentId), {
 					steering: [...event.steering],
 					followUp: [...event.followUp],
+				});
+				break;
+			}
+
+			// ---- Project events ----
+			case "project:list": {
+				appStore.set(projectsAtom, event.projects);
+				if (event.activeProjectId !== undefined) {
+					appStore.set(activeProjectIdAtom, event.activeProjectId);
+				}
+				break;
+			}
+
+			case "project:active-changed": {
+				appStore.set(activeProjectIdAtom, event.projectId);
+				break;
+			}
+
+			case "project:confirm-delete": {
+				appStore.set(pendingDeleteProjectAtom, {
+					projectId: event.projectId,
+					projectName: event.projectName,
+					agentCount: event.agentCount,
 				});
 				break;
 			}
@@ -328,7 +354,17 @@ export async function initAppData(api: any): Promise<void> {
 		})
 		.catch(() => {});
 
-	// 3. Pull initial agent list + restored history synchronously.
+	// 3. Pull initial project list.
+	api.listProjects()
+		.then((r: any) => {
+			if (r?.success && Array.isArray(r.projects)) {
+				appStore.set(projectsAtom, r.projects);
+				if (r.activeProjectId) appStore.set(activeProjectIdAtom, r.activeProjectId);
+			}
+		})
+		.catch(() => {});
+
+	// 4. Pull initial agent list + restored history synchronously.
 	const r = await api.getAgents().catch(() => null);
 	if (r?.success) {
 		if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
@@ -344,10 +380,10 @@ export async function initAppData(api: any): Promise<void> {
 		}
 	}
 
-	// 4. Auto-restore / fallback after agents are loaded.
+	// 5. Auto-restore / fallback after agents are loaded.
 	_autoSelectAgent();
 
-	// 5. Subscribe: whenever agents change (e.g. `agent:list` IPC),
+	// 6. Subscribe: whenever agents change (e.g. `agent:list` IPC),
 	//    re-evaluate auto-select if nothing is active.
 	appStore.sub(agentsAtom, () => _autoSelectAgent());
 }

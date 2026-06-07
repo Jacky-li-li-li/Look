@@ -7,12 +7,13 @@ import { Button } from "@shared/components/ui/button";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { cn } from "@shared/lib/utils";
-import type { AgentInfo } from "@shared/types";
+import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { MessageSquare, Network, Plus, Settings, X } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { activeAgentIdAtom, agentsAtom } from "../store/atoms";
+import { activeAgentIdAtom, activeProjectAtom, activeProjectIdAtom, agentsAtom, projectsAtom } from "../store/atoms";
+import ProjectSelector from "./ProjectSelector";
 
 const api = (window as any).look;
 
@@ -24,6 +25,10 @@ interface SidebarProps {
 	onCreateClick: (defaultModel?: string) => void;
 	onQuickCreateChat: () => void;
 	onSettingsClick: () => void;
+	/** Project callbacks */
+	onSelectProject: (projectId: string) => void;
+	onCreateProject: () => void;
+	onDeleteProject: (project: ProjectInfo) => void;
 }
 
 const CHAT_TAB_ROLES: ReadonlySet<AgentInfo["role"]> = new Set(["chat"]);
@@ -62,11 +67,17 @@ export default function Sidebar({
 	onCreateClick,
 	onQuickCreateChat,
 	onSettingsClick,
+	onSelectProject,
+	onCreateProject,
+	onDeleteProject,
 }: SidebarProps) {
 	const { t } = useTranslation();
 	const [tab, setTab] = React.useState("chat");
 	const agents = useAtomValue(agentsAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	const projects = useAtomValue(projectsAtom);
+	const activeProjectId = useAtomValue(activeProjectIdAtom);
+	const activeProject = useAtomValue(activeProjectAtom);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const editRef = useRef<HTMLInputElement>(null);
@@ -74,6 +85,8 @@ export default function Sidebar({
 	const chatCount = agents.filter(isChatAgent).length;
 	const orchCount = agents.filter(isOrchAgent).length;
 	const activeAgent = agents.find((a) => a.id === activeAgentId);
+	const projectValid = !activeProjectId || (activeProject?.valid ?? false);
+	const hasActiveProject = activeProjectId !== null;
 
 	const handleDoubleClick = useCallback((agent: AgentInfo) => {
 		setEditingId(agent.id);
@@ -114,6 +127,7 @@ export default function Sidebar({
 
 	return (
 		<aside className="flex h-full w-[260px] min-w-[260px] max-w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border bg-sidebar">
+			<ProjectSelector projects={projects} activeProjectId={activeProjectId} onSelectProject={onSelectProject} onCreateProject={onCreateProject} onDeleteProject={onDeleteProject} />
 			<Tabs value={tab} onValueChange={setTab} className="shrink-0">
 				<TabsList className="w-full h-auto rounded-none bg-transparent gap-0 px-3 border-b border-hairline">
 					<TabsTrigger
@@ -148,13 +162,18 @@ export default function Sidebar({
 					variant="line"
 					size="sm"
 					className="h-10 flex-1 justify-start text-[12px] font-medium"
-					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)}
+					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)} disabled={!hasActiveProject || !projectValid}
 				>
 					<Plus className="size-4" />
 					{t("sidebar.newAgent")}
 				</Button>
 			</div>
 
+			{!projectValid && activeProjectId && (
+				<div className="mx-3 mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+					{"⚠ " + t("project.pathMissing", "Project path does not exist. The folder may have been moved or deleted.")}
+				</div>
+			)}
 			<ScrollArea className="flex-1 min-h-0 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
 				<div className="flex flex-col gap-1.5 px-3 pb-3">
 					{filteredAgents.map((agent) => {
@@ -233,7 +252,7 @@ export default function Sidebar({
 
 					{filteredAgents.length === 0 && (
 						<div className="mx-1 mt-3 rounded-lg border border-dashed border-hairline p-5 text-center text-[11px] text-muted-foreground">
-							{tab === "chat" ? t("sidebar.noChatAgents") : t("sidebar.noOrchAgents")}
+							{!hasActiveProject ? t("sidebar.pleaseOpenProject", "Please open a project first") : (tab === "chat" ? t("sidebar.noChatAgents") : t("sidebar.noOrchAgents"))}
 							<br />
 							{t("sidebar.clickNewAgent")}
 						</div>

@@ -7,32 +7,39 @@
 // agent:usage-update only re-renders the Sidebar row, not ChatPanel.
 // ============================================================
 
-import type { PermissionMode, ThinkingLevel } from "@shared/types";
+import type { PermissionMode, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { FolderOpen } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { ThemeProvider } from "next-themes";
 import AgentCreateDialog from "./components/AgentCreateDialog";
 import ChatPanel from "./components/ChatPanel";
+import DeleteProjectDialog from "./components/DeleteProjectDialog";
+import NewProjectDialog from "./components/NewProjectDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import SettingsDialog from "./components/SettingsDialog";
 import Sidebar from "./components/Sidebar";
+import WelcomeScreen from "./components/WelcomeScreen";
 import { preloadHighlighter } from "./lib/highlighter";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
+	activeProjectAtom,
+	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
 	defaultModelForCreateAtom,
 	messagesAtomFamily,
 	pendingAsksAtom,
+	pendingDeleteProjectAtom,
+	projectsAtom,
 	providerSettingsAtom,
 	queuesAtomFamily,
 	showCreateDialogAtom,
@@ -65,6 +72,87 @@ export default function App() {
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeMessages = useAtomValue(messagesAtomFamily(activeAgentId ?? ""));
 	const activeQueue = useAtomValue(queuesAtomFamily(activeAgentId ?? ""));
+
+	// ---- Project state ----
+	const projects = useAtomValue(projectsAtom);
+	const activeProjectId = useAtomValue(activeProjectIdAtom);
+	const activeProject = useAtomValue(activeProjectAtom);
+	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
+	const [newProjectCwd, setNewProjectCwd] = useState<string | null>(null);
+
+	// ---- Project callbacks ----
+
+	const handleSelectProject = useCallback((projectId: string) => {
+		if (!api) return;
+		appStore.set(activeProjectIdAtom, projectId);
+		api.switchProject(projectId).then((r: any) => {
+			if (r?.success) {
+				if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
+				if (r.history) {
+					for (const [agentId, msgs] of Object.entries(r.history)) {
+						if (Array.isArray(msgs) && msgs.length > 0) {
+							appStore.set(messagesAtomFamily(agentId), msgs as any);
+						}
+					}
+				}
+			}
+		}).catch(() => {});
+		// Persist last active project
+		api.setGeneralSettings({}).catch(() => {});
+	}, []);
+
+	const handleOpenProject = useCallback(async () => {
+		if (!api) return;
+		const result = await api.openDirectoryDialog();
+		if (!result?.success || !result.path) return;
+		setNewProjectCwd(result.path);
+	}, []);
+
+	const handleCreateProject = useCallback(async (cwd: string, name?: string) => {
+		if (!api) return;
+		const r = await api.createProject(cwd, name);
+		if (r?.success) {
+			if (r.isDuplicate) {
+				toast("Project already open", { description: "Switched to existing project." });
+			}
+			appStore.set(projectsAtom, await api.listProjects().then((pr: any) => pr?.projects ?? []).catch(() => []));
+			// Pull agents for new project
+			const ar = await api.getAgents().catch(() => null);
+			if (ar?.success) {
+				if (Array.isArray(ar.agents)) appStore.set(agentsAtom, ar.agents);
+			}
+		} else {
+			toast.error(r?.error ?? "Failed to create project");
+		}
+	}, []);
+
+	const handleDeleteProject = useCallback((project: ProjectInfo) => {
+		// Trigger confirmation flow
+		api.deleteProject(project.id);
+	}, []);
+
+	const handleProjectCreated = useCallback(async (projectId: string) => {
+		// Refresh project list
+		const r = await api.listProjects().catch(() => null);
+		if (r?.success) {
+			appStore.set(projectsAtom, r.projects);
+		}
+	}, []);
+
+	const handleDeleteProjectCancelled = useCallback(() => {
+		appStore.set(pendingDeleteProjectAtom, null);
+	}, []);
+
+	const handleDeleteProjectConfirmed = useCallback(() => {
+		const p = appStore.get(pendingDeleteProjectAtom);
+		if (!p) return;
+		api.confirmDeleteProject(p.projectId, true);
+		appStore.set(pendingDeleteProjectAtom, null);
+		// Refresh
+		api.listProjects().then((r: any) => {
+			if (r?.success) appStore.set(projectsAtom, r.projects);
+		}).catch(() => {});
+	}, []);
 
 	// ---- Callbacks: use appStore.get() to read latest value, avoiding stale closures ----
 
@@ -198,14 +286,19 @@ export default function App() {
 
 	// ---- Side effects ----
 
-	// Persist active agent ID with debounce.
+	// Persist active agent ID and project ID with debounce.
 	useEffect(() => {
-		if (!api || !activeAgentId) return;
+		if (!api) return;
 		const timer = setTimeout(() => {
-			api.setGeneralSettings({ lastActiveAgentId: activeAgentId }).catch(() => {});
+			const payload: Record<string, any> = {};
+			if (activeAgentId) payload.lastActiveAgentId = activeAgentId;
+			if (activeProjectId) payload.lastActiveProjectId = activeProjectId;
+			if (Object.keys(payload).length > 0) {
+				api.setGeneralSettings(payload).catch(() => {});
+			}
 		}, 500);
 		return () => clearTimeout(timer);
-	}, [activeAgentId]);
+	}, [activeAgentId, activeProjectId]);
 
 	// Permission ask: 30s default-deny timer.
 	useEffect(() => {
@@ -248,12 +341,17 @@ export default function App() {
 						onCreateClick={handleCreateClick}
 						onQuickCreateChat={handleQuickCreateChat}
 						onSettingsClick={handleSettingsClick}
+						onSelectProject={handleSelectProject}
+						onCreateProject={handleOpenProject}
+						onDeleteProject={handleDeleteProject}
 					/>
 
 					<Separator orientation="vertical" className="mx-2 bg-transparent" />
 
 					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
-						{activeAgent ? (
+						{!api ? null : projects.length === 0 ? (
+						<WelcomeScreen onOpenProject={handleOpenProject} />
+					) : activeAgent ? (
 							<>
 								<header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-hairline px-4">
 									<div className="flex min-w-0 items-center gap-3">
@@ -314,7 +412,25 @@ export default function App() {
 							onClose={handleCloseCreateDialog}
 						/>
 					)}
-					{showSettings && (
+					{newProjectCwd && (
+					<NewProjectDialog
+						open={!!newProjectCwd}
+						cwd={newProjectCwd}
+						onClose={() => setNewProjectCwd(null)}
+						onCreated={handleProjectCreated}
+					/>
+				)}
+				{pendingDelete && (
+					<DeleteProjectDialog
+						open={!!pendingDelete}
+						projectId={pendingDelete.projectId}
+						projectName={pendingDelete.projectName}
+						agentCount={pendingDelete.agentCount}
+						onClose={handleDeleteProjectCancelled}
+						onDeleted={handleDeleteProjectConfirmed}
+					/>
+				)}
+				{showSettings && (
 						<SettingsDialog
 							open={showSettings}
 							providers={providerSettings}

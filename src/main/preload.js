@@ -124,6 +124,20 @@ const api = {
   // Contains all session .jsonl files for each agent.
   openProjectFolder: () =>
     ipcRenderer.invoke("look:invoke", { type: "shell:open-project-folder" }),
+
+  // ---- Project CRUD ----
+  listProjects: () =>
+    ipcRenderer.invoke("look:invoke", { type: "project:list" }),
+  createProject: (cwd, name) =>
+    ipcRenderer.invoke("look:invoke", { type: "project:create", cwd, name }),
+  switchProject: (projectId) =>
+    ipcRenderer.invoke("look:invoke", { type: "project:switch", projectId }),
+  deleteProject: (projectId) =>
+    ipcRenderer.invoke("look:invoke", { type: "project:delete", projectId }),
+  confirmDeleteProject: (projectId, confirmed) =>
+    ipcRenderer.invoke("look:invoke", { type: "project:confirm-delete-response", projectId, confirmed }),
+  getActiveProject: () =>
+    ipcRenderer.invoke("look:invoke", { type: "project:get-active" }),
 };
 
 contextBridge.exposeInMainWorld("look", api);
