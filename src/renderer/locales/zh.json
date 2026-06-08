@@ -150,6 +150,31 @@
     "statMatches": "{{n}} 处",
     "statEntries": "{{n}} 项"
   },
+  "auth": {
+    "loginTitle": "登录以继续",
+    "registerTitle": "创建账户",
+    "emailPlaceholder": "邮箱",
+    "passwordPlaceholder": "密码",
+    "loginBtn": "登录",
+    "registerBtn": "创建账户",
+    "switchToRegister": "还没有账户？注册",
+    "switchToLogin": "已有账户？登录",
+    "emailRequired": "请输入邮箱",
+    "passwordMinLength": "密码至少需要6个字符",
+    "alreadyRegistered": "该邮箱已注册，请直接登录。",
+    "registerSuccess": "账户创建成功！已自动登录。"
+  },
+  "profile": {
+    "title": "个人信息",
+    "userName": "用户名",
+    "avatar": "头像",
+    "uploadAvatar": "上传图片",
+    "chooseEmoji": "选择表情",
+    "logout": "退出登录",
+    "userNamePlaceholder": "你的显示名称",
+    "userNameSaved": "用户名已更新",
+    "avatarSaved": "头像已更新"
+  },
   "toast": {
     "modelUnavailable": "模型不可用: {{primary}}。已切换到 {{resolved}}。",
     "triedModels": "尝试了 {{count}} 个模型。当前使用 {{resolved}}。",

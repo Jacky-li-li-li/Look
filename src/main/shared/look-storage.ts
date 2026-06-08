@@ -58,6 +58,11 @@ export function getUiSettingsPath(): string {
 	return path.join(LOOK_DIR, "ui-settings.json");
 }
 
+/** User profile (avatar, display name, etc.) */
+export function getUserProfilePath(): string {
+	return path.join(LOOK_DIR, "user-profile.json");
+}
+
 /** pi SDK session files directory */
 export function getSessionsDir(): string {
 	return path.join(LOOK_DIR, "sessions");

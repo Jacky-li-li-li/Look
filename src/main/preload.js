@@ -177,6 +177,14 @@ const api = {
       entryId,
       label,
     }),
+
+  // ---- User Profile ----
+  getUserProfile: () =>
+    ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),
+  updateUserProfile: (patch) =>
+    ipcRenderer.invoke("look:invoke", { type: "user-profile:update", patch }),
+  resetUserProfile: () =>
+    ipcRenderer.invoke("look:invoke", { type: "user-profile:reset" }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

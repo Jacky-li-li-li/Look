@@ -150,6 +150,31 @@
     "statMatches": "{{n}} matches",
     "statEntries": "{{n}} items"
   },
+  "auth": {
+    "loginTitle": "Sign in to continue",
+    "registerTitle": "Create an account",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Password",
+    "loginBtn": "Sign In",
+    "registerBtn": "Create Account",
+    "switchToRegister": "Don't have an account? Sign up",
+    "switchToLogin": "Already have an account? Sign in",
+    "emailRequired": "Email is required",
+    "passwordMinLength": "Password must be at least 6 characters",
+    "alreadyRegistered": "This email is already registered. Please sign in instead.",
+    "registerSuccess": "Account created! You're now signed in."
+  },
+  "profile": {
+    "title": "Profile",
+    "userName": "Username",
+    "avatar": "Avatar",
+    "uploadAvatar": "Upload image",
+    "chooseEmoji": "Choose emoji",
+    "logout": "Sign Out",
+    "userNamePlaceholder": "Your display name",
+    "userNameSaved": "Username updated",
+    "avatarSaved": "Avatar updated"
+  },
   "toast": {
     "modelUnavailable": "Model unavailable: {{primary}}. Switched to {{resolved}}.",
     "triedModels": "Tried {{count}} models in chain. Now using {{resolved}}.",

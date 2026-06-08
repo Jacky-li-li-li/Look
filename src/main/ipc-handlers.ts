@@ -5,8 +5,9 @@
 
 import { type BrowserWindow, dialog, ipcMain } from "electron";
 import type { AgentManager } from "./agent-manager.js";
-import { getProjectsIndexPath, getSessionsDir } from "./shared/look-storage.js";
+import { getProjectsIndexPath, getSessionsDir, getUserProfilePath } from "./shared/look-storage.js";
 import type { AgentRole, MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
+import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 
 export function registerIpcHandlers(agentManager: AgentManager, mainWindow: BrowserWindow): void {
 	// Forward all AgentManager events to the renderer
@@ -345,6 +346,21 @@ async function handleRendererInvoke(
 		case "agent:set-entry-label": {
 			agentManager.setEntryLabel(data.agentId, data.entryId, data.label);
 			return { success: true };
+		}
+
+		// === User Profile ===
+		case "user-profile:get": {
+			return { success: true, profile: getUserProfile() };
+		}
+
+		case "user-profile:update": {
+			const profile = updateUserProfile(data.patch);
+			return { success: true, profile };
+		}
+
+		case "user-profile:reset": {
+			const profile = resetUserProfile();
+			return { success: true, profile };
 		}
 
 		default:

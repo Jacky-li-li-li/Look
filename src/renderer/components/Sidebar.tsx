@@ -23,7 +23,9 @@ import {
 	runningAgentsAtom,
 } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
+import { userProfileAtom } from "../store/authAtoms";
 import ProjectSelector from "./ProjectSelector";
+import UserAvatar from "./UserAvatar";
 
 const api = (window as any).look;
 
@@ -90,6 +92,7 @@ export default function Sidebar({
 	const activeProject = useAtomValue(activeProjectAtom);
 	const recentlyCompleted = useAtomValue(recentlyCompletedAtom);
 	const runningAgents = useAtomValue(runningAgentsAtom);
+	const userProfile = useAtomValue(userProfileAtom);
 	const activeChatAtBottom = useAtomValue(activeChatAtBottomAtom);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
@@ -341,16 +344,24 @@ export default function Sidebar({
 				</div>
 			</ScrollArea>
 
-			<div className="flex shrink-0 items-center border-t border-hairline px-3 py-2.5">
-				<Button
-					variant="line"
-					size="default"
-					className="h-10 flex-1 justify-start gap-2 text-[12px] font-medium"
-					onClick={onSettingsClick}
-				>
-					<Settings className="size-4" />
-					{t("sidebar.settings")}
-				</Button>
+			<div className="flex shrink-0 flex-col border-t border-hairline">
+				<div className="flex items-center gap-2 px-3 py-2">
+					<UserAvatar avatar={userProfile.avatar} size="sm" />
+					<span className="truncate text-[11px] font-medium text-muted-foreground">
+						{userProfile.userName || "You"}
+					</span>
+				</div>
+				<div className="flex shrink-0 items-center px-3 py-2.5">
+					<Button
+						variant="line"
+						size="default"
+						className="h-10 flex-1 justify-start gap-2 text-[12px] font-medium"
+						onClick={onSettingsClick}
+					>
+						<Settings className="size-4" />
+						{t("sidebar.settings")}
+					</Button>
+				</div>
 			</div>
 		</aside>
 	);

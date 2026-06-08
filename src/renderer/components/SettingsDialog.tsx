@@ -43,14 +43,19 @@ import {
 	Terminal,
 	Trash2,
 	Zap,
+	UserRound,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { showError } from "../lib/ipc";
+import { supabase } from "../lib/supabase";
+import { userProfileAtom } from "../store/authAtoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import { ProviderIcon } from "./ProviderIcon";
+import UserAvatar from "./UserAvatar";
+import ProfileEditor from "./ProfileEditor";
 
 const api = (window as any).look;
 
@@ -70,7 +75,7 @@ interface SettingsDialogProps {
 	onProvidersChange: (providers: ProviderInfo[]) => void;
 	onClose: () => void;
 	/** Which tab to show on open. Defaults to "general". */
-	defaultTab?: "general" | "api-keys" | "chat-prompt" | "about";
+	defaultTab?: "general" | "api-keys" | "chat-prompt" | "about" | "profile";
 }
 
 const THINKING_LEVELS = ["off", "low", "medium", "high"] as const;
@@ -356,6 +361,13 @@ function SettingsDialogImpl({
 							{t("settings.general")}
 						</TabsTrigger>
 						<TabsTrigger
+							value="profile"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
+						>
+							<UserRound className="size-3.5" />
+							{t("profile.title")}
+						</TabsTrigger>
+						<TabsTrigger
 							value="api-keys"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
@@ -382,6 +394,23 @@ function SettingsDialogImpl({
 							{t("settings.about")}
 						</TabsTrigger>
 					</TabsList>
+
+					{/* ─── Profile ─── */}
+					<TabsContent value="profile" className="flex-1 min-h-0 data-[state=inactive]:hidden">
+						<ContentPanel className="gap-3">
+							<Card size="sm">
+								<CardHeader className="border-b border-hairline px-4 py-2.5">
+									<CardTitle className="flex items-center gap-1.5 text-[13px]">
+										<UserRound className="size-3.5 text-muted-foreground" />
+										{t("profile.title")}
+									</CardTitle>
+								</CardHeader>
+								<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
+									<ProfileEditor />
+								</CardContent>
+							</Card>
+						</ContentPanel>
+					</TabsContent>
 
 					{/* ─── General ─── */}
 					<TabsContent value="general" className="flex-1 min-h-0 data-[state=inactive]:hidden">

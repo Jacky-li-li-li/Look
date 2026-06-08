@@ -89,7 +89,7 @@ export const activeChatAtBottomAtom = atom(true);
 export const showCreateDialogAtom = atom(false);
 export const defaultModelForCreateAtom = atom<string | undefined>(undefined);
 export const showSettingsAtom = atom(false);
-export const settingsTabAtom = atom<"general" | "api-keys" | "chat-prompt" | "about">("general");
+export const settingsTabAtom = atom<"general" | "api-keys" | "chat-prompt" | "about" | "profile">("general");
 
 // ---- Derived atoms (replace App.tsx useMemo) ----
 

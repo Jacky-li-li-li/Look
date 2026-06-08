@@ -24,13 +24,16 @@ import type {
 	PiThinkingBlock,
 	PiToolCallBlock,
 } from "@shared/types";
-import { MapPin, UserRound } from "lucide-react";
+import { useAtomValue } from "jotai";
+import { MapPin } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
+import { userProfileAtom } from "../store/authAtoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
+import UserAvatar from "./UserAvatar";
 
 interface MessageBubbleProps {
 	message: PiMessage;
@@ -119,6 +122,7 @@ const MessageBubble = memo(function MessageBubble({
 	flash = false,
 }: MessageBubbleProps) {
 	const { t } = useTranslation();
+	const userProfile = useAtomValue(userProfileAtom);
 	const isUser = message.role === "user";
 	const isAssistant = message.role === "assistant";
 
@@ -131,9 +135,7 @@ const MessageBubble = memo(function MessageBubble({
 			{!isUser ? (
 				<PixelAgentAvatar role={agentRole} size="sm" className="mt-0.5 shrink-0" />
 			) : (
-				<div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border border-hairline bg-background text-foreground">
-					<UserRound className="size-3.5" />
-				</div>
+				<UserAvatar avatar={userProfile.avatar} size="sm" className="mt-0.5" />
 			)}
 
 			<div className="min-w-0 flex-1">
@@ -142,7 +144,7 @@ const MessageBubble = memo(function MessageBubble({
 					className={cn("mb-1 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}
 				>
 					<span className="font-medium uppercase tracking-wider">
-						{isUser ? t("chat.you") : (agentName ?? t("chat.agent"))}
+						{isUser ? (userProfile.userName || t("chat.you")) : (agentName ?? t("chat.agent"))}
 					</span>
 					{message.isStreaming && <span className="status-mark" data-status="thinking" />}
 					{isAssistant && isActiveLeaf && (

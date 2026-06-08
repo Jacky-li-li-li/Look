@@ -21,6 +21,7 @@ import { ThemeProvider } from "next-themes";
 import AgentCreateDialog from "./components/AgentCreateDialog";
 import ChatPanel from "./components/ChatPanel";
 import DeleteProjectDialog from "./components/DeleteProjectDialog";
+import LoginScreen from "./components/LoginScreen";
 import NewProjectDialog from "./components/NewProjectDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
@@ -28,6 +29,7 @@ import SettingsDialog from "./components/SettingsDialog";
 import Sidebar from "./components/Sidebar";
 import WelcomeScreen from "./components/WelcomeScreen";
 import { preloadHighlighter } from "./lib/highlighter";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
@@ -47,6 +49,7 @@ import {
 	settingsTabAtom,
 	userPreferredModelAtom,
 } from "./store/atoms";
+import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "./store/authAtoms";
 import { appStore } from "./store/ipcHandler";
 
 preloadHighlighter();
@@ -55,6 +58,11 @@ const api = (window as any).look;
 
 export default function App() {
 	const { t } = useTranslation();
+
+	// ---- Auth state ----
+	const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInAtom);
+	const [authLoading, setAuthLoading] = useAtom(authLoadingAtom);
+	const [, setUserProfile] = useAtom(userProfileAtom);
 
 	// ---- Read atoms ----
 	const activeAgent = useAtomValue(activeAgentAtom);
@@ -302,6 +310,79 @@ export default function App() {
 
 	// ---- Side effects ----
 
+	// Auth session restore on mount
+	useEffect(() => {
+		if (!api) return;
+		const configured = isSupabaseConfigured();
+
+		async function restoreSession() {
+			if (!configured) {
+				// No Supabase config — skip login entirely, operate as before
+				setIsLoggedIn(true);
+				setAuthLoading(false);
+				return;
+			}
+
+			const { data: { session } } = await supabase.auth.getSession();
+
+			if (session?.user) {
+				// Restore from cloud
+				const { data: cloudProfile } = await supabase
+					.from("user_profiles")
+					.select("user_name, avatar")
+					.eq("id", session.user.id)
+					.single();
+
+				if (cloudProfile) {
+					setUserProfile({
+						userId: session.user.id,
+						email: session.user.email ?? "",
+						userName: cloudProfile.user_name || session.user.email || "",
+						avatar: cloudProfile.avatar || "",
+					});
+				} else {
+					// Fallback to local
+					try {
+						const r = await api.getUserProfile();
+						if (r?.success && r.profile?.userId === session.user.id) {
+							setUserProfile(r.profile);
+						} else {
+							setUserProfile({
+								userId: session.user.id,
+								email: session.user.email ?? "",
+								userName: session.user.email ?? "",
+								avatar: "",
+							});
+						}
+					} catch {
+						setUserProfile({
+							userId: session.user.id,
+							email: session.user.email ?? "",
+							userName: session.user.email ?? "",
+							avatar: "",
+						});
+					}
+				}
+				setIsLoggedIn(true);
+			} else {
+				// No session — try local profile as fallback
+				try {
+					const r = await api.getUserProfile();
+					if (r?.success && r.profile?.userId) {
+						setUserProfile(r.profile);
+						setIsLoggedIn(true);
+						setAuthLoading(false);
+						return;
+					}
+				} catch {}
+				setIsLoggedIn(false);
+			}
+			setAuthLoading(false);
+		}
+
+		restoreSession();
+	}, []);
+
 	// Persist active agent ID and project ID with debounce.
 	useEffect(() => {
 		if (!api) return;
@@ -345,6 +426,22 @@ export default function App() {
 					Run with <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">npm run dev</code> inside
 					Electron.
 				</p>
+			</div>
+		);
+	}
+
+	// Auth guard — show LoginScreen when Supabase is configured and user is not logged in
+	if (isSupabaseConfigured() && !isLoggedIn) {
+		return <LoginScreen />;
+	}
+
+	// Loading state while checking session
+	if (isSupabaseConfigured() && authLoading) {
+		return (
+			<div className="app-shell flex h-screen flex-col items-center justify-center gap-4 p-10 text-center">
+				<PixelAgentAvatar size="lg" active />
+				<h1 className="text-xl font-semibold tracking-tight text-foreground">Look</h1>
+				<p className="text-xs text-muted-foreground">{t("common.loading")}</p>
 			</div>
 		);
 	}

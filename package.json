@@ -25,6 +25,7 @@
     "@earendil-works/pi-ai": "^0.78.0",
     "@earendil-works/pi-coding-agent": "^0.78.0",
     "@fontsource-variable/geist": "^5.2.9",
+    "@supabase/supabase-js": "^2.108.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.3.0",
     "class-variance-authority": "^0.7.1",

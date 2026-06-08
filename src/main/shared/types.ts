@@ -4,6 +4,17 @@
 // ============================================================
 
 // ============================================================
+// User Profile (shared between main & renderer)
+// ============================================================
+
+export interface UserProfile {
+	userId: string;
+	email: string;
+	userName: string;
+	avatar: string;
+}
+
+// ============================================================
 // Project types (cwd-based project management)
 // ============================================================
 
@@ -505,7 +516,11 @@ export type RendererToMainEvent =
 	 */
 	| { type: "agent:create-fork"; agentId: string; entryId: string; name?: string }
 	/** Set or clear a user-defined label on any entry. */
-	| { type: "agent:set-entry-label"; agentId: string; entryId: string; label: string | null };
+	| { type: "agent:set-entry-label"; agentId: string; entryId: string; label: string | null }
+	// ---- User Profile ----
+	| { type: "user-profile:get" }
+	| { type: "user-profile:update"; patch: Partial<{ userId: string; email: string; userName: string; avatar: string }> }
+	| { type: "user-profile:reset" };
 
 // ============================================================
 // Orchestrator — v0.2 / v0.3 types

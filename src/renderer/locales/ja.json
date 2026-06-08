@@ -150,6 +150,31 @@
     "statMatches": "{{n}} 件",
     "statEntries": "{{n}} 件"
   },
+  "auth": {
+    "loginTitle": "サインインしてください",
+    "registerTitle": "アカウントを作成",
+    "emailPlaceholder": "メールアドレス",
+    "passwordPlaceholder": "パスワード",
+    "loginBtn": "サインイン",
+    "registerBtn": "アカウント作成",
+    "switchToRegister": "アカウントをお持ちでない方は登録",
+    "switchToLogin": "すでにアカウントをお持ちの方はログイン",
+    "emailRequired": "メールアドレスを入力してください",
+    "passwordMinLength": "パスワードは6文字以上必要です",
+    "alreadyRegistered": "このメールアドレスは既に登録されています。ログインしてください。",
+    "registerSuccess": "アカウントを作成しました！自動的にサインインしました。"
+  },
+  "profile": {
+    "title": "プロフィール",
+    "userName": "ユーザー名",
+    "avatar": "アバター",
+    "uploadAvatar": "画像をアップロード",
+    "chooseEmoji": "絵文字を選択",
+    "logout": "ログアウト",
+    "userNamePlaceholder": "表示名",
+    "userNameSaved": "ユーザー名を更新しました",
+    "avatarSaved": "アバターを更新しました"
+  },
   "toast": {
     "modelUnavailable": "モデルが利用できません: {{primary}}。{{resolved}} に切り替えました。",
     "triedModels": "{{count}} 個のモデルを試行しました。現在 {{resolved}} を使用中。",
