@@ -1,5 +1,5 @@
 // ============================================================
-// LoginScreen — email + password auth via Supabase
+// LoginScreen — email OTP (verification code) via Supabase
 // Ink Wash design language
 // ============================================================
 
@@ -7,7 +7,7 @@ import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
 import { useAtom } from "jotai";
-import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2, Mail, Hash } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -17,19 +17,22 @@ import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const api = (window as any).look;
 
+type Step = "email" | "code";
+
 export default function LoginScreen() {
 	const { t } = useTranslation();
 	const [, setIsLoggedIn] = useAtom(isLoggedInAtom);
 	const [, setAuthLoading] = useAtom(authLoadingAtom);
 	const [, setUserProfile] = useAtom(userProfileAtom);
 
-	const [mode, setMode] = useState<"login" | "register">("login");
+	const [step, setStep] = useState<Step>("email");
 	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
+	const [code, setCode] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [codeSent, setCodeSent] = useState(false);
 
-	async function handleSubmit(e: React.FormEvent) {
+	async function handleSendCode(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
 
@@ -37,63 +40,75 @@ export default function LoginScreen() {
 			setError(t("auth.emailRequired", "Email is required"));
 			return;
 		}
-		if (password.length < 6) {
-			setError(t("auth.passwordMinLength", "Password must be at least 6 characters"));
+
+		setSubmitting(true);
+		const { error: otpError } = await supabase.auth.signInWithOtp({
+			email: email.trim(),
+			options: { shouldCreateUser: true },
+		});
+
+		if (otpError) {
+			setError(otpError.message);
+			setSubmitting(false);
+			return;
+		}
+
+		setCodeSent(true);
+		setSubmitting(false);
+		setStep("code");
+		toast(t("auth.codeSent", "Verification code sent to your email"));
+	}
+
+	async function handleVerifyCode(e: React.FormEvent) {
+		e.preventDefault();
+		setError(null);
+
+		if (code.length < 6) {
+			setError(t("auth.codeMinLength", "Please enter the 6-digit code"));
 			return;
 		}
 
 		setSubmitting(true);
+		const { data, error: verifyError } = await supabase.auth.verifyOtp({
+			email: email.trim(),
+			token: code.trim(),
+			type: "email",
+		});
 
-		if (mode === "register") {
-			const { data, error: signUpError } = await supabase.auth.signUp({
-				email: email.trim(),
-				password,
-			});
-
-			if (signUpError) {
-				// Handle "already registered" gracefully
-				if (signUpError.message?.includes("already registered") || signUpError.code === "user_already_exists") {
-					setError(t("auth.alreadyRegistered", "This email is already registered. Please sign in instead."));
-				} else {
-					setError(signUpError.message);
-				}
-				setSubmitting(false);
-				return;
-			}
-
-			if (data.user) {
-				// Update local profile from cloud (triggered by DB trigger)
-				await loadProfile(data.user.id, data.user.email ?? email);
-			}
-
-			toast.success(t("auth.registerSuccess", "Account created! You're now signed in."));
-			setIsLoggedIn(true);
-		} else {
-			// login
-			const { data, error: signInError } = await supabase.auth.signInWithPassword({
-				email: email.trim(),
-				password,
-			});
-
-			if (signInError) {
-				setError(signInError.message);
-				setSubmitting(false);
-				return;
-			}
-
-			if (data.user) {
-				await loadProfile(data.user.id, data.user.email ?? email);
-			}
-
-			setIsLoggedIn(true);
+		if (verifyError || !data.user) {
+			setError(verifyError?.message ?? t("auth.verifyFailed", "Verification failed"));
+			setSubmitting(false);
+			return;
 		}
 
-		setSubmitting(false);
+		await loadProfile(data.user.id, data.user.email ?? email);
+		setIsLoggedIn(true);
 		setAuthLoading(false);
 	}
 
+	function handleBack() {
+		setStep("email");
+		setCode("");
+		setError(null);
+	}
+
+	async function handleResendCode() {
+		setError(null);
+		setSubmitting(true);
+		const { error: otpError } = await supabase.auth.signInWithOtp({
+			email: email.trim(),
+			options: { shouldCreateUser: true },
+		});
+		setSubmitting(false);
+
+		if (otpError) {
+			setError(otpError.message);
+			return;
+		}
+		toast(t("auth.codeResent", "A new code has been sent"));
+	}
+
 	async function loadProfile(userId: string, userEmail: string) {
-		// 1. Try fetching from Supabase
 		const { data: cloudProfile } = await supabase
 			.from("user_profiles")
 			.select("user_name, avatar")
@@ -104,37 +119,29 @@ export default function LoginScreen() {
 			setUserProfile({
 				userId,
 				email: userEmail,
-				userName: cloudProfile.user_name || userEmail,
+				userName: cloudProfile.user_name || userEmail.split("@")[0],
 				avatar: cloudProfile.avatar || "",
 			});
-			// Persist to local ~/.look/user-profile.json for offline fallback
 			if (api?.updateUserProfile) {
 				api.updateUserProfile({
 					userId,
 					email: userEmail,
-					userName: cloudProfile.user_name || userEmail,
+					userName: cloudProfile.user_name || userEmail.split("@")[0],
 					avatar: cloudProfile.avatar || "",
 				}).catch(() => {});
 			}
 			return;
 		}
 
-		// 2. Fallback to local profile
 		if (api?.getUserProfile) {
 			const r = await api.getUserProfile().catch(() => null);
-			if (r?.success && r.profile?.userId) {
+			if (r?.success && r.profile?.userId === userId) {
 				setUserProfile(r.profile);
 				return;
 			}
 		}
 
-		// 3. Bare default
-		setUserProfile({ userId, email: userEmail, userName: userEmail, avatar: "" });
-	}
-
-	function switchMode() {
-		setError(null);
-		setMode(mode === "login" ? "register" : "login");
+		setUserProfile({ userId, email: userEmail, userName: userEmail.split("@")[0], avatar: "" });
 	}
 
 	return (
@@ -145,72 +152,112 @@ export default function LoginScreen() {
 					<PixelAgentAvatar size="lg" active />
 					<h1 className="text-xl font-semibold tracking-tight text-foreground">Look</h1>
 					<p className="text-xs text-muted-foreground">
-						{mode === "login" ? t("auth.loginTitle", "Sign in to continue") : t("auth.registerTitle", "Create an account")}
+						{step === "email"
+							? t("auth.enterEmail", "Enter your email to sign in or create an account")
+							: t("auth.enterCode", "Enter the verification code sent to your email")}
 					</p>
 				</div>
 
-				{/* Form */}
-				<form onSubmit={handleSubmit} className="flex flex-col gap-4">
-					<div className="relative">
-						<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-						<Input
-							type="email"
-							placeholder={t("auth.emailPlaceholder", "Email")}
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							className="h-11 pl-10 text-[13px]"
-							autoFocus
-							disabled={submitting}
-						/>
-					</div>
-
-					<div className="relative">
-						<Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-						<Input
-							type="password"
-							placeholder={t("auth.passwordPlaceholder", "Password")}
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							className="h-11 pl-10 text-[13px]"
-							disabled={submitting}
-						/>
-					</div>
-
-					{error && (
-						<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
-							{error}
+				{step === "email" ? (
+					<form onSubmit={handleSendCode} className="flex flex-col gap-4">
+						<div className="relative">
+							<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+							<Input
+								type="email"
+								placeholder={t("auth.emailPlaceholder", "Email")}
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								className="h-11 pl-10 text-[13px]"
+								autoFocus
+								disabled={submitting}
+							/>
 						</div>
-					)}
 
-					<Button
-						type="submit"
-						disabled={submitting}
-						className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
-					>
-						{submitting ? (
-							<Loader2 className="size-4 animate-spin" />
-						) : (
-							<>
-								{mode === "login" ? t("auth.loginBtn", "Sign In") : t("auth.registerBtn", "Create Account")}
-								<ArrowRight className="ml-2 size-4" />
-							</>
+						{error && (
+							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+								{error}
+							</div>
 						)}
-					</Button>
-				</form>
 
-				{/* Toggle mode */}
-				<div className="mt-6 text-center">
-					<button
-						type="button"
-						onClick={switchMode}
-						disabled={submitting}
-						className="text-[12px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
-					>
-						{mode === "login"
-							? t("auth.switchToRegister", "Don't have an account? Sign up")
-							: t("auth.switchToLogin", "Already have an account? Sign in")}
-					</button>
-				</div>
+						<Button
+							type="submit"
+							disabled={submitting}
+							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+						>
+							{submitting ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<>
+									{t("auth.sendCode", "Send Verification Code")}
+									<ArrowRight className="ml-2 size-4" />
+								</>
+							)}
+						</Button>
+					</form>
+				) : (
+					<form onSubmit={handleVerifyCode} className="flex flex-col gap-4">
+						{/* Show masked email */}
+						<div className="rounded-lg border border-hairline bg-muted/30 px-3 py-2 text-center text-[12px] text-muted-foreground">
+							{t("auth.codeSentTo", "Code sent to")}{" "}
+							<span className="font-medium text-foreground">{email}</span>
+						</div>
+
+						<div className="relative">
+							<Hash className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+							<Input
+								type="text"
+								inputMode="numeric"
+								maxLength={6}
+								placeholder="000000"
+								value={code}
+								onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+								className="h-11 pl-10 text-center text-[18px] tracking-[0.3em]"
+								autoFocus
+								disabled={submitting}
+							/>
+						</div>
+
+						{error && (
+							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+								{error}
+							</div>
+						)}
+
+						<Button
+							type="submit"
+							disabled={submitting || code.length < 6}
+							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+						>
+							{submitting ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<>
+									{t("auth.verifyBtn", "Verify & Sign In")}
+									<ArrowRight className="ml-2 size-4" />
+								</>
+							)}
+						</Button>
+
+						<div className="flex justify-center gap-4 text-[12px]">
+							<button
+								type="button"
+								onClick={handleBack}
+								disabled={submitting}
+								className="text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+							>
+								{t("auth.changeEmail", "Change email")}
+							</button>
+							<button
+								type="button"
+								onClick={handleResendCode}
+								disabled={submitting}
+								className="text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+							>
+								{t("auth.resendCode", "Resend code")}
+							</button>
+						</div>
+					</form>
+				)}
 			</div>
 		</div>
 	);

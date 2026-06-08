@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
 -- 3. RLS policies: users can only read/write their own profile
+-- Drop first so the script is safe to re-run
+DROP POLICY IF EXISTS "Users can read own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
+
 CREATE POLICY "Users can read own profile"
   ON public.user_profiles
   FOR SELECT
