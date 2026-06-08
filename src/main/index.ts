@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { AgentManager } from "./agent-manager.js";
 import { registerIpcHandlers } from "./ipc-handlers.js";
+import { checkForUpdates, initUpdater } from "./updater.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -202,6 +203,12 @@ async function initAgentManager(): Promise<void> {
 		}
 
 		console.log("[Look] IPC handlers registered");
+
+		// Auto-updater: check for updates 3s after startup
+		initUpdater(mainWindow);
+		setTimeout(() => {
+			checkForUpdates().catch(() => {});
+		}, 3000);
 	}
 }
 

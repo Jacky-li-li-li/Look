@@ -91,6 +91,17 @@ export const defaultModelForCreateAtom = atom<string | undefined>(undefined);
 export const showSettingsAtom = atom(false);
 export const settingsTabAtom = atom<"general" | "api-keys" | "chat-prompt" | "about" | "profile">("general");
 
+// ---- Auto Updater ----
+
+export interface UpdateStatus {
+	stage: "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
+	version?: string;
+	percent?: number;
+	message?: string;
+}
+
+export const updateStatusAtom = atom<UpdateStatus | null>(null);
+
 // ---- Derived atoms (replace App.tsx useMemo) ----
 
 /** Currently active agent object — derived from agents list + activeAgentId. */

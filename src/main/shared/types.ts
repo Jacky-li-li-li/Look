@@ -517,6 +517,10 @@ export type RendererToMainEvent =
 	| { type: "agent:create-fork"; agentId: string; entryId: string; name?: string }
 	/** Set or clear a user-defined label on any entry. */
 	| { type: "agent:set-entry-label"; agentId: string; entryId: string; label: string | null }
+	// ---- Auto Updater ----
+	| { type: "update:check" }
+	| { type: "update:download" }
+	| { type: "update:install" }
 	// ---- User Profile ----
 	| { type: "user-profile:get" }
 	| { type: "user-profile:update"; patch: Partial<{ userId: string; email: string; userName: string; avatar: string }> }

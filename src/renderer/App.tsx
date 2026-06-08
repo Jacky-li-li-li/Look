@@ -26,6 +26,7 @@ import NewProjectDialog from "./components/NewProjectDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import SettingsDialog from "./components/SettingsDialog";
+import UpdateNotification from "./components/UpdateNotification";
 import Sidebar from "./components/Sidebar";
 import WelcomeScreen from "./components/WelcomeScreen";
 import { preloadHighlighter } from "./lib/highlighter";
@@ -564,6 +565,7 @@ export default function App() {
 					/>
 				</div>
 			</TooltipProvider>
+			<UpdateNotification />
 		</ThemeProvider>
 	);
 }

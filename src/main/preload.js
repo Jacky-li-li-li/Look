@@ -178,6 +178,14 @@ const api = {
       label,
     }),
 
+  // ---- Auto Updater ----
+  checkForUpdates: () =>
+    ipcRenderer.invoke("look:invoke", { type: "update:check" }),
+  downloadUpdate: () =>
+    ipcRenderer.invoke("look:invoke", { type: "update:download" }),
+  installUpdate: () =>
+    ipcRenderer.invoke("look:invoke", { type: "update:install" }),
+
   // ---- User Profile ----
   getUserProfile: () =>
     ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),

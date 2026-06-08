@@ -4,6 +4,11 @@
 
 module.exports = {
   appId: "com.agent-harness.app",
+  publish: {
+    provider: "github",
+    owner: "Jacky-li-li-li",
+    repo: "Look",
+  },
   productName: "Look",
   directories: {
     output: "release",

@@ -45,6 +45,7 @@ import {
 	Zap,
 	UserRound,
 } from "lucide-react";
+import { useAtom, useAtomValue } from "jotai";
 import { useTheme } from "next-themes";
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -52,6 +53,7 @@ import { toast } from "sonner";
 import { showError } from "../lib/ipc";
 import { supabase } from "../lib/supabase";
 import { userProfileAtom } from "../store/authAtoms";
+import { updateStatusAtom } from "../store/atoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import { ProviderIcon } from "./ProviderIcon";
 import UserAvatar from "./UserAvatar";
@@ -130,6 +132,54 @@ function authSourceLabel(
 			return { label: "auto", title: t("settings.authSourceAuto") };
 	}
 }
+
+// ── Update check button for About tab ──
+function UpdateCheckButton() {
+    const { t } = useTranslation();
+    const updateStatus = useAtomValue(updateStatusAtom);
+
+    if (!updateStatus || updateStatus.stage === "not-available" || updateStatus.stage === "error") {
+      return (
+        <button
+          type="button"
+          onClick={() => api?.checkForUpdates?.()}
+          className="rounded-md border border-hairline px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-accent transition-colors"
+        >
+          {t("settings.checkForUpdates", "Check for Updates")}
+        </button>
+      );
+    }
+
+    if (updateStatus.stage === "checking") {
+      return <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Loader2 className="size-3 animate-spin" />Checking...</span>;
+    }
+
+    if (updateStatus.stage === "available") {
+      return (
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-[12px] font-medium text-foreground">Version {updateStatus.version} available</span>
+          <button type="button" onClick={() => api?.downloadUpdate?.()}
+            className="rounded-md bg-foreground px-3 py-1.5 text-[11px] font-medium text-background hover:opacity-90">Download Update</button>
+        </div>
+      );
+    }
+
+    if (updateStatus.stage === "downloading") {
+      return <span className="text-[11px] text-muted-foreground">Downloading: {(updateStatus.percent ?? 0).toFixed(0)}%</span>;
+    }
+
+    if (updateStatus.stage === "downloaded") {
+      return (
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-[12px] text-foreground">Update ready</span>
+          <button type="button" onClick={() => api?.installUpdate?.()}
+            className="rounded-md bg-foreground px-3 py-1.5 text-[11px] font-medium text-background hover:opacity-90">Restart to Install</button>
+        </div>
+      );
+    }
+
+    return null;
+  }
 
 // ── Right-side content panel ──
 function ContentPanel({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -927,6 +977,7 @@ function SettingsDialogImpl({
 								{configured} provider{configured !== 1 ? "s" : ""} configured ·{" "}
 								{providers.reduce((s, p) => s + p.modelsAvailable, 0)} models
 							</p>
+							<UpdateCheckButton />
 						</ContentPanel>
 					</TabsContent>
 				</Tabs>

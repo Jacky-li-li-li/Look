@@ -8,6 +8,7 @@ import type { AgentManager } from "./agent-manager.js";
 import { getProjectsIndexPath, getSessionsDir, getUserProfilePath } from "./shared/look-storage.js";
 import type { AgentRole, MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
+import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 
 export function registerIpcHandlers(agentManager: AgentManager, mainWindow: BrowserWindow): void {
 	// Forward all AgentManager events to the renderer
@@ -345,6 +346,22 @@ async function handleRendererInvoke(
 
 		case "agent:set-entry-label": {
 			agentManager.setEntryLabel(data.agentId, data.entryId, data.label);
+			return { success: true };
+		}
+
+		// === Auto Updater ===
+		case "update:check": {
+			checkForUpdates().catch(() => {});
+			return { success: true };
+		}
+
+		case "update:download": {
+			downloadUpdate().catch(() => {});
+			return { success: true };
+		}
+
+		case "update:install": {
+			quitAndInstall();
 			return { success: true };
 		}
 

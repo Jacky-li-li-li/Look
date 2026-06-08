@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import i18n from "../i18n";
 import {
 	activeAgentIdAtom,
+	updateStatusAtom,
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
