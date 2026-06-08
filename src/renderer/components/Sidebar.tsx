@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { MessageSquare, Network, Plus, Settings, X } from "lucide-react";
+import { MessageSquare, Network, Plus, X } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -344,25 +344,16 @@ export default function Sidebar({
 				</div>
 			</ScrollArea>
 
-			<div className="flex shrink-0 flex-col border-t border-hairline">
-				<div className="flex items-center gap-2 px-3 py-2">
-					<UserAvatar avatar={userProfile.avatar} size="sm" />
-					<span className="truncate text-[11px] font-medium text-muted-foreground">
-						{userProfile.userName || "You"}
-					</span>
-				</div>
-				<div className="flex shrink-0 items-center px-3 py-2.5">
-					<Button
-						variant="line"
-						size="default"
-						className="h-10 flex-1 justify-start gap-2 text-[12px] font-medium"
-						onClick={onSettingsClick}
-					>
-						<Settings className="size-4" />
-						{t("sidebar.settings")}
-					</Button>
-				</div>
-			</div>
+			<button
+				type="button"
+				onClick={onSettingsClick}
+				className="flex shrink-0 items-center gap-2 border-t border-hairline px-3 py-2.5 transition-colors hover:bg-accent/50"
+			>
+				<UserAvatar avatar={userProfile.avatar} size="sm" />
+				<span className="truncate text-[11px] font-medium text-muted-foreground">
+					{userProfile.userName || "You"}
+				</span>
+			</button>
 		</aside>
 	);
 }
