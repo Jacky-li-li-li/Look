@@ -1,6 +1,6 @@
+import type { AgentInfo, PiMessage, ProjectInfo, SessionTreeNode } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
-import type { AgentInfo, PiMessage, ProjectInfo } from "@shared/types";
 import type { PermissionRequest } from "../components/PermissionDialog";
 
 // ---- Core data ----
@@ -19,11 +19,7 @@ export const recentlyCompletedAtom = atom<string[]>([]);
 /** Derived: set of currently running agent IDs (thinking/working) */
 export const runningAgentsAtom = atom<Set<string>>((get) => {
 	const agents = get(agentsAtom);
-	return new Set(
-		agents
-			.filter((a) => a.status === "thinking" || a.status === "working")
-			.map((a) => a.id),
-	);
+	return new Set(agents.filter((a) => a.status === "thinking" || a.status === "working").map((a) => a.id));
 });
 
 // ---- Project data ----
@@ -47,6 +43,28 @@ export const queuesAtomFamily = atomFamily((_agentId: string) =>
 	atom<{ steering: string[]; followUp: string[] }>({ steering: [], followUp: [] }),
 );
 
+// ---- v0.4 Session tree / branching ----
+
+/** Per-agent session tree (single-root, IPC-friendly shape). Driven
+ *  by `agent:tree-changed` events emitted from the main process when
+ *  the leaf moves (append / navigate / label). Read by the future
+ *  tree-view UI and by ChatPanel to know whether the current view is
+ *  on the "latest" branch. */
+export const sessionTreeAtomFamily = atomFamily((_agentId: string) => atom<SessionTreeNode | null>(null));
+
+/** Per-agent current leafId. Same source as the tree — `agent:tree-changed`. */
+export const sessionLeafIdAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
+
+/** In-flight navigate calls (per agent). `null` = idle. The renderer
+ *  sets it on click and clears it after the IPC resolves; MessageBubble
+ *  reads it to disable the action buttons. The non-null value is the
+ *  entryId of the target — purely for debugging / future visual feedback,
+ *  not a UI flag. */
+export const navigatingEntryAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
+
+/** In-flight createFork calls (per agent). Same shape as above. */
+export const forkingEntryAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
+
 export const pendingAsksAtom = atom<PermissionRequest[]>([]);
 
 // ---- Settings (persisted via IPC to main process, NOT localStorage) ----
@@ -57,6 +75,14 @@ export const userPreferredModelAtom = atom<string | null>(null);
 
 /** Last active agent id for auto-restore on app startup. */
 export const lastActiveAgentIdAtom = atom<string | null>(null);
+
+/**
+ * Whether the active agent's chat panel is scrolled to the bottom.
+ * Set by ChatPanel (via useStickToBottomContext), read by Sidebar to
+ * decide whether to show the completed green border — if the user is
+ * already viewing the latest messages, the indicator is unnecessary.
+ */
+export const activeChatAtBottomAtom = atom(true);
 
 // ---- UI state ----
 
@@ -97,4 +123,11 @@ export const providerSettingsAtom = atom<SettingsProviderInfo[]>([]);
 export function removeAgentAtoms(agentId: string): void {
 	messagesAtomFamily.remove(agentId);
 	queuesAtomFamily.remove(agentId);
+	// v0.4: free the per-agent tree/leaf/navigating/forking atoms too
+	// so a re-created agent with the same id (extremely unlikely, but
+	// possible after a uuidv4 collision) doesn't inherit stale state.
+	sessionTreeAtomFamily.remove(agentId);
+	sessionLeafIdAtomFamily.remove(agentId);
+	navigatingEntryAtomFamily.remove(agentId);
+	forkingEntryAtomFamily.remove(agentId);
 }

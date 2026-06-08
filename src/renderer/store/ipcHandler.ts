@@ -8,24 +8,6 @@
 // ChatPanel.
 // ============================================================
 
-import { createStore } from "jotai";
-import { toast } from "sonner";
-import i18n from "../i18n";
-import {
-	activeAgentIdAtom,
-	activeProjectIdAtom,
-	agentsAtom,
-	autoCollapseAtom,
-	messagesAtomFamily,
-	pendingAsksAtom,
-	pendingDeleteProjectAtom,
-	projectsAtom,
-	providerSettingsAtom,
-	queuesAtomFamily,
-	recentlyCompletedAtom,
-	removeAgentAtoms,
-	userPreferredModelAtom,
-} from "./atoms";
 import type {
 	MainToRendererEvent,
 	PiContentBlock,
@@ -34,6 +16,28 @@ import type {
 	PiThinkingBlock,
 	PiToolCallBlock,
 } from "@shared/types";
+import { createStore } from "jotai";
+import { toast } from "sonner";
+import i18n from "../i18n";
+import {
+	activeAgentIdAtom,
+	activeProjectIdAtom,
+	agentsAtom,
+	autoCollapseAtom,
+	forkingEntryAtomFamily,
+	messagesAtomFamily,
+	navigatingEntryAtomFamily,
+	pendingAsksAtom,
+	pendingDeleteProjectAtom,
+	projectsAtom,
+	providerSettingsAtom,
+	queuesAtomFamily,
+	recentlyCompletedAtom,
+	removeAgentAtoms,
+	sessionLeafIdAtomFamily,
+	sessionTreeAtomFamily,
+	userPreferredModelAtom,
+} from "./atoms";
 
 /** Shared: convert a raw pi SDK content block to Look's PiContentBlock. */
 function sdkBlockToPiBlock(b: any): PiContentBlock {
@@ -158,10 +162,34 @@ export function initIpcHandlers(api: any): () => void {
 			}
 
 			case "agent:queue_update": {
+				// Copy out of the readonly array exposed by the
+				// `agent:queue_update` event payload — the atom
+				// owns a mutable shape (push-friendly downstream)
+				// so a fresh array avoids any aliasing surprises.
 				appStore.set(queuesAtomFamily(event.agentId), {
-					steering: [...event.steering],
-					followUp: [...event.followUp],
+					steering: event.steering ? [...event.steering] : [],
+					followUp: event.followUp ? [...event.followUp] : [],
 				});
+				break;
+			}
+
+			// ---- v0.4 Session tree / branching ----
+			// Fired by the main process whenever the leaf moves
+			// (append, navigate, label, fork). Both the tree shape
+			// and the leafId arrive together so consumers can
+			// decide in one render pass whether the view is on the
+			// "latest" branch.
+			case "agent:tree-changed": {
+				appStore.set(sessionTreeAtomFamily(event.agentId), event.tree);
+				appStore.set(sessionLeafIdAtomFamily(event.agentId), event.leafId);
+				// Clear the in-flight flag on whichever side the
+				// main process just confirmed. Whichever wasn't
+				// the cause will be cleared by its own response
+				// (navigateTree returns synchronously after the
+				// tree-changed emit; createFork returns via the
+				// invoke promise + a fresh tree-changed).
+				appStore.set(navigatingEntryAtomFamily(event.agentId), null);
+				appStore.set(forkingEntryAtomFamily(event.agentId), null);
 				break;
 			}
 
@@ -201,10 +229,7 @@ export function initIpcHandlers(api: any): () => void {
 			case "agent:agent_end": {
 				if (!event.willRetry) {
 					const prev = appStore.get(recentlyCompletedAtom);
-					appStore.set(recentlyCompletedAtom, [
-						...prev.filter((id) => id !== event.agentId),
-						event.agentId,
-					]);
+					appStore.set(recentlyCompletedAtom, [...prev.filter((id) => id !== event.agentId), event.agentId]);
 				}
 				break;
 			}

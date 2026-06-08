@@ -206,6 +206,76 @@ export interface ContextUsageInfo {
 }
 
 // ============================================================
+// Session tree / branching (pi SDK tree structure, surfaced
+// through Look). v0.4 — powers /tree (in-place navigate) and
+// /fork (extract branch to a new .jsonl). See agent-manager.ts
+// for the methods that wrap pi's SessionManager + AgentSession.
+// ============================================================
+
+/**
+ * Subset of a pi session entry that the renderer needs to draw
+ * the tree. We deliberately do NOT ship the full entry payload
+ * across IPC (tool arguments, full message text, etc.) — only
+ * what's needed to render a node and decide what to do with it.
+ *
+ * `children` is recursively the same shape. Mirrors pi's
+ * `SessionTreeNode` but flattened for IPC serialization.
+ */
+export interface SessionTreeNode {
+	id: string;
+	parentId: string | null;
+	type:
+		| "message"
+		| "model_change"
+		| "thinking_level_change"
+		| "compaction"
+		| "branch_summary"
+		| "label"
+		| "session_info"
+		| "custom"
+		| "custom_message";
+	timestamp: string;
+	/** For `type === "message"`: the role + a short text preview. */
+	role?: "user" | "assistant" | "toolResult" | "bashExecution" | "custom" | "branchSummary" | "compactionSummary";
+	textPreview?: string;
+	/** For `type === "branch_summary"`: the LLM-generated summary text. */
+	summary?: string;
+	/** For `type === "label"`: the user-defined label string. */
+	label?: string;
+	children: SessionTreeNode[];
+}
+
+/** Lightweight shape returned by `getUserMessagesForForking`. */
+export interface SessionForkPoint {
+	entryId: string;
+	/** Truncated to ~120 chars — full text is reconstructed by the renderer
+	 *  from the session tree if needed. */
+	text: string;
+	timestamp: string;
+}
+
+/** Result of a `navigateTree` call. Mirrors `AgentSession.navigateTree`'s
+ *  return shape, narrowed to the fields the renderer consumes. */
+export interface NavigateTreeResult {
+	/** The text of the user message we landed on, ready to be put in
+	 *  the editor (so the user can edit-then-resubmit to create a new
+	 *  branch). undefined when navigating to non-user entries. */
+	editorText?: string;
+	/** True if the user cancelled the summary prompt. */
+	cancelled: boolean;
+	/** True if the underlying call was aborted (e.g. user hit Stop). */
+	aborted?: boolean;
+}
+
+/** Result of a `createForkedSession` call. */
+export interface ForkedSessionResult {
+	/** New agentId created for the forked branch. */
+	agentId: string;
+	/** Path to the new .jsonl file the SDK created. */
+	sessionFilePath: string;
+}
+
+// ============================================================
 // Events (Main ↔ Renderer)
 //
 // `MainToRendererEvent` names mirror pi SDK AgentSessionEvent
@@ -292,6 +362,13 @@ export type MainToRendererEvent =
 	| WithAgentId<{ type: "agent:usage-update"; usage: UsageSnapshot }>
 	| WithAgentId<{ type: "agent:history"; messages: PiMessage[] }>
 	| WithAgentId<{ type: "agent:compacting"; compacting: boolean }>
+	// v0.4 — tree / branching. Fired when the leaf or the tree shape
+	// changed (navigate, label set, new branch created by forking).
+	| WithAgentId<{
+			type: "agent:tree-changed";
+			leafId: string | null;
+			tree: SessionTreeNode;
+	  }>
 	| {
 			type: "permission:ask";
 			requestId: string;
@@ -397,7 +474,38 @@ export type RendererToMainEvent =
 	| { type: "project:switch"; projectId: string }
 	| { type: "project:delete"; projectId: string }
 	| { type: "project:confirm-delete-response"; projectId: string; confirmed: boolean }
-	| { type: "project:get-active" };
+	| { type: "project:get-active" }
+	// ---- v0.4 Session tree / branching ----
+	/** Read the full session tree for an agent (for the tree-view UI). */
+	| { type: "agent:get-session-tree"; agentId: string }
+	/** List the user messages that can be selected as a fork point. */
+	| { type: "agent:get-fork-points"; agentId: string }
+	/**
+	 * Navigate the session tree. This is the primary `/tree` operation:
+	 *  - lands the leaf on `entryId`
+	 *  - optionally summarizes the abandoned branch (LLM call)
+	 *  - returns the user-message text (if any) to seed the editor
+	 *  - emits `agent:tree-changed` and a fresh `agent:history` to the renderer
+	 */
+	| {
+			type: "agent:navigate-tree";
+			agentId: string;
+			entryId: string;
+			/** Generate a branch summary for the abandoned path. */
+			summarize?: boolean;
+			/** Override the default summary prompt. */
+			customInstructions?: string;
+			/** User-defined label to attach to the summary entry. */
+			label?: string;
+	  }
+	/**
+	 * Create a new agent that holds an extracted branch as its own
+	 * session file. This is the `/fork` operation. The new agent is
+	 * persisted in agents.json and broadcast via `agent:created`.
+	 */
+	| { type: "agent:create-fork"; agentId: string; entryId: string; name?: string }
+	/** Set or clear a user-defined label on any entry. */
+	| { type: "agent:set-entry-label"; agentId: string; entryId: string; label: string | null };
 
 // ============================================================
 // Orchestrator — v0.2 / v0.3 types

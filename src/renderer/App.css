@@ -580,6 +580,45 @@ body {
     box-shadow: inset 0 0 0 1px oklch(0.55 0.15 150 / 0.8);
   }
 
+  /* Flowing green border — reusable for any element (e.g. scroll-to-bottom button) */
+  .flowing-border {
+    position: relative;
+    border-color: transparent !important;
+  }
+  .flowing-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--flow-angle, 0deg),
+      transparent 0deg,
+      oklch(0.6 0.18 150 / 0.9) 90deg,
+      transparent 180deg,
+      oklch(0.6 0.18 150 / 0.9) 270deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: flow-rotate 2s linear infinite;
+    z-index: -1;
+  }
+  .flowing-border:hover::before {
+    background: conic-gradient(
+      from var(--flow-angle, 0deg),
+      transparent 0deg,
+      oklch(0.65 0.22 150) 90deg,
+      transparent 180deg,
+      oklch(0.65 0.22 150) 270deg,
+      transparent 360deg
+    );
+  }
+
   /* ============================================================
      Liquid Row — session list item
      ============================================================ */
@@ -723,5 +762,30 @@ body {
 
 .animate-drawer-expand {
   animation: drawer-expand 180ms ease both;
+}
+
+/* ── v0.4: bubble flash on tree-navigate ──
+   When the user lands on a historical message via the new
+   "Branch from here" action, ChatPanel sets `flashEntryId`
+   state and MessageBubble applies .bubble-flash for ~900ms.
+   We ring the bubble with the ink color — light mode uses
+   the dark ink at 30% opacity, dark mode inverts to the light
+   ink at the same opacity. The ring animates up to full
+   intensity so it doesn't feel like an error pop. */
+@keyframes bubble-flash {
+  0%   { box-shadow: 0 0 0 0 oklch(0.04 0.002 85 / 0); }
+  20%  { box-shadow: 0 0 0 2px oklch(0.04 0.002 85 / 0.3); }
+  100% { box-shadow: 0 0 0 0 oklch(0.04 0.002 85 / 0); }
+}
+@keyframes bubble-flash-dark {
+  0%   { box-shadow: 0 0 0 0 oklch(0.985 0.002 85 / 0); }
+  20%  { box-shadow: 0 0 0 2px oklch(0.985 0.002 85 / 0.3); }
+  100% { box-shadow: 0 0 0 0 oklch(0.985 0.002 85 / 0); }
+}
+.bubble-flash {
+  animation: bubble-flash 900ms ease-out both;
+}
+.dark .bubble-flash {
+  animation: bubble-flash-dark 900ms ease-out both;
 }
 

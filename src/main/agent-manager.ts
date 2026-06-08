@@ -41,7 +41,9 @@ import type {
 	AgentRole,
 	AgentStatus,
 	ContextUsageInfo,
+	ForkedSessionResult,
 	MainToRendererEvent,
+	NavigateTreeResult,
 	PermissionMode,
 	PiContentBlock,
 	PiMessage,
@@ -49,6 +51,8 @@ import type {
 	PiThinkingBlock,
 	PiToolCallBlock,
 	ProjectInfo,
+	SessionForkPoint,
+	SessionTreeNode,
 	TaskNode,
 	ThinkingLevel,
 	UsageSnapshot,
@@ -107,6 +111,14 @@ interface ManagedAgent {
 	resolveWaits?: (() => void)[];
 	/** Per-agent permission mode (ask / plan / allow). */
 	permissionMode: PermissionMode;
+	/**
+	 * Mirror of `session.sessionManager.getLeafId()`. Updated from the
+	 * SDK's `message_start` event (which is when the leaf actually
+	 * advances — `appendMessage` is internal to pi). Persisted into
+	 * `agents.json` so a restart lands on the same branch the user
+	 * was on. See `syncLeafFromSession` for the sync point.
+	 */
+	leafId: string | null;
 }
 
 interface ManagedProject {
@@ -292,6 +304,10 @@ const SHORT_MESSAGE_THRESHOLD = 4;
 
 /** 最大标题长度 */
 const MAX_TITLE_LENGTH = 20;
+
+/** Cap on agent display name length. Mirrors pi's own sanity cap
+ *  so fork-names fit in the sidebar without truncating at render. */
+const MAX_NAME_LEN = 80;
 
 // ============================================================
 // AgentManager
@@ -609,6 +625,11 @@ export class AgentManager {
 					model: m.info.model,
 					thinkingLevel: m.info.thinkingLevel,
 					sessionFile: m.session.sessionFile ?? undefined,
+					// v0.4: persist the active leaf so a restart lands on
+					// the same branch the user was on (otherwise pi's
+					// default leaf = last append = end of file, which
+					// looks like the branch switch never happened).
+					leafId: m.leafId,
 					permissionMode: m.permissionMode,
 					usage: m.info.usage,
 					createdAt: m.info.createdAt,
@@ -643,29 +664,35 @@ export class AgentManager {
 				if (!sessionFile || !fs.existsSync(sessionFile)) continue;
 				if (this.agents.has(id)) continue;
 
-				// Open pi session from existing file
-				const sm = SessionManager.open(sessionFile);
+			// Open pi session from existing file
+			const sm = SessionManager.open(sessionFile);
 
-				// Extract messages from the session tree
-				// Use getBranch() (not getEntries()) — sessions are a tree, and
-				// getEntries() returns entries from ALL branches including ones
-				// the user has abandoned. getBranch() walks from the current
-				// leaf to root, which is what we want for a linear conversation.
-				const branch = sm.getBranch();
-				const uiMessages: PiMessage[] = [];
-				for (const e of branch) {
-					if (e.type !== "message") continue;
-					const msg = e.message;
-					// Skip pi-internal message types (bashExecution, custom, etc.)
-					if (
-						msg.role === "bashExecution" ||
-						msg.role === "custom" ||
-						msg.role === "branchSummary" ||
-						msg.role === "compactionSummary"
-					)
-						continue;
-					uiMessages.push(convertPiMessage(msg, id, e.id));
-				}
+			// Extract messages from the session tree
+			// Use getBranch() (not getEntries()) — sessions are a tree, and
+			// getEntries() returns entries from ALL branches including ones
+			// the user has abandoned. getBranch() walks from the current
+			// leaf to root, which is what we want for a linear conversation.
+			const branch = sm.getBranch();
+			const uiMessages: PiMessage[] = [];
+			for (const e of branch) {
+				if (e.type !== "message") continue;
+				const msg = e.message;
+				// Skip pi-internal message types (bashExecution, custom, etc.)
+				if (
+					msg.role === "bashExecution" ||
+					msg.role === "custom" ||
+					msg.role === "compactionSummary"
+				)
+					continue;
+				// v0.4: keep `branchSummary` messages in the UI. The
+				// previous code dropped them, which meant switching
+				// branches via /tree lost all context from the
+				// abandoned path the moment Look restarted. pi marks
+				// these as `role: "branchSummary"` — we promote them
+				// to a regular user message so the LLM (and the user)
+				// can still see what the other branch explored.
+				uiMessages.push(convertPiMessage(msg, id, e.id));
+			}
 
 				// Backfill toolCall blocks with toolResult isError/result
 				for (const tmsg of uiMessages) {
@@ -820,15 +847,41 @@ export class AgentManager {
 					});
 				}
 
-				const managed: ManagedAgent = {
-					info,
-					session,
-					messages: uiMessages,
-					unsubscribe: session.subscribe((event) => this.handleSessionEvent(id, event)),
-					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
-				};
+			const managed: ManagedAgent = {
+				info,
+				session,
+				messages: uiMessages,
+				unsubscribe: session.subscribe((event) => this.handleSessionEvent(id, event)),
+				permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
+				// v0.4: seed leaf from index. If absent (legacy
+				// agents.json without the field), fall back to the
+				// SDK's current leaf, which is the end of the file
+				// for v3 sessions — i.e. "no branch switch pending".
+				leafId: entry.leafId ?? sm.getLeafId(),
+			};
 
-				this.agents.set(id, managed);
+			// v0.4: if the persisted leaf differs from the file's
+			// end-of-file leaf, call sm.branch() so subsequent
+			// appends land on the persisted branch (otherwise the
+			// next message would silently re-grow the abandoned
+			// branch and clobber the user's switch on next save).
+			// Cheap no-op when leafId matches the file's tail.
+			if (entry.leafId && entry.leafId !== sm.getLeafId()) {
+				try {
+					sm.branch(entry.leafId);
+					managed.leafId = sm.getLeafId();
+				} catch (err) {
+					console.warn(
+						`[Look] Failed to restore leaf ${entry.leafId} for agent ${id}:`,
+						err,
+					);
+					// Fall back to the SDK's current leaf so we don't
+					// stay in a bad state.
+					managed.leafId = sm.getLeafId();
+				}
+			}
+
+			this.agents.set(id, managed);
 				this.agentUsage.set(id, { ...cumUsage });
 				loaded++;
 			}
@@ -1366,6 +1419,9 @@ export class AgentManager {
 			messages: [],
 			unsubscribe: session.subscribe((e) => this.handleSessionEvent(id, e)),
 			permissionMode: "ask",
+			// v0.4: new agent starts with a fresh tree, no leaf yet.
+			// message_start of the first user message will set it.
+			leafId: session.sessionManager.getLeafId(),
 		};
 		this.agents.set(id, managed);
 
@@ -1788,6 +1844,17 @@ export class AgentManager {
 		return { ...event, type: `agent:${event.type}`, agentId };
 	}
 
+	/**
+	 * Split a stored model key like `"anthropic/claude-3-5-sonnet"`
+	 * into `[provider, modelId]`. Mirrors the convention used by
+	 * `resolveModel` / `ModelRegistry` lookups.
+	 */
+	private splitModelKey(key: string): [string, string] {
+		const slash = key.indexOf("/");
+		if (slash < 0) return ["anthropic", key];
+		return [key.slice(0, slash), key.slice(slash + 1)];
+	}
+
 	/** Tool calls blocked by the permission gate (locally). */
 	private blockedToolCalls = new Map<string, Set<string>>();
 
@@ -1820,6 +1887,13 @@ export class AgentManager {
 				// handleSessionEvent. Synthesizing a placeholder from
 				// addMessage would race with the SDK's event and break
 				// message-id correlation in the UI.
+				//
+				// v0.4: but we DO need to mirror the leaf here —
+				// message_start is the SDK's signal that the leaf just
+				// advanced (appendMessage is internal to pi, so we
+				// can't observe it directly). Sync the mirror and
+				// tell the renderer the tree shape may have changed.
+				this.syncLeafFromSession(agentId);
 				break;
 			}
 			case "message_update": {
@@ -2016,6 +2090,31 @@ export class AgentManager {
 			}
 			case "agent_end": {
 				this.updateStatus(agentId, "idle");
+				// After a turn completes, the SDK has committed all
+				// messages to the session tree (with real UUID entry
+				// IDs). Rebuild m.messages from the tree so future
+				// navigateTree / createFork calls get correct entry
+				// IDs instead of the synthetic m_xxx fallback IDs
+				// we used during streaming.
+				{
+					const rebuilt = this.rebuildMessagesFromSession(agentId);
+					if (rebuilt.length > 0) {
+						const oldLen = m.messages.length;
+						m.messages = rebuilt;
+						m.info.messageCount = rebuilt.length;
+						this.emit({ type: "agent:history", agentId, messages: rebuilt });
+						// Re-emit tree-changed so the renderer picks up the
+						// latest leafId after the turn.
+						this.syncLeafFromSession(agentId);
+						// Persist the new leaf so a restart doesn't undo the switch.
+						this.saveIndex();
+						// Only log when IDs actually changed (first
+						// turn after restart already has correct IDs).
+						if (oldLen === rebuilt.length) {
+							console.log(`[Look] Synced message IDs for agent ${agentId} (${rebuilt.length} messages)`);
+						}
+					}
+				}
 				m.resolveWaits?.forEach((fn) => {
 					fn();
 				});
@@ -2049,6 +2148,337 @@ export class AgentManager {
 				break;
 			}
 		}
+	}
+
+	// ============================================================
+	// Session tree / branching (v0.4)
+	// ============================================================
+
+	/**
+	 * Pull the current leafId from the SDK's SessionManager and
+	 * mirror it on `m.leafId`. Emits `agent:tree-changed` so the
+	 * renderer can refresh its tree-view and breadcrumb.
+	 *
+	 * Called from `message_start` (where the leaf advances due to
+	 * `appendMessage`) and at the tail of `navigateTreeSession` /
+	 * `createForkedSession` (which move the leaf via the SDK's
+	 * own `navigateTree` / `createBranchedSession`).
+	 */
+	private syncLeafFromSession(agentId: string): void {
+		const m = this.agents.get(agentId);
+		if (!m) return;
+		const newLeaf = m.session.sessionManager.getLeafId();
+		if (newLeaf === m.leafId) return; // no-op when nothing moved
+		m.leafId = newLeaf;
+		const tree = this.snapshotTreeForRenderer(agentId);
+		if (tree) {
+			this.emit({ type: "agent:tree-changed", agentId, leafId: newLeaf, tree });
+		}
+	}
+
+	/**
+	 * Flatten pi's `SessionTreeNode` into the IPC-friendly shape
+	 * declared in `shared/types.ts`. Caps `textPreview` to keep the
+	 * payload small (a long conversation can otherwise balloon a
+	 * single IPC frame).
+	 */
+	private snapshotTreeForRenderer(agentId: string): SessionTreeNode | null {
+		const m = this.agents.get(agentId);
+		if (!m) return null;
+		const roots = m.session.sessionManager.getTree();
+		// A well-formed session has exactly one root; defensively
+		// pick the first if there are multiple (orphans etc.).
+		if (roots.length === 0) {
+			return {
+				id: "__empty__",
+				parentId: null,
+				type: "session_info",
+				timestamp: new Date(0).toISOString(),
+				children: [],
+			};
+		}
+		return this.toRendererTreeNode(roots[0]);
+	}
+
+	private toRendererTreeNode(n: any): SessionTreeNode {
+		const entry = n.entry ?? {};
+		const node: SessionTreeNode = {
+			id: entry.id,
+			parentId: entry.parentId,
+			type: entry.type,
+			timestamp: entry.timestamp,
+			children: (n.children ?? []).map((c: any) => this.toRendererTreeNode(c)),
+		};
+		if (entry.type === "message" && entry.message) {
+			node.role = entry.message.role;
+			const text = this.previewTextFromMessage(entry.message);
+			if (text) node.textPreview = text;
+		} else if (entry.type === "branch_summary") {
+			node.summary = entry.summary;
+		} else if (entry.type === "label") {
+			node.label = entry.label;
+		}
+		return node;
+	}
+
+	private previewTextFromMessage(msg: any): string {
+		const MAX = 120;
+		if (typeof msg.content === "string") return msg.content.slice(0, MAX);
+		if (Array.isArray(msg.content)) {
+			const text = msg.content
+				.filter((b: any) => b?.type === "text")
+				.map((b: any) => b.text ?? "")
+				.join(" ")
+				.trim();
+			return text.slice(0, MAX);
+		}
+		return "";
+	}
+
+	/** Read the tree for an agent. Cheap (in-memory traversal). */
+	getSessionTree(agentId: string): SessionTreeNode | null {
+		return this.snapshotTreeForRenderer(agentId);
+	}
+
+	/** Read the leafId for an agent (null if no entries yet). */
+	getLeafId(agentId: string): string | null {
+		const m = this.agents.get(agentId);
+		if (!m) return null;
+		// Always read fresh — `m.leafId` is a mirror and could
+		// drift if the SDK is mid-write; `getLeafId()` is cheap.
+		return m.session.sessionManager.getLeafId();
+	}
+
+	/**
+	 * List user messages the user can pick as a fork point.
+	 * Thin wrapper around `AgentSession.getUserMessagesForForking()`
+	 * which already returns `{ entryId, text }` pairs.
+	 */
+	getForkPoints(agentId: string): SessionForkPoint[] {
+		const m = this.agents.get(agentId);
+		if (!m) return [];
+		const raw = m.session.getUserMessagesForForking();
+		return raw.map((r) => {
+			const e = m.session.sessionManager.getEntry(r.entryId);
+			return {
+				entryId: r.entryId,
+				text: r.text.length > 120 ? `${r.text.slice(0, 120)}…` : r.text,
+				timestamp: e?.timestamp ?? new Date().toISOString(),
+			};
+		});
+	}
+
+	/**
+	 * Navigate the active branch. Wraps `AgentSession.navigateTree`
+	 * which is the same code path the pi TUI uses — it handles
+	 * "land on user message → put text in editor", summary prompts,
+	 * and the cancel button in one call. After the SDK moves the
+	 * leaf we re-emit the agent's history so the renderer can
+	 * replace its message list (this is the only way the renderer
+	 * knows to drop messages from the abandoned branch).
+	 */
+	async navigateTreeSession(
+		agentId: string,
+		entryId: string,
+		opts?: { summarize?: boolean; customInstructions?: string; label?: string },
+	): Promise<NavigateTreeResult> {
+		const m = this.agents.get(agentId);
+		if (!m) {
+			throw new Error(`Agent ${agentId} not found`);
+		}
+		if (m.info.status === "thinking" || m.info.status === "working") {
+			throw new Error(
+				"Cannot navigate the tree while the agent is generating. Stop the current turn first.",
+			);
+		}
+		const result = await m.session.navigateTree(entryId, {
+			summarize: opts?.summarize,
+			customInstructions: opts?.customInstructions,
+			label: opts?.label,
+		});
+		if (result.cancelled) {
+			// Renderer may want to keep the user on the old leaf —
+			// nothing to do here, the SDK already restored the leaf.
+			return { cancelled: true };
+		}
+		// Rebuild the message list from the new active branch. We
+		// mirror the `loadPersistedAgents` extraction so the
+		// renderer gets the same shape it knows how to render.
+		const messages = this.rebuildMessagesFromSession(agentId);
+		this.emit({ type: "agent:history", agentId, messages });
+		this.syncLeafFromSession(agentId);
+		// Persist the new leaf so a restart doesn't undo the switch.
+		this.saveIndex();
+		return {
+			cancelled: false,
+			editorText: result.editorText,
+			aborted: result.aborted,
+		};
+	}
+
+	/**
+	 * Create a new agent that holds an extracted branch as its own
+	 * session file. Mirrors what `/fork` does in the pi TUI: copy
+	 * the path from root to `entryId` into a brand-new .jsonl, then
+	 * open a new AgentSession against it. The new agent is
+	 * registered in `this.agents` and broadcast via `agent:created`.
+	 */
+	async createForkedSession(
+		agentId: string,
+		entryId: string,
+		opts?: { name?: string },
+	): Promise<ForkedSessionResult> {
+		const src = this.agents.get(agentId);
+		if (!src) throw new Error(`Agent ${agentId} not found`);
+
+		const newSessionFile = src.session.sessionManager.createBranchedSession(entryId);
+		if (!newSessionFile) {
+			throw new Error("Failed to create the forked session file (in-memory session?)");
+		}
+
+		// Open the brand-new file and build a fresh AgentSession
+		// against it. Reuse the parent's role / model / tools so the
+		// fork feels like "the same agent, different branch".
+		const sm = SessionManager.open(newSessionFile);
+		const role = src.info.role;
+		const roleToolNames = getRoleTools(role);
+		const toolNames: string[] = roleToolNames ?? [...BUILTIN_TOOL_NAMES];
+		const model = this.lookupModel(...this.splitModelKey(src.info.model));
+		if (!model) {
+			throw new Error(`Cannot resolve model ${src.info.model} for forked session`);
+		}
+		let systemPrompt = getRoleSystemPrompt(role);
+		if (role === "chat") {
+			const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
+			if (custom) systemPrompt = custom;
+		}
+		const newId = uuidv4().slice(0, 8);
+		const resourceLoader = this.buildResourceLoader({ systemPrompt, agentId: newId });
+
+		await resourceLoader.reload();
+		const customTools = this.buildCustomTools(toolNames, newId);
+		const allToolNames = resolveToolNames(roleToolNames, customTools);
+
+		const settingsManager = makeBaseSettings();
+		const { session } = await createAgentSession({
+			cwd: this.getAgentCwd(agentId),
+			authStorage: this.authStorage,
+			modelRegistry: this.modelRegistry,
+			sessionManager: sm,
+			settingsManager,
+			thinkingLevel: src.info.thinkingLevel,
+			tools: allToolNames,
+			customTools: customTools as any,
+			resourceLoader,
+			model,
+		});
+
+		const forkName = (opts?.name ?? `${src.info.name} · fork`).slice(0, MAX_NAME_LEN);
+		const info: AgentInfo = {
+			id: newId,
+			name: forkName,
+			role,
+			model: src.info.model,
+			thinkingLevel: src.info.thinkingLevel,
+			status: "idle",
+			messageCount: 0,
+			createdAt: Date.now(),
+			usage: { ...EMPTY_USAGE },
+			fallbackModels: src.info.fallbackModels,
+			permissionMode: src.info.permissionMode,
+			sessionFilePath: newSessionFile,
+			projectId: src.info.projectId,
+		};
+
+		// Pull messages from the new file's branch so the renderer
+		// sees the fork's content immediately (no waiting for the
+		// first user message).
+		const messages = this.extractMessagesFromSessionManager(sm, newId);
+		const managed: ManagedAgent = {
+			info,
+			session,
+			messages,
+			unsubscribe: session.subscribe((e) => this.handleSessionEvent(newId, e)),
+			permissionMode: src.info.permissionMode,
+			leafId: sm.getLeafId(),
+		};
+		this.agents.set(newId, managed);
+		this.agentUsage.set(newId, { ...EMPTY_USAGE });
+
+		// The first real message in the new agent must come from
+		// the user, not from a synthetic system message — we want
+		// the fork to land cleanly on `entryId`'s user prompt.
+		// (mirrors `createAgent`'s pattern of seeding a system
+		// message; here the new file already has the user's
+		// prompt at the tip, so no seed is needed.)
+
+		this.saveIndex();
+		this.emit({ type: "agent:created", agentId: newId, agent: { ...info } });
+		this.emit({ type: "agent:history", agentId: newId, messages });
+		this.emitAgentList();
+		return { agentId: newId, sessionFilePath: newSessionFile };
+	}
+
+	/**
+	 * Set or clear a user-defined label on any entry. Labels are
+	 * rendered as bookmarks in the future tree-view UI; they do
+	 * NOT participate in LLM context.
+	 */
+	setEntryLabel(agentId: string, entryId: string, label: string | null): void {
+		const m = this.agents.get(agentId);
+		if (!m) return;
+		// Treat empty string as "clear" — the renderer can pass `""`
+		// from an input's onBlur and expect a remove.
+		const next = label && label.trim().length > 0 ? label.trim() : undefined;
+		m.session.sessionManager.appendLabelChange(entryId, next);
+		this.syncLeafFromSession(agentId); // emits agent:tree-changed
+	}
+
+	/**
+	 * Re-run the same `getBranch() → convert` extraction as
+	 * `loadPersistedAgents`, but against an already-open
+	 * SessionManager. Used after `navigateTree` to rebuild the
+	 * renderer's message list.
+	 */
+	private rebuildMessagesFromSession(agentId: string): PiMessage[] {
+		const m = this.agents.get(agentId);
+		if (!m) return [];
+		return this.extractMessagesFromSessionManager(m.session.sessionManager, agentId);
+	}
+
+	private extractMessagesFromSessionManager(sm: any, agentId: string): PiMessage[] {
+		const branch = sm.getBranch();
+		const out: PiMessage[] = [];
+		for (const e of branch) {
+			if (e.type !== "message") continue;
+			const msg = e.message;
+			if (msg.role === "bashExecution" || msg.role === "custom" || msg.role === "compactionSummary") continue;
+			out.push(convertPiMessage(msg, agentId, e.id));
+		}
+		// Same tool-result backfill as loadPersistedAgents (keeps
+		// toolCall blocks in assistant messages rich with result).
+		for (const tmsg of out) {
+			if (tmsg.role !== "tool") continue;
+			const tcId = (tmsg as any)._toolCallId as string | undefined;
+			const isErr = (tmsg as any)._isError as boolean | undefined;
+			if (!tcId) continue;
+			for (const am of out) {
+				if (am.role !== "assistant") continue;
+				const block = am.contentBlocks.find(
+					(b) => b.type === "toolCall" && (b as PiToolCallBlock).id === tcId,
+				) as PiToolCallBlock | undefined;
+				if (!block) continue;
+				block.result =
+					(tmsg as any).contentBlocks
+						?.filter((bb: any) => bb.type === "text")
+						.map((bb: any) => bb.text ?? "")
+						.join("\n") ?? "";
+				block.isError = isErr ?? false;
+				block.status = isErr ? "error" : "success";
+				break;
+			}
+		}
+		return out;
 	}
 
 	// ============================================================

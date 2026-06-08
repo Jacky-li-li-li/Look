@@ -1,5 +1,18 @@
 // ============================================================
 // MessageBubble — Whisper Bubbles + Inset Drawers (Ink Wash)
+//
+// v0.4: Branching actions (Branch from here / Fork to new chat)
+// are rendered by ChatPanel *outside* the bubble, in a sibling
+// row directly below the message row. The whole row is a
+// `group/message` so hovering the bubble OR the actions keeps
+// the strip visible. This matches the ChatGPT pattern and keeps
+// the bubble itself free of any meta-UI.
+//
+// User bubbles do NOT get an action strip — forking off a user
+// message is a different mental model ("re-ask the same question")
+// and we don't want to suggest it accidentally. The future
+// /tree command palette (Phase 1.5+) will let the user navigate
+// to any user message as a fork point if they really want to.
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
@@ -11,7 +24,7 @@ import type {
 	PiThinkingBlock,
 	PiToolCallBlock,
 } from "@shared/types";
-import { UserRound } from "lucide-react";
+import { MapPin, UserRound } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
@@ -24,6 +37,20 @@ interface MessageBubbleProps {
 	agentRole?: AgentRole;
 	agentName?: string;
 	autoCollapse: boolean;
+	/**
+	 * v0.4: whether this message's id matches the session's
+	 * current leafId. Renders a subtle "active" accent (left
+	 * border + pin badge) so the user can see at a glance which
+	 * branch they're on. */
+	isActiveLeaf?: boolean;
+	/**
+	 * v0.4: when true, applies the .bubble-flash animation to
+	 * the inner whisper-bubble. ChatPanel sets this on the
+	 * entry it just navigated to, for ~900ms, then clears it.
+	 * The animation is a 2px ink-color ring growing then
+	 * fading — see App.css.
+	 */
+	flash?: boolean;
 }
 
 /** Render content blocks in pi SDK order (thinking → toolCall → text).
@@ -83,9 +110,17 @@ function ContentBlocks({
 	);
 }
 
-const MessageBubble = memo(function MessageBubble({ message, agentRole, agentName, autoCollapse }: MessageBubbleProps) {
+const MessageBubble = memo(function MessageBubble({
+	message,
+	agentRole,
+	agentName,
+	autoCollapse,
+	isActiveLeaf = false,
+	flash = false,
+}: MessageBubbleProps) {
 	const { t } = useTranslation();
 	const isUser = message.role === "user";
+	const isAssistant = message.role === "assistant";
 
 	return (
 		<div
@@ -110,22 +145,31 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 						{isUser ? t("chat.you") : (agentName ?? t("chat.agent"))}
 					</span>
 					{message.isStreaming && <span className="status-mark" data-status="thinking" />}
+					{isAssistant && isActiveLeaf && (
+						<span
+							title={t("chat.activeLeaf")}
+							className="inline-flex items-center gap-0.5 rounded-sm border border-hairline px-1 py-px text-[9px] font-medium uppercase tracking-wider text-muted-foreground/80"
+						>
+							<MapPin className="size-2.5" />
+							{t("chat.activeLeaf")}
+						</span>
+					)}
 				</div>
 
 				{/* Whisper bubble */}
 				{message.assistantChunks && message.assistantChunks.length > 0 ? (
 					/* ── Multi-chunk: separate blocks under ONE label ── */
-					<div className="flex flex-col gap-3">
+					<div
+						className={cn(
+							"whisper-bubble whisper-bubble--assistant flex flex-col gap-3 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed w-full",
+							isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
+							flash && "bubble-flash",
+						)}
+					>
 						{message.assistantChunks.map((chunk, ci) => (
 							<div
 								key={ci}
-								className={cn(
-									"whisper-bubble whisper-bubble--assistant flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed w-full",
-									// Last chunk gets a subtle left-accent to indicate it's the final answer
-									ci === message.assistantChunks!.length - 1 &&
-										message.assistantChunks!.length > 1 &&
-										"border-l-2 border-primary/30",
-								)}
+								className="flex flex-col gap-2"
 							>
 								<ContentBlocks
 									blocks={chunk.contentBlocks}
@@ -142,6 +186,8 @@ const MessageBubble = memo(function MessageBubble({ message, agentRole, agentNam
 							"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
 							isUser && "whisper-bubble--user",
 							!isUser && "whisper-bubble--assistant w-full",
+							isAssistant && isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
+							flash && "bubble-flash",
 						)}
 					>
 						<ContentBlocks

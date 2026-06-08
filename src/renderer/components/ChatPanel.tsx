@@ -15,11 +15,33 @@ import type {
 	PiTextBlock,
 	PiToolCallBlock,
 } from "@shared/types";
-import { ChevronDown, MessageSquare, Send, Square } from "lucide-react";
+import { useAtomValue, useSetAtom } from "jotai";
+import {
+	GitBranch,
+	Check,
+	ChevronDown,
+	Copy,
+	GitFork,
+	Undo2,
+	MessageSquare,
+	Send,
+	Square,
+} from "lucide-react";
 import type React from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import {
+	activeAgentIdAtom,
+	activeChatAtBottomAtom,
+	forkingEntryAtomFamily,
+	navigatingEntryAtomFamily,
+	recentlyCompletedAtom,
+	sessionLeafIdAtomFamily,
+} from "../store/atoms";
+import { appStore } from "../store/ipcHandler";
+import { BranchConfirmDialog, type BranchConfirmRequest, type BranchConfirmResult } from "./BranchConfirmDialog";
 import ContextRing from "./ContextRing";
 import MessageBubble from "./MessageBubble";
 import ModelSelector from "./ModelSelector";
@@ -81,9 +103,7 @@ const ChatPanel = memo(function ChatPanel({
 }: ChatPanelProps) {
 	const { t } = useTranslation();
 	const [input, setInput] = useState("");
-	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
-	const [showScrollBtn, setShowScrollBtn] = useState(false);
 
 	// ---- v0.3 skills: lazy-load + slash menu state ----
 	// We fetch the skill list once per agent mount. The main process
@@ -306,42 +326,6 @@ const ChatPanel = memo(function ChatPanel({
 		return merged;
 	}, [messages]);
 
-	// Track whether an initial scroll-to-bottom is needed.
-	// Reset on agentId change so session switch re-scrolls;
-	// also covers page refresh where agentId stays fixed but
-	// messages load asynchronously (effect watches length too).
-	const needsInitialScrollRef = useRef(true);
-	useEffect(() => {
-		needsInitialScrollRef.current = true;
-	}, [agentId]);
-
-	// Initial scroll-to-bottom — fires on session switch AND on
-	// first data load after refresh. Double rAF lets Virtuoso
-	// measure item heights (which happen after the first paint)
-	// before we scroll, avoiding the "stuck at top" glitch.
-	useEffect(() => {
-		if (!needsInitialScrollRef.current) return;
-		if (displayMessages.length === 0) return;
-		needsInitialScrollRef.current = false;
-
-		let raf1 = 0;
-		let raf2 = 0;
-		raf1 = requestAnimationFrame(() => {
-			raf2 = requestAnimationFrame(() => {
-				virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end" });
-			});
-		});
-		return () => {
-			cancelAnimationFrame(raf1);
-			cancelAnimationFrame(raf2);
-		};
-	}, [agentId, displayMessages.length]);
-
-	const handleScrollToBottom = () => {
-		virtuosoRef.current?.scrollToIndex({ index: displayMessages.length - 1, behavior: "smooth" });
-		setShowScrollBtn(false);
-	};
-
 	const handleSend = () => {
 		const text = input.trim();
 		if (!text) return;
@@ -379,6 +363,286 @@ const ChatPanel = memo(function ChatPanel({
 		}
 	};
 
+	// ---- v0.4 Session tree / branching ----
+	// Read the per-agent tree/leaf state from Jotai (driven by
+	// `agent:tree-changed` events in store/ipcHandler.ts). The
+	// `isActiveLeaf` derived on the spot is cheap — `Set.has` is
+	// O(1) and the set only has at most a few entries.
+	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
+	const forkingEntry = useAtomValue(forkingEntryAtomFamily(agentId));
+	const sessionLeafId = useAtomValue(sessionLeafIdAtomFamily(agentId));
+
+	// Confirm-sheet state. `pendingBranchEntryId` is the assistant
+	// bubble the user clicked; `pendingConfirm` is the dialog
+	// content. We hold the entry separately so the dialog can
+	// reference it after the user picks a summary option without
+	// the closure capturing stale data.
+	const [pendingConfirm, setPendingConfirm] = useState<BranchConfirmRequest | null>(null);
+	const [pendingBranchEntryId, setPendingBranchEntryId] = useState<string | null>(null);
+	// True while a fork is in flight (post-confirm) so the action
+	// strip on the bubble can flip to a disabled state until the
+	// agent:tree-changed event lands.
+
+	// Ref that records "I just asked the main process to navigate
+	// to entry X — when the message list updates, scroll the
+	// matching DOM node into view and flash it". Cleared after
+	// the scroll runs (one-shot) so streaming messages don't keep
+	// yanking the view.
+	const pendingScrollToRef = useRef<string | null>(null);
+	// Entry id that should receive the bubble-flash animation
+	// right now. Set by the scroll-into-view effect after a
+	// navigate, cleared ~900ms later. State-driven (not classList
+	// imperative) so React owns the class application.
+	const [flashEntryId, setFlashEntryId] = useState<string | null>(null);
+	const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(() => {
+		return () => {
+			if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+		};
+	}, []);
+
+	// One-shot scroll + flash after the message list updates to
+	// reflect a navigate. We trigger on the *first* render where
+	// the pending entry's message is present and a previous
+	// ref-snapshot of the messages did not contain it. The library
+	// does a smooth scroll on its own, but the entry might be far
+	// up the list, so we override with explicit scrollIntoView.
+	// The flash is then driven by `flashEntryId` state — MessageBubble
+	// adds .bubble-flash when its id matches — so React owns the
+	// class lifecycle, not us.
+	const lastMessageIdsRef = useRef<Set<string>>(new Set());
+	useEffect(() => {
+		const target = pendingScrollToRef.current;
+		if (!target) return;
+		const ids = new Set(displayMessages.map((m) => m.id));
+		if (ids.has(target) && !lastMessageIdsRef.current.has(target)) {
+			requestAnimationFrame(() => {
+				const el = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(target)}"]`);
+				if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+				pendingScrollToRef.current = null;
+			});
+			setFlashEntryId(target);
+			if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+			flashTimerRef.current = setTimeout(() => {
+				setFlashEntryId(null);
+				flashTimerRef.current = null;
+			}, 900);
+		}
+		lastMessageIdsRef.current = ids;
+	}, [displayMessages]);
+
+	const handleBranchFromHere = useCallback(
+		(entryId: string) => {
+			// Block if the agent is busy generating — main process
+			// would throw, and we want a friendlier surface here.
+			if (isBusy) {
+				toast(t("chat.stopFirstToNavigate"));
+				return;
+			}
+			// Block re-entry if another navigate is in flight.
+			if (navigatingEntry !== null || forkingEntry !== null) return;
+			// Two-step confirm: if the user has un-sent text, ask
+			// whether to send it first (otherwise we'd silently
+			// discard their draft on the upcoming leaf switch).
+			if (input.trim().length > 0) {
+				setPendingBranchEntryId(entryId);
+				setPendingConfirm({ kind: "input-not-empty" });
+			} else {
+				setPendingBranchEntryId(entryId);
+				setPendingConfirm({ kind: "summary" });
+			}
+		},
+		[isBusy, navigatingEntry, forkingEntry, input, t],
+	);
+
+	const handleForkToNewChat = useCallback(
+		async (entryId: string) => {
+			if (isBusy) {
+				toast(t("chat.stopFirstToNavigate"));
+				return;
+			}
+			if (navigatingEntry !== null || forkingEntry !== null) return;
+			const api = (window as any).look;
+			if (!api) return;
+			appStore.set(forkingEntryAtomFamily(agentId), entryId);
+			const toastId = toast.loading(t("chat.forking"));
+			try {
+				const r = await api.createFork(agentId, entryId, {});
+				toast.dismiss(toastId);
+				if (!r?.success) {
+					toast.error(t("chat.forkFailed", { message: r?.error ?? "unknown" }));
+					appStore.set(forkingEntryAtomFamily(agentId), null);
+					return;
+				}
+				// Switch the active agent to the new one so the
+				// user lands on their forked session.
+				if (r.agentId) {
+					appStore.set(activeAgentIdAtom, r.agentId);
+					toast.success(t("chat.forkCreated"), { duration: 1500 });
+				}
+			} catch (err: any) {
+				toast.dismiss(toastId);
+				toast.error(t("chat.forkFailed", { message: err?.message ?? "unknown" }));
+				appStore.set(forkingEntryAtomFamily(agentId), null);
+			}
+		},
+		[isBusy, navigatingEntry, forkingEntry, agentId, t],
+	);
+
+	// Resolve the confirm sheet into an actual action. Single
+	// dispatcher so the dialog stays dumb about what each kind means.
+	const handleConfirmResolve = useCallback(
+		async (result: BranchConfirmResult) => {
+			const entryId = pendingBranchEntryId;
+			const confirm = pendingConfirm;
+			setPendingConfirm(null);
+			setPendingBranchEntryId(null);
+			if (!entryId || !confirm) return;
+			// User dismissed the dialog via X / Escape — bail without navigating.
+			if (result.kind === "summary-cancel") return;
+			if (confirm.kind === "input-not-empty") {
+				if (result.kind === "input-cancel") return;
+				if (result.kind === "input-send-first") {
+					// Send the user's draft, then proceed to the
+					// summary prompt. The user gets a normal message
+					// flow first; the navigate is the second step.
+					const draft = input.trim();
+					setInput("");
+					onSend(draft);
+					// Defer the summary prompt until the SDK has
+					// actually accepted the message (one tick is
+					// enough — handleSessionEvent updates leaf on
+					// message_start).
+					setTimeout(() => {
+						setPendingBranchEntryId(entryId);
+						setPendingConfirm({ kind: "summary" });
+					}, 50);
+					return;
+				}
+				// result.kind === "input-overwrite" → fall through
+				// to the summary prompt, replacing the input box
+				// with the editorText returned by navigateTree.
+			}
+			// From here on we're definitely about to call
+			// navigateTree. Decide the summary options first.
+			let summarize: boolean;
+			if (result.kind === "summary-generate") summarize = true;
+			else summarize = false;
+			const api = (window as any).look;
+			if (!api) return;
+			appStore.set(navigatingEntryAtomFamily(agentId), entryId);
+			pendingScrollToRef.current = entryId;
+			const toastId = toast.loading(t("chat.navigating"));
+			try {
+				const r = await api.navigateTree(agentId, entryId, { summarize });
+				toast.dismiss(toastId);
+				if (!r?.success) {
+					toast.error(t("chat.navigatingFailed", { message: r?.error ?? "unknown" }));
+					appStore.set(navigatingEntryAtomFamily(agentId), null);
+					pendingScrollToRef.current = null;
+					return;
+				}
+				const nav = r.result ?? {};
+				if (nav.cancelled) {
+					// User bailed at the summary prompt inside the
+					// SDK (it can show its own chooser). The main
+					// process keeps the previous leaf.
+					appStore.set(navigatingEntryAtomFamily(agentId), null);
+					pendingScrollToRef.current = null;
+					return;
+				}
+				// Put the returned editorText in the input box. If
+				// undefined (target was not a user message), clear
+				// it and surface a hint.
+				if (typeof nav.editorText === "string") {
+					setInput(nav.editorText);
+					inputRef.current?.focus();
+				} else {
+					setInput("");
+					toast(t("chat.switchedToBranchEditorHint"), { duration: 2500 });
+				}
+				toast.success(t("chat.branched"), { duration: 1500 });
+				// The agent:tree-changed event will clear the
+				// navigating flag and update leafId.
+			} catch (err: any) {
+				toast.dismiss(toastId);
+				toast.error(t("chat.navigatingFailed", { message: err?.message ?? "unknown" }));
+				appStore.set(navigatingEntryAtomFamily(agentId), null);
+				pendingScrollToRef.current = null;
+			}
+		},
+		[pendingBranchEntryId, pendingConfirm, input, onSend, agentId, t],
+	);
+
+	// v0.4 — "Copy message" handler. Extracts the plain-text
+	// content from the assistant message (skipping thinking /
+	// toolCall blocks) and writes it to the system clipboard.
+	// Shows a brief "Copied" toast and flips the button icon
+	// to a check mark for ~1.2s so the action has a visible
+	// affordance even on a quick click.
+	const [copiedEntryId, setCopiedEntryId] = useState<string | null>(null);
+	const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(() => {
+		return () => {
+			if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+		};
+	}, []);
+	const handleCopyMessage = useCallback(
+		async (entryId: string) => {
+			const target = displayMessages.find((m) => m.id === entryId);
+			if (!target) return;
+			// Compose plain text from text blocks. For multi-chunk
+			// assistant messages, `assistantChunks` is the
+			// authoritative source — `contentBlocks` may have
+			// been flattened to a single merged block already by
+			// the renderer, in which case the chunks are still
+			// available for copy.
+			const textBlocks: { type: "text"; text: string }[] = [];
+			if (target.assistantChunks && target.assistantChunks.length > 0) {
+				for (const chunk of target.assistantChunks) {
+					for (const b of chunk.contentBlocks) {
+						if (b.type === "text" && b.text) textBlocks.push(b as PiTextBlock);
+					}
+				}
+			} else {
+				for (const b of target.contentBlocks) {
+					if (b.type === "text" && b.text) textBlocks.push(b as PiTextBlock);
+				}
+			}
+			const text = textBlocks
+				.map((b) => b.text)
+				.join("\n\n")
+				.trim();
+			if (!text) return;
+			try {
+				// navigator.clipboard is available in the Electron
+				// renderer; falls back to the legacy execCommand path
+				// for older sandboxes.
+				if (navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(text);
+				} else {
+					const ta = document.createElement("textarea");
+					ta.value = text;
+					ta.style.position = "fixed";
+					ta.style.opacity = "0";
+					document.body.appendChild(ta);
+					ta.select();
+					document.execCommand("copy");
+					document.body.removeChild(ta);
+				}
+				setCopiedEntryId(entryId);
+				if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+				copyTimerRef.current = setTimeout(() => {
+					setCopiedEntryId(null);
+					copyTimerRef.current = null;
+				}, 1200);
+			} catch (err) {
+				toast.error(t("chat.copyFailed", { message: (err as Error)?.message ?? "unknown" }));
+			}
+		},
+		[displayMessages, t],
+	);
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			{" "}
@@ -394,43 +658,108 @@ const ChatPanel = memo(function ChatPanel({
 					</div>
 				</div>
 			) : (
-				<Virtuoso
+				<StickToBottom
 					key={agentId}
-					ref={virtuosoRef}
-					data={displayMessages}
-					initialTopMostItemIndex={displayMessages.length - 1}
-					followOutput="smooth"
-					atBottomStateChange={(atBottom) => setShowScrollBtn(!atBottom)}
-					className="flex-1"
-					itemContent={(_index, msg) => (
-						<div className="flex w-full flex-col gap-5 px-5 py-2.5">
-							<MessageBubble
-								key={msg.id}
-								message={msg}
-								agentRole={agentRole}
-								agentName={agentName}
-								autoCollapse={autoCollapse}
-							/>
-						</div>
-					)}
-				/>
-			)}
-			{/* Floating scroll-to-bottom button — sits at the bottom of the message area */}
-			<div className="relative shrink-0 h-0 z-10">
-				<button
-					onClick={handleScrollToBottom}
-					className={cn(
-						"absolute bottom-0 right-4 flex size-8 items-center justify-center rounded-full border border-hairline bg-card shadow-md backdrop-blur-sm transition-all duration-200",
-						showScrollBtn
-							? "translate-y-0 opacity-100 pointer-events-auto"
-							: "translate-y-3 opacity-0 pointer-events-none",
-					)}
-					aria-label="Scroll to bottom"
-					title="Scroll to bottom"
+					initial="instant"
+					resize="smooth"
+					// h-0 + flex-1 is the standard Tailwind flex-column pattern:
+					// the inner <StickToBottom.Content> is styled with
+					// `height: 100%` by the library, and that percentage only
+					// resolves to a real pixel value when the parent has an
+					// *explicit* height (flex-1 alone isn't enough — the
+					// browser computes it but treats the box as indefinite
+					// for child percentage resolution). h-0 + flex-1 lets
+					// flex grow the box to the available space *and* gives
+					// the child a concrete parent height to resolve against.
+					// overflow-hidden clips the library's transform-translated
+					// content to the box. min-h-0 stops long messages from
+					// inflating the flex item past its allocation.
+					className="relative h-0 min-h-0 flex-1 overflow-hidden"
 				>
-					<ChevronDown className="size-4 text-muted-foreground" />
-				</button>
-			</div>
+					<StickToBottom.Content className="flex flex-col gap-5 px-5 py-2.5">
+						{displayMessages.map((msg) => {
+							// v0.4 — action strip aligned with pi SDK:
+							//  Branch from here (/tree) → any message
+							//  Fork to new chat (/fork)  → user messages only (matches getUserMessagesForForking)
+							const showActions = msg.role === "assistant" || msg.role === "user";
+							const isActionBusy = isBusy || navigatingEntry !== null || forkingEntry !== null;
+							const actionDisabledReason = isActionBusy ? t("chat.stopFirstToNavigate") : undefined;
+							return (
+								<div
+									key={msg.id}
+									data-message-id={msg.id}
+									className={cn("group/message flex flex-col", showActions ? "gap-1" : "gap-0")}
+								>
+									<MessageBubble
+										message={msg}
+										agentRole={agentRole}
+										agentName={agentName}
+										autoCollapse={autoCollapse}
+										isActiveLeaf={!!sessionLeafId && msg.id === sessionLeafId}
+										flash={flashEntryId === msg.id}
+									/>
+									{showActions ? (
+										<div
+											className={cn(
+												"flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover/message:opacity-100",
+												msg.role === "user" ? "mr-9 justify-end" : "ml-9",
+											)}
+										>
+											<Button
+												variant="line-ghost"
+												size="xs"
+												disabled={isActionBusy}
+												onClick={() => handleBranchFromHere(msg.id)}
+												title={actionDisabledReason}
+												aria-label={t("chat.branchFromHere")}
+											>
+												<Undo2 className="size-3" />
+
+											</Button>
+											{msg.role === "user" ? (
+												<Button
+													variant="line-ghost"
+													size="xs"
+													disabled={isActionBusy}
+													onClick={() => handleForkToNewChat(msg.id)}
+													title={actionDisabledReason}
+													aria-label={t("chat.forkToNewChat")}
+												>
+													<GitBranch className="size-3" />
+
+												</Button>
+											) : null}
+											{msg.role === "assistant" ? (
+												<Button
+													variant="line-ghost"
+													size="xs"
+													onClick={() => handleCopyMessage(msg.id)}
+													title={t("chat.copyMessage")}
+													aria-label={t("chat.copyMessage")}
+												>
+												{copiedEntryId === msg.id ? (
+													<Check className="size-3" />
+												) : (
+													<Copy className="size-3" />
+												)}
+
+											</Button>
+											) : null}
+										</div>
+									) : null}
+								</div>
+							);
+						})}
+					</StickToBottom.Content>
+					{/* Floating scroll-to-bottom button — appears when the user
+					    scrolls up to read history. useStickToBottomContext drives
+					    isAtBottom off the user's actual scroll position; the
+					    library also handles "escape from lock" so a brand-new
+					    streaming message won't yank the user back down once
+					    they've intentionally scrolled away. */}
+					<ScrollToBottomButton />
+				</StickToBottom>
+			)}
 			{/* Queue drawer — slides up when the SDK's queue is non-empty.
 			    The list comes from the `queue` prop (driven by
 			    `agent:queue_update` events forwarded from pi's
@@ -585,8 +914,78 @@ const ChatPanel = memo(function ChatPanel({
 					</div>
 				</div>
 			</div>
+			{/* v0.4 — Branch confirm sheet. Two modes (summary,
+			    input-not-empty) live in one component so the modal
+			    surface is unified. The dialog is dumb about WHAT the
+			    result means; ChatPanel translates the result into
+			    the corresponding navigate / send / cancel call. */}
+			<BranchConfirmDialog request={pendingConfirm} onResolve={handleConfirmResolve} />
 		</div>
 	);
 });
+
+/**
+ * Floating scroll-to-bottom affordance.
+ *
+ * Lives INSIDE <StickToBottom> so it can call useStickToBottomContext.
+ * The library auto-hides this when the user is at the bottom and shows
+ * it when they scroll up (see StickToBottom's escapedFromLock mechanic).
+ *
+ * Positioning: absolute bottom-4 right-4, on top of the message area,
+ * matching the original Virtuoso-era placement so the visual is unchanged.
+ *
+ * Exported for unit testing — the only branchable logic is the
+ * isAtBottom → null-vs-render decision.
+ */
+export function ScrollToBottomButton() {
+	const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+	const setAtBottom = useSetAtom(activeChatAtBottomAtom);
+	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	const wasAtBottomRef = useRef(isAtBottom);
+
+	useEffect(() => {
+		setAtBottom(isAtBottom);
+	}, [isAtBottom, setAtBottom]);
+
+	// Clear the "recently completed" flag when the user scrolls back to
+	// bottom — they've seen the latest output. Without this, scrolling
+	// back up after acknowledging would re-show the green border.
+	useEffect(() => {
+		const justLandedAtBottom = isAtBottom && !wasAtBottomRef.current;
+		wasAtBottomRef.current = isAtBottom;
+
+		if (justLandedAtBottom && activeAgentId) {
+			const completed = appStore.get(recentlyCompletedAtom);
+			if (completed.includes(activeAgentId)) {
+				appStore.set(
+					recentlyCompletedAtom,
+					completed.filter((id: string) => id !== activeAgentId),
+				);
+			}
+		}
+	}, [isAtBottom, activeAgentId]);
+
+	return (
+		<button
+			type="button"
+			onClick={() => scrollToBottom()}
+			aria-label="Scroll to bottom"
+			title="Scroll to bottom"
+			className={cn(
+				"absolute bottom-4 right-4 z-10 flex size-8 items-center justify-center rounded-full transition-all duration-300 ease-out",
+				isAtBottom
+					? "pointer-events-none scale-75 opacity-0"
+					: "scale-100 opacity-100 bg-card shadow-md backdrop-blur-sm flowing-border",
+			)}
+		>
+			<ChevronDown
+				className={cn(
+					"size-4 transition-all duration-300 ease-out",
+					isAtBottom ? "opacity-0" : "text-muted-foreground",
+				)}
+			/>
+		</button>
+	);
+}
 
 export default ChatPanel;

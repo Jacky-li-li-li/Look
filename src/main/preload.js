@@ -138,6 +138,45 @@ const api = {
     ipcRenderer.invoke("look:invoke", { type: "project:confirm-delete-response", projectId, confirmed }),
   getActiveProject: () =>
     ipcRenderer.invoke("look:invoke", { type: "project:get-active" }),
+
+  // ---- v0.4 Session tree / branching ----
+  // `window.look.*` API surface for the tree-view UI and the
+  // hover-action buttons in MessageBubble. The renderer never
+  // touches pi's SessionManager directly — all reads/writes go
+  // through the main process so the in-memory mirror on
+  // `ManagedAgent` stays the single source of truth.
+  getSessionTree: (agentId) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:get-session-tree", agentId }),
+  getForkPoints: (agentId) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:get-fork-points", agentId }),
+  // opts: { summarize?, customInstructions?, label? }
+  // returns: { editorText?, cancelled: boolean, aborted?: boolean }
+  navigateTree: (agentId, entryId, opts) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "agent:navigate-tree",
+      agentId,
+      entryId,
+      summarize: opts?.summarize,
+      customInstructions: opts?.customInstructions,
+      label: opts?.label,
+    }),
+  // opts: { name? } — defaults to `${parentName} · fork`
+  // returns: { agentId, sessionFilePath }
+  createFork: (agentId, entryId, opts) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "agent:create-fork",
+      agentId,
+      entryId,
+      name: opts?.name,
+    }),
+  // label: string | null — null/empty clears
+  setEntryLabel: (agentId, entryId, label) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "agent:set-entry-label",
+      agentId,
+      entryId,
+      label,
+    }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

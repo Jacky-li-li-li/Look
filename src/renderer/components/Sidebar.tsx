@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	activeAgentIdAtom,
+	activeChatAtBottomAtom,
 	activeProjectAtom,
 	activeProjectIdAtom,
 	agentsAtom,
@@ -89,6 +90,7 @@ export default function Sidebar({
 	const activeProject = useAtomValue(activeProjectAtom);
 	const recentlyCompleted = useAtomValue(recentlyCompletedAtom);
 	const runningAgents = useAtomValue(runningAgentsAtom);
+	const activeChatAtBottom = useAtomValue(activeChatAtBottomAtom);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const editRef = useRef<HTMLInputElement>(null);
@@ -113,7 +115,7 @@ export default function Sidebar({
 		const raf = requestAnimationFrame(() => {
 			document
 				.querySelector(`[data-agent-id="${activeAgentId}"]`)
-				?.scrollIntoView({ behavior: "instant", block: "nearest" });
+				?.scrollIntoView({ behavior: "smooth", block: "end" });
 		});
 		return () => cancelAnimationFrame(raf);
 	}, [activeAgentId, tab]);
@@ -237,7 +239,7 @@ export default function Sidebar({
 								data-agent-status={agent.status}
 								data-running={runningAgents.has(agent.id) || undefined}
 								data-completed={
-									recentlyCompleted.includes(agent.id) ? "" : undefined
+									recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom) ? "" : undefined
 								}
 								role="button"
 								tabIndex={0}
@@ -269,6 +271,7 @@ export default function Sidebar({
 									"hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-hidden",
 									isActive && !runningAgents.has(agent.id) && "border-border bg-accent/60",
 								)}
+								style={{ transition: "box-shadow 300ms ease-out" }}
 							>
 								<div className="min-w-0 flex-1">
 									{editingId === agent.id ? (

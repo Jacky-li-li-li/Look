@@ -303,6 +303,50 @@ async function handleRendererInvoke(
 			return { success: true, project: active };
 		}
 
+		// === v0.4 Session tree / branching ===
+		// `/tree` + `/fork` family. See agent-manager.ts for the
+		// pi-side wrappers (getSessionTree / navigateTreeSession /
+		// createForkedSession / setEntryLabel). The renderer
+		// drives UX around these primitives; main is a thin facade.
+		case "agent:get-session-tree": {
+			const tree = agentManager.getSessionTree(data.agentId);
+			return { success: true, tree };
+		}
+
+		case "agent:get-fork-points": {
+			const points = agentManager.getForkPoints(data.agentId);
+			return { success: true, points };
+		}
+
+		case "agent:navigate-tree": {
+			try {
+				const result = await agentManager.navigateTreeSession(data.agentId, data.entryId, {
+					summarize: data.summarize,
+					customInstructions: data.customInstructions,
+					label: data.label,
+				});
+				return { success: true, result };
+			} catch (e: any) {
+				return { success: false, error: e?.message ?? "Failed to navigate tree" };
+			}
+		}
+
+		case "agent:create-fork": {
+			try {
+				const result = await agentManager.createForkedSession(data.agentId, data.entryId, {
+					name: data.name,
+				});
+				return { success: true, ...result };
+			} catch (e: any) {
+				return { success: false, error: e?.message ?? "Failed to create fork" };
+			}
+		}
+
+		case "agent:set-entry-label": {
+			agentManager.setEntryLabel(data.agentId, data.entryId, data.label);
+			return { success: true };
+		}
+
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };
 	}
