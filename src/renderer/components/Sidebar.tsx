@@ -350,16 +350,9 @@ export default function Sidebar({
 				className="flex shrink-0 items-center gap-2 border-t border-hairline px-3 py-2.5 transition-colors hover:bg-accent/50"
 			>
 				<UserAvatar avatar={userProfile.avatar} size="sm" />
-				<div className="min-w-0 flex-1 text-left">
-					<div className="truncate text-[11px] font-medium text-muted-foreground">
-						{userProfile.userName || "You"}
-					</div>
-					{userProfile.email && (
-						<div className="truncate text-[9px] text-muted-foreground/60">
-							{userProfile.email}
-						</div>
-					)}
-				</div>
+				<span className="truncate text-[11px] font-medium text-muted-foreground">
+					{userProfile.userName || "You"}
+				</span>
 			</button>
 		</aside>
 	);
