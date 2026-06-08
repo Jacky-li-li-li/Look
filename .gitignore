@@ -7,3 +7,7 @@ dist/
 .claude/
 # Throwaway probes — kept locally for debugging, not part of the codebase
 _probe.ts
+release/
+node_modules/
+.env
+dist/
