@@ -151,10 +151,8 @@ export default function LoginScreen() {
 								className="text-muted-foreground underline-offset-2 hover:underline">
 								{t("auth.forgotPassword")}
 							</button>
-						</div>
-						<div className="text-center">
 							<button type="button" onClick={() => { setMode("register"); reset(); }}
-								className="text-[12px] text-muted-foreground underline-offset-2 hover:underline">
+								className="text-muted-foreground underline-offset-2 hover:underline">
 								{t("auth.switchToRegister")}
 							</button>
 						</div>
