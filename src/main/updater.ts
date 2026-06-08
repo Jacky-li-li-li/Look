@@ -1,51 +1,83 @@
 // ============================================================
 // Updater — electron-updater wrapper
-// Forwards autoUpdater events to renderer via IPC
+// Forwards autoUpdater events to renderer via IPC.
+//
+// electron-updater is loaded lazily so a missing/optional dep never
+// blocks app start. If the module isn't installed we emit one
+// `update:error` event and degrade silently thereafter.
 // ============================================================
 
 import { BrowserWindow } from "electron";
-import { autoUpdater } from "electron-updater";
+import type { AppUpdater } from "electron-updater";
+
+let autoUpdater: AppUpdater | null = null;
+let loadFailed = false;
+
+async function loadAutoUpdater(): Promise<AppUpdater | null> {
+	if (autoUpdater) return autoUpdater;
+	if (loadFailed) return null;
+	try {
+		const mod = await import("electron-updater");
+		autoUpdater = mod.autoUpdater;
+		return autoUpdater;
+	} catch (err) {
+		loadFailed = true;
+		console.warn(`[updater] electron-updater not available: ${(err as Error).message}`);
+		return null;
+	}
+}
 
 export function initUpdater(mainWindow: BrowserWindow): void {
 	if (!mainWindow || mainWindow.isDestroyed()) return;
 
-	autoUpdater.autoDownload = false;
-	autoUpdater.autoInstallOnAppQuit = true;
+	// Lazy-load on first event so a missing/optional dep never crashes app start.
+	void loadAutoUpdater().then((updater) => {
+		if (!updater) {
+			emit(mainWindow, {
+				type: "update:error",
+				message: "electron-updater module not available. Run `npm install electron-updater`.",
+			});
+			return;
+		}
 
-	autoUpdater.on("checking-for-update", () => {
-		emit(mainWindow, { type: "update:checking" });
-	});
+		updater.autoDownload = false;
+		updater.autoInstallOnAppQuit = true;
 
-	autoUpdater.on("update-available", (info) => {
-		emit(mainWindow, {
-			type: "update:available",
-			version: info.version,
-			releaseDate: (info as any).releaseDate,
+		updater.on("checking-for-update", () => {
+			emit(mainWindow, { type: "update:checking" });
 		});
-	});
 
-	autoUpdater.on("update-not-available", () => {
-		emit(mainWindow, { type: "update:not-available" });
-	});
-
-	autoUpdater.on("download-progress", (progress) => {
-		emit(mainWindow, {
-			type: "update:download-progress",
-			percent: progress.percent,
+		updater.on("update-available", (info) => {
+			emit(mainWindow, {
+				type: "update:available",
+				version: info.version,
+				releaseDate: (info as any).releaseDate,
+			});
 		});
-	});
 
-	autoUpdater.on("update-downloaded", (info) => {
-		emit(mainWindow, {
-			type: "update:downloaded",
-			version: info.version,
+		updater.on("update-not-available", () => {
+			emit(mainWindow, { type: "update:not-available" });
 		});
-	});
 
-	autoUpdater.on("error", (error) => {
-		emit(mainWindow, {
-			type: "update:error",
-			message: error.message ?? "Unknown update error",
+		updater.on("download-progress", (progress) => {
+			emit(mainWindow, {
+				type: "update:download-progress",
+				percent: progress.percent,
+			});
+		});
+
+		updater.on("update-downloaded", (info) => {
+			emit(mainWindow, {
+				type: "update:downloaded",
+				version: info.version,
+			});
+		});
+
+		updater.on("error", (error) => {
+			emit(mainWindow, {
+				type: "update:error",
+				message: error.message ?? "Unknown update error",
+			});
 		});
 	});
 }
@@ -57,13 +89,21 @@ function emit(mainWindow: BrowserWindow, event: Record<string, unknown>): void {
 }
 
 export async function checkForUpdates(): Promise<void> {
-	await autoUpdater.checkForUpdates();
+	const updater = await loadAutoUpdater();
+	if (!updater) throw new Error("electron-updater not installed");
+	await updater.checkForUpdates();
 }
 
 export async function downloadUpdate(): Promise<void> {
-	await autoUpdater.downloadUpdate();
+	const updater = await loadAutoUpdater();
+	if (!updater) throw new Error("electron-updater not installed");
+	await updater.downloadUpdate();
 }
 
 export function quitAndInstall(): void {
+	if (!autoUpdater) {
+		console.warn("[updater] quitAndInstall called before updater was loaded");
+		return;
+	}
 	autoUpdater.quitAndInstall();
 }
