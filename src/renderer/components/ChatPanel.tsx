@@ -701,50 +701,52 @@ const ChatPanel = memo(function ChatPanel({
 									{showActions ? (
 										<div
 											className={cn(
-												"flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover/message:opacity-100",
-												msg.role === "user" ? "mr-9 justify-end" : "ml-9",
+												"flex items-center gap-1 opacity-40 transition-opacity duration-200 group-hover/message:opacity-100",
+												msg.role === "user" ? "justify-end mr-10" : "ml-10",
 											)}
 										>
+											{/* Branch from here — all messages */}
 											<Button
-												variant="line-ghost"
-												size="xs"
+												variant="ghost"
+												size="icon-xs"
 												disabled={isActionBusy}
 												onClick={() => handleBranchFromHere(msg.id)}
-												title={actionDisabledReason}
+												title={actionDisabledReason || t("chat.branchFromHere")}
 												aria-label={t("chat.branchFromHere")}
 											>
-												<Undo2 className="size-3" />
-
+												<Undo2 className="size-3.5" />
 											</Button>
-											{msg.role === "user" ? (
+
+											{/* Fork to new chat — user messages only */}
+											{msg.role === "user" && (
 												<Button
-													variant="line-ghost"
-													size="xs"
+													variant="ghost"
+													size="icon-xs"
 													disabled={isActionBusy}
 													onClick={() => handleForkToNewChat(msg.id)}
-													title={actionDisabledReason}
+													title={actionDisabledReason || t("chat.forkToNewChat")}
 													aria-label={t("chat.forkToNewChat")}
 												>
-													<GitBranch className="size-3" />
-
+													<GitBranch className="size-3.5" />
 												</Button>
-											) : null}
-											{msg.role === "assistant" ? (
+											)}
+
+											{/* Copy — assistant messages only */}
+											{msg.role === "assistant" && (
 												<Button
-													variant="line-ghost"
-													size="xs"
+													variant="ghost"
+													size="icon-xs"
 													onClick={() => handleCopyMessage(msg.id)}
 													title={t("chat.copyMessage")}
 													aria-label={t("chat.copyMessage")}
 												>
-												{copiedEntryId === msg.id ? (
-													<Check className="size-3" />
-												) : (
-													<Copy className="size-3" />
-												)}
-
-											</Button>
-											) : null}
+													{copiedEntryId === msg.id ? (
+														<Check className="size-3.5" />
+													) : (
+														<Copy className="size-3.5" />
+													)}
+												</Button>
+											)}
 										</div>
 									) : null}
 								</div>
