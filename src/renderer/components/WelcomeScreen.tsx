@@ -5,8 +5,6 @@
 import { FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-const api = (window as any).look;
-
 interface WelcomeScreenProps {
 	onOpenProject: () => void;
 }

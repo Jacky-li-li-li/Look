@@ -2,7 +2,7 @@
 // Electron Main Process Entry Point
 // ============================================================
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { AgentManager } from "./agent-manager.js";
@@ -101,6 +101,36 @@ function setupProcessBoundary() {
 // Window
 // ============================================================
 
+function setupCsp(): void {
+	// Dev mode: Vite injects inline scripts for HMR and React Fast Refresh,
+	// which would be blocked by strict CSP. Skip CSP entirely on localhost.
+	if (isDev) return;
+
+	const csp = [
+		`default-src 'self'`,
+		`script-src 'self'`,
+		`style-src 'self' 'unsafe-inline'`,
+		`img-src 'self' data: blob: file: https:`,
+		`font-src 'self' data:`,
+		`connect-src 'self' https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*`,
+		`media-src 'self' data: blob: file:`,
+		`frame-src 'self' data: blob:`,
+		`worker-src 'self' blob:`,
+		`object-src 'none'`,
+		`base-uri 'self'`,
+		`form-action 'none'`,
+	].join("; ");
+
+	session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+		callback({
+			responseHeaders: {
+				...details.responseHeaders,
+				"Content-Security-Policy": [csp],
+			},
+		});
+	});
+}
+
 function createWindow(): void {
 	mainWindow = new BrowserWindow({
 		width: 1400,
@@ -117,7 +147,7 @@ function createWindow(): void {
 	});
 
 	if (isDev) {
-		mainWindow.loadURL("http://localhost:5173");
+		mainWindow.loadURL("http://localhost:5174");
 		mainWindow.webContents.openDevTools();
 	} else {
 		mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -214,6 +244,7 @@ async function initAgentManager(): Promise<void> {
 
 app.whenReady().then(async () => {
 	setupProcessBoundary();
+	setupCsp();
 
 	// Set Dock icon on macOS (PNG supported since Electron 20+)
 	if (process.platform === "darwin" && app.dock) {

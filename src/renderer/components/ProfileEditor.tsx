@@ -3,12 +3,12 @@
 // Used inside SettingsDialog
 // ============================================================
 
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
-import { isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
+import { userProfileAtom } from "../store/authAtoms";
 import UserAvatar from "./UserAvatar";
 
 const api = (window as any).look;
@@ -16,7 +16,6 @@ const api = (window as any).look;
 export default function ProfileEditor() {
 	const { t } = useTranslation();
 	const [profile, setProfile] = useAtom(userProfileAtom);
-	const setIsLoggedIn = useSetAtom(isLoggedInAtom);
 	const [editingName, setEditingName] = useState(false);
 	const [nameValue, setNameValue] = useState(profile.userName);
 	const nameRef = useRef<HTMLInputElement>(null);
@@ -43,12 +42,6 @@ export default function ProfileEditor() {
 			}
 		}
 		setEditingName(false);
-	}
-
-	async function handleLogout() {
-		await supabase.auth.signOut();
-		setIsLoggedIn(false);
-		toast(t("profile.logout"));
 	}
 
 	function handleAvatarUpload() {
@@ -98,7 +91,9 @@ export default function ProfileEditor() {
 			<div className="flex items-center justify-between gap-4 py-3">
 				<div className="flex min-w-0 flex-col gap-0.5">
 					<label className="text-[13px] font-medium leading-none">{t("profile.userName")}</label>
-					<span className="text-[11px] text-muted-foreground leading-tight">{t("profile.userNamePlaceholder")}</span>
+					<span className="text-[11px] text-muted-foreground leading-tight">
+						{t("profile.userNamePlaceholder")}
+					</span>
 				</div>
 				{editingName ? (
 					<input

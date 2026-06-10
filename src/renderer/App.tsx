@@ -7,17 +7,16 @@
 // agent:usage-update only re-renders the Sidebar row, not ChatPanel.
 // ============================================================
 
-import type { PermissionMode, ProjectInfo, ThinkingLevel } from "@shared/types";
-import { FolderOpen } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
-
 import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
+import type { PermissionMode, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
+import { FolderOpen } from "lucide-react";
 import { ThemeProvider } from "next-themes";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import AgentCreateDialog from "./components/AgentCreateDialog";
 import ChatPanel from "./components/ChatPanel";
 import DeleteProjectDialog from "./components/DeleteProjectDialog";
@@ -26,15 +25,14 @@ import NewProjectDialog from "./components/NewProjectDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import SettingsDialog from "./components/SettingsDialog";
-import UpdateNotification from "./components/UpdateNotification";
 import Sidebar from "./components/Sidebar";
+import UpdateNotification from "./components/UpdateNotification";
 import WelcomeScreen from "./components/WelcomeScreen";
 import { preloadHighlighter } from "./lib/highlighter";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
-	activeProjectAtom,
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
@@ -45,9 +43,9 @@ import {
 	projectsAtom,
 	providerSettingsAtom,
 	queuesAtomFamily,
+	settingsTabAtom,
 	showCreateDialogAtom,
 	showSettingsAtom,
-	settingsTabAtom,
 	userPreferredModelAtom,
 } from "./store/atoms";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "./store/authAtoms";
@@ -85,7 +83,6 @@ export default function App() {
 	// ---- Project state ----
 	const projects = useAtomValue(projectsAtom);
 	const activeProjectId = useAtomValue(activeProjectIdAtom);
-	const activeProject = useAtomValue(activeProjectAtom);
 	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
 	const [newProjectCwd, setNewProjectCwd] = useState<string | null>(null);
 
@@ -94,6 +91,8 @@ export default function App() {
 	const handleSelectProject = useCallback((projectId: string) => {
 		if (!api) return;
 		appStore.set(activeProjectIdAtom, projectId);
+		appStore.set(activeAgentIdAtom, null);
+		appStore.set(agentsAtom, []);
 		api.switchProject(projectId)
 			.then((r: any) => {
 				if (r?.success) {
@@ -108,8 +107,6 @@ export default function App() {
 				}
 			})
 			.catch(() => {});
-		// Persist last active project
-		api.setGeneralSettings({}).catch(() => {});
 	}, []);
 
 	const handleOpenProject = useCallback(async () => {
@@ -117,30 +114,6 @@ export default function App() {
 		const result = await api.openDirectoryDialog();
 		if (!result?.success || !result.path) return;
 		setNewProjectCwd(result.path);
-	}, []);
-
-	const handleCreateProject = useCallback(async (cwd: string, name?: string) => {
-		if (!api) return;
-		const r = await api.createProject(cwd, name);
-		if (r?.success) {
-			if (r.isDuplicate) {
-				toast("Project already open", { description: "Switched to existing project." });
-			}
-			appStore.set(
-				projectsAtom,
-				await api
-					.listProjects()
-					.then((pr: any) => pr?.projects ?? [])
-					.catch(() => []),
-			);
-			// Pull agents for new project
-			const ar = await api.getAgents().catch(() => null);
-			if (ar?.success) {
-				if (Array.isArray(ar.agents)) appStore.set(agentsAtom, ar.agents);
-			}
-		} else {
-			toast.error(r?.error ?? "Failed to create project");
-		}
 	}, []);
 
 	const handleDeleteProject = useCallback((project: ProjectInfo) => {
@@ -324,7 +297,9 @@ export default function App() {
 				return;
 			}
 
-			const { data: { session } } = await supabase.auth.getSession();
+			const {
+				data: { session },
+			} = await supabase.auth.getSession();
 
 			if (session?.user) {
 				// Restore from cloud
@@ -382,7 +357,7 @@ export default function App() {
 		}
 
 		restoreSession();
-	}, []);
+	}, [setAuthLoading, setIsLoggedIn, setUserProfile]);
 
 	// Persist active agent ID and project ID with debounce.
 	useEffect(() => {
@@ -431,11 +406,6 @@ export default function App() {
 		);
 	}
 
-	// Auth guard — show LoginScreen when Supabase is configured and user is not logged in
-	if (isSupabaseConfigured() && !isLoggedIn) {
-		return <LoginScreen />;
-	}
-
 	// Loading state while checking session
 	if (isSupabaseConfigured() && authLoading) {
 		return (
@@ -445,6 +415,11 @@ export default function App() {
 				<p className="text-xs text-muted-foreground">{t("common.loading")}</p>
 			</div>
 		);
+	}
+
+	// Auth guard — show LoginScreen when Supabase is configured and user is not logged in
+	if (isSupabaseConfigured() && !isLoggedIn) {
+		return <LoginScreen />;
 	}
 
 	return (

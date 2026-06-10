@@ -30,7 +30,8 @@ function autoCloseCodeFences(text: string): string {
 }
 
 import { Check, Copy } from "lucide-react";
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useThrottle } from "../hooks/useThrottle";
@@ -99,6 +100,7 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({
 				</Button>
 			</div>
 			{html ? (
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki returns renderer-generated highlight markup for code blocks.
 				<div className="shiki-code-output" dangerouslySetInnerHTML={{ __html: html }} />
 			) : (
 				<pre className="overflow-x-auto p-3 text-[12px] leading-relaxed font-mono">

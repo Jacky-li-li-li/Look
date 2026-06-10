@@ -16,17 +16,7 @@ import type {
 	PiToolCallBlock,
 } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
-import {
-	GitBranch,
-	Check,
-	ChevronDown,
-	Copy,
-	GitFork,
-	Undo2,
-	MessageSquare,
-	Send,
-	Square,
-} from "lucide-react";
+import { Check, ChevronDown, Copy, GitBranch, MessageSquare, Send, Square, Undo2 } from "lucide-react";
 import type React from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -83,6 +73,26 @@ interface ChatPanelProps {
 	 */
 	onAbort?: () => void;
 }
+function fmtTokens(n: number): string {
+	if (n === 0) return "";
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+	return `${n}`;
+}
+
+function fmtCost(total: number): string {
+	if (total === 0) return "";
+	return total < 0.01 ? `${total.toFixed(4)}` : `${total.toFixed(2)}`;
+}
+
+function fmtUsage(msg: PiMessage): string {
+	const u = msg.usage;
+	if (!u || u.totalTokens <= 0) return "";
+	const parts = [fmtTokens(u.totalTokens)];
+	if (u.cost.total > 0) parts.push(fmtCost(u.cost.total));
+	return parts.join(" · ");
+}
+
 const ChatPanel = memo(function ChatPanel({
 	agentId,
 	agentRole,
@@ -702,7 +712,7 @@ const ChatPanel = memo(function ChatPanel({
 										<div
 											className={cn(
 												"flex items-center gap-1 opacity-40 transition-opacity duration-200 group-hover/message:opacity-100",
-												msg.role === "user" ? "justify-end mr-10" : "ml-10",
+												msg.role === "user" ? "justify-end mr-10 max-w-[80%]" : "ml-10 mr-4 max-w-[92%]",
 											)}
 										>
 											{/* Branch from here — all messages */}
@@ -746,6 +756,13 @@ const ChatPanel = memo(function ChatPanel({
 														<Copy className="size-3.5" />
 													)}
 												</Button>
+											)}
+
+											{/* Token usage — assistant messages only */}
+											{msg.role === "assistant" && msg.usage && msg.usage.totalTokens > 0 && (
+												<span className="ml-2 font-mono text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
+													{fmtUsage(msg)}
+												</span>
 											)}
 										</div>
 									) : null}
@@ -967,6 +984,8 @@ export function ScrollToBottomButton() {
 		}
 	}, [isAtBottom, activeAgentId]);
 
+	if (isAtBottom) return null;
+
 	return (
 		<button
 			type="button"
@@ -975,17 +994,10 @@ export function ScrollToBottomButton() {
 			title="Scroll to bottom"
 			className={cn(
 				"absolute bottom-4 right-4 z-10 flex size-8 items-center justify-center rounded-full transition-all duration-300 ease-out",
-				isAtBottom
-					? "pointer-events-none scale-75 opacity-0"
-					: "scale-100 opacity-100 bg-card shadow-md backdrop-blur-sm flowing-border",
+				"scale-100 opacity-100 bg-card shadow-md backdrop-blur-sm flowing-border",
 			)}
 		>
-			<ChevronDown
-				className={cn(
-					"size-4 transition-all duration-300 ease-out",
-					isAtBottom ? "opacity-0" : "text-muted-foreground",
-				)}
-			/>
+			<ChevronDown className="size-4 text-muted-foreground transition-all duration-300 ease-out" />
 		</button>
 	);
 }

@@ -46,6 +46,8 @@ export interface UserSettings {
 	chatSystemPrompt: string;
 	/** Last active agent ID to restore on restart. */
 	lastActiveAgentId: string;
+	/** Last active project ID to restore on restart. */
+	lastActiveProjectId: string;
 }
 
 const DEFAULTS: UserSettings = {
@@ -57,6 +59,7 @@ const DEFAULTS: UserSettings = {
 	preferredModel: null,
 	chatSystemPrompt: "",
 	lastActiveAgentId: "",
+	lastActiveProjectId: "",
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -74,6 +77,8 @@ interface UiSettings {
 	chatSystemPrompt: string;
 	/** Last active agent ID to restore on restart. */
 	lastActiveAgentId: string;
+	/** Last active project ID to restore on restart. */
+	lastActiveProjectId: string;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -83,6 +88,7 @@ const UI_DEFAULTS: UiSettings = {
 	compressThreshold: DEFAULTS.compressThreshold,
 	chatSystemPrompt: DEFAULTS.chatSystemPrompt,
 	lastActiveAgentId: "",
+	lastActiveProjectId: "",
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -184,6 +190,7 @@ export class UserSettingsStore {
 		if (partial.compressThreshold !== undefined) uiPartial.compressThreshold = partial.compressThreshold;
 		if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
 		if (partial.lastActiveAgentId !== undefined) uiPartial.lastActiveAgentId = partial.lastActiveAgentId;
+		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

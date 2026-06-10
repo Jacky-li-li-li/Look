@@ -79,6 +79,13 @@ const MermaidBlock = memo(function MermaidBlock({ children }: MermaidBlockProps)
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const renderIdRef = useRef(`mermaid-${Math.random().toString(36).slice(2, 9)}`);
 	const code = String(children).replace(/\n$/, "");
+	const svgContainerRef = useCallback(
+		(node: HTMLDivElement | null) => {
+			if (!node) return;
+			node.innerHTML = svg ?? "";
+		},
+		[svg],
+	);
 
 	const {
 		state: zoom,
@@ -180,11 +187,7 @@ const MermaidBlock = memo(function MermaidBlock({ children }: MermaidBlockProps)
 					/>
 
 					{/* The zoomable diagram */}
-					<div
-						className="p-4 inline-block min-w-full"
-						{...containerProps}
-						dangerouslySetInnerHTML={{ __html: svg }}
-					/>
+					<div ref={svgContainerRef} className="p-4 inline-block min-w-full" {...containerProps} />
 
 					{/* Zoom indicator — bottom-right */}
 					<div className="absolute bottom-2 right-2 text-[10px] text-muted-foreground/50 font-mono tabular-nums select-none pointer-events-none">

@@ -17,6 +17,7 @@ export default function UpdateNotification() {
 
 	// Dismiss when stage changes
 	useEffect(() => {
+		if (!updateStatus?.stage) return;
 		setDismissed(null);
 	}, [updateStatus?.stage]);
 
@@ -77,7 +78,9 @@ export default function UpdateNotification() {
 		return (
 			<div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-hairline bg-card px-3 py-2 shadow-lg">
 				<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-				<span className="text-[12px] text-muted-foreground">Downloading: {(updateStatus.percent ?? 0).toFixed(0)}%</span>
+				<span className="text-[12px] text-muted-foreground">
+					Downloading: {(updateStatus.percent ?? 0).toFixed(0)}%
+				</span>
 			</div>
 		);
 	}

@@ -7,7 +7,7 @@
 // `update:error` event and degrade silently thereafter.
 // ============================================================
 
-import { BrowserWindow } from "electron";
+import type { BrowserWindow } from "electron";
 import type { AppUpdater } from "electron-updater";
 
 let autoUpdater: AppUpdater | null = null;

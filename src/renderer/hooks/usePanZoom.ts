@@ -51,7 +51,7 @@ export function usePanZoom({ minScale = 0.15, maxScale = 6, initialScale = 1 }: 
 	// stopPropagation prevents Virtuoso from capturing the wheel event
 	// and scrolling the message list instead of zooming the diagram.
 	const onWheel = useCallback(
-		(e: WheelEvent) => {
+		(e: React.WheelEvent<HTMLElement>) => {
 			e.preventDefault();
 			e.stopPropagation();
 			const container = e.currentTarget as HTMLElement;

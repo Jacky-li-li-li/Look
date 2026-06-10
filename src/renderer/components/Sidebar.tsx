@@ -22,8 +22,8 @@ import {
 	recentlyCompletedAtom,
 	runningAgentsAtom,
 } from "../store/atoms";
-import { appStore } from "../store/ipcHandler";
 import { userProfileAtom } from "../store/authAtoms";
+import { appStore } from "../store/ipcHandler";
 import ProjectSelector from "./ProjectSelector";
 import UserAvatar from "./UserAvatar";
 
@@ -111,13 +111,13 @@ export default function Sidebar({
 		const agent = agents.find((a) => a.id === activeAgentId);
 		if (agent && !isChatAgent(agent)) setTab("orch");
 		else if (agent && isChatAgent(agent)) setTab("chat");
-	}, [activeAgentId]);
+	}, [activeAgentId, agents]);
 
 	useEffect(() => {
 		if (!activeAgentId) return;
 		const raf = requestAnimationFrame(() => {
 			document
-				.querySelector(`[data-agent-id="${activeAgentId}"]`)
+				.querySelector(`[data-agent-id="${activeAgentId}"][data-agent-tab="${tab}"]`)
 				?.scrollIntoView({ behavior: "smooth", block: "end" });
 		});
 		return () => cancelAnimationFrame(raf);
@@ -239,6 +239,7 @@ export default function Sidebar({
 							<div
 								key={agent.id}
 								data-agent-id={agent.id}
+								data-agent-tab={isChatAgent(agent) ? "chat" : "orch"}
 								data-agent-status={agent.status}
 								data-running={runningAgents.has(agent.id) || undefined}
 								data-completed={

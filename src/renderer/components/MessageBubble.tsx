@@ -144,7 +144,7 @@ const MessageBubble = memo(function MessageBubble({
 					className={cn("mb-1 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}
 				>
 					<span className="font-medium uppercase tracking-wider">
-						{isUser ? (userProfile.userName || t("chat.you")) : (agentName ?? t("chat.agent"))}
+						{isUser ? userProfile.userName || t("chat.you") : (agentName ?? t("chat.agent"))}
 					</span>
 					{message.isStreaming && <span className="status-mark" data-status="thinking" />}
 					{isAssistant && isActiveLeaf && (
@@ -169,10 +169,7 @@ const MessageBubble = memo(function MessageBubble({
 						)}
 					>
 						{message.assistantChunks.map((chunk, ci) => (
-							<div
-								key={ci}
-								className="flex flex-col gap-2"
-							>
+							<div key={ci} className="flex flex-col gap-2">
 								<ContentBlocks
 									blocks={chunk.contentBlocks}
 									isStreaming={!!message.isStreaming && ci === message.assistantChunks!.length - 1}

@@ -41,17 +41,29 @@ export default function LoginScreen() {
 	async function handleLogin(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
-		if (!email.trim()) { setError(t("auth.emailRequired")); return; }
-		if (password.length < 6) { setError(t("auth.passwordMinLength")); return; }
+		if (!email.trim()) {
+			setError(t("auth.emailRequired"));
+			return;
+		}
+		if (password.length < 6) {
+			setError(t("auth.passwordMinLength"));
+			return;
+		}
 
 		setSubmitting(true);
 		const { data, error: err } = await supabase.auth.signInWithPassword({
-			email: email.trim(), password,
+			email: email.trim(),
+			password,
 		});
-		if (err) { setError(err.message); setSubmitting(false); return; }
+		if (err) {
+			setError(err.message);
+			setSubmitting(false);
+			return;
+		}
 		if (data.user) {
 			await loadProfile(data.user.id, data.user.email ?? email);
-			setIsLoggedIn(true); setAuthLoading(false);
+			setIsLoggedIn(true);
+			setAuthLoading(false);
 		}
 	}
 
@@ -60,12 +72,19 @@ export default function LoginScreen() {
 	async function handleRegister(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
-		if (!email.trim()) { setError(t("auth.emailRequired")); return; }
-		if (password.length < 6) { setError(t("auth.passwordMinLength")); return; }
+		if (!email.trim()) {
+			setError(t("auth.emailRequired"));
+			return;
+		}
+		if (password.length < 6) {
+			setError(t("auth.passwordMinLength"));
+			return;
+		}
 
 		setSubmitting(true);
 		const { error: err } = await supabase.auth.signUp({
-			email: email.trim(), password,
+			email: email.trim(),
+			password,
 		});
 		setSubmitting(false);
 
@@ -87,13 +106,19 @@ export default function LoginScreen() {
 	async function handleForgot(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
-		if (!email.trim()) { setError(t("auth.emailRequired")); return; }
+		if (!email.trim()) {
+			setError(t("auth.emailRequired"));
+			return;
+		}
 
 		setSubmitting(true);
 		const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim());
 		setSubmitting(false);
 
-		if (err) { setError(err.message); return; }
+		if (err) {
+			setError(err.message);
+			return;
+		}
 		setSent(true);
 		toast.success(t("auth.passwordResetEmailSent"));
 	}
@@ -101,11 +126,11 @@ export default function LoginScreen() {
 	// ── Profile ──
 
 	async function loadProfile(userId: string, userEmail: string) {
-		const { data: p } = await supabase.from("user_profiles")
-			.select("user_name, avatar").eq("id", userId).single();
+		const { data: p } = await supabase.from("user_profiles").select("user_name, avatar").eq("id", userId).single();
 
 		const profile = {
-			userId, email: userEmail,
+			userId,
+			email: userEmail,
 			userName: p?.user_name || userEmail.split("@")[0],
 			avatar: p?.avatar || "",
 		};
@@ -131,28 +156,65 @@ export default function LoginScreen() {
 					<form onSubmit={handleLogin} className="flex flex-col gap-4">
 						<div className="relative">
 							<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input type="email" placeholder={t("auth.emailPlaceholder")} value={email}
+							<Input
+								type="email"
+								placeholder={t("auth.emailPlaceholder")}
+								value={email}
 								onChange={(e) => setEmail(e.target.value)}
-								className="h-11 pl-10 text-[13px]" autoFocus disabled={submitting} />
+								className="h-11 pl-10 text-[13px]"
+								autoFocus
+								disabled={submitting}
+							/>
 						</div>
 						<div className="relative">
 							<Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input type="password" placeholder={t("auth.passwordPlaceholder")} value={password}
+							<Input
+								type="password"
+								placeholder={t("auth.passwordPlaceholder")}
+								value={password}
 								onChange={(e) => setPassword(e.target.value)}
-								className="h-11 pl-10 text-[13px]" disabled={submitting} />
+								className="h-11 pl-10 text-[13px]"
+								disabled={submitting}
+							/>
 						</div>
-						{error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">{error}</div>}
-						<Button type="submit" disabled={submitting}
-							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}>
-							{submitting ? <Loader2 className="size-4 animate-spin" /> : <>{t("auth.loginBtn")}<ArrowRight className="ml-2 size-4" /></>}
+						{error && (
+							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+								{error}
+							</div>
+						)}
+						<Button
+							type="submit"
+							disabled={submitting}
+							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+						>
+							{submitting ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<>
+									{t("auth.loginBtn")}
+									<ArrowRight className="ml-2 size-4" />
+								</>
+							)}
 						</Button>
 						<div className="flex justify-between text-[12px]">
-							<button type="button" onClick={() => { setMode("forgot"); reset(); }}
-								className="text-muted-foreground underline-offset-2 hover:underline">
+							<button
+								type="button"
+								onClick={() => {
+									setMode("forgot");
+									reset();
+								}}
+								className="text-muted-foreground underline-offset-2 hover:underline"
+							>
 								{t("auth.forgotPassword")}
 							</button>
-							<button type="button" onClick={() => { setMode("register"); reset(); }}
-								className="text-muted-foreground underline-offset-2 hover:underline">
+							<button
+								type="button"
+								onClick={() => {
+									setMode("register");
+									reset();
+								}}
+								className="text-muted-foreground underline-offset-2 hover:underline"
+							>
 								{t("auth.switchToRegister")}
 							</button>
 						</div>
@@ -164,24 +226,55 @@ export default function LoginScreen() {
 					<form onSubmit={handleRegister} className="flex flex-col gap-4">
 						<div className="relative">
 							<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input type="email" placeholder={t("auth.emailPlaceholder")} value={email}
+							<Input
+								type="email"
+								placeholder={t("auth.emailPlaceholder")}
+								value={email}
 								onChange={(e) => setEmail(e.target.value)}
-								className="h-11 pl-10 text-[13px]" autoFocus disabled={submitting} />
+								className="h-11 pl-10 text-[13px]"
+								autoFocus
+								disabled={submitting}
+							/>
 						</div>
 						<div className="relative">
 							<Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input type="password" placeholder={t("auth.setYourPassword")} value={password}
+							<Input
+								type="password"
+								placeholder={t("auth.setYourPassword")}
+								value={password}
 								onChange={(e) => setPassword(e.target.value)}
-								className="h-11 pl-10 text-[13px]" disabled={submitting} />
+								className="h-11 pl-10 text-[13px]"
+								disabled={submitting}
+							/>
 						</div>
-						{error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">{error}</div>}
-						<Button type="submit" disabled={submitting}
-							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}>
-							{submitting ? <Loader2 className="size-4 animate-spin" /> : <>{t("auth.registerBtn")}<ArrowRight className="ml-2 size-4" /></>}
+						{error && (
+							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+								{error}
+							</div>
+						)}
+						<Button
+							type="submit"
+							disabled={submitting}
+							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+						>
+							{submitting ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<>
+									{t("auth.registerBtn")}
+									<ArrowRight className="ml-2 size-4" />
+								</>
+							)}
 						</Button>
 						<div className="text-center">
-							<button type="button" onClick={() => { setMode("login"); reset(); }}
-								className="text-[12px] text-muted-foreground underline-offset-2 hover:underline">
+							<button
+								type="button"
+								onClick={() => {
+									setMode("login");
+									reset();
+								}}
+								className="text-[12px] text-muted-foreground underline-offset-2 hover:underline"
+							>
 								{t("auth.switchToLogin")}
 							</button>
 						</div>
@@ -198,8 +291,14 @@ export default function LoginScreen() {
 								<span className="font-medium text-foreground">{email}</span>
 							</p>
 						</div>
-						<Button variant="outline" className="h-10 w-full text-[12px]"
-							onClick={() => { setMode("login"); reset(); }}>
+						<Button
+							variant="outline"
+							className="h-10 w-full text-[12px]"
+							onClick={() => {
+								setMode("login");
+								reset();
+							}}
+						>
 							{t("auth.backToLogin")}
 						</Button>
 					</div>
@@ -210,18 +309,44 @@ export default function LoginScreen() {
 					<form onSubmit={handleForgot} className="flex flex-col gap-4">
 						<div className="relative">
 							<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input type="email" placeholder={t("auth.emailPlaceholder")} value={email}
+							<Input
+								type="email"
+								placeholder={t("auth.emailPlaceholder")}
+								value={email}
 								onChange={(e) => setEmail(e.target.value)}
-								className="h-11 pl-10 text-[13px]" autoFocus disabled={submitting} />
+								className="h-11 pl-10 text-[13px]"
+								autoFocus
+								disabled={submitting}
+							/>
 						</div>
-						{error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">{error}</div>}
-						<Button type="submit" disabled={submitting}
-							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}>
-							{submitting ? <Loader2 className="size-4 animate-spin" /> : <>{t("auth.sendResetLink")}<ArrowRight className="ml-2 size-4" /></>}
+						{error && (
+							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+								{error}
+							</div>
+						)}
+						<Button
+							type="submit"
+							disabled={submitting}
+							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+						>
+							{submitting ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<>
+									{t("auth.sendResetLink")}
+									<ArrowRight className="ml-2 size-4" />
+								</>
+							)}
 						</Button>
 						<div className="text-center">
-							<button type="button" onClick={() => { setMode("login"); reset(); }}
-								className="text-[12px] text-muted-foreground underline-offset-2 hover:underline">
+							<button
+								type="button"
+								onClick={() => {
+									setMode("login");
+									reset();
+								}}
+								className="text-[12px] text-muted-foreground underline-offset-2 hover:underline"
+							>
 								{t("auth.backToLogin")}
 							</button>
 						</div>
@@ -238,8 +363,14 @@ export default function LoginScreen() {
 								<span className="font-medium text-foreground">{email}</span>
 							</p>
 						</div>
-						<Button variant="outline" className="h-10 w-full text-[12px]"
-							onClick={() => { setMode("login"); reset(); }}>
+						<Button
+							variant="outline"
+							className="h-10 w-full text-[12px]"
+							onClick={() => {
+								setMode("login");
+								reset();
+							}}
+						>
 							{t("auth.backToLogin")}
 						</Button>
 					</div>

@@ -55,11 +55,7 @@ export function BranchConfirmDialog({ request, onResolve }: BranchConfirmDialogP
 			open={open}
 			onOpenChange={(o) => {
 				if (!o) {
-					onResolve(
-						request?.kind === "input-not-empty"
-							? { kind: "input-cancel" }
-							: { kind: "summary-cancel" },
-					);
+					onResolve(request?.kind === "input-not-empty" ? { kind: "input-cancel" } : { kind: "summary-cancel" });
 				}
 			}}
 		>
@@ -74,11 +70,7 @@ export function BranchConfirmDialog({ request, onResolve }: BranchConfirmDialogP
 							<Button variant="line-ghost" size="sm" onClick={() => onResolve({ kind: "summary-skip" })}>
 								{t("chat.summarySkip")}
 							</Button>
-							<Button
-								variant="line-filled"
-								size="sm"
-								onClick={() => onResolve({ kind: "summary-generate" })}
-							>
+							<Button variant="line-filled" size="sm" onClick={() => onResolve({ kind: "summary-generate" })}>
 								{t("chat.summaryGenerate")}
 							</Button>
 						</DialogFooter>

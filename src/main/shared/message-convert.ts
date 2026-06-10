@@ -72,6 +72,16 @@ export function convertPiMessage(piMsg: any, agentId: string, msgId: string): Pi
 		};
 	}
 
+	if (piRole === "branchSummary") {
+		return {
+			id: msgId,
+			agentId,
+			role: "user",
+			contentBlocks: [{ type: "text", text: `Branch summary:\n${piMsg.summary ?? ""}` }],
+			timestamp: piMsg.timestamp ?? Date.now(),
+		};
+	}
+
 	return {
 		id: msgId,
 		agentId,

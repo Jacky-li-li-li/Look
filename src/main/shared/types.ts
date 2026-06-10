@@ -393,7 +393,14 @@ export type MainToRendererEvent =
 	// ---- Project events ----
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
-	| { type: "project:confirm-delete"; projectId: string; projectName: string; agentCount: number };
+	| { type: "project:confirm-delete"; projectId: string; projectName: string; agentCount: number }
+	// ---- Auto updater events ----
+	| { type: "update:checking" }
+	| { type: "update:available"; version: string; releaseDate?: string }
+	| { type: "update:not-available" }
+	| { type: "update:download-progress"; percent: number }
+	| { type: "update:downloaded"; version: string }
+	| { type: "update:error"; message: string };
 
 /**
  * Subset of pi's AssistantMessageEvent delta types that Look
@@ -523,7 +530,10 @@ export type RendererToMainEvent =
 	| { type: "update:install" }
 	// ---- User Profile ----
 	| { type: "user-profile:get" }
-	| { type: "user-profile:update"; patch: Partial<{ userId: string; email: string; userName: string; avatar: string }> }
+	| {
+			type: "user-profile:update";
+			patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>;
+	  }
 	| { type: "user-profile:reset" };
 
 // ============================================================

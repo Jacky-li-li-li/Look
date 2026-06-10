@@ -21,7 +21,6 @@ import { toast } from "sonner";
 import i18n from "../i18n";
 import {
 	activeAgentIdAtom,
-	updateStatusAtom,
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
@@ -37,6 +36,7 @@ import {
 	removeAgentAtoms,
 	sessionLeafIdAtomFamily,
 	sessionTreeAtomFamily,
+	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
 
@@ -217,6 +217,48 @@ export function initIpcHandlers(api: any): () => void {
 				break;
 			}
 
+			case "update:checking": {
+				appStore.set(updateStatusAtom, { stage: "checking" });
+				break;
+			}
+
+			case "update:available": {
+				appStore.set(updateStatusAtom, {
+					stage: "available",
+					version: event.version,
+				});
+				break;
+			}
+
+			case "update:not-available": {
+				appStore.set(updateStatusAtom, { stage: "not-available" });
+				break;
+			}
+
+			case "update:download-progress": {
+				appStore.set(updateStatusAtom, {
+					stage: "downloading",
+					percent: event.percent,
+				});
+				break;
+			}
+
+			case "update:downloaded": {
+				appStore.set(updateStatusAtom, {
+					stage: "downloaded",
+					version: event.version,
+				});
+				break;
+			}
+
+			case "update:error": {
+				appStore.set(updateStatusAtom, {
+					stage: "error",
+					message: event.message,
+				});
+				break;
+			}
+
 			case "error": {
 				toast.error(
 					event.agentId
@@ -280,12 +322,16 @@ export function initIpcHandlers(api: any): () => void {
 			case "agent:message_end": {
 				const finalMsg = event.message as any;
 				const msgs = [...appStore.get(messagesAtomFamily(event.agentId))];
-				let idx = msgs.length - 1;
-				for (let i = msgs.length - 1; i >= 0; i--)
-					if (msgs[i].isStreaming) {
-						idx = i;
-						break;
+				const finalId = finalMsg?.id;
+				let idx = finalId ? msgs.findIndex((m) => m.id === finalId) : -1;
+				if (idx < 0) {
+					for (let i = msgs.length - 1; i >= 0; i--) {
+						if (msgs[i].isStreaming) {
+							idx = i;
+							break;
+						}
 					}
+				}
 				if (idx < 0) break;
 				const oldBlocks = msgs[idx].contentBlocks;
 				const blocks: PiContentBlock[] = Array.isArray(finalMsg.content)
@@ -305,11 +351,29 @@ export function initIpcHandlers(api: any): () => void {
 							} satisfies PiToolCallBlock;
 						})
 					: oldBlocks;
+				const usage = finalMsg.usage
+					? {
+							inputTokens: finalMsg.usage.input ?? 0,
+							outputTokens: finalMsg.usage.output ?? 0,
+							cacheReadTokens: finalMsg.usage.cacheRead ?? 0,
+							cacheWriteTokens: finalMsg.usage.cacheWrite ?? 0,
+							totalTokens: finalMsg.usage.totalTokens ?? 0,
+							cost: {
+								input: finalMsg.usage.cost?.input ?? 0,
+								output: finalMsg.usage.cost?.output ?? 0,
+								cacheRead: finalMsg.usage.cost?.cacheRead ?? 0,
+								cacheWrite: finalMsg.usage.cost?.cacheWrite ?? 0,
+								total: finalMsg.usage.cost?.total ?? 0,
+							},
+						}
+					: undefined;
 				msgs[idx] = {
 					...msgs[idx],
+					id: finalId ?? msgs[idx].id,
 					contentBlocks: blocks,
 					isStreaming: false,
 					timestamp: finalMsg.timestamp ?? msgs[idx].timestamp,
+					usage,
 				};
 				appStore.set(messagesAtomFamily(event.agentId), msgs);
 				break;

@@ -5,10 +5,10 @@
 
 import { type BrowserWindow, dialog, ipcMain } from "electron";
 import type { AgentManager } from "./agent-manager.js";
-import { getProjectsIndexPath, getSessionsDir, getUserProfilePath } from "./shared/look-storage.js";
+import { getSessionsDir } from "./shared/look-storage.js";
 import type { AgentRole, MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
-import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
+import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 
 export function registerIpcHandlers(agentManager: AgentManager, mainWindow: BrowserWindow): void {
 	// Forward all AgentManager events to the renderer

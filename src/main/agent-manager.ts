@@ -74,15 +74,6 @@ const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls"]);
 /** Names of pi's built-in coding-agent tools (the default 7). */
 const BUILTIN_TOOL_NAMES: readonly string[] = ["read", "bash", "write", "edit", "grep", "find", "ls"];
 
-/** Per-session settings baseline. Used by `createAgent` and
- *  `loadPersistedAgents` so the two paths can't drift apart. */
-function makeBaseSettings() {
-	return SettingsManager.inMemory({
-		compaction: { enabled: true, reserveTokens: 8192, keepRecentTokens: 30000 },
-		retry: { enabled: true, maxRetries: 3, baseDelayMs: 2000 },
-	});
-}
-
 /** Filter a role's tool list down to (built-ins) + (custom tool names). */
 function resolveToolNames(roleToolNames: string[] | null, customTools: Array<{ name: string }>): string[] {
 	const builtins = new Set(BUILTIN_TOOL_NAMES);
@@ -205,12 +196,7 @@ function parseTitleFromResponse(apiStyle: "anthropic" | "openai" | "google", dat
  * 根据 Base URL 自动检测 API 风格（Anthropic / OpenAI / Google），
  * 同一 Provider 可能通过不同端点暴露不同风格的 API。
  */
-function callTitleApi(
-	baseUrl: string,
-	apiKey: string,
-	modelId: string,
-	prompt: string,
-): Promise<string | null> {
+function callTitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
 	const style = detectApiStyle(baseUrl);
 
 	if (style === "anthropic") {
@@ -222,7 +208,12 @@ function callTitleApi(
 	return callOpenAITitleApi(baseUrl, apiKey, modelId, prompt);
 }
 
-async function callAnthropicTitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
+async function callAnthropicTitleApi(
+	baseUrl: string,
+	apiKey: string,
+	modelId: string,
+	prompt: string,
+): Promise<string | null> {
 	const url = `${baseUrl}/messages`;
 	const body = JSON.stringify({
 		model: modelId,
@@ -230,22 +221,40 @@ async function callAnthropicTitleApi(baseUrl: string, apiKey: string, modelId: s
 		thinking: { type: "disabled" },
 		messages: [{ role: "user", content: prompt }],
 	});
-	const data = await httpPostJson(url, { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body);
+	const data = await httpPostJson(
+		url,
+		{ "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+		body,
+	);
 	return data ? parseTitleFromResponse("anthropic", data) : null;
 }
 
-async function callOpenAITitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
+async function callOpenAITitleApi(
+	baseUrl: string,
+	apiKey: string,
+	modelId: string,
+	prompt: string,
+): Promise<string | null> {
 	const url = `${baseUrl}/chat/completions`;
 	const body = JSON.stringify({
 		model: modelId,
 		max_tokens: 64,
 		messages: [{ role: "user", content: prompt }],
 	});
-	const data = await httpPostJson(url, { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" }, body);
+	const data = await httpPostJson(
+		url,
+		{ Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+		body,
+	);
 	return data ? parseTitleFromResponse("openai", data) : null;
 }
 
-async function callGoogleTitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
+async function callGoogleTitleApi(
+	baseUrl: string,
+	apiKey: string,
+	modelId: string,
+	prompt: string,
+): Promise<string | null> {
 	const url = `${baseUrl}/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
 	const body = JSON.stringify({
 		contents: [{ parts: [{ text: prompt }] }],
@@ -260,23 +269,32 @@ function httpPostJson(url: string, headers: Record<string, string>, body: string
 	return new Promise((resolve) => {
 		const { hostname, pathname, search, port } = new URL(url);
 		const path = pathname + search;
-		const req = httpsRequest(
-			{ hostname, port: port || 443, path, method: "POST", headers },
-			(res) => {
-				let data = "";
-				res.setEncoding("utf-8");
-				res.on("data", (chunk: string) => { data += chunk; });
-				res.on("end", () => {
-					if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-						try { resolve(JSON.parse(data)); } catch { resolve(null); }
-					} else {
+		const req = httpsRequest({ hostname, port: port || 443, path, method: "POST", headers }, (res) => {
+			let data = "";
+			res.setEncoding("utf-8");
+			res.on("data", (chunk: string) => {
+				data += chunk;
+			});
+			res.on("end", () => {
+				if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+					try {
+						resolve(JSON.parse(data));
+					} catch {
 						resolve(null);
 					}
-				});
-			},
-		);
-		const timer = setTimeout(() => { req.destroy(); resolve(null); }, 15_000);
-		req.on("error", () => { clearTimeout(timer); resolve(null); });
+				} else {
+					resolve(null);
+				}
+			});
+		});
+		const timer = setTimeout(() => {
+			req.destroy();
+			resolve(null);
+		}, 15_000);
+		req.on("error", () => {
+			clearTimeout(timer);
+			resolve(null);
+		});
 		req.on("close", () => clearTimeout(timer));
 		req.write(body);
 		req.end();
@@ -554,7 +572,7 @@ export class AgentManager {
 				// Project already exists from a previous migration step
 			}
 			const projectId = result.project.id;
-			for (const [id, m] of agentPairs) {
+			for (const [_id, m] of agentPairs) {
 				m.info.projectId = projectId;
 			}
 		}
@@ -579,15 +597,49 @@ export class AgentManager {
 
 	getAgentCwd(agentId: string): string {
 		const m = this.agents.get(agentId);
-		if (!m?.info.projectId) return process.cwd(); // fallback for edge cases
-		const mp = this.projects.get(m.info.projectId);
-		return mp?.info.cwd ?? process.cwd();
+		if (!m) return process.cwd();
+		if (m.info.projectId) {
+			const mp = this.projects.get(m.info.projectId);
+			if (mp?.info.valid) return mp.info.cwd;
+		}
+		return m.session.sessionManager.getCwd?.() ?? process.cwd();
 	}
 
 	getProjectSettings(projectId?: string): UserSettingsStore | null {
 		const pid = projectId ?? this.activeProjectId;
 		if (!pid) return null;
 		return this.projects.get(pid)?.userSettings ?? null;
+	}
+
+	private resolveProjectCwd(projectId: string | undefined, fallback: string): string {
+		if (!projectId) return fallback;
+		const mp = this.projects.get(projectId);
+		return mp?.info.valid ? mp.info.cwd : fallback;
+	}
+
+	private settingsManagerForCwd(cwd: string, projectId?: string): SettingsManager {
+		if (projectId) {
+			const mp = this.projects.get(projectId);
+			if (mp?.info.valid && mp.info.cwd === cwd) return mp.settingsManager;
+		}
+		for (const mp of this.projects.values()) {
+			if (mp.info.valid && mp.info.cwd === cwd) return mp.settingsManager;
+		}
+		return SettingsManager.create(cwd, getLookDir());
+	}
+
+	private restorePersistedLeaf(sm: SessionManager, leafId: unknown, agentId: string): string | null {
+		if (leafId === undefined) return sm.getLeafId();
+		try {
+			if (leafId === null) {
+				sm.resetLeaf();
+			} else if (typeof leafId === "string" && leafId !== sm.getLeafId()) {
+				sm.branch(leafId);
+			}
+		} catch (err) {
+			console.warn(`[Look] Failed to restore leaf ${String(leafId)} for agent ${agentId}:`, err);
+		}
+		return sm.getLeafId();
 	}
 
 	listProjects(): ProjectInfo[] {
@@ -664,35 +716,16 @@ export class AgentManager {
 				if (!sessionFile || !fs.existsSync(sessionFile)) continue;
 				if (this.agents.has(id)) continue;
 
-			// Open pi session from existing file
-			const sm = SessionManager.open(sessionFile);
+				// Open pi session from existing file. Apply the persisted
+				// leaf immediately, before extracting UI history or creating
+				// AgentSession, so the SDK context and Look's mirror both point
+				// at the same branch.
+				const sm = SessionManager.open(sessionFile);
+				this.restorePersistedLeaf(sm, entry.leafId, id);
+				const sessionCwd = sm.getCwd?.() ?? process.cwd();
+				const projectCwd = this.resolveProjectCwd(entry.projectId, sessionCwd);
 
-			// Extract messages from the session tree
-			// Use getBranch() (not getEntries()) — sessions are a tree, and
-			// getEntries() returns entries from ALL branches including ones
-			// the user has abandoned. getBranch() walks from the current
-			// leaf to root, which is what we want for a linear conversation.
-			const branch = sm.getBranch();
-			const uiMessages: PiMessage[] = [];
-			for (const e of branch) {
-				if (e.type !== "message") continue;
-				const msg = e.message;
-				// Skip pi-internal message types (bashExecution, custom, etc.)
-				if (
-					msg.role === "bashExecution" ||
-					msg.role === "custom" ||
-					msg.role === "compactionSummary"
-				)
-					continue;
-				// v0.4: keep `branchSummary` messages in the UI. The
-				// previous code dropped them, which meant switching
-				// branches via /tree lost all context from the
-				// abandoned path the moment Look restarted. pi marks
-				// these as `role: "branchSummary"` — we promote them
-				// to a regular user message so the LLM (and the user)
-				// can still see what the other branch explored.
-				uiMessages.push(convertPiMessage(msg, id, e.id));
-			}
+				const uiMessages = this.extractMessagesFromSessionManager(sm, id);
 
 				// Backfill toolCall blocks with toolResult isError/result
 				for (const tmsg of uiMessages) {
@@ -798,15 +831,17 @@ export class AgentManager {
 					projectId: entry.projectId,
 				};
 
-				// Rebuild live pi session from the opened session file
-				const settingsManager = makeBaseSettings();
+				// Rebuild live pi session from the opened session file.
+				// Keep cwd/settings/resource loader aligned the way the SDK's
+				// createAgentSession() default path does.
+				const settingsManager = this.settingsManagerForCwd(projectCwd, entry.projectId);
 
 				const roleToolNames = getRoleTools(info.role); // string[] | null
 				// null = "all built-in tools" (chat mode restored from disk)
 				const toolNames: string[] = roleToolNames ?? [...BUILTIN_TOOL_NAMES];
 				let systemPrompt = getRoleSystemPrompt(info.role);
 				if (info.role === "chat") {
-					const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
+					const custom = this.getProjectSettings(info.projectId)?.getAll().chatSystemPrompt;
 					if (custom) systemPrompt = custom;
 				}
 				const customTools = this.buildCustomTools(toolNames, id);
@@ -814,13 +849,15 @@ export class AgentManager {
 				const resourceLoader = this.buildResourceLoader({
 					systemPrompt,
 					agentId: id,
+					cwd: projectCwd,
+					settingsManager,
 				});
 				await resourceLoader.reload();
 
 				const allToolNames = resolveToolNames(roleToolNames, customTools);
 
 				const { session } = await createAgentSession({
-					cwd: this.getAgentCwd(id),
+					cwd: projectCwd,
 					authStorage: this.authStorage,
 					modelRegistry: this.modelRegistry,
 					sessionManager: sm,
@@ -847,41 +884,16 @@ export class AgentManager {
 					});
 				}
 
-			const managed: ManagedAgent = {
-				info,
-				session,
-				messages: uiMessages,
-				unsubscribe: session.subscribe((event) => this.handleSessionEvent(id, event)),
-				permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
-				// v0.4: seed leaf from index. If absent (legacy
-				// agents.json without the field), fall back to the
-				// SDK's current leaf, which is the end of the file
-				// for v3 sessions — i.e. "no branch switch pending".
-				leafId: entry.leafId ?? sm.getLeafId(),
-			};
+				const managed: ManagedAgent = {
+					info,
+					session,
+					messages: uiMessages,
+					unsubscribe: session.subscribe((event) => this.handleSessionEvent(id, event)),
+					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
+					leafId: sm.getLeafId(),
+				};
 
-			// v0.4: if the persisted leaf differs from the file's
-			// end-of-file leaf, call sm.branch() so subsequent
-			// appends land on the persisted branch (otherwise the
-			// next message would silently re-grow the abandoned
-			// branch and clobber the user's switch on next save).
-			// Cheap no-op when leafId matches the file's tail.
-			if (entry.leafId && entry.leafId !== sm.getLeafId()) {
-				try {
-					sm.branch(entry.leafId);
-					managed.leafId = sm.getLeafId();
-				} catch (err) {
-					console.warn(
-						`[Look] Failed to restore leaf ${entry.leafId} for agent ${id}:`,
-						err,
-					);
-					// Fall back to the SDK's current leaf so we don't
-					// stay in a bad state.
-					managed.leafId = sm.getLeafId();
-				}
-			}
-
-			this.agents.set(id, managed);
+				this.agents.set(id, managed);
 				this.agentUsage.set(id, { ...cumUsage });
 				loaded++;
 			}
@@ -961,7 +973,7 @@ export class AgentManager {
 	}
 
 	private isUserConfigured(provider: string): boolean {
-		return this.authStorage.getAuthStatus(provider).source === "stored";
+		return this.modelRegistry.getProviderAuthStatus(provider).configured;
 	}
 
 	/** Returns the active project's root directory path. */
@@ -985,7 +997,7 @@ export class AgentManager {
 	}> {
 		return this.modelRegistry
 			.getAll()
-			.filter((m) => this.isUserConfigured(m.provider))
+			.filter((m) => this.modelRegistry.hasConfiguredAuth(m))
 			.map((m) => ({
 				provider: m.provider,
 				id: m.id,
@@ -1040,7 +1052,7 @@ export class AgentManager {
 	async getProviderSettings() {
 		const providers = await this.getProviders();
 		return providers.map((p) => {
-			const s = this.authStorage.getAuthStatus(p.id);
+			const s = this.modelRegistry.getProviderAuthStatus(p.id);
 			return {
 				id: p.id,
 				name: p.name,
@@ -1123,27 +1135,15 @@ export class AgentManager {
 	}
 
 	/**
-	 * Add one or more `skillPaths` to `~/.look/settings.json.skills`.
+	 * Add one or more `skillPaths` to the SDK-managed global skills list.
 	 * Used by the renderer's "Import from <tool>" affordance to make
 	 * Claude Code / Cursor / Codex / Copilot skills available in Look.
-	 *
-	 * We write the file directly because the SDK's `SettingsManager`
-	 * doesn't expose a setter for the `skills` field — the field is
-	 * consumed by `DefaultResourceLoader` but only via the loaded
-	 * JSON, not as a typed property.
 	 */
 	async importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }> {
 		try {
-			const settingsPath = join(getLookDir(), "settings.json");
-			let raw: Record<string, unknown> = {};
-			if (fs.existsSync(settingsPath)) {
-				try {
-					raw = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-				} catch {
-					raw = {};
-				}
-			}
-			const existing = Array.isArray(raw.skills) ? (raw.skills as unknown[]) : [];
+			const cwd = this.getActiveProject()?.cwd ?? process.cwd();
+			const settingsManager = SettingsManager.create(cwd, getLookDir());
+			const existing = settingsManager.getSkillPaths();
 			// De-dup (preserve order, prefer earliest). Expand `~` and
 			// drop non-existent paths so we don't pollute the file.
 			const seen = new Set<string>();
@@ -1156,9 +1156,8 @@ export class AgentManager {
 				seen.add(expanded);
 				merged.push(expanded);
 			}
-			raw.skills = merged;
-			fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-			fs.writeFileSync(settingsPath, JSON.stringify(raw, null, 2));
+			settingsManager.setSkillPaths(merged);
+			await settingsManager.flush();
 			invalidateSkillCache();
 			return { success: true, importedCount: merged.length };
 		} catch (e: unknown) {
@@ -1200,15 +1199,12 @@ export class AgentManager {
 		});
 	}
 
-	// Internal: read the `skills` array from settings.json for the
-	// `listSkillsForUI` snapshot. SettingsManager doesn't expose a
-	// typed getter, so we read the file directly.
+	// Internal: read the SDK-managed merged skills array for the
+	// `listSkillsForUI` snapshot.
 	private readImportedSkillPaths(): string[] {
 		try {
-			const settingsPath = path.join(getLookDir(), "settings.json");
-			if (!fs.existsSync(settingsPath)) return [];
-			const raw = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-			return Array.isArray(raw.skills) ? (raw.skills as string[]) : [];
+			const cwd = this.getActiveProject()?.cwd ?? process.cwd();
+			return SettingsManager.create(cwd, getLookDir()).getSkillPaths();
 		} catch {
 			return [];
 		}
@@ -1232,9 +1228,10 @@ export class AgentManager {
 	private resolveModel(primaryModelId: string, fallbackModelIds: string[]) {
 		for (const c of [primaryModelId, ...fallbackModelIds]) {
 			const [p, ...parts] = c.includes("/") ? c.split("/") : ["anthropic", c];
-			if (!this.isUserConfigured(p)) continue;
 			const found = this.lookupModel(p, parts.join("/"));
-			if (found) return { provider: p, modelId: parts.join("/"), resolvedId: c };
+			if (found && this.modelRegistry.hasConfiguredAuth(found)) {
+				return { provider: p, modelId: parts.join("/"), resolvedId: c };
+			}
 		}
 		throw new Error(
 			`No usable model found. Tried: [${[primaryModelId, ...fallbackModelIds].join(", ")}]. ` +
@@ -1348,6 +1345,8 @@ export class AgentManager {
 		const wasFallback = resolvedId !== primaryModelId;
 
 		const id = uuidv4().slice(0, 8);
+		const projectCwd = this.getActiveProjectCwd();
+		const settingsManager = this.settingsManagerForCwd(projectCwd, this.activeProjectId ?? undefined);
 		const roleToolNames = getRoleTools(options.role); // string[] | null
 		// null = "all built-in tools" (chat mode)
 		const toolNames: string[] = roleToolNames ?? ["read", "bash", "write", "edit", "grep", "find", "ls"];
@@ -1363,11 +1362,12 @@ export class AgentManager {
 		const resourceLoader = this.buildResourceLoader({
 			systemPrompt,
 			agentId: id,
+			cwd: projectCwd,
+			settingsManager,
 		});
 		await resourceLoader.reload();
 
 		// pi native persistence: SessionManager.create writes to ~/.look/sessions/
-		const projectCwd = this.getActiveProjectCwd();
 		const sm = SessionManager.create(projectCwd, getSessionsDir());
 		// Intentional: a brand-new agent with no messages is NOT a
 		// valid conversation. We deliberately do NOT seed an empty
@@ -1379,8 +1379,6 @@ export class AgentManager {
 		// index on next start. (The sessionFile path is still saved
 		// into `agents.json` immediately so the agent's in-memory
 		// session is recoverable as soon as the first message lands.)
-		const settingsManager = makeBaseSettings();
-
 		const allToolNames = resolveToolNames(roleToolNames, customTools);
 
 		const { session, modelFallbackMessage } = await createAgentSession({
@@ -1520,8 +1518,10 @@ export class AgentManager {
 	 */
 	listAgentsWithHistory(): { agents: AgentInfo[]; history: Record<string, PiMessage[]> } {
 		const agents = this.listAgents();
+		const visibleIds = new Set(agents.map((agent) => agent.id));
 		const history: Record<string, PiMessage[]> = {};
 		for (const a of this.agents.values()) {
+			if (!visibleIds.has(a.info.id)) continue;
 			if (a.messages.length > 0) history[a.info.id] = a.messages;
 		}
 		return { agents, history };
@@ -1552,7 +1552,7 @@ export class AgentManager {
 			return trimmed.slice(0, MAX_TITLE_LENGTH);
 		}
 
-		const apiKey = this.getApiKey(provider);
+		const apiKey = await this.modelRegistry.getApiKeyForProvider(provider);
 		if (!apiKey) {
 			return null;
 		}
@@ -1564,9 +1564,12 @@ export class AgentManager {
 			const result = await callTitleApi(baseUrl, apiKey, modelId, prompt);
 			if (!result) return null;
 			// 清理引号和书名号
-			const cleaned = result.trim().replace(/^["'""''「《]+|["'""''」》]+$/g, "").trim();
+			const cleaned = result
+				.trim()
+				.replace(/^["'""''「《]+|["'""''」》]+$/g, "")
+				.trim();
 			return cleaned.slice(0, MAX_TITLE_LENGTH) || null;
-		} catch (err) {
+		} catch (_err) {
 			return null;
 		}
 	}
@@ -1599,13 +1602,15 @@ export class AgentManager {
 		const modelId = parts.join("/");
 		this.titleInFlight.add(agentId);
 
-		this.generateTitle(userMessage, p, modelId).then((title) => {
-			this.titleInFlight.delete(agentId);
-			if (!title || title === DEFAULT_CHAT_NAME) return;
-			this.renameAgent(agentId, title);
-		}).catch((err) => {
-			this.titleInFlight.delete(agentId);
-		});
+		this.generateTitle(userMessage, p, modelId)
+			.then((title) => {
+				this.titleInFlight.delete(agentId);
+				if (!title || title === DEFAULT_CHAT_NAME) return;
+				this.renameAgent(agentId, title);
+			})
+			.catch((err) => {
+				this.titleInFlight.delete(agentId);
+			});
 	}
 
 	// ============================================================
@@ -1789,7 +1794,7 @@ export class AgentManager {
 		// the error is opaque ("no credentials" deep in pi internals).
 		// Catching it here gives the renderer a clean message it can
 		// surface in a toast and roll the model selector back.
-		if (!this.isUserConfigured(provider)) {
+		if (!this.modelRegistry.hasConfiguredAuth(model)) {
 			throw new Error(`Provider '${provider}' is not configured. Add an API key in Settings first.`);
 		}
 
@@ -1949,6 +1954,7 @@ export class AgentManager {
 			}
 			case "message_end": {
 				const msg = event.message;
+				let recordedMessage = false;
 				// Push the SDK's finalized message (real id, real content,
 				// real usage) into m.messages so getMessages() /
 				// listAgentsWithHistory() / the persisted-agents restore
@@ -1961,9 +1967,10 @@ export class AgentManager {
 					const realId = (msg as any).id ?? `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 					if (!m.messages.some((x) => x.id === realId)) {
 						this.addMessage(agentId, convertPiMessage(msg, agentId, realId));
+						recordedMessage = true;
 					}
 				}
-				if (msg?.role === "assistant" && msg.usage) this.trackUsage(agentId, msg.usage);
+				if (recordedMessage && msg?.role === "assistant" && msg.usage) this.trackUsage(agentId, msg.usage);
 				m.info.messageCount = m.messages.length;
 
 				// 记录首条用户消息并立即启动标题生成（与 AI 回复并行）
@@ -2287,9 +2294,7 @@ export class AgentManager {
 			throw new Error(`Agent ${agentId} not found`);
 		}
 		if (m.info.status === "thinking" || m.info.status === "working") {
-			throw new Error(
-				"Cannot navigate the tree while the agent is generating. Stop the current turn first.",
-			);
+			throw new Error("Cannot navigate the tree while the agent is generating. Stop the current turn first.");
 		}
 		const result = await m.session.navigateTree(entryId, {
 			summarize: opts?.summarize,
@@ -2323,11 +2328,7 @@ export class AgentManager {
 	 * open a new AgentSession against it. The new agent is
 	 * registered in `this.agents` and broadcast via `agent:created`.
 	 */
-	async createForkedSession(
-		agentId: string,
-		entryId: string,
-		opts?: { name?: string },
-	): Promise<ForkedSessionResult> {
+	async createForkedSession(agentId: string, entryId: string, opts?: { name?: string }): Promise<ForkedSessionResult> {
 		const src = this.agents.get(agentId);
 		if (!src) throw new Error(`Agent ${agentId} not found`);
 
@@ -2340,6 +2341,8 @@ export class AgentManager {
 		// against it. Reuse the parent's role / model / tools so the
 		// fork feels like "the same agent, different branch".
 		const sm = SessionManager.open(newSessionFile);
+		const sourceCwd = this.getAgentCwd(agentId);
+		const settingsManager = this.settingsManagerForCwd(sourceCwd, src.info.projectId);
 		const role = src.info.role;
 		const roleToolNames = getRoleTools(role);
 		const toolNames: string[] = roleToolNames ?? [...BUILTIN_TOOL_NAMES];
@@ -2349,19 +2352,23 @@ export class AgentManager {
 		}
 		let systemPrompt = getRoleSystemPrompt(role);
 		if (role === "chat") {
-			const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
+			const custom = this.getProjectSettings(src.info.projectId)?.getAll().chatSystemPrompt;
 			if (custom) systemPrompt = custom;
 		}
 		const newId = uuidv4().slice(0, 8);
-		const resourceLoader = this.buildResourceLoader({ systemPrompt, agentId: newId });
+		const resourceLoader = this.buildResourceLoader({
+			systemPrompt,
+			agentId: newId,
+			cwd: sourceCwd,
+			settingsManager,
+		});
 
 		await resourceLoader.reload();
 		const customTools = this.buildCustomTools(toolNames, newId);
 		const allToolNames = resolveToolNames(roleToolNames, customTools);
 
-		const settingsManager = makeBaseSettings();
 		const { session } = await createAgentSession({
-			cwd: this.getAgentCwd(agentId),
+			cwd: sourceCwd,
 			authStorage: this.authStorage,
 			modelRegistry: this.modelRegistry,
 			sessionManager: sm,
@@ -2430,8 +2437,19 @@ export class AgentManager {
 		// Treat empty string as "clear" — the renderer can pass `""`
 		// from an input's onBlur and expect a remove.
 		const next = label && label.trim().length > 0 ? label.trim() : undefined;
+		const oldLeaf = m.session.sessionManager.getLeafId();
 		m.session.sessionManager.appendLabelChange(entryId, next);
-		this.syncLeafFromSession(agentId); // emits agent:tree-changed
+		if (oldLeaf === null) {
+			m.session.sessionManager.resetLeaf();
+		} else {
+			m.session.sessionManager.branch(oldLeaf);
+		}
+		m.leafId = oldLeaf;
+		const tree = this.snapshotTreeForRenderer(agentId);
+		if (tree) {
+			this.emit({ type: "agent:tree-changed", agentId, leafId: oldLeaf, tree });
+		}
+		this.saveIndex();
 	}
 
 	/**
@@ -2450,6 +2468,27 @@ export class AgentManager {
 		const branch = sm.getBranch();
 		const out: PiMessage[] = [];
 		for (const e of branch) {
+			if (e.type === "branch_summary") {
+				const timestamp =
+					typeof e.timestamp === "number"
+						? e.timestamp
+						: Number.isFinite(new Date(e.timestamp).getTime())
+							? new Date(e.timestamp).getTime()
+							: Date.now();
+				out.push(
+					convertPiMessage(
+						{
+							role: "branchSummary",
+							summary: e.summary,
+							fromId: e.fromId ?? e.parentId ?? "root",
+							timestamp,
+						},
+						agentId,
+						e.id,
+					),
+				);
+				continue;
+			}
 			if (e.type !== "message") continue;
 			const msg = e.message;
 			if (msg.role === "bashExecution" || msg.role === "custom" || msg.role === "compactionSummary") continue;
@@ -2464,9 +2503,9 @@ export class AgentManager {
 			if (!tcId) continue;
 			for (const am of out) {
 				if (am.role !== "assistant") continue;
-				const block = am.contentBlocks.find(
-					(b) => b.type === "toolCall" && (b as PiToolCallBlock).id === tcId,
-				) as PiToolCallBlock | undefined;
+				const block = am.contentBlocks.find((b) => b.type === "toolCall" && (b as PiToolCallBlock).id === tcId) as
+					| PiToolCallBlock
+					| undefined;
 				if (!block) continue;
 				block.result =
 					(tmsg as any).contentBlocks
@@ -2594,6 +2633,8 @@ export class AgentManager {
 	private buildResourceLoader(opts: {
 		systemPrompt: string;
 		agentId: string;
+		cwd: string;
+		settingsManager?: SettingsManager;
 		task?: TaskNode;
 	}): DefaultResourceLoader {
 		// v0.3 skills: feed ALL discovered skill paths into the SDK's
@@ -2602,7 +2643,7 @@ export class AgentManager {
 		// actually exist on disk (Look project + user, agentskills.io,
 		// Claude Code, Cursor, Codex, Copilot, Hermes Agent, pi SDK,
 		// and user-imported paths from settings.json).
-		const skillPaths = gatherSkillPaths(this.getAgentCwd(opts.agentId));
+		const skillPaths = gatherSkillPaths(opts.cwd);
 
 		// v0.3 skills scoping: when the orchestrator spawns a worker
 		// with a `task.allowedSkills` constraint, narrow the visible
@@ -2628,7 +2669,7 @@ export class AgentManager {
 		const skillsOverrideForSdk = skillsOverride as any;
 
 		return new DefaultResourceLoader({
-			cwd: this.getAgentCwd(opts.agentId),
+			cwd: opts.cwd,
 			// Resource discovery (extensions / skills / prompts / themes /
 			// context files) lives under `~/.look/` so it lines up with
 			// our AuthStorage / ModelRegistry / SessionManager paths.
@@ -2636,6 +2677,7 @@ export class AgentManager {
 			// `~/.pi/agent/`, which is what the `pi` CLI uses — we don't
 			// want to inherit that scope.
 			agentDir: getLookDir(),
+			settingsManager: opts.settingsManager ?? this.settingsManagerForCwd(opts.cwd),
 			// v0.3: feed all discovered skill paths into the SDK's loader so
 			// they get auto-injected into worker system prompts.
 			...(skillPaths.length > 0 ? { additionalSkillPaths: skillPaths } : {}),

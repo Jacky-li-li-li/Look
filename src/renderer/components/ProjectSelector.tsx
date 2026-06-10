@@ -14,8 +14,6 @@ import type { ProjectInfo } from "@shared/types";
 import { AlertTriangle, Check, ChevronDown, Folder, FolderOpen, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-const api = (window as any).look;
-
 interface ProjectSelectorProps {
 	projects: ProjectInfo[];
 	activeProjectId: string | null;
@@ -26,7 +24,7 @@ interface ProjectSelectorProps {
 
 function shortenPath(cwd: string, homedir: string): string {
 	if (homedir && cwd.startsWith(homedir)) {
-		return "~" + cwd.slice(homedir.length);
+		return `~${cwd.slice(homedir.length)}`;
 	}
 	return cwd;
 }
