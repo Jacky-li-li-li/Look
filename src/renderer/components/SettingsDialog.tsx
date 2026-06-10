@@ -29,7 +29,6 @@ import { cn } from "@shared/lib/utils";
 import { useAtomValue } from "jotai";
 import {
 	AlertCircle,
-	Check,
 	Cpu,
 	Eye,
 	EyeOff,
@@ -51,19 +50,29 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { showError } from "../lib/ipc";
-import { updateStatusAtom } from "../store/atoms";
+import { chatAgentNameAtom, updateStatusAtom } from "../store/atoms";
+import { appStore } from "../store/ipcHandler";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import ProfileEditor from "./ProfileEditor";
 import { ProviderIcon } from "./ProviderIcon";
 
 const api = (window as any).look;
 
+interface ProviderModelInfo {
+	id: string;
+	name: string;
+	reasoning: boolean;
+	contextWindow: number;
+	maxTokens: number;
+}
+
 interface ProviderInfo {
 	id: string;
 	name: string;
 	hasKey: boolean;
-	envVar: string;
+	envVar?: string;
 	modelsAvailable: number;
+	models?: ProviderModelInfo[];
 	authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
 	envLabel?: string;
 }
@@ -128,6 +137,45 @@ function authSourceLabel(
 		default:
 			return { label: "auto", title: t("settings.authSourceAuto") };
 	}
+}
+
+function formatContextWindow(tokens: number): string {
+	if (tokens >= 1_000_000) {
+		return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`;
+	}
+	return `${Math.round(tokens / 1000)}K`;
+}
+
+function ProviderModelCount({ provider }: { provider: ProviderInfo }) {
+	const models = provider.models ?? [];
+	return (
+		<Badge variant="outline" className="h-4.5 gap-1 px-1.5 text-[10px]">
+			<Cpu className="size-2.5" />
+			{provider.modelsAvailable}
+		</Badge>
+	);
+}
+
+function ModelList({ models, t }: { models: ProviderModelInfo[]; t: (key: string) => string }) {
+	return (
+		<div className="">
+			{models.map((model) => (
+				<div
+					key={model.id}
+					className="flex items-start justify-between gap-3 pl-[44px] pr-3 py-1.5 text-left hover:bg-muted/40"
+				>
+					<div className="min-w-0">
+						<div className="truncate text-[12px] font-medium">{model.name}</div>
+						<div className="truncate font-mono text-[10px] text-muted-foreground">{model.id}</div>
+					</div>
+					<span className="shrink-0 whitespace-nowrap font-mono text-[10px] text-muted-foreground">
+						{model.reasoning ? t("agent.modelThink") : t("agent.modelBase")} /{" "}
+						{formatContextWindow(model.contextWindow)}
+					</span>
+				</div>
+			))}
+		</div>
+	);
 }
 
 // ── Update check button for About tab ──
@@ -226,6 +274,8 @@ function SettingsDialogImpl({
 	const [autoCompress, setAutoCompress] = useState(false);
 	const [compressThreshold, setCompressThreshold] = useState(60);
 	const [chatSystemPrompt, setChatSystemPrompt] = useState("");
+	const [chatAgentName, setChatAgentName] = useState("");
+	const [dirty, setDirty] = useState(false);
 	const [_settingsLoaded, setSettingsLoaded] = useState(false);
 	const [tab, setTab] = useState<string>(defaultTab);
 	useEffect(() => {
@@ -244,6 +294,7 @@ function SettingsDialogImpl({
 					if (r.settings.autoCompress !== undefined) setAutoCompress(r.settings.autoCompress);
 					if (r.settings.compressThreshold !== undefined) setCompressThreshold(r.settings.compressThreshold);
 					if (r.settings.chatSystemPrompt !== undefined) setChatSystemPrompt(r.settings.chatSystemPrompt);
+						if (r.settings.chatAgentName !== undefined) setChatAgentName(r.settings.chatAgentName);
 					setSettingsLoaded(true);
 				}
 			})
@@ -260,6 +311,10 @@ function SettingsDialogImpl({
 	const [forceSave, setForceSave] = useState<{ provider: string; key: string; reason: string; status: number } | null>(
 		null,
 	);
+	const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
+	const toggleProviderExpand = (id: string) => {
+		setExpandedProviders((prev) => ({ ...prev, [id]: !prev[id] }));
+	};
 
 	// Reset inline editing state when dialog opens
 	useEffect(() => {
@@ -378,13 +433,35 @@ function SettingsDialogImpl({
 	// Persist settings to main process
 	const persistSettings = useCallback((partial: Record<string, any>) => {
 		if (!api) return;
+		setDirty(true);
+		if (partial.chatAgentName !== undefined) {
+			appStore.set(chatAgentNameAtom, partial.chatAgentName);
+		}
 		api.setGeneralSettings(partial).catch(showError);
 	}, []);
 
-	const storedProviders = providers.filter((p) => p.hasKey || !p.authSource || p.authSource === "fallback");
-	const envProviders = providers.filter((p) => !p.hasKey && p.authSource && p.authSource !== "fallback");
-	const storedCount = storedProviders.length;
-	const envCount = envProviders.length;
+	const handleSaveAndClose = useCallback(() => {
+		persistSettings({
+			language,
+			defaultThinkingLevel: thinkingLevel,
+			autoCollapse,
+			autoCompress,
+			compressThreshold,
+			chatSystemPrompt,
+			chatAgentName,
+		});
+		setDirty(false);
+		onClose();
+	}, [language, thinkingLevel, autoCollapse, autoCompress, compressThreshold, chatSystemPrompt, chatAgentName, onClose]);
+
+	const storedProviders = providers
+		.filter((p) => !p.authSource || p.authSource === "stored" || p.authSource === "fallback")
+		.sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
+	const envProviders = providers
+		.filter((p) => p.authSource && p.authSource !== "stored" && p.authSource !== "fallback")
+		.sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
+	const storedCount = storedProviders.filter((p) => p.hasKey).length;
+	const envCount = envProviders.filter((p) => p.hasKey).length;
 
 	const handleResetDefaults = () => {
 		if (api)
@@ -397,6 +474,7 @@ function SettingsDialogImpl({
 					setAutoCompress(r.settings.autoCompress ?? false);
 					setCompressThreshold(r.settings.compressThreshold ?? 60);
 					setChatSystemPrompt(r.settings.chatSystemPrompt ?? "");
+						setChatAgentName(r.settings.chatAgentName ?? "");
 				}
 			});
 		setTheme("dark");
@@ -643,6 +721,20 @@ function SettingsDialogImpl({
 						<ContentPanel className="gap-3">
 							<div className="flex flex-col gap-3">
 								<div className="flex flex-col gap-0.5">
+									<h3 className="text-[13px] font-medium leading-none">{t("settings.agentName")}</h3>
+									<span className="text-[11px] text-muted-foreground leading-tight">
+										{t("settings.agentNameDesc")}
+									</span>
+								</div>
+								<Input
+									id="chatAgentName"
+									placeholder={t("settings.agentNamePlaceholder")}
+									value={chatAgentName}
+									onChange={(e) => setChatAgentName(e.target.value)}
+									onBlur={() => persistSettings({ chatAgentName })}
+									className="h-8 text-[13px]"
+								/>
+								<div className="flex flex-col gap-0.5 mt-3">
 									<h3 className="text-[13px] font-medium leading-none">{t("settings.chatSystemPrompt")}</h3>
 									<span className="text-[11px] text-muted-foreground leading-tight">
 										{t("settings.chatSystemPromptDesc")}
@@ -718,7 +810,7 @@ function SettingsDialogImpl({
 													>
 														<div className="flex items-center justify-between gap-3 px-3 py-2">
 															<div className="min-w-0 flex-1">
-																<div className="flex items-center gap-2 text-[13px] font-medium">
+																<div className="flex items-center gap-1 text-[13px] font-medium">
 																	<span
 																		className={cn(
 																			"size-2 shrink-0 rounded-full",
@@ -726,11 +818,19 @@ function SettingsDialogImpl({
 																		)}
 																	/>
 																	<ProviderIcon id={p.id} className="size-4 shrink-0" />
-																	{p.name}
-																	<Badge variant="outline" className="h-4.5 gap-1 px-1.5 text-[10px]">
-																		<Check className="size-2.5" />
-																		{p.modelsAvailable}
-																	</Badge>
+																	<span
+																		className={cn(
+																			"cursor-pointer transition-colors hover:text-foreground",
+																			(!p.models || p.models.length === 0) && "cursor-default",
+																		)}
+																		onClick={() => p.models && p.models.length > 0 && toggleProviderExpand(p.id)}
+																		role="button"
+																		tabIndex={0}
+																		onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleProviderExpand(p.id); }}
+																		>
+																			{p.name}
+																		</span>
+																	<ProviderModelCount provider={p} />
 																	{ts?.verdict === "ok" && (
 																		<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
 																			<ShieldCheck className="size-2.5" />
@@ -758,9 +858,11 @@ function SettingsDialogImpl({
 																		</span>
 																	)}
 																</div>
-																<code className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
-																	{p.envVar}
-																</code>
+																{p.envVar && (
+																	<code className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
+																		{p.envVar}
+																	</code>
+																)}
 															</div>
 															<div className="flex shrink-0 items-center gap-1">
 																<Button
@@ -806,6 +908,10 @@ function SettingsDialogImpl({
 																)}
 															</div>
 														</div>
+
+														{expandedProviders[p.id] && p.models && p.models.length > 0 && (
+															<ModelList models={p.models} t={t} />
+														)}
 
 														{isEditing && (
 															<div className="border-t border-hairline bg-muted/30 px-3 pb-3 pt-2">
@@ -865,12 +971,14 @@ function SettingsDialogImpl({
 																		)}
 																	</Button>
 																</div>
-																<p className="mt-1.5 text-[10px] text-muted-foreground">
-																	Or set{" "}
-																	<code className="rounded bg-muted px-1 font-mono text-[10px]">
-																		export {p.envVar}=...
-																	</code>
-																</p>
+																{p.envVar && (
+																	<p className="mt-1.5 text-[10px] text-muted-foreground">
+																		Or set{" "}
+																		<code className="rounded bg-muted px-1 font-mono text-[10px]">
+																			export {p.envVar}=...
+																		</code>
+																	</p>
+																)}
 															</div>
 														)}
 													</div>
@@ -900,10 +1008,21 @@ function SettingsDialogImpl({
 													>
 														<div className="flex items-center justify-between gap-3 px-3 py-2">
 															<div className="min-w-0 flex-1">
-																<div className="flex items-center gap-2 text-[13px] font-medium">
+																<div className="flex items-center gap-1 text-[13px] font-medium">
 																	<span className="size-2 shrink-0 rounded-full bg-sky-500" />
 																	<ProviderIcon id={p.id} className="size-4 shrink-0" />
-																	{p.name}
+																	<span
+																		className={cn(
+																			"cursor-pointer transition-colors hover:text-foreground",
+																			(!p.models || p.models.length === 0) && "cursor-default",
+																		)}
+																		onClick={() => p.models && p.models.length > 0 && toggleProviderExpand(p.id)}
+																		role="button"
+																		tabIndex={0}
+																		onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleProviderExpand(p.id); }}
+																		>
+																			{p.name}
+																		</span>
 																	<Badge
 																		variant="secondary"
 																		className="h-4.5 gap-1 px-1.5 text-[10px]"
@@ -911,6 +1030,7 @@ function SettingsDialogImpl({
 																	>
 																		{src.label}
 																	</Badge>
+																	<ProviderModelCount provider={p} />
 																	{ts?.verdict === "ok" && (
 																		<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
 																			<ShieldCheck className="size-2.5" />
@@ -937,9 +1057,11 @@ function SettingsDialogImpl({
 																		</span>
 																	)}
 																</div>
-																<code className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
-																	{p.envVar}
-																</code>
+																{(p.envLabel || p.envVar) && (
+																	<code className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
+																		{p.envLabel ?? p.envVar}
+																	</code>
+																)}
 															</div>
 															<div className="flex shrink-0 items-center gap-1">
 																<Button
@@ -953,6 +1075,9 @@ function SettingsDialogImpl({
 																</Button>
 															</div>
 														</div>
+														{expandedProviders[p.id] && p.models && p.models.length > 0 && (
+															<ModelList models={p.models} t={t} />
+														)}
 													</div>
 												);
 											})}
@@ -1002,8 +1127,8 @@ function SettingsDialogImpl({
 					<Button variant="line" size="sm" className="h-7 text-[11px]" onClick={handleResetDefaults}>
 						{t("settings.resetDefaults")}
 					</Button>
-					<Button variant="line-filled" size="sm" className="h-7 text-[11px]" onClick={onClose}>
-						{t("common.close")}
+					<Button variant="line-filled" size="sm" className="h-7 text-[11px]" onClick={handleSaveAndClose}>
+						{dirty ? t("common.save") : t("common.close")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

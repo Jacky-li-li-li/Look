@@ -7,10 +7,9 @@
 // ============================================================
 
 import fs, { existsSync } from "node:fs";
-import { request as httpsRequest } from "node:https";
 import { homedir } from "node:os";
 import path, { join } from "node:path";
-import { findEnvKeys, getModel } from "@earendil-works/pi-ai";
+import { completeSimple } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	AuthStorage,
@@ -120,19 +119,6 @@ interface ManagedProject {
 
 export type EventCallback = (event: MainToRendererEvent) => void;
 
-/**
- * Resolve the env-var name for a provider via the SDK's own
- * `findEnvKeys()` (covers all built-in providers and any custom
- * one declared in `~/.look/models.json`). Falls back to the
- * convention `PROVIDER_API_KEY` for unknown providers — kept as a
- * last-resort so the Settings UI still surfaces a hint.
- */
-function envVarForProvider(provider: string): string {
-	const keys = findEnvKeys(provider);
-	if (keys && keys.length > 0) return keys[0];
-	return `${provider.toUpperCase().replace(/-/g, "_")}_API_KEY`;
-}
-
 /** 从 pi SDK 消息中提取纯文本内容 */
 function extractTextFromPiMessage(msg: any): string {
 	if (typeof msg.content === "string") return msg.content.trim();
@@ -146,159 +132,14 @@ function extractTextFromPiMessage(msg: any): string {
 	return "";
 }
 
-// ---- 标题生成 API 调用 ----
-// 不维护硬编码的 Provider → Base URL 映射，直接复用 pi SDK 的路由机制：
-// pi SDK 通过环境变量 {PROVIDER}_BASE_URL / ANTHROPIC_BASE_URL / OPENAI_BASE_URL 来路由。
-// 我们按同样优先级解析，保证与会话中实际使用的模型端点一致。
-
-/** 根据 Base URL 自动检测 API 风格 */
-function detectApiStyle(baseUrl: string): "anthropic" | "openai" | "google" {
-	if (baseUrl.includes("/anthropic")) return "anthropic";
-	if (baseUrl.includes("generativelanguage.googleapis.com")) return "google";
-	return "openai";
-}
-
-/**
- * 解析 Provider 的 Base URL，与会话模型路由保持一致的优先级：
- *   1. {PROVIDER}_BASE_URL   （如 DEEPSEEK_BASE_URL）
- *   2. ANTHROPIC_BASE_URL     （Anthropic 协议通用端点，如指向 DeepSeek 兼容 API）
- *   3. OPENAI_BASE_URL        （OpenAI 协议通用端点）
- *   4. https://api.{provider}.com
- */
-function resolveBaseUrl(provider: string): string {
-	const envKey = `${provider.toUpperCase().replace(/-/g, "_")}_BASE_URL`;
-	if (process.env[envKey]) return process.env[envKey]!;
-	if (process.env.ANTHROPIC_BASE_URL) return process.env.ANTHROPIC_BASE_URL;
-	if (process.env.OPENAI_BASE_URL) return process.env.OPENAI_BASE_URL;
-	return `https://api.${provider}.com`;
-}
-
-/** 从 API 响应中提取标题文本 */
-function parseTitleFromResponse(apiStyle: "anthropic" | "openai" | "google", data: any): string | null {
-	if (apiStyle === "anthropic") {
-		// 优先取 text 类型，兼容 thinking 模型（deepseek v4 等）
-		for (const block of data?.content ?? []) {
-			if (block.type === "text" && block.text) return block.text;
-			if (block.type === "thinking" && block.thinking) return block.thinking;
-		}
-		return null;
-	}
-	if (apiStyle === "google") {
-		return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
-	}
-	// OpenAI 风格
-	return data?.choices?.[0]?.message?.content ?? null;
-}
-
-/**
- * 调用 AI API 生成标题（非流式）
- *
- * 根据 Base URL 自动检测 API 风格（Anthropic / OpenAI / Google），
- * 同一 Provider 可能通过不同端点暴露不同风格的 API。
- */
-function callTitleApi(baseUrl: string, apiKey: string, modelId: string, prompt: string): Promise<string | null> {
-	const style = detectApiStyle(baseUrl);
-
-	if (style === "anthropic") {
-		return callAnthropicTitleApi(baseUrl, apiKey, modelId, prompt);
-	}
-	if (style === "google") {
-		return callGoogleTitleApi(baseUrl, apiKey, modelId, prompt);
-	}
-	return callOpenAITitleApi(baseUrl, apiKey, modelId, prompt);
-}
-
-async function callAnthropicTitleApi(
-	baseUrl: string,
-	apiKey: string,
-	modelId: string,
-	prompt: string,
-): Promise<string | null> {
-	const url = `${baseUrl}/messages`;
-	const body = JSON.stringify({
-		model: modelId,
-		max_tokens: 128,
-		thinking: { type: "disabled" },
-		messages: [{ role: "user", content: prompt }],
-	});
-	const data = await httpPostJson(
-		url,
-		{ "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-		body,
-	);
-	return data ? parseTitleFromResponse("anthropic", data) : null;
-}
-
-async function callOpenAITitleApi(
-	baseUrl: string,
-	apiKey: string,
-	modelId: string,
-	prompt: string,
-): Promise<string | null> {
-	const url = `${baseUrl}/chat/completions`;
-	const body = JSON.stringify({
-		model: modelId,
-		max_tokens: 64,
-		messages: [{ role: "user", content: prompt }],
-	});
-	const data = await httpPostJson(
-		url,
-		{ Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-		body,
-	);
-	return data ? parseTitleFromResponse("openai", data) : null;
-}
-
-async function callGoogleTitleApi(
-	baseUrl: string,
-	apiKey: string,
-	modelId: string,
-	prompt: string,
-): Promise<string | null> {
-	const url = `${baseUrl}/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`;
-	const body = JSON.stringify({
-		contents: [{ parts: [{ text: prompt }] }],
-		generationConfig: { maxOutputTokens: 64 },
-	});
-	const data = await httpPostJson(url, { "content-type": "application/json" }, body);
-	return data ? parseTitleFromResponse("google", data) : null;
-}
-
-/** HTTP POST + JSON 解析，任何错误返回 null */
-function httpPostJson(url: string, headers: Record<string, string>, body: string): Promise<any> {
-	return new Promise((resolve) => {
-		const { hostname, pathname, search, port } = new URL(url);
-		const path = pathname + search;
-		const req = httpsRequest({ hostname, port: port || 443, path, method: "POST", headers }, (res) => {
-			let data = "";
-			res.setEncoding("utf-8");
-			res.on("data", (chunk: string) => {
-				data += chunk;
-			});
-			res.on("end", () => {
-				if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-					try {
-						resolve(JSON.parse(data));
-					} catch {
-						resolve(null);
-					}
-				} else {
-					resolve(null);
-				}
-			});
-		});
-		const timer = setTimeout(() => {
-			req.destroy();
-			resolve(null);
-		}, 15_000);
-		req.on("error", () => {
-			clearTimeout(timer);
-			resolve(null);
-		});
-		req.on("close", () => clearTimeout(timer));
-		req.write(body);
-		req.end();
-	});
+/** 从 pi SDK assistant message 中提取纯文本内容 */
+function extractTextFromAssistantMessage(msg: any): string {
+	if (!Array.isArray(msg?.content)) return "";
+	return msg.content
+		.filter((b: any) => b.type === "text")
+		.map((b: any) => b.text ?? "")
+		.join("\n")
+		.trim();
 }
 
 const EMPTY_USAGE: UsageSnapshot = {
@@ -941,39 +782,33 @@ export class AgentManager {
 	}
 
 	/**
-	 * Self-test an env-var credential for a provider. Reads the
-	 * env var and runs the same probe as testApiKey.
+	 * Self-test the SDK-configured credential for a provider. This covers
+	 * environment, OAuth, and models.json auth without Look reading provider
+	 * config directly.
 	 */
 	async testEnvKey(provider: string) {
-		const { findEnvKeys } = await import("@earendil-works/pi-ai");
-		const { testApiKey } = await import("./provider-validator.js");
-		const envVar = findEnvKeys(provider)?.[0];
-		if (!envVar) return { skipped: true, reason: `No env var known for "${provider}"` };
-		const key = process.env[envVar];
-		if (!key) return { skipped: true, reason: `${envVar} is not set` };
-		return testApiKey(provider, key);
+		const { testConfiguredProvider } = await import("./provider-validator.js");
+		return testConfiguredProvider(this.modelRegistry, provider);
 	}
 
-	/** Return provider IDs whose env-var credential is available. */
+	/** Return provider IDs whose SDK auth source is the environment. */
 	async getVerifiedEnvProviders(): Promise<string[]> {
-		const { findEnvKeys } = await import("@earendil-works/pi-ai");
 		const allModels = this.modelRegistry.getAll();
 		const seen = new Set<string>();
 		const providers: string[] = [];
 		for (const m of allModels) {
 			if (seen.has(m.provider)) continue;
 			seen.add(m.provider);
-			const status = this.authStorage.getAuthStatus(m.provider);
-			if (status.source !== "environment") continue;
-			const envVar = findEnvKeys(m.provider)?.[0];
-			if (!envVar || !process.env[envVar]) continue;
-			providers.push(m.provider);
+			const status = this.modelRegistry.getProviderAuthStatus(m.provider);
+			if (status.configured && status.source === "environment") providers.push(m.provider);
 		}
 		return providers;
 	}
 
 	private isUserConfigured(provider: string): boolean {
-		return this.modelRegistry.getProviderAuthStatus(provider).configured;
+		return this.modelRegistry
+			.getAll()
+			.some((m) => m.provider === provider && this.modelRegistry.hasConfiguredAuth(m));
 	}
 
 	/** Returns the active project's root directory path. */
@@ -995,18 +830,15 @@ export class AgentManager {
 		maxTokens: number;
 		cost: { input: number; output: number };
 	}> {
-		return this.modelRegistry
-			.getAll()
-			.filter((m) => this.modelRegistry.hasConfiguredAuth(m))
-			.map((m) => ({
-				provider: m.provider,
-				id: m.id,
-				name: m.name ?? m.id,
-				reasoning: m.reasoning ?? false,
-				contextWindow: m.contextWindow ?? 128000,
-				maxTokens: m.maxTokens ?? 16384,
-				cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
-			}));
+		return this.modelRegistry.getAvailable().map((m) => ({
+			provider: m.provider,
+			id: m.id,
+			name: m.name ?? m.id,
+			reasoning: m.reasoning ?? false,
+			contextWindow: m.contextWindow ?? 128000,
+			maxTokens: m.maxTokens ?? 16384,
+			cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
+		}));
 	}
 
 	/** First user-configured model key as `provider/id`, or null. */
@@ -1038,7 +870,10 @@ export class AgentManager {
 			if (e) {
 				e.models.push(m.id);
 			} else {
-				providerMap.set(m.provider, { name: m.provider, models: [] });
+				providerMap.set(m.provider, {
+					name: this.modelRegistry.getProviderDisplayName(m.provider),
+					models: [m.id],
+				});
 			}
 		}
 		return Array.from(providerMap.entries()).map(([id, info]) => ({
@@ -1051,14 +886,37 @@ export class AgentManager {
 
 	async getProviderSettings() {
 		const providers = await this.getProviders();
+		const availableByProvider = new Map<
+			string,
+			Array<{
+				id: string;
+				name: string;
+				reasoning: boolean;
+				contextWindow: number;
+				maxTokens: number;
+			}>
+		>();
+		for (const m of this.modelRegistry.getAvailable()) {
+			const models = availableByProvider.get(m.provider) ?? [];
+			models.push({
+				id: m.id,
+				name: m.name ?? m.id,
+				reasoning: m.reasoning ?? false,
+				contextWindow: m.contextWindow ?? 128000,
+				maxTokens: m.maxTokens ?? 16384,
+			});
+			availableByProvider.set(m.provider, models);
+		}
 		return providers.map((p) => {
 			const s = this.modelRegistry.getProviderAuthStatus(p.id);
+			const models = availableByProvider.get(p.id) ?? [];
 			return {
 				id: p.id,
 				name: p.name,
 				hasKey: p.hasCredentials,
-				envVar: envVarForProvider(p.id),
-				modelsAvailable: p.models.length,
+				envVar: s.source === "environment" ? s.label : undefined,
+				modelsAvailable: models.length,
+				models,
 				authSource: s.source,
 				envLabel: s.label,
 			};
@@ -1240,7 +1098,7 @@ export class AgentManager {
 	}
 
 	private lookupModel(provider: string, modelId: string) {
-		return this.modelRegistry.find(provider, modelId) ?? getModel(provider as any, modelId);
+		return this.modelRegistry.find(provider, modelId);
 	}
 
 	// ============================================================
@@ -1552,19 +1410,31 @@ export class AgentManager {
 			return trimmed.slice(0, MAX_TITLE_LENGTH);
 		}
 
-		const apiKey = await this.modelRegistry.getApiKeyForProvider(provider);
-		if (!apiKey) {
-			return null;
-		}
-
-		const baseUrl = resolveBaseUrl(provider);
+		const model = this.modelRegistry.find(provider, modelId);
+		if (!model) return null;
+		const auth = await this.modelRegistry.getApiKeyAndHeaders(model);
+		if (!auth.ok) return null;
 		const prompt = TITLE_PROMPT + userMessage;
 
 		try {
-			const result = await callTitleApi(baseUrl, apiKey, modelId, prompt);
-			if (!result) return null;
+			const result = await completeSimple(
+				model,
+				{
+					messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+				},
+				{
+					apiKey: auth.apiKey,
+					headers: auth.headers,
+					maxTokens: 64,
+					timeoutMs: 15_000,
+					maxRetries: 0,
+				},
+			);
+			if (result.stopReason === "error") return null;
+			const text = extractTextFromAssistantMessage(result);
+			if (!text) return null;
 			// 清理引号和书名号
-			const cleaned = result
+			const cleaned = text
 				.trim()
 				.replace(/^["'""''「《]+|["'""''」》]+$/g, "")
 				.trim();

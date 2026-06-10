@@ -36,6 +36,7 @@ import {
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
+	chatAgentNameAtom,
 	defaultModelForCreateAtom,
 	messagesAtomFamily,
 	pendingAsksAtom,
@@ -66,6 +67,7 @@ export default function App() {
 	// ---- Read atoms ----
 	const activeAgent = useAtomValue(activeAgentAtom);
 	const autoCollapse = useAtomValue(autoCollapseAtom);
+	const chatAgentName = useAtomValue(chatAgentNameAtom);
 	const showCreateDialog = useAtomValue(showCreateDialogAtom);
 	const defaultModelForCreate = useAtomValue(defaultModelForCreateAtom);
 	const showSettings = useAtomValue(showSettingsAtom);
@@ -470,7 +472,7 @@ export default function App() {
 								<ChatPanel
 									agentId={activeAgent.id}
 									agentRole={activeAgent.role}
-									agentName={activeAgent.name}
+									agentName={chatAgentName || activeAgent.name}
 									messages={activeMessages}
 									autoCollapse={autoCollapse}
 									queue={activeQueue}

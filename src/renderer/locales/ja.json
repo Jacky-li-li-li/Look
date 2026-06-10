@@ -54,7 +54,7 @@
 		"failedSelfTest": "{{provider}} セルフテスト失敗しましたが保存されました: {{reason}}",
 		"authSourceEnv": "環境変数 {{env}} から検出",
 		"authSourceRuntime": "ランタイムで提供",
-		"authSourceConfig": "~/.pi/agent/models.json で設定",
+		"authSourceConfig": "~/.look/models.json で設定",
 		"authSourceAuto": "自動設定",
 		"chatSystemPrompt": "システムプロンプト",
 		"chatSystemPromptDesc": "新規チャットセッションのカスタムシステムプロンプト",

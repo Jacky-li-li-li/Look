@@ -16,19 +16,14 @@
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
-import type {
-	AgentRole,
-	PiContentBlock,
-	PiMessage,
-	PiTextBlock,
-} from "@shared/types";
+import type { AgentRole, PiContentBlock, PiMessage, PiTextBlock } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { MapPin } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../store/authAtoms";
-import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import ExecutionProcess from "./ExecutionProcess";
+import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import SkillAwareContent from "./SkillAwareContent";
 import UserAvatar from "./UserAvatar";
 

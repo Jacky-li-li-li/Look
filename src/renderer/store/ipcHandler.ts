@@ -24,6 +24,7 @@ import {
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
+	chatAgentNameAtom,
 	forkingEntryAtomFamily,
 	messagesAtomFamily,
 	navigatingEntryAtomFamily,
@@ -481,6 +482,7 @@ export async function initAppData(api: any): Promise<void> {
 			if (r?.success && r.settings) {
 				if (r.settings.language) i18n.changeLanguage(r.settings.language);
 				if (r.settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, r.settings.autoCollapse);
+				if (r.settings.chatAgentName !== undefined) appStore.set(chatAgentNameAtom, r.settings.chatAgentName);
 				if (r.settings.preferredModel) appStore.set(userPreferredModelAtom, r.settings.preferredModel);
 				if (r.settings.lastActiveAgentId) {
 					_lastActiveAgentId = r.settings.lastActiveAgentId;

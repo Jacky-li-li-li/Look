@@ -151,6 +151,14 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
 	const statusVariant =
 		toolCall.status === "success" ? "outline" : toolCall.status === "error" ? "destructive" : "secondary";
+	const statusBadgeColor =
+		toolCall.status === "success"
+			? "text-emerald-500"
+			: toolCall.status === "error"
+				? "text-red-500"
+				: toolCall.status === "running"
+					? "text-amber-500"
+					: "text-muted-foreground";
 
 	return (
 		<div>
@@ -174,7 +182,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					{statSuffix && (
 						<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
 					)}
-					<Badge variant={statusVariant as any} className="h-5 shrink-0 rounded px-1.5 font-mono text-[9px]">
+					<Badge variant={statusVariant as any} className={cn("h-5 shrink-0 rounded px-1.5 font-mono text-[9px]", statusBadgeColor)}>
 						{toolCall.status}
 					</Badge>
 				</button>
@@ -224,11 +232,29 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 }
 
 function StatusIcon({ status }: { status: ToolCallRecord["status"] }) {
-	const cls = "size-3.5 shrink-0";
-	if (status === "success") return <Check className={cn(cls, "text-emerald-400")} />;
-	if (status === "error") return <X className={cn(cls, "text-red-400")} />;
-	if (status === "running") return <Loader2 className={cn(cls, "animate-spin text-amber-400")} />;
-	return <Wrench className={cn(cls, "text-muted-foreground")} />;
+	if (status === "success")
+		return (
+			<span className="text-emerald-500">
+				<Check className="size-3.5 shrink-0" />
+			</span>
+		);
+	if (status === "error")
+		return (
+			<span className="text-red-500">
+				<X className="size-3.5 shrink-0" />
+			</span>
+		);
+	if (status === "running")
+		return (
+			<span className="text-amber-500">
+				<Loader2 className="size-3.5 shrink-0 animate-spin" />
+			</span>
+		);
+	return (
+		<span className="text-muted-foreground">
+			<Wrench className="size-3.5 shrink-0" />
+		</span>
+	);
 }
 
 function safeJson(value: unknown): string {

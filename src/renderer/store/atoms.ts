@@ -71,6 +71,9 @@ export const pendingAsksAtom = atom<PermissionRequest[]>([]);
 
 export const autoCollapseAtom = atom(true);
 
+/** Custom agent display name set by user in settings, shown next to avatar. */
+export const chatAgentNameAtom = atom("");
+
 export const userPreferredModelAtom = atom<string | null>(null);
 
 /** Last active agent id for auto-restore on app startup. */
@@ -124,8 +127,17 @@ interface SettingsProviderInfo {
 	id: string;
 	name: string;
 	hasKey: boolean;
-	envVar: string;
+	envVar?: string;
 	modelsAvailable: number;
+	models?: Array<{
+		id: string;
+		name: string;
+		reasoning: boolean;
+		contextWindow: number;
+		maxTokens: number;
+	}>;
+	authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
+	envLabel?: string;
 }
 export const providerSettingsAtom = atom<SettingsProviderInfo[]>([]);
 

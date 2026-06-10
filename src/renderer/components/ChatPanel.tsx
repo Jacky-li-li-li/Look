@@ -26,6 +26,7 @@ import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
 	forkingEntryAtomFamily,
+	runningAgentsAtom,
 	navigatingEntryAtomFamily,
 	recentlyCompletedAtom,
 	sessionLeafIdAtomFamily,
@@ -698,7 +699,7 @@ const ChatPanel = memo(function ChatPanel({
 								<div
 									key={msg.id}
 									data-message-id={msg.id}
-									className={cn("group/message flex flex-col", showActions ? "gap-1" : "gap-0")}
+									className={cn("group/message flex flex-col", showActions ? "gap-1" : "gap-0", msg.isStreaming && "animate-draw-in")}
 								>
 									<MessageBubble
 										message={msg}
@@ -712,7 +713,7 @@ const ChatPanel = memo(function ChatPanel({
 										<div
 											className={cn(
 												"flex items-center gap-1 opacity-40 transition-opacity duration-200 group-hover/message:opacity-100",
-												msg.role === "user" ? "justify-end mr-10 max-w-[80%]" : "ml-10 mr-4 max-w-[92%]",
+												msg.role === "user" ? "self-end justify-end mr-10 max-w-[80%]" : "ml-10 mr-4 max-w-[92%]",
 											)}
 										>
 											{/* Branch from here — all messages */}
@@ -960,6 +961,8 @@ export function ScrollToBottomButton() {
 	const { isAtBottom, scrollToBottom } = useStickToBottomContext();
 	const setAtBottom = useSetAtom(activeChatAtBottomAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	const runningAgents = useAtomValue(runningAgentsAtom);
+	const isAgentRunning = activeAgentId ? runningAgents.has(activeAgentId) : false;
 	const wasAtBottomRef = useRef(isAtBottom);
 
 	useEffect(() => {
@@ -994,7 +997,8 @@ export function ScrollToBottomButton() {
 			title="Scroll to bottom"
 			className={cn(
 				"absolute bottom-4 right-4 z-10 flex size-8 items-center justify-center rounded-full transition-all duration-300 ease-out",
-				"scale-100 opacity-100 bg-card shadow-md backdrop-blur-sm flowing-border",
+				"scale-100 opacity-100 bg-card shadow-md backdrop-blur-sm",
+				isAgentRunning && "flowing-border",
 			)}
 		>
 			<ChevronDown className="size-4 text-muted-foreground transition-all duration-300 ease-out" />

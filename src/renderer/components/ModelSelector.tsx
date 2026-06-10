@@ -28,7 +28,7 @@ type ProviderSource = "api" | "env";
 interface ProviderLite {
 	id: string;
 	hasKey: boolean;
-	authSource: string;
+	authSource?: string;
 }
 
 export default function ModelSelector({ agentId, currentModel, onModelChanged, onRequestApiKeys }: ModelSelectorProps) {
@@ -36,7 +36,6 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	const [models, setModels] = useState<AvailableModel[]>([]);
 	const [providerSource, setProviderSource] = useState<Record<string, ProviderSource>>({});
 	const [switching, setSwitching] = useState(false);
-	const [verifiedEnv, setVerifiedEnv] = useState<Set<string>>(new Set());
 	const [open, setOpen] = useState(false);
 	const latestPropsRef = useRef({ currentModel, onModelChanged });
 	latestPropsRef.current = { currentModel, onModelChanged };
@@ -44,18 +43,16 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	const fetchProvidersAndModels = useCallback(async () => {
 		if (!api) return;
 		// Use getSettings (not getProviders) because it returns the
-		// `hasKey` + `authSource` fields the tab-splitter needs.
-		// `getProviders` returns `hasCredentials`, so reading `hasKey`
-		// from it always gives `undefined` → empty list on both tabs.
-		const [m, s, v] = await Promise.all([api.getModels(), api.getSettings(), api.getVerifiedEnvProviders?.()]);
+		// SDK authSource fields the tab-splitter needs.
+		const [m, s] = await Promise.all([api.getModels(), api.getSettings()]);
 		if (m?.success) setModels(m.models);
-		if (v?.success) setVerifiedEnv(new Set(v.providers));
 		if (s?.success) {
 			const map: Record<string, ProviderSource> = {};
 			for (const prov of s.providers as ProviderLite[]) {
-				if (prov.hasKey) {
+				if (!prov.hasKey) continue;
+				if (!prov.authSource || prov.authSource === "stored" || prov.authSource === "fallback") {
 					map[prov.id] = "api";
-				} else if (prov.authSource && prov.authSource !== "fallback") {
+				} else {
 					map[prov.id] = "env";
 				}
 			}
@@ -107,7 +104,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	);
 
 	const apiModels = models.filter((m) => providerSource[m.provider] === "api");
-	const envModels = models.filter((m) => providerSource[m.provider] === "env" && verifiedEnv.has(m.provider));
+	const envModels = models.filter((m) => providerSource[m.provider] === "env");
 
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
 	const label = switching ? "…" : (currentModelObj?.name ?? currentModel?.split("/").pop() ?? t("agent.model"));

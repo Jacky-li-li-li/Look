@@ -54,8 +54,11 @@
 		"failedSelfTest": "{{provider}} 自检失败但已保存: {{reason}}",
 		"authSourceEnv": "从环境变量 {{env}} 检测到",
 		"authSourceRuntime": "运行时提供",
-		"authSourceConfig": "通过 ~/.pi/agent/models.json 配置",
+		"authSourceConfig": "通过 ~/.look/models.json 配置",
 		"authSourceAuto": "自动配置",
+		"agentName": "Agent 名称",
+		"agentNameDesc": "助手消息中头像旁显示的展示名称",
+		"agentNamePlaceholder": "留空则使用会话名称",
 		"chatSystemPrompt": "系统提示",
 		"chatSystemPromptDesc": "新建对话会话的自定义系统提示",
 		"chatSystemPromptPlaceholder": "输入自定义系统提示（默认: pi SDK coding assistant）"

@@ -44,6 +44,8 @@ export interface UserSettings {
 	/** Custom system prompt for new chat sessions. Empty string =
 	 *  use pi SDK's default coding assistant prompt. */
 	chatSystemPrompt: string;
+	/** Custom display name for the agent, shown next to avatar. */
+	chatAgentName: string;
 	/** Last active agent ID to restore on restart. */
 	lastActiveAgentId: string;
 	/** Last active project ID to restore on restart. */
@@ -57,6 +59,7 @@ const DEFAULTS: UserSettings = {
 	autoCompress: false,
 	compressThreshold: 60,
 	preferredModel: null,
+	chatAgentName: "",
 	chatSystemPrompt: "",
 	lastActiveAgentId: "",
 	lastActiveProjectId: "",
@@ -75,6 +78,8 @@ interface UiSettings {
 	autoCompress: boolean;
 	compressThreshold: number;
 	chatSystemPrompt: string;
+	/** Custom display name for the agent, shown next to avatar. */
+	chatAgentName: string;
 	/** Last active agent ID to restore on restart. */
 	lastActiveAgentId: string;
 	/** Last active project ID to restore on restart. */
@@ -87,6 +92,7 @@ const UI_DEFAULTS: UiSettings = {
 	autoCompress: DEFAULTS.autoCompress,
 	compressThreshold: DEFAULTS.compressThreshold,
 	chatSystemPrompt: DEFAULTS.chatSystemPrompt,
+	chatAgentName: DEFAULTS.chatAgentName,
 	lastActiveAgentId: "",
 	lastActiveProjectId: "",
 };
@@ -189,6 +195,7 @@ export class UserSettingsStore {
 		if (partial.autoCompress !== undefined) uiPartial.autoCompress = partial.autoCompress;
 		if (partial.compressThreshold !== undefined) uiPartial.compressThreshold = partial.compressThreshold;
 		if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
+		if (partial.chatAgentName !== undefined) uiPartial.chatAgentName = partial.chatAgentName;
 		if (partial.lastActiveAgentId !== undefined) uiPartial.lastActiveAgentId = partial.lastActiveAgentId;
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
 		if (Object.keys(uiPartial).length > 0) {

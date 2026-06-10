@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm install                          # Install dependencies
 npm run dev                          # Run both Vite dev server + Electron concurrently
-npm run dev:renderer                 # Vite dev server only (port 5173)
+npm run dev:renderer                 # Vite dev server only (port 5174)
 npm run dev:main                     # Compile main process + launch Electron
 npm run build                        # Full production build
 npm run build:main                   # tsc for main process only
@@ -33,6 +33,26 @@ Vitest 3 with `environment: "node"`. Config in `vitest.config.ts`. Currently no 
 npm test                             # Run all vitest-managed tests (vitest --run)
 npm run test:watch                   # Watch mode
 npx vitest --run <name-fragment>     # Run a single test file by name fragment
+```
+
+### Development Startup Notes
+
+2026-06-11 provider/CSP update follow-up:
+
+- Dev mode intentionally skips main-process CSP injection because Vite injects React Fast Refresh and HMR scripts. Packaged builds still use the strict CSP in `src/renderer/index.html` plus the main-process `onHeadersReceived` CSP. To keep the dev console clean without weakening packaged security, `src/main/index.ts` sets `ELECTRON_DISABLE_SECURITY_WARNINGS=true` only when `app.isPackaged === false`.
+- `screen -S look-runtime -X quit` can remove the detached screen session while leaving child processes alive (`npm run dev`, `concurrently`, `vite`, `electron dist/main/index.js`, Electron helpers, and esbuild). After quitting the screen session, always verify and clean the remaining Look runtime process tree before restarting.
+- The renderer dev server is fixed at port `5174` (`vite.config.ts`), and the Electron main process loads `http://localhost:5174` in dev. If startup behaves oddly, check `lsof -nP -iTCP:5174 -sTCP:LISTEN` before launching another runtime.
+- Cleanup should target the Look dev runtime only. Do not kill the active Claude/Proma agent process just because it has `/Users/jacky/Desktop/pi` in its command line; that process is the current coding session, not the app runtime.
+
+Useful cleanup/restart sequence:
+
+```bash
+screen -S look-runtime -X quit || true
+pgrep -fl "(electron dist/main/index.js|vite|look-runtime|npm run dev|dev:renderer|dev:main)"
+lsof -nP -iTCP:5174 -sTCP:LISTEN
+# Kill only the listed Look runtime PIDs if they remain, then:
+screen -dmS look-runtime zsh -lc 'cd /Users/jacky/Desktop/pi && npm run dev'
+curl -fsS http://localhost:5174/
 ```
 
 ## Architecture

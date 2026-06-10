@@ -17,6 +17,12 @@ let agentManager: AgentManager | null = null;
 
 const isDev = !app.isPackaged;
 
+if (isDev) {
+	// Vite dev server needs relaxed CSP for HMR; keep Electron's warning out of
+	// the development console while leaving packaged security checks intact.
+	process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
+}
+
 // ============================================================
 // Layer 3 — Electron Process Boundary (pi doesn't cover this)
 //

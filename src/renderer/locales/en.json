@@ -54,8 +54,11 @@
 		"failedSelfTest": "{{provider}} saved despite failed self-test: {{reason}}",
 		"authSourceEnv": "Detected from {{env}} in environment",
 		"authSourceRuntime": "Provided at runtime",
-		"authSourceConfig": "Configured via ~/.pi/agent/models.json",
+		"authSourceConfig": "Configured via ~/.look/models.json",
 		"authSourceAuto": "Auto-configured",
+		"agentName": "Agent Name",
+		"agentNameDesc": "Display name shown next to the avatar in assistant messages",
+		"agentNamePlaceholder": "Leave empty to use the session name",
 		"chatSystemPrompt": "System Prompt",
 		"chatSystemPromptDesc": "Custom system prompt for new chat sessions",
 		"chatSystemPromptPlaceholder": "Enter a custom system prompt (default: pi SDK coding assistant)"
