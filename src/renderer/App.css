@@ -375,6 +375,32 @@ body {
   }
 
   /* ============================================================
+     Execution Process — inline collapsible group (no card chrome)
+     ============================================================ */
+
+  .execution-process__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    color: var(--ink-4);
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    padding: 2px 0;
+    transition: color 120ms;
+  }
+
+  .execution-process__trigger:hover {
+    color: var(--ink-7);
+  }
+
+  .execution-process__body {
+    margin-left: 6px;
+    padding-left: 12px;
+    border-left: 1px solid var(--ink-2);
+  }
+
+  /* ============================================================
      Line-Drawing Buttons
      ============================================================ */
 

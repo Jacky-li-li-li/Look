@@ -21,8 +21,6 @@ import type {
 	PiContentBlock,
 	PiMessage,
 	PiTextBlock,
-	PiThinkingBlock,
-	PiToolCallBlock,
 } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { MapPin } from "lucide-react";
@@ -30,9 +28,8 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../store/authAtoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
+import ExecutionProcess from "./ExecutionProcess";
 import SkillAwareContent from "./SkillAwareContent";
-import ThinkingPanel from "./ThinkingPanel";
-import ToolCallCard from "./ToolCallCard";
 import UserAvatar from "./UserAvatar";
 
 interface MessageBubbleProps {
@@ -56,8 +53,26 @@ interface MessageBubbleProps {
 	flash?: boolean;
 }
 
-/** Render content blocks in pi SDK order (thinking → toolCall → text).
- *  No ExecutionProcess wrapping — each block type is independently rendered. */
+/** Split blocks into continuous segments. Consecutive thinking/toolCall
+ *  blocks are grouped into a "process" segment (rendered inside
+ *  ExecutionProcess). Consecutive text blocks are merged into a single
+ *  "text" segment to avoid extra DOM wrapping and gap spacing. */
+function segmentBlocks(blocks: PiContentBlock[]): Array<{ type: "process" | "text"; blocks: PiContentBlock[] }> {
+	const segments: Array<{ type: "process" | "text"; blocks: PiContentBlock[] }> = [];
+	for (const block of blocks) {
+		const segmentType = block.type === "text" ? "text" : "process";
+		const last = segments[segments.length - 1];
+		if (last && last.type === segmentType) {
+			last.blocks.push(block);
+		} else {
+			segments.push({ type: segmentType, blocks: [block] });
+		}
+	}
+	return segments;
+}
+
+/** Render content blocks grouped into ExecutionProcess for consecutive
+ *  thinking/toolCall runs, while text blocks render unwrapped. */
 function ContentBlocks({
 	blocks,
 	isStreaming,
@@ -67,47 +82,30 @@ function ContentBlocks({
 	isStreaming: boolean;
 	autoCollapse: boolean;
 }) {
+	const segments = segmentBlocks(blocks);
+
 	return (
 		<div className="flex flex-col gap-2">
-			{blocks.map((block, i) => {
-				if (block.type === "thinking") {
-					const tb = block as PiThinkingBlock;
-					if (!tb.thinking) return null;
+			{segments.map((seg, si) => {
+				if (seg.type === "process") {
 					return (
-						<ThinkingPanel
-							key={`t-${i}`}
-							thinking={tb.thinking}
+						<ExecutionProcess
+							key={`ep-${si}`}
+							blocks={seg.blocks}
 							isStreaming={isStreaming}
 							autoCollapse={autoCollapse}
 						/>
 					);
 				}
-				if (block.type === "toolCall") {
-					const tc = block as PiToolCallBlock;
-					return (
-						<ToolCallCard
-							key={tc.id || `tc-${i}`}
-							toolCall={{
-								callId: tc.id,
-								toolName: tc.name,
-								args: tc.arguments,
-								status: tc.status,
-								result: tc.result,
-								isError: tc.isError,
-							}}
-						/>
-					);
-				}
-				if (block.type === "text") {
+				return seg.blocks.map((block, bi) => {
 					const tb = block as PiTextBlock;
 					if (!tb.text) return null;
 					return (
-						<div key={`text-${i}`} className="message-prose">
+						<div key={`text-${si}-${bi}`} className="message-prose">
 							<SkillAwareContent content={tb.text} isStreaming={isStreaming} />
 						</div>
 					);
-				}
-				return null;
+				});
 			})}
 		</div>
 	);
@@ -160,26 +158,22 @@ const MessageBubble = memo(function MessageBubble({
 
 				{/* Whisper bubble */}
 				{message.assistantChunks && message.assistantChunks.length > 0 ? (
-					/* ── Multi-chunk: separate blocks under ONE label ── */
+					/* Multi-chunk: flatMap all blocks so segmentBlocks groups across chunk boundaries */
 					<div
 						className={cn(
-							"whisper-bubble whisper-bubble--assistant flex flex-col gap-3 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed w-full",
+							"whisper-bubble whisper-bubble--assistant flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed w-full",
 							isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
 							flash && "bubble-flash",
 						)}
 					>
-						{message.assistantChunks.map((chunk, ci) => (
-							<div key={ci} className="flex flex-col gap-2">
-								<ContentBlocks
-									blocks={chunk.contentBlocks}
-									isStreaming={!!message.isStreaming && ci === message.assistantChunks!.length - 1}
-									autoCollapse={autoCollapse}
-								/>
-							</div>
-						))}
+						<ContentBlocks
+							blocks={message.assistantChunks.flatMap((c) => c.contentBlocks)}
+							isStreaming={message.isStreaming ?? false}
+							autoCollapse={autoCollapse}
+						/>
 					</div>
 				) : (
-					/* ── Single-chunk ── */
+					/* Single-chunk */
 					<div
 						className={cn(
 							"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",

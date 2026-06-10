@@ -117,14 +117,6 @@
 		"copied": "コピーしました",
 		"copyFailed": "コピーに失敗しました：{{message}}"
 	},
-	"execution": {
-		"executionProcess": "実行プロセス",
-		"reasoning": "推論",
-		"expanded": "展開中",
-		"collapsed": "折りたたみ済み",
-		"steps": "{{count}} ステップ",
-		"steps_plural": "{{count}} ステップ"
-	},
 	"permission": {
 		"title": "権限リクエスト",
 		"description": "Agent が権限ゲートでフラグされたツールを実行しようとしています。",
@@ -149,6 +141,12 @@
 		"statLines": "{{n}} 行",
 		"statMatches": "{{n}} 件",
 		"statEntries": "{{n}} 件"
+	},
+	"executionProcess": {
+		"title": "実行プロセス",
+		"summary": "{{thinking}}回の思考、{{tools}}個のツール",
+		"summaryThinkingOnly": "{{thinking}}回の思考",
+		"summaryToolsOnly": "{{tools}}個のツール"
 	},
 	"auth": {
 		"loginDesc": "アカウントでサインイン",

@@ -117,14 +117,6 @@
 		"copied": "已复制",
 		"copyFailed": "复制失败：{{message}}"
 	},
-	"execution": {
-		"executionProcess": "执行过程",
-		"reasoning": "推理",
-		"expanded": "展开",
-		"collapsed": "已折叠",
-		"steps": "{{count}} 步",
-		"steps_plural": "{{count}} 步"
-	},
 	"permission": {
 		"title": "权限请求",
 		"description": "Agent 想要运行一个被权限门控标记的工具。",
@@ -149,6 +141,12 @@
 		"statLines": "{{n}} 行",
 		"statMatches": "{{n}} 处",
 		"statEntries": "{{n}} 项"
+	},
+	"executionProcess": {
+		"title": "执行过程",
+		"summary": "{{thinking}}次思考，{{tools}}个工具调用",
+		"summaryThinkingOnly": "{{thinking}}次思考",
+		"summaryToolsOnly": "{{tools}}个工具调用"
 	},
 	"auth": {
 		"loginDesc": "使用账户登录",

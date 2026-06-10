@@ -1,19 +1,21 @@
 // ============================================================
 // Provider Validator — Live API key self-test
 //
+// Derives provider metadata (API style, baseUrl, test model) from
+// @earendil-works/pi-ai's auto-generated MODELS registry so Look
+// never drifts from upstream provider catalog changes.
+//
 // Each provider maps to a lightweight list/whoami endpoint we
 // can hit with the candidate key to confirm it's accepted.
 //
-// Two strategies:
+// Three strategies:
+//   - Anthropic Messages API: POST {baseUrl}/v1/messages with max_tokens=1
+//     (matches Anthropic protocol — same path pi SDK uses via @anthropic-ai/sdk)
 //   - OpenAI-compatible: GET {baseUrl}/models (no token burn)
-//   - Anthropic-compatible: POST {baseUrl}/messages with max_tokens=1
-//     because Anthropic's /v1/models is admin-only (returns 403 for
-//     normal API keys). Uses a minimal prompt to burn < 10 tokens.
+//   - Google: GET {baseUrl}/models?key={key}
 //
 // Base URL resolution: checks {PROVIDER}_BASE_URL env var first
-// (e.g. ANTHROPIC_BASE_URL), falls back to the hardcoded default.
-// This is essential for users who use proxy/compatible endpoints
-// (e.g. DeepSeek's Anthropic-compatible API at api.deepseek.com/anthropic).
+// (e.g. ANTHROPIC_BASE_URL), falls back to the MODELS baseUrl.
 //
 // Outcome is one of:
 //   - { ok: true,  status: <2xx> }            key works
@@ -23,183 +25,126 @@
 //                                             provider — UI treats as a
 //                                             neutral state, save still
 //                                             allowed.
-//
-// A non-2xx response is a *rejection*, not an error. We surface the
-// provider's own error body (truncated) so the user can see why
-// their key was rejected ("invalid x-api-key", "insufficient
-// quota", etc.) without leaving the app.
 // ============================================================
 
 import { request as httpsRequest } from "node:https";
+import { getModels } from "@earendil-works/pi-ai";
 
 export type TestResult =
 	| { ok: true; status: number; skipped?: false }
 	| { ok: false; status: number; error: string; skipped?: false }
 	| { skipped: true; reason: string };
 
-type ApiStyle = "openai" | "anthropic" | "google";
+type TestStrategy = "openai" | "anthropic" | "google";
 
-interface ProviderTest {
-	api: ApiStyle;
-	defaultBaseUrl: string;
+interface TestConfig {
+	strategy: TestStrategy;
+	baseUrl: string;
+	testModel: string;
 }
 
-// ---- Provider config table ----
-const PROVIDER_CONFIG: Record<string, ProviderTest> = {
-	// ── Anthropic-compatible (POST /messages) ──
-	anthropic: {
-		api: "anthropic",
-		defaultBaseUrl: "https://api.anthropic.com",
-	},
-	minimax: {
-		api: "anthropic",
-		defaultBaseUrl: "https://api.minimax.io/anthropic",
-	},
-	"minimax-cn": {
-		api: "anthropic",
-		defaultBaseUrl: "https://api.minimaxi.com/anthropic",
-	},
-
-	// ── OpenAI-compatible (GET /models) ──
-	openai: {
-		api: "openai",
-		defaultBaseUrl: "https://api.openai.com/v1",
-	},
-	deepseek: {
-		api: "openai",
-		defaultBaseUrl: "https://api.deepseek.com",
-	},
-	mistral: {
-		api: "openai",
-		defaultBaseUrl: "https://api.mistral.ai/v1",
-	},
-	groq: {
-		api: "openai",
-		defaultBaseUrl: "https://api.groq.com/openai/v1",
-	},
-	cerebras: {
-		api: "openai",
-		defaultBaseUrl: "https://api.cerebras.ai/v1",
-	},
-	xai: {
-		api: "openai",
-		defaultBaseUrl: "https://api.x.ai/v1",
-	},
-	openrouter: {
-		api: "openai",
-		defaultBaseUrl: "https://openrouter.ai/api/v1",
-	},
-	fireworks: {
-		api: "openai",
-		defaultBaseUrl: "https://api.fireworks.ai/inference/v1",
-	},
-	together: {
-		api: "openai",
-		defaultBaseUrl: "https://api.together.xyz/v1",
-	},
-	huggingface: {
-		api: "openai",
-		defaultBaseUrl: "https://huggingface.co/api",
-	},
-	vercel: {
-		api: "openai",
-		defaultBaseUrl: "https://ai-gateway.vercel.sh/v1",
-	},
-	zai: {
-		api: "openai",
-		defaultBaseUrl: "https://api.z.ai/api/paas/v4",
-	},
-	"kimi-coding": {
-		api: "openai",
-		defaultBaseUrl: "https://api.moonshot.cn/v1",
-	},
-	moonshotai: {
-		api: "openai",
-		defaultBaseUrl: "https://api.moonshot.ai/v1",
-	},
-	"moonshotai-cn": {
-		api: "openai",
-		defaultBaseUrl: "https://api.moonshot.cn/v1",
-	},
-	xiaomi: {
-		api: "openai",
-		defaultBaseUrl: "https://api.xiaomimimo.com/v1",
-	},
-	"xiaomi-token-plan-cn": {
-		api: "openai",
-		defaultBaseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
-	},
-	"xiaomi-token-plan-ams": {
-		api: "openai",
-		defaultBaseUrl: "https://token-plan-ams.xiaomimimo.com/v1",
-	},
-	"xiaomi-token-plan-sgp": {
-		api: "openai",
-		defaultBaseUrl: "https://token-plan-sgp.xiaomimimo.com/v1",
-	},
-
-	// ── Google (key in query string) ──
-	google: {
-		api: "google",
-		defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
-	},
-};
+/**
+ * Providers that use OAuth, multi-variable cloud auth, or device-flow
+ * login. Their keys cannot be validated with a simple HTTP probe.
+ */
+const UNTESTABLE_PROVIDERS: ReadonlySet<string> = new Set([
+	"amazon-bedrock",          // AWS IAM / profile / bearer token
+	"google-vertex",           // ADC or explicit API key + project + location
+	"azure-openai-responses",  // Azure resource-level auth
+	"openai-codex",            // ChatGPT Plus/Pro OAuth
+	"github-copilot",          // GitHub OAuth device flow
+	"opencode",                // OpenCode OAuth
+	"opencode-go",             // OpenCode Go OAuth
+	"cloudflare-workers-ai",   // needs CLOUDFLARE_ACCOUNT_ID
+	"cloudflare-ai-gateway",   // needs CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_GATEWAY_ID
+]);
 
 /**
- * Providers that use complex authentication (AWS IAM, OAuth, device
- * flow, custom headers, user-specific resource URLs) and cannot be
- * tested through a simple API-key probe.
+ * Derive test config from pi SDK's MODELS registry.
+ * Returns null if the provider cannot be tested with a simple HTTP probe.
  */
-const KNOWN_UNTESTABLE_PROVIDERS: ReadonlySet<string> = new Set([
-	"amazon-bedrock",
-	"google-vertex",
-	"azure-openai-responses",
-	"openai-codex",
-	"github-copilot",
-	"opencode",
-	"opencode-go",
-	"cloudflare-workers-ai",
-	"cloudflare-ai-gateway",
-]);
+function getTestConfig(provider: string): TestConfig | null {
+	if (UNTESTABLE_PROVIDERS.has(provider)) return null;
+
+	const models = getModels(provider as Parameters<typeof getModels>[0]);
+	const first = models?.[0];
+	if (!first) return null;
+
+	const api: string = first.api;
+	const sdkBaseUrl: string = first.baseUrl;
+	const modelId: string = first.id;
+
+	switch (api) {
+		case "anthropic-messages":
+			return { strategy: "anthropic", baseUrl: sdkBaseUrl, testModel: modelId };
+
+		case "openai-completions":
+		case "openai-responses":
+			return { strategy: "openai", baseUrl: sdkBaseUrl, testModel: modelId };
+
+		// Mistral uses its own native SDK but exposes an OpenAI-compatible /v1/models endpoint.
+		// pi SDK baseUrl for mistral is "https://api.mistral.ai" (no /v1 suffix).
+		case "mistral-conversations":
+			return {
+				strategy: "openai",
+				baseUrl: sdkBaseUrl.endsWith("/v1") ? sdkBaseUrl : `${sdkBaseUrl}/v1`,
+				testModel: modelId,
+			};
+
+		case "google-generative-ai":
+			return { strategy: "google", baseUrl: sdkBaseUrl, testModel: modelId };
+
+		// bedrock-converse-stream, azure-openai-responses, openai-codex-responses,
+		// google-vertex — all use complex auth and are already in UNTESTABLE_PROVIDERS.
+		default:
+			return null;
+	}
+}
 
 /**
  * Resolve the effective base URL for a provider.
  * Checks {PROVIDER}_BASE_URL env var (pi SDK convention), falls back
- * to the hardcoded default.
+ * to the MODELS registry baseUrl.
  */
 export function resolveBaseUrl(provider: string): string {
-	const cfg = PROVIDER_CONFIG[provider];
-	const defaultUrl = cfg?.defaultBaseUrl ?? `https://api.${provider}.com`;
 	const envKey = `${provider.toUpperCase().replace(/-/g, "_")}_BASE_URL`;
-	return process.env[envKey] || defaultUrl;
+	if (process.env[envKey]) return process.env[envKey];
+
+	const cfg = getTestConfig(provider);
+	if (cfg) return cfg.baseUrl;
+
+	// Last resort for unknown providers
+	return `https://api.${provider}.com`;
 }
 
 /**
  * Test a candidate key against the provider's self-test endpoint.
  * @param provider - provider id (e.g. "anthropic", "openai")
  * @param key - the API key to test
- * @param baseUrl - optional override for the base URL (falls back to env var or default)
+ * @param baseUrl - optional override for the base URL (falls back to env var or MODELS default)
  */
 export async function testApiKey(provider: string, key: string, baseUrl?: string): Promise<TestResult> {
-	if (KNOWN_UNTESTABLE_PROVIDERS.has(provider)) {
+	if (UNTESTABLE_PROVIDERS.has(provider)) {
 		return { skipped: true, reason: "使用复杂认证（AWS IAM / ADC / OAuth），请手动测试" };
-	}
-	const cfg = PROVIDER_CONFIG[provider];
-	if (!cfg) {
-		return { skipped: true, reason: `No self-test configured for "${provider}"` };
 	}
 	if (!key || !key.trim()) {
 		return { ok: false, status: 0, error: "Empty key" };
 	}
 
+	const cfg = getTestConfig(provider);
+	if (!cfg) {
+		return { skipped: true, reason: `No self-test configured for "${provider}"` };
+	}
+
 	const effectiveBaseUrl = baseUrl || resolveBaseUrl(provider);
 
 	try {
-		const res = await (cfg.api === "anthropic"
-			? testAnthropicStyle(effectiveBaseUrl, key)
-			: cfg.api === "google"
-				? testGoogleStyle(effectiveBaseUrl, key)
-				: testOpenAIStyle(effectiveBaseUrl, key));
+		const res =
+			cfg.strategy === "anthropic"
+				? await testAnthropicStyle(effectiveBaseUrl, key, cfg.testModel)
+				: cfg.strategy === "google"
+					? await testGoogleStyle(effectiveBaseUrl, key)
+					: await testOpenAIStyle(effectiveBaseUrl, key);
 
 		if (res.ok) return { ok: true, status: res.status };
 		const friendly = extractErrorMessage(res.body) || `HTTP ${res.status}`;
@@ -219,30 +164,30 @@ export async function testApiKey(provider: string, key: string, baseUrl?: string
 
 // ── Test strategies ──
 
-/** OpenAI style: GET {baseUrl}/models with Bearer auth */
+/** OpenAI-compatible: GET {baseUrl}/models with Bearer auth */
 async function testOpenAIStyle(baseUrl: string, key: string) {
 	const url = `${baseUrl}/models`;
 	const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
 	return httpGet(url, headers, 10_000);
 }
 
-/** Anthropic style: POST {baseUrl}/messages with x-api-key, burn ≤ 10 tokens */
-async function testAnthropicStyle(baseUrl: string, key: string) {
-	const url = `${baseUrl}/messages`;
+/** Anthropic Messages API: POST {baseUrl}/v1/messages with x-api-key, burn ≤ 10 tokens */
+async function testAnthropicStyle(baseUrl: string, key: string, model?: string) {
+	const url = `${baseUrl}/v1/messages`;
 	const headers: Record<string, string> = {
 		"x-api-key": key,
 		"anthropic-version": "2023-06-01",
 		"content-type": "application/json",
 	};
 	const body = JSON.stringify({
-		model: "claude-haiku-4-5-20251001",
+		model: model ?? "claude-haiku-4-5-20251001",
 		max_tokens: 1,
 		messages: [{ role: "user", content: "hi" }],
 	});
 	return httpPost(url, headers, body, 10_000);
 }
 
-/** Google style: GET {baseUrl}/models?key={key} */
+/** Google Generative Language API: GET {baseUrl}/models?key={key} */
 async function testGoogleStyle(baseUrl: string, key: string) {
 	const url = `${baseUrl}/models?key=${encodeURIComponent(key)}`;
 	return httpGet(url, {}, 10_000);

@@ -117,14 +117,6 @@
 		"copied": "Copied",
 		"copyFailed": "Copy failed: {{message}}"
 	},
-	"execution": {
-		"executionProcess": "Execution Process",
-		"reasoning": "Reasoning",
-		"expanded": "Expanded",
-		"collapsed": "Collapsed",
-		"steps": "{{count}} step",
-		"steps_plural": "{{count}} steps"
-	},
 	"permission": {
 		"title": "Permission requested",
 		"description": "Agent wants to run a tool that the permission gate flagged.",
@@ -149,6 +141,12 @@
 		"statLines": "{{n}} lines",
 		"statMatches": "{{n}} matches",
 		"statEntries": "{{n}} items"
+	},
+	"executionProcess": {
+		"title": "Execution",
+		"summary": "{{thinking}} reasoning, {{tools}} tools",
+		"summaryThinkingOnly": "{{thinking}} reasoning",
+		"summaryToolsOnly": "{{tools}} tools"
 	},
 	"auth": {
 		"loginDesc": "Sign in with your account",
