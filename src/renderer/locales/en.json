@@ -10,12 +10,9 @@
 		"reset": "Reset"
 	},
 	"sidebar": {
-		"chat": "Chat",
-		"orch": "Orch",
 		"newAgent": "New Agent",
 		"settings": "Settings",
-		"noChatAgents": "No chat agents yet.",
-		"noOrchAgents": "No orchestration agents yet.",
+		"noAgents": "No agents yet.",
 		"clickNewAgent": "Click + New Agent."
 	},
 	"settings": {

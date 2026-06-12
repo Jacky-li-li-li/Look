@@ -147,7 +147,6 @@ function formatContextWindow(tokens: number): string {
 }
 
 function ProviderModelCount({ provider }: { provider: ProviderInfo }) {
-	const models = provider.models ?? [];
 	return (
 		<Badge variant="outline" className="h-4.5 gap-1 px-1.5 text-[10px]">
 			<Cpu className="size-2.5" />
@@ -294,7 +293,7 @@ function SettingsDialogImpl({
 					if (r.settings.autoCompress !== undefined) setAutoCompress(r.settings.autoCompress);
 					if (r.settings.compressThreshold !== undefined) setCompressThreshold(r.settings.compressThreshold);
 					if (r.settings.chatSystemPrompt !== undefined) setChatSystemPrompt(r.settings.chatSystemPrompt);
-						if (r.settings.chatAgentName !== undefined) setChatAgentName(r.settings.chatAgentName);
+					if (r.settings.chatAgentName !== undefined) setChatAgentName(r.settings.chatAgentName);
 					setSettingsLoaded(true);
 				}
 			})
@@ -452,7 +451,17 @@ function SettingsDialogImpl({
 		});
 		setDirty(false);
 		onClose();
-	}, [language, thinkingLevel, autoCollapse, autoCompress, compressThreshold, chatSystemPrompt, chatAgentName, onClose]);
+	}, [
+		language,
+		thinkingLevel,
+		autoCollapse,
+		autoCompress,
+		compressThreshold,
+		chatSystemPrompt,
+		chatAgentName,
+		onClose,
+		persistSettings,
+	]);
 
 	const storedProviders = providers
 		.filter((p) => !p.authSource || p.authSource === "stored" || p.authSource === "fallback")
@@ -474,7 +483,7 @@ function SettingsDialogImpl({
 					setAutoCompress(r.settings.autoCompress ?? false);
 					setCompressThreshold(r.settings.compressThreshold ?? 60);
 					setChatSystemPrompt(r.settings.chatSystemPrompt ?? "");
-						setChatAgentName(r.settings.chatAgentName ?? "");
+					setChatAgentName(r.settings.chatAgentName ?? "");
 				}
 			});
 		setTheme("dark");
@@ -823,13 +832,18 @@ function SettingsDialogImpl({
 																			"cursor-pointer transition-colors hover:text-foreground",
 																			(!p.models || p.models.length === 0) && "cursor-default",
 																		)}
-																		onClick={() => p.models && p.models.length > 0 && toggleProviderExpand(p.id)}
+																		onClick={() =>
+																			p.models && p.models.length > 0 && toggleProviderExpand(p.id)
+																		}
 																		role="button"
 																		tabIndex={0}
-																		onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleProviderExpand(p.id); }}
-																		>
-																			{p.name}
-																		</span>
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ")
+																				toggleProviderExpand(p.id);
+																		}}
+																	>
+																		{p.name}
+																	</span>
 																	<ProviderModelCount provider={p} />
 																	{ts?.verdict === "ok" && (
 																		<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
@@ -1016,13 +1030,18 @@ function SettingsDialogImpl({
 																			"cursor-pointer transition-colors hover:text-foreground",
 																			(!p.models || p.models.length === 0) && "cursor-default",
 																		)}
-																		onClick={() => p.models && p.models.length > 0 && toggleProviderExpand(p.id)}
+																		onClick={() =>
+																			p.models && p.models.length > 0 && toggleProviderExpand(p.id)
+																		}
 																		role="button"
 																		tabIndex={0}
-																		onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleProviderExpand(p.id); }}
-																		>
-																			{p.name}
-																		</span>
+																		onKeyDown={(e) => {
+																			if (e.key === "Enter" || e.key === " ")
+																				toggleProviderExpand(p.id);
+																		}}
+																	>
+																		{p.name}
+																	</span>
 																	<Badge
 																		variant="secondary"
 																		className="h-4.5 gap-1 px-1.5 text-[10px]"
@@ -1104,7 +1123,7 @@ function SettingsDialogImpl({
 								</Badge>
 							</div>
 							<p className="text-[13px] text-muted-foreground max-w-xs leading-relaxed">
-								Multi-agent orchestration desktop application. Built with Electron, React, and pi SDK.
+								Agent desktop application. Built with Electron, React, and pi SDK.
 							</p>
 							<div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
 								<span className="flex items-center justify-center gap-1.5">

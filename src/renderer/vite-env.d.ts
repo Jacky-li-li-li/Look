@@ -17,13 +17,7 @@ interface LookAPI {
 	invoke(event: any): Promise<any>;
 	onEvent(callback: (event: any) => void): () => void;
 	sendMessage(agentId: string, message: string): Promise<any>;
-	createAgent(
-		name: string,
-		role: string,
-		model?: string,
-		thinkingLevel?: string,
-		parentAgentId?: string,
-	): Promise<any>;
+	createAgent(name: string, role: string, model?: string, thinkingLevel?: string): Promise<any>;
 	destroyAgent(agentId: string): Promise<any>;
 	getHistory(agentId: string): Promise<any>;
 	getModels(): Promise<any>;

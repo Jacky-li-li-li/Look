@@ -10,12 +10,9 @@
 		"reset": "重置"
 	},
 	"sidebar": {
-		"chat": "对话",
-		"orch": "编排",
 		"newAgent": "新建 Agent",
 		"settings": "设置",
-		"noChatAgents": "暂无对话 Agent。",
-		"noOrchAgents": "暂无编排 Agent。",
+		"noAgents": "暂无 Agent。",
 		"clickNewAgent": "点击 + 新建 Agent。"
 	},
 	"settings": {

@@ -182,7 +182,10 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					{statSuffix && (
 						<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
 					)}
-					<Badge variant={statusVariant as any} className={cn("h-5 shrink-0 rounded px-1.5 font-mono text-[9px]", statusBadgeColor)}>
+					<Badge
+						variant={statusVariant as any}
+						className={cn("h-5 shrink-0 rounded px-1.5 font-mono text-[9px]", statusBadgeColor)}
+					>
 						{toolCall.status}
 					</Badge>
 				</button>

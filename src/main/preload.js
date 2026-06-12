@@ -26,8 +26,8 @@ const api = {
   sendMessage: (agentId, message) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message }),
 
-  createAgent: (name, role, model, thinkingLevel, parentAgentId) =>
-    ipcRenderer.invoke("look:invoke", { type: "agent:create", name, role, model, thinkingLevel, parentAgentId }),
+  createAgent: (name, role, model, thinkingLevel) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:create", name, role, model, thinkingLevel }),
 
   destroyAgent: (agentId) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:destroy", agentId }),

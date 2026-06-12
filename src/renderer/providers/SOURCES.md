@@ -9,7 +9,7 @@ Icons for the 32 AI providers shown on the Settings → API Keys page.
 - **License**: MIT
 - **Upstream**: https://registry.npmjs.org/@lobehub/icons-static-svg/-/icons-static-svg-1.91.0.tgz
 
-Lobe Icons is a curated set of single-color SVG path icons for AI / LLM brands, maintained by the LobeHub community (same project as the LobeChat AI app). It is the icon source credited by [Proma](https://github.com/proma-ai/Proma), a comparable multi-agent Electron desktop client.
+Lobe Icons is a curated set of single-color SVG path icons for AI / LLM brands, maintained by the LobeHub community (same project as the LobeChat AI app). It is the icon source credited by [Proma](https://github.com/proma-ai/Proma), a comparable Electron desktop client.
 
 ## Color model
 

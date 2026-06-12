@@ -2,15 +2,14 @@
 // Sidebar — Frosted Glass + Line-Drawing (Ink Wash, shadcn/ui)
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { MessageSquare, Network, Plus, X } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Plus, X } from "lucide-react";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	activeAgentIdAtom,
@@ -35,20 +34,11 @@ interface SidebarProps {
 	/** Opens the Create dialog. Optional `defaultModel` is the model the
 	 *  dialog should pre-select (e.g. the active agent's model). */
 	onCreateClick: (defaultModel?: string) => void;
-	onQuickCreateChat: () => void;
 	onSettingsClick: () => void;
 	/** Project callbacks */
 	onSelectProject: (projectId: string) => void;
 	onCreateProject: () => void;
 	onDeleteProject: (project: ProjectInfo) => void;
-}
-
-const CHAT_TAB_ROLES: ReadonlySet<AgentInfo["role"]> = new Set(["chat"]);
-function isChatAgent(agent: AgentInfo): boolean {
-	return CHAT_TAB_ROLES.has(agent.role);
-}
-function isOrchAgent(agent: AgentInfo): boolean {
-	return !CHAT_TAB_ROLES.has(agent.role);
 }
 
 function fmtCost(total: number): string {
@@ -77,14 +67,12 @@ export default function Sidebar({
 	onSelect,
 	onDestroy,
 	onCreateClick,
-	onQuickCreateChat,
 	onSettingsClick,
 	onSelectProject,
 	onCreateProject,
 	onDeleteProject,
 }: SidebarProps) {
 	const { t } = useTranslation();
-	const [tab, setTab] = React.useState("chat");
 	const agents = useAtomValue(agentsAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const projects = useAtomValue(projectsAtom);
@@ -97,45 +85,33 @@ export default function Sidebar({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const editRef = useRef<HTMLInputElement>(null);
-	const filteredAgents = agents.filter(tab === "chat" ? isChatAgent : isOrchAgent);
-	const chatCount = agents.filter(isChatAgent).length;
-	const orchCount = agents.filter(isOrchAgent).length;
 	const activeAgent = agents.find((a) => a.id === activeAgentId);
 	const projectValid = !activeProjectId || (activeProject?.valid ?? false);
 	const hasActiveProject = activeProjectId !== null;
-
-	// Auto-switch tab + scroll active card into view.
-	// Two effects so tab switch happens first, then the re-render exposes the
-	// card in the DOM, and the second effect scrolls it into view.
-	useEffect(() => {
-		const agent = agents.find((a) => a.id === activeAgentId);
-		if (agent && !isChatAgent(agent)) setTab("orch");
-		else if (agent && isChatAgent(agent)) setTab("chat");
-	}, [activeAgentId, agents]);
 
 	useEffect(() => {
 		if (!activeAgentId) return;
 		const raf = requestAnimationFrame(() => {
 			document
-				.querySelector(`[data-agent-id="${activeAgentId}"][data-agent-tab="${tab}"]`)
+				.querySelector(`[data-agent-id="${activeAgentId}"]`)
 				?.scrollIntoView({ behavior: "smooth", block: "end" });
 		});
 		return () => cancelAnimationFrame(raf);
-	}, [activeAgentId, tab]);
+	}, [activeAgentId]);
 
 	// Auto-scroll to the bottom when a new agent is appended (not replaced).
 	const listEndRef = useRef<HTMLDivElement>(null);
-	const prevIdsRef = useRef<Set<string>>(new Set(filteredAgents.map((a) => a.id)));
+	const prevIdsRef = useRef<Set<string>>(new Set(agents.map((a) => a.id)));
 	useEffect(() => {
 		const prevIds = prevIdsRef.current;
-		const newIds = filteredAgents.map((a) => a.id);
+		const newIds = agents.map((a) => a.id);
 		// Only scroll when the list grew and overlaps with the previous set
 		// (appending), not when it's a wholesale replacement (tab/project switch).
 		if (newIds.length > prevIds.size && newIds.some((id) => prevIds.has(id))) {
 			listEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
 		}
 		prevIdsRef.current = new Set(newIds);
-	}, [filteredAgents]);
+	}, [agents]);
 
 	const handleDoubleClick = useCallback((agent: AgentInfo) => {
 		setEditingId(agent.id);
@@ -183,41 +159,12 @@ export default function Sidebar({
 				onCreateProject={onCreateProject}
 				onDeleteProject={onDeleteProject}
 			/>
-			<Tabs value={tab} onValueChange={setTab} className="shrink-0">
-				<TabsList className="w-full h-auto rounded-none bg-transparent gap-0 px-3 border-b border-hairline">
-					<TabsTrigger
-						value="chat"
-						className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
-					>
-						<MessageSquare className="size-4" />
-						{t("sidebar.chat")}
-						{chatCount > 0 && (
-							<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
-								{chatCount}
-							</Badge>
-						)}
-					</TabsTrigger>
-					<TabsTrigger
-						value="orch"
-						className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
-					>
-						<Network className="size-4" />
-						{t("sidebar.orch")}
-						{orchCount > 0 && (
-							<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
-								{orchCount}
-							</Badge>
-						)}
-					</TabsTrigger>
-				</TabsList>
-			</Tabs>
-
 			<div className="flex shrink-0 gap-1.5 px-3 py-3">
 				<Button
 					variant="line"
 					size="sm"
 					className="h-10 flex-1 justify-start text-[12px] font-medium"
-					onClick={tab === "chat" ? onQuickCreateChat : () => onCreateClick(activeAgent?.model)}
+					onClick={() => onCreateClick(activeAgent?.model)}
 					disabled={!hasActiveProject || !projectValid}
 				>
 					<Plus className="size-4" />
@@ -233,13 +180,12 @@ export default function Sidebar({
 			)}
 			<ScrollArea className="flex-1 min-h-0 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
 				<div className="flex flex-col gap-1.5 px-3 pb-3">
-					{filteredAgents.map((agent) => {
+					{agents.map((agent) => {
 						const isActive = agent.id === activeAgentId;
 						return (
 							<div
 								key={agent.id}
 								data-agent-id={agent.id}
-								data-agent-tab={isChatAgent(agent) ? "chat" : "orch"}
 								data-agent-status={agent.status}
 								data-running={runningAgents.has(agent.id) || undefined}
 								data-completed={
@@ -330,13 +276,11 @@ export default function Sidebar({
 						);
 					})}
 
-					{filteredAgents.length === 0 && (
+					{agents.length === 0 && (
 						<div className="mx-1 mt-3 rounded-lg border border-dashed border-hairline p-5 text-center text-[11px] text-muted-foreground">
 							{!hasActiveProject
 								? t("sidebar.pleaseOpenProject", "Please open a project first")
-								: tab === "chat"
-									? t("sidebar.noChatAgents")
-									: t("sidebar.noOrchAgents")}
+								: t("sidebar.noAgents")}
 							<br />
 							{t("sidebar.clickNewAgent")}
 						</div>

@@ -1,7 +1,7 @@
 {
   "name": "look",
   "version": "1.0.0",
-  "description": "Multi-Agent Orchestration System — Look",
+  "description": "Electron desktop agent app — Look",
   "type": "module",
   "main": "dist/main/index.js",
   "scripts": {

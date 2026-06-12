@@ -57,9 +57,9 @@ curl -fsS http://localhost:5174/
 
 ## Architecture
 
-This is **Look** — a multi-agent orchestration desktop app built on the [pi SDK](https://github.com/earendil-works/pi-mono), with Electron + React as its desktop shell, developed by **Jackyyyyyy**. Look is dedicated to multi-agent collaboration. Its core design philosophy: complex tasks are automatically decomposed, each task is assigned to a dedicated agent, agents run independently while sharing context, and they work together seamlessly to deliver high-quality results.
+This is **Look** — an Electron + React desktop app built on the [pi SDK](https://github.com/earendil-works/pi-mono), developed by **Jackyyyyyy**.
 
-The pi SDK (`@earendil-works/pi-*`) provides the agent runtime: model registry, session management, tool execution, retry, and event streaming. Look layers a multi-agent system on top.
+The pi SDK (`@earendil-works/pi-*`) provides the agent runtime: model registry, session management, tool execution, retry, and event streaming. Look provides the desktop shell, project/session persistence, permissions UI, settings, and chat experience.
 
 ### Dual TypeScript Setup
 
@@ -79,16 +79,15 @@ The `@shared/*` path alias resolves to `src/main/shared/*` in both tsconfigs, in
 ```
 Renderer (React 19, Vite, Tailwind v4, shadcn/ui)
   │
-  │  contextBridge (preload.js) — "harness" API
-  │    - send(event)       → ipcRenderer.send("harness:event", ...)
-  │    - invoke(event)     → ipcRenderer.invoke("harness:invoke", ...)  (returns Promise)
-  │    - onEvent(callback) → ipcRenderer.on("agent:event", ...)
+  │  contextBridge (preload.js) — "look" API
+  │    - send(event)       → ipcRenderer.send("look:event", ...)
+  │    - invoke(event)     → ipcRenderer.invoke("look:invoke", ...)  (returns Promise)
+  │    - onEvent(callback) → ipcRenderer.on("look:event", ...)
   │
   ▼
 Main Process (Electron)
   ├── AgentManager (singleton) — manages N AgentSessions
   │     Each session = one pi AgentSession with role, model, tools, permission gate
-  ├── Orchestration Tools — spawn_agent, send_to_agent, ask_agent, wait_for_agent, list_agents
   ├── Permission Gate — three-layer (global deny → role rules → path protection)
   └── Skills Loader — loads SKILL.md from ~/.look/skills/ and <project>/.look/skills/
 ```
@@ -98,14 +97,14 @@ Main Process (Electron)
 The core singleton. It:
 - Creates `AgentSession` instances via pi's `createAgentSession()` with role-specific tools, system prompts, thinking levels, and model fallback chains
 - Delegates events from each session's `session.subscribe()` stream through to the renderer via `onEvent` callbacks
-- Handles cross-agent messaging: `sendMessage`, `askAgent` (synchronous ask-wait), `waitForAgent`
-- Manages model fallback (primary → fallback1 → fallback2) and runtime model switching (destroy + recreate + restore context)
+- Handles user messaging through `sendMessage`
+- Manages model fallback (primary → fallback1 → fallback2) and runtime model switching
 - Tracks cumulative token usage/cost per agent
 
 ### IPC Pattern (`src/main/ipc-handlers.ts`)
 
-- **Main → Renderer**: `agent:event` channel carries a discriminated union of events (`MainToRendererEvent` in [types.ts](src/main/shared/types.ts)) — agent lifecycle, streaming message deltas (`text_delta`/`thinking_delta`), tool call state transitions, usage updates, permission requests
-- **Renderer → Main**: `harness:invoke` (request-response) for commands (send message, create/destroy agent, switch model, get settings) and `harness:event` (fire-and-forget) for `app:ready`
+- **Main → Renderer**: `look:event` channel carries a discriminated union of events (`MainToRendererEvent` in [types.ts](src/main/shared/types.ts)) — agent lifecycle, streaming message deltas (`text_delta`/`thinking_delta`), tool call state transitions, usage updates, permission requests
+- **Renderer → Main**: `look:invoke` (request-response) for commands (send message, create/destroy agent, switch model, get settings) and `look:event` (fire-and-forget) for `app:ready`
 - AgentManager's `onEvent()` callback forwards everything to the renderer; IPC handlers bridge the two directions
 
 ### Skills System (`src/main/skills/skill-loader.ts`)
@@ -118,11 +117,7 @@ Renderer-side: `SkillSlashMenu` (slash-command popover), `SkillTag` (inline skil
 
 ### Agent Roles (`src/main/agents/roles.ts`)
 
-8 role templates + `custom`. Each defines: default model, thinking level, fallback chain, allowed tools, system prompt. The orchestrator role additionally gets the 5 orchestration tools. The reviewer role is read-only (no `write`/`edit`/`bash`).
-
-### Orchestration Tools (`src/main/tools/orchestration.ts`)
-
-Custom pi tools defined with TypeBox schemas. Registered per-agent based on role. Agents can spawn sub-agents, message each other, ask questions synchronously, wait for completion, and list active agents. New spawned agents inherit model/thinking from their parent (`parentAgentId`).
+7 role templates + `custom`. Each defines: default model, thinking level, fallback chain, allowed tools, system prompt. The reviewer role is read-only (no `write`/`edit`/`bash`).
 
 ### Permission Gate (`src/main/permissions/permission-gate.ts`)
 

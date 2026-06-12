@@ -1,10 +1,10 @@
 # Look
 
-Multi-Agent Orchestration System — 基于 Electron 的桌面端多 Agent 编排平台。
+基于 Electron 的桌面端 Agent 应用。
 
 ## 特性
 
-- **多 Agent 编排** — 支持 chat、coder、orchestrator、crawler、cleaner、analyst、reporter 等多种角色
+- **多角色 Agent** — 支持 chat、coder、reviewer、crawler、cleaner、analyst、reporter 等多种角色
 - **技能系统** — 可扩展的 Skill 加载与执行机制
 - **32+ AI 提供商** — 内置 Anthropic、OpenAI、Google、DeepSeek、Groq 等主流模型提供商图标与配置
 - **权限管理** — 细粒度的 Agent 权限控制
@@ -56,7 +56,6 @@ src/
 │   ├── permissions/      # 权限控制
 │   ├── shared/           # 共享类型/工具/UI 组件
 │   ├── skills/           # Skill 加载器
-│   ├── tools/            # 工具编排
 │   └── assets/           # 静态资源
 └── renderer/             # React 渲染进程
     ├── App.tsx           # 主应用

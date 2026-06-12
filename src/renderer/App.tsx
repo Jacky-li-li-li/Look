@@ -162,8 +162,7 @@ export default function App() {
 
 	const handleCreateAgent = useCallback(async (name: string, role: string, model?: string, thinkingLevel?: string) => {
 		if (!api) return;
-		const parentId = appStore.get(activeAgentIdAtom);
-		const result = await api.createAgent(name, role, model, thinkingLevel, parentId);
+		const result = await api.createAgent(name, role, model, thinkingLevel);
 		if (result?.success && result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
 		appStore.set(showCreateDialogAtom, false);
 	}, []);
@@ -213,16 +212,6 @@ export default function App() {
 	const handleRequestApiKeys = useCallback(() => {
 		appStore.set(settingsTabAtom, "api-keys");
 		appStore.set(showSettingsAtom, true);
-	}, []);
-
-	const handleQuickCreateChat = useCallback(async () => {
-		if (!api) return;
-		const agent = appStore.get(activeAgentAtom);
-		const prefModel = appStore.get(userPreferredModelAtom);
-		const seedModel = agent?.model ?? prefModel ?? undefined;
-		const parentId = appStore.get(activeAgentIdAtom);
-		const r = await api.createAgent("聊天助手", "chat", seedModel, undefined, parentId);
-		if (r?.success && r.agentId) appStore.set(activeAgentIdAtom, r.agentId);
 	}, []);
 
 	const handleCloseSettings = useCallback(() => appStore.set(showSettingsAtom, false), []);
@@ -375,23 +364,6 @@ export default function App() {
 		return () => clearTimeout(timer);
 	}, [activeAgentId, activeProjectId]);
 
-	// Permission ask: 30s default-deny timer.
-	useEffect(() => {
-		if (!pendingAsk) return;
-		const head = pendingAsk;
-		const timer = setTimeout(() => {
-			const asks = appStore.get(pendingAsksAtom);
-			if (asks.length > 0 && asks[0].requestId === head.requestId) {
-				appStore.set(pendingAsksAtom, asks.slice(1));
-			}
-			api.respondPermission({ action: "deny", requestId: head.requestId, reason: "Timed out (30s)" }).catch(
-				() => {},
-			);
-			toast(t("permission.timedOut", { toolName: head.toolName }), { description: head.reason, duration: 3000 });
-		}, 30_000);
-		return () => clearTimeout(timer);
-	}, [pendingAsk, t]);
-
 	// ---- Render ----
 
 	if (!api) {
@@ -432,7 +404,6 @@ export default function App() {
 						onSelect={handleSelectAgent}
 						onDestroy={handleDestroyAgent}
 						onCreateClick={handleCreateClick}
-						onQuickCreateChat={handleQuickCreateChat}
 						onSettingsClick={handleSettingsClick}
 						onSelectProject={handleSelectProject}
 						onCreateProject={handleOpenProject}

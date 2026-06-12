@@ -9,7 +9,6 @@ import React from "react";
 
 const ROLE_LABEL: Record<string, string> = {
 	chat: "助手",
-	orchestrator: "编排器",
 	crawler: "爬取器",
 	cleaner: "清洗器",
 	analyst: "分析师",
@@ -21,7 +20,6 @@ const ROLE_LABEL: Record<string, string> = {
 
 const ROLE_INITIAL: Record<string, string> = {
 	chat: "C",
-	orchestrator: "O",
 	crawler: "W",
 	cleaner: "L",
 	analyst: "A",
@@ -33,7 +31,6 @@ const ROLE_INITIAL: Record<string, string> = {
 
 const PIXEL_PATTERNS: Record<string, string[]> = {
 	chat: ["01110", "11011", "10101", "10001", "01110"],
-	orchestrator: ["00100", "01110", "11111", "01110", "00100"],
 	crawler: ["10101", "01110", "11111", "01010", "10001"],
 	cleaner: ["00111", "00110", "11100", "01100", "11000"],
 	analyst: ["10001", "10011", "10111", "11111", "11111"],

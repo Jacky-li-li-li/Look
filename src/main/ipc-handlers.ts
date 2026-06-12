@@ -55,7 +55,6 @@ async function handleRendererInvoke(
 				role: data.role as AgentRole,
 				model: data.model,
 				thinkingLevel: data.thinkingLevel as ThinkingLevel,
-				parentAgentId: data.parentAgentId,
 			});
 			return { success: true, agentId: id };
 		}

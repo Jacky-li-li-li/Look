@@ -10,12 +10,9 @@
 		"reset": "リセット"
 	},
 	"sidebar": {
-		"chat": "チャット",
-		"orch": "オーケストレーション",
 		"newAgent": "新規 Agent",
 		"settings": "設定",
-		"noChatAgents": "チャット Agent がまだありません。",
-		"noOrchAgents": "オーケストレーション Agent がまだありません。",
+		"noAgents": "Agent がまだありません。",
 		"clickNewAgent": "+ 新規 Agent をクリック。"
 	},
 	"settings": {

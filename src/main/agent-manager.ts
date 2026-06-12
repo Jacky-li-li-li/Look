@@ -1,5 +1,5 @@
 // ============================================================
-// AgentManager — Multi-Agent Orchestration Core
+// AgentManager — Agent Runtime Core
 //
 // Persistence: pi SessionManager manages session .jsonl files natively
 // (create/open/auto-save). We only store a lightweight agents.json index
@@ -20,7 +20,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
-import { getRoleDefaults, getRoleSystemPrompt, getRoleTools } from "./agents/roles.js";
+import { getRoleDefaults, getRoleSystemPrompt, getRoleTools, normalizeAgentRole } from "./agents/roles.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
 import { PermissionAskService } from "./permissions/permission-ask.js";
 import { checkPermission } from "./permissions/permission-gate.js";
@@ -44,7 +44,6 @@ import type {
 	MainToRendererEvent,
 	NavigateTreeResult,
 	PermissionMode,
-	PiContentBlock,
 	PiMessage,
 	PiTextBlock,
 	PiThinkingBlock,
@@ -52,7 +51,6 @@ import type {
 	ProjectInfo,
 	SessionForkPoint,
 	SessionTreeNode,
-	TaskNode,
 	ThinkingLevel,
 	UsageSnapshot,
 } from "./shared/types.js";
@@ -64,7 +62,6 @@ import {
 	type LoadedSkills,
 	listAllSkills,
 } from "./skills/skill-loader.js";
-import { createOrchestrationTools } from "./tools/orchestration.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 
 /** Tools allowed in "plan" mode. Anything else is hard-blocked. */
@@ -73,11 +70,10 @@ const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls"]);
 /** Names of pi's built-in coding-agent tools (the default 7). */
 const BUILTIN_TOOL_NAMES: readonly string[] = ["read", "bash", "write", "edit", "grep", "find", "ls"];
 
-/** Filter a role's tool list down to (built-ins) + (custom tool names). */
-function resolveToolNames(roleToolNames: string[] | null, customTools: Array<{ name: string }>): string[] {
+/** Filter a role's tool list down to pi's built-in tool names. */
+function resolveToolNames(roleToolNames: string[] | null): string[] {
 	const builtins = new Set(BUILTIN_TOOL_NAMES);
-	const builtinSelection = (roleToolNames ?? [...BUILTIN_TOOL_NAMES]).filter((t) => builtins.has(t));
-	return [...builtinSelection, ...customTools.map((t) => t.name)];
+	return (roleToolNames ?? [...BUILTIN_TOOL_NAMES]).filter((t) => builtins.has(t));
 }
 
 // ============================================================
@@ -90,7 +86,6 @@ export interface CreateAgentOptions {
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
 	fallbackModels?: string[];
-	parentAgentId?: string;
 }
 
 interface ManagedAgent {
@@ -98,7 +93,6 @@ interface ManagedAgent {
 	session: AgentSession;
 	messages: PiMessage[];
 	unsubscribe: () => void;
-	resolveWaits?: (() => void)[];
 	/** Per-agent permission mode (ask / plan / allow). */
 	permissionMode: PermissionMode;
 	/**
@@ -142,14 +136,34 @@ function extractTextFromAssistantMessage(msg: any): string {
 		.trim();
 }
 
-const EMPTY_USAGE: UsageSnapshot = {
-	inputTokens: 0,
-	outputTokens: 0,
-	cacheReadTokens: 0,
-	cacheWriteTokens: 0,
-	totalTokens: 0,
-	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-};
+function emptyUsageSnapshot(): UsageSnapshot {
+	return {
+		inputTokens: 0,
+		outputTokens: 0,
+		cacheReadTokens: 0,
+		cacheWriteTokens: 0,
+		totalTokens: 0,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	};
+}
+
+function cloneUsageSnapshot(usage: Partial<UsageSnapshot> | null | undefined): UsageSnapshot {
+	const cost = usage?.cost;
+	return {
+		inputTokens: usage?.inputTokens ?? 0,
+		outputTokens: usage?.outputTokens ?? 0,
+		cacheReadTokens: usage?.cacheReadTokens ?? 0,
+		cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
+		totalTokens: usage?.totalTokens ?? 0,
+		cost: {
+			input: cost?.input ?? 0,
+			output: cost?.output ?? 0,
+			cacheRead: cost?.cacheRead ?? 0,
+			cacheWrite: cost?.cacheWrite ?? 0,
+			total: cost?.total ?? 0,
+		},
+	};
+}
 
 /** 默认 Chat Agent 名称 — 标题为此名称的会话在首次回复后自动生成标题 */
 const DEFAULT_CHAT_NAME = "聊天助手";
@@ -624,7 +638,7 @@ export class AgentManager {
 				// assistant messages. This is the source of truth — entry.usage
 				// (if present) is only used as a fallback for agents whose
 				// messages happen to carry no usage data.
-				const cumUsage: UsageSnapshot = { ...EMPTY_USAGE };
+				let cumUsage: UsageSnapshot = emptyUsageSnapshot();
 				let hasMessageUsage = false;
 				for (const msg of uiMessages) {
 					if (msg.role !== "assistant" || !msg.usage) continue;
@@ -644,7 +658,7 @@ export class AgentManager {
 				// Fallback: if no message had usage (e.g. very old sessions),
 				// use whatever was in the index file.
 				if (!hasMessageUsage && entry.usage) {
-					Object.assign(cumUsage, entry.usage);
+					cumUsage = cloneUsageSnapshot(entry.usage);
 				}
 
 				// Restore last-context-tokens from the last assistant message.
@@ -657,16 +671,17 @@ export class AgentManager {
 				}
 
 				// Build agent info
+				const role = normalizeAgentRole(entry.role);
 				const info: AgentInfo = {
 					id,
 					name: entry.name ?? "Agent",
-					role: entry.role ?? "custom",
+					role,
 					model: resolvedModelKey,
 					thinkingLevel: entry.thinkingLevel ?? "medium",
 					status: "idle",
 					messageCount: uiMessages.length,
 					createdAt: entry.createdAt ?? Date.now(),
-					usage: cumUsage,
+					usage: cloneUsageSnapshot(cumUsage),
 					fallbackModels: [],
 					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
 					projectId: entry.projectId,
@@ -678,15 +693,11 @@ export class AgentManager {
 				const settingsManager = this.settingsManagerForCwd(projectCwd, entry.projectId);
 
 				const roleToolNames = getRoleTools(info.role); // string[] | null
-				// null = "all built-in tools" (chat mode restored from disk)
-				const toolNames: string[] = roleToolNames ?? [...BUILTIN_TOOL_NAMES];
 				let systemPrompt = getRoleSystemPrompt(info.role);
 				if (info.role === "chat") {
 					const custom = this.getProjectSettings(info.projectId)?.getAll().chatSystemPrompt;
 					if (custom) systemPrompt = custom;
 				}
-				const customTools = this.buildCustomTools(toolNames, id);
-
 				const resourceLoader = this.buildResourceLoader({
 					systemPrompt,
 					agentId: id,
@@ -695,7 +706,7 @@ export class AgentManager {
 				});
 				await resourceLoader.reload();
 
-				const allToolNames = resolveToolNames(roleToolNames, customTools);
+				const allToolNames = resolveToolNames(roleToolNames);
 
 				const { session } = await createAgentSession({
 					cwd: projectCwd,
@@ -705,7 +716,6 @@ export class AgentManager {
 					settingsManager,
 					thinkingLevel: info.thinkingLevel,
 					tools: allToolNames,
-					customTools: customTools as any,
 					resourceLoader,
 					// Pin the resolved model so we never let pi's session
 					// restore use a model the user no longer has a key for.
@@ -735,7 +745,7 @@ export class AgentManager {
 				};
 
 				this.agents.set(id, managed);
-				this.agentUsage.set(id, { ...cumUsage });
+				this.agentUsage.set(id, cloneUsageSnapshot(cumUsage));
 				loaded++;
 			}
 
@@ -1160,17 +1170,17 @@ export class AgentManager {
 	// ============================================================
 
 	async createAgent(options: CreateAgentOptions): Promise<string> {
-		const defaults = getRoleDefaults(options.role);
-		const parentAgent = options.parentAgentId ? this.agents.get(options.parentAgentId)?.info : undefined;
+		const role = normalizeAgentRole(options.role);
+		const defaults = getRoleDefaults(role);
 		const userDef = this.getProjectSettings()?.getAll().defaultThinkingLevel;
-		const thinkingLevel = options.thinkingLevel ?? parentAgent?.thinkingLevel ?? userDef ?? defaults.thinkingLevel;
+		const thinkingLevel = options.thinkingLevel ?? userDef ?? defaults.thinkingLevel;
 
 		// ---- Resolve primary model ----
-		// Priority: explicit option > parent's model > role default >
-		// first user-configured model. Chat mode has role default null,
-		// so the last fallback kicks in for that role.
+		// Priority: explicit option > role default > first user-configured
+		// model. Chat mode has role default null, so the last fallback kicks
+		// in for that role.
 		const roleDefault = defaults.model; // string | null
-		const primaryModelId = options.model ?? parentAgent?.model ?? roleDefault ?? this.firstAvailableModelKey();
+		const primaryModelId = options.model ?? roleDefault ?? this.firstAvailableModelKey();
 		if (!primaryModelId) {
 			throw new Error(
 				`No model available for new agent. Configure an API key in Settings, or pass an explicit model.`,
@@ -1180,7 +1190,7 @@ export class AgentManager {
 		// ---- Resolve fallback chain ----
 		// Order:
 		//   1. Role static fallbacks (kept for backward compat — coder,
-		//      orchestrator, etc. have meaningful role-presets).
+		//      reviewer, etc. have meaningful role-presets).
 		//   2. The full set of user-configured models (any provider the
 		//      user has a key for), excluding the primary. This is what
 		//      makes chat agents robust to "I only have a deepseek key"
@@ -1205,15 +1215,13 @@ export class AgentManager {
 		const id = uuidv4().slice(0, 8);
 		const projectCwd = this.getActiveProjectCwd();
 		const settingsManager = this.settingsManagerForCwd(projectCwd, this.activeProjectId ?? undefined);
-		const roleToolNames = getRoleTools(options.role); // string[] | null
+		const roleToolNames = getRoleTools(role); // string[] | null
 		// null = "all built-in tools" (chat mode)
-		const toolNames: string[] = roleToolNames ?? ["read", "bash", "write", "edit", "grep", "find", "ls"];
 		const model = this.lookupModel(provider, modelId);
 		if (!model) throw new Error(`Model not found: ${resolvedId}`);
 
-		const customTools = this.buildCustomTools(toolNames, id);
-		let systemPrompt = getRoleSystemPrompt(options.role);
-		if (options.role === "chat") {
+		let systemPrompt = getRoleSystemPrompt(role);
+		if (role === "chat") {
 			const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
 			if (custom) systemPrompt = custom;
 		}
@@ -1237,7 +1245,7 @@ export class AgentManager {
 		// index on next start. (The sessionFile path is still saved
 		// into `agents.json` immediately so the agent's in-memory
 		// session is recoverable as soon as the first message lands.)
-		const allToolNames = resolveToolNames(roleToolNames, customTools);
+		const allToolNames = resolveToolNames(roleToolNames);
 
 		const { session, modelFallbackMessage } = await createAgentSession({
 			cwd: projectCwd,
@@ -1246,24 +1254,23 @@ export class AgentManager {
 			model,
 			thinkingLevel,
 			tools: allToolNames,
-			customTools: customTools as any,
 			resourceLoader,
 			sessionManager: sm,
 			settingsManager,
 		});
 
-		this.agentUsage.set(id, { ...EMPTY_USAGE });
+		this.agentUsage.set(id, emptyUsageSnapshot());
 
 		const info: AgentInfo = {
 			id,
 			name: options.name,
-			role: options.role,
+			role,
 			model: resolvedId,
 			thinkingLevel,
 			status: "idle",
 			messageCount: 0,
 			createdAt: Date.now(),
-			usage: { ...EMPTY_USAGE },
+			usage: emptyUsageSnapshot(),
 			fallbackModels,
 			permissionMode: "ask",
 			projectId: this.activeProjectId ?? undefined,
@@ -1568,37 +1575,6 @@ export class AgentManager {
 		} catch (err: any) {
 			this.emit({ type: "error", agentId, message: `Abort failed: ${err.message}` });
 		}
-	}
-
-	async askAgent(agentId: string, question: string, timeoutMs: number): Promise<string> {
-		const m = this.agents.get(agentId);
-		if (!m) throw new Error(`Agent ${agentId} not found`);
-		return new Promise<string>((resolve, reject) => {
-			const t = setTimeout(() => reject(new Error(`Timeout asking agent ${agentId}`)), timeoutMs);
-			(m.resolveWaits ??= []).push(() => {
-				clearTimeout(t);
-				const last = [...m.messages].reverse().find((x) => x.role === "assistant");
-				const text = last?.contentBlocks
-					?.filter((b: PiContentBlock) => b.type === "text")
-					.map((b) => (b as PiTextBlock).text ?? "")
-					.join("\n");
-				resolve(text || "(no response)");
-			});
-			this.sendMessage(agentId, question);
-		});
-	}
-
-	async waitForAgent(agentId: string, timeoutMs: number): Promise<void> {
-		const m = this.agents.get(agentId);
-		if (!m) throw new Error(`Agent ${agentId} not found`);
-		if (m.info.status === "idle") return;
-		return new Promise<void>((resolve, reject) => {
-			const t = setTimeout(() => reject(new Error(`Timeout waiting for agent ${agentId}`)), timeoutMs);
-			(m.resolveWaits ??= []).push(() => {
-				clearTimeout(t);
-				resolve();
-			});
-		});
 	}
 
 	// ============================================================
@@ -1992,11 +1968,6 @@ export class AgentManager {
 						}
 					}
 				}
-				m.resolveWaits?.forEach((fn) => {
-					fn();
-				});
-				m.resolveWaits = undefined;
-
 				// Auto-compress after the agent loop finishes.
 				// (triggering on message_end is too early — status is still
 				// "thinking" so compressSession's guard returns immediately.)
@@ -2213,9 +2184,8 @@ export class AgentManager {
 		const sm = SessionManager.open(newSessionFile);
 		const sourceCwd = this.getAgentCwd(agentId);
 		const settingsManager = this.settingsManagerForCwd(sourceCwd, src.info.projectId);
-		const role = src.info.role;
+		const role = normalizeAgentRole(src.info.role);
 		const roleToolNames = getRoleTools(role);
-		const toolNames: string[] = roleToolNames ?? [...BUILTIN_TOOL_NAMES];
 		const model = this.lookupModel(...this.splitModelKey(src.info.model));
 		if (!model) {
 			throw new Error(`Cannot resolve model ${src.info.model} for forked session`);
@@ -2234,8 +2204,7 @@ export class AgentManager {
 		});
 
 		await resourceLoader.reload();
-		const customTools = this.buildCustomTools(toolNames, newId);
-		const allToolNames = resolveToolNames(roleToolNames, customTools);
+		const allToolNames = resolveToolNames(roleToolNames);
 
 		const { session } = await createAgentSession({
 			cwd: sourceCwd,
@@ -2245,7 +2214,6 @@ export class AgentManager {
 			settingsManager,
 			thinkingLevel: src.info.thinkingLevel,
 			tools: allToolNames,
-			customTools: customTools as any,
 			resourceLoader,
 			model,
 		});
@@ -2260,7 +2228,7 @@ export class AgentManager {
 			status: "idle",
 			messageCount: 0,
 			createdAt: Date.now(),
-			usage: { ...EMPTY_USAGE },
+			usage: emptyUsageSnapshot(),
 			fallbackModels: src.info.fallbackModels,
 			permissionMode: src.info.permissionMode,
 			sessionFilePath: newSessionFile,
@@ -2280,7 +2248,7 @@ export class AgentManager {
 			leafId: sm.getLeafId(),
 		};
 		this.agents.set(newId, managed);
-		this.agentUsage.set(newId, { ...EMPTY_USAGE });
+		this.agentUsage.set(newId, emptyUsageSnapshot());
 
 		// The first real message in the new agent must come from
 		// the user, not from a synthetic system message — we want
@@ -2412,7 +2380,7 @@ export class AgentManager {
 				total: usage.cost?.total ?? 0,
 			},
 		};
-		const cum = this.agentUsage.get(agentId) ?? { ...EMPTY_USAGE };
+		const cum = cloneUsageSnapshot(this.agentUsage.get(agentId));
 		cum.inputTokens += snap.inputTokens;
 		cum.outputTokens += snap.outputTokens;
 		cum.cacheReadTokens += snap.cacheReadTokens;
@@ -2424,8 +2392,8 @@ export class AgentManager {
 		cum.cost.cacheWrite += snap.cost.cacheWrite;
 		cum.cost.total += snap.cost.total;
 		this.agentUsage.set(agentId, cum);
-		m.info.usage = { ...cum };
-		this.emit({ type: "agent:usage-update", agentId, usage: { ...cum } });
+		m.info.usage = cloneUsageSnapshot(cum);
+		this.emit({ type: "agent:usage-update", agentId, usage: cloneUsageSnapshot(cum) });
 	}
 
 	// ============================================================
@@ -2482,11 +2450,6 @@ export class AgentManager {
 		}
 	}
 
-	private buildCustomTools(toolNames: string[], agentId: string): any[] {
-		const orch = ["spawn_agent", "send_to_agent", "ask_agent", "wait_for_agent", "list_agents"];
-		return toolNames.some((t) => orch.includes(t)) ? createOrchestrationTools(this, agentId) : [];
-	}
-
 	// ============================================================
 	// Resource Loader — Inject permission gate as an inline extension
 	//
@@ -2505,7 +2468,6 @@ export class AgentManager {
 		agentId: string;
 		cwd: string;
 		settingsManager?: SettingsManager;
-		task?: TaskNode;
 	}): DefaultResourceLoader {
 		// v0.3 skills: feed ALL discovered skill paths into the SDK's
 		// resource loader so agent sessions see the same skills as the
@@ -2514,29 +2476,6 @@ export class AgentManager {
 		// Claude Code, Cursor, Codex, Copilot, Hermes Agent, pi SDK,
 		// and user-imported paths from settings.json).
 		const skillPaths = gatherSkillPaths(opts.cwd);
-
-		// v0.3 skills scoping: when the orchestrator spawns a worker
-		// with a `task.allowedSkills` constraint, narrow the visible
-		// set. The SDK's `formatSkillsForPrompt` already filters out
-		// skills with `disable-model-invocation: true` — we only add
-		// the optional allowed-list on top.
-		const allowed = opts.task?.allowedSkills;
-		const skillsOverride =
-			allowed === undefined
-				? undefined
-				: (result: { skills: Array<{ name: string }>; diagnostics: unknown[] }) => {
-						const allow = new Set(allowed);
-						return {
-							...result,
-							skills: result.skills.filter((s) => allow.has(s.name)),
-						};
-					};
-		// SDK's skillsOverride signature uses the SDK's own Skill and
-		// ResourceDiagnostic types; we use a narrow in-house shape and
-		// cast to satisfy the SDK option type. Runtime contract is
-		// preserved: we only filter `skills` by name and forward
-		// `diagnostics` unchanged.
-		const skillsOverrideForSdk = skillsOverride as any;
 
 		return new DefaultResourceLoader({
 			cwd: opts.cwd,
@@ -2551,8 +2490,6 @@ export class AgentManager {
 			// v0.3: feed all discovered skill paths into the SDK's loader so
 			// they get auto-injected into worker system prompts.
 			...(skillPaths.length > 0 ? { additionalSkillPaths: skillPaths } : {}),
-			// v0.3: optional allowed-list for orchestrator-spawned workers.
-			...(skillsOverrideForSdk ? { skillsOverride: skillsOverrideForSdk } : {}),
 			systemPromptOverride: () => opts.systemPrompt,
 			appendSystemPromptOverride: () => [],
 			extensionFactories: [

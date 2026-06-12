@@ -21,13 +21,6 @@ export interface RoleConfig {
 	tools: string[] | null;
 	/** Empty string = no role system prompt injected (chat mode). */
 	systemPrompt: string;
-	/**
-	 * Skills auto-attached to workers of this role. Intersection
-	 * with the task's `allowedSkills` is what actually gets loaded.
-	 * Empty array = no auto-attached skills (worker only sees
-	 * whatever the task explicitly allows).
-	 */
-	defaultSkills?: string[];
 }
 
 /**
@@ -69,50 +62,6 @@ Tool usage:
 
 Response style:
 - Be concise. Prefer a short answer with a clear next step.`,
-	},
-
-	orchestrator: {
-		role: "orchestrator",
-		label: "Orchestrator",
-		emoji: "🎯",
-		description: "Coordinates tasks across agents. Receives user requests and delegates to specialized agents.",
-		defaultModel: "anthropic/claude-sonnet-4-20250514",
-		defaultThinkingLevel: "medium",
-		fallbackModels: ["anthropic/claude-opus-4-5", "openai/gpt-4o"],
-		tools: [
-			"read",
-			"bash",
-			"write",
-			"edit",
-			"spawn_agent",
-			"send_to_agent",
-			"ask_agent",
-			"wait_for_agent",
-			"list_agents",
-		],
-		systemPrompt: `You are the Orchestrator agent in a multi-agent system. Your role is to:
-1. Understand user requests and break them down into tasks
-2. Delegate tasks to specialized agents using spawn_agent, send_to_agent, or ask_agent
-3. Coordinate the workflow and track progress using list_agents and wait_for_agent
-4. Synthesize results from sub-agents into coherent responses for the user
-
-Available agents and their roles:
-- crawler: Searches and fetches data from the web
-- cleaner: Cleans, normalizes, and preprocesses data
-- analyst: Analyzes data, detects trends, extracts insights
-- reporter: Generates structured reports and charts
-- coder: Writes and modifies code
-- reviewer: Reviews code for quality and issues
-
-When the user gives a complex task:
-1. Use list_agents to see what agents are available
-2. spawn_agent to create any needed agents
-3. send_to_agent to assign tasks
-4. wait_for_agent to wait for completion
-5. ask_agent if you need a specific answer from an agent
-6. Synthesize and present results clearly
-
-Be concise but thorough. Show the user what's happening at each step.`,
 	},
 
 	crawler: {
@@ -199,6 +148,10 @@ Be concise but thorough. Show the user what's happening at each step.`,
 		systemPrompt: `You are a versatile AI agent. Help the user with their tasks efficiently.`,
 	},
 };
+
+export function normalizeAgentRole(role: unknown): AgentRole {
+	return typeof role === "string" && role in ROLE_CONFIGS ? (role as AgentRole) : "custom";
+}
 
 /** Get the tool list for a given role.
  *

@@ -26,9 +26,9 @@ import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
 	forkingEntryAtomFamily,
-	runningAgentsAtom,
 	navigatingEntryAtomFamily,
 	recentlyCompletedAtom,
+	runningAgentsAtom,
 	sessionLeafIdAtomFamily,
 } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
@@ -699,7 +699,11 @@ const ChatPanel = memo(function ChatPanel({
 								<div
 									key={msg.id}
 									data-message-id={msg.id}
-									className={cn("group/message flex flex-col", showActions ? "gap-1" : "gap-0", msg.isStreaming && "animate-draw-in")}
+									className={cn(
+										"group/message flex flex-col",
+										showActions ? "gap-1" : "gap-0",
+										msg.isStreaming && "animate-draw-in",
+									)}
 								>
 									<MessageBubble
 										message={msg}
@@ -713,7 +717,9 @@ const ChatPanel = memo(function ChatPanel({
 										<div
 											className={cn(
 												"flex items-center gap-1 opacity-40 transition-opacity duration-200 group-hover/message:opacity-100",
-												msg.role === "user" ? "self-end justify-end mr-10 max-w-[80%]" : "ml-10 mr-4 max-w-[92%]",
+												msg.role === "user"
+													? "self-end justify-end mr-10 max-w-[80%]"
+													: "ml-10 mr-4 max-w-[92%]",
 											)}
 										>
 											{/* Branch from here — all messages */}

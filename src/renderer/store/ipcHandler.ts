@@ -154,6 +154,22 @@ export function initIpcHandlers(api: any): () => void {
 				break;
 			}
 
+			case "permission:resolved": {
+				const asks = appStore.get(pendingAsksAtom);
+				const resolved = asks.find((ask) => ask.requestId === event.requestId);
+				appStore.set(
+					pendingAsksAtom,
+					asks.filter((ask) => ask.requestId !== event.requestId),
+				);
+				if (resolved && event.decision.action === "deny" && event.decision.reason.startsWith("Timed out")) {
+					toast(t("permission.timedOut", { toolName: resolved.toolName }), {
+						description: resolved.reason,
+						duration: 3000,
+					});
+				}
+				break;
+			}
+
 			case "agent:permission-mode": {
 				appStore.set(
 					agentsAtom,

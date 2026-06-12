@@ -30,7 +30,6 @@ import { useTranslation } from "react-i18next";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const ROLE_OPTIONS = [
-	{ value: "orchestrator", label: "Orchestrator", desc: "任务编排" },
 	{ value: "crawler", label: "Crawler", desc: "数据爬取" },
 	{ value: "cleaner", label: "Cleaner", desc: "数据清洗" },
 	{ value: "analyst", label: "Analyst", desc: "数据分析" },
@@ -50,7 +49,6 @@ const THINKING_LEVELS: { value: ThinkingLevel; label: string }[] = [
 ];
 
 const ROLE_THINKING_DEFAULTS: Record<string, ThinkingLevel> = {
-	orchestrator: "medium",
 	crawler: "low",
 	cleaner: "off",
 	analyst: "high",

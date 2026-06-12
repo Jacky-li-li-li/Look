@@ -23,6 +23,14 @@ if (isDev) {
 	process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 }
 
+// Disable GPU / sandbox when running in a sandboxed/container environment
+// without hardware acceleration (e.g. Trae sandbox, CI, Docker)
+if (process.env.SANDBOX_GPU_WORKAROUND !== "0") {
+	app.commandLine.appendSwitch("no-sandbox");
+	app.commandLine.appendSwitch("disable-gpu-sandbox");
+	app.commandLine.appendSwitch("in-process-gpu");
+}
+
 // ============================================================
 // Layer 3 — Electron Process Boundary (pi doesn't cover this)
 //
@@ -144,7 +152,7 @@ function createWindow(): void {
 		minWidth: 900,
 		minHeight: 600,
 		title: "Look",
-		icon: path.join(__dirname, "assets/icon-512.png"),
+		icon: path.join(__dirname, "assets/icon-1024.png"),
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
 			contextIsolation: true,
@@ -254,7 +262,7 @@ app.whenReady().then(async () => {
 
 	// Set Dock icon on macOS (PNG supported since Electron 20+)
 	if (process.platform === "darwin" && app.dock) {
-		const iconPath = path.join(__dirname, "assets/icon-512.png");
+		const iconPath = path.join(__dirname, "assets/icon-1024.png");
 		app.dock.setIcon(iconPath);
 	}
 
