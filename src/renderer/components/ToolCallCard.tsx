@@ -10,6 +10,7 @@ import type { ToolCallRecord } from "@shared/types";
 import { Check, ChevronRight, Loader2, Wrench, X } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { scheduleCollapse } from "../lib/batchCollapse";
 
 interface ToolCallCardProps {
 	toolCall: ToolCallRecord;
@@ -129,13 +130,10 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 				userManuallyToggled.current = false;
 				setOpen(true);
 			} else if ((curr === "success" || curr === "error") && !userManuallyToggled.current) {
-				// Debounce auto-collapse by 300ms so rapid status transitions
-				// don't trigger animation thrashing. Collects multiple tool
-				// completions into a single frame.
-				collapseTimerRef.current = setTimeout(() => setOpen(false), 300);
-				return () => {
-					if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
-				};
+				// Batch-collapse: collects N tool completions into a single
+				// setTimeout tick, avoiding 109 independent timers when all
+				// tools finish at once.
+				scheduleCollapse(() => setOpen(false));
 			}
 			prevStatus.current = curr;
 		}

@@ -4,18 +4,64 @@
 // ============================================================
 
 import { type BrowserWindow, dialog, ipcMain } from "electron";
+import path from "node:path";
 import type { AgentManager } from "./agent-manager.js";
 import { getSessionsDir } from "./shared/look-storage.js";
 import type { MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 
+// ─── IPC input validation ───────────────────────────────────────────
+// Renderer-sourced inputs must be validated at runtime. TypeScript
+// types are compile-time only — a compromised or buggy renderer can
+// send arbitrary shapes. These guards are intentionally minimal: they
+// reject clearly malformed values without becoming a second type system.
+
+const VALID_AGENT_ID = /^[a-zA-Z0-9_-]{6,64}$/;
+const VALID_PROVIDER = /^[a-zA-Z][a-zA-Z0-9_-]{1,63}$/;
+
+function guardAgentId(id: unknown, label: string): string {
+	if (typeof id !== "string" || !VALID_AGENT_ID.test(id)) {
+		throw new Error(`Invalid ${label}: ${JSON.stringify(id)}`);
+	}
+	return id;
+}
+
+function guardPath(p: unknown, label: string): string {
+	if (typeof p !== "string" || p.length === 0 || p.length > 4096) {
+		throw new Error(`Invalid ${label}: ${JSON.stringify(p)}`);
+	}
+	const resolved = path.resolve(p);
+	// Reject attempts to traverse above the home directory
+	if (resolved.length < 2 || resolved.includes("\0")) {
+		throw new Error(`Path traversal rejected: ${JSON.stringify(p)}`);
+	}
+	return p;
+}
+
+function guardProvider(provider: unknown): string {
+	if (typeof provider !== "string" || !VALID_PROVIDER.test(provider)) {
+		throw new Error(`Invalid provider: ${JSON.stringify(provider)}`);
+	}
+	return provider;
+}
+
+// ────────────────────────────────────────────────────────────────────
+
 export function registerIpcHandlers(agentManager: AgentManager, mainWindow: BrowserWindow): void {
+	// Clean up previous registrations to support macOS activate re-creation
+	ipcMain.removeHandler("look:invoke");
+	ipcMain.removeAllListeners("look:event");
+
 	// Forward all AgentManager events to the renderer
-	agentManager.onEvent((event: MainToRendererEvent) => {
+	const unsubscribeEvents = agentManager.onEvent((event: MainToRendererEvent) => {
 		if (!mainWindow.isDestroyed()) {
 			mainWindow.webContents.send("look:event", event);
 		}
+	});
+
+	mainWindow.on("closed", () => {
+		unsubscribeEvents();
 	});
 
 	// Handle renderer → main events
@@ -44,7 +90,8 @@ async function handleRendererInvoke(
 	switch (data.type) {
 		// === Agent messaging ===
 		case "agent:send-message": {
-			await agentManager.sendMessage(data.agentId, data.message);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+				await agentManager.sendMessage(_agentId, data.message);
 			return { success: true };
 		}
 
@@ -55,7 +102,8 @@ async function handleRendererInvoke(
 		}
 
 		case "agent:destroy": {
-			await agentManager.destroyAgent(data.agentId);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+				await agentManager.destroyAgent(_agentId);
 			return { success: true };
 		}
 
@@ -126,7 +174,8 @@ async function handleRendererInvoke(
 		}
 
 		case "settings:set-api-key": {
-			agentManager.setApiKey(data.provider, data.key);
+			const _provider = guardProvider(data.provider);
+				agentManager.setApiKey(_provider, data.key);
 			const providers = await agentManager.getProviderSettings();
 			return { success: true, providers };
 		}
@@ -262,7 +311,8 @@ async function handleRendererInvoke(
 		}
 
 		case "project:create": {
-			const result = agentManager.createProject(data.cwd, data.name);
+			const _cwd = guardPath(data.cwd, "cwd");
+				const result = agentManager.createProject(_cwd, data.name);
 			return {
 				success: true,
 				project: result.project,

@@ -194,5 +194,3 @@ const api = {
 };
 
 contextBridge.exposeInMainWorld("look", api);
-// Back-compat alias. Will be removed once all consumers migrate.
-contextBridge.exposeInMainWorld("harness", api);

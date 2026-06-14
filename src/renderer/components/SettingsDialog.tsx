@@ -320,7 +320,7 @@ function SettingsDialogImpl({
 		setShowKey(false);
 	}, []);
 
-	const appVersion = "1.0.0";
+	const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.0.0";
 
 	const loading = providers.length === 0 && !!api;
 

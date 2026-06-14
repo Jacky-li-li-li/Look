@@ -22,8 +22,17 @@ import { execSync } from "node:child_process";
  * Call once at app startup. Safe to call synchronously if wrapped
  * in a try/catch with a timeout.
  */
+/** Only known-safe shell paths are allowed so execSync cannot be
+ *  hijacked via a malicious $SHELL environment variable. */
+const ALLOWED_SHELLS = /^\/(usr(\/local)?\/)?bin\/(zsh|bash)$/;
+
 export function loadShellEnv(): void {
-	const shell = process.env.SHELL || "/bin/zsh";
+	const rawShell = process.env.SHELL || "/bin/zsh";
+	if (!ALLOWED_SHELLS.test(rawShell)) {
+		console.warn("[Look] Skipping shell env: $SHELL not in whitelist:", rawShell);
+		return;
+	}
+	const shell = rawShell;
 	let rcFile: string;
 	if (shell.includes("zsh")) {
 		rcFile = "$HOME/.zshrc";

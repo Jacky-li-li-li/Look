@@ -10,6 +10,7 @@ import type { PiContentBlock, PiThinkingBlock, PiToolCallBlock } from "@shared/t
 import { ChevronRight } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { scheduleCollapse } from "../lib/batchCollapse";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
 
@@ -44,7 +45,7 @@ export default function ExecutionProcess({ blocks, isStreaming, autoCollapse }: 
 	React.useEffect(() => {
 		if (prevStreaming.current && !isStreaming) {
 			if (autoCollapse && !userManuallyToggled.current) {
-				collapseTimerRef.current = setTimeout(() => setOpen(false), 300);
+				scheduleCollapse(() => setOpen(false));
 			}
 		} else if (isStreaming && !userManuallyToggled.current) {
 			setOpen(true);

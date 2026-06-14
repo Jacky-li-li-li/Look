@@ -98,6 +98,8 @@ interface GeneralSettings {
 }
 
 declare global {
+	const __APP_VERSION__: string;
+
 	interface Window {
 		look: LookAPI;
 		/** @deprecated use `window.look` instead. */

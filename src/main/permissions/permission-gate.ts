@@ -22,6 +22,37 @@ export interface PermissionRule {
 	reason: string;
 }
 
+/**
+ * Normalize a shell command for security matching:
+ * - collapse multiple spaces/tabs to single space
+ * - strip wrapping parentheses/subshells
+ * - expand common evasion patterns (eval, $(...), backticks)
+ */
+function normalizeCommand(raw: string): string {
+	let cmd = raw.toLowerCase();
+	// Collapse whitespace
+	cmd = cmd.replace(/\s+/g, " ").trim();
+	// Strip outer parens/subshell wrappers: (cmd) → cmd
+	cmd = cmd.replace(/^\(+/, "").replace(/\)+$/, "").trim();
+	// Unwrap eval/sh -c wrappers
+	cmd = cmd.replace(/^(eval|sh\s+-c|bash\s+-c|zsh\s+-c)\s+["']?/, "").replace(/["']?\s*$/, "");
+	return cmd;
+}
+
+/** Check if a bash command targets .env files via redirections or inline writes */
+function bashTargetsEnvFile(cmd: string): boolean {
+	const normalized = normalizeCommand(cmd);
+	// Detect redirect/tee/sed/cp targeting .env files
+	const envFilePattern = /(?:>>?\s*|tee\s+(?:-a\s+)?|sed\s+.*-i\s*(?:'[^']*'\s+|"[^"]*"\s+)?|cp\s+\S+\s+)(?:\S*\/)?\.env(?:\.\w+)?(?:\s|$)/;
+	if (envFilePattern.test(normalized)) return true;
+	// Detect echo/printf with redirect targeting .env
+	if (/(?:echo|printf)\s.*[>|].*\.env/.test(normalized)) return true;
+	if (/(?:echo|printf)\s.*\.env/.test(normalized) && /[>|]/.test(normalized)) return true;
+	// cat with redirect to .env
+	if (/cat\s.*[|>].*\.env/.test(normalized) || /cat\s.*\.env.*[|>]/.test(normalized)) return true;
+	return false;
+}
+
 /** Global deny rules: always blocked, no prompt */
 const GLOBAL_DENY_RULES: PermissionRule[] = [
 	{
@@ -30,9 +61,13 @@ const GLOBAL_DENY_RULES: PermissionRule[] = [
 		action: "deny",
 		reason: "Destructive filesystem operations are blocked",
 		condition: (args) => {
-			const cmd = String(args.command ?? "").toLowerCase();
+			const cmd = normalizeCommand(String(args.command ?? ""));
 			return (
-				cmd.includes("rm -rf /") || cmd.includes("mkfs.") || cmd.includes("dd if=") || cmd.includes("> /dev/sda")
+				/rm\s+(-[a-z]*f[a-z]*\s+(-[a-z]*r[a-z]*\s+)?|(-[a-z]*r[a-z]*\s+)?-[a-z]*f[a-z]*\s+)\//.test(cmd) ||
+				/rm\s+-rf\s+\//.test(cmd) ||
+				cmd.includes("mkfs.") ||
+				cmd.includes("dd if=") ||
+				cmd.includes("> /dev/sda")
 			);
 		},
 	},
@@ -42,19 +77,36 @@ const GLOBAL_DENY_RULES: PermissionRule[] = [
 		action: "deny",
 		reason: "Force push to main/master is blocked",
 		condition: (args) => {
-			const cmd = String(args.command ?? "").toLowerCase();
+			const cmd = normalizeCommand(String(args.command ?? ""));
 			return cmd.includes("git push") && cmd.includes("--force") && (cmd.includes("main") || cmd.includes("master"));
 		},
 	},
 	{
-		name: "block-env-overwrite",
+		name: "block-env-overwrite-write",
 		toolName: "write",
 		action: "deny",
 		reason: "Writing to .env files is blocked",
 		condition: (args) => {
 			const p = String(args.path ?? "").toLowerCase();
-			return p.endsWith(".env") || p.includes(".env.");
+			return p.endsWith(".env") || /\.env\.\w+$/.test(p);
 		},
+	},
+	{
+		name: "block-env-overwrite-edit",
+		toolName: "edit",
+		action: "deny",
+		reason: "Editing .env files is blocked",
+		condition: (args) => {
+			const p = String(args.file_path ?? args.path ?? "").toLowerCase();
+			return p.endsWith(".env") || /\.env\.\w+$/.test(p);
+		},
+	},
+	{
+		name: "block-env-overwrite-bash",
+		toolName: "bash",
+		action: "deny",
+		reason: "Modifying .env files via shell is blocked",
+		condition: (args) => bashTargetsEnvFile(String(args.command ?? "")),
 	},
 ];
 
@@ -103,7 +155,7 @@ const PROTECTED_PATHS: PermissionRule[] = [
 		action: "ask",
 		reason: "Editing source file — confirm?",
 		condition: (args) => {
-			const p = String(args.path ?? "").toLowerCase();
+			const p = String(args.file_path ?? args.path ?? "").toLowerCase();
 			return p.endsWith(".ts") || p.endsWith(".tsx") || p.endsWith(".js");
 		},
 	},
@@ -132,7 +184,7 @@ export function checkPermission(
 	// Check deny rules first (highest priority)
 	for (const rule of ALL_RULES) {
 		if (rule.toolName !== toolName) continue;
-		if (rule.roles && rule.roles.length > 0 && agentRole && !rule.roles.includes(agentRole)) continue;
+		if (rule.roles && rule.roles.length > 0 && (!agentRole || !rule.roles.includes(agentRole))) continue;
 		if (rule.condition && !rule.condition(args)) continue;
 
 		if (rule.action === "deny") {
@@ -143,7 +195,7 @@ export function checkPermission(
 	// Check ask rules
 	for (const rule of ALL_RULES) {
 		if (rule.toolName !== toolName) continue;
-		if (rule.roles && rule.roles.length > 0 && agentRole && !rule.roles.includes(agentRole)) continue;
+		if (rule.roles && rule.roles.length > 0 && (!agentRole || !rule.roles.includes(agentRole))) continue;
 		if (rule.condition && !rule.condition(args)) continue;
 
 		if (rule.action === "ask") {

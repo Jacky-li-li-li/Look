@@ -256,7 +256,9 @@ export class AgentManager {
 					createdAt: mp.info.createdAt,
 				})),
 			};
-			fs.writeFileSync(this.projectsIndexPath, JSON.stringify(data, null, 2));
+			const tmp = `${this.projectsIndexPath}.tmp`;
+			fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+			fs.renameSync(tmp, this.projectsIndexPath);
 		} catch (err) {
 			console.error("[Look] Failed to persist projects:", err);
 		}
@@ -534,7 +536,9 @@ export class AgentManager {
 					projectId: m.info.projectId,
 				})),
 			};
-			fs.writeFileSync(this.agentsIndexPath, JSON.stringify(data, null, 2));
+			const tmp = `${this.agentsIndexPath}.tmp`;
+			fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+			fs.renameSync(tmp, this.agentsIndexPath);
 		} catch (err) {
 			console.error("[Look] Failed to persist agent index:", err);
 		}

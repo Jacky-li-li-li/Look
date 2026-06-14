@@ -304,7 +304,8 @@ export function initIpcHandlers(api: any): () => void {
 						? [{ type: "text", text: msg.content, active: false } satisfies PiTextBlock]
 						: [];
 				const ui: PiMessage = {
-					id: msg.id ?? `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+					// v0.7: Drop fallback ID. The main process always passes msg.id from the SDK.
+					id: msg.id,
 					agentId: event.agentId,
 					role: msg.role === "toolResult" ? "tool" : (msg.role ?? "assistant"),
 					contentBlocks: blocks,

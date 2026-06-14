@@ -21,10 +21,10 @@ import type React from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import {
+		activeChatAtBottomAtom,
 	activeAgentIdAtom,
-	activeChatAtBottomAtom,
 	forkingEntryAtomFamily,
 	navigatingEntryAtomFamily,
 	recentlyCompletedAtom,
@@ -232,8 +232,9 @@ const ChatPanel = memo(function ChatPanel({
 				const a = merged[i];
 				if (a.role !== "assistant") continue;
 
-				const chunks = a.assistantChunks;
-				if (chunks) {
+				// Shallow-copy to avoid mutating upstream atom data.
+				if (a.assistantChunks) {
+					const chunks = [...a.assistantChunks];
 					for (let c = 0; c < chunks.length; c++) {
 						const chunk = chunks[c];
 						const pendingIdx = chunk.contentBlocks.findIndex(
@@ -244,7 +245,7 @@ const ChatPanel = memo(function ChatPanel({
 							const tb = { ...(newBlocks[pendingIdx] as PiToolCallBlock), result: resultText, isError: false };
 							newBlocks[pendingIdx] = tb;
 							chunks[c] = { contentBlocks: newBlocks };
-							merged[i] = { ...a, assistantChunks: chunks.slice() };
+							merged[i] = { ...a, assistantChunks: chunks };
 							return true;
 						}
 					}
@@ -391,59 +392,90 @@ const ChatPanel = memo(function ChatPanel({
 	const [pendingConfirm, setPendingConfirm] = useState<BranchConfirmRequest | null>(null);
 	const [pendingBranchEntryId, setPendingBranchEntryId] = useState<string | null>(null);
 	// True while a fork is in flight (post-confirm) so the action
-	// strip on the bubble can flip to a disabled state until the
-	// agent:tree-changed event lands.
+		// strip on the bubble can flip to a disabled state until the
+		// agent:tree-changed event lands.
 
-	// Ref that records "I just asked the main process to navigate
-	// to entry X — when the message list updates, scroll the
-	// matching DOM node into view and flash it". Cleared after
-	// the scroll runs (one-shot) so streaming messages don't keep
-	// yanking the view.
-	const pendingScrollToRef = useRef<string | null>(null);
-	// Entry id that should receive the bubble-flash animation
-	// right now. Set by the scroll-into-view effect after a
-	// navigate, cleared ~900ms later. State-driven (not classList
-	// imperative) so React owns the class application.
-	const [flashEntryId, setFlashEntryId] = useState<string | null>(null);
-	const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	useEffect(() => {
-		return () => {
-			if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-		};
-	}, []);
+		// ── Virtual-scroll + flash (Virtuoso-driven) ──
+		const virtuosoRef = useRef<VirtuosoHandle>(null);
+		const [isAtBottom, setIsAtBottom] = useState(true);
+		const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
+		useEffect(() => {
+			setAtBottomAtom(isAtBottom);
+		}, [isAtBottom, setAtBottomAtom]);
 
-	// One-shot scroll + flash after the message list updates to
-	// reflect a navigate. We trigger on the *first* render where
-	// the pending entry's message is present and a previous
-	// ref-snapshot of the messages did not contain it. The library
-	// does a smooth scroll on its own, but the entry might be far
-	// up the list, so we override with explicit scrollIntoView.
-	// The flash is then driven by `flashEntryId` state — MessageBubble
-	// adds .bubble-flash when its id matches — so React owns the
-	// class lifecycle, not us.
-	const lastMessageIdsRef = useRef<Set<string>>(new Set());
-	useEffect(() => {
-		const target = pendingScrollToRef.current;
-		if (!target) return;
-		const ids = new Set(displayMessages.map((m) => m.id));
-		if (ids.has(target) && !lastMessageIdsRef.current.has(target)) {
+		// ── Scroll to bottom ──
+		// Three scenarios, one strategy:
+		// 1. Page refresh with preloaded messages  → mount + data ready
+		// 2. Agent switch with cached messages      → agentId changes
+		// 3. Agent switch with async-loaded messages → length: 0 → N
+		const hasInitialScrolledRef = useRef(false);
+		const scrollToBottom = useCallback(() => {
 			requestAnimationFrame(() => {
-				const el = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(target)}"]`);
-				if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
-				pendingScrollToRef.current = null;
+				requestAnimationFrame(() => {
+					virtuosoRef.current?.scrollToIndex({
+						index: "LAST",
+						align: "end",
+						behavior: "auto",
+					});
+				});
 			});
-			setFlashEntryId(target);
-			if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-			flashTimerRef.current = setTimeout(() => {
-				setFlashEntryId(null);
-				flashTimerRef.current = null;
-			}, 900);
-		}
-		lastMessageIdsRef.current = ids;
-	}, [displayMessages]);
+		}, []);
 
-	const handleBranchFromHere = useCallback(
-		(entryId: string) => {
+		// Scenario 1 & 3 combined: messages arrived (on mount or async).
+		// The latch prevents re-scrolling during streaming updates.
+		useEffect(() => {
+			if (!hasInitialScrolledRef.current && displayMessages.length > 0) {
+				hasInitialScrolledRef.current = true;
+				scrollToBottom();
+			}
+		}, [displayMessages.length, scrollToBottom]);
+
+		// Scenario 2: agentId changed → Virtuoso remounts via key={agentId}.
+		const prevAgentIdRef = useRef(agentId);
+		useEffect(() => {
+			if (agentId !== prevAgentIdRef.current) {
+				prevAgentIdRef.current = agentId;
+				scrollToBottom();
+			}
+		}, [agentId, scrollToBottom]);
+
+		const [flashEntryId, setFlashEntryId] = useState<string | null>(null);
+		const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+		useEffect(() => {
+			return () => {
+				if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+			};
+		}, []);
+
+		const pendingScrollToIndexRef = useRef<number | null>(null);
+		const lastCountRef = useRef(displayMessages.length);
+		useEffect(() => {
+			const targetIdx = pendingScrollToIndexRef.current;
+			if (targetIdx == null) return;
+			if (targetIdx < displayMessages.length && displayMessages.length !== lastCountRef.current) {
+				requestAnimationFrame(() => {
+					virtuosoRef.current?.scrollToIndex({
+						index: targetIdx,
+						align: "center",
+						behavior: "smooth",
+					});
+					pendingScrollToIndexRef.current = null;
+				});
+				const targetId = displayMessages[targetIdx]?.id;
+				if (targetId) {
+					setFlashEntryId(targetId);
+					if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+					flashTimerRef.current = setTimeout(() => {
+						setFlashEntryId(null);
+						flashTimerRef.current = null;
+					}, 900);
+				}
+			}
+			lastCountRef.current = displayMessages.length;
+		}, [displayMessages]);
+
+		const handleBranchFromHere = useCallback(
+			(entryId: string) => {
 			// Block if the agent is busy generating — main process
 			// would throw, and we want a friendlier surface here.
 			if (isBusy) {
@@ -542,7 +574,7 @@ const ChatPanel = memo(function ChatPanel({
 			const api = (window as any).look;
 			if (!api) return;
 			appStore.set(navigatingEntryAtomFamily(agentId), entryId);
-			pendingScrollToRef.current = entryId;
+			pendingScrollToIndexRef.current = displayMessages.findIndex(m => m.id === entryId);
 			const toastId = toast.loading(t("chat.navigating"));
 			try {
 				const r = await api.navigateTree(agentId, entryId, { summarize });
@@ -550,7 +582,7 @@ const ChatPanel = memo(function ChatPanel({
 				if (!r?.success) {
 					toast.error(t("chat.navigatingFailed", { message: r?.error ?? "unknown" }));
 					appStore.set(navigatingEntryAtomFamily(agentId), null);
-					pendingScrollToRef.current = null;
+					pendingScrollToIndexRef.current = null;
 					return;
 				}
 				const nav = r.result ?? {};
@@ -559,7 +591,7 @@ const ChatPanel = memo(function ChatPanel({
 					// SDK (it can show its own chooser). The main
 					// process keeps the previous leaf.
 					appStore.set(navigatingEntryAtomFamily(agentId), null);
-					pendingScrollToRef.current = null;
+					pendingScrollToIndexRef.current = null;
 					return;
 				}
 				// Put the returned editorText in the input box. If
@@ -579,7 +611,7 @@ const ChatPanel = memo(function ChatPanel({
 				toast.dismiss(toastId);
 				toast.error(t("chat.navigatingFailed", { message: err?.message ?? "unknown" }));
 				appStore.set(navigatingEntryAtomFamily(agentId), null);
-				pendingScrollToRef.current = null;
+				pendingScrollToIndexRef.current = null;
 			}
 		},
 		[pendingBranchEntryId, pendingConfirm, input, onSend, agentId, t],
@@ -669,35 +701,23 @@ const ChatPanel = memo(function ChatPanel({
 					</div>
 				</div>
 			) : (
-				<StickToBottom
+				<div className="h-0 min-h-0 flex-1 relative">
+				<Virtuoso
 					key={agentId}
-					initial="instant"
-					resize="smooth"
-					// h-0 + flex-1 is the standard Tailwind flex-column pattern:
-					// the inner <StickToBottom.Content> is styled with
-					// `height: 100%` by the library, and that percentage only
-					// resolves to a real pixel value when the parent has an
-					// *explicit* height (flex-1 alone isn't enough — the
-					// browser computes it but treats the box as indefinite
-					// for child percentage resolution). h-0 + flex-1 lets
-					// flex grow the box to the available space *and* gives
-					// the child a concrete parent height to resolve against.
-					// overflow-hidden clips the library's transform-translated
-					// content to the box. min-h-0 stops long messages from
-					// inflating the flex item past its allocation.
-					className="relative h-0 min-h-0 flex-1 overflow-hidden"
-				>
-					<StickToBottom.Content className="flex flex-col gap-5 px-5 py-2.5">
-						{displayMessages.map((msg) => {
-							// v0.4 — action strip aligned with pi SDK:
-							//  Branch from here (/tree) → any message
-							//  Fork to new chat (/fork)  → user messages only (matches getUserMessagesForForking)
-							const showActions = msg.role === "assistant" || msg.role === "user";
-							const isActionBusy = isBusy || navigatingEntry !== null || forkingEntry !== null;
-							const actionDisabledReason = isActionBusy ? t("chat.stopFirstToNavigate") : undefined;
-							return (
+					ref={virtuosoRef}
+					style={{ height: "100%" }}
+					totalCount={displayMessages.length}
+					followOutput="smooth"
+					atBottomStateChange={setIsAtBottom}
+					itemContent={(index) => {
+						const msg = displayMessages[index];
+						if (!msg) return null;
+						const showActions = msg.role === "assistant" || msg.role === "user";
+						const isActionBusy = isBusy || navigatingEntry !== null || forkingEntry !== null;
+						const actionDisabledReason = isActionBusy ? t("chat.stopFirstToNavigate") : undefined;
+						return (
+							<div className="px-5 py-2.5">
 								<div
-									key={msg.id}
 									data-message-id={msg.id}
 									className={cn(
 										"group/message flex flex-col",
@@ -722,41 +742,27 @@ const ChatPanel = memo(function ChatPanel({
 													: "ml-10 mr-4 max-w-[92%]",
 											)}
 										>
-											{/* Branch from here — all messages */}
-											<Button
-												variant="ghost"
-												size="icon-xs"
+											<Button variant="ghost" size="icon-xs"
 												disabled={isActionBusy}
 												onClick={() => handleBranchFromHere(msg.id)}
 												title={actionDisabledReason || t("chat.branchFromHere")}
-												aria-label={t("chat.branchFromHere")}
-											>
+												aria-label={t("chat.branchFromHere")}>
 												<Undo2 className="size-3.5" />
 											</Button>
-
-											{/* Fork to new chat — user messages only */}
 											{msg.role === "user" && (
-												<Button
-													variant="ghost"
-													size="icon-xs"
+												<Button variant="ghost" size="icon-xs"
 													disabled={isActionBusy}
 													onClick={() => handleForkToNewChat(msg.id)}
 													title={actionDisabledReason || t("chat.forkToNewChat")}
-													aria-label={t("chat.forkToNewChat")}
-												>
+													aria-label={t("chat.forkToNewChat")}>
 													<GitBranch className="size-3.5" />
 												</Button>
 											)}
-
-											{/* Copy — assistant messages only */}
 											{msg.role === "assistant" && (
-												<Button
-													variant="ghost"
-													size="icon-xs"
+												<Button variant="ghost" size="icon-xs"
 													onClick={() => handleCopyMessage(msg.id)}
 													title={t("chat.copyMessage")}
-													aria-label={t("chat.copyMessage")}
-												>
+													aria-label={t("chat.copyMessage")}>
 													{copiedEntryId === msg.id ? (
 														<Check className="size-3.5" />
 													) : (
@@ -764,8 +770,6 @@ const ChatPanel = memo(function ChatPanel({
 													)}
 												</Button>
 											)}
-
-											{/* Token usage — assistant messages only */}
 											{msg.role === "assistant" && msg.usage && msg.usage.totalTokens > 0 && (
 												<span className="ml-2 font-mono text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
 													{fmtUsage(msg)}
@@ -774,17 +778,12 @@ const ChatPanel = memo(function ChatPanel({
 										</div>
 									) : null}
 								</div>
-							);
-						})}
-					</StickToBottom.Content>
-					{/* Floating scroll-to-bottom button — appears when the user
-					    scrolls up to read history. useStickToBottomContext drives
-					    isAtBottom off the user's actual scroll position; the
-					    library also handles "escape from lock" so a brand-new
-					    streaming message won't yank the user back down once
-					    they've intentionally scrolled away. */}
-					<ScrollToBottomButton />
-				</StickToBottom>
+							</div>
+						);
+					}}
+				/>
+				<ScrollToBottomButton isAtBottom={isAtBottom} virtuosoRef={virtuosoRef} />
+				</div>
 			)}
 			{/* Queue drawer — slides up when the SDK's queue is non-empty.
 			    The list comes from the `queue` prop (driven by
@@ -953,31 +952,26 @@ const ChatPanel = memo(function ChatPanel({
 /**
  * Floating scroll-to-bottom affordance.
  *
- * Lives INSIDE <StickToBottom> so it can call useStickToBottomContext.
- * The library auto-hides this when the user is at the bottom and shows
- * it when they scroll up (see StickToBottom's escapedFromLock mechanic).
- *
- * Positioning: absolute bottom-4 right-4, on top of the message area,
- * matching the original Virtuoso-era placement so the visual is unchanged.
+ * Receives `isAtBottom` and `virtuosoRef` from the parent ChatPanel,
+ * which reads `isAtBottom` from Virtuoso's `atBottomStateChange` prop.
+ * The button is hidden at the bottom and scrolls to the last item on click.
  *
  * Exported for unit testing — the only branchable logic is the
  * isAtBottom → null-vs-render decision.
  */
-export function ScrollToBottomButton() {
-	const { isAtBottom, scrollToBottom } = useStickToBottomContext();
-	const setAtBottom = useSetAtom(activeChatAtBottomAtom);
+interface ScrollToBottomButtonProps {
+	isAtBottom: boolean;
+	virtuosoRef: React.RefObject<VirtuosoHandle | null>;
+}
+
+export function ScrollToBottomButton({ isAtBottom, virtuosoRef }: ScrollToBottomButtonProps) {
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const runningAgents = useAtomValue(runningAgentsAtom);
 	const isAgentRunning = activeAgentId ? runningAgents.has(activeAgentId) : false;
 	const wasAtBottomRef = useRef(isAtBottom);
 
-	useEffect(() => {
-		setAtBottom(isAtBottom);
-	}, [isAtBottom, setAtBottom]);
-
 	// Clear the "recently completed" flag when the user scrolls back to
-	// bottom — they've seen the latest output. Without this, scrolling
-	// back up after acknowledging would re-show the green border.
+	// bottom — they've seen the latest output.
 	useEffect(() => {
 		const justLandedAtBottom = isAtBottom && !wasAtBottomRef.current;
 		wasAtBottomRef.current = isAtBottom;
@@ -998,7 +992,7 @@ export function ScrollToBottomButton() {
 	return (
 		<button
 			type="button"
-			onClick={() => scrollToBottom()}
+			onClick={() => virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" })}
 			aria-label="Scroll to bottom"
 			title="Scroll to bottom"
 			className={cn(

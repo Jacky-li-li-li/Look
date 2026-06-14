@@ -272,6 +272,26 @@ app.whenReady().then(async () => {
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
+			if (mainWindow && agentManager) {
+				registerIpcHandlers(agentManager, mainWindow);
+				const allProjects = agentManager.listProjects();
+				const activeProject = agentManager.getActiveProject();
+				mainWindow.webContents.send("look:event", {
+					type: "project:list" as const,
+					projects: allProjects,
+					activeProjectId: activeProject?.id ?? null,
+				});
+				if (activeProject) {
+					const snapshot = agentManager.listAgentsWithHistory();
+					if (snapshot.agents.length > 0) {
+						mainWindow.webContents.send("look:event", {
+							type: "agent:list" as const,
+							agentId: "",
+							agents: snapshot.agents,
+						});
+					}
+				}
+			}
 		}
 	});
 });

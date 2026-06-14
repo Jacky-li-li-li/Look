@@ -70,7 +70,9 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 		<Dialog
 			open={open}
 			onOpenChange={(o) => {
-				if (!o) onDeny();
+				// Esc / outside-click dismiss: keep the dialog open rather than
+				// silently denying. Only explicit button clicks decide.
+				if (!o) return;
 			}}
 		>
 			<DialogContent className="max-w-md">
