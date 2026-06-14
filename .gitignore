@@ -11,3 +11,4 @@ release/
 node_modules/
 .env
 dist/
+.alma-snapshots

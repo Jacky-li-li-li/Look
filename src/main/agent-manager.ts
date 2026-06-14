@@ -37,7 +37,6 @@ import {
 import { convertPiMessage } from "./shared/message-convert.js";
 import type {
 	AgentInfo,
-	AgentRole,
 	AgentStatus,
 	ContextUsageInfo,
 	ForkedSessionResult,
@@ -45,8 +44,6 @@ import type {
 	NavigateTreeResult,
 	PermissionMode,
 	PiMessage,
-	PiTextBlock,
-	PiThinkingBlock,
 	PiToolCallBlock,
 	ProjectInfo,
 	SessionForkPoint,
@@ -191,6 +188,8 @@ export class AgentManager {
 	private lastContextTokens = new Map<string, number>();
 	private firstUserMessage = new Map<string, string>();
 	private titleInFlight = new Set<string>();
+	private messageUpdateBuffers = new Map<string, any>();
+	private messageUpdateFlushTimer: NodeJS.Timeout | null = null;
 	private agentsIndexPath: string;
 	private projectsIndexPath: string;
 
@@ -820,17 +819,18 @@ export class AgentManager {
 		maxTokens: number;
 		cost: { input: number; output: number };
 	}> {
-		return this.modelRegistry.getAvailable()
+		return this.modelRegistry
+			.getAvailable()
 			.filter((m) => this.authStorage.has(m.provider))
 			.map((m) => ({
-			provider: m.provider,
-			id: m.id,
-			name: m.name ?? m.id,
-			reasoning: m.reasoning ?? false,
-			contextWindow: m.contextWindow ?? 128000,
-			maxTokens: m.maxTokens ?? 16384,
-			cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
-		}));
+				provider: m.provider,
+				id: m.id,
+				name: m.name ?? m.id,
+				reasoning: m.reasoning ?? false,
+				contextWindow: m.contextWindow ?? 128000,
+				maxTokens: m.maxTokens ?? 16384,
+				cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
+			}));
 	}
 
 	/** First user-configured model key as `provider/id`, or null. */
@@ -1241,10 +1241,12 @@ export class AgentManager {
 			id: uuidv4(),
 			agentId: id,
 			role: "system",
-			contentBlocks: [{
-				type: "text",
-				text: `"${agentName}" started. Model: ${resolvedId}, Thinking: ${thinkingLevel}${fallbackNote}${modelWarn}`,
-			}],
+			contentBlocks: [
+				{
+					type: "text",
+					text: `"${agentName}" started. Model: ${resolvedId}, Thinking: ${thinkingLevel}${fallbackNote}${modelWarn}`,
+				},
+			],
 			timestamp: Date.now(),
 		});
 
@@ -1291,6 +1293,8 @@ export class AgentManager {
 		this.agents.delete(agentId);
 		this.agentUsage.delete(agentId);
 		this.lastContextTokens.delete(agentId);
+		this.firstUserMessage.delete(agentId);
+		this.messageUpdateBuffers.delete(agentId);
 		this.saveIndex();
 		this.emit({ type: "agent:destroyed", agentId });
 		this.emitAgentList();
@@ -1617,6 +1621,14 @@ export class AgentManager {
 		// NOT also synthesize a message_start from addMessage (that
 		// would race with the SDK's real event and break id
 		// correlation in the UI).
+
+		// Batch high-frequency message_update events at ~16ms to avoid
+		// IPC flooding the renderer on every token delta.
+		if (event.type === "message_update") {
+			this.bufferMessageUpdate(agentId, event);
+			return;
+		}
+		this.flushMessageUpdates();
 		this.emit(this.toRendererEvent(agentId, event));
 	}
 
@@ -1625,6 +1637,25 @@ export class AgentManager {
 		// Pass pi's payload fields through unchanged; just rewrite `type`
 		// and inject `agentId` so the renderer can correlate.
 		return { ...event, type: `agent:${event.type}`, agentId };
+	}
+
+	/** Buffer high-frequency message_update events and flush at 16ms. */
+	private bufferMessageUpdate(agentId: string, event: any): void {
+		this.messageUpdateBuffers.set(agentId, event);
+		if (!this.messageUpdateFlushTimer) {
+			this.messageUpdateFlushTimer = setTimeout(() => this.flushMessageUpdates(), 16);
+		}
+	}
+
+	private flushMessageUpdates(): void {
+		if (this.messageUpdateFlushTimer) {
+			clearTimeout(this.messageUpdateFlushTimer);
+			this.messageUpdateFlushTimer = null;
+		}
+		for (const [agentId, event] of this.messageUpdateBuffers) {
+			this.emit(this.toRendererEvent(agentId, event));
+		}
+		this.messageUpdateBuffers.clear();
 	}
 
 	/**
@@ -1677,57 +1708,6 @@ export class AgentManager {
 				// can't observe it directly). Sync the mirror and
 				// tell the renderer the tree shape may have changed.
 				this.syncLeafFromSession(agentId);
-				break;
-			}
-			case "message_update": {
-				// Mirror pi's deltas into the local message so the next
-				// message_end has a complete record. We DO NOT emit a
-				// separate text-delta event — the renderer reads from
-				// message_update's assistantMessageEvent directly.
-				const evt = event.assistantMessageEvent;
-				if (!evt) break;
-				const sm = [...m.messages].reverse().find((x) => x.isStreaming);
-				if (!sm) break;
-				if (evt.type === "text_delta") {
-					let block = [...sm.contentBlocks]
-						.reverse()
-						.find((b) => b.type === "text" && (b as PiTextBlock).active === true) as PiTextBlock | undefined;
-					if (!block) {
-						block = { type: "text", text: "", active: true };
-						sm.contentBlocks.push(block);
-					}
-					block.text += evt.delta;
-				} else if (evt.type === "thinking_delta") {
-					let block = [...sm.contentBlocks]
-						.reverse()
-						.find((b) => b.type === "thinking" && (b as PiThinkingBlock).active === true) as
-						| PiThinkingBlock
-						| undefined;
-					if (!block) {
-						block = { type: "thinking", thinking: "", active: true };
-						sm.contentBlocks.push(block);
-					}
-					block.thinking += evt.delta;
-				} else if (evt.type === "text_end") {
-					for (const b of sm.contentBlocks)
-						if (b.type === "text" && (b as PiTextBlock).active) (b as PiTextBlock).active = false;
-				} else if (evt.type === "thinking_end") {
-					for (const b of sm.contentBlocks)
-						if (b.type === "thinking" && (b as PiThinkingBlock).active) (b as PiThinkingBlock).active = false;
-				} else if (evt.type === "toolcall_end") {
-					const tc = (evt as any).toolCall;
-					if (tc) {
-						sm.contentBlocks.push({
-							type: "toolCall",
-							id: tc.id ?? "",
-							name: tc.name ?? "unknown",
-							arguments: tc.arguments ?? {},
-							status: "pending",
-							result: "",
-							isError: false,
-						});
-					}
-				}
 				break;
 			}
 			case "message_end": {

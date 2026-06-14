@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { AgentManager } from "./agent-manager.js";
 import { registerIpcHandlers } from "./ipc-handlers.js";
+import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,7 +26,7 @@ if (isDev) {
 
 // Disable GPU / sandbox when running in a sandboxed/container environment
 // without hardware acceleration (e.g. Trae sandbox, CI, Docker)
-if (process.env.SANDBOX_GPU_WORKAROUND !== "0") {
+if (process.env.SANDBOX_GPU_WORKAROUND === "1") {
 	app.commandLine.appendSwitch("no-sandbox");
 	app.commandLine.appendSwitch("disable-gpu-sandbox");
 	app.commandLine.appendSwitch("in-process-gpu");
@@ -120,13 +121,36 @@ function setupCsp(): void {
 	// which would be blocked by strict CSP. Skip CSP entirely on localhost.
 	if (isDev) return;
 
+	// The renderer's Supabase client needs to reach its project origin.
+	// Parse the configured URL at runtime; fall back to the standard
+	// Supabase domain wildcard if the env var isn't visible in main.
+	const supabaseOrigin = (() => {
+		const url = process.env.VITE_SUPABASE_URL;
+		if (!url) return null;
+		try {
+			return new URL(url).origin;
+		} catch {
+			return null;
+		}
+	})();
+
+	const connectSrc = [
+		"'self'",
+		"http://localhost:*",
+		"http://127.0.0.1:*",
+		"ws://localhost:*",
+		"ws://127.0.0.1:*",
+		"https://*.supabase.co",
+		...(supabaseOrigin ? [supabaseOrigin] : []),
+	].join(" ");
+
 	const csp = [
 		`default-src 'self'`,
 		`script-src 'self'`,
 		`style-src 'self' 'unsafe-inline'`,
 		`img-src 'self' data: blob: file: https:`,
 		`font-src 'self' data:`,
-		`connect-src 'self' https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*`,
+		`connect-src ${connectSrc}`,
 		`media-src 'self' data: blob: file:`,
 		`frame-src 'self' data: blob:`,
 		`worker-src 'self' blob:`,
@@ -178,6 +202,8 @@ function createWindow(): void {
 // ============================================================
 
 async function initAgentManager(): Promise<void> {
+	loadShellEnv();
+
 	agentManager = new AgentManager();
 
 	// Load projects first, then restore agents

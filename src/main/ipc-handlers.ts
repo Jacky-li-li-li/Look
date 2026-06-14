@@ -4,49 +4,23 @@
 // ============================================================
 
 import { type BrowserWindow, dialog, ipcMain } from "electron";
-import path from "node:path";
 import type { AgentManager } from "./agent-manager.js";
+import {
+	guardAgentId,
+	guardBoolean,
+	guardEnum,
+	guardObject,
+	guardOptionalBoolean,
+	guardOptionalString,
+	guardPath,
+	guardProvider,
+	guardString,
+	guardStringArray,
+} from "./ipc-guards.js";
 import { getSessionsDir } from "./shared/look-storage.js";
 import type { MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
-
-// ─── IPC input validation ───────────────────────────────────────────
-// Renderer-sourced inputs must be validated at runtime. TypeScript
-// types are compile-time only — a compromised or buggy renderer can
-// send arbitrary shapes. These guards are intentionally minimal: they
-// reject clearly malformed values without becoming a second type system.
-
-const VALID_AGENT_ID = /^[a-zA-Z0-9_-]{6,64}$/;
-const VALID_PROVIDER = /^[a-zA-Z][a-zA-Z0-9_-]{1,63}$/;
-
-function guardAgentId(id: unknown, label: string): string {
-	if (typeof id !== "string" || !VALID_AGENT_ID.test(id)) {
-		throw new Error(`Invalid ${label}: ${JSON.stringify(id)}`);
-	}
-	return id;
-}
-
-function guardPath(p: unknown, label: string): string {
-	if (typeof p !== "string" || p.length === 0 || p.length > 4096) {
-		throw new Error(`Invalid ${label}: ${JSON.stringify(p)}`);
-	}
-	const resolved = path.resolve(p);
-	// Reject attempts to traverse above the home directory
-	if (resolved.length < 2 || resolved.includes("\0")) {
-		throw new Error(`Path traversal rejected: ${JSON.stringify(p)}`);
-	}
-	return p;
-}
-
-function guardProvider(provider: unknown): string {
-	if (typeof provider !== "string" || !VALID_PROVIDER.test(provider)) {
-		throw new Error(`Invalid provider: ${JSON.stringify(provider)}`);
-	}
-	return provider;
-}
-
-// ────────────────────────────────────────────────────────────────────
 
 export function registerIpcHandlers(agentManager: AgentManager, mainWindow: BrowserWindow): void {
 	// Clean up previous registrations to support macOS activate re-creation
@@ -71,7 +45,11 @@ export function registerIpcHandlers(agentManager: AgentManager, mainWindow: Brow
 
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
-		return handleRendererInvoke(data, agentManager, mainWindow);
+		try {
+			return await handleRendererInvoke(data, agentManager, mainWindow);
+		} catch (err: any) {
+			return { success: false, error: err?.message ?? String(err) };
+		}
 	});
 }
 
@@ -91,19 +69,22 @@ async function handleRendererInvoke(
 		// === Agent messaging ===
 		case "agent:send-message": {
 			const _agentId = guardAgentId(data.agentId, "agentId");
-				await agentManager.sendMessage(_agentId, data.message);
+			guardString(data.message, "message");
+			guardOptionalString(data.targetAgentId, "targetAgentId");
+			await agentManager.sendMessage(_agentId, data.message);
 			return { success: true };
 		}
 
 		// === Agent lifecycle ===
 		case "agent:create": {
+			guardOptionalString(data.name, "name");
 			const id = await agentManager.createAgent(data.name);
 			return { success: true, agentId: id };
 		}
 
 		case "agent:destroy": {
 			const _agentId = guardAgentId(data.agentId, "agentId");
-				await agentManager.destroyAgent(_agentId);
+			await agentManager.destroyAgent(_agentId);
 			return { success: true };
 		}
 
@@ -113,14 +94,17 @@ async function handleRendererInvoke(
 		// to "idle" via the SDK's own event stream — we don't set
 		// status here. Safe to call when not streaming (no-op).
 		case "agent:abort": {
-			await agentManager.abortAgent(data.agentId);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			await agentManager.abortAgent(_agentId);
 			return { success: true };
 		}
 
 		// === Model switching ===
 		case "agent:switch-model": {
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			guardString(data.model, "model");
 			try {
-				await agentManager.setModel(data.agentId, data.model);
+				await agentManager.setModel(_agentId, data.model);
 				return { success: true };
 			} catch (e: any) {
 				return { success: false, error: e?.message ?? "Failed to switch model" };
@@ -129,7 +113,9 @@ async function handleRendererInvoke(
 
 		// === Thinking level ===
 		case "agent:update-thinking": {
-			agentManager.setThinkingLevel(data.agentId, data.level as ThinkingLevel);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const _level = guardEnum(data.level, "level", ["off", "minimal", "low", "medium", "high", "xhigh"] as const);
+			agentManager.setThinkingLevel(_agentId, _level as ThinkingLevel);
 			return { success: true };
 		}
 
@@ -158,7 +144,8 @@ async function handleRendererInvoke(
 
 		// === Agent history (pull messages for an agent, on demand) ===
 		case "agent:get-history": {
-			const msgs = agentManager.getMessages(data.agentId);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const msgs = agentManager.getMessages(_agentId);
 			return { success: true, messages: msgs };
 		}
 
@@ -169,24 +156,29 @@ async function handleRendererInvoke(
 		}
 
 		case "settings:get-api-key": {
-			const key = agentManager.getApiKey(data.provider);
+			const _provider = guardProvider(data.provider);
+			const key = agentManager.getApiKey(_provider);
 			return { success: true, key: key ?? null };
 		}
 
 		case "settings:set-api-key": {
 			const _provider = guardProvider(data.provider);
-				agentManager.setApiKey(_provider, data.key);
+			guardString(data.key, "key");
+			agentManager.setApiKey(_provider, data.key);
 			const providers = await agentManager.getProviderSettings();
 			return { success: true, providers };
 		}
 
 		case "settings:test-api-key": {
-			const result = await agentManager.testApiKey(data.provider, data.key);
+			const _provider = guardProvider(data.provider);
+			guardString(data.key, "key");
+			const result = await agentManager.testApiKey(_provider, data.key);
 			return { success: true, result };
 		}
 
 		case "settings:test-env-key": {
-			const result = await agentManager.testEnvKey(data.provider);
+			const _provider = guardProvider(data.provider);
+			const result = await agentManager.testEnvKey(_provider);
 			return { success: true, result };
 		}
 
@@ -195,8 +187,34 @@ async function handleRendererInvoke(
 		}
 
 		case "settings:general:set": {
-			const settings = await agentManager.updateGeneralSettings(data.settings ?? {});
-			return { success: true, settings };
+			const settings = guardObject(data.settings, "settings");
+			if ("language" in settings) {
+				guardEnum(settings.language, "settings.language", ["en", "zh", "ja"] as const);
+			}
+			if ("defaultThinkingLevel" in settings) {
+				guardEnum(settings.defaultThinkingLevel, "settings.defaultThinkingLevel", [
+					"off",
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh",
+				] as const);
+			}
+			if ("autoCollapse" in settings) {
+				guardBoolean(settings.autoCollapse, "settings.autoCollapse");
+			}
+			if ("compactionEnabled" in settings) {
+				guardBoolean(settings.compactionEnabled, "settings.compactionEnabled");
+			}
+			if ("preferredModel" in settings && settings.preferredModel !== null) {
+				guardString(settings.preferredModel, "settings.preferredModel");
+			}
+			if ("chatSystemPrompt" in settings) {
+				guardString(settings.chatSystemPrompt, "settings.chatSystemPrompt");
+			}
+			const updated = await agentManager.updateGeneralSettings(data.settings ?? {});
+			return { success: true, settings: updated };
 		}
 
 		case "settings:general:reset": {
@@ -205,17 +223,21 @@ async function handleRendererInvoke(
 
 		// === Context usage & compression ===
 		case "context:usage": {
-			const usage = agentManager.getContextUsage(data.agentId);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const usage = agentManager.getContextUsage(_agentId);
 			return { success: true, usage };
 		}
 
 		case "session:compress": {
-			await agentManager.compressSession(data.agentId);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			await agentManager.compressSession(_agentId);
 			return { success: true };
 		}
 
 		case "agent:rename": {
-			agentManager.renameAgent(data.agentId, data.name);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			guardOptionalString(data.name, "name");
+			agentManager.renameAgent(_agentId, data.name);
 			return { success: true };
 		}
 
@@ -225,17 +247,13 @@ async function handleRendererInvoke(
 			// resolve the matching pending ask (if any). The `tool_call`
 			// extension hook is awaiting on this resolution — pi's tool
 			// execution is suspended until we resolve.
-			const action = (data as any).action as "allow" | "deny" | "edit";
+			const action = guardEnum(data.action, "action", ["allow", "deny", "edit"] as const);
+			const requestId = guardString(data.requestId, "requestId");
 			const askService = agentManager.getPermissionAsk();
-			// We need the requestId; in the new payload it's sent as
-			// requestId at top-level for backwards compat with the
-			// simple {requestId, allowed} shape from the v1 dialog.
-			const requestId = (data as any).requestId;
-			if (!requestId) return { success: false, error: "Missing requestId" };
 			if (action === "deny") {
-				askService.resolve(requestId, { action: "deny", reason: (data as any).reason ?? "Denied by user" });
+				askService.resolve(requestId, { action: "deny", reason: data.reason ?? "Denied by user" });
 			} else if (action === "edit") {
-				askService.resolve(requestId, { action: "edit", args: (data as any).args ?? {} });
+				askService.resolve(requestId, { action: "edit", args: data.args ?? {} });
 			} else {
 				askService.resolve(requestId, { action: "allow" });
 			}
@@ -244,8 +262,10 @@ async function handleRendererInvoke(
 		}
 
 		case "permission:set-mode": {
-			agentManager.setPermissionMode(data.agentId, data.mode);
-			return { success: true, mode: data.mode };
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const _mode = guardEnum(data.mode, "mode", ["ask", "plan", "allow"] as const);
+			agentManager.setPermissionMode(_agentId, _mode);
+			return { success: true, mode: _mode };
 		}
 
 		// === v0.3 Skills ===
@@ -256,10 +276,14 @@ async function handleRendererInvoke(
 		}
 
 		case "skills:invoke": {
-			return await agentManager.invokeSkill(data.agentId, data.skillName, data.args);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			guardString(data.skillName, "skillName");
+			guardOptionalString(data.args, "args");
+			return await agentManager.invokeSkill(_agentId, data.skillName, data.args);
 		}
 
 		case "skills:import-paths": {
+			guardStringArray(data.paths, "paths");
 			return await agentManager.importSkillPaths(data.paths);
 		}
 
@@ -288,8 +312,9 @@ async function handleRendererInvoke(
 
 		// === OS shell ===
 		case "shell:reveal-in-finder": {
+			const _path = guardPath(data.path, "path");
 			const { shell } = await import("electron");
-			shell.showItemInFolder(data.path);
+			shell.showItemInFolder(_path);
 			return { success: true };
 		}
 
@@ -312,7 +337,8 @@ async function handleRendererInvoke(
 
 		case "project:create": {
 			const _cwd = guardPath(data.cwd, "cwd");
-				const result = agentManager.createProject(_cwd, data.name);
+			guardOptionalString(data.name, "name");
+			const result = agentManager.createProject(_cwd, data.name);
 			return {
 				success: true,
 				project: result.project,
@@ -321,6 +347,7 @@ async function handleRendererInvoke(
 		}
 
 		case "project:switch": {
+			guardString(data.projectId, "projectId");
 			agentManager.setActiveProject(data.projectId);
 			// After switching, return the agents for this project
 			const snapshot = agentManager.listAgentsWithHistory();
@@ -328,11 +355,14 @@ async function handleRendererInvoke(
 		}
 
 		case "project:delete": {
+			guardString(data.projectId, "projectId");
 			await agentManager.deleteProject(data.projectId);
 			return { success: true };
 		}
 
 		case "project:confirm-delete-response": {
+			guardString(data.projectId, "projectId");
+			guardBoolean(data.confirmed, "confirmed");
 			if (data.confirmed) {
 				await (agentManager as any).executeDeleteProject(data.projectId);
 			}
@@ -350,18 +380,25 @@ async function handleRendererInvoke(
 		// createForkedSession / setEntryLabel). The renderer
 		// drives UX around these primitives; main is a thin facade.
 		case "agent:get-session-tree": {
-			const tree = agentManager.getSessionTree(data.agentId);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const tree = agentManager.getSessionTree(_agentId);
 			return { success: true, tree };
 		}
 
 		case "agent:get-fork-points": {
-			const points = agentManager.getForkPoints(data.agentId);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const points = agentManager.getForkPoints(_agentId);
 			return { success: true, points };
 		}
 
 		case "agent:navigate-tree": {
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const _entryId = guardString(data.entryId, "entryId");
+			guardOptionalBoolean(data.summarize, "summarize");
+			guardOptionalString(data.customInstructions, "customInstructions");
+			guardOptionalString(data.label, "label");
 			try {
-				const result = await agentManager.navigateTreeSession(data.agentId, data.entryId, {
+				const result = await agentManager.navigateTreeSession(_agentId, _entryId, {
 					summarize: data.summarize,
 					customInstructions: data.customInstructions,
 					label: data.label,
@@ -373,8 +410,11 @@ async function handleRendererInvoke(
 		}
 
 		case "agent:create-fork": {
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const _entryId = guardString(data.entryId, "entryId");
+			guardOptionalString(data.name, "name");
 			try {
-				const result = await agentManager.createForkedSession(data.agentId, data.entryId, {
+				const result = await agentManager.createForkedSession(_agentId, _entryId, {
 					name: data.name,
 				});
 				return { success: true, ...result };
@@ -384,7 +424,12 @@ async function handleRendererInvoke(
 		}
 
 		case "agent:set-entry-label": {
-			agentManager.setEntryLabel(data.agentId, data.entryId, data.label);
+			const _agentId = guardAgentId(data.agentId, "agentId");
+			const _entryId = guardString(data.entryId, "entryId");
+			if (data.label !== null) {
+				guardString(data.label, "label");
+			}
+			agentManager.setEntryLabel(_agentId, _entryId, data.label);
 			return { success: true };
 		}
 
@@ -410,6 +455,7 @@ async function handleRendererInvoke(
 		}
 
 		case "user-profile:update": {
+			guardObject(data.patch, "patch");
 			const profile = updateUserProfile(data.patch);
 			return { success: true, profile };
 		}

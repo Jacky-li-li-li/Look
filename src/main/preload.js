@@ -1,9 +1,9 @@
 // ============================================================
 // Preload Script — contextBridge API (CommonJS for Electron sandbox)
 //
-// Exposes the Look IPC surface as `window.look` (canonical). The
-// legacy `window.harness` name is also exposed as a non-breaking
-// alias so older code paths keep working until they migrate.
+// Exposes the Look IPC surface as `window.look` (canonical).
+// No legacy `window.harness` alias remains; all renderer code
+// must consume the API through `window.look`.
 // ============================================================
 
 const { contextBridge, ipcRenderer } = require("electron");

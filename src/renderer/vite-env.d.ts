@@ -3,11 +3,8 @@
 /**
  * The Look IPC surface injected by preload.js.
  *
- * Renamed from `HarnessAPI` in the c-task: the project's canonical
- * name is "Look" (the product), and the previous "harness" name was
- * an internal codename that leaked into the public API. The
- * `HarnessAPI` alias below is kept for back-compat with any
- * external code still consuming `window.harness`.
+ * `window.look` is the canonical renderer API. The previous
+ * `HarnessAPI` / `window.harness` codename has been removed.
  */
 interface LookAPI {
 	/** User home directory, injected by preload. Used to shorten absolute
@@ -81,9 +78,6 @@ interface SkillDiagnostic {
 	path?: string;
 }
 
-/** @deprecated use `LookAPI` instead — kept for back-compat with `window.harness`. */
-type HarnessAPI = LookAPI;
-
 interface GeneralSettings {
 	language: "en" | "zh" | "ja";
 	defaultThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -102,8 +96,6 @@ declare global {
 
 	interface Window {
 		look: LookAPI;
-		/** @deprecated use `window.look` instead. */
-		harness: HarnessAPI;
 	}
 }
 
