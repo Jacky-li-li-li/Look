@@ -2,12 +2,10 @@
 // ModelSelector — Centered dialog for picking a model (Ink Wash)
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@shared/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import type { AvailableModel } from "@shared/types";
-import { ArrowRight, Check, ChevronDown, Cpu, Key, Terminal } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Cpu } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -23,47 +21,24 @@ interface ModelSelectorProps {
 	onRequestApiKeys?: () => void;
 }
 
-type ProviderSource = "api" | "env";
-
-interface ProviderLite {
-	id: string;
-	hasKey: boolean;
-	authSource?: string;
-}
-
 export default function ModelSelector({ agentId, currentModel, onModelChanged, onRequestApiKeys }: ModelSelectorProps) {
 	const { t } = useTranslation();
 	const [models, setModels] = useState<AvailableModel[]>([]);
-	const [providerSource, setProviderSource] = useState<Record<string, ProviderSource>>({});
 	const [switching, setSwitching] = useState(false);
 	const [open, setOpen] = useState(false);
 	const latestPropsRef = useRef({ currentModel, onModelChanged });
 	latestPropsRef.current = { currentModel, onModelChanged };
 
-	const fetchProvidersAndModels = useCallback(async () => {
+	const fetchModels = useCallback(async () => {
 		if (!api) return;
-		// Use getSettings (not getProviders) because it returns the
-		// SDK authSource fields the tab-splitter needs.
-		const [m, s] = await Promise.all([api.getModels(), api.getSettings()]);
+		const m = await api.getModels();
 		if (m?.success) setModels(m.models);
-		if (s?.success) {
-			const map: Record<string, ProviderSource> = {};
-			for (const prov of s.providers as ProviderLite[]) {
-				if (!prov.hasKey) continue;
-				if (!prov.authSource || prov.authSource === "stored" || prov.authSource === "fallback") {
-					map[prov.id] = "api";
-				} else {
-					map[prov.id] = "env";
-				}
-			}
-			setProviderSource(map);
-		}
 	}, []);
 
 	// Fetch on mount
 	useEffect(() => {
-		fetchProvidersAndModels();
-	}, [fetchProvidersAndModels]);
+		fetchModels();
+	}, [fetchModels]);
 
 	const handleSwitch = useCallback(
 		async (modelKey: string) => {
@@ -103,9 +78,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 		[agentId, t],
 	);
 
-	const apiModels = models.filter((m) => providerSource[m.provider] === "api");
-	const envModels = models.filter((m) => providerSource[m.provider] === "env");
-
+		
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
 	const label = switching ? "…" : (currentModelObj?.name ?? currentModel?.split("/").pop() ?? t("agent.model"));
 
@@ -114,14 +87,13 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	// would otherwise open to an empty list and the user would think
 	// the dialog is broken. Re-evaluated each time the data refreshes
 	// (key forces remount when the loaded-model count changes).
-	const defaultTab = apiModels.length > 0 ? "api" : "env";
 
 	return (
 		<Dialog
 			open={open}
 			onOpenChange={(o) => {
 				setOpen(o);
-				if (o) fetchProvidersAndModels();
+				if (o) fetchModels();
 			}}
 		>
 			<DialogTrigger asChild>
@@ -134,11 +106,11 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 					/>
 				</Button>
 			</DialogTrigger>
-			<DialogContent className="max-w-xl p-0" showCloseButton>
+			<DialogContent className="max-w-xl p-0 max-h-[85vh]" showCloseButton>
 				<DialogHeader className="px-4 pt-3 pb-0">
 					<DialogTitle className="text-[13px] font-semibold">{t("agent.switchModel")}</DialogTitle>
 				</DialogHeader>
-				<div className="min-h-0">
+				<div className="min-h-0 overflow-y-auto">
 					{models.length === 0 ? (
 						<div className="px-4 py-8">
 							<button
@@ -154,45 +126,9 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 							</button>
 						</div>
 					) : (
-						<Tabs
-							key={`${apiModels.length}-${envModels.length}`}
-							defaultValue={defaultTab}
-							className="flex flex-col"
-						>
-							{/* Underline tabs — matches Sidebar Chat/Orch */}
-							<TabsList className="w-full h-auto rounded-none bg-transparent gap-0 px-3 border-b border-hairline">
-								<TabsTrigger
-									value="api"
-									className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
-								>
-									<Key className="size-4" />
-									{t("agent.apiKeys")}
-									{apiModels.length > 0 && (
-										<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
-											{apiModels.length}
-										</Badge>
-									)}
-								</TabsTrigger>
-								<TabsTrigger
-									value="env"
-									className="flex-1 gap-2 py-2.5 text-[13px] font-medium rounded-none border-b-2 border-transparent text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground transition-colors"
-								>
-									<Terminal className="size-4" />
-									{t("agent.environment")}
-									{envModels.length > 0 && (
-										<Badge variant="secondary" className="ml-auto h-5 min-w-5 px-1.5 text-[10px]">
-											{envModels.length}
-										</Badge>
-									)}
-								</TabsTrigger>
-							</TabsList>
-							<TabsContent value="api" className="h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
-								<ModelList models={apiModels} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
-							</TabsContent>
-							<TabsContent value="env" className="h-80 overflow-y-auto p-2 data-[state=inactive]:hidden">
-								<ModelList models={envModels} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
-							</TabsContent>
-						</Tabs>
+						<div className="p-2">
+							<ModelList models={models} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
+						</div>
 					)}
 				</div>
 			</DialogContent>

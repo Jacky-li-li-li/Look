@@ -86,7 +86,7 @@ interface SettingsDialogProps {
 	defaultTab?: "general" | "api-keys" | "chat-prompt" | "about" | "profile";
 }
 
-const THINKING_LEVELS = ["off", "low", "medium", "high"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 
 type TestVerdict = { verdict: "ok" | "error" | "skipped"; reason?: string } | null;
 
@@ -270,8 +270,7 @@ function SettingsDialogImpl({
 	const [language, setLanguage] = useState("en");
 	const [thinkingLevel, setThinkingLevel] = useState("medium");
 	const [autoCollapse, setAutoCollapse] = useState(true);
-	const [autoCompress, setAutoCompress] = useState(false);
-	const [compressThreshold, setCompressThreshold] = useState(60);
+	const [compactionEnabled, setCompactionEnabled] = useState(true);
 	const [chatSystemPrompt, setChatSystemPrompt] = useState("");
 	const [chatAgentName, setChatAgentName] = useState("");
 	const [dirty, setDirty] = useState(false);
@@ -290,8 +289,7 @@ function SettingsDialogImpl({
 					if (r.settings.language) setLanguage(r.settings.language);
 					if (r.settings.defaultThinkingLevel) setThinkingLevel(r.settings.defaultThinkingLevel);
 					if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
-					if (r.settings.autoCompress !== undefined) setAutoCompress(r.settings.autoCompress);
-					if (r.settings.compressThreshold !== undefined) setCompressThreshold(r.settings.compressThreshold);
+					if (r.settings.compactionEnabled !== undefined) setCompactionEnabled(r.settings.compactionEnabled);
 					if (r.settings.chatSystemPrompt !== undefined) setChatSystemPrompt(r.settings.chatSystemPrompt);
 					if (r.settings.chatAgentName !== undefined) setChatAgentName(r.settings.chatAgentName);
 					setSettingsLoaded(true);
@@ -444,8 +442,8 @@ function SettingsDialogImpl({
 			language,
 			defaultThinkingLevel: thinkingLevel,
 			autoCollapse,
-			autoCompress,
-			compressThreshold,
+			compactionEnabled,
+			
 			chatSystemPrompt,
 			chatAgentName,
 		});
@@ -455,22 +453,16 @@ function SettingsDialogImpl({
 		language,
 		thinkingLevel,
 		autoCollapse,
-		autoCompress,
-		compressThreshold,
+		compactionEnabled,
+		
 		chatSystemPrompt,
 		chatAgentName,
 		onClose,
 		persistSettings,
 	]);
 
-	const storedProviders = providers
-		.filter((p) => !p.authSource || p.authSource === "stored" || p.authSource === "fallback")
-		.sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
-	const envProviders = providers
-		.filter((p) => p.authSource && p.authSource !== "stored" && p.authSource !== "fallback")
-		.sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
-	const storedCount = storedProviders.filter((p) => p.hasKey).length;
-	const envCount = envProviders.filter((p) => p.hasKey).length;
+	const allProviders = [...providers].sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
+	const configuredCount = allProviders.filter((p) => p.hasKey).length;
 
 	const handleResetDefaults = () => {
 		if (api)
@@ -480,8 +472,8 @@ function SettingsDialogImpl({
 					i18n.changeLanguage(r.settings.language ?? "en");
 					setThinkingLevel(r.settings.defaultThinkingLevel ?? "medium");
 					setAutoCollapse(r.settings.autoCollapse ?? true);
-					setAutoCompress(r.settings.autoCompress ?? false);
-					setCompressThreshold(r.settings.compressThreshold ?? 60);
+					setCompactionEnabled(r.settings.compactionEnabled ?? true);
+					;
 					setChatSystemPrompt(r.settings.chatSystemPrompt ?? "");
 					setChatAgentName(r.settings.chatAgentName ?? "");
 				}
@@ -490,7 +482,7 @@ function SettingsDialogImpl({
 		toast.success(t("settings.resetDone"));
 	};
 
-	const configured = providers.filter((p) => p.hasKey).length;
+	const configured = allProviders.filter((p) => p.hasKey).length;
 
 	return (
 		<Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -688,37 +680,12 @@ function SettingsDialogImpl({
 										<Switch
 											id="autocompress"
 											size="sm"
-											checked={autoCompress}
+											checked={compactionEnabled}
 											onCheckedChange={(v) => {
-												setAutoCompress(v);
-												persistSettings({ autoCompress: v });
+												setCompactionEnabled(v);
+												persistSettings({ compactionEnabled: v });
 											}}
 										/>
-									</SettingRow>
-									<SettingRow
-										id="compressThreshold"
-										label={t("settings.compressThreshold")}
-										desc={t("settings.compressThresholdDesc")}
-									>
-										<div className="flex items-center gap-2">
-											<input
-												id="compressThreshold"
-												type="range"
-												min={40}
-												max={95}
-												step={5}
-												value={compressThreshold}
-												onChange={(e) => {
-													const v = Number(e.target.value);
-													setCompressThreshold(v);
-													persistSettings({ compressThreshold: v });
-												}}
-												className="w-20 h-1.5 cursor-pointer accent-foreground appearance-none rounded-full bg-muted-foreground/20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground"
-											/>
-											<span className="w-8 text-right text-[11px] font-mono tabular-nums text-muted-foreground">
-												{compressThreshold}%
-											</span>
-										</div>
 									</SettingRow>
 								</CardContent>
 							</Card>
@@ -770,42 +737,9 @@ function SettingsDialogImpl({
 								</div>
 							</ContentPanel>
 						) : (
-							<ContentPanel className="overflow-hidden p-0">
-								<Tabs defaultValue="api-key" className="flex h-full min-h-0 flex-col">
-									<TabsList className="!flex !h-auto !justify-start sticky top-0 z-10 w-full self-stretch gap-0 rounded-none border-b border-hairline bg-popover/80 px-0 py-0 backdrop-blur">
-										<TabsTrigger
-											value="api-key"
-											className="!h-auto !flex-none !justify-start gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground"
-										>
-											<Key className="size-3.5" />
-											{t("settings.apiKey")}
-											{storedCount > 0 && (
-												<Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px]">
-													{storedCount}
-												</Badge>
-											)}
-										</TabsTrigger>
-										<TabsTrigger
-											value="env"
-											className="!h-auto !flex-none !justify-start gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground"
-										>
-											<Terminal className="size-3.5" />
-											{t("settings.env")}
-											{envCount > 0 && (
-												<Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px]">
-													{envCount}
-												</Badge>
-											)}
-										</TabsTrigger>
-									</TabsList>
-
-									{/* ── Sub-tab: stored API keys (editable) ── */}
-									<TabsContent
-										value="api-key"
-										className="flex-1 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
-									>
+							<ContentPanel className="p-0">
 										<div className="flex flex-col gap-0.5 p-3">
-											{storedProviders.map((p) => {
+											{allProviders.map((p) => {
 												const isEditing = editing === p.id;
 												const ts = testStatus[p.id];
 												return (
@@ -998,116 +932,12 @@ function SettingsDialogImpl({
 													</div>
 												);
 											})}
-											{storedProviders.length === 0 && (
+											{allProviders.length === 0 && (
 												<p className="py-8 text-center text-[12px] text-muted-foreground">
 													{t("settings.setKey")} — No API keys configured.
 												</p>
 											)}
 										</div>
-									</TabsContent>
-
-									{/* ── Sub-tab: env-detected credentials (read-only + Test) ── */}
-									<TabsContent
-										value="env"
-										className="flex-1 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
-									>
-										<div className="flex flex-col gap-0.5 p-3">
-											{envProviders.map((p) => {
-												const ts = envTestStatus[p.id];
-												const src = authSourceLabel(p.authSource ?? "", p.envLabel, t);
-												return (
-													<div
-														key={p.id}
-														className="overflow-hidden rounded-lg border border-transparent bg-muted/40"
-													>
-														<div className="flex items-center justify-between gap-3 px-3 py-2">
-															<div className="min-w-0 flex-1">
-																<div className="flex items-center gap-1 text-[13px] font-medium">
-																	<span className="size-2 shrink-0 rounded-full bg-sky-500" />
-																	<ProviderIcon id={p.id} className="size-4 shrink-0" />
-																	<span
-																		className={cn(
-																			"cursor-pointer transition-colors hover:text-foreground",
-																			(!p.models || p.models.length === 0) && "cursor-default",
-																		)}
-																		onClick={() =>
-																			p.models && p.models.length > 0 && toggleProviderExpand(p.id)
-																		}
-																		role="button"
-																		tabIndex={0}
-																		onKeyDown={(e) => {
-																			if (e.key === "Enter" || e.key === " ")
-																				toggleProviderExpand(p.id);
-																		}}
-																	>
-																		{p.name}
-																	</span>
-																	<Badge
-																		variant="secondary"
-																		className="h-4.5 gap-1 px-1.5 text-[10px]"
-																		title={src.title}
-																	>
-																		{src.label}
-																	</Badge>
-																	<ProviderModelCount provider={p} />
-																	{ts?.verdict === "ok" && (
-																		<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-																			<ShieldCheck className="size-2.5" />
-																			Verified
-																		</span>
-																	)}
-																	{ts?.verdict === "error" && (
-																		<span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
-																			<AlertCircle className="size-2.5" />
-																			Failed
-																		</span>
-																	)}
-																	{ts?.verdict === "skipped" && ts.reason?.includes("复杂认证") && (
-																		<span
-																			className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-																			title={ts.reason}
-																		>
-																			复杂认证
-																		</span>
-																	)}
-																	{ts?.verdict === "skipped" && !ts.reason?.includes("复杂认证") && (
-																		<span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-																			Untested
-																		</span>
-																	)}
-																</div>
-																{(p.envLabel || p.envVar) && (
-																	<code className="mt-0.5 block font-mono text-[10px] text-muted-foreground">
-																		{p.envLabel ?? p.envVar}
-																	</code>
-																)}
-															</div>
-															<div className="flex shrink-0 items-center gap-1">
-																<Button
-																	variant="line"
-																	size="xs"
-																	className="h-7 text-[11px]"
-																	onClick={() => handleTestEnv(p.id)}
-																>
-																	<ShieldCheck data-icon="inline-start" className="size-3" />
-																	{t("settings.testKey")}
-																</Button>
-															</div>
-														</div>
-														{expandedProviders[p.id] && p.models && p.models.length > 0 && (
-															<ModelList models={p.models} t={t} />
-														)}
-													</div>
-												);
-											})}
-											{envProviders.length === 0 && (
-												<p className="py-8 text-center text-[12px] text-muted-foreground">
-													No env credentials detected.
-												</p>
-											)}
-										</div>
-									</TabsContent>
-								</Tabs>
 							</ContentPanel>
 						)}
 					</TabsContent>

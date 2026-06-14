@@ -23,7 +23,7 @@ export type TestResult =
 	| { ok: false; status: number; error: string; skipped?: false }
 	| { skipped: true; reason: string };
 
-const SELF_TEST_PROMPT = "Reply exactly: OK";
+const SELF_TEST_PROMPT = "Hi";
 const SELF_TEST_TIMEOUT_MS = 10_000;
 
 function firstProviderModel(modelRegistry: ModelRegistry, provider: string): Model<Api> | undefined {

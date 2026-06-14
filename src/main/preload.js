@@ -26,8 +26,8 @@ const api = {
   sendMessage: (agentId, message) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message }),
 
-  createAgent: (name, role, model, thinkingLevel) =>
-    ipcRenderer.invoke("look:invoke", { type: "agent:create", name, role, model, thinkingLevel }),
+  createAgent: (name) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:create", name }),
 
   destroyAgent: (agentId) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:destroy", agentId }),
@@ -68,8 +68,6 @@ const api = {
   testEnvKey: (provider) =>
     ipcRenderer.invoke("look:invoke", { type: "settings:test-env-key", provider }),
 
-  getVerifiedEnvProviders: () =>
-    ipcRenderer.invoke("look:invoke", { type: "settings:get-verified-env" }),
 
   setApiKey: (provider, key) =>
     ipcRenderer.invoke("look:invoke", { type: "settings:set-api-key", provider, key }),

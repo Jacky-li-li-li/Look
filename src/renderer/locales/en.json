@@ -10,10 +10,10 @@
 		"reset": "Reset"
 	},
 	"sidebar": {
-		"newAgent": "New Agent",
+		"newChat": "New Chat",
 		"settings": "Settings",
 		"noAgents": "No agents yet.",
-		"clickNewAgent": "Click + New Agent."
+		"clickToStart": "Click + above to start"
 	},
 	"settings": {
 		"title": "Settings",
@@ -34,12 +34,9 @@
 		"autoCollapse": "Auto Collapse",
 		"autoCollapseDesc": "Collapse thinking panel when output starts streaming",
 		"autoCompress": "Auto Compress",
-		"autoCompressDesc": "Automatically compress context when approaching limits",
-		"compressThreshold": "Compress Threshold",
-		"compressThresholdDesc": "Percentage of context window at which compression triggers",
+		"autoCompressDesc": "SDK auto-compacts conversation history when context nears the model window limit (reserves 16K tokens)",
 		"resetDefaults": "Reset to Defaults",
 		"resetDone": "Settings reset to defaults",
-		"env": "Environment",
 		"apiKey": "API Key",
 		"setKey": "Set Key",
 		"keyUpdated": "{{provider}} key updated",
@@ -61,17 +58,9 @@
 		"chatSystemPromptPlaceholder": "Enter a custom system prompt (default: pi SDK coding assistant)"
 	},
 	"agent": {
-		"createTitle": "Create Agent",
-		"createDesc": "Configure a new agent with a role and model.",
-		"namePlaceholder": "Agent name",
-		"role": "Role",
 		"model": "Model",
-		"thinking": "Thinking",
-		"create": "Create",
-		"noModels": "No models available. Add API keys in Settings.",
 		"switchModel": "Switch model",
 		"apiKeys": "API Keys",
-		"environment": "Environment",
 		"noModelsCategory": "No models in this category.",
 		"reasoning": "Reasoning",
 		"modelBase": "base",

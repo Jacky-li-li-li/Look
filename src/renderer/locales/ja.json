@@ -10,10 +10,10 @@
 		"reset": "リセット"
 	},
 	"sidebar": {
-		"newAgent": "新規 Agent",
+		"newChat": "新規チャット",
 		"settings": "設定",
 		"noAgents": "Agent がまだありません。",
-		"clickNewAgent": "+ 新規 Agent をクリック。"
+		"clickToStart": "上部の + をクリックして開始"
 	},
 	"settings": {
 		"title": "設定",
@@ -34,12 +34,9 @@
 		"autoCollapse": "自動折りたたみ",
 		"autoCollapseDesc": "出力のストリーミング開始時に思考パネルを折りたたむ",
 		"autoCompress": "自動圧縮",
-		"autoCompressDesc": "コンテキスト制限に近づいたら自動的に圧縮",
-		"compressThreshold": "圧縮しきい値",
-		"compressThresholdDesc": "圧縮がトリガーされるコンテキストウィンドウの割合",
+		"autoCompressDesc": "コンテキストがモデルウィンドウ制限に近づくと、SDKが自動的に会話履歴を圧縮します（16Kトークン予約）",
 		"resetDefaults": "デフォルトに戻す",
 		"resetDone": "設定をデフォルトに戻しました",
-		"env": "環境変数",
 		"apiKey": "API キー",
 		"setKey": "キーを設定",
 		"keyUpdated": "{{provider}} キーを更新しました",
@@ -58,17 +55,9 @@
 		"chatSystemPromptPlaceholder": "カスタムシステムプロンプトを入力（デフォルト: pi SDK coding assistant）"
 	},
 	"agent": {
-		"createTitle": "Agent を作成",
-		"createDesc": "役割とモデルで新しい Agent を設定します。",
-		"namePlaceholder": "Agent 名",
-		"role": "役割",
 		"model": "モデル",
-		"thinking": "思考",
-		"create": "作成",
-		"noModels": "利用可能なモデルがありません。設定で API キーを追加してください。",
 		"switchModel": "モデルを切り替え",
 		"apiKeys": "API キー",
-		"environment": "環境変数",
 		"noModelsCategory": "このカテゴリにモデルはありません。",
 		"reasoning": "推論",
 		"modelBase": "ベース",

@@ -149,7 +149,7 @@ describe("pi SDK provider alignment", () => {
 		expect(sdkMocks.completeSimple).toHaveBeenCalledTimes(1);
 		const [model, context, options] = sdkMocks.completeSimple.mock.calls[0];
 		expect(model.provider).toBe("openai");
-		expect(context.messages[0].content).toContain("OK");
+		expect(context.messages[0].content).toEqual("Hi");
 		expect(options.apiKey).toBe("sk-candidate");
 	});
 });

@@ -107,8 +107,6 @@ export interface AgentInfo {
 	createdAt: number;
 	/** Cumulative token usage */
 	usage: UsageSnapshot;
-	/** Fallback model chain (provider/model-id) */
-	fallbackModels: string[];
 	/** Per-agent permission mode. Defaults to "ask". */
 	permissionMode: PermissionMode;
 	/** Path to the session JSONL file (~/.look/sessions/...). */
@@ -431,13 +429,7 @@ export type AssistantMessageEventUnion =
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =
 	| { type: "agent:send-message"; agentId: string; message: string; targetAgentId?: string }
-	| {
-			type: "agent:create";
-			name: string;
-			role: AgentRole;
-			thinkingLevel?: ThinkingLevel;
-			model?: string;
-	  }
+	| { type: "agent:create"; name?: string }
 	| { type: "agent:destroy"; agentId: string }
 	| { type: "agent:switch-model"; agentId: string; model: string }
 	| { type: "agent:update-thinking"; agentId: string; level: ThinkingLevel }
@@ -458,7 +450,6 @@ export type RendererToMainEvent =
 	| { type: "settings:set-api-key"; provider: string; key: string }
 	| { type: "settings:test-api-key"; provider: string; key: string }
 	| { type: "settings:test-env-key"; provider: string }
-	| { type: "settings:get-verified-env" }
 	| { type: "settings:general:get" }
 	| { type: "context:usage"; agentId: string }
 	| { type: "session:compress"; agentId: string }
@@ -472,8 +463,7 @@ export type RendererToMainEvent =
 				language: "en" | "zh" | "ja";
 				defaultThinkingLevel: ThinkingLevel;
 				autoCollapse: boolean;
-				autoCompress: boolean;
-				compressThreshold: number;
+				compactionEnabled: boolean;
 				preferredModel: string | null;
 				chatSystemPrompt: string;
 			}>;

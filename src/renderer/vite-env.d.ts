@@ -17,7 +17,7 @@ interface LookAPI {
 	invoke(event: any): Promise<any>;
 	onEvent(callback: (event: any) => void): () => void;
 	sendMessage(agentId: string, message: string): Promise<any>;
-	createAgent(name: string, role: string, model?: string, thinkingLevel?: string): Promise<any>;
+	createAgent(name?: string): Promise<any>;
 	destroyAgent(agentId: string): Promise<any>;
 	getHistory(agentId: string): Promise<any>;
 	getModels(): Promise<any>;
@@ -88,8 +88,7 @@ interface GeneralSettings {
 	language: "en" | "zh" | "ja";
 	defaultThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 	autoCollapse: boolean;
-	autoCompress: boolean;
-	compressThreshold: number;
+	compactionEnabled: boolean;
 	/** Most recent model the user picked in the bottom-bar ModelSelector.
 	 *  Used by quick-create to seed new chat agents with the user's
 	 *  current pick. null = "no preference" (main picks first available). */

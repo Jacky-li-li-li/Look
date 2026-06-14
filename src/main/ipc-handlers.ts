@@ -6,7 +6,7 @@
 import { type BrowserWindow, dialog, ipcMain } from "electron";
 import type { AgentManager } from "./agent-manager.js";
 import { getSessionsDir } from "./shared/look-storage.js";
-import type { AgentRole, MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
+import type { MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 
@@ -50,12 +50,7 @@ async function handleRendererInvoke(
 
 		// === Agent lifecycle ===
 		case "agent:create": {
-			const id = await agentManager.createAgent({
-				name: data.name,
-				role: data.role as AgentRole,
-				model: data.model,
-				thinkingLevel: data.thinkingLevel as ThinkingLevel,
-			});
+			const id = await agentManager.createAgent(data.name);
 			return { success: true, agentId: id };
 		}
 
@@ -144,11 +139,6 @@ async function handleRendererInvoke(
 		case "settings:test-env-key": {
 			const result = await agentManager.testEnvKey(data.provider);
 			return { success: true, result };
-		}
-
-		case "settings:get-verified-env": {
-			const envProviders = await agentManager.getVerifiedEnvProviders();
-			return { success: true, providers: envProviders };
 		}
 
 		case "settings:general:get": {

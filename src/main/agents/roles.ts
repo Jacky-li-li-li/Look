@@ -1,6 +1,6 @@
 // ============================================================
 // Agent Role Definitions
-// Defines default tools, system prompts, model, thinking, fallbacks per role
+// Defines default tools, system prompts, model, thinking per role
 // ============================================================
 
 import type { AgentRole, ThinkingLevel } from "../shared/types.js";
@@ -14,9 +14,6 @@ export interface RoleConfig {
 	 *  first user-configured model at runtime. */
 	defaultModel: string | null;
 	defaultThinkingLevel: ThinkingLevel;
-	/** Fallback models in priority order — tried if primary model fails.
-	 *  Empty for "no role-default fallback" (chat mode). */
-	fallbackModels: string[];
 	/** null = "all built-in tools"; array = explicit subset. */
 	tools: string[] | null;
 	/** Empty string = no role system prompt injected (chat mode). */
@@ -26,7 +23,9 @@ export interface RoleConfig {
 /**
  * Role configurations.
  * defaultModel format: "provider/model-id" (e.g., "anthropic/claude-sonnet-4-20250514")
- * fallbackModels: tried in order when primary fails (rate limit, context overflow, etc.)
+ * Dynamic fallback: `createAgent` builds the fallback chain from all
+ * user-configured models via `getAvailableModelsSync()`, so the role
+ * config itself no longer carries a static fallback chain.
  */
 export const ROLE_CONFIGS: Record<AgentRole, RoleConfig> = {
 	chat: {
@@ -50,7 +49,6 @@ export const ROLE_CONFIGS: Record<AgentRole, RoleConfig> = {
 		description: "通用 agent — 所有内置工具全开，模型由用户在底部选择。",
 		defaultModel: null,
 		defaultThinkingLevel: "medium",
-		fallbackModels: [],
 		tools: null,
 		systemPrompt: `You are a helpful assistant with access to tools.
 
@@ -71,7 +69,6 @@ Response style:
 		description: "Searches and fetches data from social media, web pages, and other sources.",
 		defaultModel: "anthropic/claude-sonnet-4-20250514",
 		defaultThinkingLevel: "low",
-		fallbackModels: ["anthropic/claude-haiku-4-5-20251001", "openai/gpt-4o-mini"],
 		tools: ["read", "bash", "write", "edit", "grep", "find"],
 		systemPrompt: `You are a Data Crawler agent. Your job is to search and fetch data from the web, process URLs, and collect information.`,
 	},
@@ -83,7 +80,6 @@ Response style:
 		description: "Cleans, normalizes, deduplicates, and preprocesses raw data.",
 		defaultModel: "anthropic/claude-haiku-4-5-20251001",
 		defaultThinkingLevel: "off",
-		fallbackModels: ["anthropic/claude-sonnet-4-20250514", "openai/gpt-4o-mini"],
 		tools: ["read", "bash", "write", "edit", "grep", "find"],
 		systemPrompt: `You are a Data Cleaner agent. Your job is to clean, normalize, and preprocess data.`,
 	},
@@ -95,7 +91,6 @@ Response style:
 		description: "Analyzes data: sentiment, trends, topics, insights extraction.",
 		defaultModel: "anthropic/claude-sonnet-4-20250514",
 		defaultThinkingLevel: "high",
-		fallbackModels: ["anthropic/claude-opus-4-5", "openai/gpt-4o"],
 		tools: ["read", "bash", "write", "edit", "grep", "find"],
 		systemPrompt: `You are a Data Analyst agent. Analyze data thoroughly and extract actionable insights.`,
 	},
@@ -107,7 +102,6 @@ Response style:
 		description: "Generates structured reports, charts, and presentations from analysis results.",
 		defaultModel: "anthropic/claude-sonnet-4-20250514",
 		defaultThinkingLevel: "medium",
-		fallbackModels: ["anthropic/claude-haiku-4-5-20251001", "openai/gpt-4o"],
 		tools: ["read", "bash", "write", "edit", "grep", "find"],
 		systemPrompt: `You are a Report Generator agent. Generate structured reports from analysis results.`,
 	},
@@ -119,7 +113,6 @@ Response style:
 		description: "Writes, edits, and debugs code.",
 		defaultModel: "anthropic/claude-sonnet-4-20250514",
 		defaultThinkingLevel: "medium",
-		fallbackModels: ["anthropic/claude-opus-4-5", "openai/gpt-4o"],
 		tools: ["read", "bash", "write", "edit", "grep", "find", "ls"],
 		systemPrompt: `You are a Coding agent. Write clean, well-documented code. Follow best practices and the project's conventions.`,
 	},
@@ -131,7 +124,6 @@ Response style:
 		description: "Reviews code for quality, security, and best practices.",
 		defaultModel: "anthropic/claude-haiku-4-5-20251001",
 		defaultThinkingLevel: "off",
-		fallbackModels: ["anthropic/claude-sonnet-4-20250514"],
 		tools: ["read", "grep", "find", "ls"],
 		systemPrompt: `You are a Code Reviewer agent. Review code for bugs, security issues, performance problems, and adherence to best practices. Be constructive and specific.`,
 	},
@@ -143,7 +135,6 @@ Response style:
 		description: "A custom-configured agent.",
 		defaultModel: "anthropic/claude-sonnet-4-20250514",
 		defaultThinkingLevel: "medium",
-		fallbackModels: [],
 		tools: ["read", "bash", "write", "edit"],
 		systemPrompt: `You are a versatile AI agent. Help the user with their tasks efficiently.`,
 	},
@@ -178,17 +169,17 @@ export function listRoles(): { role: AgentRole; label: string; emoji: string; de
 	}));
 }
 
-/** Get default config for a role (model, thinking, fallbacks).
- *  `model` may be null ("no role-default; pick first user-configured"). */
+/** Get default config for a role (model, thinking level).
+ *  `model` may be null ("no role-default; pick first user-configured").
+ *  Dynamic fallback: `createAgent` builds the fallback chain from all
+ *  user-configured models via `getAvailableModelsSync()`. */
 export function getRoleDefaults(role: AgentRole): {
 	model: string | null;
 	thinkingLevel: ThinkingLevel;
-	fallbackModels: string[];
 } {
 	const config = ROLE_CONFIGS[role] ?? ROLE_CONFIGS.custom;
 	return {
 		model: config.defaultModel,
 		thinkingLevel: config.defaultThinkingLevel,
-		fallbackModels: config.fallbackModels,
 	};
 }

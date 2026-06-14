@@ -46,7 +46,12 @@ export function getModelsPath(): string {
 	return path.join(LOOK_DIR, "models.json");
 }
 
-/** Application settings (owned by the SDK's SettingsManager) */
+/** Dynamically registered custom providers (Look-managed, persisted across restarts) */
+	export function getCustomProvidersPath(): string {
+		return path.join(LOOK_DIR, "custom-providers.json");
+	}
+
+	/** Application settings (owned by the SDK's SettingsManager) */
 export function getSettingsPath(): string {
 	return path.join(LOOK_DIR, "settings.json");
 }

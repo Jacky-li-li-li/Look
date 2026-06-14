@@ -17,7 +17,6 @@ import { ThemeProvider } from "next-themes";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import AgentCreateDialog from "./components/AgentCreateDialog";
 import ChatPanel from "./components/ChatPanel";
 import DeleteProjectDialog from "./components/DeleteProjectDialog";
 import LoginScreen from "./components/LoginScreen";
@@ -37,7 +36,6 @@ import {
 	agentsAtom,
 	autoCollapseAtom,
 	chatAgentNameAtom,
-	defaultModelForCreateAtom,
 	messagesAtomFamily,
 	pendingAsksAtom,
 	pendingDeleteProjectAtom,
@@ -45,7 +43,6 @@ import {
 	providerSettingsAtom,
 	queuesAtomFamily,
 	settingsTabAtom,
-	showCreateDialogAtom,
 	showSettingsAtom,
 	userPreferredModelAtom,
 } from "./store/atoms";
@@ -68,8 +65,6 @@ export default function App() {
 	const activeAgent = useAtomValue(activeAgentAtom);
 	const autoCollapse = useAtomValue(autoCollapseAtom);
 	const chatAgentName = useAtomValue(chatAgentNameAtom);
-	const showCreateDialog = useAtomValue(showCreateDialogAtom);
-	const defaultModelForCreate = useAtomValue(defaultModelForCreateAtom);
 	const showSettings = useAtomValue(showSettingsAtom);
 	const settingsTab = useAtomValue(settingsTabAtom);
 	const providerSettings = useAtomValue(providerSettingsAtom);
@@ -160,13 +155,6 @@ export default function App() {
 		appStore.set(activeAgentIdAtom, agentId);
 	}, []);
 
-	const handleCreateAgent = useCallback(async (name: string, role: string, model?: string, thinkingLevel?: string) => {
-		if (!api) return;
-		const result = await api.createAgent(name, role, model, thinkingLevel);
-		if (result?.success && result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
-		appStore.set(showCreateDialogAtom, false);
-	}, []);
-
 	const handleDestroyAgent = useCallback(async (agentId: string) => {
 		if (!api) return;
 		await api.destroyAgent(agentId);
@@ -199,9 +187,11 @@ export default function App() {
 		if (api) api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
 	}, []);
 
-	const handleCreateClick = useCallback((defaultModel?: string) => {
-		if (defaultModel !== undefined) appStore.set(defaultModelForCreateAtom, defaultModel);
-		appStore.set(showCreateDialogAtom, true);
+
+	const handleCreateClick = useCallback(async () => {
+		if (!api) return;
+		const result = await api.createAgent();
+		if (result?.success && result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
 	}, []);
 
 	const handleSettingsClick = useCallback(() => {
@@ -215,10 +205,6 @@ export default function App() {
 	}, []);
 
 	const handleCloseSettings = useCallback(() => appStore.set(showSettingsAtom, false), []);
-	const handleCloseCreateDialog = useCallback(() => {
-		appStore.set(showCreateDialogAtom, false);
-		appStore.set(defaultModelForCreateAtom, undefined);
-	}, []);
 
 	const handleOpenProjectFolder = useCallback(() => {
 		try {
@@ -404,6 +390,7 @@ export default function App() {
 						onSelect={handleSelectAgent}
 						onDestroy={handleDestroyAgent}
 						onCreateClick={handleCreateClick}
+
 						onSettingsClick={handleSettingsClick}
 						onSelectProject={handleSelectProject}
 						onCreateProject={handleOpenProject}
@@ -469,13 +456,6 @@ export default function App() {
 						)}
 					</main>
 
-					{showCreateDialog && (
-						<AgentCreateDialog
-							defaultModel={defaultModelForCreate}
-							onCreate={handleCreateAgent}
-							onClose={handleCloseCreateDialog}
-						/>
-					)}
 					{newProjectCwd && (
 						<NewProjectDialog
 							open={!!newProjectCwd}

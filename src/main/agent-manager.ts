@@ -80,14 +80,6 @@ function resolveToolNames(roleToolNames: string[] | null): string[] {
 // Types
 // ============================================================
 
-export interface CreateAgentOptions {
-	name: string;
-	role: AgentRole;
-	model?: string;
-	thinkingLevel?: ThinkingLevel;
-	fallbackModels?: string[];
-}
-
 interface ManagedAgent {
 	info: AgentInfo;
 	session: AgentSession;
@@ -197,7 +189,6 @@ export class AgentManager {
 
 	private agentUsage = new Map<string, UsageSnapshot>();
 	private lastContextTokens = new Map<string, number>();
-	private lastCompactPct = new Map<string, number>();
 	private firstUserMessage = new Map<string, string>();
 	private titleInFlight = new Set<string>();
 	private agentsIndexPath: string;
@@ -316,8 +307,8 @@ export class AgentManager {
 			defaultThinkingLevel: globalAll.defaultThinkingLevel,
 			preferredModel: globalAll.preferredModel,
 			autoCollapse: globalAll.autoCollapse,
-			autoCompress: globalAll.autoCompress,
-			compressThreshold: globalAll.compressThreshold,
+			compactionEnabled: globalAll.compactionEnabled,
+
 			chatSystemPrompt: globalAll.chatSystemPrompt,
 		});
 
@@ -682,7 +673,6 @@ export class AgentManager {
 					messageCount: uiMessages.length,
 					createdAt: entry.createdAt ?? Date.now(),
 					usage: cloneUsageSnapshot(cumUsage),
-					fallbackModels: [],
 					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
 					projectId: entry.projectId,
 				};
@@ -802,23 +792,9 @@ export class AgentManager {
 	}
 
 	/** Return provider IDs whose SDK auth source is the environment. */
-	async getVerifiedEnvProviders(): Promise<string[]> {
-		const allModels = this.modelRegistry.getAll();
-		const seen = new Set<string>();
-		const providers: string[] = [];
-		for (const m of allModels) {
-			if (seen.has(m.provider)) continue;
-			seen.add(m.provider);
-			const status = this.modelRegistry.getProviderAuthStatus(m.provider);
-			if (status.configured && status.source === "environment") providers.push(m.provider);
-		}
-		return providers;
-	}
 
 	private isUserConfigured(provider: string): boolean {
-		return this.modelRegistry
-			.getAll()
-			.some((m) => m.provider === provider && this.modelRegistry.hasConfiguredAuth(m));
+		return this.authStorage.has(provider);
 	}
 
 	/** Returns the active project's root directory path. */
@@ -840,7 +816,9 @@ export class AgentManager {
 		maxTokens: number;
 		cost: { input: number; output: number };
 	}> {
-		return this.modelRegistry.getAvailable().map((m) => ({
+		return this.modelRegistry.getAvailable()
+			.filter((m) => this.authStorage.has(m.provider))
+			.map((m) => ({
 			provider: m.provider,
 			id: m.id,
 			name: m.name ?? m.id,
@@ -906,7 +884,7 @@ export class AgentManager {
 				maxTokens: number;
 			}>
 		>();
-		for (const m of this.modelRegistry.getAvailable()) {
+		for (const m of this.getAvailableModelsSync()) {
 			const models = availableByProvider.get(m.provider) ?? [];
 			models.push({
 				id: m.id,
@@ -1169,45 +1147,25 @@ export class AgentManager {
 	// Agent CRUD
 	// ============================================================
 
-	async createAgent(options: CreateAgentOptions): Promise<string> {
-		const role = normalizeAgentRole(options.role);
+	/**
+	 * Create a new chat agent with sensible defaults — no dialog, one click.
+	 * Used by the Sidebar "新建对话" button and Cmd+N shortcut.
+	 */
+	async createAgent(name?: string): Promise<string> {
+		const role = normalizeAgentRole("chat");
 		const defaults = getRoleDefaults(role);
 		const userDef = this.getProjectSettings()?.getAll().defaultThinkingLevel;
-		const thinkingLevel = options.thinkingLevel ?? userDef ?? defaults.thinkingLevel;
+		const thinkingLevel = userDef ?? defaults.thinkingLevel ?? "medium";
 
-		// ---- Resolve primary model ----
-		// Priority: explicit option > role default > first user-configured
-		// model. Chat mode has role default null, so the last fallback kicks
-		// in for that role.
-		const roleDefault = defaults.model; // string | null
-		const primaryModelId = options.model ?? roleDefault ?? this.firstAvailableModelKey();
+		const primaryModelId = this.firstAvailableModelKey();
 		if (!primaryModelId) {
-			throw new Error(
-				`No model available for new agent. Configure an API key in Settings, or pass an explicit model.`,
-			);
+			throw new Error("No model available. Configure an API key in Settings.");
 		}
 
-		// ---- Resolve fallback chain ----
-		// Order:
-		//   1. Role static fallbacks (kept for backward compat — coder,
-		//      reviewer, etc. have meaningful role-presets).
-		//   2. The full set of user-configured models (any provider the
-		//      user has a key for), excluding the primary. This is what
-		//      makes chat agents robust to "I only have a deepseek key"
-		//      — the chain doesn't reference unconfigured anthropic /
-		//      openai models the role happened to hard-code.
-		//   3. firstAvailableModelKey() as the absolute last resort,
-		//      guarded by the resolveModel's isUserConfigured check.
-		// resolveModel itself further filters out unconfigured entries
-		// so a stale primary/fallback can't crash the session.
-		const roleFallbacks = options.fallbackModels ?? defaults.fallbackModels ?? [];
 		const dynamicFallbacks = this.getAvailableModelsSync()
 			.map((m) => `${m.provider}/${m.id}`)
-			.filter((key) => key !== primaryModelId && !roleFallbacks.includes(key));
-		const lastResort = this.firstAvailableModelKey();
-		const lastResortFiltered =
-			lastResort && lastResort !== primaryModelId && !roleFallbacks.includes(lastResort) ? [lastResort] : [];
-		const fallbackModels = [...roleFallbacks, ...dynamicFallbacks, ...lastResortFiltered];
+			.filter((key) => key !== primaryModelId);
+		const fallbackModels = [...dynamicFallbacks];
 
 		const { provider, modelId, resolvedId } = this.resolveModel(primaryModelId, fallbackModels);
 		const wasFallback = resolvedId !== primaryModelId;
@@ -1215,16 +1173,14 @@ export class AgentManager {
 		const id = uuidv4().slice(0, 8);
 		const projectCwd = this.getActiveProjectCwd();
 		const settingsManager = this.settingsManagerForCwd(projectCwd, this.activeProjectId ?? undefined);
-		const roleToolNames = getRoleTools(role); // string[] | null
-		// null = "all built-in tools" (chat mode)
+		const roleToolNames = getRoleTools(role);
 		const model = this.lookupModel(provider, modelId);
 		if (!model) throw new Error(`Model not found: ${resolvedId}`);
 
 		let systemPrompt = getRoleSystemPrompt(role);
-		if (role === "chat") {
-			const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
-			if (custom) systemPrompt = custom;
-		}
+		const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
+		if (custom) systemPrompt = custom;
+
 		const resourceLoader = this.buildResourceLoader({
 			systemPrompt,
 			agentId: id,
@@ -1233,18 +1189,7 @@ export class AgentManager {
 		});
 		await resourceLoader.reload();
 
-		// pi native persistence: SessionManager.create writes to ~/.look/sessions/
 		const sm = SessionManager.create(projectCwd, getSessionsDir());
-		// Intentional: a brand-new agent with no messages is NOT a
-		// valid conversation. We deliberately do NOT seed an empty
-		// session.jsonl here — the SDK's lazy-flush means the file
-		// is only created on disk after the first assistant message
-		// lands, and `loadPersistedAgents` skips agents whose
-		// sessionFile doesn't exist on restart. So a "create then
-		// close before any message" agent will be pruned from the
-		// index on next start. (The sessionFile path is still saved
-		// into `agents.json` immediately so the agent's in-memory
-		// session is recoverable as soon as the first message lands.)
 		const allToolNames = resolveToolNames(roleToolNames);
 
 		const { session, modelFallbackMessage } = await createAgentSession({
@@ -1261,9 +1206,10 @@ export class AgentManager {
 
 		this.agentUsage.set(id, emptyUsageSnapshot());
 
+		const agentName = name?.trim() || `Chat ${this.agents.size + 1}`;
 		const info: AgentInfo = {
 			id,
-			name: options.name,
+			name: agentName,
 			role,
 			model: resolvedId,
 			thinkingLevel,
@@ -1271,7 +1217,6 @@ export class AgentManager {
 			messageCount: 0,
 			createdAt: Date.now(),
 			usage: emptyUsageSnapshot(),
-			fallbackModels,
 			permissionMode: "ask",
 			projectId: this.activeProjectId ?? undefined,
 		};
@@ -1282,8 +1227,6 @@ export class AgentManager {
 			messages: [],
 			unsubscribe: session.subscribe((e) => this.handleSessionEvent(id, e)),
 			permissionMode: "ask",
-			// v0.4: new agent starts with a fresh tree, no leaf yet.
-			// message_start of the first user message will set it.
 			leafId: session.sessionManager.getLeafId(),
 		};
 		this.agents.set(id, managed);
@@ -1294,28 +1237,14 @@ export class AgentManager {
 			id: uuidv4(),
 			agentId: id,
 			role: "system",
-			contentBlocks: [
-				{
-					type: "text",
-					text: `Agent "${options.name}" [${options.role}] started. Model: ${resolvedId}, Thinking: ${thinkingLevel}${fallbackNote}${modelWarn}`,
-				},
-			],
+			contentBlocks: [{
+				type: "text",
+				text: `"${agentName}" started. Model: ${resolvedId}, Thinking: ${thinkingLevel}${fallbackNote}${modelWarn}`,
+			}],
 			timestamp: Date.now(),
 		});
 
-		// Product decision: a brand-new agent with no messages is NOT
-		// a valid conversation. We deliberately do NOT write
-		// `agents.json` here — committing the agent to the index
-		// happens on the first `message_end` event below. If the user
-		// closes the app before sending any message, the in-memory
-		// `ManagedAgent` is simply discarded along with the renderer
-		// state, and `loadPersistedAgents` never sees a record.
 		this.emit({ type: "agent:created", agentId: id, agent: { ...info } });
-		// P-未5: surface the fallback switch in the UI. The renderer
-		// uses this to show a toast (e.g. "primary 'claude-sonnet-4'
-		// unavailable, using 'deepseek/deepseek-v4-pro'"). Keeping the
-		// tried chain in the event lets the UI show a small "details"
-		// affordance later if we want to.
 		if (wasFallback) {
 			this.emit({
 				type: "agent:model-fallback",
@@ -1358,7 +1287,6 @@ export class AgentManager {
 		this.agents.delete(agentId);
 		this.agentUsage.delete(agentId);
 		this.lastContextTokens.delete(agentId);
-		this.lastCompactPct.delete(agentId);
 		this.saveIndex();
 		this.emit({ type: "agent:destroyed", agentId });
 		this.emitAgentList();
@@ -1968,23 +1896,6 @@ export class AgentManager {
 						}
 					}
 				}
-				// Auto-compress after the agent loop finishes.
-				// (triggering on message_end is too early — status is still
-				// "thinking" so compressSession's guard returns immediately.)
-				// At this point pi SDK's internal _checkCompaction has already
-				// run in _handlePostAgentRun, so prepareCompaction() will
-				// detect "already compacted" and skip if the SDK handled it.
-				const s = this.getProjectSettings()?.getAll() ?? ({} as UserSettings);
-				if (s.autoCompress) {
-					const ctx = this.getContextUsage(agentId);
-					if (ctx && ctx.percentage >= s.compressThreshold) {
-						const lp = this.lastCompactPct.get(agentId);
-						if (lp === undefined || lp < s.compressThreshold) {
-							this.lastCompactPct.set(agentId, ctx.percentage);
-							this.compressSession(agentId);
-						}
-					}
-				}
 				break;
 			}
 			case "compaction_start": {
@@ -2229,7 +2140,6 @@ export class AgentManager {
 			messageCount: 0,
 			createdAt: Date.now(),
 			usage: emptyUsageSnapshot(),
-			fallbackModels: src.info.fallbackModels,
 			permissionMode: src.info.permissionMode,
 			sessionFilePath: newSessionFile,
 			projectId: src.info.projectId,

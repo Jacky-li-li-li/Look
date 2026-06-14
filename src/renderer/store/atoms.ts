@@ -89,8 +89,6 @@ export const activeChatAtBottomAtom = atom(true);
 
 // ---- UI state ----
 
-export const showCreateDialogAtom = atom(false);
-export const defaultModelForCreateAtom = atom<string | undefined>(undefined);
 export const showSettingsAtom = atom(false);
 export const settingsTabAtom = atom<"general" | "api-keys" | "chat-prompt" | "about" | "profile">("general");
 

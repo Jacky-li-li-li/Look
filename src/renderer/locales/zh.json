@@ -10,10 +10,10 @@
 		"reset": "重置"
 	},
 	"sidebar": {
-		"newAgent": "新建 Agent",
+		"newChat": "新建对话",
 		"settings": "设置",
 		"noAgents": "暂无 Agent。",
-		"clickNewAgent": "点击 + 新建 Agent。"
+		"clickToStart": "点击上方 + 新建对话开始"
 	},
 	"settings": {
 		"title": "设置",
@@ -34,12 +34,9 @@
 		"autoCollapse": "自动折叠",
 		"autoCollapseDesc": "当输出开始流式传输时自动折叠思考面板",
 		"autoCompress": "自动压缩",
-		"autoCompressDesc": "接近上下文窗口限制时自动压缩",
-		"compressThreshold": "压缩阈值",
-		"compressThresholdDesc": "触发压缩的上下文窗口百分比",
+		"autoCompressDesc": "上下文接近模型窗口限制时，SDK 自动压缩历史对话（预留 16K tokens）",
 		"resetDefaults": "恢复默认",
 		"resetDone": "已恢复默认设置",
-		"env": "环境变量",
 		"apiKey": "API 密钥",
 		"setKey": "设置密钥",
 		"keyUpdated": "{{provider}} 密钥已更新",
@@ -61,17 +58,9 @@
 		"chatSystemPromptPlaceholder": "输入自定义系统提示（默认: pi SDK coding assistant）"
 	},
 	"agent": {
-		"createTitle": "创建 Agent",
-		"createDesc": "使用角色和模型配置新 Agent。",
-		"namePlaceholder": "Agent 名称",
-		"role": "角色",
 		"model": "模型",
-		"thinking": "思考",
-		"create": "创建",
-		"noModels": "暂无可用模型。请在设置中添加 API 密钥。",
 		"switchModel": "切换模型",
 		"apiKeys": "API 密钥",
-		"environment": "环境变量",
 		"noModelsCategory": "该分类下没有模型。",
 		"reasoning": "推理",
 		"modelBase": "基础",

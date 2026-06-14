@@ -31,9 +31,7 @@ const api = (window as any).look;
 interface SidebarProps {
 	onSelect: (agentId: string) => void;
 	onDestroy: (agentId: string) => void;
-	/** Opens the Create dialog. Optional `defaultModel` is the model the
-	 *  dialog should pre-select (e.g. the active agent's model). */
-	onCreateClick: (defaultModel?: string) => void;
+	onCreateClick: () => void;
 	onSettingsClick: () => void;
 	/** Project callbacks */
 	onSelectProject: (projectId: string) => void;
@@ -66,7 +64,8 @@ function fmtRelativeTime(ts: number): string {
 export default function Sidebar({
 	onSelect,
 	onDestroy,
-	onCreateClick,
+		onCreateClick,
+
 	onSettingsClick,
 	onSelectProject,
 	onCreateProject,
@@ -164,11 +163,11 @@ export default function Sidebar({
 					variant="line"
 					size="sm"
 					className="h-10 flex-1 justify-start text-[12px] font-medium"
-					onClick={() => onCreateClick(activeAgent?.model)}
+					onClick={onCreateClick}
 					disabled={!hasActiveProject || !projectValid}
 				>
 					<Plus className="size-4" />
-					{t("sidebar.newAgent")}
+					{t("sidebar.newChat")}
 				</Button>
 			</div>
 
@@ -279,10 +278,10 @@ export default function Sidebar({
 					{agents.length === 0 && (
 						<div className="mx-1 mt-3 rounded-lg border border-dashed border-hairline p-5 text-center text-[11px] text-muted-foreground">
 							{!hasActiveProject
-								? t("sidebar.pleaseOpenProject", "Please open a project first")
-								: t("sidebar.noAgents")}
-							<br />
-							{t("sidebar.clickNewAgent")}
+									? t("sidebar.pleaseOpenProject", "Please open a project first")
+									: t("sidebar.noAgents")}
+								<br />
+								{t("sidebar.clickToStart", "Click + above to start")}
 						</div>
 					)}
 					<div ref={listEndRef} />

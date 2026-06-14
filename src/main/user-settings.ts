@@ -14,7 +14,7 @@
 //     the contract.
 //
 //   UI fields — owned by this class in `~/.look/ui-settings.json`:
-//     - language / autoCollapse / autoCompress / compressThreshold
+//     - language / autoCollapse / compactionEnabled
 //     These are Look-app concerns, not pi-agent concerns, so
 //     the SDK has no schema entry for them. We persist them
 //     in a sibling file under the same `~/.look/` root.
@@ -33,9 +33,8 @@ export interface UserSettings {
 	language: UILanguage;
 	defaultThinkingLevel: ThinkingLevel;
 	autoCollapse: boolean;
-	autoCompress: boolean;
-	compressThreshold: number;
-	/** The model the user most recently picked in the bottom-bar
+	compactionEnabled: boolean;
+		/** The model the user most recently picked in the bottom-bar
 	 *  ModelSelector. null = "no preference; pick the first configured".
 	 *  Used by App.handleQuickCreateChat to seed new chat agents
 	 *  with the user's current pick so they don't snap back to a
@@ -56,8 +55,7 @@ const DEFAULTS: UserSettings = {
 	language: "en",
 	defaultThinkingLevel: "medium",
 	autoCollapse: true,
-	autoCompress: false,
-	compressThreshold: 60,
+		compactionEnabled: true,
 	preferredModel: null,
 	chatAgentName: "",
 	chatSystemPrompt: "",
@@ -75,9 +73,8 @@ interface SdkSettings {
 interface UiSettings {
 	language: UILanguage;
 	autoCollapse: boolean;
-	autoCompress: boolean;
-	compressThreshold: number;
-	chatSystemPrompt: string;
+	compactionEnabled: boolean;
+		chatSystemPrompt: string;
 	/** Custom display name for the agent, shown next to avatar. */
 	chatAgentName: string;
 	/** Last active agent ID to restore on restart. */
@@ -89,8 +86,7 @@ interface UiSettings {
 const UI_DEFAULTS: UiSettings = {
 	language: DEFAULTS.language,
 	autoCollapse: DEFAULTS.autoCollapse,
-	autoCompress: DEFAULTS.autoCompress,
-	compressThreshold: DEFAULTS.compressThreshold,
+		compactionEnabled: DEFAULTS.compactionEnabled,
 	chatSystemPrompt: DEFAULTS.chatSystemPrompt,
 	chatAgentName: DEFAULTS.chatAgentName,
 	lastActiveAgentId: "",
@@ -108,6 +104,8 @@ type SettingsManagerLike = {
 	setDefaultModelAndProvider(provider: string, modelId: string): void;
 	setDefaultProvider(provider: string): void;
 	setDefaultModel(modelId: string): void;
+		getCompactionEnabled(): boolean;
+		setCompactionEnabled(enabled: boolean): void;
 	flush(): Promise<void>;
 };
 
@@ -133,6 +131,7 @@ export class UserSettingsStore {
 			...this.ui,
 			defaultThinkingLevel: sdk.defaultThinkingLevel ?? DEFAULTS.defaultThinkingLevel,
 			preferredModel: sdk.preferredModel ?? DEFAULTS.preferredModel,
+				compactionEnabled: this.settingsManager.getCompactionEnabled() ?? DEFAULTS.compactionEnabled,
 		};
 	}
 
@@ -188,13 +187,15 @@ export class UserSettingsStore {
 				this.settingsManager.setDefaultModel("");
 			}
 		}
-		// UI fields: persist into our sibling file.
+		if (partial.compactionEnabled !== undefined) {
+				this.settingsManager.setCompactionEnabled(partial.compactionEnabled);
+			}
+			// UI fields: persist into our sibling file.
 		const uiPartial: Partial<UiSettings> = {};
 		if (partial.language !== undefined) uiPartial.language = partial.language;
 		if (partial.autoCollapse !== undefined) uiPartial.autoCollapse = partial.autoCollapse;
-		if (partial.autoCompress !== undefined) uiPartial.autoCompress = partial.autoCompress;
-		if (partial.compressThreshold !== undefined) uiPartial.compressThreshold = partial.compressThreshold;
-		if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
+		if (partial.compactionEnabled !== undefined) uiPartial.compactionEnabled = partial.compactionEnabled;
+			if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
 		if (partial.chatAgentName !== undefined) uiPartial.chatAgentName = partial.chatAgentName;
 		if (partial.lastActiveAgentId !== undefined) uiPartial.lastActiveAgentId = partial.lastActiveAgentId;
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
