@@ -29,10 +29,22 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	const latestPropsRef = useRef({ currentModel, onModelChanged });
 	latestPropsRef.current = { currentModel, onModelChanged };
 
-	const fetchModels = useCallback(async () => {
+	// Cache: avoid re-fetching on every dialog open (ref persists across renders)
+	const modelsCacheRef = useRef<{ models: AvailableModel[]; ts: number }>({ models: [], ts: 0 });
+
+	const fetchModels = useCallback(async (force = false) => {
 		if (!api) return;
+		const now = Date.now();
+		// Return cached if fresh (< 60s) and not forced
+		if (!force && modelsCacheRef.current.ts > 0 && now - modelsCacheRef.current.ts < 60_000) {
+			setModels(modelsCacheRef.current.models);
+			return;
+		}
 		const m = await api.getModels();
-		if (m?.success) setModels(m.models);
+		if (m?.success) {
+			modelsCacheRef.current = { models: m.models, ts: now };
+			setModels(m.models);
+		}
 	}, []);
 
 	// Fetch on mount
@@ -78,7 +90,6 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 		[agentId, t],
 	);
 
-		
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
 	const label = switching ? "…" : (currentModelObj?.name ?? currentModel?.split("/").pop() ?? t("agent.model"));
 

@@ -5,6 +5,7 @@
 
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
+import { Switch } from "@shared/components/ui/switch";
 import { cn } from "@shared/lib/utils";
 import { useAtom } from "jotai";
 import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
@@ -26,6 +27,7 @@ export default function LoginScreen() {
 	const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+	const [rememberMe, setRememberMe] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [sent, setSent] = useState(false);
@@ -54,7 +56,19 @@ export default function LoginScreen() {
 		const { data, error: err } = await supabase.auth.signInWithPassword({
 			email: email.trim(),
 			password,
+			options: { captchaToken: undefined },
 		});
+		// Store remember-me preference (session is always persisted by default;
+		// when unchecked, a future enhancement would use sessionStorage instead)
+		if (!rememberMe) {
+			try {
+				localStorage.setItem("look_remember_me", "0");
+			} catch {}
+		} else {
+			try {
+				localStorage.removeItem("look_remember_me");
+			} catch {}
+		}
 		if (err) {
 			setError(err.message);
 			setSubmitting(false);
@@ -182,6 +196,21 @@ export default function LoginScreen() {
 								{error}
 							</div>
 						)}
+						<div className="flex items-center justify-between">
+							<label
+								htmlFor="rememberMe"
+								className="flex cursor-pointer items-center gap-2 text-[12px] text-muted-foreground"
+							>
+								<Switch
+									id="rememberMe"
+									size="sm"
+									checked={rememberMe}
+									onCheckedChange={setRememberMe}
+									disabled={submitting}
+								/>
+								{t("auth.rememberMe", "Remember me")}
+							</label>
+						</div>
 						<Button
 							type="submit"
 							disabled={submitting}

@@ -139,7 +139,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 		}
 	}, [toolCall.status]);
 
-	const argsJson = safeJson(toolCall.args);
+	const argsJson = React.useMemo(() => safeJson(toolCall.args), [toolCall.args]);
 	const argsPreview = argsJson.slice(0, 80);
 	const hasBody = (toolCall.result && toolCall.result.length > 0) || argsPreview.length > 0;
 

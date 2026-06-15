@@ -23,7 +23,7 @@ import LoginScreen from "./components/LoginScreen";
 import NewProjectDialog from "./components/NewProjectDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
-import SettingsDialog from "./components/SettingsDialog";
+import SettingsDialog from "./components/settings/SettingsDialog";
 import Sidebar from "./components/Sidebar";
 import UpdateNotification from "./components/UpdateNotification";
 import WelcomeScreen from "./components/WelcomeScreen";

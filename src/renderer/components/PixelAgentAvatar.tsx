@@ -6,17 +6,7 @@ import { Avatar, AvatarFallback } from "@shared/components/ui/avatar";
 import { cn } from "@shared/lib/utils";
 import type { AgentRole, AgentStatus } from "@shared/types";
 import React from "react";
-
-const ROLE_LABEL: Record<string, string> = {
-	chat: "助手",
-	crawler: "爬取器",
-	cleaner: "清洗器",
-	analyst: "分析师",
-	reporter: "报告器",
-	coder: "编码器",
-	reviewer: "审查器",
-	custom: "自定义",
-};
+import { useTranslation } from "react-i18next";
 
 const ROLE_INITIAL: Record<string, string> = {
 	chat: "C",
@@ -55,6 +45,7 @@ export const PixelAgentAvatar = React.memo(function PixelAgentAvatar({
 	active = false,
 	className,
 }: PixelAgentAvatarProps) {
+	const { t } = useTranslation();
 	const normalizedRole = PIXEL_PATTERNS[role] ? role : "custom";
 	const pattern = PIXEL_PATTERNS[normalizedRole];
 
@@ -69,7 +60,7 @@ export const PixelAgentAvatar = React.memo(function PixelAgentAvatar({
 			data-status={status}
 		>
 			<AvatarFallback className="pixel-agent-avatar__fallback">
-				<span className="sr-only">{getRoleLabel(normalizedRole)} agent</span>
+				<span className="sr-only">{getRoleLabel(normalizedRole, t)} agent</span>
 				<span className="pixel-agent-avatar__grid" aria-hidden="true">
 					{pattern.flatMap((row, y) =>
 						row
@@ -90,6 +81,22 @@ export const PixelAgentAvatar = React.memo(function PixelAgentAvatar({
 	);
 });
 
-export function getRoleLabel(role: string): string {
-	return ROLE_LABEL[role] ?? role;
+const ROLE_I18N_KEYS: Record<string, string> = {
+	chat: "roles.chat",
+	crawler: "roles.crawler",
+	cleaner: "roles.cleaner",
+	analyst: "roles.analyst",
+	reporter: "roles.reporter",
+	coder: "roles.coder",
+	reviewer: "roles.reviewer",
+	custom: "roles.custom",
+};
+
+export function getRoleLabel(role: string, t?: (key: string) => string): string {
+	if (t) {
+		const key = ROLE_I18N_KEYS[role];
+		if (key) return t(key);
+	}
+	// Fallback for external callers without i18n
+	return role;
 }

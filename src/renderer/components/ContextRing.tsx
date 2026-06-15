@@ -3,6 +3,7 @@
 // Ink Wash design, shadcn/ui-adjacent styling
 // ============================================================
 
+import { Tooltip, TooltipContent, TooltipTrigger } from "@shared/components/ui/tooltip";
 import { cn } from "@shared/lib/utils";
 import type { ContextUsageInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
@@ -110,48 +111,60 @@ export default function ContextRing({ onUsageChange }: ContextRingProps) {
 	};
 
 	return (
-		<button
-			type="button"
-			onClick={handleClick}
-			disabled={usage.compacting || usage.percentage < 1}
-			className={cn(
-				"group relative flex size-7 items-center justify-center rounded-md transition-colors border border-hairline",
-				"hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed",
-				pulsing && "animate-pulse",
-			)}
-			title={
-				usage.compacting
-					? "Compressing…"
-					: `${usage.percentage}% context used (${formatTokens(usage.usedTokens)} / ${formatTokens(usage.totalTokens)})\nClick to compress`
-			}
-		>
-			<svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="size-5 -rotate-90">
-				{/* Background track */}
-				<circle
-					cx={CENTER}
-					cy={CENTER}
-					r={RING_RADIUS}
-					fill="none"
-					strokeWidth={STROKE_WIDTH}
-					className="stroke-muted-foreground/40"
-				/>
-				{/* Usage arc */}
-				<circle
-					cx={CENTER}
-					cy={CENTER}
-					r={RING_RADIUS}
-					fill="none"
-					strokeWidth={STROKE_WIDTH}
-					strokeLinecap="round"
-					strokeDasharray={CIRCUMFERENCE}
-					strokeDashoffset={offset}
-					className={cn("transition-all duration-500 ease-out", colorMap[usage.level])}
-				/>
-			</svg>
-			{usage.compacting && (
-				<span className="absolute size-3 animate-spin rounded border-2 border-t-transparent border-muted-foreground" />
-			)}
-		</button>
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<button
+					type="button"
+					onClick={handleClick}
+					disabled={usage.compacting || usage.percentage < 1}
+					className={cn(
+						"group relative flex size-7 items-center justify-center rounded-md transition-colors border border-hairline",
+						"hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed",
+						pulsing && "animate-pulse",
+					)}
+				>
+					<svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="size-5 -rotate-90">
+						{/* Background track */}
+						<circle
+							cx={CENTER}
+							cy={CENTER}
+							r={RING_RADIUS}
+							fill="none"
+							strokeWidth={STROKE_WIDTH}
+							className="stroke-muted-foreground/40"
+						/>
+						{/* Usage arc */}
+						<circle
+							cx={CENTER}
+							cy={CENTER}
+							r={RING_RADIUS}
+							fill="none"
+							strokeWidth={STROKE_WIDTH}
+							strokeLinecap="round"
+							strokeDasharray={CIRCUMFERENCE}
+							strokeDashoffset={offset}
+							className={cn("transition-all duration-500 ease-out", colorMap[usage.level])}
+						/>
+					</svg>
+					{usage.compacting && (
+						<span className="absolute size-3 animate-spin rounded border-2 border-t-transparent border-muted-foreground" />
+					)}
+				</button>
+			</TooltipTrigger>
+			<TooltipContent side="top" className="max-w-[220px] text-center">
+				{usage.compacting ? (
+					<p className="text-[11px]">Compressing…</p>
+				) : (
+					<div className="flex flex-col gap-0.5 text-[11px]">
+						<span>{usage.percentage}% context used</span>
+						<span className="text-muted-foreground">
+							{formatTokens(usage.usedTokens)} / {formatTokens(usage.totalTokens)}
+						</span>
+						<span className="text-muted-foreground/60 text-[10px]">Click to compress</span>
+					</div>
+				)}
+			</TooltipContent>
+		</Tooltip>
 	);
 }
 

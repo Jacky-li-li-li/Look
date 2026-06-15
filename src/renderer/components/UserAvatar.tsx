@@ -45,7 +45,7 @@ export default function UserAvatar({ avatar, size = "sm", className }: UserAvata
 			)}
 		>
 			{avatar && isImageUrl(avatar) ? (
-				<img src={avatar} alt="avatar" className="size-full rounded-md object-cover" />
+				<img src={avatar} alt="avatar" className="size-full rounded-lg object-cover" />
 			) : avatar && !isImageUrl(avatar) ? (
 				<span className={cn("leading-none", emojiSizes[size])}>{avatar}</span>
 			) : (

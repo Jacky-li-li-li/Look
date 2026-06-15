@@ -180,5 +180,15 @@
 		"error": "[{{id}}] {{message}}",
 		"configFirstModel": "Configure your first model",
 		"configFirstModelDesc": "Add a provider API key in Settings to get started"
+	},
+	"roles": {
+		"chat": "Chat",
+		"crawler": "Crawler",
+		"cleaner": "Cleaner",
+		"analyst": "Analyst",
+		"reporter": "Reporter",
+		"coder": "Coder",
+		"reviewer": "Reviewer",
+		"custom": "Custom"
 	}
 }

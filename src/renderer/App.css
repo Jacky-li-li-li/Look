@@ -146,6 +146,11 @@
   --drawer-bg:       oklch(0.18 0.002 85 / 0.6);
 }
 
+/* Dark mode — app-shell shadow visible on dark canvas */
+.dark .app-shell {
+  box-shadow: inset 280px 0 120px -100px oklch(1 0 0 / 0.06);
+}
+
 /* ── Base ── */
 @theme inline {
   --font-heading: var(--font-sans);
@@ -226,6 +231,10 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--ink-3); border-radius: 2.5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
+
+/* Dark mode — brighter scrollbar thumb for visibility */
+.dark ::-webkit-scrollbar-thumb { background: oklch(0.55 0.002 85); }
+.dark ::-webkit-scrollbar-thumb:hover { background: oklch(0.62 0.002 85); }
 
 /* ============================================================
    Application Shell — Marginal Wash
@@ -730,6 +739,20 @@ body {
     table-layout: fixed !important;
     width: 100% !important;
     max-width: 100% !important;
+  }
+}
+
+/* ============================================================
+   Accessibility — Reduced motion
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

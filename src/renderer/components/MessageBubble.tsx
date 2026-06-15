@@ -119,6 +119,8 @@ const MessageBubble = memo(function MessageBubble({
 	const isUser = message.role === "user";
 	const isAssistant = message.role === "assistant";
 
+	const timeDisplay = message.timestamp ? formatMessageTime(message.timestamp) : null;
+
 	return (
 		<div
 			className={cn("flex gap-3", isUser && "flex-row-reverse self-end")}
@@ -139,6 +141,11 @@ const MessageBubble = memo(function MessageBubble({
 					<span className="font-medium uppercase tracking-wider">
 						{isUser ? userProfile.userName || t("chat.you") : (agentName ?? t("chat.agent"))}
 					</span>
+					{timeDisplay && (
+						<span className="tabular-nums" title={new Date(message.timestamp).toLocaleString()}>
+							{timeDisplay}
+						</span>
+					)}
 					{message.isStreaming && <span className="status-mark" data-status="thinking" />}
 					{isAssistant && isActiveLeaf && (
 						<span
@@ -156,7 +163,7 @@ const MessageBubble = memo(function MessageBubble({
 					/* Multi-chunk: flatMap all blocks so segmentBlocks groups across chunk boundaries */
 					<div
 						className={cn(
-							"whisper-bubble whisper-bubble--assistant flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed w-full",
+							"whisper-bubble whisper-bubble--assistant flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed max-w-[85%]",
 							isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
 							flash && "bubble-flash",
 						)}
@@ -173,7 +180,7 @@ const MessageBubble = memo(function MessageBubble({
 						className={cn(
 							"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
 							isUser && "whisper-bubble--user",
-							!isUser && "whisper-bubble--assistant w-full",
+							!isUser && "whisper-bubble--assistant max-w-[85%]",
 							isAssistant && isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
 							flash && "bubble-flash",
 						)}
@@ -189,5 +196,18 @@ const MessageBubble = memo(function MessageBubble({
 		</div>
 	);
 });
+
+function formatMessageTime(ts: number): string {
+	const diff = Date.now() - ts;
+	const seconds = Math.floor(diff / 1000);
+	if (seconds < 60) return "now";
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h`;
+	const days = Math.floor(hours / 24);
+	if (days < 7) return `${days}d`;
+	return new Date(ts).toLocaleDateString();
+}
 
 export default MessageBubble;

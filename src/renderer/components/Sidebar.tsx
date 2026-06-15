@@ -3,14 +3,22 @@
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@shared/components/ui/dropdown-menu";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { Plus, X } from "lucide-react";
+import { Copy, Download, Pencil, Plus, Trash2, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
@@ -64,7 +72,7 @@ function fmtRelativeTime(ts: number): string {
 export default function Sidebar({
 	onSelect,
 	onDestroy,
-		onCreateClick,
+	onCreateClick,
 
 	onSettingsClick,
 	onSelectProject,
@@ -84,7 +92,7 @@ export default function Sidebar({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const editRef = useRef<HTMLInputElement>(null);
-	const activeAgent = agents.find((a) => a.id === activeAgentId);
+	const [contextMenuAgentId, setContextMenuAgentId] = useState<string | null>(null);
 	const projectValid = !activeProjectId || (activeProject?.valid ?? false);
 	const hasActiveProject = activeProjectId !== null;
 
@@ -133,6 +141,67 @@ export default function Sidebar({
 		}
 		cancelRename();
 	}, [editingId, editValue, agents, cancelRename]);
+
+	// ── Context (right-click) menu ──
+	const handleContextMenu = useCallback((e: React.MouseEvent, agentId: string) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setContextMenuAgentId(agentId);
+	}, []);
+
+	const handleCopyAgentId = useCallback(
+		async (agentId: string) => {
+			try {
+				if (navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(agentId);
+				} else {
+					const ta = document.createElement("textarea");
+					ta.value = agentId;
+					ta.style.position = "fixed";
+					ta.style.opacity = "0";
+					document.body.appendChild(ta);
+					ta.select();
+					document.execCommand("copy");
+					document.body.removeChild(ta);
+				}
+				toast.success(t("sidebar.copiedId", "Agent ID copied"));
+			} catch {
+				toast.error(t("sidebar.copyFailed", "Copy failed"));
+			}
+			setContextMenuAgentId(null);
+		},
+		[t],
+	);
+
+	const handleExportChat = useCallback(
+		async (agentId: string) => {
+			try {
+				const r = await api?.exportChat?.(agentId);
+				if (r?.success) {
+					toast.success(t("sidebar.exportSuccess", "Chat exported"));
+				} else {
+					toast.error(r?.error ?? t("sidebar.exportFailed", "Export failed"));
+				}
+			} catch {
+				toast.error(t("sidebar.exportFailed", "Export failed"));
+			}
+			setContextMenuAgentId(null);
+		},
+		[t],
+	);
+
+	// Close context menu on outside click
+	useEffect(() => {
+		if (!contextMenuAgentId) return;
+		const handleClick = () => setContextMenuAgentId(null);
+		const timer = setTimeout(() => {
+			document.addEventListener("click", handleClick, { once: true });
+		}, 0);
+		return () => {
+			clearTimeout(timer);
+			document.removeEventListener("click", handleClick);
+		};
+	}, [contextMenuAgentId]);
 
 	const handleEditKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
@@ -185,6 +254,7 @@ export default function Sidebar({
 							<div
 								key={agent.id}
 								data-agent-id={agent.id}
+								onContextMenu={(e) => handleContextMenu(e, agent.id)}
 								data-agent-status={agent.status}
 								data-running={runningAgents.has(agent.id) || undefined}
 								data-completed={
@@ -278,13 +348,64 @@ export default function Sidebar({
 					{agents.length === 0 && (
 						<div className="mx-1 mt-3 rounded-lg border border-dashed border-hairline p-5 text-center text-[11px] text-muted-foreground">
 							{!hasActiveProject
-									? t("sidebar.pleaseOpenProject", "Please open a project first")
-									: t("sidebar.noAgents")}
-								<br />
-								{t("sidebar.clickToStart", "Click + above to start")}
+								? t("sidebar.pleaseOpenProject", "Please open a project first")
+								: t("sidebar.noAgents")}
+							<br />
+							{t("sidebar.clickToStart", "Click + above to start")}
 						</div>
 					)}
 					<div ref={listEndRef} />
+					{contextMenuAgentId && (
+						<DropdownMenu
+							open={true}
+							onOpenChange={(o) => {
+								if (!o) setContextMenuAgentId(null);
+							}}
+							modal={false}
+						>
+							<DropdownMenuTrigger asChild>
+								<span className="fixed invisible" />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent className="w-44" align="start">
+								<DropdownMenuItem
+									onClick={() => {
+										const agent = agents.find((a) => a.id === contextMenuAgentId);
+										if (agent) handleDoubleClick(agent);
+										setContextMenuAgentId(null);
+									}}
+									className="gap-2 text-[12px]"
+								>
+									<Pencil className="size-3.5" />
+									{t("sidebar.rename", "Rename")}
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									onClick={() => {
+										onDestroy(contextMenuAgentId);
+										setContextMenuAgentId(null);
+									}}
+									className="gap-2 text-[12px] text-destructive"
+								>
+									<Trash2 className="size-3.5" />
+									{t("sidebar.delete", "Delete")}
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									onClick={() => handleCopyAgentId(contextMenuAgentId)}
+									className="gap-2 text-[12px]"
+								>
+									<Copy className="size-3.5" />
+									{t("sidebar.copyId", "Copy Agent ID")}
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									onClick={() => handleExportChat(contextMenuAgentId)}
+									className="gap-2 text-[12px]"
+								>
+									<Download className="size-3.5" />
+									{t("sidebar.exportChat", "Export Chat")}
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					)}
 				</div>
 			</ScrollArea>
 

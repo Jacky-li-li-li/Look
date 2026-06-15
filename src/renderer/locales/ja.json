@@ -177,5 +177,15 @@
 		"error": "[{{id}}] {{message}}",
 		"configFirstModel": "最初のモデルを設定",
 		"configFirstModelDesc": "設定でプロバイダーの API キーを追加してください"
+	},
+	"roles": {
+		"chat": "チャット",
+		"crawler": "クローラー",
+		"cleaner": "クリーナー",
+		"analyst": "アナリスト",
+		"reporter": "レポーター",
+		"coder": "コーダー",
+		"reviewer": "レビュアー",
+		"custom": "カスタム"
 	}
 }
