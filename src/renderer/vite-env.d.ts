@@ -61,6 +61,11 @@ interface LookAPI {
 		success: boolean;
 		detected?: Array<{ tool: string; path: string; exists: boolean; skillCount: number }>;
 	}>;
+	// ---- MCP ----
+	listMcpTools(): Promise<{
+		success: boolean;
+		tools?: Array<{ name: string; description: string; serverName: string }>;
+	}>;
 }
 
 interface SkillEntry {

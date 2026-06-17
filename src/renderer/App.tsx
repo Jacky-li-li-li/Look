@@ -23,8 +23,8 @@ import LoginScreen from "./components/LoginScreen";
 import NewProjectDialog from "./components/NewProjectDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
-import SettingsDialog from "./components/settings/SettingsDialog";
 import Sidebar from "./components/Sidebar";
+import SettingsDialog from "./components/settings/SettingsDialog";
 import UpdateNotification from "./components/UpdateNotification";
 import WelcomeScreen from "./components/WelcomeScreen";
 import { preloadHighlighter } from "./lib/highlighter";
@@ -186,7 +186,6 @@ export default function App() {
 		appStore.set(userPreferredModelAtom, newModel);
 		if (api) api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
 	}, []);
-
 
 	const handleCreateClick = useCallback(async () => {
 		if (!api) return;
@@ -390,7 +389,6 @@ export default function App() {
 						onSelect={handleSelectAgent}
 						onDestroy={handleDestroyAgent}
 						onCreateClick={handleCreateClick}
-
 						onSettingsClick={handleSettingsClick}
 						onSelectProject={handleSelectProject}
 						onCreateProject={handleOpenProject}
@@ -437,6 +435,8 @@ export default function App() {
 									agentStatus={activeAgent.status}
 									currentModel={activeAgent.model}
 									currentThinking={activeAgent.thinkingLevel}
+									modelSupportsThinking={activeAgent.modelSupportsThinking ?? false}
+									availableThinkingLevels={activeAgent.availableThinkingLevels}
 									currentPermissionMode={activeAgent.permissionMode ?? "ask"}
 									onSend={handleSendMessage}
 									onThinkingChange={handleThinkingChange}

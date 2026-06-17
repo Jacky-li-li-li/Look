@@ -94,22 +94,17 @@ export function initIpcHandlers(api: any): () => void {
 			}
 
 			case "agent:updated":
+				console.log("[renderer] agent:updated", event.agent.id, {
+					model: event.agent.model,
+					thinkingLevel: event.agent.thinkingLevel,
+					modelSupportsThinking: event.agent.modelSupportsThinking,
+					availableThinkingLevels: event.agent.availableThinkingLevels,
+				});
 				appStore.set(
 					agentsAtom,
 					appStore.get(agentsAtom).map((a) => (a.id === event.agent.id ? event.agent : a)),
 				);
 				break;
-
-			case "agent:model-fallback": {
-				const triedCount = event.triedChain?.length ?? 0;
-				const description =
-					triedCount > 1 ? t("toast.triedModels", { count: triedCount, resolved: event.resolved }) : undefined;
-				toast.warning(t("toast.modelUnavailable", { primary: event.primary, resolved: event.resolved }), {
-					description,
-					duration: 5000,
-				});
-				break;
-			}
 
 			case "agent:status":
 				appStore.set(

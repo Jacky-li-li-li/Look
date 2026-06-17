@@ -13,7 +13,7 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import { Key, MessageSquare, Palette, UserRound, Zap } from "lucide-react";
+import { Key, MessageSquare, Palette, Plug, UserRound, Zap } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
 import ChatPromptTab from "./ChatPromptTab";
 import GeneralTab from "./GeneralTab";
+import McpTab from "./McpTab";
 import ProfileTab from "./ProfileTab";
 import type { ProviderInfo } from "./types";
 
@@ -103,6 +104,13 @@ const SettingsDialog = memo(function SettingsDialog({
 							{t("settings.chatPrompt")}
 						</TabsTrigger>
 						<TabsTrigger
+							value="mcp"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
+						>
+							<Plug className="size-3.5" />
+							{t("settings.mcp", "MCP")}
+						</TabsTrigger>
+						<TabsTrigger
 							value="about"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
@@ -125,6 +133,10 @@ const SettingsDialog = memo(function SettingsDialog({
 
 					<TabsContent value="api-keys" className="flex-1 min-h-0 data-[state=inactive]:hidden">
 						<ApiKeysTab providers={providers} onProvidersChange={onProvidersChange} />
+					</TabsContent>
+
+					<TabsContent value="mcp" className="flex-1 min-h-0 data-[state=inactive]:hidden">
+						<McpTab />
 					</TabsContent>
 
 					<TabsContent value="about" className="flex-1 min-h-0 data-[state=inactive]:hidden">

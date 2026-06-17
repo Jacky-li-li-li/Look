@@ -18,7 +18,9 @@ export function scheduleCollapse(fn: () => void): void {
 	pendingCollapses.add(fn);
 	if (!batchCollapseTimer) {
 		batchCollapseTimer = setTimeout(() => {
-			pendingCollapses.forEach((f) => f());
+			for (const f of pendingCollapses) {
+				f();
+			}
 			pendingCollapses.clear();
 			batchCollapseTimer = null;
 		}, 300);

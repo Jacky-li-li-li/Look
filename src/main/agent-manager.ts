@@ -21,6 +21,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
 import { getRoleDefaults, getRoleSystemPrompt, getRoleTools, normalizeAgentRole } from "./agents/roles.js";
+import { createMcpExtensionFactory, toolPiName } from "./mcp/mcp-extension.js";
+import { McpManager } from "./mcp/mcp-manager.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
 import { PermissionAskService } from "./permissions/permission-ask.js";
 import { checkPermission } from "./permissions/permission-gate.js";
@@ -192,6 +194,7 @@ export class AgentManager {
 	private messageUpdateFlushTimer: NodeJS.Timeout | null = null;
 	private agentsIndexPath: string;
 	private projectsIndexPath: string;
+	private _mcpManager: McpManager | null = null;
 
 	constructor() {
 		ensureLookDir();
@@ -212,6 +215,38 @@ export class AgentManager {
 		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
 		this.agentsIndexPath = getAgentsIndexPath();
 		this.projectsIndexPath = getProjectsIndexPath();
+	}
+
+	getMcpManager(): McpManager {
+		if (!this._mcpManager) {
+			this._mcpManager = new McpManager();
+			// When MCP tools change, update all active sessions.
+			this._mcpManager.on("tools:changed", () => {
+				for (const [, m] of this.agents) {
+					this.syncMcpToolsIntoSession(m.session);
+				}
+			});
+		}
+		return this._mcpManager;
+	}
+
+	/**
+	 * Ensure MCP tools are in the session's active tool list.
+	 * pi SDK filters extension tools out when `tools` is passed
+	 * to createAgentSession (our role-based filtering), so we
+	 * must explicitly add MCP tool names after creation.
+	 */
+	private syncMcpToolsIntoSession(session: any): void {
+		try {
+			const mcpTools = this.getMcpManager().listAllTools();
+			if (mcpTools.length === 0) return;
+			const mcpToolNames = mcpTools.map((t) => toolPiName(t.serverName, t.name));
+			const currentTools: string[] = session.getActiveToolNames() ?? [];
+			const merged = [...new Set([...currentTools, ...mcpToolNames])];
+			session.setActiveToolsByName(merged);
+		} catch {
+			// Session might not be ready yet — harmless.
+		}
 	}
 
 	// ============================================================
@@ -523,6 +558,8 @@ export class AgentManager {
 					role: m.info.role,
 					model: m.info.model,
 					thinkingLevel: m.info.thinkingLevel,
+					modelSupportsThinking: m.info.modelSupportsThinking,
+					availableThinkingLevels: m.info.availableThinkingLevels,
 					sessionFile: m.session.sessionFile ?? undefined,
 					// v0.4: persist the active leaf so a restart lands on
 					// the same branch the user was on (otherwise pi's
@@ -599,33 +636,6 @@ export class AgentManager {
 					}
 				}
 
-				// Pre-flight the persisted model: the user may have removed
-				// the API key for that provider since the session was last
-				// active, in which case rehydrating with `entry.model` would
-				// crash deep in pi internals on the auth lookup. Walk the
-				// fallback chain the same way `createAgent` does and surface
-				// the swap to the renderer so it can show the same toast
-				// the create-time fallback path already does.
-				const persistedModel = entry.model ?? "";
-				let resolvedModelKey = persistedModel;
-				let resolvedModelObj: ReturnType<typeof this.lookupModel> | undefined;
-				let wasRestoredFallback = false;
-				if (persistedModel) {
-					try {
-						const { provider, modelId, resolvedId } = this.resolveModel(
-							persistedModel,
-							this.firstAvailableModelKey() ? [this.firstAvailableModelKey()!] : [],
-						);
-						resolvedModelKey = resolvedId;
-						resolvedModelObj = this.lookupModel(provider, modelId);
-						wasRestoredFallback = resolvedId !== persistedModel;
-					} catch {
-						// No usable model at all (no keys configured). Keep the
-						// persisted model string so the UI still shows *something*;
-						// the first prompt will surface the real error.
-					}
-				}
-
 				// Recalculate cumulative token usage from persisted messages.
 				// pi SDK persists usage per-message in the JSONL session file,
 				// so we reconstruct the agent-level total by walking all
@@ -664,14 +674,17 @@ export class AgentManager {
 					this.lastContextTokens.set(id, lastAssistantWithUsage.usage.inputTokens);
 				}
 
-				// Build agent info
+				// Build agent info. Model/thinking capabilities are intentionally
+				// left as best-effort initial values here; the authoritative values
+				// come from AgentSession after createAgentSession() below.
 				const role = normalizeAgentRole(entry.role);
 				const info: AgentInfo = {
 					id,
 					name: entry.name ?? "Agent",
 					role,
-					model: resolvedModelKey,
+					model: entry.model ?? "",
 					thinkingLevel: entry.thinkingLevel ?? "medium",
+					modelSupportsThinking: entry.modelSupportsThinking ?? false,
 					status: "idle",
 					messageCount: uiMessages.length,
 					createdAt: entry.createdAt ?? Date.now(),
@@ -701,32 +714,30 @@ export class AgentManager {
 
 				const allToolNames = resolveToolNames(roleToolNames);
 
+				// Let the SDK restore the session using the model/thinking level
+				// recorded in the session file or from SettingsManager defaults.
+				// Do not pin a Look-derived model here; AgentSession.model is the
+				// source of truth after creation.
 				const { session } = await createAgentSession({
 					cwd: projectCwd,
 					authStorage: this.authStorage,
 					modelRegistry: this.modelRegistry,
 					sessionManager: sm,
 					settingsManager,
-					thinkingLevel: info.thinkingLevel,
 					tools: allToolNames,
 					resourceLoader,
-					// Pin the resolved model so we never let pi's session
-					// restore use a model the user no longer has a key for.
-					...(resolvedModelObj ? { model: resolvedModelObj } : {}),
 				});
-
-				if (wasRestoredFallback) {
-					this.emit({
-						type: "agent:model-fallback",
-						agentId: id,
-						primary: persistedModel,
-						resolved: resolvedModelKey,
-						triedChain: [
-							persistedModel,
-							...(this.firstAvailableModelKey() ? [this.firstAvailableModelKey()!] : []),
-						],
-					});
+				// Mirror the SDK's effective model and thinking state back into
+				// Look's AgentInfo. This is the authoritative source.
+				const effectiveModel = session.model;
+				if (effectiveModel) {
+					info.model = `${effectiveModel.provider}/${effectiveModel.id}`;
+					info.modelSupportsThinking = effectiveModel.reasoning ?? false;
 				}
+				info.thinkingLevel = session.thinkingLevel;
+				info.availableThinkingLevels = session.getAvailableThinkingLevels() ?? entry.availableThinkingLevels;
+
+				this.syncMcpToolsIntoSession(session);
 
 				const managed: ManagedAgent = {
 					info,
@@ -744,6 +755,7 @@ export class AgentManager {
 
 			if (loaded > 0) {
 				console.log(`[Look] Restored ${loaded} agent(s) from ~/.look/`);
+				this.saveIndex();
 				this.emitAgentList();
 			}
 			// Run one-shot legacy migration for agents without projectId
@@ -831,13 +843,6 @@ export class AgentManager {
 				maxTokens: m.maxTokens ?? 16384,
 				cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
 			}));
-	}
-
-	/** First user-configured model key as `provider/id`, or null. */
-	firstAvailableModelKey(): string | null {
-		const models = this.getAvailableModelsSync();
-		if (models.length === 0) return null;
-		return `${models[0].provider}/${models[0].id}`;
 	}
 
 	async getAvailableModels(): Promise<
@@ -1075,20 +1080,6 @@ export class AgentManager {
 	 * the auth lookup. The auth check here produces a clean,
 	 * user-friendly error chain.
 	 */
-	private resolveModel(primaryModelId: string, fallbackModelIds: string[]) {
-		for (const c of [primaryModelId, ...fallbackModelIds]) {
-			const [p, ...parts] = c.includes("/") ? c.split("/") : ["anthropic", c];
-			const found = this.lookupModel(p, parts.join("/"));
-			if (found && this.modelRegistry.hasConfiguredAuth(found)) {
-				return { provider: p, modelId: parts.join("/"), resolvedId: c };
-			}
-		}
-		throw new Error(
-			`No usable model found. Tried: [${[primaryModelId, ...fallbackModelIds].join(", ")}]. ` +
-				`Set an API key in Settings, or pass a configured model explicitly.`,
-		);
-	}
-
 	private lookupModel(provider: string, modelId: string) {
 		return this.modelRegistry.find(provider, modelId);
 	}
@@ -1103,9 +1094,10 @@ export class AgentManager {
 		let cw = 128000;
 
 		// Context window from the model registry.
-		// For providers not in pi SDK's built-in registry (e.g.
-		// deepseek), the user can add a custom model entry to
-		// ~/.look/models.json via the Settings UI.
+		// Custom entries in ~/.look/models.json can override built-in
+		// models; if they omit `reasoning` / `thinkingLevelMap`, the
+		// model will appear as non-reasoning even if the built-in entry
+		// supports thinking.
 		const ms = m.info.model;
 		if (ms) {
 			const [p, ...parts] = ms.includes("/") ? ms.split("/") : ["anthropic", ms];
@@ -1157,29 +1149,10 @@ export class AgentManager {
 	 */
 	async createAgent(name?: string): Promise<string> {
 		const role = normalizeAgentRole("chat");
-		const defaults = getRoleDefaults(role);
-		const userDef = this.getProjectSettings()?.getAll().defaultThinkingLevel;
-		const thinkingLevel = userDef ?? defaults.thinkingLevel ?? "medium";
-
-		const primaryModelId = this.firstAvailableModelKey();
-		if (!primaryModelId) {
-			throw new Error("No model available. Configure an API key in Settings.");
-		}
-
-		const dynamicFallbacks = this.getAvailableModelsSync()
-			.map((m) => `${m.provider}/${m.id}`)
-			.filter((key) => key !== primaryModelId);
-		const fallbackModels = [...dynamicFallbacks];
-
-		const { provider, modelId, resolvedId } = this.resolveModel(primaryModelId, fallbackModels);
-		const wasFallback = resolvedId !== primaryModelId;
-
 		const id = uuidv4().slice(0, 8);
 		const projectCwd = this.getActiveProjectCwd();
 		const settingsManager = this.settingsManagerForCwd(projectCwd, this.activeProjectId ?? undefined);
 		const roleToolNames = getRoleTools(role);
-		const model = this.lookupModel(provider, modelId);
-		if (!model) throw new Error(`Model not found: ${resolvedId}`);
 
 		let systemPrompt = getRoleSystemPrompt(role);
 		const custom = this.getProjectSettings()?.getAll().chatSystemPrompt;
@@ -1196,19 +1169,33 @@ export class AgentManager {
 		const sm = SessionManager.create(projectCwd, getSessionsDir());
 		const allToolNames = resolveToolNames(roleToolNames);
 
-		const { session, modelFallbackMessage } = await createAgentSession({
+		// Let the SDK pick the model and thinking level. createAgentSession's
+		// documented defaults are:
+		//   model: "from settings, else first available"
+		//   thinkingLevel: "from settings, else 'medium'"
+		// SettingsManager is already populated from ~/.look/settings.json, so
+		// the user's defaultProvider/defaultModel/defaultThinkingLevel are
+		// respected without Look inventing its own selection logic.
+		const { session } = await createAgentSession({
 			cwd: projectCwd,
 			authStorage: this.authStorage,
 			modelRegistry: this.modelRegistry,
-			model,
-			thinkingLevel,
 			tools: allToolNames,
 			resourceLoader,
 			sessionManager: sm,
 			settingsManager,
 		});
 
+		const effectiveModel = session.model;
+		if (!effectiveModel) {
+			throw new Error("No model available. Configure an API key in Settings.");
+		}
+		const resolvedId = `${effectiveModel.provider}/${effectiveModel.id}`;
+		const effectiveThinkingLevel = session.thinkingLevel;
+		const availableThinkingLevels = session.getAvailableThinkingLevels();
+
 		this.agentUsage.set(id, emptyUsageSnapshot());
+		this.syncMcpToolsIntoSession(session);
 
 		const agentName = name?.trim() || `Chat ${this.agents.size + 1}`;
 		const info: AgentInfo = {
@@ -1216,7 +1203,9 @@ export class AgentManager {
 			name: agentName,
 			role,
 			model: resolvedId,
-			thinkingLevel,
+			thinkingLevel: effectiveThinkingLevel,
+			modelSupportsThinking: effectiveModel.reasoning ?? false,
+			availableThinkingLevels,
 			status: "idle",
 			messageCount: 0,
 			createdAt: Date.now(),
@@ -1235,8 +1224,6 @@ export class AgentManager {
 		};
 		this.agents.set(id, managed);
 
-		const fallbackNote = wasFallback ? ` (fallback to ${resolvedId})` : "";
-		const modelWarn = modelFallbackMessage ? ` [⚠ ${modelFallbackMessage}]` : "";
 		this.addMessage(id, {
 			id: uuidv4(),
 			agentId: id,
@@ -1244,22 +1231,13 @@ export class AgentManager {
 			contentBlocks: [
 				{
 					type: "text",
-					text: `"${agentName}" started. Model: ${resolvedId}, Thinking: ${thinkingLevel}${fallbackNote}${modelWarn}`,
+					text: `"${agentName}" started. Model: ${resolvedId}, Thinking: ${effectiveThinkingLevel}`,
 				},
 			],
 			timestamp: Date.now(),
 		});
 
 		this.emit({ type: "agent:created", agentId: id, agent: { ...info } });
-		if (wasFallback) {
-			this.emit({
-				type: "agent:model-fallback",
-				agentId: id,
-				primary: primaryModelId,
-				resolved: resolvedId,
-				triedChain: [primaryModelId, ...fallbackModels],
-			});
-		}
 		this.emitAgentList();
 		return id;
 	}
@@ -1521,7 +1499,13 @@ export class AgentManager {
 		const m = this.agents.get(agentId);
 		if (!m) return;
 		m.session.setThinkingLevel(level);
-		m.info.thinkingLevel = level;
+		// The SDK clamps to the model's supported levels; mirror the
+		// effective value back so the UI never lies about what is active.
+		m.info.thinkingLevel = m.session.thinkingLevel;
+		// Re-evaluate the model's reasoning metadata in case the SDK
+		// recomputed capabilities (defensive: normally unchanged).
+		m.info.modelSupportsThinking = m.session.model?.reasoning ?? false;
+		m.info.availableThinkingLevels = m.session.getAvailableThinkingLevels() ?? m.info.availableThinkingLevels;
 		this.saveIndex();
 		this.emit({ type: "agent:updated", agentId, agent: { ...m.info } });
 	}
@@ -1582,6 +1566,11 @@ export class AgentManager {
 
 		await m.session.setModel(model);
 		m.info.model = modelKey;
+		m.info.modelSupportsThinking = model.reasoning ?? false;
+		// setModel re-clamps the thinking level to the new model's
+		// capabilities, so keep Look's mirror in sync.
+		m.info.thinkingLevel = m.session.thinkingLevel;
+		m.info.availableThinkingLevels = m.session.getAvailableThinkingLevels();
 		this.saveIndex();
 		this.emit({ type: "agent:updated", agentId, agent: { ...m.info } });
 	}
@@ -1661,7 +1650,7 @@ export class AgentManager {
 	/**
 	 * Split a stored model key like `"anthropic/claude-3-5-sonnet"`
 	 * into `[provider, modelId]`. Mirrors the convention used by
-	 * `resolveModel` / `ModelRegistry` lookups.
+	 * `ModelRegistry` lookups.
 	 */
 	private splitModelKey(key: string): [string, string] {
 		const slash = key.indexOf("/");
@@ -2074,17 +2063,14 @@ export class AgentManager {
 		}
 
 		// Open the brand-new file and build a fresh AgentSession
-		// against it. Reuse the parent's role / model / tools so the
-		// fork feels like "the same agent, different branch".
+		// against it. The session file already carries the model/thinking
+		// state from the parent branch, so let the SDK restore it rather
+		// than pinning a Look-derived model.
 		const sm = SessionManager.open(newSessionFile);
 		const sourceCwd = this.getAgentCwd(agentId);
 		const settingsManager = this.settingsManagerForCwd(sourceCwd, src.info.projectId);
 		const role = normalizeAgentRole(src.info.role);
 		const roleToolNames = getRoleTools(role);
-		const model = this.lookupModel(...this.splitModelKey(src.info.model));
-		if (!model) {
-			throw new Error(`Cannot resolve model ${src.info.model} for forked session`);
-		}
 		let systemPrompt = getRoleSystemPrompt(role);
 		if (role === "chat") {
 			const custom = this.getProjectSettings(src.info.projectId)?.getAll().chatSystemPrompt;
@@ -2107,19 +2093,27 @@ export class AgentManager {
 			modelRegistry: this.modelRegistry,
 			sessionManager: sm,
 			settingsManager,
-			thinkingLevel: src.info.thinkingLevel,
 			tools: allToolNames,
 			resourceLoader,
-			model,
 		});
+
+		this.syncMcpToolsIntoSession(session);
+
+		const effectiveModel = session.model;
+		if (!effectiveModel) {
+			throw new Error(`No model available for forked session`);
+		}
+		const resolvedId = `${effectiveModel.provider}/${effectiveModel.id}`;
 
 		const forkName = (opts?.name ?? `${src.info.name} · fork`).slice(0, MAX_NAME_LEN);
 		const info: AgentInfo = {
 			id: newId,
 			name: forkName,
 			role,
-			model: src.info.model,
-			thinkingLevel: src.info.thinkingLevel,
+			model: resolvedId,
+			thinkingLevel: session.thinkingLevel,
+			modelSupportsThinking: effectiveModel.reasoning ?? false,
+			availableThinkingLevels: session.getAvailableThinkingLevels(),
 			status: "idle",
 			messageCount: 0,
 			createdAt: Date.now(),
@@ -2387,6 +2381,10 @@ export class AgentManager {
 			systemPromptOverride: () => opts.systemPrompt,
 			appendSystemPromptOverride: () => [],
 			extensionFactories: [
+				(pm: any) => {
+					const mcpExt = createMcpExtensionFactory(this.getMcpManager());
+					mcpExt(pm);
+				},
 				(pi: any) => {
 					// Closure captures the agentId this loader is bound to.
 					// Every session built from this loader belongs to one agent.

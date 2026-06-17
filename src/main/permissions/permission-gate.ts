@@ -43,7 +43,8 @@ function normalizeCommand(raw: string): string {
 function bashTargetsEnvFile(cmd: string): boolean {
 	const normalized = normalizeCommand(cmd);
 	// Detect redirect/tee/sed/cp targeting .env files
-	const envFilePattern = /(?:>>?\s*|tee\s+(?:-a\s+)?|sed\s+.*-i\s*(?:'[^']*'\s+|"[^"]*"\s+)?|cp\s+\S+\s+)(?:\S*\/)?\.env(?:\.\w+)?(?:\s|$)/;
+	const envFilePattern =
+		/(?:>>?\s*|tee\s+(?:-a\s+)?|sed\s+.*-i\s*(?:'[^']*'\s+|"[^"]*"\s+)?|cp\s+\S+\s+)(?:\S*\/)?\.env(?:\.\w+)?(?:\s|$)/;
 	if (envFilePattern.test(normalized)) return true;
 	// Detect echo/printf with redirect targeting .env
 	if (/(?:echo|printf)\s.*[>|].*\.env/.test(normalized)) return true;
@@ -161,8 +162,16 @@ const PROTECTED_PATHS: PermissionRule[] = [
 	},
 ];
 
+/** MCP tool prefix used by Look's MCP extension. */
+const MCP_TOOL_PREFIX = "mcp:";
+
 /** All rules merged in priority order: deny > ask > allow */
 const ALL_RULES = [...GLOBAL_DENY_RULES, ...ROLE_RULES, ...PROTECTED_PATHS];
+
+/** Whether a tool name was registered by the MCP extension. */
+export function isMcpToolName(toolName: string): boolean {
+	return toolName.startsWith(MCP_TOOL_PREFIX);
+}
 
 export interface PermissionCheckResult {
 	allowed: boolean;
@@ -201,6 +210,12 @@ export function checkPermission(
 		if (rule.action === "ask") {
 			return { allowed: false, action: "ask", reason: rule.reason, ruleName: rule.name };
 		}
+	}
+
+	// MCP tools are external, arbitrary subprocesses. In "ask" mode we
+	// default to a confirmation dialog unless an explicit rule allowed them.
+	if (isMcpToolName(toolName)) {
+		return { allowed: false, action: "ask", reason: "MCP tool call requires confirmation" };
 	}
 
 	// Default: allow

@@ -74,6 +74,7 @@
 		"queuedFollowUp": "フォローアップ",
 		"empty": "まだメッセージがありません。会話を始めましょう。",
 		"thinkingLevel": "思考",
+		"thinkingUnsupported": "現在のモデルは推論をサポートしていません",
 		"permission": "権限",
 		"newChat": "新規チャット",
 		"branchFromHere": "ここから分岐",

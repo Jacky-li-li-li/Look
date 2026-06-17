@@ -73,9 +73,9 @@ describe("ScrollToBottomButton", () => {
 // 2) Static source check
 // ============================================================
 
-describe("ChatPanel source (scroll container wiring)", () => {
+describe("ChatMessageList source (scroll container wiring)", () => {
 	const SRC = readFileSync(
-		resolve(__dirname, "../src/renderer/components/ChatPanel.tsx"),
+		resolve(__dirname, "../src/renderer/components/ChatMessageList.tsx"),
 		"utf8",
 	);
 

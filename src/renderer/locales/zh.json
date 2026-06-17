@@ -77,6 +77,7 @@
 		"queuedFollowUp": "跟进",
 		"empty": "暂无消息，开始对话吧。",
 		"thinkingLevel": "思考",
+		"thinkingUnsupported": "当前模型不支持思考",
 		"permission": "权限",
 		"newChat": "新对话",
 		"branchFromHere": "从这里分叉",

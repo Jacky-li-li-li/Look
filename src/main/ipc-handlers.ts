@@ -465,6 +465,46 @@ async function handleRendererInvoke(
 			return { success: true, profile };
 		}
 
+		// === MCP (Model Context Protocol) ===
+		case "mcp:list-servers": {
+			const servers = agentManager.getMcpManager().getServerStatuses();
+			return { success: true, servers };
+		}
+
+		case "mcp:add-server": {
+			guardString(data.name, "name");
+			const config = guardObject(data.config, "config");
+			await agentManager.getMcpManager().addServer(data.name, config as any);
+			return { success: true };
+		}
+
+		case "mcp:remove-server": {
+			guardString(data.name, "name");
+			await agentManager.getMcpManager().removeServer(data.name);
+			return { success: true };
+		}
+
+		case "mcp:restart-server": {
+			guardString(data.name, "name");
+			await agentManager.getMcpManager().restartServer(data.name);
+			return { success: true };
+		}
+
+		case "mcp:list-tools": {
+			const mgr = agentManager.getMcpManager();
+			// Auto-connect if nothing is connected yet (lazy init).
+			if (mgr.listAllTools().length === 0) {
+				await mgr.connectAll();
+			}
+			const tools = mgr.listAllTools();
+			return { success: true, tools };
+		}
+
+		case "mcp:connect-all": {
+			await agentManager.getMcpManager().connectAll();
+			return { success: true };
+		}
+
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };
 	}

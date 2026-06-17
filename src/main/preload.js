@@ -100,6 +100,10 @@ const api = {
   // ---- v0.3 skills ----
   listSkills: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:list" }),
+
+  // ---- MCP ----
+  listMcpTools: () =>
+    ipcRenderer.invoke("look:invoke", { type: "mcp:list-tools" }),
   invokeSkill: (agentId, skillName, args) =>
     ipcRenderer.invoke("look:invoke", { type: "skills:invoke", agentId, skillName, args }),
   importSkillPaths: (paths) =>

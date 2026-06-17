@@ -39,3 +39,15 @@ Type: trap
 **改 baseline tsc-passing 代码时, 新加 import 可能让 TS 重新 narrow 事件类型, 暴露出旧代码的隐式 any 变严格类型。** Look 项目里加 `import { ... }` 之前, `event.steering` 可能是 `any` 而通过, 之后变成 `readonly string[]`, 旧赋值 `[event.steering]` 报 "readonly cannot be assigned"。修法: spread `[...event.steering]` 或拷到 mutable 数组。
 
 来源: 加 agent:tree-changed case 派发时撞了这个, 修了 `agent:queue_update` 的旧代码。
+
+## MCP (Model Context Protocol)
+Type: rule
+Look 把 MCP 实现为 pi extension（`src/main/mcp/mcp-extension.ts`），而不是自己包一层 runtime。设计约定：
+
+- **工具命名**：pi 侧注册为 `mcp:{serverName}:{toolName}`（ASCII 冒号），不再使用旧的全角 `：`。
+- **Schema 转换**：MCP server 返回的 JSON Schema 会尽量转成 TypeBox schema 传给 `pi.registerTool`，让 LLM 拿到结构化参数提示；无法转换的字段回退到 `Type.Any()`。
+- **激活方式**：`createAgentSession` 传了 `tools` 时会过滤掉 extension tools，因此 `AgentManager.syncMcpToolsIntoSession()` 在会话创建后把 `mcp:*` 工具名重新加入 active tools。
+- **权限门控**：MCP 工具在 "ask" 模式下默认需要用户确认；"plan" 模式下会被阻断（不是 read-only）；"allow" 模式直接放行。
+- **输入框触发**：输入框输入 `#mcp` 呼出 MCP 工具选择面板，Tab/Enter 选中后插入 `mcp:{server}:{tool} `。
+- **生命周期**：`session_start` 自动 `connectAll()`；`before-quit` 调用 `disconnectAll()` 清理子进程。
+- **依赖**：`@modelcontextprotocol/sdk` 必须是 `package.json` 的直接依赖，不能靠 transitive dependency。

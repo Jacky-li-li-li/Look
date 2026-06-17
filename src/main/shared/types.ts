@@ -102,6 +102,10 @@ export interface AgentInfo {
 	role: AgentRole;
 	model: string;
 	thinkingLevel: ThinkingLevel;
+	/** Whether the current model advertises reasoning support. */
+	modelSupportsThinking?: boolean;
+	/** Thinking levels supported by the current model (from pi SDK). */
+	availableThinkingLevels?: ThinkingLevel[];
 	status: AgentStatus;
 	messageCount: number;
 	createdAt: number;
@@ -361,10 +365,6 @@ export type MainToRendererEvent =
 	| WithAgentId<{ type: "agent:created"; agent: AgentInfo }>
 	| WithAgentId<{ type: "agent:destroyed" }>
 	| WithAgentId<{ type: "agent:updated"; agent: AgentInfo }>
-	// Emitted once after createAgent when the primary model was
-	// unavailable and resolveModel picked a fallback. Lets the
-	// renderer surface a "switched to X" toast (P-未5).
-	| WithAgentId<{ type: "agent:model-fallback"; primary: string; resolved: string; triedChain: string[] }>
 	| WithAgentId<{ type: "agent:status"; status: AgentStatus }>
 	| WithAgentId<{ type: "agent:context-usage"; usage: ContextUsageInfo }>
 	| WithAgentId<{ type: "agent:usage-update"; usage: UsageSnapshot }>
@@ -528,7 +528,14 @@ export type RendererToMainEvent =
 			type: "user-profile:update";
 			patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>;
 	  }
-	| { type: "user-profile:reset" };
+	| { type: "user-profile:reset" }
+	// ---- MCP (Model Context Protocol) ----
+	| { type: "mcp:list-servers" }
+	| { type: "mcp:add-server"; name: string; config: Record<string, unknown> }
+	| { type: "mcp:remove-server"; name: string }
+	| { type: "mcp:restart-server"; name: string }
+	| { type: "mcp:list-tools" }
+	| { type: "mcp:connect-all" };
 
 // ============================================================
 // Tool types

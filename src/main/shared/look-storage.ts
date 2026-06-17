@@ -47,11 +47,11 @@ export function getModelsPath(): string {
 }
 
 /** Dynamically registered custom providers (Look-managed, persisted across restarts) */
-	export function getCustomProvidersPath(): string {
-		return path.join(LOOK_DIR, "custom-providers.json");
-	}
+export function getCustomProvidersPath(): string {
+	return path.join(LOOK_DIR, "custom-providers.json");
+}
 
-	/** Application settings (owned by the SDK's SettingsManager) */
+/** Application settings (owned by the SDK's SettingsManager) */
 export function getSettingsPath(): string {
 	return path.join(LOOK_DIR, "settings.json");
 }
@@ -71,6 +71,11 @@ export function getUserProfilePath(): string {
 /** pi SDK session files directory */
 export function getSessionsDir(): string {
 	return path.join(LOOK_DIR, "sessions");
+}
+
+/** MCP server configurations */
+export function getMcpServersPath(): string {
+	return path.join(LOOK_DIR, "mcp-servers.json");
 }
 
 // ── Initialization ──

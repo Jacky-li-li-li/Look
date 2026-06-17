@@ -51,6 +51,15 @@ function defaultArgSummary(_toolName: string, args: Record<string, unknown>): st
 	return JSON.stringify(args, null, 2);
 }
 
+/** Parse an MCP tool name registered by Look into [server, tool]. */
+function parseMcpToolName(name: string): { server: string; tool: string } | null {
+	if (!name.startsWith("mcp:")) return null;
+	const rest = name.slice(4);
+	const idx = rest.indexOf(":");
+	if (idx === -1) return null;
+	return { server: rest.slice(0, idx), tool: rest.slice(idx + 1) };
+}
+
 export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onEdit }: PermissionDialogProps) {
 	const { t } = useTranslation();
 	const [editMode, setEditMode] = useState(false);
@@ -95,9 +104,24 @@ export function PermissionDialog({ request, queueDepth = 1, onAllow, onDeny, onE
 
 						<div className="flex flex-col gap-3 -mt-1">
 							<div className="flex items-center gap-2 text-[12px]">
-								<Badge variant="outline" className="font-mono text-[10px]">
-									{request.toolName}
-								</Badge>
+								{(() => {
+									const mcp = parseMcpToolName(request.toolName);
+									return mcp ? (
+										<div className="flex items-center gap-1.5">
+											<Badge variant="outline" className="font-mono text-[10px]">
+												{mcp.server}
+											</Badge>
+											<span className="text-muted-foreground/60">/</span>
+											<Badge variant="secondary" className="font-mono text-[10px]">
+												{mcp.tool}
+											</Badge>
+										</div>
+									) : (
+										<Badge variant="outline" className="font-mono text-[10px]">
+											{request.toolName}
+										</Badge>
+									);
+								})()}
 								<span className="text-muted-foreground/60">·</span>
 								<span className="text-muted-foreground">agent {request.agentId.slice(0, 6)}</span>
 							</div>

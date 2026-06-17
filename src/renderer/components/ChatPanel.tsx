@@ -7,7 +7,7 @@
 // in ChatInput.
 // ============================================================
 
-import type { AgentRole, AgentStatus, PermissionMode, PiMessage } from "@shared/types";
+import type { AgentRole, AgentStatus, PermissionMode, PiMessage, ThinkingLevel } from "@shared/types";
 import { memo, useCallback, useRef } from "react";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
 import ChatMessageList from "./ChatMessageList";
@@ -23,6 +23,8 @@ interface ChatPanelProps {
 	agentStatus: AgentStatus;
 	currentModel: string;
 	currentThinking: string;
+	modelSupportsThinking: boolean;
+	availableThinkingLevels?: ThinkingLevel[];
 	currentPermissionMode: PermissionMode;
 	onSend: (text: string) => void;
 	onThinkingChange: (level: string) => void;
@@ -44,6 +46,8 @@ const ChatPanel = memo(function ChatPanel({
 	agentStatus,
 	currentModel,
 	currentThinking,
+	modelSupportsThinking,
+	availableThinkingLevels,
 	currentPermissionMode,
 	onSend,
 	onThinkingChange,
@@ -80,6 +84,8 @@ const ChatPanel = memo(function ChatPanel({
 				agentStatus={agentStatus}
 				currentModel={currentModel}
 				currentThinking={currentThinking}
+				modelSupportsThinking={modelSupportsThinking}
+				availableThinkingLevels={availableThinkingLevels}
 				currentPermissionMode={currentPermissionMode}
 				isBusy={isBusy}
 				onSend={onSend}

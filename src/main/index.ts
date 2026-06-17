@@ -330,3 +330,15 @@ app.on("window-all-closed", () => {
 		app.quit();
 	}
 });
+
+// Clean up MCP server subprocesses on quit so we don't leave
+// orphaned child processes behind.
+app.on("before-quit", async () => {
+	if (agentManager) {
+		try {
+			await agentManager.getMcpManager().disconnectAll();
+		} catch {
+			// best-effort cleanup
+		}
+	}
+});

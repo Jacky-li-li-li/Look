@@ -34,7 +34,7 @@ export interface UserSettings {
 	defaultThinkingLevel: ThinkingLevel;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
-		/** The model the user most recently picked in the bottom-bar
+	/** The model the user most recently picked in the bottom-bar
 	 *  ModelSelector. null = "no preference; pick the first configured".
 	 *  Used by App.handleQuickCreateChat to seed new chat agents
 	 *  with the user's current pick so they don't snap back to a
@@ -55,7 +55,7 @@ const DEFAULTS: UserSettings = {
 	language: "en",
 	defaultThinkingLevel: "medium",
 	autoCollapse: true,
-		compactionEnabled: true,
+	compactionEnabled: true,
 	preferredModel: null,
 	chatAgentName: "",
 	chatSystemPrompt: "",
@@ -74,7 +74,7 @@ interface UiSettings {
 	language: UILanguage;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
-		chatSystemPrompt: string;
+	chatSystemPrompt: string;
 	/** Custom display name for the agent, shown next to avatar. */
 	chatAgentName: string;
 	/** Last active agent ID to restore on restart. */
@@ -86,7 +86,7 @@ interface UiSettings {
 const UI_DEFAULTS: UiSettings = {
 	language: DEFAULTS.language,
 	autoCollapse: DEFAULTS.autoCollapse,
-		compactionEnabled: DEFAULTS.compactionEnabled,
+	compactionEnabled: DEFAULTS.compactionEnabled,
 	chatSystemPrompt: DEFAULTS.chatSystemPrompt,
 	chatAgentName: DEFAULTS.chatAgentName,
 	lastActiveAgentId: "",
@@ -104,8 +104,8 @@ type SettingsManagerLike = {
 	setDefaultModelAndProvider(provider: string, modelId: string): void;
 	setDefaultProvider(provider: string): void;
 	setDefaultModel(modelId: string): void;
-		getCompactionEnabled(): boolean;
-		setCompactionEnabled(enabled: boolean): void;
+	getCompactionEnabled(): boolean;
+	setCompactionEnabled(enabled: boolean): void;
 	flush(): Promise<void>;
 };
 
@@ -131,7 +131,7 @@ export class UserSettingsStore {
 			...this.ui,
 			defaultThinkingLevel: sdk.defaultThinkingLevel ?? DEFAULTS.defaultThinkingLevel,
 			preferredModel: sdk.preferredModel ?? DEFAULTS.preferredModel,
-				compactionEnabled: this.settingsManager.getCompactionEnabled() ?? DEFAULTS.compactionEnabled,
+			compactionEnabled: this.settingsManager.getCompactionEnabled() ?? DEFAULTS.compactionEnabled,
 		};
 	}
 
@@ -188,14 +188,14 @@ export class UserSettingsStore {
 			}
 		}
 		if (partial.compactionEnabled !== undefined) {
-				this.settingsManager.setCompactionEnabled(partial.compactionEnabled);
-			}
-			// UI fields: persist into our sibling file.
+			this.settingsManager.setCompactionEnabled(partial.compactionEnabled);
+		}
+		// UI fields: persist into our sibling file.
 		const uiPartial: Partial<UiSettings> = {};
 		if (partial.language !== undefined) uiPartial.language = partial.language;
 		if (partial.autoCollapse !== undefined) uiPartial.autoCollapse = partial.autoCollapse;
 		if (partial.compactionEnabled !== undefined) uiPartial.compactionEnabled = partial.compactionEnabled;
-			if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
+		if (partial.chatSystemPrompt !== undefined) uiPartial.chatSystemPrompt = partial.chatSystemPrompt;
 		if (partial.chatAgentName !== undefined) uiPartial.chatAgentName = partial.chatAgentName;
 		if (partial.lastActiveAgentId !== undefined) uiPartial.lastActiveAgentId = partial.lastActiveAgentId;
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;

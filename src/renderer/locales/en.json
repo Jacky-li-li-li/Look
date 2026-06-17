@@ -77,6 +77,7 @@
 		"queuedFollowUp": "Follow-up",
 		"empty": "No messages yet. Start a conversation.",
 		"thinkingLevel": "Thinking",
+		"thinkingUnsupported": "Current model does not support reasoning",
 		"permission": "Permission",
 		"newChat": "New Chat",
 		"branchFromHere": "Branch from here",
