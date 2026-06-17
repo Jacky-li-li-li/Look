@@ -19,20 +19,12 @@ const LEVELS: { value: ThinkingLevel; label: string; desc: string }[] = [
 ];
 
 interface ThinkingSelectorProps {
-	agentId: string;
 	currentLevel: string;
-	supportsThinking: boolean;
 	availableThinkingLevels?: ThinkingLevel[];
 	onChanged: (level: string) => void;
 }
 
-export default function ThinkingSelector({
-	agentId,
-	currentLevel,
-	supportsThinking,
-	availableThinkingLevels,
-	onChanged,
-}: ThinkingSelectorProps) {
+export default function ThinkingSelector({ currentLevel, availableThinkingLevels, onChanged }: ThinkingSelectorProps) {
 	const { t } = useTranslation();
 	const onChangedRef = useRef(onChanged);
 	onChangedRef.current = onChanged;
@@ -43,29 +35,21 @@ export default function ThinkingSelector({
 
 	const current = LEVELS.find((l) => l.value === currentLevel) ?? LEVELS[0];
 
-	// If the main process has provided the exact list of levels supported by
-	// the current model (from the pi SDK), use it. Otherwise fall back to the
-	// coarse supportsThinking flag for backward compatibility.
 	const availableSet = useMemo(() => {
 		if (availableThinkingLevels && availableThinkingLevels.length > 0) {
 			return new Set(availableThinkingLevels);
 		}
-		return supportsThinking ? new Set(LEVELS.map((l) => l.value)) : new Set<ThinkingLevel>(["off"]);
-	}, [availableThinkingLevels, supportsThinking]);
+		return new Set<ThinkingLevel>(["off"]);
+	}, [availableThinkingLevels]);
 
-	console.log("[ThinkingSelector] render", { agentId, currentLevel, supportsThinking, availableThinkingLevels, availableSet: Array.from(availableSet) });
+	const supportsThinking = Array.from(availableSet).some((level) => level !== "off");
 
 	const triggerTitle = supportsThinking
 		? `${t("chat.thinkingLevel", "Thinking")}: ${current.label}`
 		: t("chat.thinkingUnsupported", "Current model does not support reasoning");
 
 	const trigger = (
-		<Button
-			variant="line"
-			size="sm"
-			title={triggerTitle}
-			className="group/selector h-7 font-mono text-[11px]"
-		>
+		<Button variant="line" size="sm" title={triggerTitle} className="group/selector h-7 font-mono text-[11px]">
 			<Brain data-icon="inline-start" className="size-3" />
 			{current.label}
 			<ChevronDown

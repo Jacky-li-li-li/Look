@@ -191,16 +191,6 @@ async function handleRendererInvoke(
 			if ("language" in settings) {
 				guardEnum(settings.language, "settings.language", ["en", "zh", "ja"] as const);
 			}
-			if ("defaultThinkingLevel" in settings) {
-				guardEnum(settings.defaultThinkingLevel, "settings.defaultThinkingLevel", [
-					"off",
-					"minimal",
-					"low",
-					"medium",
-					"high",
-					"xhigh",
-				] as const);
-			}
 			if ("autoCollapse" in settings) {
 				guardBoolean(settings.autoCollapse, "settings.autoCollapse");
 			}
@@ -338,7 +328,7 @@ async function handleRendererInvoke(
 		case "project:create": {
 			const _cwd = guardPath(data.cwd, "cwd");
 			guardOptionalString(data.name, "name");
-			const result = agentManager.createProject(_cwd, data.name);
+			const result = await agentManager.createProject(_cwd, data.name);
 			return {
 				success: true,
 				project: result.project,

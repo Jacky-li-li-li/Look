@@ -29,8 +29,6 @@
 		"language": "语言",
 		"interfaceLanguage": "界面语言",
 		"behavior": "行为",
-		"defaultThinking": "默认思考",
-		"thinkingDesc": "新建 Agent 时的推理深度",
 		"autoCollapse": "自动折叠",
 		"autoCollapseDesc": "当输出开始流式传输时自动折叠思考面板",
 		"autoCompress": "自动压缩",

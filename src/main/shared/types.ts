@@ -461,7 +461,6 @@ export type RendererToMainEvent =
 			type: "settings:general:set";
 			settings: Partial<{
 				language: "en" | "zh" | "ja";
-				defaultThinkingLevel: ThinkingLevel;
 				autoCollapse: boolean;
 				compactionEnabled: boolean;
 				preferredModel: string | null;

@@ -8,7 +8,7 @@
 //
 // After the refactor, the file is owned by the SDK's
 // `SettingsManager` and only persists its schema fields
-// (defaultThinkingLevel, defaultProvider, defaultModel). The
+// (defaultProvider, defaultModel). The
 // Look-only fields (language, autoCollapse, autoCompress,
 // compressThreshold) ride in a sibling `~/.look/ui-settings.json`
 // managed by `UserSettingsStore` itself.
@@ -109,8 +109,12 @@ export function migrateLegacySettings(): MigrationResult {
 		delete data.preferredModel;
 	}
 
-	// 3) `defaultThinkingLevel` keeps its name (the SDK has the
-	//    same field), so no rename needed.
+	// 3) Look no longer exposes a default thinking setting. Drop the
+	//    legacy field instead of carrying it into the SDK settings file.
+	if ("defaultThinkingLevel" in data) {
+		delete data.defaultThinkingLevel;
+		keys.push(`defaultThinkingLevel removed`);
+	}
 
 	// 4) Always stamp the migration marker so we don't re-scan
 	//    next boot. Keeping the marker unconditional (even with

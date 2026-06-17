@@ -19,8 +19,6 @@ import { useTranslation } from "react-i18next";
 
 const api = (window as any).look;
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
-
 function SettingRow({
 	label,
 	desc,
@@ -49,7 +47,6 @@ export default function GeneralTab() {
 	const { t, i18n } = useTranslation();
 	const { theme, setTheme } = useTheme();
 	const [language, setLanguage] = useState("en");
-	const [thinkingLevel, setThinkingLevel] = useState("medium");
 	const [autoCollapse, setAutoCollapse] = useState(true);
 	const [compactionEnabled, setCompactionEnabled] = useState(true);
 
@@ -59,7 +56,6 @@ export default function GeneralTab() {
 			.then((r: any) => {
 				if (r?.success && r.settings) {
 					if (r.settings.language) setLanguage(r.settings.language);
-					if (r.settings.defaultThinkingLevel) setThinkingLevel(r.settings.defaultThinkingLevel);
 					if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
 					if (r.settings.compactionEnabled !== undefined) setCompactionEnabled(r.settings.compactionEnabled);
 				}
@@ -130,28 +126,6 @@ export default function GeneralTab() {
 					</CardTitle>
 				</CardHeader>
 				<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
-					<SettingRow id="thinking" label={t("settings.defaultThinking")} desc={t("settings.thinkingDesc")}>
-						<Select
-							value={thinkingLevel}
-							onValueChange={(v) => {
-								setThinkingLevel(v);
-								persistSettings({ defaultThinkingLevel: v });
-							}}
-						>
-							<SelectTrigger id="thinking" size="sm" className="w-[100px]">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectGroup>
-									{THINKING_LEVELS.map((l) => (
-										<SelectItem key={l} value={l}>
-											{l}
-										</SelectItem>
-									))}
-								</SelectGroup>
-							</SelectContent>
-						</Select>
-					</SettingRow>
 					<SettingRow id="autoclp" label={t("settings.autoCollapse")} desc={t("settings.autoCollapseDesc")}>
 						<Switch
 							id="autoclp"

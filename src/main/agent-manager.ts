@@ -17,10 +17,11 @@ import {
 	DefaultResourceLoader,
 	ModelRegistry,
 	SessionManager,
+	type SessionStats,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
-import { getRoleDefaults, getRoleSystemPrompt, getRoleTools, normalizeAgentRole } from "./agents/roles.js";
+import { getRoleSystemPrompt, getRoleTools, normalizeAgentRole } from "./agents/roles.js";
 import { createMcpExtensionFactory, toolPiName } from "./mcp/mcp-extension.js";
 import { McpManager } from "./mcp/mcp-manager.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
@@ -138,24 +139,6 @@ function emptyUsageSnapshot(): UsageSnapshot {
 	};
 }
 
-function cloneUsageSnapshot(usage: Partial<UsageSnapshot> | null | undefined): UsageSnapshot {
-	const cost = usage?.cost;
-	return {
-		inputTokens: usage?.inputTokens ?? 0,
-		outputTokens: usage?.outputTokens ?? 0,
-		cacheReadTokens: usage?.cacheReadTokens ?? 0,
-		cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
-		totalTokens: usage?.totalTokens ?? 0,
-		cost: {
-			input: cost?.input ?? 0,
-			output: cost?.output ?? 0,
-			cacheRead: cost?.cacheRead ?? 0,
-			cacheWrite: cost?.cacheWrite ?? 0,
-			total: cost?.total ?? 0,
-		},
-	};
-}
-
 /** 默认 Chat Agent 名称 — 标题为此名称的会话在首次回复后自动生成标题 */
 const DEFAULT_CHAT_NAME = "聊天助手";
 
@@ -186,8 +169,6 @@ export class AgentManager {
 	private authStorage: AuthStorage;
 	private modelRegistry: ModelRegistry;
 
-	private agentUsage = new Map<string, UsageSnapshot>();
-	private lastContextTokens = new Map<string, number>();
 	private firstUserMessage = new Map<string, string>();
 	private titleInFlight = new Set<string>();
 	private messageUpdateBuffers = new Map<string, any>();
@@ -299,7 +280,7 @@ export class AgentManager {
 	}
 
 	/** Create a new project. Checks for duplicate cwd, auto-deduplicates names. */
-	createProject(cwd: string, name?: string): { project: ProjectInfo; isDuplicate: boolean } {
+	async createProject(cwd: string, name?: string): Promise<{ project: ProjectInfo; isDuplicate: boolean }> {
 		// Guard: duplicate cwd
 		for (const [, mp] of this.projects) {
 			if (mp.info.cwd === cwd) {
@@ -339,8 +320,7 @@ export class AgentManager {
 			getUiSettingsPath(),
 		);
 		const globalAll = globalDefaults.getAll();
-		us.update({
-			defaultThinkingLevel: globalAll.defaultThinkingLevel,
+		await us.update({
 			preferredModel: globalAll.preferredModel,
 			autoCollapse: globalAll.autoCollapse,
 			compactionEnabled: globalAll.compactionEnabled,
@@ -418,7 +398,7 @@ export class AgentManager {
 	}
 
 	/** Migrate legacy agents (no projectId) to projects. One-shot backward compat. */
-	private migrateLegacyAgents(): void {
+	private async migrateLegacyAgents(): Promise<void> {
 		const orphans = Array.from(this.agents.entries()).filter(([, m]) => !m.info.projectId);
 		if (orphans.length === 0) return;
 
@@ -449,7 +429,7 @@ export class AgentManager {
 		// Create project for each cwd group
 		for (const [cwd, agentPairs] of cwdGroups) {
 			const folderName = path.basename(cwd);
-			const result = this.createProject(cwd, `Imported: ${folderName}`);
+			const result = await this.createProject(cwd, `Imported: ${folderName}`);
 			if (result.isDuplicate) {
 				// Project already exists from a previous migration step
 			}
@@ -556,10 +536,6 @@ export class AgentManager {
 					id,
 					name: m.info.name,
 					role: m.info.role,
-					model: m.info.model,
-					thinkingLevel: m.info.thinkingLevel,
-					modelSupportsThinking: m.info.modelSupportsThinking,
-					availableThinkingLevels: m.info.availableThinkingLevels,
 					sessionFile: m.session.sessionFile ?? undefined,
 					// v0.4: persist the active leaf so a restart lands on
 					// the same branch the user was on (otherwise pi's
@@ -567,7 +543,6 @@ export class AgentManager {
 					// looks like the branch switch never happened).
 					leafId: m.leafId,
 					permissionMode: m.permissionMode,
-					usage: m.info.usage,
 					createdAt: m.info.createdAt,
 					projectId: m.info.projectId,
 				})),
@@ -636,59 +611,17 @@ export class AgentManager {
 					}
 				}
 
-				// Recalculate cumulative token usage from persisted messages.
-				// pi SDK persists usage per-message in the JSONL session file,
-				// so we reconstruct the agent-level total by walking all
-				// assistant messages. This is the source of truth — entry.usage
-				// (if present) is only used as a fallback for agents whose
-				// messages happen to carry no usage data.
-				let cumUsage: UsageSnapshot = emptyUsageSnapshot();
-				let hasMessageUsage = false;
-				for (const msg of uiMessages) {
-					if (msg.role !== "assistant" || !msg.usage) continue;
-					hasMessageUsage = true;
-					const u = msg.usage;
-					cumUsage.inputTokens += u.inputTokens;
-					cumUsage.outputTokens += u.outputTokens;
-					cumUsage.cacheReadTokens += u.cacheReadTokens;
-					cumUsage.cacheWriteTokens += u.cacheWriteTokens;
-					cumUsage.totalTokens += u.totalTokens;
-					cumUsage.cost.input += u.cost.input;
-					cumUsage.cost.output += u.cost.output;
-					cumUsage.cost.cacheRead += u.cost.cacheRead;
-					cumUsage.cost.cacheWrite += u.cost.cacheWrite;
-					cumUsage.cost.total += u.cost.total;
-				}
-				// Fallback: if no message had usage (e.g. very old sessions),
-				// use whatever was in the index file.
-				if (!hasMessageUsage && entry.usage) {
-					cumUsage = cloneUsageSnapshot(entry.usage);
-				}
-
-				// Restore last-context-tokens from the last assistant message.
-				// This seeds the context ring so it shows the correct usage
-				// immediately on restart, rather than showing 0% until the
-				// next message_end arrives.
-				const lastAssistantWithUsage = [...uiMessages].reverse().find((m) => m.role === "assistant" && m.usage);
-				if (lastAssistantWithUsage?.usage) {
-					this.lastContextTokens.set(id, lastAssistantWithUsage.usage.inputTokens);
-				}
-
-				// Build agent info. Model/thinking capabilities are intentionally
-				// left as best-effort initial values here; the authoritative values
-				// come from AgentSession after createAgentSession() below.
 				const role = normalizeAgentRole(entry.role);
 				const info: AgentInfo = {
 					id,
 					name: entry.name ?? "Agent",
 					role,
-					model: entry.model ?? "",
-					thinkingLevel: entry.thinkingLevel ?? "medium",
-					modelSupportsThinking: entry.modelSupportsThinking ?? false,
+					model: "",
+					thinkingLevel: "off",
 					status: "idle",
 					messageCount: uiMessages.length,
 					createdAt: entry.createdAt ?? Date.now(),
-					usage: cloneUsageSnapshot(cumUsage),
+					usage: emptyUsageSnapshot(),
 					permissionMode: (entry.permissionMode as PermissionMode) ?? "ask",
 					projectId: entry.projectId,
 				};
@@ -727,15 +660,6 @@ export class AgentManager {
 					tools: allToolNames,
 					resourceLoader,
 				});
-				// Mirror the SDK's effective model and thinking state back into
-				// Look's AgentInfo. This is the authoritative source.
-				const effectiveModel = session.model;
-				if (effectiveModel) {
-					info.model = `${effectiveModel.provider}/${effectiveModel.id}`;
-					info.modelSupportsThinking = effectiveModel.reasoning ?? false;
-				}
-				info.thinkingLevel = session.thinkingLevel;
-				info.availableThinkingLevels = session.getAvailableThinkingLevels() ?? entry.availableThinkingLevels;
 
 				this.syncMcpToolsIntoSession(session);
 
@@ -749,7 +673,6 @@ export class AgentManager {
 				};
 
 				this.agents.set(id, managed);
-				this.agentUsage.set(id, cloneUsageSnapshot(cumUsage));
 				loaded++;
 			}
 
@@ -759,7 +682,7 @@ export class AgentManager {
 				this.emitAgentList();
 			}
 			// Run one-shot legacy migration for agents without projectId
-			this.migrateLegacyAgents();
+			await this.migrateLegacyAgents();
 			return loaded;
 		} catch (err) {
 			console.error("[Look] Failed to load agents:", err);
@@ -808,19 +731,16 @@ export class AgentManager {
 
 	/** Return provider IDs whose SDK auth source is the environment. */
 
-	private isUserConfigured(provider: string): boolean {
-		return this.authStorage.has(provider);
-	}
-
 	/** Returns the active project's root directory path. */
 	getProjectRoot(): string {
 		return this.getActiveProjectCwd();
 	}
 
 	/**
-	 * Synchronous accessor for the user-configured model set. Used by
-	 * the createAgent path (which is async but wants to derive the
-	 * first-available model before yielding to the modelRegistry).
+	 * Synchronous accessor for the SDK-configured model set.
+	 * ModelRegistry.getAvailable() already applies pi's auth rules,
+	 * including stored keys, OAuth/runtime auth, environment variables,
+	 * and models.json request config.
 	 */
 	getAvailableModelsSync(): Array<{
 		provider: string;
@@ -832,17 +752,17 @@ export class AgentManager {
 		cost: { input: number; output: number };
 	}> {
 		return this.modelRegistry
-			.getAvailable()
-			.filter((m) => this.authStorage.has(m.provider))
+			.getAll()
+			.filter((m) => this.modelRegistry.getProviderAuthStatus(m.provider).configured)
 			.map((m) => ({
-				provider: m.provider,
-				id: m.id,
-				name: m.name ?? m.id,
-				reasoning: m.reasoning ?? false,
-				contextWindow: m.contextWindow ?? 128000,
-				maxTokens: m.maxTokens ?? 16384,
-				cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
-			}));
+			provider: m.provider,
+			id: m.id,
+			name: m.name ?? m.id,
+			reasoning: m.reasoning ?? false,
+			contextWindow: m.contextWindow ?? 128000,
+			maxTokens: m.maxTokens ?? 16384,
+			cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
+		}));
 	}
 
 	async getAvailableModels(): Promise<
@@ -861,23 +781,23 @@ export class AgentManager {
 
 	async getProviders(): Promise<Array<{ id: string; name: string; hasCredentials: boolean; models: string[] }>> {
 		const allModels = this.modelRegistry.getAll();
-		const providerMap = new Map<string, { name: string; models: string[] }>();
+		const providerMap = new Map<string, string>();
 		for (const m of allModels) {
-			const e = providerMap.get(m.provider);
-			if (e) {
-				e.models.push(m.id);
-			} else {
-				providerMap.set(m.provider, {
-					name: this.modelRegistry.getProviderDisplayName(m.provider),
-					models: [m.id],
-				});
+			if (!providerMap.has(m.provider)) {
+				providerMap.set(m.provider, this.modelRegistry.getProviderDisplayName(m.provider));
 			}
 		}
-		return Array.from(providerMap.entries()).map(([id, info]) => ({
+		const availableByProvider = new Map<string, string[]>();
+		for (const m of this.modelRegistry.getAvailable()) {
+			const models = availableByProvider.get(m.provider) ?? [];
+			models.push(m.id);
+			availableByProvider.set(m.provider, models);
+		}
+		return Array.from(providerMap.entries()).map(([id, name]) => ({
 			id,
-			name: info.name,
-			hasCredentials: this.isUserConfigured(id),
-			models: this.isUserConfigured(id) ? info.models : [],
+			name,
+			hasCredentials: this.modelRegistry.getProviderAuthStatus(id).configured,
+			models: availableByProvider.get(id) ?? [],
 		}));
 	}
 
@@ -1091,40 +1011,15 @@ export class AgentManager {
 	getContextUsage(agentId: string): ContextUsageInfo | undefined {
 		const m = this.agents.get(agentId);
 		if (!m) return undefined;
-		let cw = 128000;
-
-		// Context window from the model registry.
-		// Custom entries in ~/.look/models.json can override built-in
-		// models; if they omit `reasoning` / `thinkingLevelMap`, the
-		// model will appear as non-reasoning even if the built-in entry
-		// supports thinking.
-		const ms = m.info.model;
-		if (ms) {
-			const [p, ...parts] = ms.includes("/") ? ms.split("/") : ["anthropic", ms];
-			const mdl = this.lookupModel(p, parts.join("/"));
-			if (mdl?.contextWindow) cw = mdl.contextWindow;
-		}
-
-		// Use the input tokens from the most recent assistant response.
-		// Each request sends the full conversation history, so input
-		// tokens reflect the current context size.  Fall back to
-		// cumulative totalTokens when per-message input is empty
-		// (e.g. after restore from disk on a fresh agent).
-		let used = this.lastContextTokens.get(agentId) ?? 0;
-		if (used === 0) {
-			const cum = this.agentUsage.get(agentId);
-			if (cum && cum.totalTokens > 0) {
-				used = Math.round(cum.totalTokens * 0.5);
-			}
-		}
-
-		const pct = Math.min(100, Math.max(0, Math.round((used / cw) * 100)));
+		const usage = m.session.getContextUsage();
+		if (!usage) return undefined;
+		const pct = usage.percent === null ? 0 : Math.min(100, Math.max(0, Math.round(usage.percent)));
 		return {
 			percentage: pct,
-			usedTokens: used,
-			totalTokens: cw,
+			usedTokens: usage.tokens ?? 0,
+			totalTokens: usage.contextWindow,
 			level: pct >= 80 ? "critical" : pct >= 60 ? "warning" : "safe",
-			compacting: false,
+			compacting: m.session.isCompacting,
 		};
 	}
 
@@ -1174,8 +1069,8 @@ export class AgentManager {
 		//   model: "from settings, else first available"
 		//   thinkingLevel: "from settings, else 'medium'"
 		// SettingsManager is already populated from ~/.look/settings.json, so
-		// the user's defaultProvider/defaultModel/defaultThinkingLevel are
-		// respected without Look inventing its own selection logic.
+		// the user's defaultProvider/defaultModel are respected without Look
+		// inventing its own selection logic.
 		const { session } = await createAgentSession({
 			cwd: projectCwd,
 			authStorage: this.authStorage,
@@ -1192,9 +1087,7 @@ export class AgentManager {
 		}
 		const resolvedId = `${effectiveModel.provider}/${effectiveModel.id}`;
 		const effectiveThinkingLevel = session.thinkingLevel;
-		const availableThinkingLevels = session.getAvailableThinkingLevels();
 
-		this.agentUsage.set(id, emptyUsageSnapshot());
 		this.syncMcpToolsIntoSession(session);
 
 		const agentName = name?.trim() || `Chat ${this.agents.size + 1}`;
@@ -1202,10 +1095,8 @@ export class AgentManager {
 			id,
 			name: agentName,
 			role,
-			model: resolvedId,
-			thinkingLevel: effectiveThinkingLevel,
-			modelSupportsThinking: effectiveModel.reasoning ?? false,
-			availableThinkingLevels,
+			model: "",
+			thinkingLevel: "off",
 			status: "idle",
 			messageCount: 0,
 			createdAt: Date.now(),
@@ -1237,7 +1128,7 @@ export class AgentManager {
 			timestamp: Date.now(),
 		});
 
-		this.emit({ type: "agent:created", agentId: id, agent: { ...info } });
+		this.emit({ type: "agent:created", agentId: id, agent: this.agentInfoFromSdk(managed) });
 		this.emitAgentList();
 		return id;
 	}
@@ -1269,8 +1160,6 @@ export class AgentManager {
 			}
 		}
 		this.agents.delete(agentId);
-		this.agentUsage.delete(agentId);
-		this.lastContextTokens.delete(agentId);
 		this.firstUserMessage.delete(agentId);
 		this.messageUpdateBuffers.delete(agentId);
 		this.saveIndex();
@@ -1279,10 +1168,12 @@ export class AgentManager {
 	}
 
 	getAgentInfo(agentId: string) {
-		return this.agents.get(agentId)?.info;
+		const m = this.agents.get(agentId);
+		if (!m) return undefined;
+		return this.agentInfoFromSdk(m);
 	}
 	listAgents() {
-		const all = Array.from(this.agents.values()).map((a) => ({ ...a.info }));
+		const all = Array.from(this.agents.values()).map((a) => this.agentInfoFromSdk(a));
 		if (!this.activeProjectId) return [];
 		return all.filter((a) => a.projectId === this.activeProjectId);
 	}
@@ -1314,7 +1205,7 @@ export class AgentManager {
 		if (!m || !newName.trim()) return;
 		m.info.name = newName.trim();
 		this.saveIndex();
-		this.emit({ type: "agent:updated", agentId, agent: { ...m.info } });
+		this.emit({ type: "agent:updated", agentId, agent: this.agentInfoFromSdk(m) });
 		this.emitAgentList();
 	}
 
@@ -1389,11 +1280,11 @@ export class AgentManager {
 			return;
 		}
 
-		const [p, ...parts] = m.info.model.includes("/") ? m.info.model.split("/") : ["anthropic", m.info.model];
-		const modelId = parts.join("/");
+		const model = m.session.model;
+		if (!model) return;
 		this.titleInFlight.add(agentId);
 
-		this.generateTitle(userMessage, p, modelId)
+		this.generateTitle(userMessage, model.provider, model.id)
 			.then((title) => {
 				this.titleInFlight.delete(agentId);
 				if (!title || title === DEFAULT_CHAT_NAME) return;
@@ -1499,15 +1390,7 @@ export class AgentManager {
 		const m = this.agents.get(agentId);
 		if (!m) return;
 		m.session.setThinkingLevel(level);
-		// The SDK clamps to the model's supported levels; mirror the
-		// effective value back so the UI never lies about what is active.
-		m.info.thinkingLevel = m.session.thinkingLevel;
-		// Re-evaluate the model's reasoning metadata in case the SDK
-		// recomputed capabilities (defensive: normally unchanged).
-		m.info.modelSupportsThinking = m.session.model?.reasoning ?? false;
-		m.info.availableThinkingLevels = m.session.getAvailableThinkingLevels() ?? m.info.availableThinkingLevels;
-		this.saveIndex();
-		this.emit({ type: "agent:updated", agentId, agent: { ...m.info } });
+		this.emit({ type: "agent:updated", agentId, agent: this.agentInfoFromSdk(m) });
 	}
 
 	/**
@@ -1522,12 +1405,27 @@ export class AgentManager {
 		m.info.permissionMode = mode;
 		this.saveIndex();
 		this.emit({ type: "agent:permission-mode", agentId, mode });
-		this.emit({ type: "agent:updated", agentId, agent: { ...m.info } });
+		this.emit({ type: "agent:updated", agentId, agent: this.agentInfoFromSdk(m) });
 	}
 
 	/** Read-only accessor for the permission ask service (used by IPC). */
 	getPermissionAsk(): PermissionAskService {
 		return this.permissionAsk;
+	}
+
+	private agentInfoFromSdk(m: ManagedAgent): AgentInfo {
+		const model = m.session.model;
+		return {
+			...m.info,
+			model: model ? `${model.provider}/${model.id}` : m.info.model,
+			thinkingLevel: m.session.thinkingLevel,
+			modelSupportsThinking: model?.reasoning ?? false,
+			availableThinkingLevels: m.session.getAvailableThinkingLevels(),
+			messageCount: m.messages.length,
+			usage: this.usageSnapshotFromSession(m.session),
+			permissionMode: m.permissionMode,
+			sessionFilePath: m.session.sessionFile ?? m.info.sessionFilePath,
+		};
 	}
 
 	// ============================================================
@@ -1551,8 +1449,7 @@ export class AgentManager {
 		if (!m) throw new Error(`Agent not found: ${agentId}`);
 		if (!m.session) throw new Error(`Agent ${agentId} has no live session`);
 
-		const [provider, ...idParts] = modelKey.includes("/") ? modelKey.split("/") : ["anthropic", modelKey];
-		const modelId = idParts.join("/");
+		const [provider, modelId] = this.splitModelKey(modelKey);
 		const model = this.lookupModel(provider, modelId);
 		if (!model) throw new Error(`Model not found: ${modelKey}`);
 
@@ -1565,14 +1462,7 @@ export class AgentManager {
 		}
 
 		await m.session.setModel(model);
-		m.info.model = modelKey;
-		m.info.modelSupportsThinking = model.reasoning ?? false;
-		// setModel re-clamps the thinking level to the new model's
-		// capabilities, so keep Look's mirror in sync.
-		m.info.thinkingLevel = m.session.thinkingLevel;
-		m.info.availableThinkingLevels = m.session.getAvailableThinkingLevels();
-		this.saveIndex();
-		this.emit({ type: "agent:updated", agentId, agent: { ...m.info } });
+		this.emit({ type: "agent:updated", agentId, agent: this.agentInfoFromSdk(m) });
 	}
 
 	// ============================================================
@@ -1650,11 +1540,13 @@ export class AgentManager {
 	/**
 	 * Split a stored model key like `"anthropic/claude-3-5-sonnet"`
 	 * into `[provider, modelId]`. Mirrors the convention used by
-	 * `ModelRegistry` lookups.
+	 * `ModelRegistry` lookups; callers must pass a fully-qualified key.
 	 */
 	private splitModelKey(key: string): [string, string] {
 		const slash = key.indexOf("/");
-		if (slash < 0) return ["anthropic", key];
+		if (slash <= 0 || slash === key.length - 1) {
+			throw new Error(`Model key must be in provider/modelId form: ${key}`);
+		}
 		return [key.slice(0, slash), key.slice(slash + 1)];
 	}
 
@@ -1682,6 +1574,10 @@ export class AgentManager {
 		if (!m) return;
 
 		switch (event.type) {
+			case "thinking_level_changed": {
+				this.emit({ type: "agent:updated", agentId, agent: this.agentInfoFromSdk(m) });
+				break;
+			}
 			case "message_start": {
 				// m.messages is populated at message_end with the SDK's
 				// finalized message (real id, real content, real usage).
@@ -1717,7 +1613,7 @@ export class AgentManager {
 						recordedMessage = true;
 					}
 				}
-				if (recordedMessage && msg?.role === "assistant" && msg.usage) this.trackUsage(agentId, msg.usage);
+				if (recordedMessage && msg?.role === "assistant") this.trackUsage(agentId);
 				m.info.messageCount = m.messages.length;
 
 				// 记录首条用户消息并立即启动标题生成（与 AI 回复并行）
@@ -2103,19 +1999,20 @@ export class AgentManager {
 		if (!effectiveModel) {
 			throw new Error(`No model available for forked session`);
 		}
-		const resolvedId = `${effectiveModel.provider}/${effectiveModel.id}`;
 
 		const forkName = (opts?.name ?? `${src.info.name} · fork`).slice(0, MAX_NAME_LEN);
+		// Pull messages from the new file's branch so the renderer
+		// sees the fork's content immediately (no waiting for the
+		// first user message).
+		const messages = this.extractMessagesFromSessionManager(sm, newId);
 		const info: AgentInfo = {
 			id: newId,
 			name: forkName,
 			role,
-			model: resolvedId,
-			thinkingLevel: session.thinkingLevel,
-			modelSupportsThinking: effectiveModel.reasoning ?? false,
-			availableThinkingLevels: session.getAvailableThinkingLevels(),
+			model: "",
+			thinkingLevel: "off",
 			status: "idle",
-			messageCount: 0,
+			messageCount: messages.length,
 			createdAt: Date.now(),
 			usage: emptyUsageSnapshot(),
 			permissionMode: src.info.permissionMode,
@@ -2123,10 +2020,6 @@ export class AgentManager {
 			projectId: src.info.projectId,
 		};
 
-		// Pull messages from the new file's branch so the renderer
-		// sees the fork's content immediately (no waiting for the
-		// first user message).
-		const messages = this.extractMessagesFromSessionManager(sm, newId);
 		const managed: ManagedAgent = {
 			info,
 			session,
@@ -2136,7 +2029,6 @@ export class AgentManager {
 			leafId: sm.getLeafId(),
 		};
 		this.agents.set(newId, managed);
-		this.agentUsage.set(newId, emptyUsageSnapshot());
 
 		// The first real message in the new agent must come from
 		// the user, not from a synthetic system message — we want
@@ -2146,7 +2038,7 @@ export class AgentManager {
 		// prompt at the tip, so no seed is needed.)
 
 		this.saveIndex();
-		this.emit({ type: "agent:created", agentId: newId, agent: { ...info } });
+		this.emit({ type: "agent:created", agentId: newId, agent: this.agentInfoFromSdk(managed) });
 		this.emit({ type: "agent:history", agentId: newId, messages });
 		this.emitAgentList();
 		return { agentId: newId, sessionFilePath: newSessionFile };
@@ -2250,38 +2142,36 @@ export class AgentManager {
 	// Usage
 	// ============================================================
 
-	private trackUsage(agentId: string, usage: any): void {
-		const m = this.agents.get(agentId);
-		if (!m) return;
-		this.lastContextTokens.set(agentId, usage.input ?? 0);
-		const snap: UsageSnapshot = {
-			inputTokens: usage.input ?? 0,
-			outputTokens: usage.output ?? 0,
-			cacheReadTokens: usage.cacheRead ?? 0,
-			cacheWriteTokens: usage.cacheWrite ?? 0,
-			totalTokens: usage.totalTokens ?? 0,
+	private usageSnapshotFromStats(stats: SessionStats): UsageSnapshot {
+		return {
+			inputTokens: stats.tokens.input,
+			outputTokens: stats.tokens.output,
+			cacheReadTokens: stats.tokens.cacheRead,
+			cacheWriteTokens: stats.tokens.cacheWrite,
+			totalTokens: stats.tokens.total,
 			cost: {
-				input: usage.cost?.input ?? 0,
-				output: usage.cost?.output ?? 0,
-				cacheRead: usage.cost?.cacheRead ?? 0,
-				cacheWrite: usage.cost?.cacheWrite ?? 0,
-				total: usage.cost?.total ?? 0,
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				total: stats.cost,
 			},
 		};
-		const cum = cloneUsageSnapshot(this.agentUsage.get(agentId));
-		cum.inputTokens += snap.inputTokens;
-		cum.outputTokens += snap.outputTokens;
-		cum.cacheReadTokens += snap.cacheReadTokens;
-		cum.cacheWriteTokens += snap.cacheWriteTokens;
-		cum.totalTokens += snap.totalTokens;
-		cum.cost.input += snap.cost.input;
-		cum.cost.output += snap.cost.output;
-		cum.cost.cacheRead += snap.cost.cacheRead;
-		cum.cost.cacheWrite += snap.cost.cacheWrite;
-		cum.cost.total += snap.cost.total;
-		this.agentUsage.set(agentId, cum);
-		m.info.usage = cloneUsageSnapshot(cum);
-		this.emit({ type: "agent:usage-update", agentId, usage: cloneUsageSnapshot(cum) });
+	}
+
+	private usageSnapshotFromSession(session: AgentSession): UsageSnapshot {
+		try {
+			return this.usageSnapshotFromStats(session.getSessionStats());
+		} catch {
+			return emptyUsageSnapshot();
+		}
+	}
+
+	private trackUsage(agentId: string): void {
+		const m = this.agents.get(agentId);
+		if (!m) return;
+		const usage = this.usageSnapshotFromSession(m.session);
+		this.emit({ type: "agent:usage-update", agentId, usage });
 	}
 
 	// ============================================================

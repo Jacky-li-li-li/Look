@@ -4,7 +4,6 @@
 // Field split (intentional, matches the SDK's design boundary):
 //
 //   SDK fields — owned by `SettingsManager` in `~/.look/settings.json`:
-//     - defaultThinkingLevel  → SDK `setDefaultThinkingLevel`
 //     - preferredModel        → SDK `setDefaultModelAndProvider`
 //     The SDK's settings file only persists fields its schema
 //     knows about; any keys we tried to sneak in via
@@ -25,13 +24,11 @@
 
 import fs from "fs";
 import path from "path";
-import type { ThinkingLevel } from "./shared/types.js";
 
 export type UILanguage = "en" | "zh" | "ja";
 
 export interface UserSettings {
 	language: UILanguage;
-	defaultThinkingLevel: ThinkingLevel;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
 	/** The model the user most recently picked in the bottom-bar
@@ -53,7 +50,6 @@ export interface UserSettings {
 
 const DEFAULTS: UserSettings = {
 	language: "en",
-	defaultThinkingLevel: "medium",
 	autoCollapse: true,
 	compactionEnabled: true,
 	preferredModel: null,
@@ -65,7 +61,6 @@ const DEFAULTS: UserSettings = {
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
 interface SdkSettings {
-	defaultThinkingLevel: ThinkingLevel;
 	preferredModel: string | null;
 }
 
@@ -97,10 +92,8 @@ const UI_DEFAULTS: UiSettings = {
  *  fields' getters + setters that mark themselves as modified
  *  on set, plus `flush()` for the durability boundary. */
 type SettingsManagerLike = {
-	getDefaultThinkingLevel(): ThinkingLevel | undefined;
 	getDefaultProvider(): string | undefined;
 	getDefaultModel(): string | undefined;
-	setDefaultThinkingLevel(level: ThinkingLevel): void;
 	setDefaultModelAndProvider(provider: string, modelId: string): void;
 	setDefaultProvider(provider: string): void;
 	setDefaultModel(modelId: string): void;
@@ -129,7 +122,6 @@ export class UserSettingsStore {
 		return {
 			...DEFAULTS,
 			...this.ui,
-			defaultThinkingLevel: sdk.defaultThinkingLevel ?? DEFAULTS.defaultThinkingLevel,
 			preferredModel: sdk.preferredModel ?? DEFAULTS.preferredModel,
 			compactionEnabled: this.settingsManager.getCompactionEnabled() ?? DEFAULTS.compactionEnabled,
 		};
@@ -137,8 +129,6 @@ export class UserSettingsStore {
 
 	private readSdk(): SdkSettings {
 		return {
-			defaultThinkingLevel: (this.settingsManager.getDefaultThinkingLevel() ??
-				DEFAULTS.defaultThinkingLevel) as ThinkingLevel,
 			preferredModel: this.composePreferredModel(),
 		};
 	}
@@ -173,9 +163,6 @@ export class UserSettingsStore {
 	async update(partial: Partial<UserSettings>): Promise<UserSettings> {
 		// SDK fields: dispatch through the SDK's own setters so they
 		// are marked as modified and `flush()` writes them.
-		if (partial.defaultThinkingLevel !== undefined) {
-			this.settingsManager.setDefaultThinkingLevel(partial.defaultThinkingLevel);
-		}
 		if (partial.preferredModel !== undefined) {
 			if (partial.preferredModel) {
 				const [provider, ...parts] = partial.preferredModel.split("/");
@@ -212,9 +199,7 @@ export class UserSettingsStore {
 	}
 
 	async reset(): Promise<UserSettings> {
-		// SDK fields: clear both halves of the provider/model pair and
-		// reset the thinking level to its default.
-		this.settingsManager.setDefaultThinkingLevel(DEFAULTS.defaultThinkingLevel);
+		// SDK fields: clear both halves of the provider/model pair.
 		this.settingsManager.setDefaultProvider("");
 		this.settingsManager.setDefaultModel("");
 		// UI fields: rewrite to defaults on disk.

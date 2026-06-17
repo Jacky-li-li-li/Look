@@ -29,8 +29,6 @@
 		"language": "言語",
 		"interfaceLanguage": "インターフェース言語",
 		"behavior": "動作",
-		"defaultThinking": "デフォルト思考",
-		"thinkingDesc": "新規 Agent の推論深度",
 		"autoCollapse": "自動折りたたみ",
 		"autoCollapseDesc": "出力のストリーミング開始時に思考パネルを折りたたむ",
 		"autoCompress": "自動圧縮",

@@ -29,8 +29,6 @@
 		"language": "Language",
 		"interfaceLanguage": "Interface language",
 		"behavior": "Behavior",
-		"defaultThinking": "Default Thinking",
-		"thinkingDesc": "Reasoning depth for new agents",
 		"autoCollapse": "Auto Collapse",
 		"autoCollapseDesc": "Collapse thinking panel when output starts streaming",
 		"autoCompress": "Auto Compress",

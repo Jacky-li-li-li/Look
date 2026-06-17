@@ -14,7 +14,7 @@ import type { PermissionMode, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { FolderOpen } from "lucide-react";
 import { ThemeProvider } from "next-themes";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import ChatPanel from "./components/ChatPanel";
@@ -174,12 +174,6 @@ export default function App() {
 		const id = appStore.get(activeAgentIdAtom);
 		if (!id || !api) return;
 		await api.updateThinking(id, level);
-		// Optimistic update (agent:updated IPC also fires).
-		const agents = appStore.get(agentsAtom);
-		appStore.set(
-			agentsAtom,
-			agents.map((a) => (a.id === id ? { ...a, thinkingLevel: level as ThinkingLevel } : a)),
-		);
 	}, []);
 
 	const handleModelChanged = useCallback((newModel: string) => {
@@ -349,6 +343,16 @@ export default function App() {
 		return () => clearTimeout(timer);
 	}, [activeAgentId, activeProjectId]);
 
+	// The main process mirrors this list directly from pi's
+	// AgentSession.getAvailableThinkingLevels(). Do not infer model families here.
+	const thinkingLevels = useMemo(() => {
+		const levels =
+			activeAgent?.availableThinkingLevels && activeAgent.availableThinkingLevels.length > 0
+				? activeAgent.availableThinkingLevels
+				: (["off"] as ThinkingLevel[]);
+		return levels;
+	}, [activeAgent?.availableThinkingLevels]);
+
 	// ---- Render ----
 
 	if (!api) {
@@ -435,8 +439,7 @@ export default function App() {
 									agentStatus={activeAgent.status}
 									currentModel={activeAgent.model}
 									currentThinking={activeAgent.thinkingLevel}
-									modelSupportsThinking={activeAgent.modelSupportsThinking ?? false}
-									availableThinkingLevels={activeAgent.availableThinkingLevels}
+									availableThinkingLevels={thinkingLevels}
 									currentPermissionMode={activeAgent.permissionMode ?? "ask"}
 									onSend={handleSendMessage}
 									onThinkingChange={handleThinkingChange}

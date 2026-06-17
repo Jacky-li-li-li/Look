@@ -30,7 +30,6 @@ interface ChatInputProps {
 	agentStatus: AgentStatus;
 	currentModel: string;
 	currentThinking: string;
-	modelSupportsThinking: boolean;
 	availableThinkingLevels?: ThinkingLevel[];
 	currentPermissionMode: PermissionMode;
 	isBusy: boolean;
@@ -48,7 +47,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		agentStatus,
 		currentModel,
 		currentThinking,
-		modelSupportsThinking,
 		availableThinkingLevels,
 		currentPermissionMode,
 		isBusy,
@@ -398,9 +396,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 						onRequestApiKeys={onRequestApiKeys}
 					/>
 					<ThinkingSelector
-						agentId={agentId}
 						currentLevel={currentThinking}
-						supportsThinking={modelSupportsThinking}
 						availableThinkingLevels={availableThinkingLevels}
 						onChanged={onThinkingChange}
 					/>

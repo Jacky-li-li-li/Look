@@ -486,7 +486,7 @@ const ChatMessageList = memo(function ChatMessageList({
 									{showActions ? (
 										<div
 											className={cn(
-												"flex items-center gap-1 opacity-40 transition-opacity duration-200 group-hover/message:opacity-100",
+												"flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover/message:opacity-100",
 												msg.role === "user"
 													? "self-end justify-end mr-10 max-w-[80%]"
 													: "ml-10 mr-4 max-w-[92%]",

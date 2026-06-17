@@ -85,7 +85,6 @@ interface SkillDiagnostic {
 
 interface GeneralSettings {
 	language: "en" | "zh" | "ja";
-	defaultThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
 	/** Most recent model the user picked in the bottom-bar ModelSelector.

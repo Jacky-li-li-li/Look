@@ -23,7 +23,6 @@ interface ChatPanelProps {
 	agentStatus: AgentStatus;
 	currentModel: string;
 	currentThinking: string;
-	modelSupportsThinking: boolean;
 	availableThinkingLevels?: ThinkingLevel[];
 	currentPermissionMode: PermissionMode;
 	onSend: (text: string) => void;
@@ -46,7 +45,6 @@ const ChatPanel = memo(function ChatPanel({
 	agentStatus,
 	currentModel,
 	currentThinking,
-	modelSupportsThinking,
 	availableThinkingLevels,
 	currentPermissionMode,
 	onSend,
@@ -84,7 +82,6 @@ const ChatPanel = memo(function ChatPanel({
 				agentStatus={agentStatus}
 				currentModel={currentModel}
 				currentThinking={currentThinking}
-				modelSupportsThinking={modelSupportsThinking}
 				availableThinkingLevels={availableThinkingLevels}
 				currentPermissionMode={currentPermissionMode}
 				isBusy={isBusy}

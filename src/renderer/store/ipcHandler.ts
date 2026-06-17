@@ -94,15 +94,16 @@ export function initIpcHandlers(api: any): () => void {
 			}
 
 			case "agent:updated":
-				console.log("[renderer] agent:updated", event.agent.id, {
-					model: event.agent.model,
-					thinkingLevel: event.agent.thinkingLevel,
-					modelSupportsThinking: event.agent.modelSupportsThinking,
-					availableThinkingLevels: event.agent.availableThinkingLevels,
-				});
 				appStore.set(
 					agentsAtom,
 					appStore.get(agentsAtom).map((a) => (a.id === event.agent.id ? event.agent : a)),
+				);
+				break;
+
+			case "agent:thinking_level_changed":
+				appStore.set(
+					agentsAtom,
+					appStore.get(agentsAtom).map((a) => (a.id === event.agentId ? { ...a, thinkingLevel: event.level } : a)),
 				);
 				break;
 
