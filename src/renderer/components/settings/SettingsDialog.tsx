@@ -13,13 +13,12 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import { Key, MessageSquare, Palette, Plug, UserRound, Zap } from "lucide-react";
+import { Key, Palette, Plug, UserRound, Zap } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
-import ChatPromptTab from "./ChatPromptTab";
 import GeneralTab from "./GeneralTab";
 import McpTab from "./McpTab";
 import ProfileTab from "./ProfileTab";
@@ -32,7 +31,7 @@ interface SettingsDialogProps {
 	providers: ProviderInfo[];
 	onProvidersChange: (providers: ProviderInfo[]) => void;
 	onClose: () => void;
-	defaultTab?: "general" | "api-keys" | "chat-prompt" | "about" | "profile";
+	defaultTab?: "general" | "api-keys" | "about" | "profile";
 }
 
 const SettingsDialog = memo(function SettingsDialog({
@@ -97,13 +96,6 @@ const SettingsDialog = memo(function SettingsDialog({
 							)}
 						</TabsTrigger>
 						<TabsTrigger
-							value="chat-prompt"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
-						>
-							<MessageSquare className="size-3.5" />
-							{t("settings.chatPrompt")}
-						</TabsTrigger>
-						<TabsTrigger
 							value="mcp"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
 						>
@@ -125,10 +117,6 @@ const SettingsDialog = memo(function SettingsDialog({
 
 					<TabsContent value="general" className="flex-1 min-h-0 data-[state=inactive]:hidden">
 						<GeneralTab />
-					</TabsContent>
-
-					<TabsContent value="chat-prompt" className="flex-1 min-h-0 data-[state=inactive]:hidden">
-						<ChatPromptTab />
 					</TabsContent>
 
 					<TabsContent value="api-keys" className="flex-1 min-h-0 data-[state=inactive]:hidden">

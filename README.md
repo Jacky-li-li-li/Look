@@ -1,13 +1,14 @@
 # Look
 
-基于 Electron 的桌面端 Agent 应用。
+基于 Electron 的 pi SDK 桌面客户端。
 
 ## 特性
 
-- **多角色 Agent** — 支持 chat、coder、reviewer、crawler、cleaner、analyst、reporter 等多种角色
-- **技能系统** — 可扩展的 Skill 加载与执行机制
+- **单会话运行时** — 任意时刻只保留一个活动的 pi `AgentSessionRuntime`
+- **原生会话历史** — 新建、恢复、Fork 和树导航均使用 pi `SessionManager`
+- **技能系统** — 使用 pi ResourceLoader 和 `/skill:name` 原生调用
 - **32+ AI 提供商** — 内置 Anthropic、OpenAI、Google、DeepSeek、Groq 等主流模型提供商图标与配置
-- **权限管理** — 细粒度的 Agent 权限控制
+- **项目信任** — 使用 pi Project Trust 决定是否加载项目资源
 - **国际化** — 支持中文、英文、日文
 - **现代 UI** — 基于 React 19、Tailwind CSS 4、shadcn/ui，支持暗色/亮色主题
 
@@ -50,12 +51,10 @@ src/
 ├── main/                 # Electron 主进程
 │   ├── index.ts          # 入口
 │   ├── ipc-handlers.ts   # IPC 通信处理
-│   ├── agent-manager.ts  # Agent 管理器
+│   ├── session-runtime-manager.ts  # 单一 pi 会话运行时
 │   ├── preload.js        # 预加载脚本
-│   ├── agents/           # Agent 角色定义
-│   ├── permissions/      # 权限控制
 │   ├── shared/           # 共享类型/工具/UI 组件
-│   ├── skills/           # Skill 加载器
+│   ├── mcp/              # pi MCP Extension
 │   └── assets/           # 静态资源
 └── renderer/             # React 渲染进程
     ├── App.tsx           # 主应用

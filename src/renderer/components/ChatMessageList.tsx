@@ -4,15 +4,7 @@
 
 import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
-import type {
-	AgentRole,
-	AgentStatus,
-	PiChunk,
-	PiContentBlock,
-	PiMessage,
-	PiTextBlock,
-	PiToolCallBlock,
-} from "@shared/types";
+import type { PiChunk, PiContentBlock, PiMessage, PiTextBlock, PiToolCallBlock, SessionStatus } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Check, ChevronDown, Copy, GitBranch, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -36,11 +28,10 @@ import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 interface ChatMessageListProps {
 	agentId: string;
-	agentRole?: AgentRole;
 	agentName?: string;
 	messages: PiMessage[];
 	autoCollapse: boolean;
-	agentStatus: AgentStatus;
+	agentStatus: SessionStatus;
 	isBusy: boolean;
 	inputRef: React.RefObject<ChatInputHandle | null>;
 	onSend: (text: string) => void;
@@ -68,7 +59,6 @@ function fmtUsage(msg: PiMessage): string {
 
 const ChatMessageList = memo(function ChatMessageList({
 	agentId,
-	agentRole,
 	agentName,
 	messages,
 	autoCollapse,
@@ -419,7 +409,7 @@ const ChatMessageList = memo(function ChatMessageList({
 			<>
 				<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
 					<div className="relative">
-						<PixelAgentAvatar role={agentRole} status={agentStatus} size="lg" />
+						<PixelAgentAvatar status={agentStatus} size="lg" />
 						<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
 					</div>
 					<div className="flex flex-col gap-1">
@@ -477,7 +467,6 @@ const ChatMessageList = memo(function ChatMessageList({
 								>
 									<MessageBubble
 										message={msg}
-										agentRole={agentRole}
 										agentName={agentName}
 										autoCollapse={autoCollapse}
 										isActiveLeaf={!!sessionLeafId && msg.id === sessionLeafId}

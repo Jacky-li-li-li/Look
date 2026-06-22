@@ -27,42 +27,8 @@ export interface ProjectInfo {
 	valid: boolean; // whether cwd exists on disk (false if moved/deleted)
 }
 
-/** Agent role template */
-export type AgentRole =
-	| "chat" // 通用聊天 agent
-	| "coder"
-	| "reviewer"
-	| "crawler"
-	| "cleaner"
-	| "analyst"
-	| "reporter"
-	| "custom";
-
 /** Agent status */
-export type AgentStatus = "idle" | "thinking" | "working" | "error" | "destroyed";
-
-/**
- * Per-agent permission mode. Controls how the permission gate
- * handles tool calls for this agent.
- *
- * - `ask` (default): every gate-flagged tool pops a dialog
- * - `plan`: only read-only tools (`read`/`grep`/`find`/`ls`) are
- *   allowed; everything else is blocked without asking
- * - `allow`: every tool is silently allowed (use only for trusted
- *   agents / scripted workflows)
- */
-export type PermissionMode = "ask" | "plan" | "allow";
-
-/**
- * User response to a permission ask. Mirrors the three buttons in
- * the PermissionDialog (Allow / Allow with edits / Deny). The
- * `edit` variant carries the patched args the main process should
- * apply to the tool's input before letting pi run it.
- */
-export type PermissionDecision =
-	| { action: "allow" }
-	| { action: "deny"; reason: string }
-	| { action: "edit"; args: Record<string, unknown> };
+export type SessionStatus = "idle" | "thinking" | "working" | "error" | "destroyed";
 
 /** Pi thinking level — matches pi's built-in levels */
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -83,36 +49,21 @@ export interface UsageSnapshot {
 	};
 }
 
-/** Agent definition (config, not runtime) */
-export interface AgentDefinition {
-	id: string;
-	name: string;
-	role: AgentRole;
-	model: string;
-	thinkingLevel: ThinkingLevel;
-	systemPrompt: string;
-	tools: string[];
-	isDefault: boolean;
-}
-
 /** Runtime agent info sent to renderer */
 export interface AgentInfo {
 	id: string;
 	name: string;
-	role: AgentRole;
 	model: string;
 	thinkingLevel: ThinkingLevel;
 	/** Whether the current model advertises reasoning support. */
 	modelSupportsThinking?: boolean;
 	/** Thinking levels supported by the current model (from pi SDK). */
 	availableThinkingLevels?: ThinkingLevel[];
-	status: AgentStatus;
+	status: SessionStatus;
 	messageCount: number;
 	createdAt: number;
 	/** Cumulative token usage */
 	usage: UsageSnapshot;
-	/** Per-agent permission mode. Defaults to "ask". */
-	permissionMode: PermissionMode;
 	/** Path to the session JSONL file (~/.look/sessions/...). */
 	sessionFilePath?: string;
 	/** Project this agent belongs to. undefined for legacy agents before migration. */
@@ -166,36 +117,18 @@ export interface PiMessage {
 	assistantChunks?: PiChunk[];
 }
 
+/** Raw pi AgentMessage transported only while a message is streaming. */
+export interface PiStreamMessage {
+	id: string;
+	role: string;
+	content: unknown;
+	timestamp: number;
+	usage?: unknown;
+}
+
 /** One reasoning step within a merged multi-turn assistant reply */
 export interface PiChunk {
 	contentBlocks: PiContentBlock[];
-}
-
-// ============================================================
-// Legacy types
-// ============================================================
-
-/** @deprecated Use PiChunk instead. */
-export interface AssistantChunk {
-	content: string;
-	thinking?: string;
-	toolCalls?: ToolCallRecord[];
-}
-
-/** A single message in an agent's conversation */
-export interface AgentMessage {
-	id: string;
-	agentId: string;
-	role: "user" | "assistant" | "tool" | "system";
-	content: string;
-	thinking?: string;
-	toolCalls?: ToolCallRecord[];
-	/** Multi-step chunks — when present, render as separate blocks under ONE agent label */
-	assistantChunks?: AssistantChunk[];
-	timestamp: number;
-	isStreaming?: boolean;
-	/** Token usage for this message (assistant messages only) */
-	usage?: UsageSnapshot;
 }
 
 /** Record of a tool call */
@@ -220,7 +153,7 @@ export interface ContextUsageInfo {
 // ============================================================
 // Session tree / branching (pi SDK tree structure, surfaced
 // through Look). v0.4 — powers /tree (in-place navigate) and
-// /fork (extract branch to a new .jsonl). See agent-manager.ts
+// /fork (extract branch to a new .jsonl). See session-runtime-manager.ts
 // for the methods that wrap pi's SessionManager + AgentSession.
 // ============================================================
 
@@ -281,7 +214,7 @@ export interface NavigateTreeResult {
 
 /** Result of a `createForkedSession` call. */
 export interface ForkedSessionResult {
-	/** New agentId created for the forked branch. */
+	/** New pi session ID created for the forked branch. */
 	agentId: string;
 	/** Path to the new .jsonl file the SDK created. */
 	sessionFilePath: string;
@@ -295,7 +228,7 @@ export interface ForkedSessionResult {
 // with an `agent:` namespace prefix added by Look. Payloads use the
 // SAME field names as pi's events so we can pass them through
 // without translation. Look-specific events (list/created/destroyed/
-// updated/permission:request/error/context-usage/compacting) are
+// updated/error/context-usage/compacting) are
 // kept as-is — they have no pi equivalent.
 // ============================================================
 
@@ -312,14 +245,14 @@ export type MainToRendererEvent =
 	| WithAgentId<{ type: "agent:agent_start" }>
 	| WithAgentId<{ type: "agent:agent_end"; messages: PiMessage[]; willRetry: boolean }>
 	| WithAgentId<{ type: "agent:turn_start" }>
-	| WithAgentId<{ type: "agent:turn_end"; message: PiMessage; toolResults: unknown[] }>
-	| WithAgentId<{ type: "agent:message_start"; message: PiMessage }>
+	| WithAgentId<{ type: "agent:turn_end"; message: PiStreamMessage; toolResults: unknown[] }>
+	| WithAgentId<{ type: "agent:message_start"; message: PiStreamMessage }>
 	| WithAgentId<{
 			type: "agent:message_update";
-			message: PiMessage;
+			message: PiStreamMessage;
 			assistantMessageEvent: AssistantMessageEventUnion;
 	  }>
-	| WithAgentId<{ type: "agent:message_end"; message: PiMessage }>
+	| WithAgentId<{ type: "agent:message_end"; message: PiStreamMessage }>
 	| WithAgentId<{
 			type: "agent:tool_execution_start";
 			toolCallId: string;
@@ -361,11 +294,11 @@ export type MainToRendererEvent =
 	| WithAgentId<{ type: "agent:session_info_changed"; name: string | undefined }>
 	| WithAgentId<{ type: "agent:thinking_level_changed"; level: ThinkingLevel }>
 	// ---- Look-specific events (no pi equivalent) ----
-	| WithAgentId<{ type: "agent:list"; agents: AgentInfo[] }>
+	| { type: "agent:list"; projectId: string; agents: AgentInfo[] }
 	| WithAgentId<{ type: "agent:created"; agent: AgentInfo }>
 	| WithAgentId<{ type: "agent:destroyed" }>
 	| WithAgentId<{ type: "agent:updated"; agent: AgentInfo }>
-	| WithAgentId<{ type: "agent:status"; status: AgentStatus }>
+	| WithAgentId<{ type: "agent:status"; status: SessionStatus }>
 	| WithAgentId<{ type: "agent:context-usage"; usage: ContextUsageInfo }>
 	| WithAgentId<{ type: "agent:usage-update"; usage: UsageSnapshot }>
 	| WithAgentId<{ type: "agent:history"; messages: PiMessage[] }>
@@ -377,21 +310,6 @@ export type MainToRendererEvent =
 			leafId: string | null;
 			tree: SessionTreeNode;
 	  }>
-	| {
-			type: "permission:ask";
-			requestId: string;
-			agentId: string;
-			toolName: string;
-			args: Record<string, unknown>;
-			reason: string;
-	  }
-	| {
-			type: "permission:resolved";
-			requestId: string;
-			agentId: string;
-			decision: PermissionDecision;
-	  }
-	| WithAgentId<{ type: "agent:permission-mode"; mode: PermissionMode }>
 	| { type: "error"; agentId?: string; message: string }
 	// ---- Project events ----
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
@@ -428,20 +346,13 @@ export type AssistantMessageEventUnion =
 
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =
-	| { type: "agent:send-message"; agentId: string; message: string; targetAgentId?: string }
-	| { type: "agent:create"; name?: string }
+	| { type: "agent:send-message"; agentId: string; message: string }
+	| { type: "agent:activate"; agentId: string }
+	| { type: "agent:create"; name?: string; projectId?: string }
 	| { type: "agent:destroy"; agentId: string }
 	| { type: "agent:switch-model"; agentId: string; model: string }
 	| { type: "agent:update-thinking"; agentId: string; level: ThinkingLevel }
 	| { type: "agent:get-history"; agentId: string }
-	| {
-			type: "permission:response";
-			action: "allow" | "deny" | "edit";
-			requestId: string;
-			reason?: string;
-			args?: Record<string, unknown>;
-	  }
-	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
 	| { type: "model:list" }
 	| { type: "model:providers" }
 	| { type: "agents:list" }
@@ -464,13 +375,13 @@ export type RendererToMainEvent =
 				autoCollapse: boolean;
 				compactionEnabled: boolean;
 				preferredModel: string | null;
-				chatSystemPrompt: string;
+				lastActiveSessionId: string;
+				lastActiveProjectId: string;
 			}>;
 	  }
 	| { type: "settings:general:reset" }
 	// ---- v0.3 skills IPC ----
 	| { type: "skills:list" }
-	| { type: "skills:invoke"; agentId: string; skillName: string; args?: string }
 	| { type: "skills:import-paths"; paths: string[] }
 	| { type: "skills:detect-common" }
 	// ---- OS native dialogs (renderer → main) ----
@@ -509,11 +420,7 @@ export type RendererToMainEvent =
 			/** User-defined label to attach to the summary entry. */
 			label?: string;
 	  }
-	/**
-	 * Create a new agent that holds an extracted branch as its own
-	 * session file. This is the `/fork` operation. The new agent is
-	 * persisted in agents.json and broadcast via `agent:created`.
-	 */
+	/** Fork the active pi runtime to a new native session file. */
 	| { type: "agent:create-fork"; agentId: string; entryId: string; name?: string }
 	/** Set or clear a user-defined label on any entry. */
 	| { type: "agent:set-entry-label"; agentId: string; entryId: string; label: string | null }
@@ -535,17 +442,6 @@ export type RendererToMainEvent =
 	| { type: "mcp:restart-server"; name: string }
 	| { type: "mcp:list-tools" }
 	| { type: "mcp:connect-all" };
-
-// ============================================================
-// Tool types
-// ============================================================
-
-export interface ToolSpec {
-	name: string;
-	description: string;
-	parameters: Record<string, unknown>;
-	roles: AgentRole[];
-}
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

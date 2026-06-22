@@ -2,11 +2,10 @@
 // Look Storage — ~/.look/ path management
 //
 // pi SDK handles session persistence natively (SessionManager.create/open).
-// We only store the lightweight agent index and user settings ourselves.
+// Look stores project bookmarks and UI preferences; pi owns session state.
 //
 // Structure:
 //   ~/.look/
-//   ├── agents.json       → Agent index: [{ id, name, role, sessionFile, projectId }]
 //   ├── projects.json     → Project index: [{ id, name, cwd }]
 //   ├── auth.json         → pi AuthStorage
 //   ├── models.json       → pi ModelRegistry
@@ -24,11 +23,6 @@ const LOOK_DIR = path.join(os.homedir(), ".look");
 
 export function getLookDir(): string {
 	return LOOK_DIR;
-}
-
-/** Lightweight index: agent id → sessionFile mapping */
-export function getAgentsIndexPath(): string {
-	return path.join(LOOK_DIR, "agents.json");
 }
 
 /** Project index: project id → cwd mapping */

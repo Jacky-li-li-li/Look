@@ -47,10 +47,7 @@
 		"authSourceEnv": "環境変数 {{env}} から検出",
 		"authSourceRuntime": "ランタイムで提供",
 		"authSourceConfig": "~/.look/models.json で設定",
-		"authSourceAuto": "自動設定",
-		"chatSystemPrompt": "システムプロンプト",
-		"chatSystemPromptDesc": "新規チャットセッションのカスタムシステムプロンプト",
-		"chatSystemPromptPlaceholder": "カスタムシステムプロンプトを入力（デフォルト: pi SDK coding assistant）"
+		"authSourceAuto": "自動設定"
 	},
 	"agent": {
 		"model": "モデル",
@@ -73,7 +70,6 @@
 		"empty": "まだメッセージがありません。会話を始めましょう。",
 		"thinkingLevel": "思考",
 		"thinkingUnsupported": "現在のモデルは推論をサポートしていません",
-		"permission": "権限",
 		"newChat": "新規チャット",
 		"branchFromHere": "ここから分岐",
 		"forkToNewChat": "新しいチャットに分岐",
@@ -101,20 +97,6 @@
 		"copyMessage": "コピー",
 		"copied": "コピーしました",
 		"copyFailed": "コピーに失敗しました：{{message}}"
-	},
-	"permission": {
-		"title": "権限リクエスト",
-		"description": "Agent が権限ゲートでフラグされたツールを実行しようとしています。",
-		"reason": "理由",
-		"arguments": "引数",
-		"editPath": "パスを編集",
-		"otherArgsPreserved": "他の引数は保持されます。",
-		"allow": "許可",
-		"deny": "拒否",
-		"allowWithEdits": "編集して許可",
-		"allowEdited": "許可（編集済み）",
-		"more": "+{{count}} 件",
-		"timedOut": "タイムアウト — 拒否されました: {{toolName}}"
 	},
 	"tool": {
 		"arguments": "引数",
@@ -172,19 +154,8 @@
 		"triedModels": "{{count}} 個のモデルを試行しました。現在 {{resolved}} を使用中。",
 		"noHarness": "Harness API が利用できません。Electron で実行してください。",
 		"modelSwitchFailed": "モデルの切り替えに失敗しました",
-		"permissionMode": "権限モード: {{mode}}",
 		"error": "[{{id}}] {{message}}",
 		"configFirstModel": "最初のモデルを設定",
 		"configFirstModelDesc": "設定でプロバイダーの API キーを追加してください"
-	},
-	"roles": {
-		"chat": "チャット",
-		"crawler": "クローラー",
-		"cleaner": "クリーナー",
-		"analyst": "アナリスト",
-		"reporter": "レポーター",
-		"coder": "コーダー",
-		"reviewer": "レビュアー",
-		"custom": "カスタム"
 	}
 }

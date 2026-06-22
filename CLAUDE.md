@@ -27,7 +27,7 @@ npm run check                        # Full CI check: lint + both tsc --noEmit +
 
 ### Tests
 
-Vitest 3 with `environment: "node"`. Config in `vitest.config.ts`. Currently no test files; add new tests to the `include` list in `vitest.config.ts`.
+Vitest 3 with `environment: "node"`. Config in `vitest.config.ts`.
 
 ```bash
 npm test                             # Run all vitest-managed tests (vitest --run)
@@ -59,7 +59,7 @@ curl -fsS http://localhost:5174/
 
 This is **Look** — an Electron + React desktop app built on the [pi SDK](https://github.com/earendil-works/pi-mono), developed by **Jackyyyyyy**.
 
-The pi SDK (`@earendil-works/pi-*`) provides the agent runtime: model registry, session management, tool execution, retry, and event streaming. Look provides the desktop shell, project/session persistence, permissions UI, settings, and chat experience.
+The pi SDK (`@earendil-works/pi-*`) provides the agent runtime: model registry, session management, tool execution, retry, project trust, resources, and event streaming. Look provides the desktop shell, project bookmarks, UI settings, and chat experience.
 
 ### Dual TypeScript Setup
 
@@ -86,45 +86,27 @@ Renderer (React 19, Vite, Tailwind v4, shadcn/ui)
   │
   ▼
 Main Process (Electron)
-  ├── AgentManager (singleton) — manages N AgentSessions
-  │     Each session = one pi AgentSession with role, model, tools, permission gate
-  ├── Permission Gate — three-layer (global deny → role rules → path protection)
-  └── Skills Loader — loads SKILL.md from ~/.look/skills/ and <project>/.look/skills/
+  └── SessionRuntimeManager (singleton)
+        ├── exactly one live pi AgentSessionRuntime
+        ├── SessionManager-native history/new/resume/fork/tree
+        └── ResourceLoader-native extensions, skills and project trust
 ```
 
-### AgentManager (`src/main/agent-manager.ts`)
+### SessionRuntimeManager (`src/main/session-runtime-manager.ts`)
 
-The core singleton. It:
-- Creates `AgentSession` instances via pi's `createAgentSession()` with role-specific tools, system prompts, thinking levels, and model fallback chains
-- Delegates events from each session's `session.subscribe()` stream through to the renderer via `onEvent` callbacks
-- Handles user messaging through `sendMessage`
-- Manages model fallback (primary → fallback1 → fallback2) and runtime model switching
-- Tracks cumulative token usage/cost per agent
+The core singleton owns exactly one live `AgentSessionRuntime`. Sidebar rows are pi session files, not concurrently running agents. It delegates lifecycle, model, thinking, compaction, session naming, new/resume/fork/tree, extension binding, and persistence to pi SDK APIs.
 
 ### IPC Pattern (`src/main/ipc-handlers.ts`)
 
-- **Main → Renderer**: `look:event` channel carries a discriminated union of events (`MainToRendererEvent` in [types.ts](src/main/shared/types.ts)) — agent lifecycle, streaming message deltas (`text_delta`/`thinking_delta`), tool call state transitions, usage updates, permission requests
+- **Main → Renderer**: `look:event` carries the active pi session lifecycle, streaming message snapshots, tool state, usage, history, and tree updates.
 - **Renderer → Main**: `look:invoke` (request-response) for commands (send message, create/destroy agent, switch model, get settings) and `look:event` (fire-and-forget) for `app:ready`
-- AgentManager's `onEvent()` callback forwards everything to the renderer; IPC handlers bridge the two directions
+- SessionRuntimeManager's `onEvent()` callback forwards the active session stream to the renderer; IPC handlers bridge the two directions
 
-### Skills System (`src/main/skills/skill-loader.ts`)
+### Skills System
 
-Look uses its own skills namespace: `~/.look/skills/` and `<project>/.look/skills/` (NOT the pi SDK default `.pi/skills/`). SKILL.md parsing is delegated to the pi SDK's `loadSkills()` — Look is a thin wrapper.
-
-Key functions: `listAllSkills`, `findSkill`, `gatherSkillPaths`, `getSkillDiagnostics`, `invalidateSkillCache`. Skills are cached until explicitly invalidated. Diagnostics surface issues like name collisions.
+Skills come from the active runtime's pi `ResourceLoader`. The renderer inserts `/skill:name`; `AgentSession.prompt()` performs the native expansion. Imported paths are written with `SettingsManager.setSkillPaths()` followed by `session.reload()`.
 
 Renderer-side: `SkillSlashMenu` (slash-command popover), `SkillTag` (inline skill chip), `skillSegments` (slash-command text parsing), `SkillAwareContent` (renders content with embedded skill tags).
-
-### Agent Roles (`src/main/agents/roles.ts`)
-
-7 role templates + `custom`. Each defines: default model, thinking level, fallback chain, allowed tools, system prompt. The reviewer role is read-only (no `write`/`edit`/`bash`).
-
-### Permission Gate (`src/main/permissions/permission-gate.ts`)
-
-Three layers evaluated in priority order:
-1. **Global deny** — destructive filesystem ops (`rm -rf /`, `mkfs`), force push to main/master, writing to `.env` files
-2. **Role rules** — Reviewer can't `write`/`edit`
-3. **Protected paths** — writing to `package.json`/`tsconfig`/YAML or editing `.ts`/`.tsx`/`.js` triggers `ask` (user confirmation)
 
 ### Other Main Process Modules
 
@@ -143,22 +125,22 @@ Three layers evaluated in priority order:
 
 React 19 single-page app. `App.tsx` subscribes to `agent:event` IPC events and manages state (agents list, messages per agent, active agent). Key components:
 
-- **Sidebar** — left panel with Chat/Orch tabs, agent list with status indicators, create/destroy
+- **Sidebar** — project-grouped pi session history with create/delete actions
 - **ChatPanel** — message display + input area; merges consecutive assistant messages (pi may split across turns)
 - **MessageBubble** — renders thinking (collapsible), tool calls (collapsible cards), and markdown output
 - **StreamingMarkdown** — react-markdown + rehype-highlight with `useThrottle` for performance during streaming
 - **ModelSelector** / **ThinkingSelector** — dropdowns for per-agent model and thinking level
-- **PermissionDialog** — user confirmation prompts for permission-requiring operations
 - **SkillSlashMenu** — `/skill:name` autocomplete popover in the chat input
 - **SkillTag** — visual chip for inline skill references in messages
 
 ### pi SDK Integration
 
 - `AuthStorage` + `ModelRegistry` — multi-provider model management with API keys
-- `createAgentSession()` — creates an independent agent session with tools, model, thinking level, system prompt
+- `createAgentSessionRuntime()` — owns the one active session and replaces it for new/resume/fork
+- `createAgentSessionServices()` / `createAgentSessionFromServices()` — constructs cwd-bound trusted resources and the session
 - `session.subscribe()` — event stream (message_start, message_update, message_end, tool_execution_start/update/end, agent_start/end)
-- `DefaultResourceLoader` — injects custom system prompts
-- `SettingsManager.inMemory()` — retry configuration (3 retries, 2s base delay)
+- `DefaultResourceLoader` — loads extensions, skills, prompts, context files, and MCP extension tools
+- `ProjectTrustStore` + `SettingsManager` — apply pi's project resource trust policy
 - `TypeBox` (`@typebox/typebox`) — used for tool parameter schema definitions
 
 ## Key Conventions
@@ -170,5 +152,5 @@ React 19 single-page app. `App.tsx` subscribes to `agent:event` IPC events and m
 - **Context isolation**: strict — `nodeIntegration: false`, `contextIsolation: true`, all IPC through preload
 - **Model format**: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4-20250514"`)
 - **Thinking levels**: `"off" | "minimal" | "low" | "medium" | "high" | "xhigh"` — matches pi SDK's built-in levels
-- **Skills paths**: Look uses `~/.look/skills/` and `<project>/.look/skills/`, not the pi SDK default `.pi/skills/`
+- **Skills paths**: use `SettingsManager.getSkillPaths()` and pi ResourceLoader defaults
 - **Linter rules**: a11y is off; `noExplicitAny`, `noNonNullAssertion`, `noUnusedFunctionParameters` are off

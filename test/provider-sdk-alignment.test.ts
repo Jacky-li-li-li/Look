@@ -155,15 +155,15 @@ describe("pi SDK provider alignment", () => {
 });
 
 describe("provider source regressions", () => {
-	const agentManagerSource = readFileSync(resolve(__dirname, "../src/main/agent-manager.ts"), "utf8");
+	const runtimeManagerSource = readFileSync(resolve(__dirname, "../src/main/session-runtime-manager.ts"), "utf8");
 	const validatorSource = readFileSync(resolve(__dirname, "../src/main/provider-validator.ts"), "utf8");
 	const modelSelectorSource = readFileSync(resolve(__dirname, "../src/renderer/components/ModelSelector.tsx"), "utf8");
 
 	it("does not hand-roll provider HTTP routing in main", () => {
-		expect(agentManagerSource).not.toMatch(/node:https|httpsRequest/);
-		expect(agentManagerSource).not.toMatch(/\bfindEnvKeys\b|\bgetModel\b/);
-		expect(agentManagerSource).not.toMatch(/detectApiStyle|resolveBaseUrl|callAnthropicTitleApi/);
-		expect(agentManagerSource).not.toMatch(/\/chat\/completions|\/v1\/messages|\/models\?key=/);
+		expect(runtimeManagerSource).not.toMatch(/node:https|httpsRequest/);
+		expect(runtimeManagerSource).not.toMatch(/\bfindEnvKeys\b|\bgetModel\b/);
+		expect(runtimeManagerSource).not.toMatch(/detectApiStyle|resolveBaseUrl|callAnthropicTitleApi/);
+		expect(runtimeManagerSource).not.toMatch(/\/chat\/completions|\/v1\/messages|\/models\?key=/);
 		expect(validatorSource).not.toMatch(/node:https|httpsRequest/);
 		expect(validatorSource).not.toMatch(/UNTESTABLE_PROVIDERS|testOpenAIStyle|testAnthropicStyle|testGoogleStyle/);
 		expect(validatorSource).not.toMatch(/\/chat\/completions|\/v1\/messages|\/models\?key=/);

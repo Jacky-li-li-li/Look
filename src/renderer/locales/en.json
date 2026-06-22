@@ -47,13 +47,7 @@
 		"authSourceEnv": "Detected from {{env}} in environment",
 		"authSourceRuntime": "Provided at runtime",
 		"authSourceConfig": "Configured via ~/.look/models.json",
-		"authSourceAuto": "Auto-configured",
-		"agentName": "Agent Name",
-		"agentNameDesc": "Display name shown next to the avatar in assistant messages",
-		"agentNamePlaceholder": "Leave empty to use the session name",
-		"chatSystemPrompt": "System Prompt",
-		"chatSystemPromptDesc": "Custom system prompt for new chat sessions",
-		"chatSystemPromptPlaceholder": "Enter a custom system prompt (default: pi SDK coding assistant)"
+		"authSourceAuto": "Auto-configured"
 	},
 	"agent": {
 		"model": "Model",
@@ -76,7 +70,6 @@
 		"empty": "No messages yet. Start a conversation.",
 		"thinkingLevel": "Thinking",
 		"thinkingUnsupported": "Current model does not support reasoning",
-		"permission": "Permission",
 		"newChat": "New Chat",
 		"branchFromHere": "Branch from here",
 		"forkToNewChat": "Fork to new chat",
@@ -104,20 +97,6 @@
 		"copyMessage": "Copy",
 		"copied": "Copied",
 		"copyFailed": "Copy failed: {{message}}"
-	},
-	"permission": {
-		"title": "Permission requested",
-		"description": "Agent wants to run a tool that the permission gate flagged.",
-		"reason": "Reason",
-		"arguments": "Arguments",
-		"editPath": "Edit path",
-		"otherArgsPreserved": "Other arguments will be preserved.",
-		"allow": "Allow",
-		"deny": "Deny",
-		"allowWithEdits": "Allow with edits",
-		"allowEdited": "Allow edited",
-		"more": "+{{count}} more",
-		"timedOut": "Timed out — denied: {{toolName}}"
 	},
 	"tool": {
 		"arguments": "Arguments",
@@ -175,19 +154,8 @@
 		"triedModels": "Tried {{count}} models in chain. Now using {{resolved}}.",
 		"noHarness": "Harness API not available. Run in Electron.",
 		"modelSwitchFailed": "Failed to switch model",
-		"permissionMode": "Permission mode: {{mode}}",
 		"error": "[{{id}}] {{message}}",
 		"configFirstModel": "Configure your first model",
 		"configFirstModelDesc": "Add a provider API key in Settings to get started"
-	},
-	"roles": {
-		"chat": "Chat",
-		"crawler": "Crawler",
-		"cleaner": "Cleaner",
-		"analyst": "Analyst",
-		"reporter": "Reporter",
-		"coder": "Coder",
-		"reviewer": "Reviewer",
-		"custom": "Custom"
 	}
 }

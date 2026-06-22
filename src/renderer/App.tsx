@@ -10,7 +10,7 @@
 import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
-import type { PermissionMode, ProjectInfo, ThinkingLevel } from "@shared/types";
+import type { ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { FolderOpen } from "lucide-react";
 import { ThemeProvider } from "next-themes";
@@ -21,7 +21,6 @@ import ChatPanel from "./components/ChatPanel";
 import DeleteProjectDialog from "./components/DeleteProjectDialog";
 import LoginScreen from "./components/LoginScreen";
 import NewProjectDialog from "./components/NewProjectDialog";
-import { PermissionDialog } from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import Sidebar from "./components/Sidebar";
 import SettingsDialog from "./components/settings/SettingsDialog";
@@ -35,9 +34,7 @@ import {
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
-	chatAgentNameAtom,
 	messagesAtomFamily,
-	pendingAsksAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
@@ -64,13 +61,9 @@ export default function App() {
 	// ---- Read atoms ----
 	const activeAgent = useAtomValue(activeAgentAtom);
 	const autoCollapse = useAtomValue(autoCollapseAtom);
-	const chatAgentName = useAtomValue(chatAgentNameAtom);
 	const showSettings = useAtomValue(showSettingsAtom);
 	const settingsTab = useAtomValue(settingsTabAtom);
 	const providerSettings = useAtomValue(providerSettingsAtom);
-	const pendingAsks = useAtomValue(pendingAsksAtom);
-	const pendingAsk = pendingAsks[0] ?? null;
-	const pendingQueueDepth = pendingAsks.length;
 
 	// Messages and queue for the active agent (atomFamily).
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
@@ -151,8 +144,10 @@ export default function App() {
 		api.sendMessage(id, text);
 	}, []);
 
-	const handleSelectAgent = useCallback((agentId: string) => {
-		appStore.set(activeAgentIdAtom, agentId);
+	const handleSelectAgent = useCallback(async (agentId: string) => {
+		if (!api) return;
+		const result = await api.activateSession(agentId);
+		if (result?.success) appStore.set(activeAgentIdAtom, agentId);
 	}, []);
 
 	const handleDestroyAgent = useCallback(async (agentId: string) => {
@@ -210,46 +205,6 @@ export default function App() {
 		} catch (err: any) {
 			toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`);
 		}
-	}, []);
-
-	// ---- Permission dialog ----
-
-	const drainAsk = useCallback(
-		(action: "allow" | "deny" | "edit", extras?: { reason?: string; args?: Record<string, unknown> }) => {
-			const asks = appStore.get(pendingAsksAtom);
-			if (asks.length === 0) return;
-			const [head, ...rest] = asks;
-			appStore.set(pendingAsksAtom, rest);
-			api.respondPermission({ action, requestId: head.requestId, ...extras })
-				.then((r: any) => {
-					if (!r?.success) {
-						toast.error(`Permission response failed: ${r?.error ?? "unknown"}`);
-					} else if (action === "allow") {
-						toast.success(`Allowed: ${head.toolName}`, { duration: 1500 });
-					} else if (action === "deny") {
-						toast(`Denied: ${head.toolName}`, { description: head.reason, duration: 2000 });
-					} else {
-						toast.success(`Allowed (edited): ${head.toolName}`, { duration: 1500 });
-					}
-				})
-				.catch(() => toast.error("Failed to send permission response"));
-		},
-		[],
-	);
-
-	const handlePermissionAllow = useCallback(() => drainAsk("allow"), [drainAsk]);
-	const handlePermissionDeny = useCallback(() => drainAsk("deny"), [drainAsk]);
-	const handlePermissionEdit = useCallback((args: Record<string, unknown>) => drainAsk("edit", { args }), [drainAsk]);
-
-	const handlePermissionModeChange = useCallback((mode: PermissionMode) => {
-		const id = appStore.get(activeAgentIdAtom);
-		if (!id) return;
-		const agents = appStore.get(agentsAtom);
-		appStore.set(
-			agentsAtom,
-			agents.map((a) => (a.id === id ? { ...a, permissionMode: mode } : a)),
-		);
-		api.setPermissionMode(id, mode);
 	}, []);
 
 	// ---- Side effects ----
@@ -334,7 +289,7 @@ export default function App() {
 		if (!api) return;
 		const timer = setTimeout(() => {
 			const payload: Record<string, any> = {};
-			if (activeAgentId) payload.lastActiveAgentId = activeAgentId;
+			if (activeAgentId) payload.lastActiveSessionId = activeAgentId;
 			if (activeProjectId) payload.lastActiveProjectId = activeProjectId;
 			if (Object.keys(payload).length > 0) {
 				api.setGeneralSettings(payload).catch(() => {});
@@ -408,7 +363,7 @@ export default function App() {
 							<>
 								<header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-hairline px-4">
 									<div className="flex min-w-0 items-center gap-3">
-										<PixelAgentAvatar role={activeAgent.role} status={activeAgent.status} size="sm" active />
+										<PixelAgentAvatar status={activeAgent.status} size="sm" active />
 										<div className="min-w-0">
 											<div className="flex min-w-0 items-center gap-2">
 												<h1 className="truncate text-[13px] font-semibold">{activeAgent.name}</h1>
@@ -431,8 +386,7 @@ export default function App() {
 
 								<ChatPanel
 									agentId={activeAgent.id}
-									agentRole={activeAgent.role}
-									agentName={chatAgentName || activeAgent.name}
+									agentName={activeAgent.name}
 									messages={activeMessages}
 									autoCollapse={autoCollapse}
 									queue={activeQueue}
@@ -440,11 +394,9 @@ export default function App() {
 									currentModel={activeAgent.model}
 									currentThinking={activeAgent.thinkingLevel}
 									availableThinkingLevels={thinkingLevels}
-									currentPermissionMode={activeAgent.permissionMode ?? "ask"}
 									onSend={handleSendMessage}
 									onThinkingChange={handleThinkingChange}
 									onModelChange={handleModelChanged}
-									onPermissionModeChange={handlePermissionModeChange}
 									onRequestApiKeys={handleRequestApiKeys}
 									onAbort={handleAbortAgent}
 								/>
@@ -486,14 +438,6 @@ export default function App() {
 							defaultTab={settingsTab}
 						/>
 					)}
-
-					<PermissionDialog
-						request={pendingAsk}
-						queueDepth={pendingQueueDepth}
-						onAllow={handlePermissionAllow}
-						onDeny={handlePermissionDeny}
-						onEdit={handlePermissionEdit}
-					/>
 				</div>
 			</TooltipProvider>
 			<UpdateNotification />

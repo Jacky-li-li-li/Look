@@ -16,7 +16,7 @@
 //        </skill>
 //
 //   3. [v0.4 compact] Lean invocation with just user args
-//      (produced by Look's formatInvocation). Only the name and
+//      (kept for rendering legacy persisted messages). Only the name and
 //      location are stored; the LLM reads the SKILL.md on demand.
 //        <skill-invoke name="foo" location="/path/to/SKILL.md">
 //        user args here

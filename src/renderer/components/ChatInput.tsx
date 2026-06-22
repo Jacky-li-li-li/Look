@@ -7,14 +7,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@shared/components/ui/p
 import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { Textarea } from "@shared/components/ui/textarea";
-import type { AgentStatus, PermissionMode, ThinkingLevel } from "@shared/types";
+import type { SessionStatus, ThinkingLevel } from "@shared/types";
 import { Puzzle, Search, Send, Square } from "lucide-react";
 import type React from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
-import { PermissionModeSelector } from "./PermissionModeSelector";
 import SkillOverlaySegments from "./SkillOverlaySegments";
 import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
 import ThinkingSelector from "./ThinkingSelector";
@@ -27,16 +26,14 @@ export interface ChatInputHandle {
 
 interface ChatInputProps {
 	agentId: string;
-	agentStatus: AgentStatus;
+	agentStatus: SessionStatus;
 	currentModel: string;
 	currentThinking: string;
 	availableThinkingLevels?: ThinkingLevel[];
-	currentPermissionMode: PermissionMode;
 	isBusy: boolean;
 	onSend: (text: string) => void;
 	onThinkingChange: (level: string) => void;
 	onModelChange: (model: string) => void;
-	onPermissionModeChange: (mode: PermissionMode) => void;
 	onRequestApiKeys?: () => void;
 	onAbort?: () => void;
 }
@@ -48,12 +45,10 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		currentModel,
 		currentThinking,
 		availableThinkingLevels,
-		currentPermissionMode,
 		isBusy,
 		onSend,
 		onThinkingChange,
 		onModelChange,
-		onPermissionModeChange,
 		onRequestApiKeys,
 		onAbort,
 	},
@@ -400,7 +395,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 						availableThinkingLevels={availableThinkingLevels}
 						onChanged={onThinkingChange}
 					/>
-					<PermissionModeSelector mode={currentPermissionMode} onChange={onPermissionModeChange} />
 					<Popover open={toolsOpen} onOpenChange={setToolsOpen}>
 						<PopoverTrigger asChild>
 							<Button

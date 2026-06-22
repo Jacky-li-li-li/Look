@@ -24,11 +24,9 @@ import {
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
-	chatAgentNameAtom,
 	forkingEntryAtomFamily,
 	messagesAtomFamily,
 	navigatingEntryAtomFamily,
-	pendingAsksAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
@@ -133,45 +131,6 @@ export function initIpcHandlers(api: any): () => void {
 
 			case "agent:history": {
 				appStore.set(messagesAtomFamily(event.agentId), event.messages);
-				break;
-			}
-
-			case "permission:ask": {
-				appStore.set(pendingAsksAtom, [
-					...appStore.get(pendingAsksAtom),
-					{
-						requestId: event.requestId,
-						agentId: event.agentId,
-						toolName: event.toolName,
-						args: event.args,
-						reason: event.reason,
-					},
-				]);
-				break;
-			}
-
-			case "permission:resolved": {
-				const asks = appStore.get(pendingAsksAtom);
-				const resolved = asks.find((ask) => ask.requestId === event.requestId);
-				appStore.set(
-					pendingAsksAtom,
-					asks.filter((ask) => ask.requestId !== event.requestId),
-				);
-				if (resolved && event.decision.action === "deny" && event.decision.reason.startsWith("Timed out")) {
-					toast(t("permission.timedOut", { toolName: resolved.toolName }), {
-						description: resolved.reason,
-						duration: 3000,
-					});
-				}
-				break;
-			}
-
-			case "agent:permission-mode": {
-				appStore.set(
-					agentsAtom,
-					appStore.get(agentsAtom).map((a) => (a.id === event.agentId ? { ...a, permissionMode: event.mode } : a)),
-				);
-				toast.success(t("toast.permissionMode", { mode: event.mode }), { duration: 1500 });
 				break;
 			}
 
@@ -463,21 +422,18 @@ export function initIpcHandlers(api: any): () => void {
 
 // ---- App data initialization ----
 
-let _lastActiveAgentId: string | null = null;
+let _lastActiveSessionId: string | null = null;
 
-/** Try lastActiveAgentId first, then first chat agent. */
+/** Try the persisted session first, then the newest available session. */
 function _autoSelectAgent(): void {
 	if (appStore.get(activeAgentIdAtom)) return;
 	const agents = appStore.get(agentsAtom);
 	if (agents.length === 0) return;
-	if (_lastActiveAgentId && agents.some((a) => a.id === _lastActiveAgentId)) {
-		appStore.set(activeAgentIdAtom, _lastActiveAgentId);
+	if (_lastActiveSessionId && agents.some((a) => a.id === _lastActiveSessionId)) {
+		appStore.set(activeAgentIdAtom, _lastActiveSessionId);
 		return;
 	}
-	const chatAgent = agents.find((a) => a.role === "chat");
-	if (chatAgent) {
-		appStore.set(activeAgentIdAtom, chatAgent.id);
-	}
+	appStore.set(activeAgentIdAtom, agents[0].id);
 }
 
 /** Initialize data previously loaded in App.tsx's useEffect hooks. */
@@ -495,10 +451,9 @@ export async function initAppData(api: any): Promise<void> {
 			if (r?.success && r.settings) {
 				if (r.settings.language) i18n.changeLanguage(r.settings.language);
 				if (r.settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, r.settings.autoCollapse);
-				if (r.settings.chatAgentName !== undefined) appStore.set(chatAgentNameAtom, r.settings.chatAgentName);
 				if (r.settings.preferredModel) appStore.set(userPreferredModelAtom, r.settings.preferredModel);
-				if (r.settings.lastActiveAgentId) {
-					_lastActiveAgentId = r.settings.lastActiveAgentId;
+				if (r.settings.lastActiveSessionId) {
+					_lastActiveSessionId = r.settings.lastActiveSessionId;
 				}
 			}
 		})

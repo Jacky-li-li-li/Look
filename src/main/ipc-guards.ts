@@ -2,7 +2,7 @@
 // IPC input validation guards
 // Reusable runtime validators for renderer → main IPC payloads.
 // TypeScript types are compile-time only; these guards reject
-// malformed or malicious input before it reaches AgentManager.
+// malformed or malicious input before it reaches the session runtime.
 // ============================================================
 
 import path from "node:path";

@@ -5,8 +5,8 @@
 import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
-import { AgentManager } from "./agent-manager.js";
-import { registerIpcHandlers } from "./ipc-handlers.js";
+import { promptForProjectTrust, registerIpcHandlers } from "./ipc-handlers.js";
+import { SessionRuntimeManager } from "./session-runtime-manager.js";
 import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
 
@@ -14,7 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
-let agentManager: AgentManager | null = null;
+let runtimeManager: SessionRuntimeManager | null = null;
 
 const isDev = !app.isPackaged;
 
@@ -201,51 +201,28 @@ function createWindow(): void {
 // Uses pi's retry settings for Layer 1 protection
 // ============================================================
 
-async function initAgentManager(): Promise<void> {
+async function initSessionRuntime(): Promise<void> {
 	loadShellEnv();
 
-	agentManager = new AgentManager();
+	runtimeManager = new SessionRuntimeManager();
 
-	// Load projects first, then restore agents
-	await agentManager.loadProjects();
-	await agentManager.restoreWorkspace();
-
-	// Restore last active project from UI settings
-	let lastActiveProjectId: string | null = null;
-	try {
-		const { getUiSettingsPath } = await import("./shared/look-storage.js");
-		const fs = await import("node:fs");
-		const uiPath = getUiSettingsPath();
-		if (fs.existsSync(uiPath)) {
-			const uiSettings = JSON.parse(fs.readFileSync(uiPath, "utf-8"));
-			lastActiveProjectId = uiSettings.lastActiveProjectId ?? null;
-		}
-	} catch {
-		// Ignore errors reading UI settings
-	}
-
-	// Set active project
-	const projects = agentManager.listProjects();
-	if (lastActiveProjectId && projects.some((p: any) => p.id === lastActiveProjectId)) {
-		agentManager.setActiveProject(lastActiveProjectId);
-		console.log(`[Look] Restored active project: ${lastActiveProjectId}`);
-	} else if (projects.length > 0) {
-		const firstValid = projects.find((p: any) => p.valid);
-		if (firstValid) {
-			agentManager.setActiveProject(firstValid.id);
-			console.log(`[Look] Activated first valid project: ${firstValid.id}`);
-		}
+	// Load projects, then restore the one active pi runtime and session metadata.
+	await runtimeManager.loadProjects();
+	await runtimeManager.restoreWorkspace();
+	const restoredProject = runtimeManager.getActiveProject();
+	if (mainWindow && restoredProject) {
+		await promptForProjectTrust(runtimeManager, restoredProject.id, mainWindow);
 	}
 
 	// The app requires the user to select a project folder first
 	// before any agent can be created. No auto-creation of default agents.
 
 	if (mainWindow) {
-		registerIpcHandlers(agentManager, mainWindow);
+		registerIpcHandlers(runtimeManager, mainWindow);
 
 		// Push initial state: projects + agents + history
-		const allProjects = agentManager.listProjects();
-		const activeProject = agentManager.getActiveProject();
+		const allProjects = runtimeManager.listProjects();
+		const activeProject = runtimeManager.getActiveProject();
 		mainWindow.webContents.send("look:event", {
 			type: "project:list" as const,
 			projects: allProjects,
@@ -253,11 +230,11 @@ async function initAgentManager(): Promise<void> {
 		});
 
 		if (activeProject) {
-			const snapshot = agentManager.listAgentsWithHistory();
+			const snapshot = runtimeManager.listAgentsWithHistory();
 			if (snapshot.agents.length > 0) {
 				mainWindow.webContents.send("look:event", {
 					type: "agent:list" as const,
-					agentId: "",
+					projectId: activeProject.id,
 					agents: snapshot.agents,
 				});
 				for (const [agentId, msgs] of Object.entries(snapshot.history)) {
@@ -293,26 +270,26 @@ app.whenReady().then(async () => {
 	}
 
 	createWindow();
-	await initAgentManager();
+	await initSessionRuntime();
 
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
-			if (mainWindow && agentManager) {
-				registerIpcHandlers(agentManager, mainWindow);
-				const allProjects = agentManager.listProjects();
-				const activeProject = agentManager.getActiveProject();
+			if (mainWindow && runtimeManager) {
+				registerIpcHandlers(runtimeManager, mainWindow);
+				const allProjects = runtimeManager.listProjects();
+				const activeProject = runtimeManager.getActiveProject();
 				mainWindow.webContents.send("look:event", {
 					type: "project:list" as const,
 					projects: allProjects,
 					activeProjectId: activeProject?.id ?? null,
 				});
 				if (activeProject) {
-					const snapshot = agentManager.listAgentsWithHistory();
+					const snapshot = runtimeManager.listAgentsWithHistory();
 					if (snapshot.agents.length > 0) {
 						mainWindow.webContents.send("look:event", {
 							type: "agent:list" as const,
-							agentId: "",
+							projectId: activeProject.id,
 							agents: snapshot.agents,
 						});
 					}
@@ -334,9 +311,9 @@ app.on("window-all-closed", () => {
 // Clean up MCP server subprocesses on quit so we don't leave
 // orphaned child processes behind.
 app.on("before-quit", async () => {
-	if (agentManager) {
+	if (runtimeManager) {
 		try {
-			await agentManager.getMcpManager().disconnectAll();
+			await runtimeManager.getMcpManager().disconnectAll();
 		} catch {
 			// best-effort cleanup
 		}

@@ -18,7 +18,7 @@
 // `ui-settings.json`. Runs once and stamps `_migrated: true` so
 // subsequent boots are a no-op.
 //
-// Invoked synchronously from the AgentManager constructor, BEFORE
+// Invoked synchronously from the SessionRuntimeManager constructor, BEFORE
 // `SettingsManager.create()`, so the SDK reads the post-migration
 // `settings.json` directly into its in-memory state — no reload
 // needed.

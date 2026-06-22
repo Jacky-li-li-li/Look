@@ -1,7 +1,6 @@
 import type { AgentInfo, PiMessage, ProjectInfo, SessionTreeNode } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
-import type { PermissionRequest } from "../components/PermissionDialog";
 
 // ---- Core data ----
 
@@ -65,19 +64,11 @@ export const navigatingEntryAtomFamily = atomFamily((_agentId: string) => atom<s
 /** In-flight createFork calls (per agent). Same shape as above. */
 export const forkingEntryAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
 
-export const pendingAsksAtom = atom<PermissionRequest[]>([]);
-
 // ---- Settings (persisted via IPC to main process, NOT localStorage) ----
 
 export const autoCollapseAtom = atom(true);
 
-/** Custom agent display name set by user in settings, shown next to avatar. */
-export const chatAgentNameAtom = atom("");
-
 export const userPreferredModelAtom = atom<string | null>(null);
-
-/** Last active agent id for auto-restore on app startup. */
-export const lastActiveAgentIdAtom = atom<string | null>(null);
 
 /**
  * Whether the active agent's chat panel is scrolled to the bottom.
@@ -90,7 +81,7 @@ export const activeChatAtBottomAtom = atom(true);
 // ---- UI state ----
 
 export const showSettingsAtom = atom(false);
-export const settingsTabAtom = atom<"general" | "api-keys" | "chat-prompt" | "about" | "profile">("general");
+export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile">("general");
 
 // ---- Auto Updater ----
 

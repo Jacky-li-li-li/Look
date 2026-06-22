@@ -26,8 +26,15 @@ const api = {
   sendMessage: (agentId, message) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message }),
 
-  createAgent: (name) =>
-    ipcRenderer.invoke("look:invoke", { type: "agent:create", name }),
+  activateSession: (sessionId) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:activate", agentId: sessionId }),
+
+  createAgent: (input) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "agent:create",
+      name: typeof input === "string" ? input : input?.name,
+      projectId: typeof input === "object" ? input?.projectId : undefined,
+    }),
 
   destroyAgent: (agentId) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:destroy", agentId }),
@@ -90,13 +97,6 @@ const api = {
   renameAgent: (agentId, name) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:rename", agentId, name }),
 
-  respondPermission: (decision) =>
-    // decision: { action: "allow" | "deny" | "edit", reason?, args? }
-    ipcRenderer.invoke("look:invoke", { type: "permission:response", ...decision }),
-
-  setPermissionMode: (agentId, mode) =>
-    ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", agentId, mode }),
-
   // ---- v0.3 skills ----
   listSkills: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:list" }),
@@ -104,8 +104,6 @@ const api = {
   // ---- MCP ----
   listMcpTools: () =>
     ipcRenderer.invoke("look:invoke", { type: "mcp:list-tools" }),
-  invokeSkill: (agentId, skillName, args) =>
-    ipcRenderer.invoke("look:invoke", { type: "skills:invoke", agentId, skillName, args }),
   importSkillPaths: (paths) =>
     ipcRenderer.invoke("look:invoke", { type: "skills:import-paths", paths }),
   detectCommonSkillPaths: () =>
@@ -145,8 +143,7 @@ const api = {
   // `window.look.*` API surface for the tree-view UI and the
   // hover-action buttons in MessageBubble. The renderer never
   // touches pi's SessionManager directly — all reads/writes go
-  // through the main process so the in-memory mirror on
-  // `ManagedAgent` stays the single source of truth.
+  // through the main process and the active AgentSessionRuntime.
   getSessionTree: (agentId) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:get-session-tree", agentId }),
   getForkPoints: (agentId) =>

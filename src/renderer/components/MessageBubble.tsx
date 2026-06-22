@@ -16,7 +16,7 @@
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
-import type { AgentRole, PiContentBlock, PiMessage, PiTextBlock } from "@shared/types";
+import type { PiContentBlock, PiMessage, PiTextBlock } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { MapPin } from "lucide-react";
 import { memo } from "react";
@@ -29,7 +29,6 @@ import UserAvatar from "./UserAvatar";
 
 interface MessageBubbleProps {
 	message: PiMessage;
-	agentRole?: AgentRole;
 	agentName?: string;
 	autoCollapse: boolean;
 	/**
@@ -108,7 +107,6 @@ function ContentBlocks({
 
 const MessageBubble = memo(function MessageBubble({
 	message,
-	agentRole,
 	agentName,
 	autoCollapse,
 	isActiveLeaf = false,
@@ -128,7 +126,7 @@ const MessageBubble = memo(function MessageBubble({
 		>
 			{/* Avatar */}
 			{!isUser ? (
-				<PixelAgentAvatar role={agentRole} size="sm" className="mt-0.5 shrink-0" />
+				<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
 			) : (
 				<UserAvatar avatar={userProfile.avatar} size="sm" className="mt-0.5" />
 			)}

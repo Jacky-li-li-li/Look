@@ -6,7 +6,7 @@
 // On submit, calls `window.look.importSkillPaths([path])` which
 // appends the path to `~/.look/settings.json#skills`. The slash
 // menu re-fetches the list, and the new directory is picked up
-// by `gatherSkillPaths()` on the next `listAllSkills()` call.
+// by pi SettingsManager and picked up by ResourceLoader.reload().
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";

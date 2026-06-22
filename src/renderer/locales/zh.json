@@ -47,13 +47,7 @@
 		"authSourceEnv": "从环境变量 {{env}} 检测到",
 		"authSourceRuntime": "运行时提供",
 		"authSourceConfig": "通过 ~/.look/models.json 配置",
-		"authSourceAuto": "自动配置",
-		"agentName": "Agent 名称",
-		"agentNameDesc": "助手消息中头像旁显示的展示名称",
-		"agentNamePlaceholder": "留空则使用会话名称",
-		"chatSystemPrompt": "系统提示",
-		"chatSystemPromptDesc": "新建对话会话的自定义系统提示",
-		"chatSystemPromptPlaceholder": "输入自定义系统提示（默认: pi SDK coding assistant）"
+		"authSourceAuto": "自动配置"
 	},
 	"agent": {
 		"model": "模型",
@@ -76,7 +70,6 @@
 		"empty": "暂无消息，开始对话吧。",
 		"thinkingLevel": "思考",
 		"thinkingUnsupported": "当前模型不支持思考",
-		"permission": "权限",
 		"newChat": "新对话",
 		"branchFromHere": "从这里分叉",
 		"forkToNewChat": "抽成新会话",
@@ -104,20 +97,6 @@
 		"copyMessage": "复制",
 		"copied": "已复制",
 		"copyFailed": "复制失败：{{message}}"
-	},
-	"permission": {
-		"title": "权限请求",
-		"description": "Agent 想要运行一个被权限门控标记的工具。",
-		"reason": "原因",
-		"arguments": "参数",
-		"editPath": "编辑路径",
-		"otherArgsPreserved": "其他参数将被保留。",
-		"allow": "允许",
-		"deny": "拒绝",
-		"allowWithEdits": "编辑后允许",
-		"allowEdited": "允许（已编辑）",
-		"more": "+{{count}} 更多",
-		"timedOut": "超时 — 已拒绝: {{toolName}}"
 	},
 	"tool": {
 		"arguments": "参数",
@@ -175,19 +154,8 @@
 		"triedModels": "尝试了 {{count}} 个模型。当前使用 {{resolved}}。",
 		"noHarness": "Harness API 不可用。请在 Electron 中运行。",
 		"modelSwitchFailed": "切换模型失败",
-		"permissionMode": "权限模式: {{mode}}",
 		"error": "[{{id}}] {{message}}",
 		"configFirstModel": "配置第一个模型吧",
 		"configFirstModelDesc": "在 API 密钥里添加一个 provider 的 key 即可使用"
-	},
-	"roles": {
-		"chat": "助手",
-		"crawler": "爬取器",
-		"cleaner": "清洗器",
-		"analyst": "分析师",
-		"reporter": "报告器",
-		"coder": "编码器",
-		"reviewer": "审查器",
-		"custom": "自定义"
 	}
 }
