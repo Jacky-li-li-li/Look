@@ -10,6 +10,7 @@ import {
 	createAgentSessionFromServices,
 	createAgentSessionRuntime,
 	createAgentSessionServices,
+	type ExtensionFactory,
 	hasProjectTrustInputs,
 	ModelRegistry,
 	type SessionInfo as PiSessionInfo,
@@ -18,6 +19,11 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
+import {
+	createPermissionExtensionFactory,
+	createPlanModeHandler,
+	type ToolCallHandler,
+} from "./extensions/permission-extension.js";
 import { createMcpExtensionFactory } from "./mcp/mcp-extension.js";
 import { McpManager } from "./mcp/mcp-manager.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
@@ -37,6 +43,9 @@ import type {
 	ForkedSessionResult,
 	MainToRendererEvent,
 	NavigateTreeResult,
+	PermissionAskEvent,
+	PermissionMode,
+	PermissionRespondPayload,
 	PiMessage,
 	PiToolCallBlock,
 	ProjectInfo,
@@ -98,6 +107,11 @@ export class SessionRuntimeManager {
 	private activeProjectId: string | null = null;
 	private activeSessionId: string | null = null;
 	private _mcpManager: McpManager | null = null;
+	private _permissionMode: PermissionMode = "ask";
+	/** Permission ask mode: pending requests keyed by requestId. */
+	private permissionAwaiting = new Map<string, { resolve: (action: "allow" | "deny" | "allow_always") => void }>();
+	/** "ask" mode: tools allowed for the rest of this session (set by "Always Allow"). */
+	private sessionAllowedTools = new Set<string>();
 
 	constructor() {
 		ensureLookDir();
@@ -109,8 +123,9 @@ export class SessionRuntimeManager {
 		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
 		this.trustStore = new ProjectTrustStore(getLookDir());
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
-		this.globalSettingsManager.setDefaultProjectTrust("always");
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
+		this._permissionMode = this.userSettings.getAll().permissionMode;
+		this.globalSettingsManager.setDefaultProjectTrust(this._permissionMode === "always" ? "always" : "ask");
 		this.projectsIndexPath = getProjectsIndexPath();
 	}
 
@@ -427,7 +442,7 @@ export class SessionRuntimeManager {
 					modelRegistry: this.modelRegistry,
 					settingsManager,
 					resourceLoaderOptions: {
-						extensionFactories: [createMcpExtensionFactory(this.getMcpManager())],
+						extensionFactories: this.buildExtensionFactories(cwd),
 					},
 					resourceLoaderReloadOptions: {
 						resolveProjectTrust: async () => trusted,
@@ -454,6 +469,16 @@ export class SessionRuntimeManager {
 			release();
 			if (this.resourceInitializationTail === tail) this.resourceInitializationTail = Promise.resolve();
 		}
+	}
+
+	private buildExtensionFactories(cwd: string): ExtensionFactory[] {
+		const factories: ExtensionFactory[] = [];
+		if (this._permissionMode === "ask" || this._permissionMode === "plan") {
+			const handler = this.createPermissionToolCallHandler(cwd);
+			factories.push(createPermissionExtensionFactory(handler));
+		}
+		factories.push(createMcpExtensionFactory(this.getMcpManager()));
+		return factories;
 	}
 
 	private resolveProjectTrust(cwd: string): boolean {
@@ -1044,6 +1069,87 @@ export class SessionRuntimeManager {
 		});
 	}
 
+	getPermissionMode(): PermissionMode {
+		return this._permissionMode;
+	}
+
+	async setPermissionMode(mode: PermissionMode): Promise<void> {
+		if (mode === this._permissionMode) return;
+		this._permissionMode = mode;
+		this.sessionAllowedTools.clear();
+		await this.userSettings.update({ permissionMode: mode });
+		this.globalSettingsManager.setDefaultProjectTrust(mode === "always" ? "always" : "ask");
+		await this.rebuildActiveRuntime();
+	}
+
+	handlePermissionResponse(payload: PermissionRespondPayload): void {
+		const pending = this.permissionAwaiting.get(payload.requestId);
+		if (!pending) return;
+		pending.resolve(payload.action);
+		this.permissionAwaiting.delete(payload.requestId);
+	}
+
+	private createPermissionToolCallHandler(cwd: string): ToolCallHandler {
+		if (this._permissionMode === "plan") {
+			return createPlanModeHandler(cwd);
+		}
+		return async (event, _ctx) => {
+			const toolName = event.toolName;
+			if (this.sessionAllowedTools.has(toolName)) return {};
+
+			const requestId = uuidv4();
+			const askEvent: PermissionAskEvent = {
+				toolName,
+				toolInput: (event.input ?? {}) as Record<string, unknown>,
+				toolDescription: `Tool: ${toolName}`,
+				requestId,
+			};
+
+			const activeSessionId = this.activeSessionId;
+			this.emit({ type: "permission:ask", agentId: activeSessionId ?? "", event: askEvent });
+
+			const action = await new Promise<"allow" | "deny" | "allow_always">((resolve) => {
+				this.permissionAwaiting.set(requestId, { resolve });
+				setTimeout(() => {
+					if (this.permissionAwaiting.has(requestId)) {
+						this.permissionAwaiting.delete(requestId);
+						resolve("deny");
+					}
+				}, 30_000);
+			});
+
+			if (action === "allow_always") {
+				this.sessionAllowedTools.add(toolName);
+				return {};
+			}
+			if (action === "allow") return {};
+			return { block: true, reason: `用户拒绝了 ${toolName} 工具调用` };
+		};
+	}
+
+	private async rebuildActiveRuntime(): Promise<void> {
+		const sessionId = this.activeSessionId;
+		if (!sessionId) return;
+		const managed = this.runtimes.get(sessionId);
+		if (!managed || managed.status !== "idle") return;
+
+		const project = this.projects.get(managed.projectId);
+		if (!project?.valid) return;
+
+		await this.disposeRuntime(sessionId);
+		const newManaged = await this.createManagedRuntime(
+			project.cwd,
+			SessionManager.create(project.cwd, getSessionsDir()),
+			managed.projectId,
+		);
+		const stored = this.findStoredSession(sessionId);
+		if (stored?.name) {
+			await newManaged.runtime.session.setSessionName(stored.name);
+		}
+		this.runtimes.set(sessionId, newManaged);
+		this.emitSessionState(sessionId);
+	}
+
 	getGeneralSettings(): UserSettings {
 		return this.userSettings.getAll();
 	}
@@ -1054,6 +1160,9 @@ export class SessionRuntimeManager {
 			for (const managed of this.runtimes.values()) {
 				managed.runtime.session.setAutoCompactionEnabled(partial.compactionEnabled);
 			}
+		}
+		if (partial.permissionMode !== undefined && partial.permissionMode !== this._permissionMode) {
+			await this.setPermissionMode(partial.permissionMode);
 		}
 		return settings;
 	}

@@ -33,6 +33,24 @@ export type SessionStatus = "idle" | "thinking" | "working" | "error" | "destroy
 /** Pi thinking level — matches pi's built-in levels */
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
+/** Permission mode — controls how tool calls are authorized */
+export type PermissionMode = "always" | "ask" | "plan";
+
+/** Permission ask event — sent from main to renderer when a tool needs approval */
+export interface PermissionAskEvent {
+	toolName: string;
+	toolInput: Record<string, unknown>;
+	toolDescription: string;
+	requestId: string;
+}
+
+/** Permission response — sent from renderer to main with user decision */
+export interface PermissionRespondPayload {
+	requestId: string;
+	action: "allow" | "deny" | "allow_always";
+	editedInput?: Record<string, unknown>;
+}
+
 /** Token usage and cost snapshot */
 export interface UsageSnapshot {
 	inputTokens: number;
@@ -311,6 +329,8 @@ export type MainToRendererEvent =
 			tree: SessionTreeNode;
 	  }>
 	| { type: "error"; agentId?: string; message: string }
+		// ---- Permission events ----
+		| { type: "permission:ask"; agentId: string; event: PermissionAskEvent }
 	// ---- Project events ----
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
@@ -380,6 +400,7 @@ export type RendererToMainEvent =
 				language: "en" | "zh" | "ja";
 				autoCollapse: boolean;
 				compactionEnabled: boolean;
+				permissionMode: PermissionMode;
 				preferredModel: string | null;
 				lastActiveSessionId: string;
 				lastActiveProjectId: string;
@@ -449,7 +470,11 @@ export type RendererToMainEvent =
 	| { type: "mcp:remove-server"; name: string }
 	| { type: "mcp:restart-server"; name: string }
 	| { type: "mcp:list-tools" }
-	| { type: "mcp:connect-all" };
+	| { type: "mcp:connect-all" }
+		// ---- Permission events (renderer → main) ----
+		| { type: "permission:set-mode"; mode: PermissionMode }
+		| { type: "permission:get-mode" }
+		| { type: "permission:respond"; payload: PermissionRespondPayload };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

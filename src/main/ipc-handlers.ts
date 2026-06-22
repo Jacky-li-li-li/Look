@@ -17,7 +17,7 @@ import {
 	guardStringArray,
 } from "./ipc-guards.js";
 import type { SessionRuntimeManager } from "./session-runtime-manager.js";
-import type { MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
+import type { MainToRendererEvent, PermissionMode, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 
@@ -210,6 +210,9 @@ async function handleRendererInvoke(
 			}
 			if ("compactionEnabled" in settings) {
 				guardBoolean(settings.compactionEnabled, "settings.compactionEnabled");
+			}
+			if ("permissionMode" in settings) {
+				guardEnum(settings.permissionMode, "settings.permissionMode", ["always", "ask", "plan"] as const);
 			}
 			if ("preferredModel" in settings && settings.preferredModel !== null) {
 				guardString(settings.preferredModel, "settings.preferredModel");
@@ -493,6 +496,23 @@ async function handleRendererInvoke(
 			await runtimeManager.getMcpManager().connectAll();
 			return { success: true };
 		}
+
+
+			// === Permission management ===
+			case "permission:set-mode": {
+				const mode = guardEnum(data.mode, "mode", ["always", "ask", "plan"] as const) as PermissionMode;
+				await runtimeManager.setPermissionMode(mode);
+				return { success: true, mode };
+			}
+
+			case "permission:get-mode": {
+				return { success: true, mode: runtimeManager.getPermissionMode() };
+			}
+
+			case "permission:respond": {
+				runtimeManager.handlePermissionResponse(data.payload);
+				return { success: true };
+			}
 
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };

@@ -26,11 +26,14 @@ import fs from "fs";
 import path from "path";
 
 export type UILanguage = "en" | "zh" | "ja";
+export type PermissionMode = "always" | "ask" | "plan";
 
 export interface UserSettings {
 	language: UILanguage;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
+	/** Permission mode for tool call authorization. */
+	permissionMode: PermissionMode;
 	/** The global pi default model. */
 	preferredModel: string | null;
 	/** Last active pi session ID to restore on restart. */
@@ -45,6 +48,7 @@ const DEFAULTS: UserSettings = {
 	language: "en",
 	autoCollapse: true,
 	compactionEnabled: true,
+	permissionMode: "ask",
 	preferredModel: null,
 	lastActiveSessionId: "",
 	lastActiveProjectId: "",
@@ -61,6 +65,8 @@ interface UiSettings {
 	language: UILanguage;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
+	/** Permission mode for tool call authorization. */
+	permissionMode: PermissionMode;
 	/** Last active pi session ID to restore on restart. */
 	lastActiveSessionId: string;
 	/** Last active project ID to restore on restart. */
@@ -72,6 +78,7 @@ const UI_DEFAULTS: UiSettings = {
 	language: DEFAULTS.language,
 	autoCollapse: DEFAULTS.autoCollapse,
 	compactionEnabled: DEFAULTS.compactionEnabled,
+	permissionMode: "ask",
 	lastActiveSessionId: "",
 	lastActiveProjectId: "",
 	openProjectIds: [],
@@ -175,6 +182,7 @@ export class UserSettingsStore {
 		if (partial.language !== undefined) uiPartial.language = partial.language;
 		if (partial.autoCollapse !== undefined) uiPartial.autoCollapse = partial.autoCollapse;
 		if (partial.compactionEnabled !== undefined) uiPartial.compactionEnabled = partial.compactionEnabled;
+		if (partial.permissionMode !== undefined) uiPartial.permissionMode = partial.permissionMode;
 		if (partial.lastActiveSessionId !== undefined) uiPartial.lastActiveSessionId = partial.lastActiveSessionId;
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
 		if (partial.openProjectIds !== undefined) uiPartial.openProjectIds = [...partial.openProjectIds];

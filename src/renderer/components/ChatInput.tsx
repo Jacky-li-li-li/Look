@@ -10,10 +10,13 @@ import { Textarea } from "@shared/components/ui/textarea";
 import type { SessionStatus, ThinkingLevel } from "@shared/types";
 import { Puzzle, Search, Send, Square } from "lucide-react";
 import type React from "react";
+import { useAtomValue } from "jotai";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { permissionModeAtom } from "../store/atoms";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
+import PermissionModeSelector from "./PermissionModeSelector";
 import SkillOverlaySegments from "./SkillOverlaySegments";
 import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
 import ThinkingSelector from "./ThinkingSelector";
@@ -55,7 +58,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	ref,
 ) {
 	const { t } = useTranslation();
-	const [input, setInput] = useState("");
+		const permissionMode = useAtomValue(permissionModeAtom);
+		const [input, setInput] = useState("");
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
 	useImperativeHandle(ref, () => ({
@@ -394,6 +398,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 						availableThinkingLevels={availableThinkingLevels}
 						onChanged={onThinkingChange}
 					/>
+					<PermissionModeSelector currentMode={permissionMode} />
 					<Popover open={toolsOpen} onOpenChange={setToolsOpen}>
 						<PopoverTrigger asChild>
 							<Button

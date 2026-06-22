@@ -10,6 +10,7 @@
 
 import type {
 	MainToRendererEvent,
+	PermissionAskEvent,
 	PiContentBlock,
 	PiMessage,
 	PiTextBlock,
@@ -29,6 +30,7 @@ import {
 	navigatingEntryAtomFamily,
 	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
+	permissionAskEventAtom,
 	projectsAtom,
 	providerSettingsAtom,
 	queuesAtomFamily,
@@ -244,6 +246,13 @@ export function initIpcHandlers(api: any): () => void {
 					stage: "error",
 					message: event.message,
 				});
+				break;
+			}
+
+			// ---- Permission events ----
+			case "permission:ask": {
+				const askEvent = (event as any).event as PermissionAskEvent;
+				if (askEvent) appStore.set(permissionAskEventAtom, askEvent);
 				break;
 			}
 

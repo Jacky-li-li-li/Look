@@ -186,6 +186,14 @@ const api = {
   installUpdate: () =>
     ipcRenderer.invoke("look:invoke", { type: "update:install" }),
 
+  // ---- Permission management ----
+  setPermissionMode: (mode) =>
+    ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", mode }),
+  getPermissionMode: () =>
+    ipcRenderer.invoke("look:invoke", { type: "permission:get-mode" }),
+  respondPermission: (payload) =>
+    ipcRenderer.invoke("look:invoke", { type: "permission:respond", payload }),
+
   // ---- User Profile ----
   getUserProfile: () =>
     ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),

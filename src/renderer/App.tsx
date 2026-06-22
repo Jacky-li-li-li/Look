@@ -21,6 +21,7 @@ import ChatPanel from "./components/ChatPanel";
 import DeleteProjectDialog from "./components/DeleteProjectDialog";
 import LoginScreen from "./components/LoginScreen";
 import NewProjectDialog from "./components/NewProjectDialog";
+import PermissionDialog from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import Sidebar from "./components/Sidebar";
 import SettingsDialog from "./components/settings/SettingsDialog";
@@ -36,6 +37,7 @@ import {
 	autoCollapseAtom,
 	messagesAtomFamily,
 	openProjectIdsAtom,
+		permissionModeAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,

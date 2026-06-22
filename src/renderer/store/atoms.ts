@@ -1,4 +1,4 @@
-import type { AgentInfo, PiMessage, ProjectInfo, SessionTreeNode } from "@shared/types";
+import type { AgentInfo, PermissionAskEvent, PermissionMode, PiMessage, ProjectInfo, SessionTreeNode } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
 
@@ -73,6 +73,12 @@ export const forkingEntryAtomFamily = atomFamily((_agentId: string) => atom<stri
 export const autoCollapseAtom = atom(true);
 
 export const userPreferredModelAtom = atom<string | null>(null);
+
+// ---- Permission management ----
+
+export const permissionModeAtom = atom<PermissionMode>("ask");
+
+export const permissionAskEventAtom = atom<PermissionAskEvent | null>(null);
 
 /**
  * Whether the active agent's chat panel is scrolled to the bottom.

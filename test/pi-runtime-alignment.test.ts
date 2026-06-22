@@ -39,11 +39,20 @@ describe("pi runtime architecture regressions", () => {
 		expect(types).toContain("interface PiStreamMessage");
 	});
 
-	it("5. has no second permission execution gate", () => {
+	it("5. has pi SDK-aligned permission extension (no old gate)", () => {
+		// Old gate must not exist
 		expect(existsSync(resolve(root, "src/main/permissions/permission-gate.ts"))).toBe(false);
-		expect(existsSync(resolve(root, "src/renderer/components/PermissionDialog.tsx"))).toBe(false);
-		expect(ipc).not.toContain("permission:set-mode");
-		expect(preload).not.toContain("respondPermission");
+		// New permission extension must exist
+		expect(existsSync(resolve(root, "src/main/extensions/permission-extension.ts"))).toBe(true);
+		// New permission UI components must exist
+		expect(existsSync(resolve(root, "src/renderer/components/PermissionDialog.tsx"))).toBe(true);
+		expect(existsSync(resolve(root, "src/renderer/components/PermissionModeSelector.tsx"))).toBe(true);
+		// Permission IPC and preload must exist
+		expect(ipc).toContain("permission:set-mode");
+		expect(ipc).toContain("permission:get-mode");
+		expect(ipc).toContain("permission:respond");
+		expect(preload).toContain("respondPermission");
+		expect(preload).toContain("setPermissionMode");
 	});
 
 	it("6. rebuilds history from SessionManager after tree navigation", () => {
