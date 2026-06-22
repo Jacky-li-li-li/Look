@@ -8,9 +8,9 @@ import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { Textarea } from "@shared/components/ui/textarea";
 import type { SessionStatus, ThinkingLevel } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { Puzzle, Search, Send, Square } from "lucide-react";
 import type React from "react";
-import { useAtomValue } from "jotai";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { permissionModeAtom } from "../store/atoms";
@@ -58,8 +58,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	ref,
 ) {
 	const { t } = useTranslation();
-		const permissionMode = useAtomValue(permissionModeAtom);
-		const [input, setInput] = useState("");
+	const permissionMode = useAtomValue(permissionModeAtom);
+	const [input, setInput] = useState("");
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
 	useImperativeHandle(ref, () => ({
@@ -312,231 +312,220 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
 	return (
 		<div className="relative mx-5 mb-2.5 rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
-				{slashOpen ? (
-					<SkillSlashMenu
-						skills={filteredSkills}
-						searchTerm={slashSearchTerm}
-						importedPaths={importedPaths}
-						detected={detected}
-						selectedIndex={slashIndex}
-						onSelectedIndexChange={setSlashIndex}
-						onSelectSkill={(s) => setInput(`/skill:${s.name} `)}
-						onImportFrom={(d) => void importDetected(d)}
-						onImportRequest={() => {
-							setInput("");
-						}}
-						onClose={() => setInput("")}
-					/>
-				) : null}
-				{hashOpen ? (
-					mcpTools.length === 0 ? (
-						<div className="absolute bottom-full left-0 right-0 z-50 mb-1 rounded-lg border border-hairline bg-popover p-3 text-center text-xs text-muted-foreground shadow-lg">
-							Type <span className="font-medium text-foreground">#mcp</span> to use MCP tools.
-							<br />
-							Add a server in <span className="font-medium text-foreground">Settings → MCP</span>.
+			{slashOpen ? (
+				<SkillSlashMenu
+					skills={filteredSkills}
+					searchTerm={slashSearchTerm}
+					importedPaths={importedPaths}
+					detected={detected}
+					selectedIndex={slashIndex}
+					onSelectedIndexChange={setSlashIndex}
+					onSelectSkill={(s) => setInput(`/skill:${s.name} `)}
+					onImportFrom={(d) => void importDetected(d)}
+					onImportRequest={() => {
+						setInput("");
+					}}
+					onClose={() => setInput("")}
+				/>
+			) : null}
+			{hashOpen ? (
+				mcpTools.length === 0 ? (
+					<div className="absolute bottom-full left-0 right-0 z-50 mb-1 rounded-lg border border-hairline bg-popover p-3 text-center text-xs text-muted-foreground shadow-lg">
+						Type <span className="font-medium text-foreground">#mcp</span> to use MCP tools.
+						<br />
+						Add a server in <span className="font-medium text-foreground">Settings → MCP</span>.
+					</div>
+				) : filteredMcpTools.length > 0 ? (
+					<div className="absolute bottom-full left-0 right-0 z-50 mb-1 max-h-48 overflow-y-auto rounded-lg border border-hairline bg-popover p-1 shadow-lg">
+						<div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+							MCP Tools
 						</div>
-					) : filteredMcpTools.length > 0 ? (
-						<div className="absolute bottom-full left-0 right-0 z-50 mb-1 max-h-48 overflow-y-auto rounded-lg border border-hairline bg-popover p-1 shadow-lg">
-							<div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-								MCP Tools
+						{filteredMcpTools.map((t, i) => (
+							<button
+								key={`${t.serverName}__${t.name}`}
+								type="button"
+								className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+									i === hashIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/40"
+								}`}
+								onMouseDown={(e) => {
+									e.preventDefault();
+									setInput(`mcp:${t.serverName}:${t.name} `);
+								}}
+							>
+								<span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
+									{t.serverName}
+								</span>
+								<span className="font-medium">{t.name}</span>
+								{t.description && <span className="truncate text-muted-foreground">— {t.description}</span>}
+							</button>
+						))}
+					</div>
+				) : (
+					<div className="absolute bottom-full left-0 right-0 z-50 mb-1 rounded-lg border border-hairline bg-popover p-3 text-center text-xs text-muted-foreground shadow-lg">
+						No matching MCP tools for "{hashSearchTerm}".
+					</div>
+				)
+			) : null}
+			<div className="grid grid-cols-1 grid-rows-1">
+				{!slashOpen && input.length > 0 ? (
+					<div
+						aria-hidden
+						className="pointer-events-none col-start-1 row-start-1 overflow-hidden whitespace-pre-wrap break-words bg-transparent px-3 py-2.5 text-[13px] leading-relaxed text-transparent"
+					>
+						<SkillOverlaySegments content={input} />
+					</div>
+				) : null}
+				<Textarea
+					ref={inputRef}
+					value={input}
+					onChange={(e) => setInput(e.target.value)}
+					onKeyDown={handleKeyDown}
+					placeholder={isBusy ? `${t("chat.send")}… (Enter to queue)` : `${t("chat.placeholder")}`}
+					rows={2}
+					style={{ gridArea: "1 / 1" }}
+					className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] leading-relaxed shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
+				/>
+			</div>
+			<div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
+				<ModelSelector
+					agentId={agentId}
+					currentModel={currentModel}
+					onModelChanged={onModelChange}
+					onRequestApiKeys={onRequestApiKeys}
+				/>
+				<ThinkingSelector
+					currentLevel={currentThinking}
+					availableThinkingLevels={availableThinkingLevels}
+					onChanged={onThinkingChange}
+				/>
+				<PermissionModeSelector currentMode={permissionMode} />
+				<Popover open={toolsOpen} onOpenChange={setToolsOpen}>
+					<PopoverTrigger asChild>
+						<Button
+							variant="line"
+							size="icon-sm"
+							aria-label={t("chat.tools", "Tools")}
+							title={t("chat.tools", "Tools")}
+						>
+							<Puzzle className="size-3.5" />
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent
+						align="end"
+						className="flex w-80 flex-col overflow-hidden rounded-lg border border-hairline bg-popover p-0 shadow-lg"
+					>
+						<Tabs defaultValue="skills" className="flex flex-col">
+							<div className="border-b border-hairline px-2 pt-2">
+								<TabsList className="grid w-full grid-cols-2 bg-transparent p-0">
+									<TabsTrigger
+										value="skills"
+										className="rounded-none border-b-2 border-transparent py-1.5 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+									>
+										{t("chat.skills", "Skills")}
+										{visibleSkills.length > 0 && (
+											<span className="ml-1.5 rounded-full bg-muted px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
+												{searchedSkills.length}
+											</span>
+										)}
+									</TabsTrigger>
+									<TabsTrigger
+										value="mcp"
+										className="rounded-none border-b-2 border-transparent py-1.5 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+									>
+										{t("chat.mcpTools", "MCP Tools")}
+										{mcpTools.length > 0 && (
+											<span className="ml-1.5 rounded-full bg-muted px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
+												{searchedMcpTools.length}
+											</span>
+										)}
+									</TabsTrigger>
+								</TabsList>
 							</div>
-							{filteredMcpTools.map((t, i) => (
-								<button
-									key={`${t.serverName}__${t.name}`}
-									type="button"
-									className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-										i === hashIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/40"
-									}`}
-									onMouseDown={(e) => {
-										e.preventDefault();
-										setInput(`mcp:${t.serverName}:${t.name} `);
-									}}
-								>
-									<span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
-										{t.serverName}
-									</span>
-									<span className="font-medium">{t.name}</span>
-									{t.description && <span className="truncate text-muted-foreground">— {t.description}</span>}
-								</button>
-							))}
-						</div>
-					) : (
-						<div className="absolute bottom-full left-0 right-0 z-50 mb-1 rounded-lg border border-hairline bg-popover p-3 text-center text-xs text-muted-foreground shadow-lg">
-							No matching MCP tools for "{hashSearchTerm}".
-						</div>
-					)
-				) : null}
-				<div className="grid grid-cols-1 grid-rows-1">
-					{!slashOpen && input.length > 0 ? (
-						<div
-							aria-hidden
-							className="pointer-events-none col-start-1 row-start-1 overflow-hidden whitespace-pre-wrap break-words bg-transparent px-3 py-2.5 text-[13px] leading-relaxed text-transparent"
-						>
-							<SkillOverlaySegments content={input} />
-						</div>
-					) : null}
-					<Textarea
-						ref={inputRef}
-						value={input}
-						onChange={(e) => setInput(e.target.value)}
-						onKeyDown={handleKeyDown}
-						placeholder={isBusy ? `${t("chat.send")}… (Enter to queue)` : `${t("chat.placeholder")}`}
-						rows={2}
-						style={{ gridArea: "1 / 1" }}
-						className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] leading-relaxed shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
-					/>
-				</div>
-				<div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
-					<ModelSelector
-						agentId={agentId}
-						currentModel={currentModel}
-						onModelChanged={onModelChange}
-						onRequestApiKeys={onRequestApiKeys}
-					/>
-					<ThinkingSelector
-						currentLevel={currentThinking}
-						availableThinkingLevels={availableThinkingLevels}
-						onChanged={onThinkingChange}
-					/>
-					<PermissionModeSelector currentMode={permissionMode} />
-					<Popover open={toolsOpen} onOpenChange={setToolsOpen}>
-						<PopoverTrigger asChild>
-							<Button
-								variant="line"
-								size="icon-sm"
-								aria-label={t("chat.tools", "Tools")}
-								title={t("chat.tools", "Tools")}
-							>
-								<Puzzle className="size-3.5" />
-							</Button>
-						</PopoverTrigger>
-						<PopoverContent
-							align="end"
-							className="flex w-80 flex-col overflow-hidden rounded-lg border border-hairline bg-popover p-0 shadow-lg"
-						>
-							<Tabs defaultValue="skills" className="flex flex-col">
-								<div className="border-b border-hairline px-2 pt-2">
-									<TabsList className="grid w-full grid-cols-2 bg-transparent p-0">
-										<TabsTrigger
-											value="skills"
-											className="rounded-none border-b-2 border-transparent py-1.5 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-										>
-											{t("chat.skills", "Skills")}
-											{visibleSkills.length > 0 && (
-												<span className="ml-1.5 rounded-full bg-muted px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
-													{searchedSkills.length}
-												</span>
-											)}
-										</TabsTrigger>
-										<TabsTrigger
-											value="mcp"
-											className="rounded-none border-b-2 border-transparent py-1.5 text-xs data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-										>
-											{t("chat.mcpTools", "MCP Tools")}
-											{mcpTools.length > 0 && (
-												<span className="ml-1.5 rounded-full bg-muted px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
-													{searchedMcpTools.length}
-												</span>
-											)}
-										</TabsTrigger>
-									</TabsList>
+							<div className="border-b border-hairline px-2 py-2">
+								<div className="relative">
+									<Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+									<input
+										type="text"
+										value={toolsSearch}
+										onChange={(e) => setToolsSearch(e.target.value)}
+										placeholder={t("chat.searchTools", "Search tools...")}
+										className="h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs outline-none ring-0 placeholder:text-muted-foreground focus:border-foreground focus-visible:ring-0"
+									/>
 								</div>
-								<div className="border-b border-hairline px-2 py-2">
-									<div className="relative">
-										<Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-										<input
-											type="text"
-											value={toolsSearch}
-											onChange={(e) => setToolsSearch(e.target.value)}
-											placeholder={t("chat.searchTools", "Search tools...")}
-											className="h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs outline-none ring-0 placeholder:text-muted-foreground focus:border-foreground focus-visible:ring-0"
-										/>
-									</div>
-								</div>
-								<TabsContent value="skills" className="mt-0">
-									<ScrollArea className="h-60">
-										{searchedSkills.length > 0 ? (
-											<div className="p-1.5">
-												{searchedSkills.map((s) => (
-													<button
-														key={`skill-${s.name}`}
-														type="button"
-														className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-														onClick={() => handlePickSkill(s.name)}
-													>
-														<span className="font-medium">/skill:{s.name}</span>
-														{s.description && (
-															<span className="line-clamp-1 text-[10px] text-muted-foreground">
-																{s.description}
-															</span>
-														)}
-													</button>
-												))}
-											</div>
-										) : (
-											<div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
-												{toolsSearch.trim()
-													? t("chat.noSkillsFound", "No skills match your search.")
-													: t("chat.noSkills", "No skills available.")}
-											</div>
-										)}
-									</ScrollArea>
-								</TabsContent>
-								<TabsContent value="mcp" className="mt-0">
-									<ScrollArea className="h-60">
-										{searchedMcpTools.length > 0 ? (
-											<div className="p-1.5">
-												{searchedMcpTools.map((t) => (
-													<button
-														key={`mcp-${t.serverName}-${t.name}`}
-														type="button"
-														className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-														onClick={() => handlePickMcpTool(t.serverName, t.name)}
-													>
-														<span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
-															{t.serverName}
+							</div>
+							<TabsContent value="skills" className="mt-0">
+								<ScrollArea className="h-60">
+									{searchedSkills.length > 0 ? (
+										<div className="p-1.5">
+											{searchedSkills.map((s) => (
+												<button
+													key={`skill-${s.name}`}
+													type="button"
+													className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+													onClick={() => handlePickSkill(s.name)}
+												>
+													<span className="font-medium">/skill:{s.name}</span>
+													{s.description && (
+														<span className="line-clamp-1 text-[10px] text-muted-foreground">
+															{s.description}
 														</span>
-														<span className="font-medium">{t.name}</span>
-													</button>
-												))}
-											</div>
-										) : (
-											<div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
-												{toolsSearch.trim()
-													? t("chat.noMcpToolsFound", "No MCP tools match your search.")
-													: t("chat.noMcpTools", "No MCP tools connected.")}
-											</div>
-										)}
-									</ScrollArea>
-								</TabsContent>
-							</Tabs>
-						</PopoverContent>
-					</Popover>
-					<div className="flex-1" />
-					<ContextRing />
-					{isBusy ? (
-						<>
-							<Button
-								variant="line"
-								size="icon-sm"
-								onClick={handleAbort}
-								aria-label={t("chat.stop")}
-								title={t("chat.stop")}
-								className="text-muted-foreground hover:text-destructive"
-							>
-								<Square data-icon="inline-start" className="size-3 fill-current" />
-							</Button>
-							<Button
-								variant={input.trim() ? "line-filled" : "line"}
-								size="icon-sm"
-								onClick={handleSend}
-								disabled={!input.trim()}
-								aria-label={t("chat.send")}
-							>
-								<Send data-icon="inline-start" className="size-3.5" />
-							</Button>
-						</>
-					) : (
+													)}
+												</button>
+											))}
+										</div>
+									) : (
+										<div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
+											{toolsSearch.trim()
+												? t("chat.noSkillsFound", "No skills match your search.")
+												: t("chat.noSkills", "No skills available.")}
+										</div>
+									)}
+								</ScrollArea>
+							</TabsContent>
+							<TabsContent value="mcp" className="mt-0">
+								<ScrollArea className="h-60">
+									{searchedMcpTools.length > 0 ? (
+										<div className="p-1.5">
+											{searchedMcpTools.map((t) => (
+												<button
+													key={`mcp-${t.serverName}-${t.name}`}
+													type="button"
+													className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+													onClick={() => handlePickMcpTool(t.serverName, t.name)}
+												>
+													<span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
+														{t.serverName}
+													</span>
+													<span className="font-medium">{t.name}</span>
+												</button>
+											))}
+										</div>
+									) : (
+										<div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
+											{toolsSearch.trim()
+												? t("chat.noMcpToolsFound", "No MCP tools match your search.")
+												: t("chat.noMcpTools", "No MCP tools connected.")}
+										</div>
+									)}
+								</ScrollArea>
+							</TabsContent>
+						</Tabs>
+					</PopoverContent>
+				</Popover>
+				<div className="flex-1" />
+				<ContextRing />
+				{isBusy ? (
+					<>
+						<Button
+							variant="line"
+							size="icon-sm"
+							onClick={handleAbort}
+							aria-label={t("chat.stop")}
+							title={t("chat.stop")}
+							className="text-muted-foreground hover:text-destructive"
+						>
+							<Square data-icon="inline-start" className="size-3 fill-current" />
+						</Button>
 						<Button
 							variant={input.trim() ? "line-filled" : "line"}
 							size="icon-sm"
@@ -546,9 +535,20 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 						>
 							<Send data-icon="inline-start" className="size-3.5" />
 						</Button>
-					)}
-				</div>
+					</>
+				) : (
+					<Button
+						variant={input.trim() ? "line-filled" : "line"}
+						size="icon-sm"
+						onClick={handleSend}
+						disabled={!input.trim()}
+						aria-label={t("chat.send")}
+					>
+						<Send data-icon="inline-start" className="size-3.5" />
+					</Button>
+				)}
 			</div>
+		</div>
 	);
 });
 

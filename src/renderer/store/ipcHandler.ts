@@ -28,6 +28,7 @@ import {
 	forkingEntryAtomFamily,
 	messagesAtomFamily,
 	navigatingEntryAtomFamily,
+	openedSessionIdsAtom,
 	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
 	permissionAskEventAtom,
@@ -98,6 +99,11 @@ export function initIpcHandlers(api: any): () => void {
 				appStore.set(
 					recentlyCompletedAtom,
 					appStore.get(recentlyCompletedAtom).filter((id) => id !== event.agentId),
+				);
+				// Clean up opened sheet
+				appStore.set(
+					openedSessionIdsAtom,
+					appStore.get(openedSessionIdsAtom).filter((id) => id !== event.agentId),
 				);
 				removeAgentAtoms(event.agentId);
 				break;
@@ -479,6 +485,7 @@ export async function initAppData(api: any): Promise<void> {
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
+		if (Array.isArray(settings.openedSessionIds)) appStore.set(openedSessionIdsAtom, settings.openedSessionIds);
 	}
 
 	// 3. Pull initial project list.

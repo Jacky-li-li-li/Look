@@ -472,13 +472,11 @@ export class SessionRuntimeManager {
 	}
 
 	private buildExtensionFactories(cwd: string): ExtensionFactory[] {
-		const factories: ExtensionFactory[] = [];
-		if (this._permissionMode === "ask" || this._permissionMode === "plan") {
-			const handler = this.createPermissionToolCallHandler(cwd);
-			factories.push(createPermissionExtensionFactory(handler));
-		}
-		factories.push(createMcpExtensionFactory(this.getMcpManager()));
-		return factories;
+		// Always register the permission extension — it checks
+		// this._permissionMode at runtime so mode switches are
+		// instantaneous and never require a runtime rebuild.
+		const handler = this.createPermissionToolCallHandler(cwd);
+		return [createPermissionExtensionFactory(handler), createMcpExtensionFactory(this.getMcpManager())];
 	}
 
 	private resolveProjectTrust(cwd: string): boolean {
@@ -1079,7 +1077,6 @@ export class SessionRuntimeManager {
 		this.sessionAllowedTools.clear();
 		await this.userSettings.update({ permissionMode: mode });
 		this.globalSettingsManager.setDefaultProjectTrust(mode === "always" ? "always" : "ask");
-		await this.rebuildActiveRuntime();
 	}
 
 	handlePermissionResponse(payload: PermissionRespondPayload): void {
@@ -1090,10 +1087,17 @@ export class SessionRuntimeManager {
 	}
 
 	private createPermissionToolCallHandler(cwd: string): ToolCallHandler {
-		if (this._permissionMode === "plan") {
-			return createPlanModeHandler(cwd);
-		}
+		// Pre-build the plan handler once; it's stateless so safe to reuse.
+		const planHandler = createPlanModeHandler(cwd);
+
 		return async (event, _ctx) => {
+			// "always" mode — allow everything, no questions asked
+			if (this._permissionMode === "always") return {};
+
+			// "plan" mode — path-filtering via the pre-built handler
+			if (this._permissionMode === "plan") return planHandler(event, _ctx);
+
+			// "ask" mode — prompt user for each intercepted tool call
 			const toolName = event.toolName;
 			if (this.sessionAllowedTools.has(toolName)) return {};
 
@@ -1125,29 +1129,6 @@ export class SessionRuntimeManager {
 			if (action === "allow") return {};
 			return { block: true, reason: `用户拒绝了 ${toolName} 工具调用` };
 		};
-	}
-
-	private async rebuildActiveRuntime(): Promise<void> {
-		const sessionId = this.activeSessionId;
-		if (!sessionId) return;
-		const managed = this.runtimes.get(sessionId);
-		if (!managed || managed.status !== "idle") return;
-
-		const project = this.projects.get(managed.projectId);
-		if (!project?.valid) return;
-
-		await this.disposeRuntime(sessionId);
-		const newManaged = await this.createManagedRuntime(
-			project.cwd,
-			SessionManager.create(project.cwd, getSessionsDir()),
-			managed.projectId,
-		);
-		const stored = this.findStoredSession(sessionId);
-		if (stored?.name) {
-			await newManaged.runtime.session.setSessionName(stored.name);
-		}
-		this.runtimes.set(sessionId, newManaged);
-		this.emitSessionState(sessionId);
 	}
 
 	getGeneralSettings(): UserSettings {

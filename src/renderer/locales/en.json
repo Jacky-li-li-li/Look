@@ -27,6 +27,11 @@
 		"noSessionSelected": "No session selected",
 		"emptyProjectHint": "Create a session inside a workspace to begin."
 	},
+	"sheet": {
+		"close": "Close session sheet",
+		"emptyHint": "Select a session from the sidebar",
+		"unknownSession": "Unknown"
+	},
 	"session": {
 		"draft": "draft",
 		"messageCount": "{{count}} messages",

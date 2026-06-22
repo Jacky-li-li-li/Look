@@ -6,8 +6,8 @@
 import { Button } from "@shared/components/ui/button";
 import SimplePopover from "@shared/components/ui/simple-popover";
 import type { PermissionMode } from "@shared/types";
+import { useSetAtom } from "jotai";
 import { Check, ChevronDown, Shield } from "lucide-react";
-import { useAtom, useSetAtom } from "jotai";
 import { useCallback, useState } from "react";
 import { permissionModeAtom } from "../store/atoms";
 

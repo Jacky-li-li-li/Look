@@ -27,6 +27,11 @@
 		"noSessionSelected": "セッションが選択されていません",
 		"emptyProjectHint": "ワークスペース内にセッションを作成してください。"
 	},
+	"sheet": {
+		"close": "セッションシートを閉じる",
+		"emptyHint": "サイドバーからセッションを選択",
+		"unknownSession": "不明なセッション"
+	},
 	"session": {
 		"draft": "下書き",
 		"messageCount": "{{count}} 件のメッセージ",

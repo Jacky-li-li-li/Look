@@ -329,8 +329,8 @@ export type MainToRendererEvent =
 			tree: SessionTreeNode;
 	  }>
 	| { type: "error"; agentId?: string; message: string }
-		// ---- Permission events ----
-		| { type: "permission:ask"; agentId: string; event: PermissionAskEvent }
+	// ---- Permission events ----
+	| { type: "permission:ask"; agentId: string; event: PermissionAskEvent }
 	// ---- Project events ----
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
@@ -471,10 +471,10 @@ export type RendererToMainEvent =
 	| { type: "mcp:restart-server"; name: string }
 	| { type: "mcp:list-tools" }
 	| { type: "mcp:connect-all" }
-		// ---- Permission events (renderer → main) ----
-		| { type: "permission:set-mode"; mode: PermissionMode }
-		| { type: "permission:get-mode" }
-		| { type: "permission:respond"; payload: PermissionRespondPayload };
+	// ---- Permission events (renderer → main) ----
+	| { type: "permission:set-mode"; mode: PermissionMode }
+	| { type: "permission:get-mode" }
+	| { type: "permission:respond"; payload: PermissionRespondPayload };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

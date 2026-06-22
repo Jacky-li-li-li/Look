@@ -13,11 +13,11 @@
 //   before each tool execution.
 // ============================================================
 
-import { resolve, relative, sep } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import type {
+	ExtensionContext,
 	ExtensionFactory,
 	ToolCallEvent,
-	ExtensionContext,
 	ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
 

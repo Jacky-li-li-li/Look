@@ -226,6 +226,9 @@ async function handleRendererInvoke(
 			if ("openProjectIds" in settings) {
 				guardStringArray(settings.openProjectIds, "settings.openProjectIds");
 			}
+			if ("openedSessionIds" in settings) {
+				guardStringArray(settings.openedSessionIds, "settings.openedSessionIds");
+			}
 			const updated = await runtimeManager.updateGeneralSettings(data.settings ?? {});
 			return { success: true, settings: updated };
 		}
@@ -497,22 +500,21 @@ async function handleRendererInvoke(
 			return { success: true };
 		}
 
+		// === Permission management ===
+		case "permission:set-mode": {
+			const mode = guardEnum(data.mode, "mode", ["always", "ask", "plan"] as const) as PermissionMode;
+			await runtimeManager.setPermissionMode(mode);
+			return { success: true, mode };
+		}
 
-			// === Permission management ===
-			case "permission:set-mode": {
-				const mode = guardEnum(data.mode, "mode", ["always", "ask", "plan"] as const) as PermissionMode;
-				await runtimeManager.setPermissionMode(mode);
-				return { success: true, mode };
-			}
+		case "permission:get-mode": {
+			return { success: true, mode: runtimeManager.getPermissionMode() };
+		}
 
-			case "permission:get-mode": {
-				return { success: true, mode: runtimeManager.getPermissionMode() };
-			}
-
-			case "permission:respond": {
-				runtimeManager.handlePermissionResponse(data.payload);
-				return { success: true };
-			}
+		case "permission:respond": {
+			runtimeManager.handlePermissionResponse(data.payload);
+			return { success: true };
+		}
 
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };

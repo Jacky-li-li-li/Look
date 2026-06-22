@@ -13,7 +13,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@shared/components/ui/dialog";
-import type { PermissionAskEvent, PermissionRespondPayload } from "@shared/types";
+import type { PermissionRespondPayload } from "@shared/types";
 import { useAtom } from "jotai";
 import { AlertTriangle, Check, Shield, X } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";

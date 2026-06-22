@@ -1,4 +1,11 @@
-import type { AgentInfo, PermissionAskEvent, PermissionMode, PiMessage, ProjectInfo, SessionTreeNode } from "@shared/types";
+import type {
+	AgentInfo,
+	PermissionAskEvent,
+	PermissionMode,
+	PiMessage,
+	ProjectInfo,
+	SessionTreeNode,
+} from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
 
@@ -29,6 +36,9 @@ export const activeProjectIdAtom = atom<string | null>(null);
 
 /** Expanded project groups in the compact workspace ledger. */
 export const openProjectIdsAtom = atom<string[]>([]);
+
+/** Session IDs opened as sheets in the top bar. */
+export const openedSessionIdsAtom = atom<string[]>([]);
 
 /** Pending delete confirmation: project info + agent count from main process. */
 export const pendingDeleteProjectAtom = atom<{

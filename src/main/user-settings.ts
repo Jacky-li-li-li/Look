@@ -42,6 +42,8 @@ export interface UserSettings {
 	lastActiveProjectId: string;
 	/** Expanded workspace groups in the renderer sidebar. */
 	openProjectIds: string[];
+	/** Session IDs opened as sheets in the top bar. */
+	openedSessionIds: string[];
 }
 
 const DEFAULTS: UserSettings = {
@@ -53,6 +55,7 @@ const DEFAULTS: UserSettings = {
 	lastActiveSessionId: "",
 	lastActiveProjectId: "",
 	openProjectIds: [],
+	openedSessionIds: [],
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -72,6 +75,8 @@ interface UiSettings {
 	/** Last active project ID to restore on restart. */
 	lastActiveProjectId: string;
 	openProjectIds: string[];
+	/** Session IDs opened as sheets in the top bar. */
+	openedSessionIds: string[];
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -82,6 +87,7 @@ const UI_DEFAULTS: UiSettings = {
 	lastActiveSessionId: "",
 	lastActiveProjectId: "",
 	openProjectIds: [],
+	openedSessionIds: [],
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -145,6 +151,7 @@ export class UserSettingsStore {
 					parsed.lastActiveSessionId = parsed.lastActiveAgentId;
 				}
 				if (!Array.isArray(parsed.openProjectIds)) parsed.openProjectIds = [];
+				if (!Array.isArray(parsed.openedSessionIds)) parsed.openedSessionIds = [];
 				// Merge with defaults so newly-added fields get sane values
 				// when loading an older file.
 				return { ...UI_DEFAULTS, ...parsed };
@@ -186,6 +193,7 @@ export class UserSettingsStore {
 		if (partial.lastActiveSessionId !== undefined) uiPartial.lastActiveSessionId = partial.lastActiveSessionId;
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
 		if (partial.openProjectIds !== undefined) uiPartial.openProjectIds = [...partial.openProjectIds];
+		if (partial.openedSessionIds !== undefined) uiPartial.openedSessionIds = [...partial.openedSessionIds];
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

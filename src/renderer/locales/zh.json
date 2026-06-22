@@ -27,6 +27,11 @@
 		"noSessionSelected": "尚未选择会话",
 		"emptyProjectHint": "在工作区中创建会话后即可开始。"
 	},
+	"sheet": {
+		"close": "关闭会话标签",
+		"emptyHint": "从侧边栏选择会话",
+		"unknownSession": "未知会话"
+	},
 	"session": {
 		"draft": "草稿",
 		"messageCount": "{{count}} 条消息",

@@ -1,0 +1,223 @@
+// ============================================================
+// SessionSheetBar — Multi-session sheet tabs in the top bar
+// ============================================================
+
+import {
+	closestCenter,
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Button } from "@shared/components/ui/button";
+import { ScrollArea } from "@shared/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@shared/components/ui/tooltip";
+import { cn } from "@shared/lib/utils";
+import type { AgentInfo } from "@shared/types";
+import { PanelRightOpen, X } from "lucide-react";
+import type React from "react";
+import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+
+interface SessionSheet {
+	id: string;
+	agent: AgentInfo | undefined;
+	projectName: string | undefined;
+}
+
+interface SessionSheetBarProps {
+	agentIds: string[];
+	agents: AgentInfo[];
+	projects: { id: string; name: string }[];
+	activeAgentId: string | null;
+	sidebarCollapsed: boolean;
+	onSelect: (agentId: string) => void;
+	onClose: (agentId: string) => void;
+	onReorder: (agentIds: string[]) => void;
+	onExpandSidebar: () => void;
+}
+
+function SortableSheet({
+	sheet,
+	isActive,
+	onSelect,
+	onClose,
+}: {
+	sheet: SessionSheet;
+	isActive: boolean;
+	onSelect: (agentId: string) => void;
+	onClose: (agentId: string) => void;
+}) {
+	const { t } = useTranslation();
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+		id: sheet.id,
+		data: { sheet },
+	});
+
+	const agent = sheet.agent;
+	const status = agent?.status ?? "idle";
+	const isRunning = status === "thinking" || status === "working";
+
+	const handleClose = useCallback(
+		(event: React.MouseEvent) => {
+			event.stopPropagation();
+			onClose(sheet.id);
+		},
+		[onClose, sheet.id],
+	);
+
+	const style = {
+		transform: CSS.Translate.toString(transform),
+		transition,
+		zIndex: isDragging ? 50 : undefined,
+	};
+
+	return (
+		<div
+			ref={setNodeRef}
+			style={style}
+			{...attributes}
+			{...listeners}
+			data-agent-id={sheet.id}
+			data-agent-status={status}
+			data-running={isRunning || undefined}
+			className={cn(
+				"group/sheet relative flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors",
+				isActive
+					? "border-foreground/20 bg-foreground/8 text-foreground"
+					: "border-hairline bg-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+				isDragging && "opacity-60",
+			)}
+			onClick={() => onSelect(sheet.id)}
+		>
+			{isRunning && <span className="status-mark block" data-status={status} />}
+			<span className="truncate font-medium">{agent?.name ?? t("sheet.unknownSession", "Unknown")}</span>
+			{sheet.projectName && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<span className="max-w-24 truncate rounded bg-muted px-1 py-0 text-[10px] text-muted-foreground">
+							{sheet.projectName}
+						</span>
+					</TooltipTrigger>
+					<TooltipContent side="bottom" className="text-xs">
+						{sheet.projectName}
+					</TooltipContent>
+				</Tooltip>
+			)}
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				className="-mr-1 size-5 opacity-0 transition-opacity group-hover/sheet:opacity-100 group-focus-visible/sheet:opacity-100 data-[active]:opacity-100"
+				data-active={isActive || undefined}
+				aria-label={t("sheet.close", "Close session sheet")}
+				title={t("sheet.close", "Close session sheet")}
+				onClick={handleClose}
+			>
+				<X className="size-3" />
+			</Button>
+		</div>
+	);
+}
+
+export default function SessionSheetBar({
+	agentIds,
+	agents,
+	projects,
+	activeAgentId,
+	sidebarCollapsed,
+	onSelect,
+	onClose,
+	onReorder,
+	onExpandSidebar,
+}: SessionSheetBarProps) {
+	const { t } = useTranslation();
+
+	const agentById = useMemo(() => {
+		const map = new Map<string, AgentInfo>();
+		for (const agent of agents) map.set(agent.id, agent);
+		return map;
+	}, [agents]);
+
+	const projectById = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const project of projects) map.set(project.id, project.name);
+		return map;
+	}, [projects]);
+
+	const sheets = useMemo<SessionSheet[]>(() => {
+		return agentIds.map((id) => {
+			const agent = agentById.get(id);
+			const projectName = agent?.projectId ? projectById.get(agent.projectId) : undefined;
+			return { id, agent, projectName };
+		});
+	}, [agentIds, agentById, projectById]);
+
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+		useSensor(KeyboardSensor, { coordinateGetter: () => ({ x: 0, y: 0 }) }),
+	);
+
+	const handleDragEnd = useCallback(
+		(event: DragEndEvent) => {
+			const { active, over } = event;
+			if (over && active.id !== over.id) {
+				const oldIndex = agentIds.indexOf(active.id as string);
+				const newIndex = agentIds.indexOf(over.id as string);
+				if (oldIndex !== -1 && newIndex !== -1) {
+					onReorder(arrayMove(agentIds, oldIndex, newIndex));
+				}
+			}
+		},
+		[agentIds, onReorder],
+	);
+
+	return (
+		<header className="flex h-12 shrink-0 items-center gap-2 border-b border-hairline px-2">
+			{sidebarCollapsed && (
+				<Button
+					size="icon-sm"
+					variant="ghost"
+					className="shrink-0 rounded-md border border-hairline"
+					onClick={onExpandSidebar}
+					aria-label={t("sidebar.expand", "Expand sidebar")}
+					title={t("sidebar.expand", "Expand sidebar")}
+				>
+					<PanelRightOpen className="size-3.5" />
+				</Button>
+			)}
+			{sheets.length === 0 ? (
+				<div className="flex h-full flex-1 items-center px-2 text-[12px] text-muted-foreground">
+					{t("sheet.emptyHint", "Select a session from the sidebar")}
+				</div>
+			) : (
+				<ScrollArea className="min-w-0 flex-1" type="auto">
+					<DndContext
+						sensors={sensors}
+						collisionDetection={closestCenter}
+						onDragEnd={handleDragEnd}
+						modifiers={[restrictToHorizontalAxis]}
+					>
+						<SortableContext items={sheets.map((s) => s.id)} strategy={horizontalListSortingStrategy}>
+							<div className="flex h-12 items-center gap-1.5 py-2">
+								{sheets.map((sheet) => (
+									<SortableSheet
+										key={sheet.id}
+										sheet={sheet}
+										isActive={sheet.id === activeAgentId}
+										onSelect={onSelect}
+										onClose={onClose}
+									/>
+								))}
+							</div>
+						</SortableContext>
+					</DndContext>
+				</ScrollArea>
+			)}
+		</header>
+	);
+}

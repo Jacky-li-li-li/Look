@@ -12,7 +12,7 @@ import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
 import type { ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
-import { FolderOpen, PanelRightOpen } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 import { ThemeProvider } from "next-themes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +23,7 @@ import LoginScreen from "./components/LoginScreen";
 import NewProjectDialog from "./components/NewProjectDialog";
 import PermissionDialog from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
+import SessionSheetBar from "./components/SessionSheetBar";
 import Sidebar from "./components/Sidebar";
 import SettingsDialog from "./components/settings/SettingsDialog";
 import UpdateNotification from "./components/UpdateNotification";
@@ -34,10 +35,11 @@ import {
 	activeAgentIdAtom,
 	activeProjectAtom,
 	activeProjectIdAtom,
+	agentsAtom,
 	autoCollapseAtom,
 	messagesAtomFamily,
+	openedSessionIdsAtom,
 	openProjectIdsAtom,
-		permissionModeAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
@@ -75,6 +77,10 @@ export default function App() {
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeMessages = useAtomValue(messagesAtomFamily(activeAgentId ?? ""));
 	const activeQueue = useAtomValue(queuesAtomFamily(activeAgentId ?? ""));
+
+	// Sheet state: opened session IDs in the top bar.
+	const agents = useAtomValue(agentsAtom);
+	const [openedSessionIds, _setOpenedSessionIds] = useAtom(openedSessionIdsAtom);
 
 	// ---- Project state ----
 	const projects = useAtomValue(projectsAtom);
@@ -131,7 +137,37 @@ export default function App() {
 	const handleSelectAgent = useCallback(async (agentId: string) => {
 		if (!api) return;
 		const result = await api.activateSession(agentId);
-		if (result?.success) appStore.set(activeAgentIdAtom, agentId);
+		if (result?.success) {
+			appStore.set(activeAgentIdAtom, agentId);
+			// Add or move the selected session to the end of the sheet bar.
+			appStore.set(openedSessionIdsAtom, (previous) => {
+				const filtered = previous.filter((id) => id !== agentId);
+				return [...filtered, agentId];
+			});
+		}
+	}, []);
+
+	const handleCloseSessionSheet = useCallback((agentId: string) => {
+		const currentIds = appStore.get(openedSessionIdsAtom);
+		const index = currentIds.indexOf(agentId);
+		const nextIds = currentIds.filter((id) => id !== agentId);
+		appStore.set(openedSessionIdsAtom, nextIds);
+
+		// If we closed the active session, switch to the left neighbor first, then right.
+		if (appStore.get(activeAgentIdAtom) === agentId) {
+			const fallbackId = nextIds[index - 1] ?? nextIds[index] ?? null;
+			if (fallbackId && api) {
+				api.activateSession(fallbackId).then((result: any) => {
+					if (result?.success) appStore.set(activeAgentIdAtom, fallbackId);
+				});
+			} else {
+				appStore.set(activeAgentIdAtom, null);
+			}
+		}
+	}, []);
+
+	const handleReorderSessionSheets = useCallback((nextIds: string[]) => {
+		appStore.set(openedSessionIdsAtom, nextIds);
 	}, []);
 
 	const handleDestroyAgent = useCallback(async (agentId: string) => {
@@ -190,20 +226,7 @@ export default function App() {
 
 	const handleCloseSettings = useCallback(() => appStore.set(showSettingsAtom, false), []);
 
-	const handleOpenProjectFolder = useCallback(() => {
-		try {
-			const fn = api?.openProjectFolder;
-			if (typeof fn !== "function") {
-				toast.error("API not available — restart the app to reload preload.");
-				return;
-			}
-			fn(activeAgent?.projectId).catch((err: any) =>
-				toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`),
-			);
-		} catch (err: any) {
-			toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`);
-		}
-	}, [activeAgent?.projectId]);
+	const handleExpandSidebar = useCallback(() => appStore.set(sidebarCollapsedAtom, false), []);
 
 	// ---- Side effects ----
 
@@ -290,12 +313,13 @@ export default function App() {
 			if (activeAgentId) payload.lastActiveSessionId = activeAgentId;
 			if (activeProjectId) payload.lastActiveProjectId = activeProjectId;
 			payload.openProjectIds = openProjectIds;
+			payload.openedSessionIds = openedSessionIds;
 			if (Object.keys(payload).length > 0) {
 				api.setGeneralSettings(payload).catch(() => {});
 			}
 		}, 500);
 		return () => clearTimeout(timer);
-	}, [activeAgentId, activeProjectId, openProjectIds]);
+	}, [activeAgentId, activeProjectId, openProjectIds, openedSessionIds]);
 
 	// The main process mirrors this list directly from pi's
 	// AgentSession.getAvailableThinkingLevels(). Do not infer model families here.
@@ -362,77 +386,61 @@ export default function App() {
 					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
 						{!api ? null : projects.length === 0 ? (
 							<WelcomeScreen onOpenProject={handleOpenProject} />
-						) : activeAgent ? (
+						) : (
 							<>
-								<header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-hairline px-4">
-									<div className="flex min-w-0 items-center gap-3">
-										<Button
-											size="icon"
-											variant="ghost"
-											className="expand-sidebar-btn size-7 rounded-md border border-hairline"
-											onClick={() => appStore.set(sidebarCollapsedAtom, false)}
-											aria-label={t("sidebar.expand", "Expand sidebar")}
-											title={t("sidebar.expand", "Expand sidebar")}
-										>
-											<PanelRightOpen className="size-3.5" />
-										</Button>
-										<PixelAgentAvatar status={activeAgent.status} size="sm" active />
-										<div className="min-w-0">
-											<div className="flex min-w-0 items-center gap-2">
-												<h1 className="truncate text-[13px] font-semibold">{activeAgent.name}</h1>
+								<SessionSheetBar
+									agentIds={openedSessionIds}
+									agents={agents}
+									projects={projects}
+									activeAgentId={activeAgentId}
+									sidebarCollapsed={sidebarCollapsed}
+									onSelect={handleSelectAgent}
+									onClose={handleCloseSessionSheet}
+									onReorder={handleReorderSessionSheets}
+									onExpandSidebar={handleExpandSidebar}
+								/>
+								{activeAgent ? (
+									<ChatPanel
+										agentId={activeAgent.id}
+										agentName={activeAgent.name}
+										messages={activeMessages}
+										autoCollapse={autoCollapse}
+										queue={activeQueue}
+										agentStatus={activeAgent.status}
+										currentModel={activeAgent.model}
+										currentThinking={activeAgent.thinkingLevel}
+										availableThinkingLevels={thinkingLevels}
+										onSend={handleSendMessage}
+										onThinkingChange={handleThinkingChange}
+										onModelChange={handleModelChanged}
+										onRequestApiKeys={handleRequestApiKeys}
+										onAbort={handleAbortAgent}
+									/>
+								) : (
+									<div className="flex flex-1 items-center justify-center p-10 text-center">
+										<div className="flex max-w-sm flex-col items-center gap-3">
+											<div className="flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
+												<FolderOpen className="size-5 text-muted-foreground" />
 											</div>
+											<p className="text-sm font-medium">
+												{activeProject?.name ?? t("workspace.noSessionSelected", "No session selected")}
+											</p>
+											<p className="text-xs text-muted-foreground">
+												{t("workspace.emptyProjectHint", "Create a session inside a workspace to begin.")}
+											</p>
+											{activeProject?.valid && (
+												<Button
+													variant="line"
+													size="sm"
+													onClick={() => handleCreateClick(activeProject.id)}
+												>
+													{t("sidebar.newSession", "New session")}
+												</Button>
+											)}
 										</div>
 									</div>
-									<div className="flex items-center gap-1">
-										<Button
-											size="icon"
-											variant="ghost"
-											className="size-7"
-											onClick={handleOpenProjectFolder}
-											aria-label="Open session storage"
-											title="Open project folder"
-										>
-											<FolderOpen className="size-3.5" />
-										</Button>
-									</div>
-								</header>
-
-								<ChatPanel
-									agentId={activeAgent.id}
-									agentName={activeAgent.name}
-									messages={activeMessages}
-									autoCollapse={autoCollapse}
-									queue={activeQueue}
-									agentStatus={activeAgent.status}
-									currentModel={activeAgent.model}
-									currentThinking={activeAgent.thinkingLevel}
-									availableThinkingLevels={thinkingLevels}
-									onSend={handleSendMessage}
-									onThinkingChange={handleThinkingChange}
-									onModelChange={handleModelChanged}
-									onRequestApiKeys={handleRequestApiKeys}
-									onAbort={handleAbortAgent}
-								/>
+								)}
 							</>
-						) : (
-							<div className="flex flex-1 items-center justify-center p-10 text-center">
-								<div className="flex max-w-sm flex-col items-center gap-3">
-									<div className="flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
-										<FolderOpen className="size-5 text-muted-foreground" />
-									</div>
-									<p className="text-sm font-medium">
-										{activeProject?.name ?? t("workspace.noSessionSelected", "No session selected")}
-									</p>
-									<p className="text-xs text-muted-foreground">
-										{t("workspace.emptyProjectHint", "Create a session inside a workspace to begin.")}
-									</p>
-									{activeProject?.valid && (
-										<Button variant="line" size="sm" onClick={() => handleCreateClick(activeProject.id)}>
-											{t("sidebar.newSession", "New session")}
-										</Button>
-									)}
-								</div>
-							</div>
 						)}
 					</main>
 
@@ -464,6 +472,7 @@ export default function App() {
 							defaultTab={settingsTab}
 						/>
 					)}
+					<PermissionDialog />
 				</div>
 			</TooltipProvider>
 			<UpdateNotification />
