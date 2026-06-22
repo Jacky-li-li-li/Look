@@ -158,7 +158,11 @@ export default function App() {
 			const fallbackId = nextIds[index - 1] ?? nextIds[index] ?? null;
 			if (fallbackId && api) {
 				api.activateSession(fallbackId).then((result: any) => {
-					if (result?.success) appStore.set(activeAgentIdAtom, fallbackId);
+					if (result?.success) {
+						appStore.set(activeAgentIdAtom, fallbackId);
+					} else {
+						appStore.set(activeAgentIdAtom, null);
+					}
 				});
 			} else {
 				appStore.set(activeAgentIdAtom, null);

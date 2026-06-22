@@ -2,18 +2,12 @@
 // SessionSheetBar — Multi-session sheet tabs in the top bar
 // ============================================================
 
-import {
-	closestCenter,
-	DndContext,
-	type DragEndEvent,
-	PointerSensor,
-	useSensor,
-	useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@shared/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@shared/components/ui/tooltip";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo } from "@shared/types";
 import { PanelRightOpen, X } from "lucide-react";
@@ -189,7 +183,7 @@ export default function SessionSheetBar({
 					{t("sheet.emptyHint", "Select a session from the sidebar")}
 				</div>
 			) : (
-				<ScrollArea className="min-w-0 flex-1" type="auto">
+				<div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
 					<DndContext
 						sensors={sensors}
 						collisionDetection={closestCenter}
@@ -197,7 +191,7 @@ export default function SessionSheetBar({
 						modifiers={[restrictToHorizontalAxis]}
 					>
 						<SortableContext items={sheets.map((s) => s.id)} strategy={horizontalListSortingStrategy}>
-							<div className="flex h-12 items-center gap-1.5 py-2">
+							<div className="flex h-12 items-center gap-1.5 px-0 py-2">
 								{sheets.map((sheet) => (
 									<SortableSheet
 										key={sheet.id}
@@ -210,7 +204,7 @@ export default function SessionSheetBar({
 							</div>
 						</SortableContext>
 					</DndContext>
-				</ScrollArea>
+				</div>
 			)}
 		</header>
 	);
