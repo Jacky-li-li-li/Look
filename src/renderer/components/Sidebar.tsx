@@ -19,6 +19,7 @@ import {
 	Folder,
 	FolderOpen,
 	MoreHorizontal,
+	PanelLeftClose,
 	Pencil,
 	Plus,
 	Trash2,
@@ -36,6 +37,7 @@ import {
 	projectsAtom,
 	recentlyCompletedAtom,
 	runningAgentsAtom,
+	sidebarCollapsedAtom,
 } from "../store/atoms";
 import { userProfileAtom } from "../store/authAtoms";
 import { appStore } from "../store/ipcHandler";
@@ -87,6 +89,7 @@ export default function Sidebar({
 	const runningAgents = useAtomValue(runningAgentsAtom);
 	const activeChatAtBottom = useAtomValue(activeChatAtBottomAtom);
 	const userProfile = useAtomValue(userProfileAtom);
+	const collapsed = useAtomValue(sidebarCollapsedAtom);
 	const homedir = api?.homedir || "";
 	const [openProjectIds, setOpenProjectIds] = useAtom(openProjectIdsAtom);
 	const openProjects = useMemo(() => new Set(openProjectIds), [openProjectIds]);
@@ -207,28 +210,40 @@ export default function Sidebar({
 	);
 
 	return (
-		<aside className="workspace-ledger glass-panel flex h-full w-[280px] min-w-[280px] max-w-[280px] shrink-0 flex-col overflow-hidden rounded-xl border">
+		<aside
+			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border"
+			data-collapsed={collapsed}
+		>
 			<header className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
 				<div className="min-w-0">
-					<div className="text-sm font-bold tracking-[0.2em] text-foreground">
-						LOOK
-					</div>
+					<div className="text-sm font-bold tracking-[0.2em] text-foreground">LOOK</div>
 					<div className="mt-0.5 font-mono text-[9px] text-muted-foreground/55">
 						{projects.length.toString().padStart(2, "0")} {t("workspace.projects", "projects")}
 					</div>
 				</div>
-				<Button
-					variant="line-ghost"
-					size="icon-sm"
-					className="border border-hairline rounded-md"
-
-					onClick={onCreateProject}
-					aria-label={t("project.openProject", "Add project folder")}
-					title={t("project.openProject", "Add project folder")}
-				>
-					<FolderOpen className="size-3.5" />
-					<Plus className="absolute ml-3 mt-3 size-2.5 rounded-full bg-sidebar" />
-				</Button>
+				<div className="flex items-center gap-1.5">
+					<Button
+						variant="line-ghost"
+						size="icon-sm"
+						className="border border-hairline rounded-md"
+						onClick={onCreateProject}
+						aria-label={t("project.openProject", "Add project folder")}
+						title={t("project.openProject", "Add project folder")}
+					>
+						<FolderOpen className="size-3.5" />
+						<Plus className="absolute ml-3 mt-3 size-2.5 rounded-full bg-sidebar" />
+					</Button>
+					<Button
+						variant="line-ghost"
+						size="icon-sm"
+						className="border border-hairline rounded-md"
+						onClick={() => appStore.set(sidebarCollapsedAtom, true)}
+						aria-label={t("sidebar.collapse", "Collapse sidebar")}
+						title={t("sidebar.collapse", "Collapse sidebar")}
+					>
+						<PanelLeftClose className="size-3.5" />
+					</Button>
+				</div>
 			</header>
 
 			<ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">

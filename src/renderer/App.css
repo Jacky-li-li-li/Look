@@ -151,6 +151,13 @@
   box-shadow: inset 280px 0 120px -100px oklch(1 0 0 / 0.06);
 }
 
+.app-shell[data-sidebar-collapsed="true"] {
+  box-shadow: none;
+}
+.dark .app-shell[data-sidebar-collapsed="true"] {
+  box-shadow: none;
+}
+
 /* ── Base ── */
 @theme inline {
   --font-heading: var(--font-sans);
@@ -757,6 +764,74 @@ body {
   .workspace-group {
     position: relative;
     border-radius: calc(var(--radius) * 1.35);
+  }
+
+  /* ============================================================
+     Collapsible Sidebar — smooth width + fade transitions
+     ============================================================ */
+
+  .sidebar-wrapper {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    opacity: 1;
+    transition:
+      width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      min-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 220ms ease,
+      border-radius 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 280ms ease;
+  }
+
+  .sidebar-wrapper[data-collapsed="true"] {
+    width: 0;
+    min-width: 0;
+    max-width: 0;
+    opacity: 0;
+    border-radius: 0;
+    border-width: 0;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  .sidebar-separator {
+    opacity: 1;
+    transition:
+      opacity 220ms ease,
+      margin 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-shell[data-sidebar-collapsed="true"] .sidebar-separator {
+    opacity: 0;
+    margin-left: 0;
+    margin-right: 0;
+    width: 0;
+  }
+
+  .expand-sidebar-btn {
+    opacity: 0;
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    transform: translateX(-4px);
+    pointer-events: none;
+    transition:
+      opacity 220ms ease,
+      width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-shell[data-sidebar-collapsed="true"] .expand-sidebar-btn {
+    opacity: 1;
+    width: 1.75rem;
+    padding-left: 0;
+    padding-right: 0;
+    transform: translateX(0);
+    pointer-events: auto;
   }
 
 

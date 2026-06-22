@@ -86,6 +86,7 @@ export const activeChatAtBottomAtom = atom(true);
 
 export const showSettingsAtom = atom(false);
 export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile">("general");
+export const sidebarCollapsedAtom = atom(false);
 
 // ---- Auto Updater ----
 

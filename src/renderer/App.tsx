@@ -12,7 +12,7 @@ import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
 import type { ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, PanelRightOpen } from "lucide-react";
 import { ThemeProvider } from "next-themes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -42,6 +42,7 @@ import {
 	queuesAtomFamily,
 	settingsTabAtom,
 	showSettingsAtom,
+	sidebarCollapsedAtom,
 	userPreferredModelAtom,
 } from "./store/atoms";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "./store/authAtoms";
@@ -66,6 +67,7 @@ export default function App() {
 	const settingsTab = useAtomValue(settingsTabAtom);
 	const providerSettings = useAtomValue(providerSettingsAtom);
 	const activeProject = useAtomValue(activeProjectAtom);
+	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 
 	// Messages and queue for the active agent (atomFamily).
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
@@ -338,7 +340,10 @@ export default function App() {
 	return (
 		<ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
 			<TooltipProvider>
-				<div className="app-shell flex h-screen overflow-hidden bg-background p-2">
+				<div
+					className="app-shell flex h-screen overflow-hidden bg-background p-2"
+					data-sidebar-collapsed={sidebarCollapsed}
+				>
 					<Sidebar
 						onSelect={handleSelectAgent}
 						onDestroy={handleDestroyAgent}
@@ -350,7 +355,7 @@ export default function App() {
 						onRenameProject={handleRenameProject}
 					/>
 
-					<Separator orientation="vertical" className="mx-2 bg-transparent" />
+					<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
 
 					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
 						{!api ? null : projects.length === 0 ? (
@@ -359,6 +364,16 @@ export default function App() {
 							<>
 								<header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-hairline px-4">
 									<div className="flex min-w-0 items-center gap-3">
+										<Button
+											size="icon"
+											variant="ghost"
+											className="expand-sidebar-btn size-7 rounded-md border border-hairline"
+											onClick={() => appStore.set(sidebarCollapsedAtom, false)}
+											aria-label={t("sidebar.expand", "Expand sidebar")}
+											title={t("sidebar.expand", "Expand sidebar")}
+										>
+											<PanelRightOpen className="size-3.5" />
+										</Button>
 										<PixelAgentAvatar status={activeAgent.status} size="sm" active />
 										<div className="min-w-0">
 											<div className="flex min-w-0 items-center gap-2">
