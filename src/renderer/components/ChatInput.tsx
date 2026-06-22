@@ -307,8 +307,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	};
 
 	return (
-		<div className="shrink-0 border-t border-hairline bg-background/70 px-5 py-2.5 backdrop-blur-md">
-			<div className="relative rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
+		<div className="relative mx-5 mb-2.5 rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
 				{slashOpen ? (
 					<SkillSlashMenu
 						skills={filteredSkills}
@@ -545,7 +544,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 					)}
 				</div>
 			</div>
-		</div>
 	);
 });
 
