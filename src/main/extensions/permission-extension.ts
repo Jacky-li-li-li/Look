@@ -31,7 +31,7 @@ import type {
 const INTERCEPT_TOOLS = new Set(["write", "edit", "notebook_edit", "bash", "task_create", "task_update"]);
 
 /** Absolute paths (relative to cwd) where plan-mode writes are allowed. */
-const PLAN_ALLOWED_RELATIVE_PATHS = [`.context${sep}plan${sep}`, `.context${sep}`];
+const PLAN_ALLOWED_RELATIVE_PATHS = [`.context${sep}plan${sep}`];
 
 /** Tools unconditionally blocked in plan mode (no path to check). */
 const PLAN_UNCONDITIONAL_BLOCK = new Set(["bash", "task_create", "task_update"]);

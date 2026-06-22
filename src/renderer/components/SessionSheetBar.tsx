@@ -6,7 +6,6 @@ import {
 	closestCenter,
 	DndContext,
 	type DragEndEvent,
-	KeyboardSensor,
 	PointerSensor,
 	useSensor,
 	useSensors,
@@ -15,8 +14,6 @@ import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@shared/components/ui/button";
-import { ScrollArea } from "@shared/components/ui/scroll-area";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@shared/components/ui/tooltip";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo } from "@shared/types";
 import { PanelRightOpen, X } from "lucide-react";
@@ -112,7 +109,7 @@ function SortableSheet({
 			<Button
 				variant="ghost"
 				size="icon-xs"
-				className="-mr-1 size-5 opacity-0 transition-opacity group-hover/sheet:opacity-100 group-focus-visible/sheet:opacity-100 data-[active]:opacity-100"
+				className="-mr-1 size-5 opacity-0 transition-opacity group-hover/sheet:opacity-100 focus-visible:opacity-100 group-focus-visible/sheet:opacity-100 data-[active]:opacity-100"
 				data-active={isActive || undefined}
 				aria-label={t("sheet.close", "Close session sheet")}
 				title={t("sheet.close", "Close session sheet")}
@@ -157,10 +154,7 @@ export default function SessionSheetBar({
 		});
 	}, [agentIds, agentById, projectById]);
 
-	const sensors = useSensors(
-		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-		useSensor(KeyboardSensor, { coordinateGetter: () => ({ x: 0, y: 0 }) }),
-	);
+	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
 	const handleDragEnd = useCallback(
 		(event: DragEndEvent) => {

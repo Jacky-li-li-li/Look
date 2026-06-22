@@ -32,6 +32,7 @@ import {
 	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
 	permissionAskEventAtom,
+	permissionModeAtom,
 	projectsAtom,
 	providerSettingsAtom,
 	queuesAtomFamily,
@@ -482,6 +483,7 @@ export async function initAppData(api: any): Promise<void> {
 		const settings = settingsResult.settings;
 		if (settings.language) await i18n.changeLanguage(settings.language);
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
+			if (settings.permissionMode) appStore.set(permissionModeAtom, settings.permissionMode);
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
