@@ -11,9 +11,40 @@
 	},
 	"sidebar": {
 		"newChat": "New Chat",
+		"newSession": "New session",
 		"settings": "Settings",
 		"noAgents": "No agents yet.",
 		"clickToStart": "Click + above to start"
+	},
+	"workspace": {
+		"title": "Workspaces",
+		"projects": "projects",
+		"projectMenu": "Project menu",
+		"openFolder": "Open folder",
+		"createFirstSession": "Create first session",
+		"addFirstProject": "Add a project folder",
+		"addFirstProjectHint": "Sessions stay scoped to its cwd",
+		"noSessionSelected": "No session selected",
+		"emptyProjectHint": "Create a session inside a workspace to begin."
+	},
+	"session": {
+		"draft": "draft",
+		"messageCount": "{{count}} messages",
+		"menu": "Session menu",
+		"status": { "thinking": "thinking", "working": "using tools", "error": "error", "idle": "idle" }
+	},
+	"project": {
+		"openProject": "Open project folder",
+		"createTitle": "Open project",
+		"name": "Project name",
+		"confirm": "Open project",
+		"delete": "Delete project",
+		"deleteTitle": "Delete workspace",
+		"deleteConfirm": "Are you sure you want to delete the workspace",
+		"deleteConfirmButton": "Delete workspace",
+		"deleteAgentWarning": "This permanently deletes {{count}} session(s) and all conversation history. This action cannot be undone.",
+		"deleteRunningWarning": "{{count}} running session(s) will be stopped first.",
+		"pathMissing": "Project folder is unavailable"
 	},
 	"settings": {
 		"title": "Settings",

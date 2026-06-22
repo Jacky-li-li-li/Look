@@ -1,6 +1,6 @@
 // ============================================================
 // IPC Handlers
-// Bridges Electron IPC between renderer and the single pi session runtime.
+// Bridges Electron IPC between renderer and the pi session runtime registry.
 // ============================================================
 
 import { type BrowserWindow, dialog, ipcMain } from "electron";
@@ -17,7 +17,6 @@ import {
 	guardStringArray,
 } from "./ipc-guards.js";
 import type { SessionRuntimeManager } from "./session-runtime-manager.js";
-import { getSessionsDir } from "./shared/look-storage.js";
 import type { MainToRendererEvent, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
@@ -27,7 +26,7 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 	ipcMain.removeHandler("look:invoke");
 	ipcMain.removeAllListeners("look:event");
 
-	// Forward active runtime events to the renderer.
+	// Forward session-scoped runtime events to the renderer.
 	const unsubscribeEvents = runtimeManager.onEvent((event: MainToRendererEvent) => {
 		if (!mainWindow.isDestroyed()) {
 			mainWindow.webContents.send("look:event", event);
@@ -48,7 +47,12 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 		try {
 			return await handleRendererInvoke(data, runtimeManager, mainWindow);
 		} catch (err: any) {
-			return { success: false, error: err?.message ?? String(err) };
+			return {
+				success: false,
+				error: err?.message ?? String(err),
+				errorCode: (err as NodeJS.ErrnoException)?.code ?? null,
+				errorStack: err?.stack ?? null,
+			};
 		}
 	});
 }
@@ -125,7 +129,7 @@ async function handleRendererInvoke(
 		case "agent:update-thinking": {
 			const _agentId = guardAgentId(data.agentId, "agentId");
 			const _level = guardEnum(data.level, "level", ["off", "minimal", "low", "medium", "high", "xhigh"] as const);
-			runtimeManager.setThinkingLevel(_agentId, _level as ThinkingLevel);
+			await runtimeManager.setThinkingLevel(_agentId, _level as ThinkingLevel);
 			return { success: true };
 		}
 
@@ -216,6 +220,9 @@ async function handleRendererInvoke(
 			if ("lastActiveProjectId" in settings) {
 				guardString(settings.lastActiveProjectId, "settings.lastActiveProjectId");
 			}
+			if ("openProjectIds" in settings) {
+				guardStringArray(settings.openProjectIds, "settings.openProjectIds");
+			}
 			const updated = await runtimeManager.updateGeneralSettings(data.settings ?? {});
 			return { success: true, settings: updated };
 		}
@@ -266,11 +273,12 @@ async function handleRendererInvoke(
 		// `{ success, path?, canceled }` so callers can distinguish
 		// "user pressed Cancel" from "no window available".
 		case "dialog:open-directory": {
+			guardOptionalString(data.title, "title");
 			if (mainWindow.isDestroyed()) {
 				return { success: false, canceled: true, error: "Main window unavailable" };
 			}
 			const result = await dialog.showOpenDialog(mainWindow, {
-				title: "Select a skills directory",
+				title: data.title || "Select a folder",
 				properties: ["openDirectory", "createDirectory"],
 			});
 			if (result.canceled || result.filePaths.length === 0) {
@@ -292,9 +300,12 @@ async function handleRendererInvoke(
 		// files for each agent are persisted.
 		case "shell:open-project-folder": {
 			const { shell } = await import("electron");
-			const sessionsDir = getSessionsDir();
-			shell.openPath(sessionsDir);
-			return { success: true, path: sessionsDir };
+			const project = data.projectId
+				? runtimeManager.listProjects().find((item) => item.id === data.projectId)
+				: runtimeManager.getActiveProject();
+			if (!project?.valid) throw new Error("Project folder is unavailable");
+			await shell.openPath(project.cwd);
+			return { success: true, path: project.cwd };
 		}
 
 		// === Project management ===
@@ -320,9 +331,16 @@ async function handleRendererInvoke(
 			guardString(data.projectId, "projectId");
 			await promptForProjectTrust(runtimeManager, data.projectId, mainWindow);
 			await runtimeManager.setActiveProject(data.projectId);
-			// After switching, return the agents for this project
-			const snapshot = runtimeManager.listAgentsWithHistory();
-			return { success: true, agents: snapshot.agents, history: snapshot.history };
+			const agents = runtimeManager.listAgentsInProject(data.projectId);
+			const history = Object.fromEntries(agents.map((agent) => [agent.id, runtimeManager.getMessages(agent.id)]));
+			return { success: true, agents, history };
+		}
+
+		case "project:rename": {
+			guardString(data.projectId, "projectId");
+			guardString(data.name, "name");
+			runtimeManager.renameProject(data.projectId, data.name);
+			return { success: true };
 		}
 
 		case "project:delete": {

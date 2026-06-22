@@ -112,18 +112,17 @@ const api = {
   // ---- OS native dialogs ----
   // Returns { success, path?, canceled?, error? }. The renderer
   // is sandboxed, so it can't call `dialog.showOpenDialog` itself.
-  openDirectoryDialog: () =>
-    ipcRenderer.invoke("look:invoke", { type: "dialog:open-directory" }),
+  openDirectoryDialog: (title) =>
+    ipcRenderer.invoke("look:invoke", { type: "dialog:open-directory", title }),
 
   // ---- OS shell ----
   // Reveal a file in the OS file manager (Finder / Explorer / etc).
   revealInFinder: (path) =>
     ipcRenderer.invoke("look:invoke", { type: "shell:reveal-in-finder", path }),
 
-  // Opens the sessions directory (~/.look/sessions/) in the OS file manager.
-  // Contains all session .jsonl files for each agent.
-  openProjectFolder: () =>
-    ipcRenderer.invoke("look:invoke", { type: "shell:open-project-folder" }),
+  // Opens a project's canonical cwd in the OS file manager.
+  openProjectFolder: (projectId) =>
+    ipcRenderer.invoke("look:invoke", { type: "shell:open-project-folder", projectId }),
 
   // ---- Project CRUD ----
   listProjects: () =>
@@ -132,6 +131,8 @@ const api = {
     ipcRenderer.invoke("look:invoke", { type: "project:create", cwd, name }),
   switchProject: (projectId) =>
     ipcRenderer.invoke("look:invoke", { type: "project:switch", projectId }),
+  renameProject: (projectId, name) =>
+    ipcRenderer.invoke("look:invoke", { type: "project:rename", projectId, name }),
   deleteProject: (projectId) =>
     ipcRenderer.invoke("look:invoke", { type: "project:delete", projectId }),
   confirmDeleteProject: (projectId, confirmed) =>

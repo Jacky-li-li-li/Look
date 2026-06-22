@@ -25,14 +25,16 @@ describe("pi runtime architecture regressions", () => {
 		expect(index).toContain("await promptForProjectTrust");
 	});
 
-	it("3. owns one replaceable AgentSessionRuntime instead of an agent map", () => {
-		expect(runtime).toContain("private runtime: AgentSessionRuntime | null");
-		expect(runtime).not.toMatch(/Map<string,\s*ManagedAgent>|Map<string,\s*AgentSession>/);
+	it("3. owns one independent AgentSessionRuntime per live session", () => {
+		expect(runtime).toContain("private readonly runtimes = new Map<string, ManagedRuntime>()");
+		expect(runtime).toContain("private readonly runtimeInitializations = new Map<string, Promise<ManagedRuntime>>()");
+		expect(runtime).not.toContain("private runtime: AgentSessionRuntime | null");
 		expect(existsSync(resolve(root, "src/main/agents/roles.ts"))).toBe(false);
 	});
 
 	it("4. distinguishes transport stream IDs from persisted SessionManager entry IDs", () => {
-		expect(runtime).toContain("activeStreamId");
+		expect(runtime).toContain("streamId: string | null");
+		expect(runtime).toContain("managed.streamId = `stream:${sessionId}:${++managed.streamSequence}`");
 		expect(runtime).toContain("convertPiMessage(entry.message, sessionId, entry.id)");
 		expect(types).toContain("interface PiStreamMessage");
 	});
@@ -46,7 +48,7 @@ describe("pi runtime architecture regressions", () => {
 
 	it("6. rebuilds history from SessionManager after tree navigation", () => {
 		expect(runtime).toContain("session.navigateTree(entryId, opts)");
-		expect(runtime).toContain("this.emitSessionState()");
+		expect(runtime).toContain("this.emitSessionState(sessionId)");
 		expect(runtime).not.toContain("messages: PiMessage[];");
 	});
 
@@ -73,7 +75,7 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("11. sends projectId in the startup session-list contract", () => {
-		const listEvents = index.match(/type: "agent:list" as const,[\s\S]{0,80}?projectId: activeProject\.id/g);
+		const listEvents = index.match(/type: "agent:list" as const,[\s\S]{0,80}?projectId: project\.id/g);
 		expect(listEvents).toHaveLength(2);
 	});
 

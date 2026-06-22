@@ -206,7 +206,8 @@ async function initSessionRuntime(): Promise<void> {
 
 	runtimeManager = new SessionRuntimeManager();
 
-	// Load projects, then restore the one active pi runtime and session metadata.
+	// Load project bookmarks and restore the selected session runtime. Other
+	// sessions remain persisted until selected or prompted.
 	await runtimeManager.loadProjects();
 	await runtimeManager.restoreWorkspace();
 	const restoredProject = runtimeManager.getActiveProject();
@@ -229,23 +230,24 @@ async function initSessionRuntime(): Promise<void> {
 			activeProjectId: activeProject?.id ?? null,
 		});
 
-		if (activeProject) {
-			const snapshot = runtimeManager.listAgentsWithHistory();
-			if (snapshot.agents.length > 0) {
+		const snapshot = runtimeManager.listAgentsWithHistory();
+		for (const project of allProjects) {
+			const agents = runtimeManager.listAgentsInProject(project.id);
+			if (agents.length > 0) {
 				mainWindow.webContents.send("look:event", {
 					type: "agent:list" as const,
-					projectId: activeProject.id,
-					agents: snapshot.agents,
+					projectId: project.id,
+					agents,
 				});
-				for (const [agentId, msgs] of Object.entries(snapshot.history)) {
-					if (msgs.length > 0) {
-						mainWindow.webContents.send("look:event", {
-							type: "agent:history" as const,
-							agentId,
-							messages: msgs,
-						});
-					}
-				}
+			}
+		}
+		for (const [agentId, msgs] of Object.entries(snapshot.history)) {
+			if (msgs.length > 0) {
+				mainWindow.webContents.send("look:event", {
+					type: "agent:history" as const,
+					agentId,
+					messages: msgs,
+				});
 			}
 		}
 
@@ -284,13 +286,13 @@ app.whenReady().then(async () => {
 					projects: allProjects,
 					activeProjectId: activeProject?.id ?? null,
 				});
-				if (activeProject) {
-					const snapshot = runtimeManager.listAgentsWithHistory();
-					if (snapshot.agents.length > 0) {
+				for (const project of allProjects) {
+					const agents = runtimeManager.listAgentsInProject(project.id);
+					if (agents.length > 0) {
 						mainWindow.webContents.send("look:event", {
 							type: "agent:list" as const,
-							projectId: activeProject.id,
-							agents: snapshot.agents,
+							projectId: project.id,
+							agents,
 						});
 					}
 				}
@@ -300,9 +302,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-	// pi SDK auto-saves session state on every turn. We do NOT
-	// destroy agents here — listAgents() now filters by active
-	// project and would miss agents in other projects.
+	// pi SDK persists each session independently on every completed turn.
 	if (process.platform !== "darwin") {
 		app.quit();
 	}
@@ -313,6 +313,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", async () => {
 	if (runtimeManager) {
 		try {
+			await runtimeManager.disposeAllRuntimes();
 			await runtimeManager.getMcpManager().disconnectAll();
 		} catch {
 			// best-effort cleanup

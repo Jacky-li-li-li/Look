@@ -86,25 +86,25 @@ Renderer (React 19, Vite, Tailwind v4, shadcn/ui)
   │
   ▼
 Main Process (Electron)
-  └── SessionRuntimeManager (singleton)
-        ├── exactly one live pi AgentSessionRuntime
+  └── SessionRuntimeManager (singleton host)
+        ├── deduplicated pi AgentSessionRuntime registry
         ├── SessionManager-native history/new/resume/fork/tree
         └── ResourceLoader-native extensions, skills and project trust
 ```
 
 ### SessionRuntimeManager (`src/main/session-runtime-manager.ts`)
 
-The core singleton owns exactly one live `AgentSessionRuntime`. Sidebar rows are pi session files, not concurrently running agents. It delegates lifecycle, model, thinking, compaction, session naming, new/resume/fork/tree, extension binding, and persistence to pi SDK APIs.
+The core singleton hosts a deduplicated `AgentSessionRuntime` registry keyed by pi session ID. Each runtime owns one pi session and its cwd-bound services; different sessions may stream concurrently. Persisted rows remain native pi session files, while unsent drafts exist only for the current process. Look delegates model, thinking, compaction, naming, fork/tree, extension binding, and persistence to pi SDK APIs.
 
 ### IPC Pattern (`src/main/ipc-handlers.ts`)
 
 - **Main → Renderer**: `look:event` carries the active pi session lifecycle, streaming message snapshots, tool state, usage, history, and tree updates.
 - **Renderer → Main**: `look:invoke` (request-response) for commands (send message, create/destroy agent, switch model, get settings) and `look:event` (fire-and-forget) for `app:ready`
-- SessionRuntimeManager's `onEvent()` callback forwards the active session stream to the renderer; IPC handlers bridge the two directions
+- SessionRuntimeManager's `onEvent()` callback forwards every live session stream with its session ID; IPC handlers bridge the two directions
 
 ### Skills System
 
-Skills come from the active runtime's pi `ResourceLoader`. The renderer inserts `/skill:name`; `AgentSession.prompt()` performs the native expansion. Imported paths are written with `SettingsManager.setSkillPaths()` followed by `session.reload()`.
+Skills come from the selected runtime's pi `ResourceLoader`. The renderer inserts `/skill:name`; `AgentSession.prompt()` performs the native expansion. Imported paths are written with `SettingsManager.setSkillPaths()` followed by reloading all live sessions.
 
 Renderer-side: `SkillSlashMenu` (slash-command popover), `SkillTag` (inline skill chip), `skillSegments` (slash-command text parsing), `SkillAwareContent` (renders content with embedded skill tags).
 

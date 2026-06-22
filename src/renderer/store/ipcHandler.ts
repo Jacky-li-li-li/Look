@@ -27,6 +27,7 @@ import {
 	forkingEntryAtomFamily,
 	messagesAtomFamily,
 	navigatingEntryAtomFamily,
+	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
@@ -66,12 +67,21 @@ export function initIpcHandlers(api: any): () => void {
 	const unsub = api.onEvent((event: MainToRendererEvent) => {
 		switch (event.type) {
 			// ---- Look-specific list / status events ----
-			case "agent:list":
-				appStore.set(agentsAtom, event.agents);
+			case "agent:list": {
+				const previous = appStore.get(agentsAtom);
+				const otherProjects = previous.filter((agent) => agent.projectId !== event.projectId);
+				const next = [...otherProjects, ...event.agents];
+				appStore.set(agentsAtom, next);
+				const activeId = appStore.get(activeAgentIdAtom);
+				if (activeId && !next.some((agent) => agent.id === activeId)) appStore.set(activeAgentIdAtom, null);
 				break;
+			}
 
 			case "agent:created":
-				appStore.set(agentsAtom, [...appStore.get(agentsAtom), event.agent]);
+				appStore.set(agentsAtom, [
+					...appStore.get(agentsAtom).filter((agent) => agent.id !== event.agent.id),
+					event.agent,
+				]);
 				break;
 
 			case "agent:destroyed": {
@@ -169,6 +179,11 @@ export function initIpcHandlers(api: any): () => void {
 			// ---- Project events ----
 			case "project:list": {
 				appStore.set(projectsAtom, event.projects);
+				const projectIds = new Set(event.projects.map((project) => project.id));
+				appStore.set(
+					openProjectIdsAtom,
+					appStore.get(openProjectIdsAtom).filter((projectId) => projectIds.has(projectId)),
+				);
 				if (event.activeProjectId !== undefined) {
 					appStore.set(activeProjectIdAtom, event.activeProjectId);
 				}
@@ -185,6 +200,7 @@ export function initIpcHandlers(api: any): () => void {
 					projectId: event.projectId,
 					projectName: event.projectName,
 					agentCount: event.agentCount,
+					runningCount: event.runningCount,
 				});
 				break;
 			}
@@ -445,29 +461,23 @@ export async function initAppData(api: any): Promise<void> {
 		})
 		.catch(() => {});
 
-	// 2. Load persisted general settings (fire-and-forget).
-	api.getGeneralSettings()
-		.then((r: any) => {
-			if (r?.success && r.settings) {
-				if (r.settings.language) i18n.changeLanguage(r.settings.language);
-				if (r.settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, r.settings.autoCollapse);
-				if (r.settings.preferredModel) appStore.set(userPreferredModelAtom, r.settings.preferredModel);
-				if (r.settings.lastActiveSessionId) {
-					_lastActiveSessionId = r.settings.lastActiveSessionId;
-				}
-			}
-		})
-		.catch(() => {});
+	// 2. Load persisted selection before sessions so auto-selection cannot race it.
+	const settingsResult = await api.getGeneralSettings().catch(() => null);
+	if (settingsResult?.success && settingsResult.settings) {
+		const settings = settingsResult.settings;
+		if (settings.language) await i18n.changeLanguage(settings.language);
+		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
+		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
+		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
+		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
+	}
 
 	// 3. Pull initial project list.
-	api.listProjects()
-		.then((r: any) => {
-			if (r?.success && Array.isArray(r.projects)) {
-				appStore.set(projectsAtom, r.projects);
-				if (r.activeProjectId) appStore.set(activeProjectIdAtom, r.activeProjectId);
-			}
-		})
-		.catch(() => {});
+	const projectResult = await api.listProjects().catch(() => null);
+	if (projectResult?.success && Array.isArray(projectResult.projects)) {
+		appStore.set(projectsAtom, projectResult.projects);
+		if (projectResult.activeProjectId) appStore.set(activeProjectIdAtom, projectResult.activeProjectId);
+	}
 
 	// 4. Pull initial agent list + restored history synchronously.
 	const r = await api.getAgents().catch(() => null);

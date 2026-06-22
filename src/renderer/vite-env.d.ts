@@ -24,6 +24,15 @@ interface LookAPI {
 	switchModel(agentId: string, model: string): Promise<any>;
 	updateThinking(agentId: string, level: string): Promise<any>;
 	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
+	openDirectoryDialog(
+		title?: string,
+	): Promise<{ success: boolean; path?: string; canceled?: boolean; error?: string }>;
+	openProjectFolder(projectId?: string): Promise<{ success: boolean; path?: string; error?: string }>;
+	listProjects(): Promise<any>;
+	createProject(cwd: string, name?: string): Promise<any>;
+	renameProject(projectId: string, name: string): Promise<any>;
+	deleteProject(projectId: string): Promise<any>;
+	confirmDeleteProject(projectId: string, confirmed: boolean): Promise<any>;
 	getSettings(): Promise<any>;
 	setApiKey(provider: string, key: string): Promise<any>;
 	testApiKey(
@@ -83,6 +92,7 @@ interface GeneralSettings {
 	preferredModel: string | null;
 	lastActiveSessionId: string;
 	lastActiveProjectId: string;
+	openProjectIds: string[];
 }
 
 declare global {

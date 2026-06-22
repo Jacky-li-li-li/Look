@@ -27,11 +27,15 @@ export const projectsAtom = atom<ProjectInfo[]>([]);
 
 export const activeProjectIdAtom = atom<string | null>(null);
 
+/** Expanded project groups in the compact workspace ledger. */
+export const openProjectIdsAtom = atom<string[]>([]);
+
 /** Pending delete confirmation: project info + agent count from main process. */
 export const pendingDeleteProjectAtom = atom<{
 	projectId: string;
 	projectName: string;
 	agentCount: number;
+	runningCount: number;
 } | null>(null);
 
 /** Per-agent message history. atomFamily creates one atom per agentId. */

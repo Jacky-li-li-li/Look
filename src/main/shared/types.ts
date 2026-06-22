@@ -314,7 +314,13 @@ export type MainToRendererEvent =
 	// ---- Project events ----
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
-	| { type: "project:confirm-delete"; projectId: string; projectName: string; agentCount: number }
+	| {
+			type: "project:confirm-delete";
+			projectId: string;
+			projectName: string;
+			agentCount: number;
+			runningCount: number;
+	  }
 	// ---- Auto updater events ----
 	| { type: "update:checking" }
 	| { type: "update:available"; version: string; releaseDate?: string }
@@ -377,6 +383,7 @@ export type RendererToMainEvent =
 				preferredModel: string | null;
 				lastActiveSessionId: string;
 				lastActiveProjectId: string;
+				openProjectIds: string[];
 			}>;
 	  }
 	| { type: "settings:general:reset" }
@@ -385,15 +392,16 @@ export type RendererToMainEvent =
 	| { type: "skills:import-paths"; paths: string[] }
 	| { type: "skills:detect-common" }
 	// ---- OS native dialogs (renderer → main) ----
-	| { type: "dialog:open-directory" }
+	| { type: "dialog:open-directory"; title?: string }
 	| { type: "shell:reveal-in-finder"; path: string }
 	// ---- OS shell: open project root in file manager ----
-	| { type: "shell:open-project-folder" }
+	| { type: "shell:open-project-folder"; projectId?: string }
 	| { type: "app:ready" }
 	// ---- Project CRUD ----
 	| { type: "project:list" }
 	| { type: "project:create"; cwd: string; name?: string }
 	| { type: "project:switch"; projectId: string }
+	| { type: "project:rename"; projectId: string; name: string }
 	| { type: "project:delete"; projectId: string }
 	| { type: "project:confirm-delete-response"; projectId: string; confirmed: boolean }
 	| { type: "project:get-active" }

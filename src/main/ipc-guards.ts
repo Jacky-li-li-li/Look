@@ -73,7 +73,7 @@ export function guardPath(p: unknown, label: string): string {
 	if (resolved.length < 2 || resolved.includes("\0")) {
 		throw new Error(`Path traversal rejected: ${JSON.stringify(p)}`);
 	}
-	return p;
+	return resolved;
 }
 
 export function guardProvider(provider: unknown): string {

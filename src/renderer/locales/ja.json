@@ -11,9 +11,40 @@
 	},
 	"sidebar": {
 		"newChat": "新規チャット",
+		"newSession": "新しいセッション",
 		"settings": "設定",
 		"noAgents": "Agent がまだありません。",
 		"clickToStart": "上部の + をクリックして開始"
+	},
+	"workspace": {
+		"title": "ワークスペース",
+		"projects": "プロジェクト",
+		"projectMenu": "プロジェクトメニュー",
+		"openFolder": "フォルダを開く",
+		"createFirstSession": "最初のセッションを作成",
+		"addFirstProject": "プロジェクトフォルダを追加",
+		"addFirstProjectHint": "セッションはプロジェクトの cwd に限定されます",
+		"noSessionSelected": "セッションが選択されていません",
+		"emptyProjectHint": "ワークスペース内にセッションを作成してください。"
+	},
+	"session": {
+		"draft": "下書き",
+		"messageCount": "{{count}} 件のメッセージ",
+		"menu": "セッションメニュー",
+		"status": { "thinking": "思考中", "working": "ツール実行中", "error": "エラー", "idle": "待機中" }
+	},
+	"project": {
+		"openProject": "プロジェクトフォルダを開く",
+		"createTitle": "プロジェクトを開く",
+		"name": "プロジェクト名",
+		"confirm": "プロジェクトを開く",
+		"delete": "プロジェクトを削除",
+		"deleteTitle": "ワークスペースを削除",
+		"deleteConfirm": "ワークスペースを削除しますか",
+		"deleteConfirmButton": "ワークスペースを削除",
+		"deleteAgentWarning": "{{count}} 件のセッションとすべての履歴が完全に削除されます。元に戻せません。",
+		"deleteRunningWarning": "実行中の {{count}} 件のセッションを先に停止します。",
+		"pathMissing": "プロジェクトフォルダを利用できません"
 	},
 	"settings": {
 		"title": "設定",

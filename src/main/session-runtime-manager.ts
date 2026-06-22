@@ -54,6 +54,16 @@ interface StoredSession extends PiSessionInfo {
 	projectId: string;
 }
 
+interface ManagedRuntime {
+	readonly runtime: AgentSessionRuntime;
+	readonly projectId: string;
+	readonly createdAt: number;
+	status: SessionStatus;
+	streamSequence: number;
+	streamId: string | null;
+	unsubscribe: () => void;
+}
+
 const MAX_NAME_LENGTH = 80;
 
 function emptyUsageSnapshot(): UsageSnapshot {
@@ -68,11 +78,9 @@ function emptyUsageSnapshot(): UsageSnapshot {
 }
 
 /**
- * Owns exactly one live pi AgentSessionRuntime.
- *
- * Sidebar rows are persisted pi sessions, not independently running agents.
- * Switching, creating and forking all replace the single active runtime through
- * AgentSessionRuntime, which is the SDK's supported lifecycle boundary.
+ * Hosts independent pi AgentSessionRuntime instances for sessions that are
+ * selected or currently running. Each runtime still owns exactly one active pi
+ * session; Look only supplies the cross-session registry and event routing.
  */
 export class SessionRuntimeManager {
 	private readonly projects = new Map<string, ProjectInfo>();
@@ -84,13 +92,11 @@ export class SessionRuntimeManager {
 	private readonly globalSettingsManager: SettingsManager;
 	private readonly userSettings: UserSettingsStore;
 	private readonly projectsIndexPath: string;
-	private runtime: AgentSessionRuntime | null = null;
-	private runtimeUnsubscribe: (() => void) | null = null;
+	private readonly runtimes = new Map<string, ManagedRuntime>();
+	private readonly runtimeInitializations = new Map<string, Promise<ManagedRuntime>>();
+	private resourceInitializationTail: Promise<void> = Promise.resolve();
 	private activeProjectId: string | null = null;
 	private activeSessionId: string | null = null;
-	private activeStatus: SessionStatus = "idle";
-	private streamSequence = 0;
-	private activeStreamId: string | null = null;
 	private _mcpManager: McpManager | null = null;
 
 	constructor() {
@@ -103,6 +109,7 @@ export class SessionRuntimeManager {
 		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
 		this.trustStore = new ProjectTrustStore(getLookDir());
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
+		this.globalSettingsManager.setDefaultProjectTrust("always");
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
 		this.projectsIndexPath = getProjectsIndexPath();
 	}
@@ -116,10 +123,15 @@ export class SessionRuntimeManager {
 		try {
 			if (existsSync(this.projectsIndexPath)) {
 				const raw = JSON.parse(fs.readFileSync(this.projectsIndexPath, "utf8"));
+				const seenCwds = new Set<string>();
 				for (const item of Array.isArray(raw.projects) ? raw.projects : []) {
-					const info: ProjectInfo = { ...item, valid: existsSync(item.cwd) };
+					const valid = existsSync(item.cwd) && fs.statSync(item.cwd).isDirectory();
+					const info: ProjectInfo = { ...item, cwd: valid ? fs.realpathSync(item.cwd) : item.cwd, valid };
+					if (seenCwds.has(info.cwd)) continue;
+					seenCwds.add(info.cwd);
 					this.projects.set(info.id, info);
 				}
+				this.saveProjects();
 			}
 		} catch (error) {
 			console.error("[Look] Failed to load projects:", error);
@@ -196,28 +208,37 @@ export class SessionRuntimeManager {
 		const project = this.projects.get(projectId);
 		if (!project?.valid) throw new Error(`Project ${projectId} not found`);
 		this.trustStore.set(project.cwd, trusted);
-		if (this.runtime?.cwd === project.cwd) {
-			this.runtime.services.settingsManager.setProjectTrusted(trusted);
-			await this.runtime.session.reload();
-		}
+		await Promise.all(
+			Array.from(this.runtimes.values())
+				.filter((managed) => managed.runtime.cwd === project.cwd)
+				.map(async (managed) => {
+					managed.runtime.services.settingsManager.setProjectTrusted(trusted);
+					await managed.runtime.session.reload();
+				}),
+		);
 	}
 
 	async createProject(cwd: string, name?: string): Promise<{ project: ProjectInfo; isDuplicate: boolean }> {
-		const existing = Array.from(this.projects.values()).find((project) => project.cwd === cwd);
+		if (!existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
+			throw new Error(`Project path is not a directory: ${cwd}`);
+		}
+		const canonicalCwd = fs.realpathSync(cwd);
+		const existing = Array.from(this.projects.values()).find((project) => project.cwd === canonicalCwd);
 		if (existing) {
 			await this.setActiveProject(existing.id);
 			return { project: existing, isDuplicate: true };
 		}
 
-		let finalName = name?.trim() || path.basename(cwd);
+		let finalName = name?.trim() || path.basename(canonicalCwd);
 		const names = new Set(Array.from(this.projects.values()).map((project) => project.name));
-		for (let suffix = 2; names.has(finalName); suffix++) finalName = `${name || path.basename(cwd)} (${suffix})`;
+		for (let suffix = 2; names.has(finalName); suffix++)
+			finalName = `${name || path.basename(canonicalCwd)} (${suffix})`;
 		const project: ProjectInfo = {
 			id: uuidv4().slice(0, 8),
 			name: finalName,
-			cwd,
+			cwd: canonicalCwd,
 			createdAt: Date.now(),
-			valid: existsSync(cwd),
+			valid: true,
 		};
 		this.projects.set(project.id, project);
 		this.sessionsByProject.set(project.id, []);
@@ -230,11 +251,7 @@ export class SessionRuntimeManager {
 		const project = this.projects.get(projectId);
 		if (!project) throw new Error(`Project ${projectId} not found`);
 		this.activeProjectId = projectId;
-		const sessions = project.valid ? await this.refreshProjectSessions(projectId) : [];
-		if (sessions.length > 0 && !sessions.some((session) => session.id === this.activeSessionId)) {
-			await this.activateSession(sessions[0].id);
-			return;
-		}
+		if (project.valid) await this.refreshProjectSessions(projectId);
 		this.emitProjectList();
 		this.emit({ type: "project:active-changed", projectId });
 		this.emitSessionList(projectId);
@@ -243,19 +260,25 @@ export class SessionRuntimeManager {
 	async deleteProject(projectId: string): Promise<void> {
 		const project = this.projects.get(projectId);
 		if (!project) return;
+		const persisted = this.sessionsByProject.get(projectId) ?? [];
+		const runtimeIds = Array.from(this.runtimes.entries())
+			.filter(([, managed]) => managed.projectId === projectId)
+			.map(([sessionId]) => sessionId);
 		this.emit({
 			type: "project:confirm-delete",
 			projectId,
 			projectName: project.name,
-			agentCount: (this.sessionsByProject.get(projectId) ?? []).length,
+			agentCount: new Set([...persisted.map((session) => session.id), ...runtimeIds]).size,
+			runningCount: runtimeIds.filter((sessionId) => this.runtimes.get(sessionId)?.status !== "idle").length,
 		});
 	}
 
 	async executeDeleteProject(projectId: string): Promise<void> {
 		const sessions = this.sessionsByProject.get(projectId) ?? [];
-		if (this.activeSessionId && sessions.some((session) => session.id === this.activeSessionId)) {
-			await this.disposeRuntime();
-		}
+		const runtimeIds = Array.from(this.runtimes.entries())
+			.filter(([, managed]) => managed.projectId === projectId)
+			.map(([sessionId]) => sessionId);
+		await Promise.all(runtimeIds.map((sessionId) => this.disposeRuntime(sessionId, true)));
 		for (const session of sessions) {
 			try {
 				fs.unlinkSync(session.path);
@@ -265,10 +288,12 @@ export class SessionRuntimeManager {
 		}
 		this.sessionsByProject.delete(projectId);
 		this.projects.delete(projectId);
+		if (this.activeSessionId && runtimeIds.includes(this.activeSessionId)) this.activeSessionId = null;
 		if (this.activeProjectId === projectId) {
 			this.activeProjectId = this.listProjects().find((project) => project.valid)?.id ?? null;
 		}
 		this.saveProjects();
+		this.emitSessionList(projectId);
 		this.emitProjectList();
 		if (this.activeProjectId) this.emitSessionList(this.activeProjectId);
 	}
@@ -302,9 +327,9 @@ export class SessionRuntimeManager {
 	}
 
 	private sessionInfo(session: StoredSession): AgentInfo {
-		const isActive = session.id === this.activeSessionId && this.runtime !== null;
-		const piSession = isActive ? this.runtime?.session : undefined;
-		const stats = isActive ? piSession?.getSessionStats() : undefined;
+		const managed = this.runtimes.get(session.id);
+		const piSession = managed?.runtime.session;
+		const stats = piSession?.getSessionStats();
 		const model = piSession?.model;
 		return {
 			id: session.id,
@@ -313,7 +338,7 @@ export class SessionRuntimeManager {
 			thinkingLevel: (piSession?.thinkingLevel as ThinkingLevel | undefined) ?? "off",
 			modelSupportsThinking: piSession?.supportsThinking() ?? false,
 			availableThinkingLevels: (piSession?.getAvailableThinkingLevels() as ThinkingLevel[] | undefined) ?? ["off"],
-			status: isActive ? this.activeStatus : "idle",
+			status: managed?.status ?? "idle",
 			messageCount: stats?.totalMessages ?? session.messageCount,
 			createdAt: session.created.getTime(),
 			usage: stats
@@ -331,13 +356,44 @@ export class SessionRuntimeManager {
 		};
 	}
 
+	private runtimeInfo(sessionId: string, managed: ManagedRuntime): AgentInfo {
+		const session = managed.runtime.session;
+		const stats = session.getSessionStats();
+		const model = session.model;
+		return {
+			id: sessionId,
+			name: (session.sessionManager.getSessionName() || "New chat").slice(0, MAX_NAME_LENGTH),
+			model: model ? `${model.provider}/${model.id}` : "",
+			thinkingLevel: session.thinkingLevel as ThinkingLevel,
+			modelSupportsThinking: session.supportsThinking(),
+			availableThinkingLevels: session.getAvailableThinkingLevels() as ThinkingLevel[],
+			status: managed.status,
+			messageCount: stats.totalMessages,
+			createdAt: managed.createdAt,
+			usage: {
+				inputTokens: stats.tokens.input,
+				outputTokens: stats.tokens.output,
+				cacheReadTokens: stats.tokens.cacheRead,
+				cacheWriteTokens: stats.tokens.cacheWrite,
+				totalTokens: stats.tokens.total,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: stats.cost },
+			},
+			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
+			projectId: managed.projectId,
+		};
+	}
+
 	listAgents(): AgentInfo[] {
-		if (!this.activeProjectId) return [];
-		return this.listAgentsInProject(this.activeProjectId);
+		return this.listProjects().flatMap((project) => this.listAgentsInProject(project.id));
 	}
 
 	listAgentsInProject(projectId: string): AgentInfo[] {
-		return (this.sessionsByProject.get(projectId) ?? []).map((session) => this.sessionInfo(session));
+		const persisted = (this.sessionsByProject.get(projectId) ?? []).map((session) => this.sessionInfo(session));
+		const persistedIds = new Set(persisted.map((session) => session.id));
+		const drafts = Array.from(this.runtimes.entries())
+			.filter(([sessionId, managed]) => managed.projectId === projectId && !persistedIds.has(sessionId))
+			.map(([sessionId, managed]) => this.runtimeInfo(sessionId, managed));
+		return [...drafts, ...persisted];
 	}
 
 	listAgentsWithHistory(): { agents: AgentInfo[]; history: Record<string, PiMessage[]> } {
@@ -351,6 +407,8 @@ export class SessionRuntimeManager {
 	}
 
 	getAgentInfo(sessionId: string): AgentInfo | undefined {
+		const managed = this.runtimes.get(sessionId);
+		if (managed) return this.runtimeInfo(sessionId, managed);
 		const session = this.findStoredSession(sessionId);
 		return session ? this.sessionInfo(session) : undefined;
 	}
@@ -358,25 +416,44 @@ export class SessionRuntimeManager {
 	private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
 		return async ({ cwd, sessionManager, sessionStartEvent }) => {
 			await this.getMcpManager().connectAll();
-			const settingsManager = SettingsManager.create(cwd, getLookDir());
-			const trusted = this.resolveProjectTrust(cwd);
-			settingsManager.setProjectTrusted(trusted);
-			const services = await createAgentSessionServices({
-				cwd,
-				agentDir: getLookDir(),
-				authStorage: this.authStorage,
-				modelRegistry: this.modelRegistry,
-				settingsManager,
-				resourceLoaderOptions: {
-					extensionFactories: [createMcpExtensionFactory(this.getMcpManager())],
-				},
-				resourceLoaderReloadOptions: {
-					resolveProjectTrust: async () => trusted,
-				},
+			return this.withResourceInitialization(async () => {
+				const settingsManager = SettingsManager.create(cwd, getLookDir());
+				const trusted = this.resolveProjectTrust(cwd);
+				settingsManager.setProjectTrusted(trusted);
+				const services = await createAgentSessionServices({
+					cwd,
+					agentDir: getLookDir(),
+					authStorage: this.authStorage,
+					modelRegistry: this.modelRegistry,
+					settingsManager,
+					resourceLoaderOptions: {
+						extensionFactories: [createMcpExtensionFactory(this.getMcpManager())],
+					},
+					resourceLoaderReloadOptions: {
+						resolveProjectTrust: async () => trusted,
+					},
+				});
+				const result = await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent });
+				return { ...result, services, diagnostics: services.diagnostics };
 			});
-			const result = await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent });
-			return { ...result, services, diagnostics: services.diagnostics };
 		};
+	}
+
+	private async withResourceInitialization<T>(task: () => Promise<T>): Promise<T> {
+		const previous = this.resourceInitializationTail;
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const tail = previous.then(() => gate);
+		this.resourceInitializationTail = tail;
+		await previous;
+		try {
+			return await task();
+		} finally {
+			release();
+			if (this.resourceInitializationTail === tail) this.resourceInitializationTail = Promise.resolve();
+		}
 	}
 
 	private resolveProjectTrust(cwd: string): boolean {
@@ -386,70 +463,128 @@ export class SessionRuntimeManager {
 		return this.globalSettingsManager.getDefaultProjectTrust() === "always";
 	}
 
-	private async createInitialRuntime(cwd: string, sessionManager: SessionManager): Promise<void> {
-		await this.disposeRuntime();
-		this.runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
+	private async createManagedRuntime(
+		cwd: string,
+		sessionManager: SessionManager,
+		projectId: string,
+		createdAt = Date.now(),
+	): Promise<ManagedRuntime> {
+		const runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
 			cwd,
 			agentDir: getLookDir(),
 			sessionManager,
 		});
-		this.runtime.setRebindSession(async (session) => this.bindSession(session));
-		await this.bindSession(this.runtime.session);
+		return this.bindRuntime(runtime, projectId, createdAt);
 	}
 
-	private async bindSession(session: AgentSession): Promise<void> {
-		this.runtimeUnsubscribe?.();
+	private async bindRuntime(
+		runtime: AgentSessionRuntime,
+		projectId: string,
+		createdAt: number,
+	): Promise<ManagedRuntime> {
+		const session = runtime.session;
 		await session.bindExtensions({
 			mode: "rpc",
 			onError: (error) => this.emit({ type: "error", agentId: session.sessionId, message: String(error) }),
 		});
-		this.runtimeUnsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
-		this.activeSessionId = session.sessionId;
-		this.activeStatus = "idle";
-		this.emitRuntimeDiagnostics();
+		const managed: ManagedRuntime = {
+			runtime,
+			projectId,
+			createdAt,
+			status: "idle",
+			streamSequence: 0,
+			streamId: null,
+			unsubscribe: () => {},
+		};
+		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
+		runtime.setRebindSession(async (nextSession) => this.rebindRuntime(runtime, nextSession));
+		this.runtimes.set(session.sessionId, managed);
+		this.emitRuntimeDiagnostics(session.sessionId, runtime);
+		return managed;
 	}
 
-	private emitRuntimeDiagnostics(): void {
-		for (const diagnostic of this.runtime?.diagnostics ?? []) {
+	private async rebindRuntime(runtime: AgentSessionRuntime, session: AgentSession): Promise<void> {
+		const previousEntry = Array.from(this.runtimes.entries()).find(([, managed]) => managed.runtime === runtime);
+		if (!previousEntry) throw new Error("Runtime replacement lost its registry entry");
+		const [previousSessionId, managed] = previousEntry;
+		managed.unsubscribe();
+		await session.bindExtensions({
+			mode: "rpc",
+			onError: (error) => this.emit({ type: "error", agentId: session.sessionId, message: String(error) }),
+		});
+		this.runtimes.delete(previousSessionId);
+		managed.status = "idle";
+		managed.streamId = null;
+		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
+		this.runtimes.set(session.sessionId, managed);
+		if (this.activeSessionId === previousSessionId) this.activeSessionId = session.sessionId;
+		this.emitRuntimeDiagnostics(session.sessionId, runtime);
+	}
+
+	private emitRuntimeDiagnostics(sessionId: string, runtime: AgentSessionRuntime): void {
+		for (const diagnostic of runtime.diagnostics) {
 			if (diagnostic.type === "error" || diagnostic.type === "warning") {
-				this.emit({ type: "error", agentId: this.activeSessionId ?? undefined, message: diagnostic.message });
+				this.emit({ type: "error", agentId: sessionId, message: diagnostic.message });
 			}
 		}
-		if (this.runtime?.modelFallbackMessage) {
+		if (runtime.modelFallbackMessage) {
 			this.emit({
 				type: "error",
-				agentId: this.activeSessionId ?? undefined,
-				message: this.runtime.modelFallbackMessage,
+				agentId: sessionId,
+				message: runtime.modelFallbackMessage,
 			});
 		}
 	}
 
-	private async disposeRuntime(): Promise<void> {
-		this.runtimeUnsubscribe?.();
-		this.runtimeUnsubscribe = null;
-		if (this.runtime) await this.runtime.dispose();
-		this.runtime = null;
-		this.activeSessionId = null;
-		this.activeStatus = "idle";
-		this.activeStreamId = null;
+	private async ensureRuntime(sessionId: string): Promise<ManagedRuntime> {
+		const existing = this.runtimes.get(sessionId);
+		if (existing) return existing;
+		const pending = this.runtimeInitializations.get(sessionId);
+		if (pending) return pending;
+		const stored = this.findStoredSession(sessionId);
+		if (!stored) throw new Error(`Session ${sessionId} not found`);
+		const initialization = this.createManagedRuntime(
+			stored.cwd,
+			SessionManager.open(stored.path),
+			stored.projectId,
+			stored.created.getTime(),
+		).finally(() => this.runtimeInitializations.delete(sessionId));
+		this.runtimeInitializations.set(sessionId, initialization);
+		return initialization;
+	}
+
+	private async disposeRuntime(sessionId: string, abort = false): Promise<void> {
+		const pending = this.runtimeInitializations.get(sessionId);
+		if (pending) await pending.catch(() => undefined);
+		const managed = this.runtimes.get(sessionId);
+		if (!managed) return;
+		if (abort && managed.runtime.session.isStreaming) await managed.runtime.session.abort();
+		managed.unsubscribe();
+		this.runtimes.delete(sessionId);
+		await managed.runtime.dispose();
+	}
+
+	async disposeAllRuntimes(): Promise<void> {
+		await Promise.all(Array.from(this.runtimes.keys()).map((sessionId) => this.disposeRuntime(sessionId, true)));
 	}
 
 	async activateSession(sessionId: string): Promise<void> {
-		if (this.activeSessionId === sessionId && this.runtime) return;
-		const stored = this.findStoredSession(sessionId);
-		if (!stored) throw new Error(`Session ${sessionId} not found`);
-		if (this.runtime) {
-			const result = await this.runtime.switchSession(stored.path);
-			if (result.cancelled) return;
-		} else {
-			await this.createInitialRuntime(stored.cwd, SessionManager.open(stored.path));
+		if (this.activeSessionId === sessionId && this.runtimes.has(sessionId)) return;
+		const previousSessionId = this.activeSessionId;
+		const managed = await this.ensureRuntime(sessionId);
+		this.activeProjectId = managed.projectId;
+		this.activeSessionId = sessionId;
+		await this.refreshProjectSessions(managed.projectId);
+		if (previousSessionId && previousSessionId !== sessionId) {
+			const previous = this.runtimes.get(previousSessionId);
+			if (previous?.status === "idle") {
+				await this.disposeRuntime(previousSessionId);
+				this.emitSessionList(previous.projectId);
+			}
 		}
-		this.activeProjectId = stored.projectId;
-		this.activeSessionId = this.runtime?.session.sessionId ?? sessionId;
-		await this.refreshProjectSessions(stored.projectId);
 		this.emitProjectList();
-		this.emit({ type: "project:active-changed", projectId: stored.projectId });
-		this.emitSessionState();
+		this.emit({ type: "project:active-changed", projectId: managed.projectId });
+		this.emitSessionState(sessionId);
 	}
 
 	async createAgent(opts?: { name?: string; projectId?: string } | string): Promise<string> {
@@ -459,34 +594,50 @@ export class SessionRuntimeManager {
 		const project = this.projects.get(projectId);
 		if (!project?.valid) throw new Error(`Project path does not exist: ${project?.cwd ?? projectId}`);
 
-		if (this.runtime?.cwd === project.cwd) {
-			const result = await this.runtime.newSession();
-			if (result.cancelled) throw new Error("New session was cancelled by an extension");
-		} else {
-			await this.createInitialRuntime(project.cwd, SessionManager.create(project.cwd, getSessionsDir()));
-		}
-		const session = this.requireActiveSession();
+		const previousSessionId = this.activeSessionId;
+		const managed = await this.createManagedRuntime(
+			project.cwd,
+			SessionManager.create(project.cwd, getSessionsDir()),
+			projectId,
+		);
+		const session = managed.runtime.session;
 		session.setSessionName((input.name?.trim() || "New chat").slice(0, MAX_NAME_LENGTH));
 		this.activeProjectId = projectId;
 		this.activeSessionId = session.sessionId;
+		if (previousSessionId && previousSessionId !== session.sessionId) {
+			const previous = this.runtimes.get(previousSessionId);
+			if (previous?.status === "idle") {
+				await this.disposeRuntime(previousSessionId);
+				this.emitSessionList(previous.projectId);
+			}
+		}
 		await this.refreshProjectSessions(projectId);
-		this.emit({ type: "agent:created", agentId: session.sessionId, agent: this.getAgentInfo(session.sessionId)! });
-		this.emitSessionState();
+		this.emit({
+			type: "agent:created",
+			agentId: session.sessionId,
+			agent: this.runtimeInfo(session.sessionId, managed),
+		});
+		this.emitSessionState(session.sessionId);
 		return session.sessionId;
 	}
 
 	async destroyAgent(sessionId: string): Promise<void> {
 		const stored = this.findStoredSession(sessionId);
-		if (!stored) return;
-		if (this.activeSessionId === sessionId) await this.disposeRuntime();
-		try {
-			fs.unlinkSync(stored.path);
-		} catch (error: any) {
-			if (error?.code !== "ENOENT") throw error;
+		const managed = this.runtimes.get(sessionId);
+		const projectId = stored?.projectId ?? managed?.projectId;
+		if (!projectId) return;
+		await this.disposeRuntime(sessionId, true);
+		if (stored) {
+			try {
+				fs.unlinkSync(stored.path);
+			} catch (error: any) {
+				if (error?.code !== "ENOENT") throw error;
+			}
 		}
-		await this.refreshProjectSessions(stored.projectId);
+		if (this.activeSessionId === sessionId) this.activeSessionId = null;
+		await this.refreshProjectSessions(projectId);
 		this.emit({ type: "agent:destroyed", agentId: sessionId });
-		this.emitSessionList(stored.projectId);
+		this.emitSessionList(projectId);
 	}
 
 	getMessages(sessionId: string): PiMessage[] {
@@ -495,41 +646,41 @@ export class SessionRuntimeManager {
 	}
 
 	private sessionManagerFor(sessionId: string): SessionManager | null {
-		if (this.activeSessionId === sessionId && this.runtime) return this.runtime.session.sessionManager;
+		const managed = this.runtimes.get(sessionId);
+		if (managed) return managed.runtime.session.sessionManager;
 		const stored = this.findStoredSession(sessionId);
 		return stored && existsSync(stored.path) ? SessionManager.open(stored.path) : null;
 	}
 
 	async sendMessage(sessionId: string, text: string): Promise<void> {
-		await this.activateSession(sessionId);
-		const session = this.requireActiveSession();
+		const session = (await this.ensureRuntime(sessionId)).runtime.session;
 		await session.prompt(text, session.isStreaming ? { streamingBehavior: "followUp" } : undefined);
 	}
 
 	async abortAgent(sessionId: string): Promise<void> {
-		if (this.activeSessionId !== sessionId || !this.runtime) return;
-		await this.runtime.session.abort();
+		const managed = this.runtimes.get(sessionId);
+		if (managed) await managed.runtime.session.abort();
 	}
 
 	async setModel(sessionId: string, modelKey: string): Promise<void> {
-		await this.activateSession(sessionId);
+		const session = (await this.ensureRuntime(sessionId)).runtime.session;
 		const slash = modelKey.indexOf("/");
 		if (slash <= 0) throw new Error(`Model key must be in provider/model form: ${modelKey}`);
 		const model = this.modelRegistry.find(modelKey.slice(0, slash), modelKey.slice(slash + 1));
 		if (!model) throw new Error(`Model not found: ${modelKey}`);
-		await this.requireActiveSession().setModel(model);
-		this.emitActiveUpdated();
+		await session.setModel(model);
+		this.emitSessionUpdated(sessionId);
 	}
 
-	setThinkingLevel(sessionId: string, level: ThinkingLevel): void {
-		if (this.activeSessionId !== sessionId || !this.runtime)
-			throw new Error("Select the session before changing thinking");
-		this.runtime.session.setThinkingLevel(level);
+	async setThinkingLevel(sessionId: string, level: ThinkingLevel): Promise<void> {
+		const managed = await this.ensureRuntime(sessionId);
+		managed.runtime.session.setThinkingLevel(level);
 	}
 
 	getContextUsage(sessionId: string): ContextUsageInfo | undefined {
-		if (this.activeSessionId !== sessionId || !this.runtime) return undefined;
-		const usage = this.runtime.session.getContextUsage();
+		const session = this.runtimes.get(sessionId)?.runtime.session;
+		if (!session) return undefined;
+		const usage = session.getContextUsage();
 		if (!usage) return undefined;
 		const percentage = usage.percent === null ? 0 : Math.min(100, Math.max(0, Math.round(usage.percent)));
 		return {
@@ -537,27 +688,28 @@ export class SessionRuntimeManager {
 			usedTokens: usage.tokens ?? 0,
 			totalTokens: usage.contextWindow,
 			level: percentage >= 80 ? "critical" : percentage >= 60 ? "warning" : "safe",
-			compacting: this.runtime.session.isCompacting,
+			compacting: session.isCompacting,
 		};
 	}
 
 	async compressSession(sessionId: string): Promise<void> {
-		await this.activateSession(sessionId);
-		if (!this.requireActiveSession().isStreaming) await this.requireActiveSession().compact();
+		const session = (await this.ensureRuntime(sessionId)).runtime.session;
+		if (!session.isStreaming) await session.compact();
 	}
 
 	renameAgent(sessionId: string, name: string): void {
 		const trimmed = name.trim().slice(0, MAX_NAME_LENGTH);
 		if (!trimmed) return;
-		if (this.activeSessionId === sessionId && this.runtime) {
-			this.runtime.session.setSessionName(trimmed);
+		const managed = this.runtimes.get(sessionId);
+		if (managed) {
+			managed.runtime.session.setSessionName(trimmed);
 		} else {
 			const manager = this.sessionManagerFor(sessionId);
 			manager?.appendSessionInfo(trimmed);
 		}
 		const stored = this.findStoredSession(sessionId);
 		if (stored) stored.name = trimmed;
-		this.emitActiveUpdated();
+		this.emitSessionUpdated(sessionId);
 		if (stored) this.emitSessionList(stored.projectId);
 	}
 
@@ -578,8 +730,8 @@ export class SessionRuntimeManager {
 	}
 
 	getForkPoints(sessionId: string): SessionForkPoint[] {
-		if (this.activeSessionId !== sessionId || !this.runtime) return [];
-		const session = this.runtime.session;
+		const session = this.runtimes.get(sessionId)?.runtime.session;
+		if (!session) return [];
 		return session.getUserMessagesForForking().map(({ entryId, text }) => ({
 			entryId,
 			text: text.length > 120 ? `${text.slice(0, 120)}…` : text,
@@ -592,10 +744,9 @@ export class SessionRuntimeManager {
 		entryId: string,
 		opts?: { summarize?: boolean; customInstructions?: string; label?: string },
 	): Promise<NavigateTreeResult> {
-		await this.activateSession(sessionId);
-		const session = this.requireActiveSession();
+		const session = (await this.ensureRuntime(sessionId)).runtime.session;
 		const result = await session.navigateTree(entryId, opts);
-		if (!result.cancelled) this.emitSessionState();
+		if (!result.cancelled) this.emitSessionState(sessionId);
 		return result;
 	}
 
@@ -604,16 +755,44 @@ export class SessionRuntimeManager {
 		entryId: string,
 		opts?: { name?: string },
 	): Promise<ForkedSessionResult> {
-		await this.activateSession(sessionId);
-		if (!this.runtime) throw new Error("No active session");
-		const result = await this.runtime.fork(entryId, { position: "at" });
-		if (result.cancelled) throw new Error("Fork was cancelled by an extension");
-		const session = this.requireActiveSession();
+		const managed = await this.ensureRuntime(sessionId);
+		if (managed.runtime.session.isStreaming) throw new Error("Stop the session before forking");
+		const sourceFile = managed.runtime.session.sessionFile;
+		if (!sourceFile) throw new Error("Source session not persisted");
+
+		// Fire extension hook (normally called by runtime.fork, but we bypass fork
+		// so the source runtime stays alive for parallel sessions).
+		const runner = managed.runtime.session.extensionRunner;
+		if (runner.hasHandlers("session_before_fork")) {
+			const hookResult = await runner.emit({
+				type: "session_before_fork",
+				entryId,
+				position: "at" as const,
+			});
+			if (hookResult?.cancel === true) throw new Error("Fork was cancelled by an extension");
+		}
+
+		// Create branched session file directly — no source runtime teardown.
+		const forkedPath = managed.runtime.session.sessionManager.createBranchedSession(entryId);
+		if (!forkedPath) throw new Error("Failed to create forked session");
+
+		// Spin up an independent runtime for the forked session.
+		const forkedManager = SessionManager.open(forkedPath);
+		const forkedManaged = await this.createManagedRuntime(
+			forkedManager.getCwd(),
+			forkedManager,
+			managed.projectId,
+			Date.now(),
+		);
+
+		const session = forkedManaged.runtime.session;
 		if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, MAX_NAME_LENGTH));
-		const projectId = this.activeProjectId;
+		const projectId = managed.projectId;
 		if (!projectId || !session.sessionFile) throw new Error("Forked session was not persisted");
 		await this.refreshProjectSessions(projectId);
-		this.emitSessionState();
+		this.activeProjectId = projectId;
+		this.activeSessionId = session.sessionId;
+		this.emitSessionState(session.sessionId);
 		return { agentId: session.sessionId, sessionFilePath: session.sessionFile };
 	}
 
@@ -627,24 +806,19 @@ export class SessionRuntimeManager {
 		this.emitTree(sessionId);
 	}
 
-	private requireActiveSession(): AgentSession {
-		if (!this.runtime) throw new Error("No active session");
-		return this.runtime.session;
-	}
-
 	private handleSessionEvent(sessionId: string, event: AgentSessionEvent): void {
 		const rendererEvent = this.toRendererEvent(sessionId, event);
 		if (rendererEvent) this.emit(rendererEvent);
 		switch (event.type) {
 			case "agent_start":
-				this.updateActiveStatus("thinking");
+				this.updateSessionStatus(sessionId, "thinking");
 				break;
 			case "tool_execution_start":
-				this.updateActiveStatus("working");
+				this.updateSessionStatus(sessionId, "working");
 				break;
 			case "agent_end":
-				this.updateActiveStatus("idle");
-				this.refreshAfterTurn(sessionId).catch((error) => this.emitError(error));
+				this.updateSessionStatus(sessionId, "idle");
+				this.refreshAfterTurn(sessionId).catch((error) => this.emitError(error, sessionId));
 				break;
 			case "message_end":
 				this.emitContextUsage(sessionId);
@@ -657,44 +831,48 @@ export class SessionRuntimeManager {
 				break;
 			case "thinking_level_changed":
 			case "session_info_changed":
-				this.emitActiveUpdated();
+				this.emitSessionUpdated(sessionId);
 				break;
 		}
 	}
 
 	private toRendererEvent(sessionId: string, event: AgentSessionEvent): MainToRendererEvent | null {
+		const managed = this.runtimes.get(sessionId);
 		if (event.type === "message_start" || event.type === "message_update" || event.type === "message_end") {
-			if (event.type === "message_start" || !this.activeStreamId) {
-				this.activeStreamId = `stream:${sessionId}:${++this.streamSequence}`;
+			if (!managed) return null;
+			if (event.type === "message_start" || !managed.streamId) {
+				managed.streamId = `stream:${sessionId}:${++managed.streamSequence}`;
 			}
 			const rendererEvent = {
 				...event,
 				type: `agent:${event.type}`,
 				agentId: sessionId,
-				message: { ...event.message, id: this.activeStreamId },
+				message: { ...event.message, id: managed.streamId },
 			} as MainToRendererEvent;
-			if (event.type === "message_end") this.activeStreamId = null;
+			if (event.type === "message_end") managed.streamId = null;
 			return rendererEvent;
 		}
 		return { ...event, type: `agent:${event.type}`, agentId: sessionId } as MainToRendererEvent;
 	}
 
 	private async refreshAfterTurn(sessionId: string): Promise<void> {
-		if (!this.activeProjectId) return;
-		await this.refreshProjectSessions(this.activeProjectId);
+		const projectId = this.runtimes.get(sessionId)?.projectId ?? this.findStoredSession(sessionId)?.projectId;
+		if (!projectId) return;
+		await this.refreshProjectSessions(projectId);
 		this.emit({ type: "agent:history", agentId: sessionId, messages: this.getMessages(sessionId) });
 		this.emitTree(sessionId);
-		this.emitActiveUpdated();
-		this.emitSessionList(this.activeProjectId);
+		this.emitSessionUpdated(sessionId);
+		this.emitSessionList(projectId);
 	}
 
-	private emitSessionState(): void {
-		const sessionId = this.activeSessionId;
+	private emitSessionState(targetSessionId?: string): void {
+		const sessionId = targetSessionId ?? this.activeSessionId;
 		if (!sessionId) return;
-		this.emitSessionList(this.activeProjectId ?? "");
+		const projectId = this.runtimes.get(sessionId)?.projectId ?? this.findStoredSession(sessionId)?.projectId;
+		if (projectId) this.emitSessionList(projectId);
 		this.emit({ type: "agent:history", agentId: sessionId, messages: this.getMessages(sessionId) });
 		this.emitTree(sessionId);
-		this.emitActiveUpdated();
+		this.emitSessionUpdated(sessionId);
 	}
 
 	private emitTree(sessionId: string): void {
@@ -710,14 +888,14 @@ export class SessionRuntimeManager {
 		if (usage) this.emit({ type: "agent:context-usage", agentId: sessionId, usage });
 	}
 
-	private updateActiveStatus(status: SessionStatus): void {
-		this.activeStatus = status;
-		if (this.activeSessionId) this.emit({ type: "agent:status", agentId: this.activeSessionId, status });
+	private updateSessionStatus(sessionId: string, status: SessionStatus): void {
+		const managed = this.runtimes.get(sessionId);
+		if (managed) managed.status = status;
+		this.emit({ type: "agent:status", agentId: sessionId, status });
 	}
 
-	private emitActiveUpdated(): void {
-		if (!this.activeSessionId) return;
-		const info = this.getAgentInfo(this.activeSessionId);
+	private emitSessionUpdated(sessionId: string): void {
+		const info = this.getAgentInfo(sessionId);
 		if (info) this.emit({ type: "agent:updated", agentId: info.id, agent: info });
 	}
 
@@ -872,8 +1050,10 @@ export class SessionRuntimeManager {
 
 	async updateGeneralSettings(partial: Partial<UserSettings>): Promise<UserSettings> {
 		const settings = await this.userSettings.update(partial);
-		if (partial.compactionEnabled !== undefined && this.runtime) {
-			this.runtime.session.setAutoCompactionEnabled(partial.compactionEnabled);
+		if (partial.compactionEnabled !== undefined) {
+			for (const managed of this.runtimes.values()) {
+				managed.runtime.session.setAutoCompactionEnabled(partial.compactionEnabled);
+			}
 		}
 		return settings;
 	}
@@ -883,18 +1063,20 @@ export class SessionRuntimeManager {
 	}
 
 	listSkillsForUI() {
-		const loaded = this.runtime?.services.resourceLoader.getSkills() ?? { skills: [], diagnostics: [] };
+		const activeRuntime = this.activeSessionId ? this.runtimes.get(this.activeSessionId)?.runtime : undefined;
+		const loaded = activeRuntime?.services.resourceLoader.getSkills() ?? { skills: [], diagnostics: [] };
 		return {
 			skills: loaded.skills,
 			diagnostics: loaded.diagnostics,
 			importedPaths:
-				this.runtime?.services.settingsManager.getSkillPaths() ?? this.globalSettingsManager.getSkillPaths(),
+				activeRuntime?.services.settingsManager.getSkillPaths() ?? this.globalSettingsManager.getSkillPaths(),
 		};
 	}
 
 	async importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }> {
 		try {
-			const settingsManager = this.runtime?.services.settingsManager ?? this.globalSettingsManager;
+			const activeRuntime = this.activeSessionId ? this.runtimes.get(this.activeSessionId)?.runtime : undefined;
+			const settingsManager = activeRuntime?.services.settingsManager ?? this.globalSettingsManager;
 			const merged = Array.from(
 				new Set(
 					[...settingsManager.getSkillPaths(), ...paths]
@@ -904,7 +1086,7 @@ export class SessionRuntimeManager {
 			);
 			settingsManager.setSkillPaths(merged);
 			await settingsManager.flush();
-			if (this.runtime) await this.runtime.session.reload();
+			await Promise.all(Array.from(this.runtimes.values()).map((managed) => managed.runtime.session.reload()));
 			return { success: true, importedCount: merged.length };
 		} catch (error) {
 			return { success: false, importedCount: 0, error: error instanceof Error ? error.message : String(error) };
@@ -940,10 +1122,10 @@ export class SessionRuntimeManager {
 		for (const callback of this.eventCallbacks) callback(event);
 	}
 
-	private emitError(error: unknown): void {
+	private emitError(error: unknown, sessionId?: string): void {
 		this.emit({
 			type: "error",
-			agentId: this.activeSessionId ?? undefined,
+			agentId: sessionId ?? this.activeSessionId ?? undefined,
 			message: error instanceof Error ? error.message : String(error),
 		});
 	}

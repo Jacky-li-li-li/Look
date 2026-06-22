@@ -37,6 +37,8 @@ export interface UserSettings {
 	lastActiveSessionId: string;
 	/** Last active project ID to restore on restart. */
 	lastActiveProjectId: string;
+	/** Expanded workspace groups in the renderer sidebar. */
+	openProjectIds: string[];
 }
 
 const DEFAULTS: UserSettings = {
@@ -46,6 +48,7 @@ const DEFAULTS: UserSettings = {
 	preferredModel: null,
 	lastActiveSessionId: "",
 	lastActiveProjectId: "",
+	openProjectIds: [],
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -62,6 +65,7 @@ interface UiSettings {
 	lastActiveSessionId: string;
 	/** Last active project ID to restore on restart. */
 	lastActiveProjectId: string;
+	openProjectIds: string[];
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -70,6 +74,7 @@ const UI_DEFAULTS: UiSettings = {
 	compactionEnabled: DEFAULTS.compactionEnabled,
 	lastActiveSessionId: "",
 	lastActiveProjectId: "",
+	openProjectIds: [],
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -132,6 +137,7 @@ export class UserSettingsStore {
 				if (!parsed.lastActiveSessionId && parsed.lastActiveAgentId) {
 					parsed.lastActiveSessionId = parsed.lastActiveAgentId;
 				}
+				if (!Array.isArray(parsed.openProjectIds)) parsed.openProjectIds = [];
 				// Merge with defaults so newly-added fields get sane values
 				// when loading an older file.
 				return { ...UI_DEFAULTS, ...parsed };
@@ -171,6 +177,7 @@ export class UserSettingsStore {
 		if (partial.compactionEnabled !== undefined) uiPartial.compactionEnabled = partial.compactionEnabled;
 		if (partial.lastActiveSessionId !== undefined) uiPartial.lastActiveSessionId = partial.lastActiveSessionId;
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
+		if (partial.openProjectIds !== undefined) uiPartial.openProjectIds = [...partial.openProjectIds];
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

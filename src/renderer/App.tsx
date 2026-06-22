@@ -31,10 +31,11 @@ import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
+	activeProjectAtom,
 	activeProjectIdAtom,
-	agentsAtom,
 	autoCollapseAtom,
 	messagesAtomFamily,
+	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
@@ -64,6 +65,7 @@ export default function App() {
 	const showSettings = useAtomValue(showSettingsAtom);
 	const settingsTab = useAtomValue(settingsTabAtom);
 	const providerSettings = useAtomValue(providerSettingsAtom);
+	const activeProject = useAtomValue(activeProjectAtom);
 
 	// Messages and queue for the active agent (atomFamily).
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
@@ -74,37 +76,17 @@ export default function App() {
 	const projects = useAtomValue(projectsAtom);
 	const activeProjectId = useAtomValue(activeProjectIdAtom);
 	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
+	const openProjectIds = useAtomValue(openProjectIdsAtom);
 	const [newProjectCwd, setNewProjectCwd] = useState<string | null>(null);
 
 	// ---- Project callbacks ----
 
-	const handleSelectProject = useCallback((projectId: string) => {
-		if (!api) return;
-		appStore.set(activeProjectIdAtom, projectId);
-		appStore.set(activeAgentIdAtom, null);
-		appStore.set(agentsAtom, []);
-		api.switchProject(projectId)
-			.then((r: any) => {
-				if (r?.success) {
-					if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
-					if (r.history) {
-						for (const [agentId, msgs] of Object.entries(r.history)) {
-							if (Array.isArray(msgs) && msgs.length > 0) {
-								appStore.set(messagesAtomFamily(agentId), msgs as any);
-							}
-						}
-					}
-				}
-			})
-			.catch(() => {});
-	}, []);
-
 	const handleOpenProject = useCallback(async () => {
 		if (!api) return;
-		const result = await api.openDirectoryDialog();
+		const result = await api.openDirectoryDialog(t("project.openProject", "Open project folder"));
 		if (!result?.success || !result.path) return;
 		setNewProjectCwd(result.path);
-	}, []);
+	}, [t]);
 
 	const handleDeleteProject = useCallback((project: ProjectInfo) => {
 		// Trigger confirmation flow
@@ -112,6 +94,8 @@ export default function App() {
 	}, []);
 
 	const handleProjectCreated = useCallback(async (projectId: string) => {
+		appStore.set(activeProjectIdAtom, projectId);
+		appStore.set(activeAgentIdAtom, null);
 		// Refresh project list
 		const r = await api.listProjects().catch(() => null);
 		if (r?.success) {
@@ -124,11 +108,7 @@ export default function App() {
 	}, []);
 
 	const handleDeleteProjectConfirmed = useCallback(() => {
-		const p = appStore.get(pendingDeleteProjectAtom);
-		if (!p) return;
-		api.confirmDeleteProject(p.projectId, true);
 		appStore.set(pendingDeleteProjectAtom, null);
-		// Refresh
 		api.listProjects()
 			.then((r: any) => {
 				if (r?.success) appStore.set(projectsAtom, r.projects);
@@ -176,10 +156,22 @@ export default function App() {
 		if (api) api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
 	}, []);
 
-	const handleCreateClick = useCallback(async () => {
+	const handleCreateClick = useCallback(async (projectId: string) => {
 		if (!api) return;
-		const result = await api.createAgent();
+		const result = await api.createAgent({ projectId });
 		if (result?.success && result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
+	}, []);
+
+	const handleRenameProject = useCallback(async (projectId: string, name: string) => {
+		if (!api || !name.trim()) return;
+		const result = await api.renameProject(projectId, name.trim());
+		if (!result?.success) toast.error(result?.error ?? "Failed to rename project");
+	}, []);
+
+	const handleOpenProjectFolderById = useCallback(async (projectId: string) => {
+		if (!api) return;
+		const result = await api.openProjectFolder(projectId).catch(() => null);
+		if (!result?.success) toast.error(result?.error ?? "Failed to open project folder");
 	}, []);
 
 	const handleSettingsClick = useCallback(() => {
@@ -201,11 +193,13 @@ export default function App() {
 				toast.error("API not available — restart the app to reload preload.");
 				return;
 			}
-			fn().catch((err: any) => toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`));
+			fn(activeAgent?.projectId).catch((err: any) =>
+				toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`),
+			);
 		} catch (err: any) {
 			toast.error(`Failed to open folder: ${err?.message ?? "unknown"}`);
 		}
-	}, []);
+	}, [activeAgent?.projectId]);
 
 	// ---- Side effects ----
 
@@ -291,12 +285,13 @@ export default function App() {
 			const payload: Record<string, any> = {};
 			if (activeAgentId) payload.lastActiveSessionId = activeAgentId;
 			if (activeProjectId) payload.lastActiveProjectId = activeProjectId;
+			payload.openProjectIds = openProjectIds;
 			if (Object.keys(payload).length > 0) {
 				api.setGeneralSettings(payload).catch(() => {});
 			}
 		}, 500);
 		return () => clearTimeout(timer);
-	}, [activeAgentId, activeProjectId]);
+	}, [activeAgentId, activeProjectId, openProjectIds]);
 
 	// The main process mirrors this list directly from pi's
 	// AgentSession.getAvailableThinkingLevels(). Do not infer model families here.
@@ -349,9 +344,10 @@ export default function App() {
 						onDestroy={handleDestroyAgent}
 						onCreateClick={handleCreateClick}
 						onSettingsClick={handleSettingsClick}
-						onSelectProject={handleSelectProject}
 						onCreateProject={handleOpenProject}
 						onDeleteProject={handleDeleteProject}
+						onOpenProject={handleOpenProjectFolderById}
+						onRenameProject={handleRenameProject}
 					/>
 
 					<Separator orientation="vertical" className="mx-2 bg-transparent" />
@@ -404,8 +400,20 @@ export default function App() {
 						) : (
 							<div className="flex flex-1 items-center justify-center p-10 text-center">
 								<div className="flex max-w-sm flex-col items-center gap-3">
-									<PixelAgentAvatar size="lg" />
-									<p className="text-xs text-muted-foreground">Select an agent or create one to begin.</p>
+									<div className="flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
+										<FolderOpen className="size-5 text-muted-foreground" />
+									</div>
+									<p className="text-sm font-medium">
+										{activeProject?.name ?? t("workspace.noSessionSelected", "No session selected")}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										{t("workspace.emptyProjectHint", "Create a session inside a workspace to begin.")}
+									</p>
+									{activeProject?.valid && (
+										<Button variant="line" size="sm" onClick={() => handleCreateClick(activeProject.id)}>
+											{t("sidebar.newSession", "New session")}
+										</Button>
+									)}
 								</div>
 							</div>
 						)}
@@ -425,6 +433,7 @@ export default function App() {
 							projectId={pendingDelete.projectId}
 							projectName={pendingDelete.projectName}
 							agentCount={pendingDelete.agentCount}
+							runningCount={pendingDelete.runningCount}
 							onClose={handleDeleteProjectCancelled}
 							onDeleted={handleDeleteProjectConfirmed}
 						/>

@@ -730,16 +730,135 @@ body {
     color: var(--ink-3);
   }
 
-  /* Radix ScrollArea forces its content wrapper to `display: table` with
-     `min-width: 100%`, and table layout ignores `width: 100%` / `max-width`
-     unless `table-layout: fixed` is set. Without this, the wrapper (and the
-     sidebar agent cards inside it) inflate to the content's natural width
-     and overflow the 260px sidebar on the right. */
-  .scroll-area-content {
+  /* Radix ScrollArea renders its content as display:table; min-width:100%.
+     With table-layout:auto the wrapper grows to the natural width of long
+     truncated text, causing horizontal overflow and the left-list jump.
+     Scope the fix to the workspace ledger so other ScrollAreas are untouched. */
+  .workspace-ledger [data-radix-scroll-area-viewport] > div {
     table-layout: fixed !important;
     width: 100% !important;
     max-width: 100% !important;
   }
+
+  /* ============================================================
+     Workspace Ledger — compact project/session navigation
+     ============================================================ */
+
+  .workspace-ledger {
+    background:
+      linear-gradient(180deg, var(--glass-highlight), transparent 28%),
+      var(--sidebar);
+    border-color: var(--sidebar-border);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 18px 52px var(--glass-shadow);
+  }
+
+  .workspace-group {
+    position: relative;
+    border-radius: calc(var(--radius) * 1.35);
+  }
+
+
+  .workspace-folder-mark {
+    display: inline-flex;
+    width: 1.4rem;
+    height: 1.4rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--hairline);
+    border-radius: calc(var(--radius) * 0.85);
+    color: var(--muted-foreground);
+    transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+  }
+
+
+  .workspace-live-count {
+    min-width: 1.1rem;
+    padding: 1px 4px;
+    border: 1px solid oklch(0.6 0.16 150 / 0.35);
+    border-radius: 999px;
+    color: oklch(0.64 0.17 150);
+    background: oklch(0.6 0.16 150 / 0.07);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.5rem;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .workspace-group-content {
+    overflow: hidden;
+  }
+
+  .workspace-group-content[data-state="open"] {
+    animation: workspace-reveal 170ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .workspace-session-rail {
+    position: relative;
+  }
+
+  .workspace-session-rail::before {
+    content: "";
+    position: absolute;
+    left: -1px;
+    top: 1px;
+    bottom: 6px;
+    width: 1px;
+    background: linear-gradient(to bottom, var(--hairline), color-mix(in oklch, var(--hairline), transparent 58%));
+  }
+
+  .session-ledger-row {
+    position: relative;
+    z-index: 0;
+    color: var(--muted-foreground);
+    transition:
+      color 130ms ease,
+      background-color 130ms ease,
+      border-color 130ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .session-ledger-row:hover,
+  .session-ledger-row:focus-within {
+    color: var(--foreground);
+    background: color-mix(in oklch, var(--foreground), transparent 96%);
+  }
+
+  .session-ledger-row[data-active] {
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--foreground), transparent 86%);
+    background:
+      linear-gradient(90deg, color-mix(in oklch, var(--foreground), transparent 94%), transparent 72%),
+      color-mix(in oklch, var(--sidebar), var(--foreground) 3%);
+  }
+
+  .session-ledger-row .status-mark[data-status="idle"],
+  .session-ledger-row .status-mark:not([data-status]) {
+    display: block;
+    border: 1px solid color-mix(in oklch, var(--foreground), transparent 80%);
+    background: transparent;
+  }
+
+  .workspace-empty-session,
+  .workspace-zero-state {
+    border-color: var(--hairline);
+    color: var(--muted-foreground);
+    transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+  }
+
+  .workspace-empty-session:hover,
+  .workspace-zero-state:hover {
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--foreground), transparent 72%);
+    background: color-mix(in oklch, var(--foreground), transparent 96%);
+  }
+}
+
+@keyframes workspace-reveal {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ============================================================
@@ -837,4 +956,3 @@ body {
 .dark .bubble-flash {
   animation: bubble-flash-dark 900ms ease-out both;
 }
-

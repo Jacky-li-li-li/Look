@@ -11,9 +11,40 @@
 	},
 	"sidebar": {
 		"newChat": "新建对话",
+		"newSession": "新建会话",
 		"settings": "设置",
 		"noAgents": "暂无 Agent。",
 		"clickToStart": "点击上方 + 新建对话开始"
+	},
+	"workspace": {
+		"title": "工作区",
+		"projects": "个项目",
+		"projectMenu": "项目菜单",
+		"openFolder": "打开文件夹",
+		"createFirstSession": "创建首个会话",
+		"addFirstProject": "添加项目文件夹",
+		"addFirstProjectHint": "会话将限定在项目 cwd 中",
+		"noSessionSelected": "尚未选择会话",
+		"emptyProjectHint": "在工作区中创建会话后即可开始。"
+	},
+	"session": {
+		"draft": "草稿",
+		"messageCount": "{{count}} 条消息",
+		"menu": "会话菜单",
+		"status": { "thinking": "思考中", "working": "调用工具", "error": "错误", "idle": "空闲" }
+	},
+	"project": {
+		"openProject": "打开项目文件夹",
+		"createTitle": "打开项目",
+		"name": "项目名称",
+		"confirm": "打开项目",
+		"delete": "删除项目",
+		"deleteTitle": "删除工作区",
+		"deleteConfirm": "确定要删除工作区",
+		"deleteConfirmButton": "删除工作区",
+		"deleteAgentWarning": "这将永久删除 {{count}} 个会话及全部对话历史，此操作无法撤销。",
+		"deleteRunningWarning": "将先停止 {{count}} 个正在运行的会话。",
+		"pathMissing": "项目文件夹不可用"
 	},
 	"settings": {
 		"title": "设置",

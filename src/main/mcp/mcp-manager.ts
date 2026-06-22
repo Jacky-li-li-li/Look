@@ -44,6 +44,7 @@ interface ConnectedServer {
 	client: Client;
 	transport: StdioClientTransport;
 	tools: McpToolInfo[];
+	config: McpServerConfig;
 }
 
 // ── Manager ──
@@ -53,6 +54,7 @@ export class McpManager extends EventEmitter {
 	/** Track intermediate state for servers that are connecting or errored (not yet/already in `servers`). */
 	private pending: Map<string, { status: "connecting"; error?: string } | { status: "error"; error: string }> =
 		new Map();
+	private connecting: Map<string, Promise<void>> = new Map();
 	private configPath: string;
 
 	constructor() {
@@ -92,9 +94,21 @@ export class McpManager extends EventEmitter {
 	}
 
 	async connectServer(name: string, config: McpServerConfig): Promise<void> {
-		if (this.servers.has(name)) {
-			await this.disconnectServer(name);
+		const existing = this.servers.get(name);
+		if (existing && JSON.stringify(existing.config) === JSON.stringify(config)) return;
+		const inFlight = this.connecting.get(name);
+		if (inFlight) {
+			await inFlight;
+			if (this.pending.get(name)?.status === "error" && !this.servers.has(name)) return;
+			return this.connectServer(name, config);
 		}
+		const connection = this.connectServerInternal(name, config).finally(() => this.connecting.delete(name));
+		this.connecting.set(name, connection);
+		await connection;
+	}
+
+	private async connectServerInternal(name: string, config: McpServerConfig): Promise<void> {
+		if (this.servers.has(name)) await this.disconnectServer(name);
 
 		this.pending.set(name, { status: "connecting" });
 		this.emit("server:status", { name, status: "connecting" as McpServerStatus });
@@ -118,7 +132,7 @@ export class McpManager extends EventEmitter {
 				serverName: name,
 			}));
 
-			this.servers.set(name, { client, transport, tools });
+			this.servers.set(name, { client, transport, tools, config });
 			this.pending.delete(name);
 
 			this.emit("server:status", {
@@ -158,6 +172,7 @@ export class McpManager extends EventEmitter {
 	}
 
 	async disconnectAll(): Promise<void> {
+		await Promise.allSettled(this.connecting.values());
 		const names = [...this.servers.keys()];
 		await Promise.all(names.map((name) => this.disconnectServer(name)));
 		this.pending.clear();

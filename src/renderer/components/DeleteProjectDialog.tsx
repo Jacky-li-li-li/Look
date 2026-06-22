@@ -14,6 +14,7 @@ interface DeleteProjectDialogProps {
 	projectId: string;
 	projectName: string;
 	agentCount: number;
+	runningCount: number;
 	onClose: () => void;
 	onDeleted: () => void;
 }
@@ -23,6 +24,7 @@ export default function DeleteProjectDialog({
 	projectId,
 	projectName,
 	agentCount,
+	runningCount,
 	onClose,
 	onDeleted,
 }: DeleteProjectDialogProps) {
@@ -57,8 +59,16 @@ export default function DeleteProjectDialog({
 					{agentCount > 0 && (
 						<p className="mt-2">
 							{t("project.deleteAgentWarning", {
-								defaultValue: `This will permanently delete ${agentCount} agent(s) and all their conversation history. This action cannot be undone.`,
+								defaultValue: `This permanently deletes ${agentCount} session(s) and all conversation history. This action cannot be undone.`,
 								count: agentCount,
+							})}
+						</p>
+					)}
+					{runningCount > 0 && (
+						<p className="mt-2 font-medium text-amber-600 dark:text-amber-400">
+							{t("project.deleteRunningWarning", {
+								defaultValue: `${runningCount} running session(s) will be stopped first.`,
+								count: runningCount,
 							})}
 						</p>
 					)}
