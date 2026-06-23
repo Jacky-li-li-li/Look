@@ -14,49 +14,67 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import type { PermissionRespondPayload } from "@shared/types";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { AlertTriangle, Check, Shield, X } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
-import { permissionAskEventAtom } from "../store/atoms";
-
-const api = (window as any).look;
-
-const TIMEOUT_MS = 30_000;
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { agentsAtom, permissionAskQueueAtom } from "../store/atoms";
 
 export default function PermissionDialog() {
-	const [event, setEvent] = useAtom(permissionAskEventAtom);
+	const [queue, setQueue] = useAtom(permissionAskQueueAtom);
+	const agents = useAtomValue(agentsAtom);
+	const event = queue[0] ?? null;
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const respondingRef = useRef<string | null>(null);
+	const [responding, setResponding] = useState(false);
 	const open = event !== null;
+	const agentName = event
+		? (agents.find((agent) => agent.id === event.agentId)?.name ?? event.agentId.slice(0, 8))
+		: "";
 
 	const respond = useCallback(
-		(action: "allow" | "deny" | "allow_always") => {
-			if (!event) return;
+		async (action: "allow" | "deny" | "allow_always") => {
+			if (!event || respondingRef.current === event.requestId) return;
+			respondingRef.current = event.requestId;
+			setResponding(true);
 			const payload: PermissionRespondPayload = {
 				requestId: event.requestId,
 				action,
 			};
-			api?.respondPermission?.(payload);
-			setEvent(null);
+			try {
+				const result = await window.look.respondPermission(payload);
+				if (!result?.success) {
+					setQueue((items) => items.filter((item) => item.requestId !== event.requestId));
+					toast.error(result?.error ?? "权限请求已失效");
+					return;
+				}
+				setQueue((items) => items.filter((item) => item.requestId !== event.requestId));
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : "权限响应发送失败");
+			} finally {
+				respondingRef.current = null;
+				setResponding(false);
+			}
 		},
-		[event, setEvent],
+		[event, setQueue],
 	);
 
 	// Auto-deny on timeout
 	useEffect(() => {
-		if (!open) return;
+		if (!event) return;
+		const delay = Math.max(0, event.expiresAt - Date.now());
 		timerRef.current = setTimeout(() => {
-			respond("deny");
-		}, TIMEOUT_MS);
+			void respond("deny");
+		}, delay);
 		return () => {
 			if (timerRef.current) clearTimeout(timerRef.current);
 		};
-	}, [open, respond]);
+	}, [event, respond]);
 
-	// Keyboard shortcuts
+	// Escape key to deny
 	useEffect(() => {
 		if (!open) return;
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Enter") respond("allow");
 			if (e.key === "Escape") respond("deny");
 		};
 		window.addEventListener("keydown", onKey);
@@ -66,7 +84,7 @@ export default function PermissionDialog() {
 	if (!event) return null;
 
 	return (
-		<Dialog open={open} onOpenChange={() => respond("deny")}>
+		<Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && void respond("deny")}>
 			<DialogContent className="max-w-md p-0" showCloseButton>
 				<DialogHeader className="px-4 pt-4 pb-0">
 					<div className="flex items-center gap-2">
@@ -74,7 +92,7 @@ export default function PermissionDialog() {
 						<DialogTitle className="text-[13px] font-semibold">工具调用确认</DialogTitle>
 					</div>
 					<DialogDescription className="text-[11px] text-muted-foreground">
-						Agent 需要执行写入操作，请确认是否允许
+						会话“{agentName}”请求执行受保护工具，请确认是否允许
 					</DialogDescription>
 				</DialogHeader>
 
@@ -96,27 +114,40 @@ export default function PermissionDialog() {
 					{/* Timeout warning */}
 					<p className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
 						<AlertTriangle className="size-3" />
-						30 秒内未操作将自动拒绝
+						30 秒内未操作将自动拒绝{queue.length > 1 ? ` · 另有 ${queue.length - 1} 个请求排队` : ""}
 					</p>
 				</div>
 
 				<DialogFooter className="flex-row justify-end gap-2 px-4 pb-4 pt-0">
-					<Button variant="line" size="sm" onClick={() => respond("deny")} className="h-8 text-[11px]">
+					<Button
+						disabled={responding}
+						variant="line"
+						size="sm"
+						onClick={() => void respond("deny")}
+						className="h-8 text-[11px]"
+					>
 						<X className="size-3" />
 						拒绝 (Esc)
 					</Button>
 					<Button
 						variant="line"
 						size="sm"
-						onClick={() => respond("allow_always")}
+						disabled={responding}
+						onClick={() => void respond("allow_always")}
 						className="h-8 text-[11px] text-emerald-600"
 					>
 						<Check className="size-3" />
-						始终允许
+						本会话始终允许此工具
 					</Button>
-					<Button variant="line-filled" size="sm" onClick={() => respond("allow")} className="h-8 text-[11px]">
+					<Button
+						disabled={responding}
+						variant="line-filled"
+						size="sm"
+						onClick={() => void respond("allow")}
+						className="h-8 text-[11px]"
+					>
 						<Check className="size-3" />
-						允许 (Enter)
+						允许
 					</Button>
 				</DialogFooter>
 			</DialogContent>

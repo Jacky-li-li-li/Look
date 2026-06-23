@@ -10,7 +10,6 @@
 
 import type {
 	MainToRendererEvent,
-	PermissionAskEvent,
 	PiContentBlock,
 	PiMessage,
 	PiTextBlock,
@@ -25,14 +24,17 @@ import {
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
+	emptyPlanQuestionDraft,
 	forkingEntryAtomFamily,
 	messagesAtomFamily,
 	navigatingEntryAtomFamily,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
-	permissionAskEventAtom,
-	permissionModeAtom,
+	permissionAskQueueAtom,
+	planApprovalRequestAtomFamily,
+	planQuestionDraftAtomFamily,
+	planQuestionRequestAtomFamily,
 	projectsAtom,
 	providerSettingsAtom,
 	queuesAtomFamily,
@@ -107,6 +109,10 @@ export function initIpcHandlers(api: any): () => void {
 					appStore.get(openedSessionIdsAtom).filter((id) => id !== event.agentId),
 				);
 				removeAgentAtoms(event.agentId);
+				appStore.set(
+					permissionAskQueueAtom,
+					appStore.get(permissionAskQueueAtom).filter((item) => item.agentId !== event.agentId),
+				);
 				break;
 			}
 
@@ -258,8 +264,53 @@ export function initIpcHandlers(api: any): () => void {
 
 			// ---- Permission events ----
 			case "permission:ask": {
-				const askEvent = (event as any).event as PermissionAskEvent;
-				if (askEvent) appStore.set(permissionAskEventAtom, askEvent);
+				const item = { ...event.event, agentId: event.agentId };
+				const queue = appStore.get(permissionAskQueueAtom);
+				if (!queue.some((pending) => pending.requestId === item.requestId)) {
+					appStore.set(permissionAskQueueAtom, [...queue, item]);
+				}
+				break;
+			}
+
+			case "permission:resolved": {
+				appStore.set(
+					permissionAskQueueAtom,
+					appStore.get(permissionAskQueueAtom).filter((item) => item.requestId !== event.requestId),
+				);
+				break;
+			}
+
+			case "plan:question-requested": {
+				appStore.set(planQuestionRequestAtomFamily(event.agentId), event.request);
+				const draft = appStore.get(planQuestionDraftAtomFamily(event.agentId));
+				if (draft.requestId !== event.request.requestId) {
+					appStore.set(planQuestionDraftAtomFamily(event.agentId), {
+						...emptyPlanQuestionDraft(),
+						requestId: event.request.requestId,
+					});
+				}
+				break;
+			}
+
+			case "plan:question-resolved": {
+				const current = appStore.get(planQuestionRequestAtomFamily(event.agentId));
+				if (current?.requestId === event.requestId) {
+					appStore.set(planQuestionRequestAtomFamily(event.agentId), null);
+					appStore.set(planQuestionDraftAtomFamily(event.agentId), emptyPlanQuestionDraft());
+				}
+				break;
+			}
+
+			case "plan:approval-requested": {
+				appStore.set(planApprovalRequestAtomFamily(event.agentId), event.request);
+				break;
+			}
+
+			case "plan:approval-resolved": {
+				const current = appStore.get(planApprovalRequestAtomFamily(event.agentId));
+				if (current?.requestId === event.requestId) {
+					appStore.set(planApprovalRequestAtomFamily(event.agentId), null);
+				}
 				break;
 			}
 
@@ -483,7 +534,6 @@ export async function initAppData(api: any): Promise<void> {
 		const settings = settingsResult.settings;
 		if (settings.language) await i18n.changeLanguage(settings.language);
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
-		if (settings.permissionMode) appStore.set(permissionModeAtom, settings.permissionMode);
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);

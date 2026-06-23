@@ -8,12 +8,12 @@ import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { Textarea } from "@shared/components/ui/textarea";
 import type { SessionStatus, ThinkingLevel } from "@shared/types";
-import { useAtomValue } from "jotai";
+import { useAtom } from "jotai";
 import { Puzzle, Search, Send, Square } from "lucide-react";
 import type React from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { permissionModeAtom } from "../store/atoms";
+import { permissionModeAtomFamily } from "../store/atoms";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
 import PermissionModeSelector from "./PermissionModeSelector";
@@ -58,9 +58,22 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	ref,
 ) {
 	const { t } = useTranslation();
-	const permissionMode = useAtomValue(permissionModeAtom);
+	const [permissionMode, setPermissionMode] = useAtom(permissionModeAtomFamily(agentId));
 	const [input, setInput] = useState("");
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+
+	useEffect(() => {
+		let cancelled = false;
+		window.look
+			.getPermissionMode(agentId)
+			.then((result) => {
+				if (!cancelled && result?.success && result.mode) setPermissionMode(result.mode);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [agentId, setPermissionMode]);
 
 	useImperativeHandle(ref, () => ({
 		getText: () => inputRef.current?.value ?? "",
@@ -398,7 +411,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 					availableThinkingLevels={availableThinkingLevels}
 					onChanged={onThinkingChange}
 				/>
-				<PermissionModeSelector currentMode={permissionMode} />
+				<PermissionModeSelector agentId={agentId} currentMode={permissionMode} />
 				<Popover open={toolsOpen} onOpenChange={setToolsOpen}>
 					<PopoverTrigger asChild>
 						<Button

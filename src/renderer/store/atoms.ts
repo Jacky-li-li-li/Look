@@ -1,8 +1,10 @@
 import type {
 	AgentInfo,
-	PermissionAskEvent,
+	PermissionAskQueueItem,
 	PermissionMode,
 	PiMessage,
+	PlanApprovalRequest,
+	PlanQuestionRequest,
 	ProjectInfo,
 	SessionTreeNode,
 } from "@shared/types";
@@ -86,9 +88,31 @@ export const userPreferredModelAtom = atom<string | null>(null);
 
 // ---- Permission management ----
 
-export const permissionModeAtom = atom<PermissionMode>("ask");
+export const permissionModeAtomFamily = atomFamily((_agentId: string) => atom<PermissionMode>("ask"));
 
-export const permissionAskEventAtom = atom<PermissionAskEvent | null>(null);
+export const permissionAskQueueAtom = atom<PermissionAskQueueItem[]>([]);
+
+export const planQuestionRequestAtomFamily = atomFamily((_agentId: string) => atom<PlanQuestionRequest | null>(null));
+
+export interface PlanQuestionDraft {
+	requestId: string | null;
+	selections: Record<string, string[]>;
+	otherEnabled: Record<string, boolean>;
+	otherValues: Record<string, string>;
+}
+
+export const emptyPlanQuestionDraft = (): PlanQuestionDraft => ({
+	requestId: null,
+	selections: {},
+	otherEnabled: {},
+	otherValues: {},
+});
+
+export const planQuestionDraftAtomFamily = atomFamily((_agentId: string) =>
+	atom<PlanQuestionDraft>(emptyPlanQuestionDraft()),
+);
+
+export const planApprovalRequestAtomFamily = atomFamily((_agentId: string) => atom<PlanApprovalRequest | null>(null));
 
 /**
  * Whether the active agent's chat panel is scrolled to the bottom.
@@ -163,4 +187,8 @@ export function removeAgentAtoms(agentId: string): void {
 	sessionLeafIdAtomFamily.remove(agentId);
 	navigatingEntryAtomFamily.remove(agentId);
 	forkingEntryAtomFamily.remove(agentId);
+	permissionModeAtomFamily.remove(agentId);
+	planQuestionRequestAtomFamily.remove(agentId);
+	planQuestionDraftAtomFamily.remove(agentId);
+	planApprovalRequestAtomFamily.remove(agentId);
 }

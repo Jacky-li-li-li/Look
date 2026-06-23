@@ -187,12 +187,16 @@ const api = {
     ipcRenderer.invoke("look:invoke", { type: "update:install" }),
 
   // ---- Permission management ----
-  setPermissionMode: (mode) =>
-    ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", mode }),
-  getPermissionMode: () =>
-    ipcRenderer.invoke("look:invoke", { type: "permission:get-mode" }),
+  setPermissionMode: (agentId, mode) =>
+    ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", agentId, mode }),
+  getPermissionMode: (agentId) =>
+    ipcRenderer.invoke("look:invoke", { type: "permission:get-mode", agentId }),
   respondPermission: (payload) =>
     ipcRenderer.invoke("look:invoke", { type: "permission:respond", payload }),
+  respondPlanQuestion: (payload) =>
+    ipcRenderer.invoke("look:invoke", { type: "plan:question-respond", payload }),
+  respondPlanApproval: (payload) =>
+    ipcRenderer.invoke("look:invoke", { type: "plan:approval-respond", payload }),
 
   // ---- User Profile ----
   getUserProfile: () =>

@@ -9,9 +9,8 @@ import type { PermissionMode } from "@shared/types";
 import { useSetAtom } from "jotai";
 import { Check, ChevronDown, Shield } from "lucide-react";
 import { useCallback, useState } from "react";
-import { permissionModeAtom } from "../store/atoms";
-
-const api = (window as any).look;
+import { toast } from "sonner";
+import { permissionModeAtomFamily } from "../store/atoms";
 
 interface ModeOption {
 	mode: PermissionMode;
@@ -36,8 +35,8 @@ const MODE_OPTIONS: ModeOption[] = [
 	{
 		mode: "plan",
 		label: "Plan",
-		labelZh: "仅规划",
-		description: "只产出 plan.md 文档，不修改项目代码",
+		labelZh: "规划后执行",
+		description: "只读探索、提问并提交计划；批准后执行",
 	},
 ];
 
@@ -48,11 +47,12 @@ const MODE_COLORS: Record<PermissionMode, string> = {
 };
 
 interface PermissionModeSelectorProps {
+	agentId: string;
 	currentMode: PermissionMode;
 }
 
-export default function PermissionModeSelector({ currentMode }: PermissionModeSelectorProps) {
-	const setMode = useSetAtom(permissionModeAtom);
+export default function PermissionModeSelector({ agentId, currentMode }: PermissionModeSelectorProps) {
+	const setMode = useSetAtom(permissionModeAtomFamily(agentId));
 	const [switching, setSwitching] = useState(false);
 
 	const current = MODE_OPTIONS.find((o) => o.mode === currentMode) ?? MODE_OPTIONS[0];
@@ -62,19 +62,16 @@ export default function PermissionModeSelector({ currentMode }: PermissionModeSe
 			if (mode === currentMode || switching) return;
 			setSwitching(true);
 			try {
-				if (api?.setPermissionMode) {
-					const result = await api.setPermissionMode(mode);
-					if (result?.success) {
-						setMode(mode);
-					}
-				}
-			} catch {
-				// IPC error — keep current mode
+				const result = await window.look.setPermissionMode(agentId, mode);
+				if (!result?.success) throw new Error(result?.error ?? "Permission mode switch failed");
+				setMode(mode);
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : "权限模式切换失败");
 			} finally {
 				setSwitching(false);
 			}
 		},
-		[currentMode, switching, setMode],
+		[agentId, currentMode, switching, setMode],
 	);
 
 	return (

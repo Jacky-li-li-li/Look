@@ -23,6 +23,8 @@ import LoginScreen from "./components/LoginScreen";
 import NewProjectDialog from "./components/NewProjectDialog";
 import PermissionDialog from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
+import PlanApprovalDialog from "./components/PlanApprovalDialog";
+import PlanQuestionDialog from "./components/PlanQuestionDialog";
 import SessionSheetBar from "./components/SessionSheetBar";
 import Sidebar from "./components/Sidebar";
 import SettingsDialog from "./components/settings/SettingsDialog";
@@ -477,6 +479,8 @@ export default function App() {
 						/>
 					)}
 					<PermissionDialog />
+					<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
+					<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 				</div>
 			</TooltipProvider>
 			<UpdateNotification />

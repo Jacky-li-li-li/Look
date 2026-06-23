@@ -65,6 +65,25 @@ interface LookAPI {
 		success: boolean;
 		tools?: Array<{ name: string; description: string; serverName: string }>;
 	}>;
+	setPermissionMode(
+		agentId: string,
+		mode: "always" | "ask" | "plan",
+	): Promise<{ success: boolean; mode?: "always" | "ask" | "plan"; error?: string }>;
+	getPermissionMode(agentId: string): Promise<{ success: boolean; mode?: "always" | "ask" | "plan"; error?: string }>;
+	respondPermission(payload: {
+		requestId: string;
+		action: "allow" | "deny" | "allow_always";
+	}): Promise<{ success: boolean; error?: string }>;
+	respondPlanQuestion(payload: {
+		requestId: string;
+		sessionId: string;
+		answers: Record<string, string>;
+	}): Promise<{ success: boolean; error?: string }>;
+	respondPlanApproval(payload: {
+		requestId: string;
+		sessionId: string;
+		action: "approve" | "reject";
+	}): Promise<{ success: boolean; error?: string }>;
 }
 
 interface SkillEntry {
@@ -86,6 +105,7 @@ interface GeneralSettings {
 	language: "en" | "zh" | "ja";
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
+	permissionMode: "always" | "ask" | "plan";
 	/** Most recent model the user picked in the bottom-bar ModelSelector.
 	 *  Used by quick-create to seed new chat agents with the user's
 	 *  current pick. null = "no preference" (main picks first available). */
@@ -93,6 +113,7 @@ interface GeneralSettings {
 	lastActiveSessionId: string;
 	lastActiveProjectId: string;
 	openProjectIds: string[];
+	openedSessionIds: string[];
 }
 
 declare global {

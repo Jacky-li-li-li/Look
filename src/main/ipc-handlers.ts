@@ -502,18 +502,48 @@ async function handleRendererInvoke(
 
 		// === Permission management ===
 		case "permission:set-mode": {
+			const sessionId = guardAgentId(data.agentId, "agentId");
 			const mode = guardEnum(data.mode, "mode", ["always", "ask", "plan"] as const) as PermissionMode;
-			await runtimeManager.setPermissionMode(mode);
+			await runtimeManager.setPermissionMode(sessionId, mode);
 			return { success: true, mode };
 		}
 
 		case "permission:get-mode": {
-			return { success: true, mode: runtimeManager.getPermissionMode() };
+			const sessionId = guardAgentId(data.agentId, "agentId");
+			return { success: true, mode: runtimeManager.getPermissionMode(sessionId) };
 		}
 
 		case "permission:respond": {
-			runtimeManager.handlePermissionResponse(data.payload);
-			return { success: true };
+			const payload = guardObject(data.payload, "payload");
+			const requestId = guardString(payload.requestId, "payload.requestId");
+			const action = guardEnum(payload.action, "payload.action", ["allow", "deny", "allow_always"] as const);
+			const accepted = runtimeManager.handlePermissionResponse({ requestId, action });
+			return { success: accepted, error: accepted ? undefined : "Permission request is no longer pending" };
+		}
+
+		case "plan:question-respond": {
+			const payload = guardObject(data.payload, "payload");
+			const requestId = guardString(payload.requestId, "payload.requestId");
+			const sessionId = guardAgentId(payload.sessionId, "payload.sessionId");
+			const rawAnswers = guardObject(payload.answers, "payload.answers");
+			const answers: Record<string, string> = Object.create(null);
+			for (const [question, answer] of Object.entries(rawAnswers)) {
+				answers[question] = guardString(answer, `payload.answers[${JSON.stringify(question)}]`);
+			}
+			const accepted = runtimeManager.handlePlanQuestionResponse({ requestId, sessionId, answers });
+			return {
+				success: accepted,
+				error: accepted ? undefined : "Plan question request is no longer pending or invalid",
+			};
+		}
+
+		case "plan:approval-respond": {
+			const payload = guardObject(data.payload, "payload");
+			const requestId = guardString(payload.requestId, "payload.requestId");
+			const sessionId = guardAgentId(payload.sessionId, "payload.sessionId");
+			const action = guardEnum(payload.action, "payload.action", ["approve", "reject"] as const);
+			const accepted = await runtimeManager.handlePlanApprovalResponse({ requestId, sessionId, action });
+			return { success: accepted, error: accepted ? undefined : "Plan approval request is no longer pending" };
 		}
 
 		default:

@@ -42,6 +42,11 @@ export interface PermissionAskEvent {
 	toolInput: Record<string, unknown>;
 	toolDescription: string;
 	requestId: string;
+	expiresAt: number;
+}
+
+export interface PermissionAskQueueItem extends PermissionAskEvent {
+	agentId: string;
 }
 
 /** Permission response — sent from renderer to main with user decision */
@@ -49,6 +54,44 @@ export interface PermissionRespondPayload {
 	requestId: string;
 	action: "allow" | "deny" | "allow_always";
 	editedInput?: Record<string, unknown>;
+}
+
+export interface PlanQuestionOption {
+	label: string;
+	description: string;
+}
+
+export interface PlanQuestion {
+	question: string;
+	header: string;
+	options: PlanQuestionOption[];
+	multiSelect?: boolean;
+}
+
+export interface PlanQuestionRequest {
+	requestId: string;
+	sessionId: string;
+	questions: PlanQuestion[];
+}
+
+export interface PlanQuestionResponse {
+	requestId: string;
+	sessionId: string;
+	answers: Record<string, string>;
+}
+
+export interface PlanApprovalRequest {
+	requestId: string;
+	planId: string;
+	sessionId: string;
+	plan: string;
+	filePath: string;
+}
+
+export interface PlanApprovalResponse {
+	requestId: string;
+	sessionId: string;
+	action: "approve" | "reject";
 }
 
 /** Token usage and cost snapshot */
@@ -331,6 +374,12 @@ export type MainToRendererEvent =
 	| { type: "error"; agentId?: string; message: string }
 	// ---- Permission events ----
 	| { type: "permission:ask"; agentId: string; event: PermissionAskEvent }
+	| { type: "permission:resolved"; agentId: string; requestId: string }
+	// ---- Plan interaction events ----
+	| { type: "plan:question-requested"; agentId: string; request: PlanQuestionRequest }
+	| { type: "plan:question-resolved"; agentId: string; requestId: string }
+	| { type: "plan:approval-requested"; agentId: string; request: PlanApprovalRequest }
+	| { type: "plan:approval-resolved"; agentId: string; requestId: string }
 	// ---- Project events ----
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
@@ -472,9 +521,11 @@ export type RendererToMainEvent =
 	| { type: "mcp:list-tools" }
 	| { type: "mcp:connect-all" }
 	// ---- Permission events (renderer → main) ----
-	| { type: "permission:set-mode"; mode: PermissionMode }
-	| { type: "permission:get-mode" }
-	| { type: "permission:respond"; payload: PermissionRespondPayload };
+	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
+	| { type: "permission:get-mode"; agentId: string }
+	| { type: "permission:respond"; payload: PermissionRespondPayload }
+	| { type: "plan:question-respond"; payload: PlanQuestionResponse }
+	| { type: "plan:approval-respond"; payload: PlanApprovalResponse };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {
