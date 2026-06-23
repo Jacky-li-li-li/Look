@@ -1,12 +1,12 @@
 // ============================================================
-// ChatInput — Textarea + Skill Slash Menu + Toolbar (Ink Wash)
+// ChatInput — ContentEditableInput + Skill Slash Menu + Toolbar
+//            (Ink Wash)
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@shared/components/ui/popover";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import { Textarea } from "@shared/components/ui/textarea";
 import type { SessionStatus, ThinkingLevel } from "@shared/types";
 import { useAtom } from "jotai";
 import { Puzzle, Search, Send, Square } from "lucide-react";
@@ -14,10 +14,10 @@ import type React from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { permissionModeAtomFamily } from "../store/atoms";
+import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
 import PermissionModeSelector from "./PermissionModeSelector";
-import SkillOverlaySegments from "./SkillOverlaySegments";
 import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
 import ThinkingSelector from "./ThinkingSelector";
 
@@ -59,8 +59,19 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 ) {
 	const { t } = useTranslation();
 	const [permissionMode, setPermissionMode] = useAtom(permissionModeAtomFamily(agentId));
-	const [input, setInput] = useState("");
-	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const [input, setInputState] = useState("");
+	const inputRef = useRef<ContentEditableInputHandle>(null);
+
+	// setInput is the single mutation entry-point: every
+	// programmatic change (slash menu pick, tools picker, send
+	// clear, branch-nav injection) flows through it so the
+	// React `input` state AND the contenteditable DOM stay in
+	// sync. User typing does NOT call this — the editor's
+	// onChange updates the state directly via the handler below.
+	const setInput = useCallback((text: string) => {
+		setInputState(text);
+		inputRef.current?.setText(text);
+	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -75,15 +86,17 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		};
 	}, [agentId, setPermissionMode]);
 
-	useImperativeHandle(ref, () => ({
-		getText: () => inputRef.current?.value ?? "",
-		setText: (text: string) => {
-			setInput(text);
-			// Also set the DOM value directly so the ref is always in sync
-			if (inputRef.current) inputRef.current.value = text;
-		},
-		focus: () => inputRef.current?.focus(),
-	}));
+	useImperativeHandle(
+		ref,
+		() => ({
+			getText: () => inputRef.current?.getText() ?? "",
+			setText: (text: string) => {
+				setInput(text);
+			},
+			focus: () => inputRef.current?.focus(),
+		}),
+		[setInput],
+	);
 
 	// ---- v0.3 skills: lazy-load + slash menu state ----
 	const [skills, setSkills] = useState<SkillEntry[]>([]);
@@ -170,7 +183,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 			const t = filteredMcpTools[index];
 			if (t) setInput(`mcp:${t.serverName}:${t.name} `);
 		},
-		[filteredMcpTools],
+		[filteredMcpTools, setInput],
 	);
 	// Compute pickable count so handleSlashMenuKey can wrap-around.
 	const visibleSkills = useMemo(() => skills.filter((s) => !s.disableModelInvocation), [skills]);
@@ -215,7 +228,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 				if (d) void importDetected(d);
 			}
 		},
-		[filteredSkills, importableDetected, importDetected],
+		[filteredSkills, importableDetected, importDetected, setInput],
 	);
 
 	// ---- Tools popover (manual skill / MCP picker) ----
@@ -250,26 +263,32 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		);
 	}, [mcpTools, toolsSearch]);
 
-	const handlePickSkill = useCallback((name: string) => {
-		setInput(`/skill:${name} `);
-		setToolsOpen(false);
-		setToolsSearch("");
-		inputRef.current?.focus();
-	}, []);
+	const handlePickSkill = useCallback(
+		(name: string) => {
+			setInput(`/skill:${name} `);
+			setToolsOpen(false);
+			setToolsSearch("");
+			inputRef.current?.focus();
+		},
+		[setInput],
+	);
 
-	const handlePickMcpTool = useCallback((serverName: string, toolName: string) => {
-		setInput(`mcp:${serverName}:${toolName} `);
-		setToolsOpen(false);
-		setToolsSearch("");
-		inputRef.current?.focus();
-	}, []);
+	const handlePickMcpTool = useCallback(
+		(serverName: string, toolName: string) => {
+			setInput(`mcp:${serverName}:${toolName} `);
+			setToolsOpen(false);
+			setToolsSearch("");
+			inputRef.current?.focus();
+		},
+		[setInput],
+	);
 
 	useEffect(() => {
 		inputRef.current?.focus();
 	}, []);
 
 	const handleSend = () => {
-		const text = input.trim();
+		const text = (inputRef.current?.getText() ?? "").trim();
 		if (!text) return;
 		onSend(text);
 		setInput("");
@@ -279,7 +298,16 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		onAbort?.();
 	};
 
-	const handleKeyDown = (e: React.KeyboardEvent) => {
+	const handleEditorChange = useCallback((text: string) => {
+		// User-driven edit (typing / paste / delete inside the
+		// editor). Update the React state only — the editor
+		// already mirrors the DOM. Programmatic setInput
+		// (commitSlashSelection, setText from outside, …) is a
+		// separate path that also re-renders the editor DOM.
+		setInputState(text);
+	}, []);
+
+	const handleEditorKeyDown = (e: React.KeyboardEvent) => {
 		// Slash (/) menu — skills
 		if (
 			slashOpen &&
@@ -318,6 +346,11 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		}
 
 		if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as KeyboardEvent).isComposing) {
+			// isComposing guard: when the user is in an IME
+			// candidate window (e.g. Chinese pinyin), Enter
+			// commits the candidate, not the editor.
+			// ContentEditableInput forwards the event to us
+			// during composition so we have to check here.
 			e.preventDefault();
 			handleSend();
 		}
@@ -379,26 +412,12 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 					</div>
 				)
 			) : null}
-			<div className="grid grid-cols-1 grid-rows-1">
-				{!slashOpen && input.length > 0 ? (
-					<div
-						aria-hidden
-						className="pointer-events-none col-start-1 row-start-1 overflow-hidden whitespace-pre-wrap break-words bg-transparent px-3 py-2.5 text-[13px] leading-relaxed text-transparent"
-					>
-						<SkillOverlaySegments content={input} />
-					</div>
-				) : null}
-				<Textarea
-					ref={inputRef}
-					value={input}
-					onChange={(e) => setInput(e.target.value)}
-					onKeyDown={handleKeyDown}
-					placeholder={isBusy ? `${t("chat.send")}… (Enter to queue)` : `${t("chat.placeholder")}`}
-					rows={2}
-					style={{ gridArea: "1 / 1" }}
-					className="min-h-16 resize-none rounded-none border-0 bg-transparent px-3 py-2.5 text-[13px] leading-relaxed shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:outline-0"
-				/>
-			</div>
+			<ContentEditableInput
+				ref={inputRef}
+				placeholder={isBusy ? `${t("chat.send")}… (Enter to queue)` : `${t("chat.placeholder")}`}
+				onChange={handleEditorChange}
+				onKeyDown={handleEditorKeyDown}
+			/>
 			<div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
 				<ModelSelector
 					agentId={agentId}

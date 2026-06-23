@@ -46,7 +46,7 @@ export function SkillAwareContent({ content, isStreaming }: SkillAwareContentPro
 						<StreamingMarkdown key={`t-${i}`} content={seg.value} isStreaming={isStreaming ?? false} inline />
 					);
 				}
-				return <SkillTag key={`s-${seg.name}-${i}`} name={seg.name} variant="static" />;
+				return <SkillTag key={`s-${seg.name}-${i}`} name={seg.name} />;
 			})}
 		</div>
 	);
