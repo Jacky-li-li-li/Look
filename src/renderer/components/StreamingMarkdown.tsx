@@ -31,12 +31,15 @@ function autoCloseCodeFences(text: string): string {
 
 import { Check, Copy } from "lucide-react";
 import type React from "react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useThrottle } from "../hooks/useThrottle";
 import { getCachedHighlighter } from "../lib/highlighter";
 import MermaidBlock from "./MermaidBlock";
+
+/** Context so deeply-nested ShikiCodeBlock knows whether the parent is streaming. */
+const StreamingContext = createContext(false);
 
 interface StreamingMarkdownProps {
 	content: string;
@@ -57,6 +60,7 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({
 	language: string;
 	children: React.ReactNode;
 }) {
+	const isStreaming = useContext(StreamingContext);
 	const [copied, setCopied] = useState(false);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const code = String(children).replace(/\n$/, "");
@@ -66,6 +70,7 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({
 	// hook profiling overhead in dev mode. Highlighter is preloaded at app
 	// startup so getCachedHighlighter() is always non-null after first paint.
 	const html = useMemo(() => {
+		if (isStreaming) return null;
 		const h = getCachedHighlighter();
 		if (!h) return null;
 		const safeLang = h.getLoadedLanguages().includes(lang) ? lang : "text";
@@ -74,7 +79,7 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({
 		} catch {
 			return null;
 		}
-	}, [code, lang]);
+	}, [code, lang, isStreaming]);
 
 	useEffect(() => () => clearTimeout(timerRef.current), []);
 
@@ -255,7 +260,7 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 	className,
 	inline = false,
 }: StreamingMarkdownProps) {
-	const throttledContent = useThrottle(content, 80, isStreaming);
+	const throttledContent = useThrottle(content, 16, isStreaming);
 
 	// Pick the pre-built component map — zero allocation per instance.
 	const components = inline ? COMPONENTS_INLINE : COMPONENTS_BLOCK;
@@ -269,11 +274,12 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 	const displayContent = autoCloseCodeFences(throttledContent);
 
 	const markdown = (
-		<ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
-			{displayContent}
-		</ReactMarkdown>
+		<StreamingContext.Provider value={isStreaming}>
+			<ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+				{displayContent}
+			</ReactMarkdown>
+		</StreamingContext.Provider>
 	);
-
 	if (inline) {
 		return <span className={cn("contents", className)}>{markdown}</span>;
 	}

@@ -2,13 +2,13 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
-import type { SessionEntry } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Check, ChevronDown, Copy, GitBranch, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { toast } from "sonner";
+import { buildTimeline, type TimelineItem } from "../lib/timeline";
 import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
@@ -33,14 +33,6 @@ interface ChatMessageListProps {
 	isBusy: boolean;
 	inputRef: React.RefObject<ChatInputHandle | null>;
 	onSend: (text: string) => Promise<boolean>;
-}
-
-interface TimelineItem {
-	id: string;
-	entryId?: string;
-	message?: AgentMessage;
-	entry?: Exclude<SessionEntry, { type: "message" }>;
-	isLive: boolean;
 }
 
 function fmtTokens(n: number): string {
@@ -81,20 +73,10 @@ const ChatMessageList = memo(function ChatMessageList({
 	onSend,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
-	const timeline = useMemo<TimelineItem[]>(() => {
-		const persisted = sessionState.entries.flatMap<TimelineItem>((entry) => {
-			if (entry.type === "message")
-				return [{ id: entry.id, entryId: entry.id, message: entry.message, isLive: false }];
-			if (entry.type === "custom_message" && !entry.display) return [];
-			return [{ id: entry.id, entryId: entry.id, entry, isLive: false }];
-		});
-		const live = sessionState.liveMessages.map<TimelineItem>((item) => ({
-			id: item.renderId,
-			message: item.message,
-			isLive: true,
-		}));
-		return [...persisted, ...live];
-	}, [sessionState.entries, sessionState.liveMessages]);
+	const timeline = useMemo<TimelineItem[]>(
+		() => buildTimeline(sessionState.entries, sessionState.liveMessages),
+		[sessionState.entries, sessionState.liveMessages],
+	);
 
 	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
 	const forkingEntry = useAtomValue(forkingEntryAtomFamily(agentId));
@@ -282,6 +264,8 @@ const ChatMessageList = memo(function ChatMessageList({
 										}
 										autoCollapse={autoCollapse}
 										toolExecutions={sessionState.toolExecutions}
+										toolResultMap={item.toolResultMap}
+										turnDurationMs={sessionState.turnDurationMs}
 										isActiveLeaf={Boolean(entryId && entryId === sessionState.leafId)}
 										flash={flashEntryId === item.id}
 									/>

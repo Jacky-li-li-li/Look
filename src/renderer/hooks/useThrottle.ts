@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
  * the output every `intervalMs` milliseconds, then flushes on completion.
  *
  * Strategy:
- *   streaming=true  → throttle updates (e.g., every 80ms)
+ *   streaming=true  → throttle at display refresh rate (every 16ms ≈ 60fps)
  *   streaming=false → update immediately (final render)
  */
 export function useThrottle<T>(value: T, intervalMs: number, isStreaming: boolean): T {

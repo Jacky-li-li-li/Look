@@ -27,6 +27,8 @@ export interface RendererSessionState {
 	leafId: string | null;
 	currentRunId: number;
 	currentMessageRenderId: string | null;
+	turnStartedAt: number;
+	turnDurationMs: number | null;
 }
 
 export const emptyRendererSessionState = (): RendererSessionState => ({
@@ -37,6 +39,8 @@ export const emptyRendererSessionState = (): RendererSessionState => ({
 	leafId: null,
 	currentRunId: 0,
 	currentMessageRenderId: null,
+	turnStartedAt: 0,
+	turnDurationMs: null,
 });
 
 export type RendererSessionPhase = "idle" | "thinking" | "working" | "retrying" | "compacting";

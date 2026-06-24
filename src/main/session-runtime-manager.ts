@@ -37,11 +37,11 @@ import { McpManager } from "./mcp/mcp-manager.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
 import {
 	ensureLookDir,
+	ensureWorkspaceDir,
 	getAuthPath,
 	getLookDir,
 	getModelsPath,
 	getProjectsIndexPath,
-	getSessionsDir,
 	getUiSettingsPath,
 	resetLegacySessionsOnce,
 } from "./shared/look-storage.js";
@@ -360,7 +360,7 @@ export class SessionRuntimeManager {
 	private async refreshProjectSessions(projectId: string): Promise<StoredSession[]> {
 		const project = this.projects.get(projectId);
 		if (!project?.valid) return [];
-		const sessions = (await SessionManager.list(project.cwd, getSessionsDir())).map((session) => ({
+		const sessions = (await SessionManager.list(project.cwd, ensureWorkspaceDir(project.name))).map((session) => ({
 			...session,
 			projectId,
 		}));
@@ -652,7 +652,7 @@ export class SessionRuntimeManager {
 
 		const managed = await this.createManagedRuntime(
 			project.cwd,
-			SessionManager.create(project.cwd, getSessionsDir()),
+			SessionManager.create(project.cwd, ensureWorkspaceDir(project.name)),
 			projectId,
 		);
 		const session = managed.runtime.session;

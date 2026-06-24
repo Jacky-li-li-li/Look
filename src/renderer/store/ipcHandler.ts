@@ -100,6 +100,8 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 			appStore.set(atom, {
 				...previous,
 				currentRunId: previous.currentRunId + 1,
+				turnStartedAt: previous.turnStartedAt || Date.now(),
+				turnDurationMs: null,
 				runtime: previous.runtime ? { ...previous.runtime, isStreaming: true } : null,
 			});
 			updateAgentRuntime(sessionId, { isStreaming: true });
@@ -115,6 +117,10 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 					sessionId,
 				]);
 			}
+			appStore.set(atom, {
+				...appStore.get(atom),
+				turnDurationMs: previous.turnStartedAt ? Date.now() - previous.turnStartedAt : null,
+			});
 			updateAgentRuntime(sessionId, { isStreaming: false, isRetrying: event.willRetry });
 			break;
 		case "message_start": {
@@ -122,6 +128,8 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 			appStore.set(atom, {
 				...previous,
 				currentMessageRenderId: renderId,
+				turnStartedAt: event.message.role === "user" ? 0 : previous.turnStartedAt,
+				turnDurationMs: event.message.role === "user" ? null : previous.turnDurationMs,
 				liveMessages: [
 					...previous.liveMessages,
 					{ renderId, runId: previous.currentRunId, message: event.message, completed: false },

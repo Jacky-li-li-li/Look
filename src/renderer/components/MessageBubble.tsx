@@ -1,5 +1,12 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, ImageContent, TextContent, ThinkingContent, ToolCall } from "@earendil-works/pi-ai";
+import type {
+	AssistantMessage,
+	ImageContent,
+	TextContent,
+	ThinkingContent,
+	ToolCall,
+	ToolResultMessage,
+} from "@earendil-works/pi-ai";
 import { cn } from "@shared/lib/utils";
 import type { SessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
@@ -20,6 +27,8 @@ interface MessageBubbleProps {
 	isStreaming?: boolean;
 	autoCollapse: boolean;
 	toolExecutions: Record<string, RendererToolExecutionState>;
+	toolResultMap?: Record<string, ToolResultMessage>;
+	turnDurationMs?: number | null;
 	isActiveLeaf?: boolean;
 	flash?: boolean;
 }
@@ -51,16 +60,49 @@ function ImageBlock({ block }: { block: ImageContent }) {
 	);
 }
 
+function MessageHeader({
+	sender,
+	timestamp,
+	isStreaming,
+	isActiveLeaf,
+	isUser,
+}: {
+	sender: string;
+	timestamp: number;
+	isStreaming: boolean;
+	isActiveLeaf: boolean;
+	isUser: boolean;
+}) {
+	const { t } = useTranslation();
+	return (
+		<div className={cn("mb-1 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
+			<span className="font-medium uppercase tracking-wider">{sender}</span>
+			<span className="tabular-nums" title={new Date(timestamp).toLocaleString()}>
+				{formatMessageTime(timestamp)}
+			</span>
+			{isStreaming && <span className="status-mark" data-status="thinking" />}
+			{isActiveLeaf && (
+				<span className="inline-flex items-center gap-0.5 rounded-sm border border-hairline px-1 py-px text-[9px] font-medium uppercase tracking-wider text-muted-foreground/80">
+					<MapPin className="size-2.5" />
+					{t("chat.activeLeaf")}
+				</span>
+			)}
+		</div>
+	);
+}
+
 function ContentBlocks({
 	blocks,
 	isStreaming,
 	autoCollapse,
 	toolExecutions,
+	toolResultMap,
 }: {
 	blocks: Array<TextContent | ThinkingContent | ImageContent | ToolCall>;
 	isStreaming: boolean;
 	autoCollapse: boolean;
 	toolExecutions: Record<string, RendererToolExecutionState>;
+	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
 	return (
 		<div className="flex flex-col gap-2">
@@ -85,14 +127,26 @@ function ContentBlocks({
 					);
 				}
 				if (block.type === "image") return <ImageBlock key={`image-${index}`} block={block} />;
+
 				const execution = toolExecutions[block.id];
+				const persistedResult = toolResultMap?.[block.id];
+
 				const status = execution
 					? execution.phase === "running"
 						? "running"
 						: execution.isError
 							? "error"
 							: "success"
-					: "pending";
+					: persistedResult
+						? persistedResult.isError
+							? "error"
+							: "success"
+						: "pending";
+
+				const result = execution
+					? resultText(execution.result ?? execution.partialResult)
+					: resultText(persistedResult?.content);
+
 				return (
 					<ToolCallCard
 						key={block.id || `tool-${index}`}
@@ -101,8 +155,8 @@ function ContentBlocks({
 							toolName: block.name,
 							args: block.arguments,
 							status,
-							result: resultText(execution?.result ?? execution?.partialResult),
-							isError: execution?.isError,
+							result,
+							isError: execution?.isError ?? persistedResult?.isError,
 						}}
 					/>
 				);
@@ -113,7 +167,7 @@ function ContentBlocks({
 
 function messageBlocks(message: AgentMessage): Array<TextContent | ThinkingContent | ImageContent | ToolCall> {
 	if (message.role === "assistant") return [...message.content];
-	if (message.role === "user" || message.role === "toolResult") {
+	if (message.role === "user") {
 		return typeof message.content === "string" ? [{ type: "text", text: message.content }] : [...message.content];
 	}
 	if (message.role === "custom") {
@@ -134,6 +188,8 @@ const MessageBubble = memo(function MessageBubble({
 	isStreaming = false,
 	autoCollapse,
 	toolExecutions,
+	toolResultMap,
+	turnDurationMs,
 	isActiveLeaf = false,
 	flash = false,
 }: MessageBubbleProps) {
@@ -141,22 +197,19 @@ const MessageBubble = memo(function MessageBubble({
 	const userProfile = useAtomValue(userProfileAtom);
 	const isUser = message.role === "user";
 	const assistant = message.role === "assistant" ? (message as AssistantMessage) : null;
-	const toolResult = message.role === "toolResult" ? message : null;
 	const timestamp = "timestamp" in message ? message.timestamp : Date.now();
 	const sender = isUser
 		? userProfile.userName || t("chat.you")
-		: message.role === "toolResult"
-			? message.toolName
-			: message.role === "custom"
-				? message.customType
-				: message.role === "bashExecution"
-					? "bash"
-					: (agentName ?? t("chat.agent"));
+		: message.role === "custom"
+			? message.customType
+			: message.role === "bashExecution"
+				? "bash"
+				: (agentName ?? t("chat.agent"));
 
 	return (
 		<div
 			className={cn("flex gap-3", isUser && "flex-row-reverse self-end")}
-			style={{ maxWidth: isUser ? "80%" : "92%" }}
+			style={{ maxWidth: isUser ? "90%" : "98%" }}
 		>
 			{isUser ? (
 				<UserAvatar avatar={userProfile.avatar} size="sm" className="mt-0.5" />
@@ -164,25 +217,17 @@ const MessageBubble = memo(function MessageBubble({
 				<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
 			)}
 			<div className="min-w-0 flex-1">
-				<div
-					className={cn("mb-1 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}
-				>
-					<span className="font-medium uppercase tracking-wider">{sender}</span>
-					<span className="tabular-nums" title={new Date(timestamp).toLocaleString()}>
-						{formatMessageTime(timestamp)}
-					</span>
-					{isStreaming && <span className="status-mark" data-status="thinking" />}
-					{assistant && isActiveLeaf && (
-						<span className="inline-flex items-center gap-0.5 rounded-sm border border-hairline px-1 py-px text-[9px] font-medium uppercase tracking-wider text-muted-foreground/80">
-							<MapPin className="size-2.5" />
-							{t("chat.activeLeaf")}
-						</span>
-					)}
-				</div>
+				<MessageHeader
+					sender={sender}
+					timestamp={timestamp}
+					isStreaming={isStreaming}
+					isActiveLeaf={isActiveLeaf}
+					isUser={isUser}
+				/>
 				<div
 					className={cn(
-						"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
-						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant max-w-[85%]",
+						"whisper-bubble flex flex-col gap-2 text-[13px] leading-relaxed",
+						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant w-full",
 						assistant && isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
 						flash && "bubble-flash",
 					)}
@@ -192,6 +237,7 @@ const MessageBubble = memo(function MessageBubble({
 						isStreaming={isStreaming}
 						autoCollapse={autoCollapse}
 						toolExecutions={toolExecutions}
+						toolResultMap={toolResultMap}
 					/>
 					{assistant?.errorMessage && <div className="text-destructive">{assistant.errorMessage}</div>}
 					{assistant && assistant.stopReason !== "stop" && assistant.stopReason !== "toolUse" && (
@@ -201,33 +247,23 @@ const MessageBubble = memo(function MessageBubble({
 					)}
 					{assistant && (
 						<div className="flex flex-wrap gap-x-2 text-[9px] text-muted-foreground/60">
-							<span>{assistant.provider}</span>
 							<span>{assistant.model}</span>
-							<span>{assistant.api}</span>
+							{turnDurationMs != null && turnDurationMs > 0 && (
+								<span>
+									{" · "}
+									{turnDurationMs >= 60_000
+										? `${(turnDurationMs / 60_000).toFixed(1)}m`
+										: `${(turnDurationMs / 1_000).toFixed(1)}s`}
+								</span>
+							)}
 							{assistant.responseModel && assistant.responseModel !== assistant.model && (
-								<span>response: {assistant.responseModel}</span>
+								<span>→ {assistant.responseModel}</span>
 							)}
 							{assistant.diagnostics && assistant.diagnostics.length > 0 && (
 								<details className="basis-full">
 									<summary className="cursor-pointer">diagnostics ({assistant.diagnostics.length})</summary>
 									<pre className="mt-1 overflow-x-auto whitespace-pre-wrap">
 										{JSON.stringify(assistant.diagnostics, null, 2)}
-									</pre>
-								</details>
-							)}
-						</div>
-					)}
-					{toolResult && (
-						<div className={cn("text-[9px] text-muted-foreground/60", toolResult.isError && "text-destructive")}>
-							<div>
-								{toolResult.toolName} · {toolResult.toolCallId}
-								{toolResult.isError ? " · error" : ""}
-							</div>
-							{toolResult.details !== undefined && (
-								<details>
-									<summary className="cursor-pointer">details</summary>
-									<pre className="mt-1 overflow-x-auto whitespace-pre-wrap">
-										{resultText(toolResult.details)}
 									</pre>
 								</details>
 							)}

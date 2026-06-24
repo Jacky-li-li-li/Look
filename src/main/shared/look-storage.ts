@@ -9,8 +9,16 @@
 //   ├── projects.json     → Project index: [{ id, name, cwd }]
 //   ├── auth.json         → pi AuthStorage
 //   ├── models.json       → pi ModelRegistry
-//   ├── settings.json     → User preferences
-//   └── sessions/         → pi SessionManager auto-manages .jsonl files
+//   ├── settings.json     → pi SettingsManager
+//   ├── ui-settings.json  → Look UI preferences
+//   ├── user-profile.json → User profile
+//   ├── mcp-servers.json  → MCP server configs
+//   └── workspaces/
+//       ├── pi/           → project "pi" (derived from cwd basename)
+//       │   └── sessions/ → pi SessionManager .jsonl files
+//       ├── my-app/
+//       │   └── sessions/
+//       └── ...
 // ============================================================
 
 import fs from "fs";
@@ -50,9 +58,7 @@ export function getSettingsPath(): string {
 	return path.join(LOOK_DIR, "settings.json");
 }
 
-/** Look-only UI preferences (language, auto-collapse, auto-compress,
- *  compress threshold) — fields the SDK's settings schema doesn't
- *  carry. Persisted by `UserSettingsStore` itself, not the SDK. */
+/** Look-only UI preferences (language, auto-collapse, etc.) */
 export function getUiSettingsPath(): string {
 	return path.join(LOOK_DIR, "ui-settings.json");
 }
@@ -62,20 +68,64 @@ export function getUserProfilePath(): string {
 	return path.join(LOOK_DIR, "user-profile.json");
 }
 
-/** pi SDK session files directory */
-export function getSessionsDir(): string {
-	return path.join(LOOK_DIR, "sessions");
-}
-
 /** MCP server configurations */
 export function getMcpServersPath(): string {
 	return path.join(LOOK_DIR, "mcp-servers.json");
 }
 
+// ── Workspace-per-project session storage ──
+
+/** Root directory for project-workspace session storage. */
+export function getWorkspacesDir(): string {
+	return path.join(LOOK_DIR, "workspaces");
+}
+
+/**
+ * Sanitise a project name for use as a directory name.
+ * Replaces characters that are problematic on common file systems.
+ */
+export function sanitiseWorkspaceName(name: string): string {
+	return (
+		name
+			.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+			.replace(/^-+|-+$/g, "")
+			.replace(/\.$/g, "-")
+			.slice(0, 120) || "untitled"
+	);
+}
+
+/** Workspace directory for a specific project. */
+export function getWorkspaceDir(name: string): string {
+	return path.join(getWorkspacesDir(), sanitiseWorkspaceName(name));
+}
+
+/** Session storage directory for a specific project. */
+export function getWorkspaceSessionsDir(name: string): string {
+	return path.join(getWorkspaceDir(name), "sessions");
+}
+
+/**
+ * Deprecated — legacy flat sessions directory kept for resetLegacySessionsOnce.
+ * New sessions use getWorkspaceSessionsDir(projectName).
+ */
+export function getSessionsDir(): string {
+	return path.join(LOOK_DIR, "sessions");
+}
+
 // ── Initialization ──
 
 export function ensureLookDir(): void {
+	fs.mkdirSync(getWorkspacesDir(), { recursive: true });
 	fs.mkdirSync(getSessionsDir(), { recursive: true });
+}
+
+/**
+ * Ensure the workspace directories for a project exist.
+ */
+export function ensureWorkspaceDir(name: string): string {
+	const dir = getWorkspaceSessionsDir(name);
+	fs.mkdirSync(dir, { recursive: true });
+	return dir;
 }
 
 /**
@@ -85,11 +135,14 @@ export function ensureLookDir(): void {
 export function resetLegacySessionsOnce(lookDir = LOOK_DIR): void {
 	const marker = path.join(lookDir, ".sdk-message-reset-v1");
 	const sessionsDir = path.join(lookDir, "sessions");
+	const workspacesDir = path.join(lookDir, "workspaces");
 	const uiSettingsPath = path.join(lookDir, "ui-settings.json");
 	if (fs.existsSync(marker)) return;
 	fs.mkdirSync(lookDir, { recursive: true });
 	fs.rmSync(sessionsDir, { recursive: true, force: true });
 	fs.mkdirSync(sessionsDir, { recursive: true });
+	fs.rmSync(workspacesDir, { recursive: true, force: true });
+	fs.mkdirSync(workspacesDir, { recursive: true });
 
 	if (fs.existsSync(uiSettingsPath)) {
 		const parsed = JSON.parse(fs.readFileSync(uiSettingsPath, "utf8"));
