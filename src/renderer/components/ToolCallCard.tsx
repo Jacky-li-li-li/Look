@@ -6,14 +6,22 @@
 
 import { Badge } from "@shared/components/ui/badge";
 import { cn } from "@shared/lib/utils";
-import type { ToolCallRecord } from "@shared/types";
 import { Check, ChevronRight, Loader2, Wrench, X } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { scheduleCollapse } from "../lib/batchCollapse";
 
+export interface ToolCallViewModel {
+	callId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result?: string;
+	isError?: boolean;
+	status: "pending" | "running" | "success" | "error";
+}
+
 interface ToolCallCardProps {
-	toolCall: ToolCallRecord;
+	toolCall: ToolCallViewModel;
 }
 
 /** Threshold: tool result text longer than this shows a summary + "show more" button */
@@ -44,7 +52,7 @@ function argStr(args: Record<string, unknown>, ...keys: string[]): string {
  * count. Built from `args`, so it is available in every status
  * (pending/running/success/error). Returns "" to fall back to argsPreview.
  */
-function formatToolSummary(toolCall: ToolCallRecord): string {
+function formatToolSummary(toolCall: ToolCallViewModel): string {
 	const a = toolCall.args ?? {};
 	switch (toolCall.toolName) {
 		case "bash": {
@@ -86,7 +94,7 @@ function formatToolSummary(toolCall: ToolCallRecord): string {
  * Returns "" when there is nothing meaningful to show.
  */
 function formatStatSuffix(
-	toolCall: ToolCallRecord,
+	toolCall: ToolCallViewModel,
 	t: (key: string, vars?: Record<string, string | number>) => string,
 ): string {
 	const { toolName, result, status } = toolCall;
@@ -232,7 +240,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	);
 }
 
-function StatusIcon({ status }: { status: ToolCallRecord["status"] }) {
+function StatusIcon({ status }: { status: ToolCallViewModel["status"] }) {
 	if (status === "success")
 		return (
 			<span className="text-emerald-500">

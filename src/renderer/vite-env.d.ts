@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+import type { AgentInfo, ImageContent } from "@shared/types";
+
 /**
  * The Look IPC surface injected by preload.js.
  *
@@ -13,17 +15,23 @@ interface LookAPI {
 	send(event: any): void;
 	invoke(event: any): Promise<any>;
 	onEvent(callback: (event: any) => void): () => void;
-	sendMessage(agentId: string, message: string): Promise<any>;
+	sendMessage(agentId: string, message: string, images?: ImageContent[]): Promise<any>;
 	activateSession(sessionId: string): Promise<any>;
 	createAgent(name?: string | { name?: string; projectId?: string }): Promise<any>;
 	destroyAgent(agentId: string): Promise<any>;
-	getHistory(agentId: string): Promise<any>;
 	getModels(): Promise<any>;
 	getProviders(): Promise<any>;
 	getAgents(): Promise<{ success: boolean; agents?: AgentInfo[]; error?: string }>;
 	switchModel(agentId: string, model: string): Promise<any>;
 	updateThinking(agentId: string, level: string): Promise<any>;
 	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
+	compressSession(agentId: string): Promise<any>;
+	navigateTree(
+		agentId: string,
+		entryId: string,
+		options?: { summarize?: boolean; customInstructions?: string; label?: string },
+	): Promise<any>;
+	createFork(agentId: string, entryId: string, options?: { name?: string }): Promise<any>;
 	openDirectoryDialog(
 		title?: string,
 	): Promise<{ success: boolean; path?: string; canceled?: boolean; error?: string }>;
@@ -123,5 +131,3 @@ declare global {
 		look: LookAPI;
 	}
 }
-
-export {};

@@ -32,11 +32,13 @@ describe("pi runtime architecture regressions", () => {
 		expect(existsSync(resolve(root, "src/main/agents/roles.ts"))).toBe(false);
 	});
 
-	it("4. distinguishes transport stream IDs from persisted SessionManager entry IDs", () => {
-		expect(runtime).toContain("streamId: string | null");
-		expect(runtime).toContain("managed.streamId = `stream:${sessionId}:${++managed.streamSequence}`");
-		expect(runtime).toContain("convertPiMessage(entry.message, sessionId, entry.id)");
-		expect(types).toContain("interface PiStreamMessage");
+	it("4. transports SDK events and SessionManager entries without a message mirror", () => {
+		expect(runtime).toContain('type: "session:sdk-event"');
+		expect(runtime).toContain("event,");
+		expect(runtime).toContain("entries: session.sessionManager.getBranch()");
+		expect(runtime).not.toContain("streamId");
+		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
+		expect(existsSync(resolve(root, "src/main/shared/message-convert.ts"))).toBe(false);
 	});
 
 	it("5. has pi SDK-aligned permission extension (no old gate)", () => {
@@ -58,7 +60,14 @@ describe("pi runtime architecture regressions", () => {
 	it("6. rebuilds history from SessionManager after tree navigation", () => {
 		expect(runtime).toContain("session.navigateTree(entryId, opts)");
 		expect(runtime).toContain("this.emitSessionState(sessionId)");
-		expect(runtime).not.toContain("messages: PiMessage[];");
+	});
+
+	it("6b. creates parallel forks through an independent SessionManager", () => {
+		expect(runtime).toContain("SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir())");
+		expect(runtime).toContain("forkManager.createBranchedSession(entryId)");
+		expect(runtime).not.toContain("sourceSession.sessionManager.createBranchedSession");
+		expect(runtime).not.toContain("managed.runtime.fork(");
+		expect(runtime).toContain('reason: "fork", previousSessionFile: sourceFile');
 	});
 
 	it("7. binds extensions after every runtime replacement", () => {

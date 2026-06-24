@@ -37,6 +37,7 @@ import {
 	projectsAtom,
 	recentlyCompletedAtom,
 	runningAgentsAtom,
+	sessionPhasesAtom,
 	sidebarCollapsedAtom,
 } from "../store/atoms";
 import { userProfileAtom } from "../store/authAtoms";
@@ -87,6 +88,7 @@ export default function Sidebar({
 	const activeProjectId = useAtomValue(activeProjectIdAtom);
 	const recentlyCompleted = useAtomValue(recentlyCompletedAtom);
 	const runningAgents = useAtomValue(runningAgentsAtom);
+	const sessionPhases = useAtomValue(sessionPhasesAtom);
 	const activeChatAtBottom = useAtomValue(activeChatAtBottomAtom);
 	const userProfile = useAtomValue(userProfileAtom);
 	const collapsed = useAtomValue(sidebarCollapsedAtom);
@@ -380,13 +382,14 @@ export default function Sidebar({
 										{sessions.map((agent) => {
 											const isActive = agent.id === activeAgentId;
 											const isRunning = runningAgents.has(agent.id);
+											const phase = sessionPhases.get(agent.id) ?? "idle";
 											const isCompleted =
 												recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom);
 											return (
 												<div
 													key={agent.id}
 													data-agent-id={agent.id}
-													data-agent-status={agent.status}
+													data-agent-status={phase}
 													data-running={isRunning || undefined}
 													data-completed={isCompleted ? "" : undefined}
 													data-active={isActive || undefined}
@@ -398,7 +401,7 @@ export default function Sidebar({
 														onClick={() => selectSession(agent)}
 														onDoubleClick={() => beginEdit("session", agent.id, agent.name)}
 													>
-														<span className="status-mark" data-status={agent.status} />
+														<span className="status-mark" data-status={phase} />
 														<span className="min-w-0 flex-1">
 															{editingSessionId === agent.id ? (
 																<input
@@ -417,7 +420,7 @@ export default function Sidebar({
 															)}
 															<span className="block truncate font-mono text-[8.5px] leading-tight text-muted-foreground/50">
 																{isRunning
-																	? t(`session.status.${agent.status}`, agent.status)
+																	? t(`session.status.${phase}`, phase)
 																	: agent.model ||
 																		(agent.sessionFilePath
 																			? t("session.messageCount", {

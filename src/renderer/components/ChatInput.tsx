@@ -7,7 +7,7 @@ import { Button } from "@shared/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@shared/components/ui/popover";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import type { SessionStatus, ThinkingLevel } from "@shared/types";
+import type { ThinkingLevel } from "@shared/types";
 import { useAtom } from "jotai";
 import { Puzzle, Search, Send, Square } from "lucide-react";
 import type React from "react";
@@ -29,12 +29,11 @@ export interface ChatInputHandle {
 
 interface ChatInputProps {
 	agentId: string;
-	agentStatus: SessionStatus;
 	currentModel: string;
 	currentThinking: string;
 	availableThinkingLevels?: ThinkingLevel[];
 	isBusy: boolean;
-	onSend: (text: string) => void;
+	onSend: (text: string) => Promise<boolean>;
 	onThinkingChange: (level: string) => void;
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
@@ -44,7 +43,6 @@ interface ChatInputProps {
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
 	{
 		agentId,
-		agentStatus,
 		currentModel,
 		currentThinking,
 		availableThinkingLevels,
@@ -287,11 +285,10 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		inputRef.current?.focus();
 	}, []);
 
-	const handleSend = () => {
+	const handleSend = async () => {
 		const text = (inputRef.current?.getText() ?? "").trim();
 		if (!text) return;
-		onSend(text);
-		setInput("");
+		if (await onSend(text)) setInput("");
 	};
 
 	const handleAbort = () => {
@@ -352,7 +349,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 			// ContentEditableInput forwards the event to us
 			// during composition so we have to check here.
 			e.preventDefault();
-			handleSend();
+			void handleSend();
 		}
 	};
 
@@ -561,7 +558,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 						<Button
 							variant={input.trim() ? "line-filled" : "line"}
 							size="icon-sm"
-							onClick={handleSend}
+							onClick={() => void handleSend()}
 							disabled={!input.trim()}
 							aria-label={t("chat.send")}
 						>
@@ -572,7 +569,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 					<Button
 						variant={input.trim() ? "line-filled" : "line"}
 						size="icon-sm"
-						onClick={handleSend}
+						onClick={() => void handleSend()}
 						disabled={!input.trim()}
 						aria-label={t("chat.send")}
 					>

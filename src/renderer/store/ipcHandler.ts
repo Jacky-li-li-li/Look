@@ -3,19 +3,10 @@
 // ============================================================
 // All IPC events from the main process are handled here via
 // `appStore.set()`, completely decoupled from React's render cycle.
-// Components subscribe only to the atoms they care about, so e.g.
-// `agent:usage-update` only re-renders the Sidebar row, not all of
-// ChatPanel.
+// Components subscribe only to the session state they render.
 // ============================================================
 
-import type {
-	MainToRendererEvent,
-	PiContentBlock,
-	PiMessage,
-	PiTextBlock,
-	PiThinkingBlock,
-	PiToolCallBlock,
-} from "@shared/types";
+import type { AgentSessionEvent, MainToRendererEvent, SessionSnapshotEnvelope } from "@shared/types";
 import { createStore } from "jotai";
 import { toast } from "sonner";
 import i18n from "../i18n";
@@ -26,7 +17,6 @@ import {
 	autoCollapseAtom,
 	emptyPlanQuestionDraft,
 	forkingEntryAtomFamily,
-	messagesAtomFamily,
 	navigatingEntryAtomFamily,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
@@ -37,36 +27,210 @@ import {
 	planQuestionRequestAtomFamily,
 	projectsAtom,
 	providerSettingsAtom,
-	queuesAtomFamily,
 	recentlyCompletedAtom,
 	removeAgentAtoms,
 	sessionLeafIdAtomFamily,
-	sessionTreeAtomFamily,
+	sessionStateAtomFamily,
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
-
-/** Shared: convert a raw pi SDK content block to Look's PiContentBlock. */
-function sdkBlockToPiBlock(b: any): PiContentBlock {
-	if (b.type === "toolCall") {
-		return {
-			type: "toolCall",
-			id: b.id ?? "",
-			name: b.name ?? "unknown",
-			arguments: b.arguments ?? {},
-			status: b.status ?? (b.result ? (b.isError ? "error" : "success") : "pending"),
-			result: b.result ?? "",
-			isError: b.isError ?? false,
-		} satisfies PiToolCallBlock;
-	}
-	return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
-}
+import type { RendererToolExecutionState } from "./sessionTypes";
 
 /** The global Jotai store — shared by IPC handler and React Provider. */
 export const appStore = createStore();
 
 /** i18n t-function — use the i18next instance directly outside React. */
 const t = i18n.t.bind(i18n);
+
+function updateAgentRuntime(
+	sessionId: string,
+	patch: Partial<{ isStreaming: boolean; isRetrying: boolean; isCompacting: boolean }>,
+) {
+	appStore.set(
+		agentsAtom,
+		appStore.get(agentsAtom).map((agent) => (agent.id === sessionId ? { ...agent, ...patch } : agent)),
+	);
+}
+
+function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
+	const previous = appStore.get(sessionStateAtomFamily(snapshot.sessionId));
+	appStore.set(sessionStateAtomFamily(snapshot.sessionId), {
+		...previous,
+		entries: snapshot.entries,
+		leafId: snapshot.leafId,
+		runtime: {
+			...snapshot.runtime,
+			steering: [...snapshot.runtime.steering],
+			followUp: [...snapshot.runtime.followUp],
+		},
+		liveMessages:
+			snapshot.reason === "agent_end"
+				? previous.liveMessages.filter((item) => item.runId !== previous.currentRunId)
+				: previous.liveMessages,
+		toolExecutions: snapshot.reason === "agent_end" ? {} : previous.toolExecutions,
+	});
+	appStore.set(sessionLeafIdAtomFamily(snapshot.sessionId), snapshot.leafId);
+	appStore.set(navigatingEntryAtomFamily(snapshot.sessionId), null);
+	appStore.set(forkingEntryAtomFamily(snapshot.sessionId), null);
+	appStore.set(
+		agentsAtom,
+		appStore.get(agentsAtom).map((agent) =>
+			agent.id === snapshot.sessionId
+				? {
+						...agent,
+						model: snapshot.runtime.model
+							? `${snapshot.runtime.model.provider}/${snapshot.runtime.model.id}`
+							: agent.model,
+						thinkingLevel: snapshot.runtime.thinkingLevel,
+						isStreaming: snapshot.runtime.isStreaming,
+						isRetrying: snapshot.runtime.isRetrying,
+						isCompacting: snapshot.runtime.isCompacting,
+						messageCount: snapshot.runtime.stats.totalMessages,
+					}
+				: agent,
+		),
+	);
+}
+
+function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
+	const atom = sessionStateAtomFamily(sessionId);
+	const previous = appStore.get(atom);
+	switch (event.type) {
+		case "agent_start":
+			appStore.set(atom, {
+				...previous,
+				currentRunId: previous.currentRunId + 1,
+				runtime: previous.runtime ? { ...previous.runtime, isStreaming: true } : null,
+			});
+			updateAgentRuntime(sessionId, { isStreaming: true });
+			appStore.set(
+				recentlyCompletedAtom,
+				appStore.get(recentlyCompletedAtom).filter((id) => id !== sessionId),
+			);
+			break;
+		case "agent_end":
+			if (!event.willRetry) {
+				appStore.set(recentlyCompletedAtom, [
+					...appStore.get(recentlyCompletedAtom).filter((id) => id !== sessionId),
+					sessionId,
+				]);
+			}
+			updateAgentRuntime(sessionId, { isStreaming: false, isRetrying: event.willRetry });
+			break;
+		case "message_start": {
+			const renderId = crypto.randomUUID();
+			appStore.set(atom, {
+				...previous,
+				currentMessageRenderId: renderId,
+				liveMessages: [
+					...previous.liveMessages,
+					{ renderId, runId: previous.currentRunId, message: event.message, completed: false },
+				],
+			});
+			break;
+		}
+		case "message_update": {
+			const renderId = previous.currentMessageRenderId ?? crypto.randomUUID();
+			const exists = previous.liveMessages.some((item) => item.renderId === renderId);
+			appStore.set(atom, {
+				...previous,
+				currentMessageRenderId: renderId,
+				liveMessages: exists
+					? previous.liveMessages.map((item) =>
+							item.renderId === renderId ? { ...item, message: event.message } : item,
+						)
+					: [
+							...previous.liveMessages,
+							{ renderId, runId: previous.currentRunId, message: event.message, completed: false },
+						],
+			});
+			break;
+		}
+		case "message_end": {
+			const renderId = previous.currentMessageRenderId ?? crypto.randomUUID();
+			const exists = previous.liveMessages.some((item) => item.renderId === renderId);
+			appStore.set(atom, {
+				...previous,
+				currentMessageRenderId: null,
+				liveMessages: exists
+					? previous.liveMessages.map((item) =>
+							item.renderId === renderId ? { ...item, message: event.message, completed: true } : item,
+						)
+					: [
+							...previous.liveMessages,
+							{ renderId, runId: previous.currentRunId, message: event.message, completed: true },
+						],
+			});
+			break;
+		}
+		case "queue_update":
+			if (previous.runtime) {
+				appStore.set(atom, {
+					...previous,
+					runtime: { ...previous.runtime, steering: [...event.steering], followUp: [...event.followUp] },
+				});
+			}
+			break;
+		case "compaction_start":
+			updateAgentRuntime(sessionId, { isCompacting: true });
+			if (previous.runtime)
+				appStore.set(atom, { ...previous, runtime: { ...previous.runtime, isCompacting: true } });
+			break;
+		case "compaction_end":
+			updateAgentRuntime(sessionId, { isCompacting: false });
+			if (previous.runtime)
+				appStore.set(atom, { ...previous, runtime: { ...previous.runtime, isCompacting: false } });
+			break;
+		case "auto_retry_start":
+			updateAgentRuntime(sessionId, { isRetrying: true });
+			if (previous.runtime)
+				appStore.set(atom, {
+					...previous,
+					runtime: { ...previous.runtime, isRetrying: true, retryAttempt: event.attempt },
+				});
+			break;
+		case "auto_retry_end":
+			updateAgentRuntime(sessionId, { isRetrying: false });
+			if (previous.runtime) appStore.set(atom, { ...previous, runtime: { ...previous.runtime, isRetrying: false } });
+			if (!event.success && event.finalError) toast.error(event.finalError);
+			break;
+		case "tool_execution_start":
+		case "tool_execution_update":
+		case "tool_execution_end": {
+			const existing = previous.toolExecutions[event.toolCallId];
+			const next: RendererToolExecutionState =
+				event.type === "tool_execution_start"
+					? {
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+							args: event.args,
+							phase: "running",
+						}
+					: event.type === "tool_execution_update"
+						? {
+								...(existing ?? {
+									toolCallId: event.toolCallId,
+									toolName: event.toolName,
+									args: event.args,
+									phase: "running" as const,
+								}),
+								partialResult: event.partialResult,
+							}
+						: {
+								...(existing ?? {
+									toolCallId: event.toolCallId,
+									toolName: event.toolName,
+									args: {},
+								}),
+								phase: "completed",
+								result: event.result,
+								isError: event.isError,
+							};
+			appStore.set(atom, { ...previous, toolExecutions: { ...previous.toolExecutions, [event.toolCallId]: next } });
+			break;
+		}
+	}
+}
 
 /** Register all IPC event listeners. Call once at app startup. */
 export function initIpcHandlers(api: any): () => void {
@@ -123,73 +287,13 @@ export function initIpcHandlers(api: any): () => void {
 				);
 				break;
 
-			case "agent:thinking_level_changed":
-				appStore.set(
-					agentsAtom,
-					appStore.get(agentsAtom).map((a) => (a.id === event.agentId ? { ...a, thinkingLevel: event.level } : a)),
-				);
+			case "session:snapshot":
+				applySnapshot(event);
 				break;
 
-			case "agent:status":
-				appStore.set(
-					agentsAtom,
-					appStore.get(agentsAtom).map((a) => (a.id === event.agentId ? { ...a, status: event.status } : a)),
-				);
-				// Clear "recently completed" when agent starts running again
-				if (event.status === "thinking" || event.status === "working") {
-					const prev = appStore.get(recentlyCompletedAtom);
-					if (prev.includes(event.agentId)) {
-						appStore.set(
-							recentlyCompletedAtom,
-							prev.filter((id) => id !== event.agentId),
-						);
-					}
-				}
+			case "session:sdk-event":
+				applySdkEvent(event.sessionId, event.event);
 				break;
-
-			case "agent:usage-update":
-				appStore.set(
-					agentsAtom,
-					appStore.get(agentsAtom).map((a) => (a.id === event.agentId ? { ...a, usage: event.usage } : a)),
-				);
-				break;
-
-			case "agent:history": {
-				appStore.set(messagesAtomFamily(event.agentId), event.messages);
-				break;
-			}
-
-			case "agent:queue_update": {
-				// Copy out of the readonly array exposed by the
-				// `agent:queue_update` event payload — the atom
-				// owns a mutable shape (push-friendly downstream)
-				// so a fresh array avoids any aliasing surprises.
-				appStore.set(queuesAtomFamily(event.agentId), {
-					steering: event.steering ? [...event.steering] : [],
-					followUp: event.followUp ? [...event.followUp] : [],
-				});
-				break;
-			}
-
-			// ---- v0.4 Session tree / branching ----
-			// Fired by the main process whenever the leaf moves
-			// (append, navigate, label, fork). Both the tree shape
-			// and the leafId arrive together so consumers can
-			// decide in one render pass whether the view is on the
-			// "latest" branch.
-			case "agent:tree-changed": {
-				appStore.set(sessionTreeAtomFamily(event.agentId), event.tree);
-				appStore.set(sessionLeafIdAtomFamily(event.agentId), event.leafId);
-				// Clear the in-flight flag on whichever side the
-				// main process just confirmed. Whichever wasn't
-				// the cause will be cleared by its own response
-				// (navigateTree returns synchronously after the
-				// tree-changed emit; createFork returns via the
-				// invoke promise + a fresh tree-changed).
-				appStore.set(navigatingEntryAtomFamily(event.agentId), null);
-				appStore.set(forkingEntryAtomFamily(event.agentId), null);
-				break;
-			}
 
 			// ---- Project events ----
 			case "project:list": {
@@ -323,181 +427,6 @@ export function initIpcHandlers(api: any): () => void {
 				);
 				break;
 			}
-
-			case "agent:agent_end": {
-				if (!event.willRetry) {
-					const prev = appStore.get(recentlyCompletedAtom);
-					appStore.set(recentlyCompletedAtom, [...prev.filter((id) => id !== event.agentId), event.agentId]);
-				}
-				break;
-			}
-
-			// ---- pi session events (mirrored with `agent:` prefix) ----
-			case "agent:message_start": {
-				const msg = event.message as any;
-				const msgs = [...appStore.get(messagesAtomFamily(event.agentId))];
-				const blocks: PiContentBlock[] = Array.isArray(msg.content)
-					? msg.content.map(sdkBlockToPiBlock)
-					: typeof msg.content === "string" && msg.content.length > 0
-						? [{ type: "text", text: msg.content, active: false } satisfies PiTextBlock]
-						: [];
-				const ui: PiMessage = {
-					// v0.7: Drop fallback ID. The main process always passes msg.id from the SDK.
-					id: msg.id,
-					agentId: event.agentId,
-					role: msg.role === "toolResult" ? "tool" : (msg.role ?? "assistant"),
-					contentBlocks: blocks,
-					timestamp: msg.timestamp ?? Date.now(),
-					isStreaming: true,
-				};
-				msgs.push(ui);
-				appStore.set(messagesAtomFamily(event.agentId), msgs);
-				break;
-			}
-
-			case "agent:message_update": {
-				const msgs = [...appStore.get(messagesAtomFamily(event.agentId))];
-				const msgId = (event.message as any)?.id;
-				let idx = msgId ? msgs.findIndex((m) => m.id === msgId) : -1;
-				if (idx < 0) {
-					idx = msgs.length - 1;
-					for (let i = msgs.length - 1; i >= 0; i--)
-						if (msgs[i].isStreaming) {
-							idx = i;
-							break;
-						}
-				}
-				if (idx < 0) break;
-				const rawContent = (event.message as any)?.content;
-				if (!Array.isArray(rawContent)) break;
-				msgs[idx] = { ...msgs[idx], contentBlocks: rawContent.map(sdkBlockToPiBlock) };
-				appStore.set(messagesAtomFamily(event.agentId), msgs);
-				break;
-			}
-
-			case "agent:message_end": {
-				const finalMsg = event.message as any;
-				const msgs = [...appStore.get(messagesAtomFamily(event.agentId))];
-				const finalId = finalMsg?.id;
-				let idx = finalId ? msgs.findIndex((m) => m.id === finalId) : -1;
-				if (idx < 0) {
-					for (let i = msgs.length - 1; i >= 0; i--) {
-						if (msgs[i].isStreaming) {
-							idx = i;
-							break;
-						}
-					}
-				}
-				if (idx < 0) break;
-				const oldBlocks = msgs[idx].contentBlocks;
-				const blocks: PiContentBlock[] = Array.isArray(finalMsg.content)
-					? finalMsg.content.map((b: any): PiContentBlock => {
-							if (b.type !== "toolCall") return { ...b, active: false } as PiTextBlock | PiThinkingBlock;
-							const oldBlock = oldBlocks.find(
-								(ob) => ob.type === "toolCall" && (ob as PiToolCallBlock).id === b.id,
-							) as PiToolCallBlock | undefined;
-							return {
-								type: "toolCall",
-								id: b.id ?? "",
-								name: b.name ?? "unknown",
-								arguments: b.arguments ?? {},
-								status: oldBlock?.status ?? "pending",
-								result: oldBlock?.result ?? "",
-								isError: oldBlock?.isError ?? false,
-							} satisfies PiToolCallBlock;
-						})
-					: oldBlocks;
-				const usage = finalMsg.usage
-					? {
-							inputTokens: finalMsg.usage.input ?? 0,
-							outputTokens: finalMsg.usage.output ?? 0,
-							cacheReadTokens: finalMsg.usage.cacheRead ?? 0,
-							cacheWriteTokens: finalMsg.usage.cacheWrite ?? 0,
-							totalTokens: finalMsg.usage.totalTokens ?? 0,
-							cost: {
-								input: finalMsg.usage.cost?.input ?? 0,
-								output: finalMsg.usage.cost?.output ?? 0,
-								cacheRead: finalMsg.usage.cost?.cacheRead ?? 0,
-								cacheWrite: finalMsg.usage.cost?.cacheWrite ?? 0,
-								total: finalMsg.usage.cost?.total ?? 0,
-							},
-						}
-					: undefined;
-				msgs[idx] = {
-					...msgs[idx],
-					id: finalId ?? msgs[idx].id,
-					contentBlocks: blocks,
-					isStreaming: false,
-					timestamp: finalMsg.timestamp ?? msgs[idx].timestamp,
-					usage,
-				};
-				appStore.set(messagesAtomFamily(event.agentId), msgs);
-				break;
-			}
-
-			case "agent:tool_execution_start":
-			case "agent:tool_execution_update":
-			case "agent:tool_execution_end": {
-				const msgs = [...appStore.get(messagesAtomFamily(event.agentId))];
-				let idx = msgs.length - 1;
-				for (let i = msgs.length - 1; i >= 0; i--)
-					if (msgs[i].isStreaming) {
-						idx = i;
-						break;
-					}
-				if (idx < 0) break;
-				const blocks = [...msgs[idx].contentBlocks];
-				const callId = event.toolCallId;
-				const foundIdx = blocks.findIndex((b) => b.type === "toolCall" && b.id === callId);
-				if (event.type === "agent:tool_execution_start") {
-					if (foundIdx < 0) {
-						blocks.push({
-							type: "toolCall",
-							id: callId,
-							name: event.toolName,
-							arguments: event.args ?? {},
-							status: "running",
-							result: "",
-							isError: false,
-						} satisfies PiToolCallBlock);
-					} else {
-						(blocks[foundIdx] as PiToolCallBlock).status = "running";
-					}
-				} else if (event.type === "agent:tool_execution_update") {
-					const partial = (event.partialResult as any)?.content?.[0]?.text ?? "";
-					if (foundIdx >= 0) {
-						const b = blocks[foundIdx] as PiToolCallBlock;
-						blocks[foundIdx] = { ...b, result: (b.result ?? "") + partial };
-					}
-				} else {
-					// tool_execution_end
-					const resultStr =
-						typeof event.result === "string"
-							? event.result
-							: ((event.result as any)?.content?.[0]?.text ?? JSON.stringify(event.result));
-					if (foundIdx >= 0) {
-						blocks[foundIdx] = {
-							...blocks[foundIdx],
-							status: event.isError ? "error" : "success",
-							result: resultStr,
-							isError: event.isError,
-						} as PiToolCallBlock;
-					} else {
-						blocks.push({
-							type: "toolCall",
-							id: callId,
-							name: event.toolName,
-							arguments: {},
-							status: event.isError ? "error" : "success",
-							result: resultStr,
-							isError: event.isError,
-						} satisfies PiToolCallBlock);
-					}
-				}
-				msgs[idx] = { ...msgs[idx], contentBlocks: blocks };
-				appStore.set(messagesAtomFamily(event.agentId), msgs);
-				break;
-			}
 		}
 	});
 	return unsub;
@@ -512,11 +441,14 @@ function _autoSelectAgent(): void {
 	if (appStore.get(activeAgentIdAtom)) return;
 	const agents = appStore.get(agentsAtom);
 	if (agents.length === 0) return;
+	let sessionId: string;
 	if (_lastActiveSessionId && agents.some((a) => a.id === _lastActiveSessionId)) {
-		appStore.set(activeAgentIdAtom, _lastActiveSessionId);
-		return;
+		sessionId = _lastActiveSessionId;
+	} else {
+		sessionId = agents[0].id;
 	}
-	appStore.set(activeAgentIdAtom, agents[0].id);
+	appStore.set(activeAgentIdAtom, sessionId);
+	void window.look.activateSession(sessionId);
 }
 
 /** Initialize data previously loaded in App.tsx's useEffect hooks. */
@@ -547,20 +479,10 @@ export async function initAppData(api: any): Promise<void> {
 		if (projectResult.activeProjectId) appStore.set(activeProjectIdAtom, projectResult.activeProjectId);
 	}
 
-	// 4. Pull initial agent list + restored history synchronously.
+	// 4. Pull session summaries. Raw SDK history is loaded on activation.
 	const r = await api.getAgents().catch(() => null);
 	if (r?.success) {
 		if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
-		if (r.history && typeof r.history === "object") {
-			for (const [agentId, msgs] of Object.entries(r.history)) {
-				if (Array.isArray(msgs) && msgs.length > 0) {
-					const existing = appStore.get(messagesAtomFamily(agentId));
-					if (existing.length === 0) {
-						appStore.set(messagesAtomFamily(agentId), msgs as any);
-					}
-				}
-			}
-		}
 	}
 
 	// 5. Auto-restore / fallback after agents are loaded.

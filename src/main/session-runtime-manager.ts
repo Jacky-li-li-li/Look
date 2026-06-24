@@ -1,6 +1,7 @@
 import fs, { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path, { join } from "node:path";
+import type { ImageContent } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -16,6 +17,7 @@ import {
 	type SessionInfo as PiSessionInfo,
 	ProjectTrustStore,
 	SessionManager,
+	type SessionStartEvent,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
@@ -41,30 +43,24 @@ import {
 	getProjectsIndexPath,
 	getSessionsDir,
 	getUiSettingsPath,
+	resetLegacySessionsOnce,
 } from "./shared/look-storage.js";
-import { convertPiMessage } from "./shared/message-convert.js";
 import type {
 	AgentInfo,
-	ContextUsageInfo,
 	ForkedSessionResult,
 	MainToRendererEvent,
 	NavigateTreeResult,
 	PermissionAskEvent,
 	PermissionMode,
 	PermissionRespondPayload,
-	PiMessage,
-	PiToolCallBlock,
 	PlanApprovalRequest,
 	PlanApprovalResponse,
 	PlanQuestion,
 	PlanQuestionRequest,
 	PlanQuestionResponse,
 	ProjectInfo,
-	SessionForkPoint,
-	SessionStatus,
-	SessionTreeNode,
+	SessionSnapshotEnvelope,
 	ThinkingLevel,
-	UsageSnapshot,
 } from "./shared/types.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 
@@ -78,9 +74,6 @@ interface ManagedRuntime {
 	readonly runtime: AgentSessionRuntime;
 	readonly projectId: string;
 	readonly createdAt: number;
-	status: SessionStatus;
-	streamSequence: number;
-	streamId: string | null;
 	unsubscribe: () => void;
 }
 
@@ -113,17 +106,6 @@ function isPermissionMode(value: unknown): value is PermissionMode {
 	return value === "always" || value === "ask" || value === "plan";
 }
 
-function emptyUsageSnapshot(): UsageSnapshot {
-	return {
-		inputTokens: 0,
-		outputTokens: 0,
-		cacheReadTokens: 0,
-		cacheWriteTokens: 0,
-		totalTokens: 0,
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-	};
-}
-
 /**
  * Hosts independent pi AgentSessionRuntime instances for sessions that are
  * selected or currently running. Each runtime still owns exactly one active pi
@@ -141,6 +123,7 @@ export class SessionRuntimeManager {
 	private readonly projectsIndexPath: string;
 	private readonly runtimes = new Map<string, ManagedRuntime>();
 	private readonly runtimeInitializations = new Map<string, Promise<ManagedRuntime>>();
+	private readonly forkOperationTails = new Map<string, Promise<void>>();
 	private resourceInitializationTail: Promise<void> = Promise.resolve();
 	private activeProjectId: string | null = null;
 	private activeSessionId: string | null = null;
@@ -162,6 +145,7 @@ export class SessionRuntimeManager {
 
 	constructor() {
 		ensureLookDir();
+		resetLegacySessionsOnce();
 		const migration = migrateLegacySettings();
 		if (migration.migrated && migration.keys.length > 0) {
 			console.log(`[Look] Migrated settings: ${migration.keys.join(", ")}`);
@@ -332,7 +316,10 @@ export class SessionRuntimeManager {
 			projectId,
 			projectName: project.name,
 			agentCount: new Set([...persisted.map((session) => session.id), ...runtimeIds]).size,
-			runningCount: runtimeIds.filter((sessionId) => this.runtimes.get(sessionId)?.status !== "idle").length,
+			runningCount: runtimeIds.filter((sessionId) => {
+				const session = this.runtimes.get(sessionId)?.runtime.session;
+				return Boolean(session && (session.isStreaming || session.isRetrying || session.isCompacting));
+			}).length,
 		});
 	}
 
@@ -401,19 +388,11 @@ export class SessionRuntimeManager {
 			thinkingLevel: (piSession?.thinkingLevel as ThinkingLevel | undefined) ?? "off",
 			modelSupportsThinking: piSession?.supportsThinking() ?? false,
 			availableThinkingLevels: (piSession?.getAvailableThinkingLevels() as ThinkingLevel[] | undefined) ?? ["off"],
-			status: managed?.status ?? "idle",
+			isStreaming: piSession?.isStreaming ?? false,
+			isRetrying: piSession?.isRetrying ?? false,
+			isCompacting: piSession?.isCompacting ?? false,
 			messageCount: stats?.totalMessages ?? session.messageCount,
 			createdAt: session.created.getTime(),
-			usage: stats
-				? {
-						inputTokens: stats.tokens.input,
-						outputTokens: stats.tokens.output,
-						cacheReadTokens: stats.tokens.cacheRead,
-						cacheWriteTokens: stats.tokens.cacheWrite,
-						totalTokens: stats.tokens.total,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: stats.cost },
-					}
-				: emptyUsageSnapshot(),
 			sessionFilePath: session.path,
 			projectId: session.projectId,
 		};
@@ -430,17 +409,11 @@ export class SessionRuntimeManager {
 			thinkingLevel: session.thinkingLevel as ThinkingLevel,
 			modelSupportsThinking: session.supportsThinking(),
 			availableThinkingLevels: session.getAvailableThinkingLevels() as ThinkingLevel[],
-			status: managed.status,
+			isStreaming: session.isStreaming,
+			isRetrying: session.isRetrying,
+			isCompacting: session.isCompacting,
 			messageCount: stats.totalMessages,
 			createdAt: managed.createdAt,
-			usage: {
-				inputTokens: stats.tokens.input,
-				outputTokens: stats.tokens.output,
-				cacheReadTokens: stats.tokens.cacheRead,
-				cacheWriteTokens: stats.tokens.cacheWrite,
-				totalTokens: stats.tokens.total,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: stats.cost },
-			},
 			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
 			projectId: managed.projectId,
 		};
@@ -457,16 +430,6 @@ export class SessionRuntimeManager {
 			.filter(([sessionId, managed]) => managed.projectId === projectId && !persistedIds.has(sessionId))
 			.map(([sessionId, managed]) => this.runtimeInfo(sessionId, managed));
 		return [...drafts, ...persisted];
-	}
-
-	listAgentsWithHistory(): { agents: AgentInfo[]; history: Record<string, PiMessage[]> } {
-		const agents = this.listAgents();
-		const history: Record<string, PiMessage[]> = {};
-		for (const info of agents) {
-			const messages = this.getMessages(info.id);
-			if (messages.length > 0) history[info.id] = messages;
-		}
-		return { agents, history };
 	}
 
 	getAgentInfo(sessionId: string): AgentInfo | undefined {
@@ -547,11 +510,13 @@ export class SessionRuntimeManager {
 		sessionManager: SessionManager,
 		projectId: string,
 		createdAt = Date.now(),
+		sessionStartEvent?: SessionStartEvent,
 	): Promise<ManagedRuntime> {
 		const runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
 			cwd,
 			agentDir: getLookDir(),
 			sessionManager,
+			sessionStartEvent,
 		});
 		return this.bindRuntime(runtime, projectId, createdAt);
 	}
@@ -572,9 +537,6 @@ export class SessionRuntimeManager {
 			runtime,
 			projectId,
 			createdAt,
-			status: "idle",
-			streamSequence: 0,
-			streamId: null,
 			unsubscribe: () => {},
 		};
 		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
@@ -604,8 +566,6 @@ export class SessionRuntimeManager {
 			onError: (error) => this.emit({ type: "error", agentId: session.sessionId, message: String(error) }),
 		});
 		this.runtimes.delete(previousSessionId);
-		managed.status = "idle";
-		managed.streamId = null;
 		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
 		this.runtimes.set(session.sessionId, managed);
 		this.syncPlanToolState(session.sessionId);
@@ -670,19 +630,14 @@ export class SessionRuntimeManager {
 	}
 
 	async activateSession(sessionId: string): Promise<void> {
-		if (this.activeSessionId === sessionId && this.runtimes.has(sessionId)) return;
-		const previousSessionId = this.activeSessionId;
+		if (this.activeSessionId === sessionId && this.runtimes.has(sessionId)) {
+			this.emitSessionState(sessionId, "activate");
+			return;
+		}
 		const managed = await this.ensureRuntime(sessionId);
 		this.activeProjectId = managed.projectId;
 		this.activeSessionId = sessionId;
 		await this.refreshProjectSessions(managed.projectId);
-		if (previousSessionId && previousSessionId !== sessionId) {
-			const previous = this.runtimes.get(previousSessionId);
-			if (previous?.status === "idle") {
-				await this.disposeRuntime(previousSessionId);
-				this.emitSessionList(previous.projectId);
-			}
-		}
 		this.emitProjectList();
 		this.emit({ type: "project:active-changed", projectId: managed.projectId });
 		this.emitSessionState(sessionId);
@@ -695,7 +650,6 @@ export class SessionRuntimeManager {
 		const project = this.projects.get(projectId);
 		if (!project?.valid) throw new Error(`Project path does not exist: ${project?.cwd ?? projectId}`);
 
-		const previousSessionId = this.activeSessionId;
 		const managed = await this.createManagedRuntime(
 			project.cwd,
 			SessionManager.create(project.cwd, getSessionsDir()),
@@ -705,20 +659,13 @@ export class SessionRuntimeManager {
 		session.setSessionName((input.name?.trim() || "New chat").slice(0, MAX_NAME_LENGTH));
 		this.activeProjectId = projectId;
 		this.activeSessionId = session.sessionId;
-		if (previousSessionId && previousSessionId !== session.sessionId) {
-			const previous = this.runtimes.get(previousSessionId);
-			if (previous?.status === "idle") {
-				await this.disposeRuntime(previousSessionId);
-				this.emitSessionList(previous.projectId);
-			}
-		}
 		await this.refreshProjectSessions(projectId);
 		this.emit({
 			type: "agent:created",
 			agentId: session.sessionId,
 			agent: this.runtimeInfo(session.sessionId, managed),
 		});
-		this.emitSessionState(session.sessionId);
+		this.emitSessionState(session.sessionId, "initial");
 		return session.sessionId;
 	}
 
@@ -741,11 +688,6 @@ export class SessionRuntimeManager {
 		this.emitSessionList(projectId);
 	}
 
-	getMessages(sessionId: string): PiMessage[] {
-		const manager = this.sessionManagerFor(sessionId);
-		return manager ? this.extractMessages(manager, sessionId) : [];
-	}
-
 	private sessionManagerFor(sessionId: string): SessionManager | null {
 		const managed = this.runtimes.get(sessionId);
 		if (managed) return managed.runtime.session.sessionManager;
@@ -753,9 +695,26 @@ export class SessionRuntimeManager {
 		return stored && existsSync(stored.path) ? SessionManager.open(stored.path) : null;
 	}
 
-	async sendMessage(sessionId: string, text: string): Promise<void> {
+	async sendMessage(sessionId: string, text: string, images?: ImageContent[]): Promise<void> {
 		const session = (await this.ensureRuntime(sessionId)).runtime.session;
-		await session.prompt(text, session.isStreaming ? { streamingBehavior: "followUp" } : undefined);
+		await new Promise<void>((resolve, reject) => {
+			let accepted = false;
+			void session
+				.prompt(text, {
+					images,
+					source: "rpc",
+					streamingBehavior: session.isStreaming ? "followUp" : undefined,
+					preflightResult: (success) => {
+						if (!success || accepted) return;
+						accepted = true;
+						resolve();
+					},
+				})
+				.catch((error) => {
+					if (!accepted) reject(error);
+					else this.emitError(error, sessionId);
+				});
+		});
 	}
 
 	async abortAgent(sessionId: string): Promise<void> {
@@ -781,21 +740,6 @@ export class SessionRuntimeManager {
 		managed.runtime.session.setThinkingLevel(level);
 	}
 
-	getContextUsage(sessionId: string): ContextUsageInfo | undefined {
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		if (!session) return undefined;
-		const usage = session.getContextUsage();
-		if (!usage) return undefined;
-		const percentage = usage.percent === null ? 0 : Math.min(100, Math.max(0, Math.round(usage.percent)));
-		return {
-			percentage,
-			usedTokens: usage.tokens ?? 0,
-			totalTokens: usage.contextWindow,
-			level: percentage >= 80 ? "critical" : percentage >= 60 ? "warning" : "safe",
-			compacting: session.isCompacting,
-		};
-	}
-
 	async compressSession(sessionId: string): Promise<void> {
 		const session = (await this.ensureRuntime(sessionId)).runtime.session;
 		if (!session.isStreaming) await session.compact();
@@ -817,32 +761,6 @@ export class SessionRuntimeManager {
 		if (stored) this.emitSessionList(stored.projectId);
 	}
 
-	getSessionTree(sessionId: string): SessionTreeNode | null {
-		const manager = this.sessionManagerFor(sessionId);
-		if (!manager) return null;
-		const roots = manager.getTree();
-		if (roots.length === 0) {
-			return {
-				id: "__empty__",
-				parentId: null,
-				type: "session_info",
-				timestamp: new Date(0).toISOString(),
-				children: [],
-			};
-		}
-		return this.toRendererTreeNode(roots[0]);
-	}
-
-	getForkPoints(sessionId: string): SessionForkPoint[] {
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		if (!session) return [];
-		return session.getUserMessagesForForking().map(({ entryId, text }) => ({
-			entryId,
-			text: text.length > 120 ? `${text.slice(0, 120)}…` : text,
-			timestamp: session.sessionManager.getEntry(entryId)?.timestamp ?? new Date().toISOString(),
-		}));
-	}
-
 	async navigateTreeSession(
 		sessionId: string,
 		entryId: string,
@@ -850,7 +768,7 @@ export class SessionRuntimeManager {
 	): Promise<NavigateTreeResult> {
 		const session = (await this.ensureRuntime(sessionId)).runtime.session;
 		const result = await session.navigateTree(entryId, opts);
-		if (!result.cancelled) this.emitSessionState(sessionId);
+		if (!result.cancelled) this.emitSessionState(sessionId, "navigate");
 		return result;
 	}
 
@@ -859,45 +777,69 @@ export class SessionRuntimeManager {
 		entryId: string,
 		opts?: { name?: string },
 	): Promise<ForkedSessionResult> {
-		const managed = await this.ensureRuntime(sessionId);
-		if (managed.runtime.session.isStreaming) throw new Error("Stop the session before forking");
-		const sourceFile = managed.runtime.session.sessionFile;
-		if (!sourceFile) throw new Error("Source session not persisted");
+		return this.withForkLock(sessionId, async () => {
+			const managed = await this.ensureRuntime(sessionId);
+			const sourceSession = managed.runtime.session;
+			if (sourceSession.isStreaming || sourceSession.isRetrying || sourceSession.isCompacting) {
+				throw new Error("Stop the session before forking");
+			}
+			const sourceFile = sourceSession.sessionFile;
+			if (!sourceFile) throw new Error("Source session not persisted");
+			if (!sourceSession.sessionManager.getEntry(entryId)) throw new Error("Invalid entry ID for forking");
 
-		// Fire extension hook (normally called by runtime.fork, but we bypass fork
-		// so the source runtime stays alive for parallel sessions).
-		const runner = managed.runtime.session.extensionRunner;
-		if (runner.hasHandlers("session_before_fork")) {
-			const hookResult = await runner.emit({
-				type: "session_before_fork",
-				entryId,
-				position: "at" as const,
-			});
-			if (hookResult?.cancel === true) throw new Error("Fork was cancelled by an extension");
+			const runner = sourceSession.extensionRunner;
+			if (runner.hasHandlers("session_before_fork")) {
+				const hookResult = await runner.emit({ type: "session_before_fork", entryId, position: "at" as const });
+				if (hookResult?.cancel === true) throw new Error("Fork was cancelled by an extension");
+			}
+
+			// createBranchedSession mutates its SessionManager. Always use an
+			// independent manager so the source runtime remains bound to A.
+			const forkManager = SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir());
+			let forkedPath: string | undefined;
+			let forkedSessionId: string | undefined;
+			try {
+				forkedPath = forkManager.createBranchedSession(entryId);
+				if (!forkedPath) throw new Error("Failed to create forked session");
+				forkedSessionId = forkManager.getSessionId();
+				const forkedManaged = await this.createManagedRuntime(
+					forkManager.getCwd(),
+					forkManager,
+					managed.projectId,
+					Date.now(),
+					{ type: "session_start", reason: "fork", previousSessionFile: sourceFile },
+				);
+				const session = forkedManaged.runtime.session;
+				if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, MAX_NAME_LENGTH));
+				if (!session.sessionFile) throw new Error("Forked session was not persisted");
+				await this.refreshProjectSessions(managed.projectId);
+				this.activeProjectId = managed.projectId;
+				this.activeSessionId = session.sessionId;
+				this.emitSessionState(session.sessionId, "initial");
+				return { agentId: session.sessionId, sessionFilePath: session.sessionFile };
+			} catch (error) {
+				if (forkedSessionId && this.runtimes.has(forkedSessionId)) await this.disposeRuntime(forkedSessionId, true);
+				if (forkedPath && existsSync(forkedPath)) fs.unlinkSync(forkedPath);
+				throw error;
+			}
+		});
+	}
+
+	private async withForkLock<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
+		const previous = this.forkOperationTails.get(sessionId) ?? Promise.resolve();
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const tail = previous.then(() => gate);
+		this.forkOperationTails.set(sessionId, tail);
+		await previous;
+		try {
+			return await task();
+		} finally {
+			release();
+			if (this.forkOperationTails.get(sessionId) === tail) this.forkOperationTails.delete(sessionId);
 		}
-
-		// Create branched session file directly — no source runtime teardown.
-		const forkedPath = managed.runtime.session.sessionManager.createBranchedSession(entryId);
-		if (!forkedPath) throw new Error("Failed to create forked session");
-
-		// Spin up an independent runtime for the forked session.
-		const forkedManager = SessionManager.open(forkedPath);
-		const forkedManaged = await this.createManagedRuntime(
-			forkedManager.getCwd(),
-			forkedManager,
-			managed.projectId,
-			Date.now(),
-		);
-
-		const session = forkedManaged.runtime.session;
-		if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, MAX_NAME_LENGTH));
-		const projectId = managed.projectId;
-		if (!projectId || !session.sessionFile) throw new Error("Forked session was not persisted");
-		await this.refreshProjectSessions(projectId);
-		this.activeProjectId = projectId;
-		this.activeSessionId = session.sessionId;
-		this.emitSessionState(session.sessionId);
-		return { agentId: session.sessionId, sessionFilePath: session.sessionFile };
 	}
 
 	setEntryLabel(sessionId: string, entryId: string, label: string | null): void {
@@ -907,97 +849,67 @@ export class SessionRuntimeManager {
 		manager.appendLabelChange(entryId, label?.trim() || undefined);
 		if (leaf) manager.branch(leaf);
 		else manager.resetLeaf();
-		this.emitTree(sessionId);
+		this.emitSessionState(sessionId, "navigate");
 	}
 
 	private handleSessionEvent(sessionId: string, event: AgentSessionEvent): void {
-		const rendererEvent = this.toRendererEvent(sessionId, event);
-		if (rendererEvent) this.emit(rendererEvent);
+		this.emit({ type: "session:sdk-event", sessionId, event });
 		switch (event.type) {
-			case "agent_start":
-				this.updateSessionStatus(sessionId, "thinking");
-				break;
-			case "tool_execution_start":
-				this.updateSessionStatus(sessionId, "working");
-				break;
 			case "agent_end":
-				this.updateSessionStatus(sessionId, "idle");
 				this.persistPermissionModeIfPossible(sessionId);
 				this.persistPlanToolSnapshotIfPossible(sessionId);
+				this.emitSessionState(sessionId, "agent_end");
 				this.refreshAfterTurn(sessionId).catch((error) => this.emitError(error, sessionId));
-				break;
-			case "message_end":
-				this.emitContextUsage(sessionId);
-				break;
-			case "compaction_start":
-				this.emit({ type: "agent:compacting", agentId: sessionId, compacting: true });
-				break;
-			case "compaction_end":
-				this.emit({ type: "agent:compacting", agentId: sessionId, compacting: false });
 				break;
 			case "thinking_level_changed":
 			case "session_info_changed":
+			case "agent_start":
+			case "compaction_start":
+			case "compaction_end":
+			case "auto_retry_start":
+			case "auto_retry_end":
 				this.emitSessionUpdated(sessionId);
 				break;
 		}
-	}
-
-	private toRendererEvent(sessionId: string, event: AgentSessionEvent): MainToRendererEvent | null {
-		const managed = this.runtimes.get(sessionId);
-		if (event.type === "message_start" || event.type === "message_update" || event.type === "message_end") {
-			if (!managed) return null;
-			if (event.type === "message_start" || !managed.streamId) {
-				managed.streamId = `stream:${sessionId}:${++managed.streamSequence}`;
-			}
-			const rendererEvent = {
-				...event,
-				type: `agent:${event.type}`,
-				agentId: sessionId,
-				message: { ...event.message, id: managed.streamId },
-			} as MainToRendererEvent;
-			if (event.type === "message_end") managed.streamId = null;
-			return rendererEvent;
-		}
-		return { ...event, type: `agent:${event.type}`, agentId: sessionId } as MainToRendererEvent;
 	}
 
 	private async refreshAfterTurn(sessionId: string): Promise<void> {
 		const projectId = this.runtimes.get(sessionId)?.projectId ?? this.findStoredSession(sessionId)?.projectId;
 		if (!projectId) return;
 		await this.refreshProjectSessions(projectId);
-		this.emit({ type: "agent:history", agentId: sessionId, messages: this.getMessages(sessionId) });
-		this.emitTree(sessionId);
 		this.emitSessionUpdated(sessionId);
 		this.emitSessionList(projectId);
 	}
 
-	private emitSessionState(targetSessionId?: string): void {
+	private emitSessionState(targetSessionId?: string, reason: SessionSnapshotEnvelope["reason"] = "activate"): void {
 		const sessionId = targetSessionId ?? this.activeSessionId;
 		if (!sessionId) return;
-		const projectId = this.runtimes.get(sessionId)?.projectId ?? this.findStoredSession(sessionId)?.projectId;
-		if (projectId) this.emitSessionList(projectId);
-		this.emit({ type: "agent:history", agentId: sessionId, messages: this.getMessages(sessionId) });
-		this.emitTree(sessionId);
-		this.emitSessionUpdated(sessionId);
-	}
-
-	private emitTree(sessionId: string): void {
-		const manager = this.sessionManagerFor(sessionId);
-		const tree = this.getSessionTree(sessionId);
-		if (manager && tree) {
-			this.emit({ type: "agent:tree-changed", agentId: sessionId, leafId: manager.getLeafId(), tree });
-		}
-	}
-
-	private emitContextUsage(sessionId: string): void {
-		const usage = this.getContextUsage(sessionId);
-		if (usage) this.emit({ type: "agent:context-usage", agentId: sessionId, usage });
-	}
-
-	private updateSessionStatus(sessionId: string, status: SessionStatus): void {
 		const managed = this.runtimes.get(sessionId);
-		if (managed) managed.status = status;
-		this.emit({ type: "agent:status", agentId: sessionId, status });
+		const projectId = managed?.projectId ?? this.findStoredSession(sessionId)?.projectId;
+		if (projectId) this.emitSessionList(projectId);
+		if (managed) {
+			const session = managed.runtime.session;
+			this.emit({
+				type: "session:snapshot",
+				sessionId,
+				reason,
+				leafId: session.sessionManager.getLeafId(),
+				entries: session.sessionManager.getBranch(),
+				runtime: {
+					model: session.model,
+					thinkingLevel: session.thinkingLevel,
+					isStreaming: session.isStreaming,
+					isRetrying: session.isRetrying,
+					isCompacting: session.isCompacting,
+					retryAttempt: session.retryAttempt,
+					steering: session.getSteeringMessages(),
+					followUp: session.getFollowUpMessages(),
+					stats: session.getSessionStats(),
+					contextUsage: session.getContextUsage(),
+				},
+			});
+		}
+		this.emitSessionUpdated(sessionId);
 	}
 
 	private emitSessionUpdated(sessionId: string): void {
@@ -1011,69 +923,6 @@ export class SessionRuntimeManager {
 
 	private emitProjectList(): void {
 		this.emit({ type: "project:list", projects: this.listProjects(), activeProjectId: this.activeProjectId });
-	}
-
-	private toRendererTreeNode(node: any): SessionTreeNode {
-		const entry = node.entry;
-		const result: SessionTreeNode = {
-			id: entry.id,
-			parentId: entry.parentId,
-			type: entry.type,
-			timestamp: entry.timestamp,
-			children: (node.children ?? []).map((child: any) => this.toRendererTreeNode(child)),
-		};
-		if (entry.type === "message") {
-			result.role = entry.message.role;
-			result.textPreview = this.previewText(entry.message).slice(0, 120);
-		} else if (entry.type === "branch_summary") result.summary = entry.summary;
-		else if (entry.type === "label") result.label = entry.label;
-		return result;
-	}
-
-	private previewText(message: any): string {
-		if (typeof message.content === "string") return message.content;
-		if (!Array.isArray(message.content)) return "";
-		return message.content
-			.filter((block: any) => block.type === "text")
-			.map((block: any) => block.text ?? "")
-			.join(" ")
-			.trim();
-	}
-
-	private extractMessages(manager: SessionManager, sessionId: string): PiMessage[] {
-		const messages: PiMessage[] = [];
-		for (const entry of manager.getBranch()) {
-			if (entry.type === "branch_summary") {
-				messages.push(
-					convertPiMessage(
-						{ role: "branchSummary", summary: entry.summary, timestamp: new Date(entry.timestamp).getTime() },
-						sessionId,
-						entry.id,
-					),
-				);
-				continue;
-			}
-			if (entry.type !== "message") continue;
-			if (["bashExecution", "custom", "compactionSummary"].includes(entry.message.role)) continue;
-			messages.push(convertPiMessage(entry.message, sessionId, entry.id));
-		}
-		for (const toolResult of messages.filter((message) => message.role === "tool")) {
-			const toolCallId = (toolResult as any)._toolCallId as string | undefined;
-			if (!toolCallId) continue;
-			for (const assistant of messages.filter((message) => message.role === "assistant")) {
-				const block = assistant.contentBlocks.find(
-					(content) => content.type === "toolCall" && content.id === toolCallId,
-				) as PiToolCallBlock | undefined;
-				if (!block) continue;
-				block.result = toolResult.contentBlocks
-					.filter((content) => content.type === "text")
-					.map((content) => content.text)
-					.join("\n");
-				block.isError = (toolResult as any)._isError ?? false;
-				block.status = block.isError ? "error" : "success";
-			}
-		}
-		return messages;
 	}
 
 	setApiKey(provider: string, key: string): void {

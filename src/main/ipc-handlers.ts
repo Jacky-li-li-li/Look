@@ -74,7 +74,7 @@ async function handleRendererInvoke(
 		case "agent:send-message": {
 			const _agentId = guardAgentId(data.agentId, "agentId");
 			guardString(data.message, "message");
-			await runtimeManager.sendMessage(_agentId, data.message);
+			await runtimeManager.sendMessage(_agentId, data.message, data.images);
 			return { success: true };
 		}
 
@@ -146,21 +146,7 @@ async function handleRendererInvoke(
 
 		// === Agent discovery (initial state pull) ===
 		case "agents:list": {
-			// Snapshot of the current agent list + restored history.
-			// Bundling history here eliminates the race where the renderer
-			// would otherwise need a separate `agent:get-history` call after
-			// mount, which can land before/after `loadPersistedAgents` finishes
-			// (the latter fires from `app.whenReady` before any IPC subscriber
-			// is registered, so push events from there are dropped).
-			const snapshot = runtimeManager.listAgentsWithHistory();
-			return { success: true, agents: snapshot.agents, history: snapshot.history };
-		}
-
-		// === Agent history (pull messages for an agent, on demand) ===
-		case "agent:get-history": {
-			const _agentId = guardAgentId(data.agentId, "agentId");
-			const msgs = runtimeManager.getMessages(_agentId);
-			return { success: true, messages: msgs };
+			return { success: true, agents: runtimeManager.listAgents() };
 		}
 
 		// === Settings ===
@@ -237,13 +223,7 @@ async function handleRendererInvoke(
 			return { success: true, settings: await runtimeManager.resetGeneralSettings() };
 		}
 
-		// === Context usage & compression ===
-		case "context:usage": {
-			const _agentId = guardAgentId(data.agentId, "agentId");
-			const usage = runtimeManager.getContextUsage(_agentId);
-			return { success: true, usage };
-		}
-
+		// === Context compression ===
 		case "session:compress": {
 			const _agentId = guardAgentId(data.agentId, "agentId");
 			await runtimeManager.compressSession(_agentId);
@@ -338,8 +318,7 @@ async function handleRendererInvoke(
 			await promptForProjectTrust(runtimeManager, data.projectId, mainWindow);
 			await runtimeManager.setActiveProject(data.projectId);
 			const agents = runtimeManager.listAgentsInProject(data.projectId);
-			const history = Object.fromEntries(agents.map((agent) => [agent.id, runtimeManager.getMessages(agent.id)]));
-			return { success: true, agents, history };
+			return { success: true, agents };
 		}
 
 		case "project:rename": {
@@ -369,23 +348,7 @@ async function handleRendererInvoke(
 			return { success: true, project: active };
 		}
 
-		// === v0.4 Session tree / branching ===
-		// `/tree` + `/fork` family. See session-runtime-manager.ts for the
-		// pi-side wrappers (getSessionTree / navigateTreeSession /
-		// createForkedSession / setEntryLabel). The renderer
-		// drives UX around these primitives; main is a thin facade.
-		case "agent:get-session-tree": {
-			const _agentId = guardAgentId(data.agentId, "agentId");
-			const tree = runtimeManager.getSessionTree(_agentId);
-			return { success: true, tree };
-		}
-
-		case "agent:get-fork-points": {
-			const _agentId = guardAgentId(data.agentId, "agentId");
-			const points = runtimeManager.getForkPoints(_agentId);
-			return { success: true, points };
-		}
-
+		// === Session tree navigation and parallel fork ===
 		case "agent:navigate-tree": {
 			const _agentId = guardAgentId(data.agentId, "agentId");
 			const _entryId = guardString(data.entryId, "entryId");

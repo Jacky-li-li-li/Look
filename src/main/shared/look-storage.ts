@@ -77,3 +77,31 @@ export function getMcpServersPath(): string {
 export function ensureLookDir(): void {
 	fs.mkdirSync(getSessionsDir(), { recursive: true });
 }
+
+/**
+ * One-time destructive reset for the SDK-native message protocol migration.
+ * Old sessions are intentionally not converted or retained.
+ */
+export function resetLegacySessionsOnce(lookDir = LOOK_DIR): void {
+	const marker = path.join(lookDir, ".sdk-message-reset-v1");
+	const sessionsDir = path.join(lookDir, "sessions");
+	const uiSettingsPath = path.join(lookDir, "ui-settings.json");
+	if (fs.existsSync(marker)) return;
+	fs.mkdirSync(lookDir, { recursive: true });
+	fs.rmSync(sessionsDir, { recursive: true, force: true });
+	fs.mkdirSync(sessionsDir, { recursive: true });
+
+	if (fs.existsSync(uiSettingsPath)) {
+		const parsed = JSON.parse(fs.readFileSync(uiSettingsPath, "utf8"));
+		parsed.lastActiveSessionId = "";
+		parsed.openedSessionIds = [];
+		delete parsed.lastActiveAgentId;
+		const tempPath = `${uiSettingsPath}.sdk-reset.tmp`;
+		fs.writeFileSync(tempPath, JSON.stringify(parsed, null, 2));
+		fs.renameSync(tempPath, uiSettingsPath);
+	}
+
+	const tempMarker = `${marker}.tmp`;
+	fs.writeFileSync(tempMarker, `${new Date().toISOString()}\n`);
+	fs.renameSync(tempMarker, marker);
+}

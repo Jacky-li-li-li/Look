@@ -14,6 +14,7 @@ import {
 	openProjectIdsAtom,
 	projectsAtom,
 	recentlyCompletedAtom,
+	sessionStateAtomFamily,
 } from "../src/renderer/store/atoms";
 import { appStore } from "../src/renderer/store/ipcHandler";
 
@@ -27,15 +28,6 @@ Object.defineProperty(Element.prototype, "scrollIntoView", { value: vi.fn(), wri
 
 afterEach(() => cleanup());
 
-const emptyUsage = {
-	inputTokens: 0,
-	outputTokens: 0,
-	cacheReadTokens: 0,
-	cacheWriteTokens: 0,
-	totalTokens: 0,
-	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-};
-
 const projects: ProjectInfo[] = [
 	{ id: "project-a", name: "Look", cwd: "/work/look", createdAt: 1, valid: true },
 	{ id: "project-b", name: "SDK", cwd: "/work/sdk", createdAt: 2, valid: true },
@@ -47,10 +39,11 @@ const sessions: AgentInfo[] = [
 		name: "Refine sidebar",
 		model: "openai/gpt-test",
 		thinkingLevel: "medium",
-		status: "idle",
+		isStreaming: false,
+		isRetrying: false,
+		isCompacting: false,
 		messageCount: 2,
 		createdAt: 10,
-		usage: emptyUsage,
 		projectId: "project-a",
 	},
 	{
@@ -58,10 +51,11 @@ const sessions: AgentInfo[] = [
 		name: "Audit runtime",
 		model: "openai/gpt-test",
 		thinkingLevel: "medium",
-		status: "working",
+		isStreaming: true,
+		isRetrying: false,
+		isCompacting: false,
 		messageCount: 3,
 		createdAt: 11,
-		usage: emptyUsage,
 		projectId: "project-b",
 	},
 ];
@@ -98,6 +92,12 @@ describe("workspace ledger sidebar", () => {
 		appStore.set(activeAgentIdAtom, "session-a");
 		appStore.set(recentlyCompletedAtom, []);
 		appStore.set(openProjectIdsAtom, []);
+		appStore.set(sessionStateAtomFamily("session-b"), {
+			...appStore.get(sessionStateAtomFamily("session-b")),
+			toolExecutions: {
+				call: { toolCallId: "call", toolName: "read", args: {}, phase: "running" },
+			},
+		});
 	});
 
 	it("renders sessions grouped under every project and exposes parallel status", async () => {

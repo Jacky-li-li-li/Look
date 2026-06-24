@@ -221,7 +221,8 @@ async function initSessionRuntime(): Promise<void> {
 	if (mainWindow) {
 		registerIpcHandlers(runtimeManager, mainWindow);
 
-		// Push initial state: projects + agents + history
+		// Push initial project/session summaries. Message history is loaded
+		// on activation as a raw SDK SessionEntry snapshot.
 		const allProjects = runtimeManager.listProjects();
 		const activeProject = runtimeManager.getActiveProject();
 		mainWindow.webContents.send("look:event", {
@@ -230,7 +231,6 @@ async function initSessionRuntime(): Promise<void> {
 			activeProjectId: activeProject?.id ?? null,
 		});
 
-		const snapshot = runtimeManager.listAgentsWithHistory();
 		for (const project of allProjects) {
 			const agents = runtimeManager.listAgentsInProject(project.id);
 			if (agents.length > 0) {
@@ -241,16 +241,6 @@ async function initSessionRuntime(): Promise<void> {
 				});
 			}
 		}
-		for (const [agentId, msgs] of Object.entries(snapshot.history)) {
-			if (msgs.length > 0) {
-				mainWindow.webContents.send("look:event", {
-					type: "agent:history" as const,
-					agentId,
-					messages: msgs,
-				});
-			}
-		}
-
 		console.log("[Look] IPC handlers registered");
 
 		// Auto-updater: check for updates 3s after startup

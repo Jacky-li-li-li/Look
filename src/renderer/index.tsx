@@ -21,13 +21,11 @@ if (import.meta.env.DEV) {
 const api = (window as any).look;
 
 // IPC event handlers run outside React lifecycle via vanilla Jotai store.
-// This decouples high-frequency events (agent:usage-update, etc.) from the
-// component tree, so e.g. token usage updates only re-render the Sidebar row
-// instead of the entire ChatPanel.
+// This decouples high-frequency SDK events from the component tree.
 // Register IPC handlers outside React lifecycle.
 if (api) initIpcHandlers(api);
 
-// Start loading persistent data (agents, history, settings) immediately.
+// Start loading session summaries and settings immediately.
 // This was previously split across multiple useEffect hooks in App.tsx.
 if (api) {
 	initAppData(api);

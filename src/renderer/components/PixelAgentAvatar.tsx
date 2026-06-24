@@ -4,13 +4,13 @@
 
 import { Avatar, AvatarFallback } from "@shared/components/ui/avatar";
 import { cn } from "@shared/lib/utils";
-import type { SessionStatus } from "@shared/types";
 import React from "react";
+import type { RendererSessionPhase } from "../store/sessionTypes";
 
 const PIXEL_PATTERN = ["01110", "11011", "10101", "10001", "01110"];
 
 interface PixelAgentAvatarProps {
-	status?: SessionStatus | string;
+	status?: RendererSessionPhase | string;
 	size?: "xs" | "sm" | "md" | "lg";
 	active?: boolean;
 	className?: string;

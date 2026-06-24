@@ -1,199 +1,263 @@
-// ============================================================
-// MessageBubble — Whisper Bubbles + Inset Drawers (Ink Wash)
-//
-// v0.4: Branching actions (Branch from here / Fork to new chat)
-// are rendered by ChatPanel *outside* the bubble, in a sibling
-// row directly below the message row. The whole row is a
-// `group/message` so hovering the bubble OR the actions keeps
-// the strip visible. This matches the ChatGPT pattern and keeps
-// the bubble itself free of any meta-UI.
-//
-// User bubbles do NOT get an action strip — forking off a user
-// message is a different mental model ("re-ask the same question")
-// and we don't want to suggest it accidentally. The future
-// /tree command palette (Phase 1.5+) will let the user navigate
-// to any user message as a fork point if they really want to.
-// ============================================================
-
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage, ImageContent, TextContent, ThinkingContent, ToolCall } from "@earendil-works/pi-ai";
 import { cn } from "@shared/lib/utils";
-import type { PiContentBlock, PiMessage, PiTextBlock } from "@shared/types";
+import type { SessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { MapPin } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../store/authAtoms";
-import ExecutionProcess from "./ExecutionProcess";
+import type { RendererToolExecutionState } from "../store/sessionTypes";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import SkillAwareContent from "./SkillAwareContent";
+import ThinkingPanel from "./ThinkingPanel";
+import ToolCallCard from "./ToolCallCard";
 import UserAvatar from "./UserAvatar";
 
 interface MessageBubbleProps {
-	message: PiMessage;
+	message: AgentMessage;
 	agentName?: string;
+	isStreaming?: boolean;
 	autoCollapse: boolean;
-	/**
-	 * v0.4: whether this message's id matches the session's
-	 * current leafId. Renders a subtle "active" accent (left
-	 * border + pin badge) so the user can see at a glance which
-	 * branch they're on. */
+	toolExecutions: Record<string, RendererToolExecutionState>;
 	isActiveLeaf?: boolean;
-	/**
-	 * v0.4: when true, applies the .bubble-flash animation to
-	 * the inner whisper-bubble. ChatPanel sets this on the
-	 * entry it just navigated to, for ~900ms, then clears it.
-	 * The animation is a 2px ink-color ring growing then
-	 * fading — see App.css.
-	 */
 	flash?: boolean;
 }
 
-/** Split blocks into continuous segments. Consecutive thinking/toolCall
- *  blocks are grouped into a "process" segment (rendered inside
- *  ExecutionProcess). Consecutive text blocks are merged into a single
- *  "text" segment to avoid extra DOM wrapping and gap spacing. */
-function segmentBlocks(blocks: PiContentBlock[]): Array<{ type: "process" | "text"; blocks: PiContentBlock[] }> {
-	const segments: Array<{ type: "process" | "text"; blocks: PiContentBlock[] }> = [];
-	for (const block of blocks) {
-		const segmentType = block.type === "text" ? "text" : "process";
-		const last = segments[segments.length - 1];
-		if (last && last.type === segmentType) {
-			last.blocks.push(block);
-		} else {
-			segments.push({ type: segmentType, blocks: [block] });
-		}
+function resultText(value: unknown): string | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value === "string") return value;
+	if (value && typeof value === "object" && "content" in value && Array.isArray(value.content)) {
+		const text = value.content
+			.filter((block): block is TextContent => block?.type === "text")
+			.map((block) => block.text)
+			.join("\n");
+		if (text) return text;
 	}
-	return segments;
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value);
+	}
 }
 
-/** Render content blocks grouped into ExecutionProcess for consecutive
- *  thinking/toolCall runs, while text blocks render unwrapped. */
+function ImageBlock({ block }: { block: ImageContent }) {
+	return (
+		<img
+			src={`data:${block.mimeType};base64,${block.data}`}
+			alt="SDK message attachment"
+			className="max-h-96 max-w-full rounded-md border border-hairline object-contain"
+		/>
+	);
+}
+
 function ContentBlocks({
 	blocks,
 	isStreaming,
 	autoCollapse,
+	toolExecutions,
 }: {
-	blocks: PiContentBlock[];
+	blocks: Array<TextContent | ThinkingContent | ImageContent | ToolCall>;
 	isStreaming: boolean;
 	autoCollapse: boolean;
+	toolExecutions: Record<string, RendererToolExecutionState>;
 }) {
-	const segments = segmentBlocks(blocks);
-
 	return (
 		<div className="flex flex-col gap-2">
-			{segments.map((seg, si) => {
-				if (seg.type === "process") {
+			{blocks.map((block, index) => {
+				if (block.type === "text") {
+					if (!block.text) return null;
 					return (
-						<ExecutionProcess
-							key={`ep-${si}`}
-							blocks={seg.blocks}
+						<div key={`text-${index}`} className="message-prose">
+							<SkillAwareContent content={block.text} isStreaming={isStreaming} />
+						</div>
+					);
+				}
+				if (block.type === "thinking") {
+					if (!block.thinking) return null;
+					return (
+						<ThinkingPanel
+							key={`thinking-${index}`}
+							thinking={block.thinking}
 							isStreaming={isStreaming}
 							autoCollapse={autoCollapse}
 						/>
 					);
 				}
-				return seg.blocks.map((block, bi) => {
-					const tb = block as PiTextBlock;
-					if (!tb.text) return null;
-					return (
-						<div key={`text-${si}-${bi}`} className="message-prose">
-							<SkillAwareContent content={tb.text} isStreaming={isStreaming} />
-						</div>
-					);
-				});
+				if (block.type === "image") return <ImageBlock key={`image-${index}`} block={block} />;
+				const execution = toolExecutions[block.id];
+				const status = execution
+					? execution.phase === "running"
+						? "running"
+						: execution.isError
+							? "error"
+							: "success"
+					: "pending";
+				return (
+					<ToolCallCard
+						key={block.id || `tool-${index}`}
+						toolCall={{
+							callId: block.id,
+							toolName: block.name,
+							args: block.arguments,
+							status,
+							result: resultText(execution?.result ?? execution?.partialResult),
+							isError: execution?.isError,
+						}}
+					/>
+				);
 			})}
 		</div>
 	);
 }
 
+function messageBlocks(message: AgentMessage): Array<TextContent | ThinkingContent | ImageContent | ToolCall> {
+	if (message.role === "assistant") return [...message.content];
+	if (message.role === "user" || message.role === "toolResult") {
+		return typeof message.content === "string" ? [{ type: "text", text: message.content }] : [...message.content];
+	}
+	if (message.role === "custom") {
+		return typeof message.content === "string" ? [{ type: "text", text: message.content }] : [...message.content];
+	}
+	if (message.role === "bashExecution") {
+		return [{ type: "text", text: `$ ${message.command}\n${message.output}` }];
+	}
+	if (message.role === "branchSummary" || message.role === "compactionSummary") {
+		return [{ type: "text", text: message.summary }];
+	}
+	return [{ type: "text", text: resultText(message) ?? "" }];
+}
+
 const MessageBubble = memo(function MessageBubble({
 	message,
 	agentName,
+	isStreaming = false,
 	autoCollapse,
+	toolExecutions,
 	isActiveLeaf = false,
 	flash = false,
 }: MessageBubbleProps) {
 	const { t } = useTranslation();
 	const userProfile = useAtomValue(userProfileAtom);
 	const isUser = message.role === "user";
-	const isAssistant = message.role === "assistant";
-
-	const timeDisplay = message.timestamp ? formatMessageTime(message.timestamp) : null;
+	const assistant = message.role === "assistant" ? (message as AssistantMessage) : null;
+	const toolResult = message.role === "toolResult" ? message : null;
+	const timestamp = "timestamp" in message ? message.timestamp : Date.now();
+	const sender = isUser
+		? userProfile.userName || t("chat.you")
+		: message.role === "toolResult"
+			? message.toolName
+			: message.role === "custom"
+				? message.customType
+				: message.role === "bashExecution"
+					? "bash"
+					: (agentName ?? t("chat.agent"));
 
 	return (
 		<div
 			className={cn("flex gap-3", isUser && "flex-row-reverse self-end")}
 			style={{ maxWidth: isUser ? "80%" : "92%" }}
 		>
-			{/* Avatar */}
-			{!isUser ? (
-				<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
-			) : (
+			{isUser ? (
 				<UserAvatar avatar={userProfile.avatar} size="sm" className="mt-0.5" />
+			) : (
+				<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
 			)}
-
 			<div className="min-w-0 flex-1">
-				{/* Sender label */}
 				<div
 					className={cn("mb-1 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}
 				>
-					<span className="font-medium uppercase tracking-wider">
-						{isUser ? userProfile.userName || t("chat.you") : (agentName ?? t("chat.agent"))}
+					<span className="font-medium uppercase tracking-wider">{sender}</span>
+					<span className="tabular-nums" title={new Date(timestamp).toLocaleString()}>
+						{formatMessageTime(timestamp)}
 					</span>
-					{timeDisplay && (
-						<span className="tabular-nums" title={new Date(message.timestamp).toLocaleString()}>
-							{timeDisplay}
-						</span>
-					)}
-					{message.isStreaming && <span className="status-mark" data-status="thinking" />}
-					{isAssistant && isActiveLeaf && (
-						<span
-							title={t("chat.activeLeaf")}
-							className="inline-flex items-center gap-0.5 rounded-sm border border-hairline px-1 py-px text-[9px] font-medium uppercase tracking-wider text-muted-foreground/80"
-						>
+					{isStreaming && <span className="status-mark" data-status="thinking" />}
+					{assistant && isActiveLeaf && (
+						<span className="inline-flex items-center gap-0.5 rounded-sm border border-hairline px-1 py-px text-[9px] font-medium uppercase tracking-wider text-muted-foreground/80">
 							<MapPin className="size-2.5" />
 							{t("chat.activeLeaf")}
 						</span>
 					)}
 				</div>
-
-				{/* Whisper bubble */}
-				{message.assistantChunks && message.assistantChunks.length > 0 ? (
-					/* Multi-chunk: flatMap all blocks so segmentBlocks groups across chunk boundaries */
-					<div
-						className={cn(
-							"whisper-bubble whisper-bubble--assistant flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed max-w-[85%]",
-							isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
-							flash && "bubble-flash",
-						)}
-					>
-						<ContentBlocks
-							blocks={message.assistantChunks.flatMap((c) => c.contentBlocks)}
-							isStreaming={message.isStreaming ?? false}
-							autoCollapse={autoCollapse}
-						/>
-					</div>
-				) : (
-					/* Single-chunk */
-					<div
-						className={cn(
-							"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
-							isUser && "whisper-bubble--user",
-							!isUser && "whisper-bubble--assistant max-w-[85%]",
-							isAssistant && isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
-							flash && "bubble-flash",
-						)}
-					>
-						<ContentBlocks
-							blocks={message.contentBlocks}
-							isStreaming={message.isStreaming ?? false}
-							autoCollapse={autoCollapse}
-						/>
-					</div>
-				)}
+				<div
+					className={cn(
+						"whisper-bubble flex flex-col gap-2 rounded-lg px-3.5 py-2.5 text-[13px] leading-relaxed",
+						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant max-w-[85%]",
+						assistant && isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
+						flash && "bubble-flash",
+					)}
+				>
+					<ContentBlocks
+						blocks={messageBlocks(message)}
+						isStreaming={isStreaming}
+						autoCollapse={autoCollapse}
+						toolExecutions={toolExecutions}
+					/>
+					{assistant?.errorMessage && <div className="text-destructive">{assistant.errorMessage}</div>}
+					{assistant && assistant.stopReason !== "stop" && assistant.stopReason !== "toolUse" && (
+						<div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+							{assistant.stopReason}
+						</div>
+					)}
+					{assistant && (
+						<div className="flex flex-wrap gap-x-2 text-[9px] text-muted-foreground/60">
+							<span>{assistant.provider}</span>
+							<span>{assistant.model}</span>
+							<span>{assistant.api}</span>
+							{assistant.responseModel && assistant.responseModel !== assistant.model && (
+								<span>response: {assistant.responseModel}</span>
+							)}
+							{assistant.diagnostics && assistant.diagnostics.length > 0 && (
+								<details className="basis-full">
+									<summary className="cursor-pointer">diagnostics ({assistant.diagnostics.length})</summary>
+									<pre className="mt-1 overflow-x-auto whitespace-pre-wrap">
+										{JSON.stringify(assistant.diagnostics, null, 2)}
+									</pre>
+								</details>
+							)}
+						</div>
+					)}
+					{toolResult && (
+						<div className={cn("text-[9px] text-muted-foreground/60", toolResult.isError && "text-destructive")}>
+							<div>
+								{toolResult.toolName} · {toolResult.toolCallId}
+								{toolResult.isError ? " · error" : ""}
+							</div>
+							{toolResult.details !== undefined && (
+								<details>
+									<summary className="cursor-pointer">details</summary>
+									<pre className="mt-1 overflow-x-auto whitespace-pre-wrap">
+										{resultText(toolResult.details)}
+									</pre>
+								</details>
+							)}
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);
 });
+
+export function SessionEntryBubble({ entry }: { entry: Exclude<SessionEntry, { type: "message" }> }) {
+	let title: string = entry.type;
+	let body = "";
+	if (entry.type === "branch_summary" || entry.type === "compaction") body = entry.summary;
+	else if (entry.type === "custom_message")
+		body = typeof entry.content === "string" ? entry.content : (resultText(entry.content) ?? "");
+	else if (entry.type === "model_change") body = `${entry.provider}/${entry.modelId}`;
+	else if (entry.type === "thinking_level_change") body = entry.thinkingLevel;
+	else if (entry.type === "label") body = entry.label ?? "";
+	else if (entry.type === "session_info") body = entry.name ?? "";
+	else if (entry.type === "custom") body = resultText(entry.data) ?? "";
+	if (entry.type === "custom_message") title = entry.customType;
+	return (
+		<div className="mx-10 rounded-md border border-hairline bg-muted/20 px-3 py-2 text-xs">
+			<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
+			{body && <div className="message-prose whitespace-pre-wrap">{body}</div>}
+		</div>
+	);
+}
 
 function formatMessageTime(ts: number): string {
 	const diff = Date.now() - ts;

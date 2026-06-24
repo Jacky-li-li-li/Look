@@ -10,10 +10,13 @@ import { Button } from "@shared/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@shared/components/ui/tooltip";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { PanelRightOpen, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { sessionStateAtomFamily } from "../store/atoms";
+import { deriveAgentPhase, deriveSessionPhase } from "../store/sessionTypes";
 
 interface SessionSheet {
 	id: string;
@@ -51,8 +54,10 @@ function SortableSheet({
 	});
 
 	const agent = sheet.agent;
-	const status = agent?.status ?? "idle";
-	const isRunning = status === "thinking" || status === "working";
+	const statePhase = useAtomValue(sessionStateAtomFamily(sheet.id));
+	const derivedPhase = deriveSessionPhase(statePhase);
+	const status = derivedPhase === "idle" ? deriveAgentPhase(agent) : derivedPhase;
+	const isRunning = status !== "idle";
 
 	const handleClose = useCallback(
 		(event: React.MouseEvent) => {

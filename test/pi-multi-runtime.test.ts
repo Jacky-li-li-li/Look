@@ -77,4 +77,45 @@ describe("pi multi-runtime host constraints", () => {
 		expect(first.getSessionFile()).not.toBe(second.getSessionFile());
 		expect(existsSync(emptyDraft.getSessionFile()!)).toBe(false);
 	});
+
+	it("branches through an independent manager without mutating the source manager", async () => {
+		const root = await mkdtemp(join(tmpdir(), "look-parallel-fork-"));
+		cleanup.push(root);
+		const cwd = join(root, "project");
+		const sessionDir = join(root, "sessions");
+		const { mkdir } = await import("node:fs/promises");
+		await Promise.all([mkdir(cwd), mkdir(sessionDir)]);
+		const source = SessionManager.create(cwd, sessionDir);
+		const entryId = source.appendMessage({ role: "user", content: "fork here", timestamp: Date.now() });
+		source.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "persist the source" }],
+			timestamp: Date.now(),
+			api: "test",
+			provider: "test",
+			model: "test",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+		} as any);
+		const sourceId = source.getSessionId();
+		const sourceFile = source.getSessionFile()!;
+		const sourceLeaf = source.getLeafId();
+
+		const copy = SessionManager.open(sourceFile, source.getSessionDir());
+		const forkedPath = copy.createBranchedSession(entryId)!;
+
+		expect(copy.getSessionId()).not.toBe(sourceId);
+		expect(forkedPath).not.toBe(sourceFile);
+		expect(source.getSessionId()).toBe(sourceId);
+		expect(source.getSessionFile()).toBe(sourceFile);
+		expect(source.getLeafId()).toBe(sourceLeaf);
+		expect(source.getEntry(entryId)).toBeDefined();
+	});
 });

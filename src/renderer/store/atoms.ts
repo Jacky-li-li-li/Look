@@ -2,14 +2,19 @@ import type {
 	AgentInfo,
 	PermissionAskQueueItem,
 	PermissionMode,
-	PiMessage,
 	PlanApprovalRequest,
 	PlanQuestionRequest,
 	ProjectInfo,
-	SessionTreeNode,
 } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
+import {
+	deriveAgentPhase,
+	deriveSessionPhase,
+	emptyRendererSessionState,
+	type RendererSessionPhase,
+	type RendererSessionState,
+} from "./sessionTypes";
 
 // ---- Core data ----
 
@@ -23,12 +28,6 @@ export const activeAgentIdAtom = atom<string | null>(null);
  * Cleared when user clicks/selects the agent.
  */
 export const recentlyCompletedAtom = atom<string[]>([]);
-
-/** Derived: set of currently running agent IDs (thinking/working) */
-export const runningAgentsAtom = atom<Set<string>>((get) => {
-	const agents = get(agentsAtom);
-	return new Set(agents.filter((a) => a.status === "thinking" || a.status === "working").map((a) => a.id));
-});
 
 // ---- Project data ----
 
@@ -50,13 +49,29 @@ export const pendingDeleteProjectAtom = atom<{
 	runningCount: number;
 } | null>(null);
 
-/** Per-agent message history. atomFamily creates one atom per agentId. */
-export const messagesAtomFamily = atomFamily((_agentId: string) => atom<PiMessage[]>([]));
-
-/** Per-agent SDK queue snapshot (driven by `agent:queue_update` events). */
-export const queuesAtomFamily = atomFamily((_agentId: string) =>
-	atom<{ steering: string[]; followUp: string[] }>({ steering: [], followUp: [] }),
+/** SDK-native persisted/live state, isolated by pi session ID. */
+export const sessionStateAtomFamily = atomFamily((_agentId: string) =>
+	atom<RendererSessionState>(emptyRendererSessionState()),
 );
+
+/** Renderer-only phase derived from native runtime getters and temporary tool executions. */
+export const sessionPhasesAtom = atom<Map<string, RendererSessionPhase>>((get) => {
+	const phases = new Map<string, RendererSessionPhase>();
+	for (const agent of get(agentsAtom)) {
+		const statePhase = deriveSessionPhase(get(sessionStateAtomFamily(agent.id)));
+		phases.set(agent.id, statePhase === "idle" ? deriveAgentPhase(agent) : statePhase);
+	}
+	return phases;
+});
+
+/** Derived: set of currently running session IDs. */
+export const runningAgentsAtom = atom<Set<string>>((get) => {
+	const running = new Set<string>();
+	for (const [sessionId, phase] of get(sessionPhasesAtom)) {
+		if (phase !== "idle") running.add(sessionId);
+	}
+	return running;
+});
 
 // ---- v0.4 Session tree / branching ----
 
@@ -65,8 +80,6 @@ export const queuesAtomFamily = atomFamily((_agentId: string) =>
  *  the leaf moves (append / navigate / label). Read by the future
  *  tree-view UI and by ChatPanel to know whether the current view is
  *  on the "latest" branch. */
-export const sessionTreeAtomFamily = atomFamily((_agentId: string) => atom<SessionTreeNode | null>(null));
-
 /** Per-agent current leafId. Same source as the tree — `agent:tree-changed`. */
 export const sessionLeafIdAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
 
@@ -178,12 +191,10 @@ export const providerSettingsAtom = atom<SettingsProviderInfo[]>([]);
 // ---- Cleanup: call when an agent is destroyed to free atom memory ----
 
 export function removeAgentAtoms(agentId: string): void {
-	messagesAtomFamily.remove(agentId);
-	queuesAtomFamily.remove(agentId);
+	sessionStateAtomFamily.remove(agentId);
 	// v0.4: free the per-agent tree/leaf/navigating/forking atoms too
 	// so a re-created agent with the same id (extremely unlikely, but
 	// possible after a uuidv4 collision) doesn't inherit stale state.
-	sessionTreeAtomFamily.remove(agentId);
 	sessionLeafIdAtomFamily.remove(agentId);
 	navigatingEntryAtomFamily.remove(agentId);
 	forkingEntryAtomFamily.remove(agentId);

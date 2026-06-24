@@ -23,8 +23,8 @@ const api = {
     return () => { ipcRenderer.removeListener("look:event", handler); };
   },
 
-  sendMessage: (agentId, message) =>
-    ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message }),
+  sendMessage: (agentId, message, images) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message, images }),
 
   activateSession: (sessionId) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:activate", agentId: sessionId }),
@@ -57,9 +57,6 @@ const api = {
   updateThinking: (agentId, level) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:update-thinking", agentId, level }),
 
-  getHistory: (agentId) =>
-    ipcRenderer.invoke("look:invoke", { type: "agent:get-history", agentId }),
-
   getSettings: () =>
     ipcRenderer.invoke("look:invoke", { type: "settings:get" }),
 
@@ -87,9 +84,6 @@ const api = {
 
   resetGeneralSettings: () =>
     ipcRenderer.invoke("look:invoke", { type: "settings:general:reset" }),
-
-  getContextUsage: (agentId) =>
-    ipcRenderer.invoke("look:invoke", { type: "context:usage", agentId }),
 
   compressSession: (agentId) =>
     ipcRenderer.invoke("look:invoke", { type: "session:compress", agentId }),
@@ -145,10 +139,6 @@ const api = {
   // hover-action buttons in MessageBubble. The renderer never
   // touches pi's SessionManager directly — all reads/writes go
   // through the main process and the active AgentSessionRuntime.
-  getSessionTree: (agentId) =>
-    ipcRenderer.invoke("look:invoke", { type: "agent:get-session-tree", agentId }),
-  getForkPoints: (agentId) =>
-    ipcRenderer.invoke("look:invoke", { type: "agent:get-fork-points", agentId }),
   // opts: { summarize?, customInstructions?, label? }
   // returns: { editorText?, cancelled: boolean, aborted?: boolean }
   navigateTree: (agentId, entryId, opts) =>

@@ -3,8 +3,7 @@
 //
 // Post-Jotai: all core state lives in atoms (store/atoms.ts).
 // IPC events are handled outside React by store/ipcHandler.ts.
-// Components subscribe only to the atoms they care about, so e.g.
-// agent:usage-update only re-renders the Sidebar row, not ChatPanel.
+// High-frequency SDK events update only their session-scoped atoms.
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
@@ -39,13 +38,12 @@ import {
 	activeProjectIdAtom,
 	agentsAtom,
 	autoCollapseAtom,
-	messagesAtomFamily,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
-	queuesAtomFamily,
+	sessionStateAtomFamily,
 	settingsTabAtom,
 	showSettingsAtom,
 	sidebarCollapsedAtom,
@@ -53,6 +51,7 @@ import {
 } from "./store/atoms";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "./store/authAtoms";
 import { appStore } from "./store/ipcHandler";
+import { deriveSessionPhase } from "./store/sessionTypes";
 
 preloadHighlighter();
 
@@ -75,10 +74,14 @@ export default function App() {
 	const activeProject = useAtomValue(activeProjectAtom);
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 
-	// Messages and queue for the active agent (atomFamily).
+	// SDK-native persisted/live state for the active pi session.
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
-	const activeMessages = useAtomValue(messagesAtomFamily(activeAgentId ?? ""));
-	const activeQueue = useAtomValue(queuesAtomFamily(activeAgentId ?? ""));
+	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? ""));
+	const activeQueue = {
+		steering: [...(activeSessionState.runtime?.steering ?? [])],
+		followUp: [...(activeSessionState.runtime?.followUp ?? [])],
+	};
+	const activePhase = deriveSessionPhase(activeSessionState);
 
 	// Sheet state: opened session IDs in the top bar.
 	const agents = useAtomValue(agentsAtom);
@@ -130,10 +133,20 @@ export default function App() {
 
 	// ---- Callbacks: use appStore.get() to read latest value, avoiding stale closures ----
 
-	const handleSendMessage = useCallback((text: string) => {
+	const handleSendMessage = useCallback(async (text: string): Promise<boolean> => {
 		const id = appStore.get(activeAgentIdAtom);
-		if (!id || !api) return;
-		api.sendMessage(id, text);
+		if (!id || !api) return false;
+		try {
+			const result = await api.sendMessage(id, text);
+			if (!result?.success) {
+				toast.error(result?.error ?? "Message was not accepted");
+				return false;
+			}
+			return true;
+		} catch (error: any) {
+			toast.error(error?.message ?? "Message was not accepted");
+			return false;
+		}
 	}, []);
 
 	const handleSelectAgent = useCallback(async (agentId: string) => {
@@ -409,10 +422,10 @@ export default function App() {
 									<ChatPanel
 										agentId={activeAgent.id}
 										agentName={activeAgent.name}
-										messages={activeMessages}
+										sessionState={activeSessionState}
 										autoCollapse={autoCollapse}
 										queue={activeQueue}
-										agentStatus={activeAgent.status}
+										phase={activePhase}
 										currentModel={activeAgent.model}
 										currentThinking={activeAgent.thinkingLevel}
 										availableThinkingLevels={thinkingLevels}
