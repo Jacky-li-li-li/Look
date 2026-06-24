@@ -215,6 +215,12 @@ async function handleRendererInvoke(
 			if ("openedSessionIds" in settings) {
 				guardStringArray(settings.openedSessionIds, "settings.openedSessionIds");
 			}
+			if ("themeStyle" in settings) {
+				guardEnum(settings.themeStyle, "settings.themeStyle", ["ink-wash", "swiss", "bauhaus"] as const);
+			}
+			if ("themeTone" in settings) {
+				guardEnum(settings.themeTone, "settings.themeTone", ["light", "dark"] as const);
+			}
 			const updated = await runtimeManager.updateGeneralSettings(data.settings ?? {});
 			return { success: true, settings: updated };
 		}

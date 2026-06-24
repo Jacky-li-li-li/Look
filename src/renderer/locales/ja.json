@@ -36,7 +36,12 @@
 		"draft": "下書き",
 		"messageCount": "{{count}} 件のメッセージ",
 		"menu": "セッションメニュー",
-		"status": { "thinking": "思考中", "working": "ツール実行中", "error": "エラー", "idle": "待機中" }
+		"status": {
+			"thinking": "思考中",
+			"working": "ツール実行中",
+			"error": "エラー",
+			"idle": "待機中"
+		}
 	},
 	"project": {
 		"openProject": "プロジェクトフォルダを開く",
@@ -83,7 +88,28 @@
 		"authSourceEnv": "環境変数 {{env}} から検出",
 		"authSourceRuntime": "ランタイムで提供",
 		"authSourceConfig": "~/.look/models.json で設定",
-		"authSourceAuto": "自動設定"
+		"authSourceAuto": "自動設定",
+		"themeInkWash": "インクウォッシュ",
+		"themeInkWashDesc": "墨色モノクロ + フロストガラス + ヘアライン",
+		"themeSwiss": "スイスグリッド",
+		"themeSwissDesc": "Helvetica + 8pt グリッド + 朱赤アクセント",
+		"themeBauhaus": "バウハウス",
+		"themeBauhausDesc": "三原色 + Futura + ハードな幾何形状",
+		"themeTone": "トーン",
+		"themeToneDesc": "ライトまたはダーク — 各スタイルに推奨トーンあり",
+		"themeToneLight": "ライト",
+		"themeToneDark": "ダーク",
+		"themeHara": "原研哉",
+		"themeHaraDesc": "東洋ミニマリズム — 余白",
+		"themeField": "Field.io",
+		"themeFieldDesc": "モーションポエトリー",
+		"themeBraun": "Braun",
+		"themeBraunDesc": "工業ミニマリズム — Dieter Rams",
+		"themeEditorial": "エディトリアル",
+		"themeEditorialDesc": "雑誌スプレッド — 大型セリフ",
+		"themeCrt": "CRT ターミナル",
+		"themeCrtDesc": "蛍光グリーン走査線",
+		"themeToneRecommended": "このスタイルには推奨"
 	},
 	"agent": {
 		"model": "モデル",

@@ -228,6 +228,8 @@ export type RendererToMainEvent =
 				lastActiveSessionId: string;
 				lastActiveProjectId: string;
 				openProjectIds: string[];
+				themeStyle: "ink-wash" | "swiss" | "bauhaus";
+				themeTone: "light" | "dark";
 			}>;
 	  }
 	| { type: "settings:general:reset" }

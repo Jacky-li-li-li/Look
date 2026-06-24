@@ -36,7 +36,12 @@
 		"draft": "draft",
 		"messageCount": "{{count}} messages",
 		"menu": "Session menu",
-		"status": { "thinking": "thinking", "working": "using tools", "error": "error", "idle": "idle" }
+		"status": {
+			"thinking": "thinking",
+			"working": "using tools",
+			"error": "error",
+			"idle": "idle"
+		}
 	},
 	"project": {
 		"openProject": "Open project folder",
@@ -83,7 +88,28 @@
 		"authSourceEnv": "Detected from {{env}} in environment",
 		"authSourceRuntime": "Provided at runtime",
 		"authSourceConfig": "Configured via ~/.look/models.json",
-		"authSourceAuto": "Auto-configured"
+		"authSourceAuto": "Auto-configured",
+		"themeInkWash": "Ink Wash",
+		"themeInkWashDesc": "Oil-ink monochrome with frosted glass and hairline borders",
+		"themeSwiss": "Swiss Grid",
+		"themeSwissDesc": "Helvetica + 8pt grid + vermillion accent, UPPERCASE",
+		"themeBauhaus": "Bauhaus",
+		"themeBauhausDesc": "Primary colors + Futura + hard geometric shapes",
+		"themeTone": "Tone",
+		"themeToneDesc": "Light or dark variant — each style has a recommended tone",
+		"themeToneLight": "Light",
+		"themeToneDark": "Dark",
+		"themeHara": "Hara",
+		"themeHaraDesc": "Eastern minimalism — empty whitespace",
+		"themeField": "Field",
+		"themeFieldDesc": "Motion poetry — particle physics",
+		"themeBraun": "Braun",
+		"themeBraunDesc": "Industrial minimalism — Dieter Rams",
+		"themeEditorial": "Editorial",
+		"themeEditorialDesc": "Magazine spread — large serif display",
+		"themeCrt": "CRT Terminal",
+		"themeCrtDesc": "Phosphor green scanlines",
+		"themeToneRecommended": "Recommended for this style"
 	},
 	"agent": {
 		"model": "Model",

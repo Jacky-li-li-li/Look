@@ -29,6 +29,7 @@
     "@earendil-works/pi-ai": "0.79.1",
     "@earendil-works/pi-coding-agent": "0.79.1",
     "@fontsource-variable/geist": "^5.2.9",
+    "@fontsource-variable/inter": "^5.2.8",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@supabase/supabase-js": "^2.108.0",
     "@tailwindcss/typography": "^0.5.19",

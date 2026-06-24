@@ -32,7 +32,7 @@ export function initMermaid() {
 			clusterBorder: "#475569",
 			titleColor: "#e2e8f0",
 			edgeLabelBackground: "transparent",
-			fontFamily: "Geist Variable, sans-serif",
+			fontFamily: "var(--font-display)",
 		},
 	});
 	mermaidReady = true;

@@ -9,6 +9,7 @@ import { cn } from "@shared/lib/utils";
 import { Check, ChevronRight, Loader2, Wrench, X } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { useLookTheme } from "../hooks/useLookTheme";
 import { scheduleCollapse } from "../lib/batchCollapse";
 
 export interface ToolCallViewModel {
@@ -120,6 +121,7 @@ function formatStatSuffix(
 
 function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { t } = useTranslation();
+	const { style: themeStyle } = useLookTheme();
 	// Auto open when running, auto close on completion
 	const [open, setOpen] = React.useState(toolCall.status === "running");
 	const prevStatus = React.useRef(toolCall.status);
@@ -181,19 +183,57 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 				>
 					<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
 					<StatusIcon status={toolCall.status} />
-					<span className="shrink-0 font-mono text-[11px] font-medium text-foreground">{toolCall.toolName}</span>
+					<span
+						className={cn(
+							"shrink-0 font-medium text-foreground",
+							themeStyle === "swiss" && "font-sans text-[10px] uppercase tracking-[0.08em] font-bold",
+							themeStyle === "bauhaus" && "font-display text-[11px] uppercase tracking-[0.04em]",
+							themeStyle === "ink-wash" && "font-mono text-[11px]",
+						)}
+					>
+						{toolCall.toolName}
+					</span>
 					<span className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground">
 						{toolSummary || argsPreview || t("tool.noArgs")}
 					</span>
 					{statSuffix && (
 						<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
 					)}
-					<Badge
-						variant={statusVariant as any}
-						className={cn("h-5 shrink-0 rounded px-1.5 font-mono text-[9px]", statusBadgeColor)}
-					>
-						{toolCall.status}
-					</Badge>
+					{themeStyle === "swiss" ? (
+						<span
+							className="ml-auto h-5 shrink-0 px-1.5 font-mono text-[9px] font-bold uppercase tracking-wider inline-flex items-center bg-foreground text-background"
+							style={{ borderRadius: 0 }}
+						>
+							{toolCall.status}
+						</span>
+					) : themeStyle === "bauhaus" ? (
+						<span className="ml-auto inline-flex items-center gap-1">
+							<span
+								className="inline-block size-2.5"
+								style={{
+									background:
+										toolCall.status === "success"
+											? "#1976d2"
+											: toolCall.status === "error"
+												? "#e2231a"
+												: toolCall.status === "running"
+													? "#fbc02d"
+													: "var(--muted-foreground)",
+									borderRadius: 0,
+								}}
+							/>
+							<span className="font-display text-[9px] uppercase tracking-[0.06em] font-bold text-foreground">
+								{toolCall.status}
+							</span>
+						</span>
+					) : (
+						<Badge
+							variant={statusVariant as any}
+							className={cn("h-5 shrink-0 rounded px-1.5 font-mono text-[9px]", statusBadgeColor)}
+						>
+							{toolCall.status}
+						</Badge>
+					)}
 				</button>
 
 				{hasBody && (

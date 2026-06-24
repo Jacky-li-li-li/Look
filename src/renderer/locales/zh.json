@@ -36,7 +36,12 @@
 		"draft": "草稿",
 		"messageCount": "{{count}} 条消息",
 		"menu": "会话菜单",
-		"status": { "thinking": "思考中", "working": "调用工具", "error": "错误", "idle": "空闲" }
+		"status": {
+			"thinking": "思考中",
+			"working": "调用工具",
+			"error": "错误",
+			"idle": "空闲"
+		}
 	},
 	"project": {
 		"openProject": "打开项目文件夹",
@@ -83,7 +88,28 @@
 		"authSourceEnv": "从环境变量 {{env}} 检测到",
 		"authSourceRuntime": "运行时提供",
 		"authSourceConfig": "通过 ~/.look/models.json 配置",
-		"authSourceAuto": "自动配置"
+		"authSourceAuto": "自动配置",
+		"themeInkWash": "墨水",
+		"themeInkWashDesc": "墨色单色 + 玻璃磨砂 + 发丝线边框",
+		"themeSwiss": "瑞士网格",
+		"themeSwissDesc": "Helvetica + 8pt 网格 + 朱红强调,全大写",
+		"themeBauhaus": "包豪斯",
+		"themeBauhausDesc": "三原色 + Futura + 硬几何形状",
+		"themeTone": "色调",
+		"themeToneDesc": "亮色或深色变体 — 每种风格有推荐色调",
+		"themeToneLight": "亮色",
+		"themeToneDark": "深色",
+		"themeHara": "原研哉",
+		"themeHaraDesc": "东方极简 — 留白",
+		"themeField": "Field.io",
+		"themeFieldDesc": "运动诗学 — 粒子物理",
+		"themeBraun": "Braun",
+		"themeBraunDesc": "工业极简 — Dieter Rams",
+		"themeEditorial": "编辑设计",
+		"themeEditorialDesc": "杂志跨页 — 大号衬线",
+		"themeCrt": "CRT 终端",
+		"themeCrtDesc": "磷光绿扫描线",
+		"themeToneRecommended": "该风格推荐此色调"
 	},
 	"agent": {
 		"model": "模型",

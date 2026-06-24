@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
 @plugin "@tailwindcss/typography";
 /* Mermaid diagram SVGs — fill container width, height auto from aspect ratio.
    Mermaid hardcodes width/height on the <svg>; we override both so the diagram
@@ -33,13 +34,16 @@
  * background + transforms). */
 @source "../../src/main/shared/**/*.{ts,tsx}";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.theme-ink-wash.tone-dark *));
 
 /* ============================================================
-   Look — Ink Wash Design System
-   Oil-ink monochrome + frosted glass + line-drawing buttons
+   Look — Multi-style Design System
+   `<html class="theme-{style} tone-{tone}">` selects tokens.
+   style: ink-wash (default) | swiss | bauhaus
+   tone:  light | dark
    ============================================================ */
-:root {
+:root,
+.theme-ink-wash.tone-light {
   --sidebar-width: 280px;
 
   /* Ink palette — warm offset at oklch 85° / chroma 0.005 */
@@ -105,10 +109,17 @@
 
   /* Inset drawer */
   --drawer-bg: oklch(0.96 0.003 85 / 0.7);
+
+  /* Style-specific font/radius baselines */
+  --font-display: "Geist Variable", system-ui, sans-serif;
+  --font-body:    "Geist Variable", system-ui, sans-serif;
+  --font-mono:    ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+  --motion-ease:  cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-fast:  160ms;
 }
 
-/* ── Tokens: Dark (ink) ── */
-.dark {
+/* ── Style: ink-wash, dark ── */
+.theme-ink-wash.tone-dark {
   --background: var(--ink-8);
   --foreground: var(--ink-0);
   --card: oklch(0.22 0.002 85);
@@ -144,24 +155,389 @@
   --glass-shadow:    oklch(0 0 0 / 0.3);
   --hairline:        oklch(1 0 0 / 0.11);
   --drawer-bg:       oklch(0.18 0.002 85 / 0.6);
+
+  --font-display: "Geist Variable", system-ui, sans-serif;
+  --font-body:    "Geist Variable", system-ui, sans-serif;
+  --font-mono:    ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+  --motion-ease:  cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-fast:  160ms;
+}
+
+/* ── Style: Swiss Grid, light (default) ──
+   Pure white + ink black + vermillion accent.
+   Helvetica/Inter, 0 radius, hard 1px borders, UPPERCASE labels. */
+.theme-swiss.tone-light,
+.theme-swiss:not(.tone-dark) {
+  /* Raw scale — paper / ink / vermillion */
+  --swiss-paper:     oklch(1 0 0);
+  --swiss-ink:       oklch(0.16 0 0);
+  --swiss-ink-soft:  oklch(0.55 0 0);
+  --swiss-gray-1:    oklch(0.97 0 0);
+  --swiss-gray-2:    oklch(0.92 0 0);
+  --swiss-vermillion: oklch(0.58 0.22 27);
+
+  /* shadcn semantic mapping */
+  --background: var(--swiss-paper);
+  --foreground: var(--swiss-ink);
+  --card: var(--swiss-paper);
+  --card-foreground: var(--swiss-ink);
+  --popover: var(--swiss-paper);
+  --popover-foreground: var(--swiss-ink);
+  --primary: var(--swiss-ink);
+  --primary-foreground: var(--swiss-paper);
+  --secondary: var(--swiss-gray-1);
+  --secondary-foreground: var(--swiss-ink);
+  --muted: var(--swiss-gray-1);
+  --muted-foreground: var(--swiss-ink-soft);
+  --accent: var(--swiss-gray-2);
+  --accent-foreground: var(--swiss-ink);
+  --destructive: var(--swiss-vermillion);
+  --border: oklch(0.16 0 0 / 1);
+  --input: var(--swiss-ink);
+  --ring: var(--swiss-vermillion);
+
+  /* Charts — black / vermillion / gray ramp */
+  --chart-1: var(--swiss-ink);
+  --chart-2: var(--swiss-vermillion);
+  --chart-3: var(--swiss-ink-soft);
+  --chart-4: var(--swiss-gray-2);
+  --chart-5: var(--swiss-gray-1);
+
+  --radius: 0;
+  --hairline: oklch(0.16 0 0 / 1);
+
+  --sidebar: var(--swiss-paper);
+  --sidebar-foreground: var(--swiss-ink);
+  --sidebar-primary: var(--swiss-vermillion);
+  --sidebar-primary-foreground: var(--swiss-paper);
+  --sidebar-accent: var(--swiss-gray-1);
+  --sidebar-accent-foreground: var(--swiss-ink);
+  --sidebar-border: oklch(0.16 0 0 / 1);
+  --sidebar-ring: var(--swiss-vermillion);
+
+  /* Kill glass on Swiss — explicit rectilinear style */
+  --glass-bg:        transparent;
+  --glass-bg-strong: var(--swiss-paper);
+  --glass-border:    oklch(0.16 0 0 / 1);
+  --glass-highlight: transparent;
+  --glass-shadow:    transparent;
+  --drawer-bg:       var(--swiss-gray-1);
+
+  --font-display: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body:    "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --motion-ease:  steps(8, end);
+  --motion-fast:  80ms;
+}
+
+/* ── Style: Swiss Grid, dark ──
+   Inverted ink black paper + white ink + same vermillion. */
+.theme-swiss.tone-dark {
+  --swiss-paper:     oklch(0.13 0 0);
+  --swiss-ink:       oklch(0.97 0 0);
+  --swiss-ink-soft:  oklch(0.65 0 0);
+  --swiss-gray-1:    oklch(0.18 0 0);
+  --swiss-gray-2:    oklch(0.24 0 0);
+  --swiss-vermillion: oklch(0.64 0.22 27);
+
+  --background: var(--swiss-paper);
+  --foreground: var(--swiss-ink);
+  --card: var(--swiss-gray-1);
+  --card-foreground: var(--swiss-ink);
+  --popover: var(--swiss-gray-1);
+  --popover-foreground: var(--swiss-ink);
+  --primary: var(--swiss-ink);
+  --primary-foreground: var(--swiss-paper);
+  --secondary: var(--swiss-gray-2);
+  --secondary-foreground: var(--swiss-ink);
+  --muted: var(--swiss-gray-1);
+  --muted-foreground: var(--swiss-ink-soft);
+  --accent: var(--swiss-gray-2);
+  --accent-foreground: var(--swiss-ink);
+  --destructive: var(--swiss-vermillion);
+  --border: oklch(0.97 0 0 / 0.16);
+  --input: var(--swiss-ink);
+  --ring: var(--swiss-vermillion);
+
+  --chart-1: var(--swiss-ink);
+  --chart-2: var(--swiss-vermillion);
+  --chart-3: var(--swiss-ink-soft);
+  --chart-4: var(--swiss-gray-2);
+  --chart-5: var(--swiss-gray-1);
+
+  --radius: 0;
+  --hairline: oklch(0.97 0 0 / 0.16);
+
+  --sidebar: var(--swiss-paper);
+  --sidebar-foreground: var(--swiss-ink);
+  --sidebar-primary: var(--swiss-vermillion);
+  --sidebar-primary-foreground: var(--swiss-paper);
+  --sidebar-accent: var(--swiss-gray-2);
+  --sidebar-accent-foreground: var(--swiss-ink);
+  --sidebar-border: oklch(0.97 0 0 / 0.16);
+  --sidebar-ring: var(--swiss-vermillion);
+
+  --glass-bg:        transparent;
+  --glass-bg-strong: var(--swiss-gray-1);
+  --glass-border:    oklch(0.97 0 0 / 0.16);
+  --glass-highlight: transparent;
+  --glass-shadow:    transparent;
+  --drawer-bg:       var(--swiss-gray-1);
+
+  --font-display: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body:    "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --motion-ease:  steps(8, end);
+  --motion-fast:  80ms;
+}
+
+/* ── Style: Bauhaus, light (default) ──
+   White paper + primary red/blue/yellow + black ink.
+   Futura fonts, 0 radius, 3px hard borders, geometric shapes. */
+.theme-bauhaus.tone-light,
+.theme-bauhaus:not(.tone-dark) {
+  --bauhaus-paper:  oklch(0.99 0 0);
+  --bauhaus-black:  oklch(0.12 0 0);
+  --bauhaus-red:    oklch(0.55 0.24 28);   /* primary red */
+  --bauhaus-blue:   oklch(0.45 0.20 255);  /* primary blue */
+  --bauhaus-yellow: oklch(0.88 0.17 95);   /* primary yellow */
+  --bauhaus-gray:   oklch(0.88 0 0);
+
+  --background: var(--bauhaus-paper);
+  --foreground: var(--bauhaus-black);
+  --card: var(--bauhaus-paper);
+  --card-foreground: var(--bauhaus-black);
+  --popover: var(--bauhaus-paper);
+  --popover-foreground: var(--bauhaus-black);
+  --primary: var(--bauhaus-black);
+  --primary-foreground: var(--bauhaus-paper);
+  --secondary: var(--bauhaus-blue);
+  --secondary-foreground: var(--bauhaus-paper);
+  --muted: var(--bauhaus-gray);
+  --muted-foreground: var(--bauhaus-black);
+  --accent: var(--bauhaus-yellow);
+  --accent-foreground: var(--bauhaus-black);
+  --destructive: var(--bauhaus-red);
+  --border: var(--bauhaus-black);
+  --input: var(--bauhaus-black);
+  --ring: var(--bauhaus-blue);
+
+  /* Charts — Bauhaus palette */
+  --chart-1: var(--bauhaus-red);
+  --chart-2: var(--bauhaus-blue);
+  --chart-3: var(--bauhaus-yellow);
+  --chart-4: var(--bauhaus-black);
+  --chart-5: var(--bauhaus-gray);
+
+  --radius: 0;
+  --hairline: var(--bauhaus-black);
+
+  --sidebar: var(--bauhaus-paper);
+  --sidebar-foreground: var(--bauhaus-black);
+  --sidebar-primary: var(--bauhaus-red);
+  --sidebar-primary-foreground: var(--bauhaus-paper);
+  --sidebar-accent: var(--bauhaus-yellow);
+  --sidebar-accent-foreground: var(--bauhaus-black);
+  --sidebar-border: var(--bauhaus-black);
+  --sidebar-ring: var(--bauhaus-blue);
+
+  /* Kill glass on Bauhaus — explicit geometric style */
+  --glass-bg:        transparent;
+  --glass-bg-strong: var(--bauhaus-paper);
+  --glass-border:    var(--bauhaus-black);
+  --glass-highlight: transparent;
+  --glass-shadow:    transparent;
+  --drawer-bg:       var(--bauhaus-gray);
+
+  --font-display: "Futura", "Century Gothic", "Avenir Next", "Trebuchet MS", sans-serif;
+  --font-body:    "Futura", "Century Gothic", "Avenir Next", "Trebuchet MS", sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  --motion-ease:  cubic-bezier(0.65, 0, 0.35, 1);
+  --motion-fast:  100ms;
+}
+
+/* ── Style: Bauhaus, dark ──
+   Dark paper + same primary colors + light ink. */
+.theme-bauhaus.tone-dark {
+  --bauhaus-paper:  oklch(0.10 0 0);
+  --bauhaus-black:  oklch(0.96 0 0);
+  --bauhaus-red:    oklch(0.62 0.24 28);
+  --bauhaus-blue:   oklch(0.58 0.20 255);
+  --bauhaus-yellow: oklch(0.88 0.17 95);
+  --bauhaus-gray:   oklch(0.22 0 0);
+
+  --background: var(--bauhaus-paper);
+  --foreground: var(--bauhaus-black);
+  --card: var(--bauhaus-gray);
+  --card-foreground: var(--bauhaus-black);
+  --popover: var(--bauhaus-gray);
+  --popover-foreground: var(--bauhaus-black);
+  --primary: var(--bauhaus-black);
+  --primary-foreground: var(--bauhaus-paper);
+  --secondary: var(--bauhaus-blue);
+  --secondary-foreground: var(--bauhaus-paper);
+  --muted: var(--bauhaus-gray);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: var(--bauhaus-yellow);
+  --accent-foreground: var(--bauhaus-black);
+  --destructive: var(--bauhaus-red);
+  --border: oklch(0.96 0 0 / 0.6);
+  --input: var(--bauhaus-black);
+  --ring: var(--bauhaus-blue);
+
+  --chart-1: var(--bauhaus-red);
+  --chart-2: var(--bauhaus-blue);
+  --chart-3: var(--bauhaus-yellow);
+  --chart-4: var(--bauhaus-black);
+  --chart-5: var(--bauhaus-gray);
+
+  --radius: 0;
+  --hairline: oklch(0.96 0 0 / 0.6);
+
+  --sidebar: var(--bauhaus-paper);
+  --sidebar-foreground: var(--bauhaus-black);
+  --sidebar-primary: var(--bauhaus-red);
+  --sidebar-primary-foreground: var(--bauhaus-paper);
+  --sidebar-accent: var(--bauhaus-yellow);
+  --sidebar-accent-foreground: var(--bauhaus-black);
+  --sidebar-border: oklch(0.96 0 0 / 0.6);
+  --sidebar-ring: var(--bauhaus-blue);
+
+  --glass-bg:        transparent;
+  --glass-bg-strong: var(--bauhaus-gray);
+  --glass-border:    oklch(0.96 0 0 / 0.6);
+  --glass-highlight: transparent;
+  --glass-shadow:    transparent;
+  --drawer-bg:       var(--bauhaus-gray);
+
+  --font-display: "Futura", "Century Gothic", "Avenir Next", "Trebuchet MS", sans-serif;
+  --font-body:    "Futura", "Century Gothic", "Avenir Next", "Trebuchet MS", sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  --motion-ease:  cubic-bezier(0.65, 0, 0.35, 1);
+  --motion-fast:  100ms;
+}
+
+/* ── Style-specific global overrides ──
+   Swiss / Bauhaus reject glass/soft-blur/soft-shadow/curve radius
+   in favor of rectilinear hairline borders + hard offsets. */
+.theme-swiss .glass-panel,
+.theme-swiss .glass-panel-strong,
+.theme-bauhaus .glass-panel,
+.theme-bauhaus .glass-panel-strong {
+  background: var(--card) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* Swiss Sidebar: 4px vermillion strip down the left edge. */
+.theme-swiss .sidebar-wrapper {
+  border-left: 4px solid var(--swiss-vermillion) !important;
+}
+
+/* Bauhaus Sidebar: 6px tri-color block at the top via ::before pseudo-element. */
+.theme-bauhaus .sidebar-wrapper {
+  position: relative;
+  border-top: none !important;
+}
+.theme-bauhaus .sidebar-wrapper::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(
+    to right,
+    var(--bauhaus-red) 0 33.333%,
+    var(--bauhaus-blue) 33.333% 66.666%,
+    var(--bauhaus-yellow) 66.666% 100%
+  );
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* WelcomeScreen / LoginScreen / dialogs accent borders — intentionally removed:
+   - Swiss app-shell vermillion strip (was too dominant)
+   - Bauhaus app-shell 4-sided color border (was visually noisy) */
+
+.theme-swiss .backdrop-blur-sm,
+.theme-swiss .backdrop-blur-md,
+.theme-swiss .backdrop-blur-lg,
+.theme-swiss .backdrop-blur-xl,
+.theme-bauhaus .backdrop-blur-sm,
+.theme-bauhaus .backdrop-blur-md,
+.theme-bauhaus .backdrop-blur-lg,
+.theme-bauhaus .backdrop-blur-xl {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.theme-swiss .rounded-md,
+.theme-swiss .rounded-lg,
+.theme-swiss .rounded-xl,
+.theme-swiss .rounded-2xl,
+.theme-swiss .rounded-3xl,
+.theme-bauhaus .rounded-md,
+.theme-bauhaus .rounded-lg,
+.theme-bauhaus .rounded-xl,
+.theme-bauhaus .rounded-2xl,
+.theme-bauhaus .rounded-3xl {
+  border-radius: 0 !important;
+}
+
+/* Soft shadows → flat on Swiss/Bauhaus */
+.theme-swiss .shadow-md,
+.theme-swiss .shadow-lg,
+.theme-swiss .shadow-xl,
+.theme-bauhaus .shadow-md,
+.theme-bauhaus .shadow-lg,
+.theme-bauhaus .shadow-xl {
+  box-shadow: none !important;
+}
+
+/* Hard offset shadows replace soft shadows on Swiss/Bauhaus */
+.theme-swiss .shadow-sm {
+  box-shadow: 2px 2px 0 0 var(--foreground) !important;
+}
+.theme-bauhaus .shadow-sm {
+  box-shadow: 4px 4px 0 0 var(--foreground) !important;
 }
 
 /* Dark mode — app-shell shadow visible on dark canvas */
-.dark .app-shell {
+.theme-ink-wash.tone-dark .app-shell {
   box-shadow: inset 280px 0 120px -100px oklch(1 0 0 / 0.06);
 }
 
 .app-shell[data-sidebar-collapsed="true"] {
   box-shadow: none;
 }
-.dark .app-shell[data-sidebar-collapsed="true"] {
+.theme-ink-wash.tone-dark .app-shell[data-sidebar-collapsed="true"] {
   box-shadow: none;
+}
+
+/* Apply font-display/font-body to the whole app via body.
+   ink-wash uses Geist, swiss uses Inter, bauhaus uses Futura stack. */
+html, body {
+  font-family: var(--font-body);
+}
+
+/* Bauhaus status labels tend to uppercase; Swiss too.
+   ink-wash keeps mixed case. */
+.theme-swiss .text-status,
+.theme-swiss .label-status,
+.theme-bauhaus .text-status,
+.theme-bauhaus .label-status {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 /* ── Base ── */
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -374,13 +750,13 @@ body {
     text-align: left;
     outline: none;
     font-size: 0.6875rem;
-    color: var(--ink-5);
+    color: var(--muted-foreground);
     transition: color 140ms ease, background-color 140ms ease;
   }
 
   .inset-drawer__trigger:hover {
-    color: var(--ink-7);
-    background-color: oklch(0.04 0.002 85 / 0.03);
+    color: var(--foreground);
+    background-color: var(--muted);
   }
 
   .inset-drawer__content {
@@ -390,7 +766,7 @@ body {
     overflow: auto;
     font-size: 0.6875rem;
     line-height: 1.6;
-    color: var(--ink-6);
+    color: var(--muted-foreground);
   }
 
   .inset-drawer__content pre {
@@ -405,7 +781,7 @@ body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--ink-5);
+    color: var(--muted-foreground);
     margin-bottom: 0.25rem;
   }
 

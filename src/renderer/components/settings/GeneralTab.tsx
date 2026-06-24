@@ -12,10 +12,10 @@ import {
 	SelectValue,
 } from "@shared/components/ui/select";
 import { Switch } from "@shared/components/ui/switch";
-import { Cpu, Moon, Sun, Zap } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Cpu, Sun, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ThemePicker } from "./ThemePicker";
 
 const api = (window as any).look;
 
@@ -45,7 +45,6 @@ function SettingRow({
 
 export default function GeneralTab() {
 	const { t, i18n } = useTranslation();
-	const { theme, setTheme } = useTheme();
 	const [language, setLanguage] = useState("en");
 	const [autoCollapse, setAutoCollapse] = useState(true);
 	const [compactionEnabled, setCompactionEnabled] = useState(true);
@@ -78,22 +77,9 @@ export default function GeneralTab() {
 					</CardTitle>
 				</CardHeader>
 				<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
-					<SettingRow
-						id="theme"
-						label={t("settings.theme")}
-						desc={theme === "dark" ? t("settings.darkMode") : t("settings.lightMode")}
-					>
-						<div className="flex items-center gap-1.5">
-							<Sun className="size-3.5 text-muted-foreground" />
-							<Switch
-								id="theme"
-								size="sm"
-								checked={theme === "dark"}
-								onCheckedChange={(c) => setTheme(c ? "dark" : "light")}
-							/>
-							<Moon className="size-3.5 text-muted-foreground" />
-						</div>
-					</SettingRow>
+					<div className="py-2.5">
+						<ThemePicker />
+					</div>
 					<SettingRow id="language" label={t("settings.language")} desc={t("settings.interfaceLanguage")}>
 						<Select
 							value={language}

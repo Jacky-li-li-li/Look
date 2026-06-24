@@ -27,6 +27,8 @@ import path from "path";
 import type { PermissionMode } from "./shared/types.js";
 
 export type UILanguage = "en" | "zh" | "ja";
+export type LookStyle = "ink-wash" | "swiss" | "bauhaus";
+export type LookTone = "light" | "dark";
 
 export interface UserSettings {
 	language: UILanguage;
@@ -44,6 +46,10 @@ export interface UserSettings {
 	openProjectIds: string[];
 	/** Session IDs opened as sheets in the top bar. */
 	openedSessionIds: string[];
+	/** Active visual style (ink-wash / swiss / bauhaus). */
+	themeStyle: LookStyle;
+	/** Active tone variant (light / dark). */
+	themeTone: LookTone;
 }
 
 const DEFAULTS: UserSettings = {
@@ -56,6 +62,8 @@ const DEFAULTS: UserSettings = {
 	lastActiveProjectId: "",
 	openProjectIds: [],
 	openedSessionIds: [],
+	themeStyle: "ink-wash",
+	themeTone: "dark",
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -77,6 +85,10 @@ interface UiSettings {
 	openProjectIds: string[];
 	/** Session IDs opened as sheets in the top bar. */
 	openedSessionIds: string[];
+	/** Active visual style (ink-wash / swiss / bauhaus). */
+	themeStyle: LookStyle;
+	/** Active tone variant (light / dark). */
+	themeTone: LookTone;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -88,6 +100,8 @@ const UI_DEFAULTS: UiSettings = {
 	lastActiveProjectId: "",
 	openProjectIds: [],
 	openedSessionIds: [],
+	themeStyle: "ink-wash",
+	themeTone: "dark",
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -194,6 +208,8 @@ export class UserSettingsStore {
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
 		if (partial.openProjectIds !== undefined) uiPartial.openProjectIds = [...partial.openProjectIds];
 		if (partial.openedSessionIds !== undefined) uiPartial.openedSessionIds = [...partial.openedSessionIds];
+		if (partial.themeStyle !== undefined) uiPartial.themeStyle = partial.themeStyle;
+		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

@@ -29,7 +29,9 @@ import Sidebar from "./components/Sidebar";
 import SettingsDialog from "./components/settings/SettingsDialog";
 import UpdateNotification from "./components/UpdateNotification";
 import WelcomeScreen from "./components/WelcomeScreen";
+import { themeFromSettings, writeLookThemeToDom } from "./hooks/useLookTheme";
 import { preloadHighlighter } from "./lib/highlighter";
+import { DEFAULT_THEME } from "./lib/look-theme";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
 	activeAgentAtom,
@@ -340,6 +342,24 @@ export default function App() {
 		return () => clearTimeout(timer);
 	}, [activeAgentId, activeProjectId, openProjectIds, openedSessionIds]);
 
+	// Boot-time theme sync: read themeStyle/themeTone from
+	// ui-settings.json and apply to <html> class before any
+	// component renders. Prevents flash of wrong theme on launch.
+	useEffect(() => {
+		if (!api) {
+			writeLookThemeToDom(DEFAULT_THEME);
+			return;
+		}
+		api.getGeneralSettings()
+			.then((r: any) => {
+				const t = themeFromSettings(r?.settings ?? {});
+				writeLookThemeToDom(t);
+			})
+			.catch(() => {
+				writeLookThemeToDom(DEFAULT_THEME);
+			});
+	}, []);
+
 	// The main process mirrors this list directly from pi's
 	// AgentSession.getAvailableThinkingLevels(). Do not infer model families here.
 	const thinkingLevels = useMemo(() => {
@@ -383,7 +403,13 @@ export default function App() {
 	}
 
 	return (
-		<ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
+		<ThemeProvider
+			attribute="data-theme"
+			defaultTheme={DEFAULT_THEME.tone}
+			themes={["light", "dark"]}
+			enableSystem={false}
+			disableTransitionOnChange
+		>
 			<TooltipProvider>
 				<div
 					className="app-shell flex h-screen overflow-hidden bg-background p-2"
