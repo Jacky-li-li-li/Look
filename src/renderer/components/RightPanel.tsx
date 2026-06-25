@@ -1,5 +1,5 @@
 // ============================================================
-// RightPanel — 右侧边栏容器（第一版仅共享区）
+// RightPanel — 右侧边栏容器(v0.6:共享区 + 工作区 双 tab)
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
@@ -11,11 +11,13 @@ import { toast } from "sonner";
 import {
 	activeProjectAtom,
 	rightPanelCollapsedAtom,
+	rightPanelTabAtom,
 	sharedFilesAtomFamily,
 	sharedFilesLoadingAtomFamily,
 } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
 import { SharedAreaPanel } from "./SharedAreaPanel";
+import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
 
 // 没有 active project 时使用的占位 projectId,避免 hook 调用顺序不稳定
 const PLACEHOLDER_PROJECT_ID = "__right_panel_placeholder__";
@@ -23,6 +25,7 @@ const PLACEHOLDER_PROJECT_ID = "__right_panel_placeholder__";
 export function RightPanel() {
 	const activeProject = useAtomValue(activeProjectAtom);
 	const [collapsed, setCollapsed] = useAtom(rightPanelCollapsedAtom);
+	const [tab, setTab] = useAtom(rightPanelTabAtom);
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
 
 	// 始终调用 hooks;在 effect 内判断 projectId 是否有效
@@ -90,8 +93,37 @@ export function RightPanel() {
 				data-collapsed={collapsed}
 				aria-label="右侧面板"
 			>
-				<header className="flex h-10 shrink-0 items-center justify-between border-b px-2">
-					{!collapsed && <span className="text-xs font-medium text-muted-foreground">{activeProject.name}</span>}
+				<header className="flex h-10 shrink-0 items-center justify-between gap-1 border-b px-2">
+					{!collapsed && (
+						<nav role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
+							<button
+								type="button"
+								role="tab"
+								aria-selected={tab === "workspace"}
+								className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+									tab === "workspace"
+										? "bg-foreground/10 text-foreground"
+										: "text-muted-foreground hover:bg-foreground/5"
+								}`}
+								onClick={() => setTab("workspace")}
+							>
+								工作区
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={tab === "shared"}
+								className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+									tab === "shared"
+										? "bg-foreground/10 text-foreground"
+										: "text-muted-foreground hover:bg-foreground/5"
+								}`}
+								onClick={() => setTab("shared")}
+							>
+								共享区
+							</button>
+						</nav>
+					)}
 					<Button
 						variant="ghost"
 						size="icon-xs"
@@ -101,7 +133,10 @@ export function RightPanel() {
 						{collapsed ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}
 					</Button>
 				</header>
-				{!collapsed && (
+				{!collapsed && tab === "workspace" && (
+					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
+				)}
+				{!collapsed && tab === "shared" && (
 					<SharedAreaPanel
 						projectId={activeProject.id}
 						files={sharedFiles}

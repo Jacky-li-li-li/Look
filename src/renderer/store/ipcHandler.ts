@@ -17,6 +17,7 @@ import {
 	autoCollapseAtom,
 	emptyPlanQuestionDraft,
 	forkingEntryAtomFamily,
+	loadedWorkspaceChildrenAtomFamily,
 	navigatingEntryAtomFamily,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
@@ -414,6 +415,26 @@ export function initIpcHandlers(api: any): () => void {
 				// 首次 fetch 由 RightPanel 的 useEffect 走 loading,后续 watcher
 				// 事件直接覆盖已有列表即可。
 				scheduleSharedRefresh(projectId, filesAtom);
+				break;
+			}
+
+			case "workspace:updated": {
+				const { projectId, relativePath } = event;
+				// 仅当用户已展开该目录才需要 refetch(VSCode 模式:未展开目录的事件忽略)
+				const loadedAtom = loadedWorkspaceChildrenAtomFamily(projectId);
+				if (!appStore.get(loadedAtom).has(relativePath)) break;
+				void window.look
+					.listWorkspaceChildren(projectId, relativePath)
+					.then((result) => {
+						if (result?.success && result.nodes) {
+							appStore.set(loadedAtom, (prev) => {
+								const next = new Map(prev);
+								next.set(relativePath, result.nodes ?? []);
+								return next;
+							});
+						}
+					})
+					.catch(() => undefined);
 				break;
 			}
 

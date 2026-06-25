@@ -210,6 +210,16 @@ const api = {
   writeSharedContent: (projectId, path, content, encoding = "utf8") =>
     ipcRenderer.invoke("look:invoke", { type: "shared:write-content", projectId, path, content, encoding }),
 
+  // ---- Workspace tree (v0.6) ----
+  listWorkspaceChildren: (projectId, relativePath) =>
+    ipcRenderer.invoke("look:invoke", { type: "workspace:list-children", projectId, relativePath }),
+  statWorkspaceNode: (projectId, relativePath) =>
+    ipcRenderer.invoke("look:invoke", { type: "workspace:stat", projectId, relativePath }),
+  startWorkspaceWatch: (projectId, relativePath) =>
+    ipcRenderer.invoke("look:invoke", { type: "workspace:watch", projectId, relativePath }),
+  stopWorkspaceWatch: (projectId, relativePath) =>
+    ipcRenderer.invoke("look:invoke", { type: "workspace:unwatch", projectId, relativePath }),
+
   // ---- Auto Updater ----
   checkForUpdates: () =>
     ipcRenderer.invoke("look:invoke", { type: "update:check" }),

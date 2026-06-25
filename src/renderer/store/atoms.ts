@@ -147,6 +147,17 @@ export const sidebarCollapsedAtom = atom(false);
 /** Right panel collapsed state. */
 export const rightPanelCollapsedAtom = atom(false);
 
+/** Right panel active tab. */
+export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
+
+/** Per-project 已展开的 workspace 路径集合。 */
+export const expandedWorkspacePathsAtomFamily = atomFamily((projectId: string) => atom<Set<string>>(new Set<string>()));
+
+/** Per-project 已加载的子项缓存:parentRelativePath → FileTreeNode[]。 */
+export const loadedWorkspaceChildrenAtomFamily = atomFamily((projectId: string) =>
+	atom<Map<string, FileTreeNode[]>>(new Map<string, FileTreeNode[]>()),
+);
+
 /** Per-project selected node path in the shared area. Per-project keeps
  *  selection from leaking across project switches. */
 export const selectedSharedPathAtomFamily = atomFamily((projectId: string) => atom<string | null>(null));

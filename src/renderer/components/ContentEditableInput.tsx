@@ -257,6 +257,51 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 			[onChange],
 		);
 
+		/**
+		 * 拖拽接收 WorkspaceTreePanel 的文件/文件夹。
+		 * 自定义 MIME `application/x-look-filerelpath` 携带相对路径,
+		 * 转换为 `@relative-path` 文本插入到光标位置。
+		 */
+		const handleDrop = useCallback(
+			(e: React.DragEvent<HTMLDivElement>) => {
+				const relPath = e.dataTransfer.getData("application/x-look-filerelpath");
+				if (!relPath) return; // 不是工作区拖拽,放过默认行为
+				e.preventDefault();
+				const text = `@${relPath}`;
+				const el = editorRef.current;
+				if (!el) {
+					onChange(text);
+					return;
+				}
+				const selection = window.getSelection();
+				if (!selection || selection.rangeCount === 0) {
+					el.appendChild(document.createTextNode(text));
+				} else {
+					const range = selection.getRangeAt(0);
+					range.deleteContents();
+					range.insertNode(document.createTextNode(text));
+					range.collapse(false);
+					selection.removeAllRanges();
+					selection.addRange(range);
+				}
+				const newText = el.textContent ?? "";
+				renderToDOM(el, newText);
+				lastRenderedRef.current = newText;
+				setEditorContent(newText);
+				onChange(newText);
+				el.focus();
+			},
+			[onChange],
+		);
+
+		const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+			// 仅当携带工作区 MIME 时显示 drop effect
+			if (e.dataTransfer.types.includes("application/x-look-filerelpath")) {
+				e.preventDefault();
+				e.dataTransfer.dropEffect = "copy";
+			}
+		}, []);
+
 		const handleFocus = useCallback(() => {
 			// Some Chromium versions inject a stray `<br>` into
 			// an empty contenteditable on focus. Strip it so the
@@ -312,6 +357,8 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 					onInput={handleInput}
 					onKeyDown={handleKeyDown}
 					onPaste={handlePaste}
+					onDrop={handleDrop}
+					onDragOver={handleDragOver}
 					onCompositionStart={handleCompositionStart}
 					onCompositionEnd={handleCompositionEnd}
 					onFocus={handleFocus}

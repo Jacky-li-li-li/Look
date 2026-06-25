@@ -65,6 +65,7 @@ import type {
 } from "./shared/types.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
+import type { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
 export type EventCallback = (event: MainToRendererEvent) => void;
 
@@ -134,6 +135,7 @@ export class SessionRuntimeManager {
 	private readonly permissionModesBySession = new Map<string, PermissionMode>();
 	private readonly dirtyPermissionModes = new Set<string>();
 	private readonly workspaceFileService: WorkspaceFileService | null;
+	private readonly workspaceTreeService: WorkspaceTreeService | null;
 	private disposed = false;
 	/** Permission ask mode: pending requests keyed by requestId. */
 	private readonly permissionAwaiting = new Map<string, PendingPermission>();
@@ -147,7 +149,7 @@ export class SessionRuntimeManager {
 	private readonly prePlanToolsBySession = new Map<string, string[]>();
 	private readonly dirtyPlanToolSnapshots = new Set<string>();
 
-	constructor(workspaceFileService?: WorkspaceFileService) {
+	constructor(workspaceFileService?: WorkspaceFileService, workspaceTreeService?: WorkspaceTreeService) {
 		ensureLookDir();
 		resetLegacySessionsOnce();
 		const migration = migrateLegacySettings();
@@ -164,6 +166,7 @@ export class SessionRuntimeManager {
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		this.projectsIndexPath = getProjectsIndexPath();
 		this.workspaceFileService = workspaceFileService ?? null;
+		this.workspaceTreeService = workspaceTreeService ?? null;
 	}
 
 	getWorkspaceFileService(): WorkspaceFileService {
@@ -176,6 +179,21 @@ export class SessionRuntimeManager {
 		return this.workspaceFileService;
 	}
 
+	getWorkspaceTreeService(): WorkspaceTreeService {
+		if (this.disposed) {
+			throw new Error("SessionRuntimeManager has been disposed");
+		}
+		if (!this.workspaceTreeService) {
+			throw new Error("WorkspaceTreeService is not configured for this SessionRuntimeManager");
+		}
+		return this.workspaceTreeService;
+	}
+
+	/** O(1) lookup by id. */
+	getProjectInfo(projectId: string): ProjectInfo | null {
+		return this.projects.get(projectId) ?? null;
+	}
+
 	async dispose(): Promise<void> {
 		if (this.disposed) return;
 		this.disposed = true;
@@ -184,6 +202,13 @@ export class SessionRuntimeManager {
 				await this.workspaceFileService.dispose();
 			} catch (error) {
 				console.error("[Look] workspaceFileService dispose failed:", error);
+			}
+		}
+		if (this.workspaceTreeService) {
+			try {
+				await this.workspaceTreeService.dispose();
+			} catch (error) {
+				console.error("[Look] workspaceTreeService dispose failed:", error);
 			}
 		}
 		await this.disposeAllRuntimes();
@@ -363,6 +388,13 @@ export class SessionRuntimeManager {
 				await this.workspaceFileService.stopWatching(projectId);
 			} catch (error) {
 				console.error(`[Look] Failed to stop shared area watcher for ${projectId}:`, error);
+			}
+		}
+		if (this.workspaceTreeService) {
+			try {
+				await this.workspaceTreeService.stopAllWatchesForProject(projectId);
+			} catch (error) {
+				console.error(`[Look] Failed to stop workspace tree watchers for ${projectId}:`, error);
 			}
 		}
 		for (const session of sessions) {
