@@ -149,6 +149,7 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 			if (text === lastRenderedRef.current) return;
 			setEditorContent(text);
 			renderToDOM(el, text);
+			placeCaretAtEnd(el);
 			lastRenderedRef.current = text;
 		}, []);
 
@@ -250,6 +251,7 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 				// the data-skill-chip span wrapper.
 				const newText = el.textContent ?? "";
 				renderToDOM(el, newText);
+				placeCaretAtEnd(el);
 				lastRenderedRef.current = newText;
 				setEditorContent(newText);
 				onChange(newText);
@@ -291,6 +293,7 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 				}
 				const newText = el.textContent ?? "";
 				renderToDOM(el, newText);
+				placeCaretAtEnd(el);
 				lastRenderedRef.current = newText;
 				setEditorContent(newText);
 				onChange(newText);
