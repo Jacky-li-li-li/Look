@@ -27,6 +27,8 @@ export interface RendererSessionState {
 	leafId: string | null;
 	currentRunId: number;
 	currentMessageRenderId: string | null;
+	/** Run ID that most recently emitted `agent_end`; used to clean up its live messages. */
+	lastEndedRunId: number | null;
 	turnStartedAt: number;
 	turnDurationMs: number | null;
 }
@@ -39,6 +41,7 @@ export const emptyRendererSessionState = (): RendererSessionState => ({
 	leafId: null,
 	currentRunId: 0,
 	currentMessageRenderId: null,
+	lastEndedRunId: null,
 	turnStartedAt: 0,
 	turnDurationMs: null,
 });

@@ -45,6 +45,120 @@ afterEach(() => {
 });
 
 describe("SDK event canonical store", () => {
+	it("resets streaming cursor fields on run boundaries", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		const first = assistant("first");
+		const second = assistant("second");
+
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_start", message: first },
+		});
+
+		const duringFirst = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(duringFirst.currentMessageRenderId).not.toBeNull();
+		expect(duringFirst.turnStartedAt).toBeGreaterThan(0);
+
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_end", message: first },
+		});
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: false } });
+		receive({
+			type: "session:snapshot",
+			sessionId: sessionIds[0],
+			reason: "agent_end",
+			leafId: "persisted",
+			entries: [],
+			runtime: { ...runtime, isStreaming: false },
+		});
+
+		const afterEnd = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(afterEnd.currentMessageRenderId).toBeNull();
+		expect(afterEnd.turnStartedAt).toBe(0);
+		expect(afterEnd.turnDurationMs).not.toBeNull();
+
+		const beforeSecondStart = Date.now();
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_start", message: second },
+		});
+
+		const duringSecond = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(duringSecond.currentMessageRenderId).not.toBeNull();
+		expect(duringSecond.turnStartedAt).toBeGreaterThanOrEqual(beforeSecondStart);
+		expect(duringSecond.turnDurationMs).toBeNull();
+	});
+
+	it("cleans up the ended run's live messages without dropping a retry run", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		const first = assistant("first");
+		const retry = assistant("retry");
+
+		// First run ends and requests a retry.
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_start", message: first },
+		});
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_end", message: first },
+		});
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: true } });
+
+		const afterFirstEnd = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(afterFirstEnd.lastEndedRunId).toBe(1);
+
+		// Retry starts before the agent_end snapshot arrives.
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_start", message: retry },
+		});
+
+		const duringRetry = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(duringRetry.currentRunId).toBe(2);
+		expect(duringRetry.liveMessages).toHaveLength(2);
+
+		// Snapshot for the first run finally arrives.
+		receive({
+			type: "session:snapshot",
+			sessionId: sessionIds[0],
+			reason: "agent_end",
+			leafId: "persisted",
+			entries: [],
+			runtime: { ...runtime, isStreaming: true },
+		});
+
+		const afterSnapshot = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(afterSnapshot.liveMessages).toHaveLength(1);
+		expect(afterSnapshot.liveMessages[0]?.runId).toBe(2);
+		expect(afterSnapshot.liveMessages[0]?.message).toBe(retry);
+	});
+
 	it("keeps persisted, live, and cumulative tool execution state separate and session-scoped", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({

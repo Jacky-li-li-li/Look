@@ -197,4 +197,156 @@ describe("buildTimeline", () => {
 		expect(timeline[1]?.id).toBe("live-u1");
 		expect(timeline[2]?.id).toBe("live-a2");
 	});
+
+	it("attaches live toolResult messages to the live assistant bubble", () => {
+		const liveMessages: RendererLiveMessage[] = [
+			{
+				renderId: "live-a1",
+				runId: 1,
+				message: baseAssistant("live-a1", [
+					{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } },
+				]),
+				completed: true,
+			},
+			{
+				renderId: "live-tr1",
+				runId: 1,
+				message: baseToolResult("tc1", "file content"),
+				completed: true,
+			},
+			{
+				renderId: "live-a2",
+				runId: 1,
+				message: baseAssistant("live-a2", [{ type: "text", text: "done" }]),
+				completed: false,
+			},
+		];
+
+		const timeline = buildTimeline([], liveMessages);
+
+		expect(timeline).toHaveLength(1);
+		expect(timeline[0]?.message?.role).toBe("assistant");
+		expect(timeline[0]?.isLive).toBe(true);
+		expect(timeline[0]?.toolResultMap).toHaveProperty("tc1");
+		expect(timeline[0]?.toolResultMap?.tc1.content[0].text).toBe("file content");
+	});
+
+	it("attaches a live toolResult to a persisted assistant bubble", () => {
+		const entries: SessionEntry[] = [
+			messageEntry("u1", baseUser("read x")),
+			messageEntry("a1", baseAssistant("a1", [{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } }])),
+		];
+		const liveMessages: RendererLiveMessage[] = [
+			{
+				renderId: "live-tr1",
+				runId: 1,
+				message: baseToolResult("tc1", "x content"),
+				completed: true,
+			},
+		];
+
+		const timeline = buildTimeline(entries, liveMessages);
+
+		expect(timeline).toHaveLength(2);
+		expect(timeline[1]?.entryId).toBe("a1");
+		expect(timeline[1]?.toolResultMap?.tc1.content[0].text).toBe("x content");
+	});
+
+	it("keeps a toolResult with the previous assistant when user steering interrupts", () => {
+		const liveMessages: RendererLiveMessage[] = [
+			{
+				renderId: "live-a1",
+				runId: 1,
+				message: baseAssistant("live-a1", [
+					{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } },
+				]),
+				completed: true,
+			},
+			{
+				renderId: "live-u1",
+				runId: 1,
+				message: baseUser("use a different path"),
+				completed: true,
+			},
+			{
+				renderId: "live-tr1",
+				runId: 1,
+				message: baseToolResult("tc1", "original path content"),
+				completed: true,
+			},
+			{
+				renderId: "live-a2",
+				runId: 1,
+				message: baseAssistant("live-a2", [{ type: "text", text: "ok" }]),
+				completed: false,
+			},
+		];
+
+		const timeline = buildTimeline([], liveMessages);
+
+		expect(timeline).toHaveLength(3);
+		expect(timeline[0]?.message?.role).toBe("assistant");
+		expect(timeline[0]?.id).toBe("live-a1");
+		expect(timeline[0]?.toolResultMap?.tc1.content[0].text).toBe("original path content");
+		expect(timeline[1]?.message?.role).toBe("user");
+		expect(timeline[2]?.message?.role).toBe("assistant");
+		expect(timeline[2]?.toolResultMap).toBeUndefined();
+	});
+
+	it("attaches multiple parallel live toolResults to the same assistant bubble", () => {
+		const liveMessages: RendererLiveMessage[] = [
+			{
+				renderId: "live-a1",
+				runId: 1,
+				message: baseAssistant("live-a1", [
+					{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } },
+					{ type: "toolCall", id: "tc2", name: "read", arguments: { path: "y" } },
+				]),
+				completed: true,
+			},
+			{
+				renderId: "live-tr1",
+				runId: 1,
+				message: baseToolResult("tc1", "x content"),
+				completed: true,
+			},
+			{
+				renderId: "live-tr2",
+				runId: 1,
+				message: baseToolResult("tc2", "y content"),
+				completed: true,
+			},
+			{
+				renderId: "live-a2",
+				runId: 1,
+				message: baseAssistant("live-a2", [{ type: "text", text: "done" }]),
+				completed: false,
+			},
+		];
+
+		const timeline = buildTimeline([], liveMessages);
+
+		expect(timeline).toHaveLength(1);
+		expect(timeline[0]?.toolResultMap).toHaveProperty("tc1");
+		expect(timeline[0]?.toolResultMap).toHaveProperty("tc2");
+		expect(timeline[0]?.toolResultMap?.tc1.content[0].text).toBe("x content");
+		expect(timeline[0]?.toolResultMap?.tc2.content[0].text).toBe("y content");
+	});
+
+	it("does not lose an orphaned live toolResult with no assistant", () => {
+		const liveMessages: RendererLiveMessage[] = [
+			{
+				renderId: "live-tr1",
+				runId: 1,
+				message: baseToolResult("tc1", "orphan result"),
+				completed: true,
+			},
+		];
+
+		const timeline = buildTimeline([], liveMessages);
+
+		expect(timeline).toHaveLength(1);
+		expect(timeline[0]?.message?.role).toBe("toolResult");
+		expect(timeline[0]?.isLive).toBe(true);
+	});
 });

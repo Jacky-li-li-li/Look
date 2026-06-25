@@ -104,28 +104,55 @@ export function buildTimeline(entries: SessionEntry[], liveMessages: RendererLiv
 		items.push({ id: entry.id, entryId: entry.id, entry, isLive: false });
 	}
 
-	closeAssistantContext();
-
+	// Live messages extend the same timeline. They may continue the current assistant
+	// context (e.g. a toolResult streaming in for the last persisted assistant), so we
+	// keep `currentAssistant` open. We also track `liveAssistant` separately so that
+	// consecutive live assistant messages merge without accidentally merging a live
+	// update into a persisted assistant bubble.
 	const liveItems: TimelineItem[] = [];
 	let liveAssistant: TimelineItem | null = null;
 
 	for (const live of liveMessages) {
 		const msg = live.message;
+		if (isToolResultMessage(msg)) {
+			pendingToolResults.push(msg);
+			continue;
+		}
+
 		if (msg.role === "user") {
+			// A user message splits the assistant chain for merging, but keep the
+			// previous assistant as the toolResult context until a new assistant begins.
+			flushToolResults();
 			liveAssistant = null;
 			liveItems.push({ id: live.renderId, message: msg, isLive: true });
 		} else if (isAssistantMessage(msg)) {
-			if (liveAssistant?.message && isAssistantMessage(liveAssistant.message)) {
+			if (liveAssistant?.message && isAssistantMessage(liveAssistant.message) && liveAssistant.isLive) {
 				// Same live assistant output chain: keep one avatar, append blocks.
 				liveAssistant.message = mergeAssistantContent(liveAssistant.message, msg);
+				flushToolResults();
 			} else {
+				// Flush any pending tool results that belong to the previous assistant
+				// (persisted or live) before starting a new live bubble.
+				flushToolResults();
 				const ti: TimelineItem = { id: live.renderId, message: msg, isLive: true };
-				liveItems.push(ti);
 				liveAssistant = ti;
+				currentAssistant = ti;
+				flushToolResults();
+				liveItems.push(ti);
 			}
 		} else {
+			flushToolResults();
+			liveAssistant = null;
+			currentAssistant = null;
 			liveItems.push({ id: live.renderId, message: msg, isLive: true });
 		}
+	}
+
+	// Attach any trailing tool results to the final assistant. If no assistant exists,
+	// render them as standalone items so the content is not silently dropped.
+	flushToolResults();
+	for (const tr of pendingToolResults) {
+		liveItems.push({ id: `orphan-tr-${tr.toolCallId}`, message: tr, isLive: true });
 	}
 
 	return [...items, ...liveItems];

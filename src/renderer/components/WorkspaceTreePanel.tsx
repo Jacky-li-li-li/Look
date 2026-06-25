@@ -95,11 +95,22 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 	// 用 ref 而非 state 避免触发额外 re-render。必须在 useBootstrapRoot 之前声明。
 	const watchedPathsRef = useRef<Set<string>>(new Set());
 
+	// 异步操作世代号:projectId 变化或卸载时递增,丢弃旧 project 的异步回调。
+	const operationGenRef = useRef(0);
+	// biome-ignore lint/correctness/useExhaustiveDependencies:  intentionally re-runs on projectId change to invalidate in-flight async work
+	useEffect(() => {
+		operationGenRef.current += 1;
+		return () => {
+			operationGenRef.current += 1;
+		};
+	}, [projectId]);
+
 	// 首次挂载时如未加载根,自动加载
 	useBootstrapRoot(projectId, setLoaded, watchedPathsRef, setIsLoading, setError, showHiddenFiles);
 
 	// showHiddenFiles 切换时：清空缓存、停止 watcher、重新加载根目录
 	useEffect(() => {
+		void showHiddenFiles; // 仅作为 effect 触发条件使用
 		setExpanded(new Set());
 		for (const relPath of watchedPathsRef.current) {
 			window.look.stopWorkspaceWatch(projectId, relPath).catch(() => undefined);
@@ -150,10 +161,10 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 				return;
 			}
 
-			let cancelled = false;
+			const gen = operationGenRef.current;
 			try {
 				const result = await window.look.listWorkspaceChildren(projectId, node.path, showHiddenFiles);
-				if (cancelled) return;
+				if (operationGenRef.current !== gen) return;
 				if (result?.success && result.nodes) {
 					setError(null);
 					setLoaded((prev) => {
@@ -166,38 +177,30 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 					window.look
 						.startWorkspaceWatch(projectId, node.path)
 						.then(() => {
-							if (!cancelled) watchedPathsRef.current.add(node.path);
+							if (operationGenRef.current === gen) watchedPathsRef.current.add(node.path);
 						})
 						.catch(() => undefined);
 				} else if (result && !result.success) {
 					toast.error(result.error ?? "加载子目录失败");
 				}
 			} catch (error) {
-				if (cancelled) return;
+				if (operationGenRef.current !== gen) return;
 				const message = error instanceof Error ? error.message : "加载子目录失败";
 				toast.error(message);
 			}
 			// parentPath 参数保留供后续扩展
 			void parentPath;
-			return () => {
-				cancelled = true;
-			};
 		},
-		[
-			expanded,
-			loaded,
-			projectId,
-			setExpanded,
-			setLoaded,
-			showHiddenFiles,
-		],
+		[expanded, loaded, projectId, setError, setExpanded, setLoaded, showHiddenFiles],
 	);
 
 	const handleRefresh = useCallback(async () => {
+		const gen = operationGenRef.current;
 		setIsLoading(true);
 		setError(null);
 		try {
 			const result = await window.look.listWorkspaceChildren(projectId, "", showHiddenFiles);
+			if (operationGenRef.current !== gen) return;
 			if (result?.success && result.nodes) {
 				setLoaded((prev) => {
 					const next = new Map(prev);
@@ -208,7 +211,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 				window.look
 					.startWorkspaceWatch(projectId, "")
 					.then(() => {
-						watchedPathsRef.current.add("");
+						if (operationGenRef.current === gen) watchedPathsRef.current.add("");
 					})
 					.catch((err: unknown) => {
 						console.error("[WorkspaceTree] Failed to start root watcher on refresh:", err);
@@ -220,12 +223,13 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 				toast.error(errMsg);
 			}
 		} catch (error) {
+			if (operationGenRef.current !== gen) return;
 			const message = error instanceof Error ? error.message : "刷新失败";
 			console.error("[WorkspaceTree] Refresh exception:", error);
 			setError(message);
 			toast.error(message);
 		} finally {
-			setIsLoading(false);
+			if (operationGenRef.current === gen) setIsLoading(false);
 		}
 	}, [projectId, setLoaded, setIsLoading, setError, showHiddenFiles]);
 

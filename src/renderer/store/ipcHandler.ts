@@ -88,6 +88,7 @@ function updateAgentRuntime(
 
 function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	const previous = appStore.get(sessionStateAtomFamily(snapshot.sessionId));
+	const isAgentEnd = snapshot.reason === "agent_end";
 	appStore.set(sessionStateAtomFamily(snapshot.sessionId), {
 		...previous,
 		entries: snapshot.entries,
@@ -97,11 +98,13 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 			steering: [...snapshot.runtime.steering],
 			followUp: [...snapshot.runtime.followUp],
 		},
-		liveMessages:
-			snapshot.reason === "agent_end"
-				? previous.liveMessages.filter((item) => item.runId !== previous.currentRunId)
-				: previous.liveMessages,
-		toolExecutions: snapshot.reason === "agent_end" ? {} : previous.toolExecutions,
+		currentMessageRenderId: isAgentEnd ? null : previous.currentMessageRenderId,
+		lastEndedRunId: isAgentEnd ? null : previous.lastEndedRunId,
+		turnStartedAt: isAgentEnd ? 0 : previous.turnStartedAt,
+		liveMessages: isAgentEnd
+			? previous.liveMessages.filter((item) => item.runId !== (previous.lastEndedRunId ?? previous.currentRunId))
+			: previous.liveMessages,
+		toolExecutions: isAgentEnd ? {} : previous.toolExecutions,
 	});
 	appStore.set(sessionLeafIdAtomFamily(snapshot.sessionId), snapshot.leafId);
 	appStore.set(navigatingEntryAtomFamily(snapshot.sessionId), null);
@@ -134,7 +137,8 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 			appStore.set(atom, {
 				...previous,
 				currentRunId: previous.currentRunId + 1,
-				turnStartedAt: previous.turnStartedAt || Date.now(),
+				currentMessageRenderId: null,
+				turnStartedAt: Date.now(),
 				turnDurationMs: null,
 				runtime: previous.runtime ? { ...previous.runtime, isStreaming: true } : null,
 			});
@@ -153,6 +157,7 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 			}
 			appStore.set(atom, {
 				...appStore.get(atom),
+				lastEndedRunId: previous.currentRunId,
 				turnDurationMs: previous.turnStartedAt ? Date.now() - previous.turnStartedAt : null,
 			});
 			updateAgentRuntime(sessionId, { isStreaming: false, isRetrying: event.willRetry });
@@ -454,10 +459,7 @@ export function initIpcHandlers(api: any): () => void {
 						}
 					})
 					.catch((err: unknown) => {
-						console.error(
-							`[WorkspaceTree] Watcher refresh exception for ${projectId}/${relativePath}:`,
-							err,
-						);
+						console.error(`[WorkspaceTree] Watcher refresh exception for ${projectId}/${relativePath}:`, err);
 					});
 				break;
 			}
