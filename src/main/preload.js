@@ -6,7 +6,7 @@
 // must consume the API through `window.look`.
 // ============================================================
 
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const api = {
   // User home directory, exposed as a sync constant so the renderer can
@@ -108,6 +108,26 @@ const api = {
   // is sandboxed, so it can't call `dialog.showOpenDialog` itself.
   openDirectoryDialog: (title) =>
     ipcRenderer.invoke("look:invoke", { type: "dialog:open-directory", title }),
+  openFileDialog: (options) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "dialog:open-files",
+      title: options?.title,
+      allowDirectories: options?.allowDirectories,
+      allowMultiple: options?.allowMultiple,
+    }),
+
+  // ---- File paths from drag/drop ----
+  // Electron's sandboxed renderer strips `file.path` from File objects.
+  // Use webUtils.getPathForFile to recover the absolute path. Falls back
+  // to null if webUtils is unavailable or the File object is invalid
+  // (e.g. dragged directory — browsers don't expose directory paths).
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || null;
+    } catch {
+      return null;
+    }
+  },
 
   // ---- OS shell ----
   // Reveal a file in the OS file manager (Finder / Explorer / etc).
@@ -167,6 +187,28 @@ const api = {
       entryId,
       label,
     }),
+
+  // ---- Shared area ----
+  listSharedFiles: (projectId) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:list", projectId }),
+  startSharedWatch: (projectId) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:watch", projectId }),
+  stopSharedWatch: (projectId) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:unwatch", projectId }),
+  writeSharedFile: (projectId, path, content) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:write", projectId, path, content }),
+  createSharedDir: (projectId, path) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:mkdir", projectId, path }),
+  deleteSharedItem: (projectId, path) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:delete", projectId, path }),
+  importToShared: (projectId, sources, targetDir) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:import", projectId, sources, targetDir }),
+  exportFromShared: (projectId, paths, destDir) =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:export", projectId, paths, destDir }),
+  // Drag-drop fallback: write base64/utf8 content when no absolute path
+  // is available (e.g. dropped into a sandboxed renderer).
+  writeSharedContent: (projectId, path, content, encoding = "utf8") =>
+    ipcRenderer.invoke("look:invoke", { type: "shared:write-content", projectId, path, content, encoding }),
 
   // ---- Auto Updater ----
   checkForUpdates: () =>

@@ -20,11 +20,21 @@ import type { SessionRuntimeManager } from "./session-runtime-manager.js";
 import type { MainToRendererEvent, PermissionMode, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
+import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 
 export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainWindow: BrowserWindow): void {
 	// Clean up previous registrations to support macOS activate re-creation
 	ipcMain.removeHandler("look:invoke");
 	ipcMain.removeAllListeners("look:event");
+
+	const workspaceFileService = runtimeManager.getWorkspaceFileService();
+	// 重建窗口时先清旧 callback,避免 chokidar emit 同时打到新/旧 window(M-7)。
+	workspaceFileService.clearEmitCallback();
+	workspaceFileService.setEmitCallback((event: MainToRendererEvent) => {
+		if (!mainWindow.isDestroyed()) {
+			mainWindow.webContents.send("look:event", event);
+		}
+	});
 
 	// Forward session-scoped runtime events to the renderer.
 	const unsubscribeEvents = runtimeManager.onEvent((event: MainToRendererEvent) => {
@@ -35,17 +45,18 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 
 	mainWindow.on("closed", () => {
 		unsubscribeEvents();
+		// workspaceFileService.dispose() 由 SessionRuntimeManager.dispose() 统一处理
 	});
 
 	// Handle renderer → main events
 	ipcMain.on("look:event", (_event, data: RendererToMainEvent) => {
-		handleRendererEvent(data, runtimeManager);
+		handleRendererEvent(data);
 	});
 
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
 		try {
-			return await handleRendererInvoke(data, runtimeManager, mainWindow);
+			return await handleRendererInvoke(data, runtimeManager, mainWindow, workspaceFileService);
 		} catch (err: any) {
 			return {
 				success: false,
@@ -57,9 +68,10 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 	});
 }
 
-function handleRendererEvent(data: RendererToMainEvent, _agentManager: SessionRuntimeManager): void {
+function handleRendererEvent(data: RendererToMainEvent): void {
 	switch (data.type) {
 		case "app:ready":
+			// 占位事件:渲染端通知主进程已就绪,目前无需特殊处理
 			break;
 	}
 }
@@ -68,6 +80,7 @@ async function handleRendererInvoke(
 	data: RendererToMainEvent,
 	runtimeManager: SessionRuntimeManager,
 	mainWindow: BrowserWindow,
+	workspaceFileService: WorkspaceFileService,
 ): Promise<any> {
 	switch (data.type) {
 		// === Agent messaging ===
@@ -279,6 +292,26 @@ async function handleRendererInvoke(
 			return { success: true, path: result.filePaths[0] };
 		}
 
+		case "dialog:open-files": {
+			guardOptionalString(data.title, "title");
+			guardOptionalBoolean(data.allowDirectories, "allowDirectories");
+			guardOptionalBoolean(data.allowMultiple, "allowMultiple");
+			if (mainWindow.isDestroyed()) {
+				return { success: false, canceled: true, error: "Main window unavailable" };
+			}
+			const properties: Array<"openFile" | "openDirectory" | "multiSelections"> = ["openFile"];
+			if (data.allowDirectories) properties.push("openDirectory");
+			if (data.allowMultiple !== false) properties.push("multiSelections");
+			const result = await dialog.showOpenDialog(mainWindow, {
+				title: data.title || "Select files",
+				properties,
+			});
+			if (result.canceled || result.filePaths.length === 0) {
+				return { success: false, canceled: true };
+			}
+			return { success: true, paths: result.filePaths };
+		}
+
 		// === OS shell ===
 		case "shell:reveal-in-finder": {
 			const _path = guardPath(data.path, "path");
@@ -466,6 +499,63 @@ async function handleRendererInvoke(
 
 		case "mcp:connect-all": {
 			await runtimeManager.getMcpManager().connectAll();
+			return { success: true };
+		}
+
+		// === Shared area ===
+		case "shared:list": {
+			const projectId = guardString(data.projectId, "projectId");
+			const nodes = await workspaceFileService.listSharedFiles(projectId);
+			return { success: true, nodes };
+		}
+		case "shared:watch": {
+			const projectId = guardString(data.projectId, "projectId");
+			await workspaceFileService.startWatching(projectId);
+			return { success: true };
+		}
+		case "shared:unwatch": {
+			const projectId = guardString(data.projectId, "projectId");
+			await workspaceFileService.stopWatching(projectId);
+			return { success: true };
+		}
+		case "shared:write": {
+			const projectId = guardString(data.projectId, "projectId");
+			const relativePath = guardString(data.path, "path");
+			guardString(data.content, "content");
+			await workspaceFileService.writeSharedFile(projectId, relativePath, data.content);
+			return { success: true };
+		}
+		case "shared:mkdir": {
+			const projectId = guardString(data.projectId, "projectId");
+			const relativePath = guardString(data.path, "path");
+			await workspaceFileService.createSharedDir(projectId, relativePath);
+			return { success: true };
+		}
+		case "shared:delete": {
+			const projectId = guardString(data.projectId, "projectId");
+			const relativePath = guardString(data.path, "path");
+			await workspaceFileService.deleteSharedItem(projectId, relativePath);
+			return { success: true };
+		}
+		case "shared:import": {
+			const projectId = guardString(data.projectId, "projectId");
+			const sources = guardStringArray(data.sources, "sources");
+			await workspaceFileService.importToShared(projectId, sources, data.targetDir);
+			return { success: true };
+		}
+		case "shared:export": {
+			const projectId = guardString(data.projectId, "projectId");
+			const paths = guardStringArray(data.paths, "paths");
+			const destDir = guardString(data.destDir, "destDir");
+			await workspaceFileService.exportFromShared(projectId, paths, destDir);
+			return { success: true };
+		}
+		case "shared:write-content": {
+			const projectId = guardString(data.projectId, "projectId");
+			const relativePath = guardString(data.path, "path");
+			guardString(data.content, "content");
+			const encoding = guardEnum(data.encoding, "encoding", ["base64", "utf8"] as const);
+			await workspaceFileService.writeSharedContent(projectId, relativePath, data.content, encoding);
 			return { success: true };
 		}
 

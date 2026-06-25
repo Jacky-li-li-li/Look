@@ -41,6 +41,7 @@ import {
 	getAuthPath,
 	getLookDir,
 	getModelsPath,
+	getProjectSharedDir,
 	getProjectsIndexPath,
 	getUiSettingsPath,
 	resetLegacySessionsOnce,
@@ -63,6 +64,7 @@ import type {
 	ThinkingLevel,
 } from "./shared/types.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
+import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 
 export type EventCallback = (event: MainToRendererEvent) => void;
 
@@ -131,6 +133,8 @@ export class SessionRuntimeManager {
 	private defaultPermissionMode: PermissionMode = "ask";
 	private readonly permissionModesBySession = new Map<string, PermissionMode>();
 	private readonly dirtyPermissionModes = new Set<string>();
+	private readonly workspaceFileService: WorkspaceFileService | null;
+	private disposed = false;
 	/** Permission ask mode: pending requests keyed by requestId. */
 	private readonly permissionAwaiting = new Map<string, PendingPermission>();
 	/** "ask" mode: tool grants keyed by pi session ID. */
@@ -143,7 +147,7 @@ export class SessionRuntimeManager {
 	private readonly prePlanToolsBySession = new Map<string, string[]>();
 	private readonly dirtyPlanToolSnapshots = new Set<string>();
 
-	constructor() {
+	constructor(workspaceFileService?: WorkspaceFileService) {
 		ensureLookDir();
 		resetLegacySessionsOnce();
 		const migration = migrateLegacySettings();
@@ -159,6 +163,30 @@ export class SessionRuntimeManager {
 		// Tool authorization must never silently grant trust to project resources.
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		this.projectsIndexPath = getProjectsIndexPath();
+		this.workspaceFileService = workspaceFileService ?? null;
+	}
+
+	getWorkspaceFileService(): WorkspaceFileService {
+		if (this.disposed) {
+			throw new Error("SessionRuntimeManager has been disposed");
+		}
+		if (!this.workspaceFileService) {
+			throw new Error("WorkspaceFileService is not configured for this SessionRuntimeManager");
+		}
+		return this.workspaceFileService;
+	}
+
+	async dispose(): Promise<void> {
+		if (this.disposed) return;
+		this.disposed = true;
+		if (this.workspaceFileService) {
+			try {
+				await this.workspaceFileService.dispose();
+			} catch (error) {
+				console.error("[Look] workspaceFileService dispose failed:", error);
+			}
+		}
+		await this.disposeAllRuntimes();
 	}
 
 	getMcpManager(): McpManager {
@@ -329,6 +357,14 @@ export class SessionRuntimeManager {
 			.filter(([, managed]) => managed.projectId === projectId)
 			.map(([sessionId]) => sessionId);
 		await Promise.all(runtimeIds.map((sessionId) => this.disposeRuntime(sessionId, true)));
+		// 先停 watcher,再删目录,避免 chokidar 监听已删 inode 持续报错
+		if (this.workspaceFileService) {
+			try {
+				await this.workspaceFileService.stopWatching(projectId);
+			} catch (error) {
+				console.error(`[Look] Failed to stop shared area watcher for ${projectId}:`, error);
+			}
+		}
 		for (const session of sessions) {
 			try {
 				fs.unlinkSync(session.path);
@@ -338,6 +374,17 @@ export class SessionRuntimeManager {
 		}
 		this.sessionsByProject.delete(projectId);
 		this.projects.delete(projectId);
+		// 删除项目时清理共享区
+		const sharedDir = getProjectSharedDir(projectId);
+		if (existsSync(sharedDir)) {
+			try {
+				fs.rmSync(sharedDir, { recursive: true, force: true });
+			} catch (error: any) {
+				if (error?.code !== "ENOENT") {
+					console.error(`Failed to remove shared area for project ${projectId}:`, error);
+				}
+			}
+		}
 		if (this.activeSessionId && runtimeIds.includes(this.activeSessionId)) this.activeSessionId = null;
 		if (this.activeProjectId === projectId) {
 			this.activeProjectId = this.listProjects().find((project) => project.valid)?.id ?? null;
@@ -439,6 +486,13 @@ export class SessionRuntimeManager {
 		return session ? this.sessionInfo(session) : undefined;
 	}
 
+	private findProjectIdByCwd(cwd: string): string | undefined {
+		for (const project of this.projects.values()) {
+			if (project.cwd === cwd) return project.id;
+		}
+		return undefined;
+	}
+
 	private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
 		return async ({ cwd, sessionManager, sessionStartEvent }) => {
 			await this.getMcpManager().connectAll();
@@ -446,6 +500,11 @@ export class SessionRuntimeManager {
 				const settingsManager = SettingsManager.create(cwd, getLookDir());
 				const trusted = this.resolveProjectTrust(cwd);
 				settingsManager.setProjectTrusted(trusted);
+				const projectId = this.findProjectIdByCwd(cwd);
+				const sharedPath = projectId ? getProjectSharedDir(projectId) : undefined;
+				const appendPrompt = sharedPath
+					? `\n## 共享区（Shared Area）\n项目共享文件目录：${sharedPath}\n你可以通过 read、write、edit、ls 等工具访问此目录。这些文件在同一项目的所有会话中共享，新建或打开历史会话均可读取。\n`
+					: undefined;
 				const services = await createAgentSessionServices({
 					cwd,
 					agentDir: getLookDir(),
@@ -454,6 +513,7 @@ export class SessionRuntimeManager {
 					settingsManager,
 					resourceLoaderOptions: {
 						extensionFactories: this.buildExtensionFactories(cwd, sessionManager.getSessionId()),
+						appendSystemPrompt: appendPrompt ? [appendPrompt] : undefined,
 					},
 					resourceLoaderReloadOptions: {
 						resolveProjectTrust: async () => trusted,

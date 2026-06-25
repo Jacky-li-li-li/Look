@@ -1,5 +1,6 @@
 import type {
 	AgentInfo,
+	FileTreeNode,
 	PermissionAskQueueItem,
 	PermissionMode,
 	PlanApprovalRequest,
@@ -140,6 +141,21 @@ export const activeChatAtBottomAtom = atom(true);
 export const showSettingsAtom = atom(false);
 export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile">("general");
 export const sidebarCollapsedAtom = atom(false);
+
+// ---- v0.5 Shared area ----
+
+/** Right panel collapsed state. */
+export const rightPanelCollapsedAtom = atom(false);
+
+/** Per-project selected node path in the shared area. Per-project keeps
+ *  selection from leaking across project switches. */
+export const selectedSharedPathAtomFamily = atomFamily((projectId: string) => atom<string | null>(null));
+
+/** Per-project shared area file tree. */
+export const sharedFilesAtomFamily = atomFamily((projectId: string) => atom<FileTreeNode[]>([]));
+
+/** Per-project shared area loading state. */
+export const sharedFilesLoadingAtomFamily = atomFamily((projectId: string) => atom(false));
 
 // ---- Auto Updater ----
 
