@@ -1,6 +1,6 @@
 # Provider Icons — Sources
 
-Icons for the 32 AI providers shown on the Settings → API Keys page.
+Icons for the AI providers shown on the Settings → API Keys page.
 
 ## Source
 
@@ -34,25 +34,19 @@ Every Lobe Icon SVG uses `fill="currentColor"` (single-color path). The actual r
 | `zai` | `zai.svg` |
 | `mistral` | `mistral.svg` |
 | `minimax` | `minimax.svg` |
-| `minimax-cn` | `minimax.svg` |
-| `moonshotai` | `moonshot.svg` |
-| `moonshotai-cn` | `moonshot.svg` |
+| `moonshotai` | `moonshotai.svg` |
 | `huggingface` | `huggingface.svg` |
 | `fireworks` | `fireworks.svg` |
 | `together` | `together.svg` |
 | `opencode` | `opencode.svg` |
-| `opencode-go` | `opencode.svg` |
 | `kimi-coding` | `kimi.svg` |
-| `cloudflare-workers-ai` | `workersai.svg` |
-| `cloudflare-ai-gateway` | `cloudflare.svg` |
-| `xiaomi` | `xiaomimimo.svg` |
-| `xiaomi-token-plan-cn` | `xiaomimimo.svg` |
-| `xiaomi-token-plan-ams` | `xiaomimimo.svg` |
-| `xiaomi-token-plan-sgp` | `xiaomimimo.svg` |
+| `cloudflare-workers-ai` | `cloudflare-workers-ai.svg` |
+| `cloudflare-ai-gateway` | `cloudflare-ai-gateway.svg` |
+| `xiaomi` | `xiaomi.svg` |
 
 ## Notes
 
-- **Region variants** (`minimax-cn`, `moonshotai-cn`, all `xiaomi-token-plan-*`, `opencode-go`) share the parent brand's icon. Only the API endpoint differs; the brand identity is the same.
+- **Region / plan variants** (`minimax-cn`, `moonshotai-cn`, all `xiaomi-token-plan-*`, `opencode-go`) are normalized to the parent brand ID at runtime by `ProviderIcon.tsx` and share the parent SVG. Only the API endpoint differs; the brand identity is the same.
 - `openai-codex` uses the Codex-specific icon (separate from the OpenAI brand mark) to signal "this is the Codex product line".
 - `amazon-bedrock` uses the Bedrock icon; the underlying model vendors (Anthropic, Meta, Mistral, etc.) are not separately branded.
 - `xai` uses the XAI / Grok mark.
@@ -67,8 +61,7 @@ curl -sL https://registry.npmjs.org/@lobehub/icons-static-svg/-/icons-static-svg
   -o /tmp/icons-static-svg.tgz
 mkdir -p /tmp/icons-static-svg && tar -xzf /tmp/icons-static-svg.tgz -C /tmp/icons-static-svg
 
-# Run the copy script
-node scripts/copy-provider-icons.mjs
+# Copy the updated SVGs into this directory, keeping the pi SDK KnownProvider id as
+# the basename. Region / plan variants that share a parent brand should be mapped in
+# `src/renderer/components/ProviderIcon.tsx` instead of adding duplicate SVG files.
 ```
-
-(The copy script lives in the workspace root and reads the mapping above.)

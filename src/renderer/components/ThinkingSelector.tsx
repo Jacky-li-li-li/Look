@@ -18,6 +18,15 @@ const LEVELS: { value: ThinkingLevel; label: string; desc: string }[] = [
 	{ value: "xhigh", label: "X-High", desc: "Maximum reasoning" },
 ];
 
+const LEVEL_COLORS: Record<ThinkingLevel, string> = {
+	off: "text-muted-foreground",
+	minimal: "text-emerald-500",
+	low: "text-sky-500",
+	medium: "text-amber-500",
+	high: "text-orange-500",
+	xhigh: "text-rose-500",
+};
+
 interface ThinkingSelectorProps {
 	currentLevel: string;
 	availableThinkingLevels?: ThinkingLevel[];
@@ -49,9 +58,14 @@ export default function ThinkingSelector({ currentLevel, availableThinkingLevels
 		: t("chat.thinkingUnsupported", "Current model does not support reasoning");
 
 	const trigger = (
-		<Button variant="line" size="sm" title={triggerTitle} className="group/selector h-7 font-mono text-[11px]">
-			<Brain data-icon="inline-start" className="size-3" />
-			{current.label}
+		<Button
+			variant="line"
+			size="sm"
+			title={triggerTitle}
+			aria-label={triggerTitle}
+			className="group/selector h-7 font-mono text-[11px]"
+		>
+			<Brain data-icon="inline-start" className={`size-3 ${LEVEL_COLORS[current.value]}`} />
 			<ChevronDown
 				data-icon="inline-end"
 				className="size-3 transition-transform duration-150 group-data-[state=open]/selector:rotate-180"
@@ -69,29 +83,37 @@ export default function ThinkingSelector({ currentLevel, availableThinkingLevels
 			align="end"
 			className="glass-panel-strong w-56 overflow-y-auto rounded-xl border p-1 shadow-xl ring-1 ring-foreground/10"
 		>
-			{!supportsThinking && (
-				<div className="px-1.5 py-1 text-[10px] text-destructive/80">
-					{t("chat.thinkingUnsupported", "Current model does not support reasoning")}
-				</div>
+			{({ close }) => (
+				<>
+					{!supportsThinking && (
+						<div className="px-1.5 py-1 text-[10px] text-destructive/80">
+							{t("chat.thinkingUnsupported", "Current model does not support reasoning")}
+						</div>
+					)}
+					{visibleLevels.map((l) => {
+						const isActive = l.value === currentLevel;
+						return (
+							<button
+								key={l.value}
+								type="button"
+								disabled={isActive}
+								onClick={() => {
+									handleSelect(l.value);
+									close();
+								}}
+								className="flex w-full cursor-pointer flex-col items-start gap-0.5 rounded-md px-1.5 py-1 text-left text-[12px] outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground disabled:cursor-default disabled:opacity-40"
+							>
+								<span className={`flex items-center gap-1.5 font-medium ${LEVEL_COLORS[l.value]}`}>
+									<span className="size-1.5 rounded-full bg-current" />
+									{l.label}
+									{isActive && <Check className="size-3" />}
+								</span>
+								<span className="text-[10px] text-muted-foreground">{l.desc}</span>
+							</button>
+						);
+					})}
+				</>
 			)}
-			{visibleLevels.map((l) => {
-				const isActive = l.value === currentLevel;
-				return (
-					<button
-						key={l.value}
-						type="button"
-						disabled={isActive}
-						onClick={() => handleSelect(l.value)}
-						className="flex w-full cursor-pointer flex-col items-start gap-0.5 rounded-md px-1.5 py-1 text-left text-[12px] outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground disabled:cursor-default disabled:opacity-40"
-					>
-						<span className="flex items-center gap-1.5 font-medium">
-							{l.label}
-							{isActive && <Check className="size-3" />}
-						</span>
-						<span className="text-[10px] text-muted-foreground">{l.desc}</span>
-					</button>
-				);
-			})}
 		</SimplePopover>
 	);
 }

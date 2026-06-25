@@ -1,14 +1,12 @@
 node_modules/
 dist/
+release/
 .DS_Store
 *.log
+.env
 .pi/
+.alma-snapshots
 # Claude / Codex local settings — not part of the project
 .claude/
 # Throwaway probes — kept locally for debugging, not part of the codebase
 _probe.ts
-release/
-node_modules/
-.env
-dist/
-.alma-snapshots

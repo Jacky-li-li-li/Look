@@ -13,6 +13,8 @@
     "resolveJsonModule": true,
     "declaration": true,
     "sourceMap": true,
+    "incremental": true,
+    "tsBuildInfoFile": "dist/main/.tsbuildinfo",
     "paths": {
       "@shared/*": ["src/main/shared/*"]
     },

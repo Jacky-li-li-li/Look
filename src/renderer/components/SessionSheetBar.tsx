@@ -13,7 +13,7 @@ import type { AgentInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { rightPanelCollapsedAtom, sessionStateAtomFamily } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
@@ -160,6 +160,28 @@ export default function SessionSheetBar({
 
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+	// When the active sheet changes, scroll it into view only if it's
+	// currently off-screen. With `inline: "nearest"` the browser leaves the
+	// scroll position alone when the active tab is already visible, so the
+	// tab bar never jumps on click.
+	useEffect(() => {
+		if (!activeAgentId) return;
+		const frame = requestAnimationFrame(() => {
+			const root = scrollContainerRef.current;
+			if (!root) return;
+			const active = root.querySelector<HTMLElement>(`[data-agent-id="${activeAgentId}"]`);
+			if (!active) return;
+			const rootRect = root.getBoundingClientRect();
+			const activeRect = active.getBoundingClientRect();
+			if (activeRect.left < rootRect.left || activeRect.right > rootRect.right) {
+				active.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+			}
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [activeAgentId]);
+
 	const handleDragEnd = useCallback(
 		(event: DragEndEvent) => {
 			const { active, over } = event;
@@ -193,7 +215,10 @@ export default function SessionSheetBar({
 					{t("sheet.emptyHint", "Select a session from the sidebar")}
 				</div>
 			) : (
-				<div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+				<div
+					ref={scrollContainerRef}
+					className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+				>
 					<DndContext
 						sensors={sensors}
 						collisionDetection={closestCenter}

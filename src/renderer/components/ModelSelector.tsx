@@ -5,7 +5,7 @@
 import { Button } from "@shared/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@shared/components/ui/dialog";
 import type { AvailableModel } from "@shared/types";
-import { ArrowRight, Check, ChevronDown, Cpu } from "lucide-react";
+import { ArrowRight, Check, ChevronDown } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -109,7 +109,11 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 		>
 			<DialogTrigger asChild>
 				<Button variant="line" size="sm" className="group/selector h-7 max-w-40 font-mono text-[11px]">
-					<Cpu data-icon="inline-start" className="size-3" />
+					<ProviderIcon
+						id={currentModelObj?.provider ?? currentModel?.split("/")[0] ?? ""}
+						className="size-3"
+						data-icon="inline-start"
+					/>
 					<span className="truncate">{label}</span>
 					<ChevronDown
 						data-icon="inline-end"

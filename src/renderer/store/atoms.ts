@@ -42,6 +42,15 @@ export const openProjectIdsAtom = atom<string[]>([]);
 /** Session IDs opened as sheets in the top bar. */
 export const openedSessionIdsAtom = atom<string[]>([]);
 
+/**
+ * Session IDs in activation order (most recent first). Independent of
+ * {@link openedSessionIdsAtom} so that clicking a tab does not reorder
+ * the visible tab bar — clicking only flips the active highlight. Used
+ * by the close-fallback to pick the previous session when the active
+ * one is closed.
+ */
+export const recentlyActiveSessionIdsAtom = atom<string[]>([]);
+
 /** Pending delete confirmation: project info + agent count from main process. */
 export const pendingDeleteProjectAtom = atom<{
 	projectId: string;

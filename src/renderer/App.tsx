@@ -46,6 +46,7 @@ import {
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
+	recentlyActiveSessionIdsAtom,
 	rightPanelCollapsedAtom,
 	sessionStateAtomFamily,
 	settingsTabAtom,
@@ -159,23 +160,32 @@ export default function App() {
 		const result = await api.activateSession(agentId);
 		if (result?.success) {
 			appStore.set(activeAgentIdAtom, agentId);
-			// Add or move the selected session to the end of the sheet bar.
-			appStore.set(openedSessionIdsAtom, (previous) => {
+			// Track activation order (most recent first) for close-fallback neighbor
+			// selection. Do NOT mutate openedSessionIdsAtom here — that would reorder
+			// the tab bar DOM and visually jump the clicked tab. Tab order is
+			// user-controlled via drag (handleReorderSessionSheets).
+			appStore.set(recentlyActiveSessionIdsAtom, (previous) => {
 				const filtered = previous.filter((id) => id !== agentId);
-				return [...filtered, agentId];
+				return [agentId, ...filtered];
 			});
 		}
 	}, []);
 
 	const handleCloseSessionSheet = useCallback((agentId: string) => {
 		const currentIds = appStore.get(openedSessionIdsAtom);
-		const index = currentIds.indexOf(agentId);
 		const nextIds = currentIds.filter((id) => id !== agentId);
 		appStore.set(openedSessionIdsAtom, nextIds);
 
-		// If we closed the active session, switch to the left neighbor first, then right.
+		// Drop from activation history as well so a closed tab never re-appears
+		// as a fallback target.
+		appStore.set(recentlyActiveSessionIdsAtom, (previous) => previous.filter((id) => id !== agentId));
+
+		// If we closed the active session, fall back to the most recently
+		// activated sibling. This is independent of tab order so it keeps
+		// working when the user has manually reordered tabs.
 		if (appStore.get(activeAgentIdAtom) === agentId) {
-			const fallbackId = nextIds[index - 1] ?? nextIds[index] ?? null;
+			const activationOrder = appStore.get(recentlyActiveSessionIdsAtom);
+			const fallbackId = activationOrder.find((id) => nextIds.includes(id)) ?? nextIds[0] ?? null;
 			if (fallbackId && api) {
 				api.activateSession(fallbackId).then((result: any) => {
 					if (result?.success) {

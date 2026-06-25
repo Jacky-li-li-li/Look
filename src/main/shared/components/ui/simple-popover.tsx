@@ -20,7 +20,7 @@ import { createPortal } from "react-dom";
 
 interface SimplePopoverProps {
 	trigger: React.ReactNode;
-	children: React.ReactNode;
+	children: React.ReactNode | ((api: { close: () => void }) => React.ReactNode);
 	align?: "start" | "end";
 	className?: string;
 	/** Estimated panel height in px — used to decide flip direction
@@ -182,6 +182,7 @@ export default function SimplePopover({
 	}, [open]);
 
 	const toggle = useCallback(() => setOpen((v) => !v), []);
+	const close = useCallback(() => setOpen(false), []);
 
 	return (
 		<div className="inline-flex">
@@ -210,7 +211,7 @@ export default function SimplePopover({
 								: { top: 0, left: 0 }
 						}
 					>
-						{children}
+						{typeof children === "function" ? children({ close }) : children}
 					</div>,
 					document.body,
 				)}

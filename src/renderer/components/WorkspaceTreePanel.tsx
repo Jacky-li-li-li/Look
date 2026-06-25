@@ -23,18 +23,7 @@ import {
 } from "@shared/components/ui/dropdown-menu";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom } from "jotai";
-import {
-	ChevronDown,
-	ChevronRight,
-	ChevronsDownUp,
-	Eye,
-	EyeOff,
-	File,
-	Folder,
-	FolderOpen,
-	MoreHorizontal,
-	RefreshCw,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
@@ -45,6 +34,7 @@ import {
 	workspaceTreeErrorAtomFamily,
 	workspaceTreeLoadingAtomFamily,
 } from "../store/atoms";
+import { FileIcon } from "./FileIcon";
 
 interface WorkspaceTreePanelProps {
 	projectId: string;
@@ -374,7 +364,6 @@ interface WorkspaceTreeNodeRowProps {
 function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRowProps) {
 	const { node, depth } = row;
 	const isDir = node.type === "directory";
-	const Icon = isDir ? (isExpanded ? FolderOpen : Folder) : File;
 
 	const handleCopyPath = () => {
 		void navigator.clipboard.writeText(node.absolutePath);
@@ -425,7 +414,7 @@ function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRo
 			) : (
 				<span className="size-4 shrink-0" />
 			)}
-			<Icon className="size-3.5 shrink-0 text-muted-foreground" />
+			<FileIcon node={node} isExpanded={isExpanded} className="size-3.5 shrink-0" />
 			<span className="min-w-0 flex-1 truncate">{node.name}</span>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>

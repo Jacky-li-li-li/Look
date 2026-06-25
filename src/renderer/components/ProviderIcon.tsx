@@ -1,7 +1,7 @@
 // ============================================================
 // ProviderIcon — 32 Lobe Icons inline-SVG icons, currentColor
 //
-// Loads every `public/providers/*.svg` at build time via Vite's
+// Loads every `src/renderer/providers/*.svg` at build time via Vite's
 // `import.meta.glob` (eager, ?raw) and inlines them into the DOM
 // rather than loading them as <img> tags. Inlining is the only way
 // to make `fill="currentColor"` cascade from the parent — when an
@@ -9,7 +9,7 @@
 // and `currentColor` resolves to the SVG's own color (black by
 // default), which would make the icons invisible on dark themes.
 //
-// Source: see ./public/providers/SOURCES.md
+// Source: see ./src/renderer/providers/SOURCES.md
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
@@ -27,7 +27,7 @@ const RAW_ICONS = import.meta.glob("../providers/*.svg" /* query: '?raw', import
 
 const ICONS: Record<string, string> = Object.fromEntries(
 	Object.entries(RAW_ICONS).map(([path, svg]) => {
-		// path looks like "/Users/.../public/providers/anthropic.svg"
+		// path looks like "/Users/.../src/renderer/providers/anthropic.svg"
 		// → keep just the basename without extension as the id.
 		const file = path.split("/").pop() ?? "";
 		const id = file.replace(/\.svg$/, "");
@@ -40,6 +40,8 @@ interface ProviderIconProps {
 	id: string;
 	/** Optional extra classes — typically `size-4 shrink-0`. */
 	className?: string;
+	/** Optional data attribute for button inline-icon padding adjustments. */
+	"data-icon"?: string;
 }
 
 /**
@@ -51,8 +53,9 @@ interface ProviderIconProps {
  * mapping (e.g. a brand-new provider id from a future pi SDK
  * release we haven't curated yet).
  */
-export function ProviderIcon({ id, className }: ProviderIconProps) {
-	const svg = ICONS[id];
+export function ProviderIcon({ id, className, "data-icon": dataIcon }: ProviderIconProps) {
+	const iconId = resolveIconId(id);
+	const svg = ICONS[iconId];
 	const initial = useMemo(() => deriveInitial(id), [id]);
 
 	if (!svg) {
@@ -62,6 +65,7 @@ export function ProviderIcon({ id, className }: ProviderIconProps) {
 					"inline-flex shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-medium text-muted-foreground",
 					className,
 				)}
+				data-icon={dataIcon}
 				aria-label={id}
 				title={id}
 			>
@@ -76,12 +80,21 @@ export function ProviderIcon({ id, className }: ProviderIconProps) {
 				"inline-flex shrink-0 items-center justify-center text-foreground [&_svg]:h-full [&_svg]:w-full",
 				className,
 			)}
-			// biome-ignore lint/security/noDangerouslySetInnerHtml: SVG content is static, bundled at build time from the project's own public/providers/ directory.
+			data-icon={dataIcon}
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: SVG content is static, bundled at build time from the project's own src/renderer/providers/ directory.
 			dangerouslySetInnerHTML={{ __html: svg }}
 			aria-label={id}
 			title={id}
 		/>
 	);
+}
+
+// Region / plan variants that share the parent brand's icon.
+// e.g. "minimax-cn" → "minimax", "xiaomi-token-plan-ams" → "xiaomi",
+//      "opencode-go" → "opencode"
+function resolveIconId(id: string): string {
+	const parent = id.replace(/-(cn|go)$/, "").replace(/-token-plan(-.*)?$/, "");
+	return ICONS[parent] ? parent : id;
 }
 
 // Strip the noisy prefixes (region variants, -ai-, -plan-, -go-)
