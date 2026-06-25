@@ -10,6 +10,7 @@ import { SessionRuntimeManager } from "./session-runtime-manager.js";
 import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
 import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
+import { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,7 @@ const __dirname = path.dirname(__filename);
 let mainWindow: BrowserWindow | null = null;
 let runtimeManager: SessionRuntimeManager | null = null;
 let workspaceFileService: WorkspaceFileService | null = null;
+let workspaceTreeService: WorkspaceTreeService | null = null;
 
 const isDev = !app.isPackaged;
 
@@ -208,7 +210,9 @@ async function initSessionRuntime(): Promise<void> {
 
 	// 共享区服务单例:由 SessionRuntimeManager 持有,以便项目生命周期能驱动 watcher 启停
 	workspaceFileService = new WorkspaceFileService();
-	runtimeManager = new SessionRuntimeManager(workspaceFileService);
+	// 工作区文件树服务:服务项目 cwd 的 lazy-load 浏览
+	workspaceTreeService = new WorkspaceTreeService();
+	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
 
 	// Load project bookmarks and restore the selected session runtime. Other
 	// sessions remain persisted until selected or prompted.

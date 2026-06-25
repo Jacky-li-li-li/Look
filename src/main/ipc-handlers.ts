@@ -21,6 +21,7 @@ import type { MainToRendererEvent, PermissionMode, RendererToMainEvent, Thinking
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
+import type { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
 export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainWindow: BrowserWindow): void {
 	// Clean up previous registrations to support macOS activate re-creation
@@ -36,6 +37,14 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 		}
 	});
 
+	const workspaceTreeService = runtimeManager.getWorkspaceTreeService();
+	workspaceTreeService.clearEmitCallback();
+	workspaceTreeService.setEmitCallback((event: MainToRendererEvent) => {
+		if (!mainWindow.isDestroyed()) {
+			mainWindow.webContents.send("look:event", event);
+		}
+	});
+
 	// Forward session-scoped runtime events to the renderer.
 	const unsubscribeEvents = runtimeManager.onEvent((event: MainToRendererEvent) => {
 		if (!mainWindow.isDestroyed()) {
@@ -45,7 +54,7 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 
 	mainWindow.on("closed", () => {
 		unsubscribeEvents();
-		// workspaceFileService.dispose() 由 SessionRuntimeManager.dispose() 统一处理
+		// workspaceFileService.dispose() / workspaceTreeService.dispose() 由 SessionRuntimeManager.dispose() 统一处理
 	});
 
 	// Handle renderer → main events
@@ -56,7 +65,13 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
 		try {
-			return await handleRendererInvoke(data, runtimeManager, mainWindow, workspaceFileService);
+			return await handleRendererInvoke(
+				data,
+				runtimeManager,
+				mainWindow,
+				workspaceFileService,
+				workspaceTreeService,
+			);
 		} catch (err: any) {
 			return {
 				success: false,
@@ -81,6 +96,7 @@ async function handleRendererInvoke(
 	runtimeManager: SessionRuntimeManager,
 	mainWindow: BrowserWindow,
 	workspaceFileService: WorkspaceFileService,
+	workspaceTreeService: WorkspaceTreeService,
 ): Promise<any> {
 	switch (data.type) {
 		// === Agent messaging ===
@@ -556,6 +572,41 @@ async function handleRendererInvoke(
 			guardString(data.content, "content");
 			const encoding = guardEnum(data.encoding, "encoding", ["base64", "utf8"] as const);
 			await workspaceFileService.writeSharedContent(projectId, relativePath, data.content, encoding);
+			return { success: true };
+		}
+
+		// === Workspace tree (v0.6) ===
+		case "workspace:list-children": {
+			const projectId = guardString(data.projectId, "projectId");
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (!project) throw new Error(`Project not found: ${projectId}`);
+			if (!project.valid) throw new Error(`Project path invalid: ${project.cwd}`);
+			const relativePath = guardString(data.relativePath, "relativePath");
+			const nodes = await workspaceTreeService.listChildren(project.cwd, relativePath);
+			return { success: true, nodes };
+		}
+		case "workspace:stat": {
+			const projectId = guardString(data.projectId, "projectId");
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (!project) throw new Error(`Project not found: ${projectId}`);
+			const relativePath = guardString(data.relativePath, "relativePath");
+			const node = await workspaceTreeService.statNode(project.cwd, relativePath);
+			return { success: true, node };
+		}
+		case "workspace:watch": {
+			const projectId = guardString(data.projectId, "projectId");
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (!project) throw new Error(`Project not found: ${projectId}`);
+			const relativePath = guardString(data.relativePath, "relativePath");
+			workspaceTreeService.startWatchDir(projectId, project.cwd, relativePath);
+			return { success: true };
+		}
+		case "workspace:unwatch": {
+			const projectId = guardString(data.projectId, "projectId");
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (!project) throw new Error(`Project not found: ${projectId}`);
+			const relativePath = guardString(data.relativePath, "relativePath");
+			workspaceTreeService.stopWatchDir(projectId, project.cwd, relativePath);
 			return { success: true };
 		}
 

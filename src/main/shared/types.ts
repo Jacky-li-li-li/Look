@@ -202,6 +202,8 @@ export type MainToRendererEvent =
 	  }
 	// ---- Shared area events ----
 	| { type: "shared:updated"; projectId: string }
+	// ---- Workspace tree events ----
+	| { type: "workspace:updated"; projectId: string; relativePath: string }
 	// ---- Auto updater events ----
 	| { type: "update:checking" }
 	| { type: "update:available"; version: string; releaseDate?: string }
@@ -320,6 +322,11 @@ export type RendererToMainEvent =
 	/** Drag-drop fallback: write file content (base64) to the shared area. Used
 	 *  when webUtils.getPathForFile() cannot return an absolute path. */
 	| { type: "shared:write-content"; projectId: string; path: string; content: string; encoding: "base64" | "utf8" }
+	// ---- Workspace tree (renderer → main) ----
+	| { type: "workspace:list-children"; projectId: string; relativePath: string }
+	| { type: "workspace:stat"; projectId: string; relativePath: string }
+	| { type: "workspace:watch"; projectId: string; relativePath: string }
+	| { type: "workspace:unwatch"; projectId: string; relativePath: string }
 	// ---- Permission events (renderer → main) ----
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
 	| { type: "permission:get-mode"; agentId: string }

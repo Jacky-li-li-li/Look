@@ -123,6 +123,17 @@ interface LookAPI {
 		content: string,
 		encoding?: "base64" | "utf8",
 	): Promise<{ success: boolean; error?: string }>;
+	// ---- Workspace tree (v0.6) ----
+	listWorkspaceChildren(
+		projectId: string,
+		relativePath: string,
+	): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
+	statWorkspaceNode(
+		projectId: string,
+		relativePath: string,
+	): Promise<{ success: boolean; node?: FileTreeNode | null; error?: string }>;
+	startWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
+	stopWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
 }
 
 interface SkillEntry {
