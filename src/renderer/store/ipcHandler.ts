@@ -45,10 +45,15 @@ export const appStore = createStore();
 const t = i18n.t.bind(i18n);
 
 /**
- * 合并 shared:updated 事件,200ms debounce 一次 listSharedFiles。
+ * 合并 shared:updated 事件,80ms debounce 一次 listSharedFiles。
  * 防止高频小写入(例如 agent 批量落盘)触发 IPC 风暴(M-10)。
+ *
+ * P0-5: 缩短到 80ms。SharedAreaPanel 删除了 onAfterChange prop 后,
+ * 所有刷新都走 chokidar → emit → scheduleSharedRefresh 这条路径,
+ * 200ms 会让"操作后到 UI 反映"有可感知的延迟;80ms 仍然 debounce
+ * 但操作感即时。
  */
-const SHARED_REFRESH_DEBOUNCE_MS = 200;
+const SHARED_REFRESH_DEBOUNCE_MS = 80;
 const sharedRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function scheduleSharedRefresh(projectId: string, filesAtom: ReturnType<typeof sharedFilesAtomFamily>): void {

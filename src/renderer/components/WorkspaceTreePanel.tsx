@@ -97,6 +97,13 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 					next.delete(node.path);
 					return next;
 				});
+				// P0-2: 折叠时停 watcher,避免长会话下 chokidar 句柄累积。
+				// stopWatchDir 是幂等的,失败时 best-effort(主端会在 dispose 时兜底清理)。
+				try {
+					await window.look.stopWorkspaceWatch(projectId, node.path);
+				} catch (error) {
+					console.error("stopWorkspaceWatch failed", error);
+				}
 				return;
 			}
 

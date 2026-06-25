@@ -51,6 +51,10 @@ function shouldIgnore(name: string, isDir: boolean): boolean {
 export class WorkspaceTreeService {
 	private readonly watchers = new Map<string, FSWatcher>(); // watcherKey → chokidar watcher
 	private readonly watchedByProject = new Map<string, Set<string>>(); // projectId → watcherKey 集合
+	// P0-4: debounceTimers 提升到实例字段,这样 stopWatchDir / stopAllWatchesForProject
+	// / dispose 才能清理 — 之前是 startWatchDir 内的局部变量,chokidar.close() 异步期间
+	// listener 仍会 emit 一次进 debounceTimers,且永远不会被清理,造成内存泄漏。
+	private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private emitCallback: WorkspaceTreeEmitCallback | null = null;
 
 	setEmitCallback(callback: WorkspaceTreeEmitCallback): void {
@@ -171,18 +175,17 @@ export class WorkspaceTreeService {
 			// macOS fsevents 对 recursive depth 有限制,depth: 0 更稳
 		});
 
-		const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 		const DEBOUNCE_MS = 300;
 
 		watcher.on("all", (_event, changedName) => {
 			if (!changedName) return;
 			// 单一路径防抖:同一次批量变化只 emit 一次
-			const existing = debounceTimers.get(key);
+			const existing = this.debounceTimers.get(key);
 			if (existing) clearTimeout(existing);
-			debounceTimers.set(
+			this.debounceTimers.set(
 				key,
 				setTimeout(() => {
-					debounceTimers.delete(key);
+					this.debounceTimers.delete(key);
 					this.emit({ type: "workspace:updated", projectId, relativePath });
 				}, DEBOUNCE_MS),
 			);
@@ -208,6 +211,14 @@ export class WorkspaceTreeService {
 		const watcher = this.watchers.get(key);
 		if (!watcher) return;
 		this.watchers.delete(key);
+		// P0-4: 同步清理该 key 的 debounceTimers。chokidar.close() 是异步的,
+		// 期间 listener 仍可能 emit 一次到 debounceTimers,如果不清,300ms 后
+		// emit 一次"幽灵"workspace:updated 到已卸载的窗口。
+		const pending = this.debounceTimers.get(key);
+		if (pending) {
+			clearTimeout(pending);
+			this.debounceTimers.delete(key);
+		}
 		void watcher.close();
 		const projectSet = this.watchedByProject.get(projectId);
 		if (projectSet) {
@@ -226,11 +237,21 @@ export class WorkspaceTreeService {
 				await watcher.close();
 				this.watchers.delete(key);
 			}
+			// P0-4: 同步清理该 key 的 debounceTimers
+			const pending = this.debounceTimers.get(key);
+			if (pending) {
+				clearTimeout(pending);
+				this.debounceTimers.delete(key);
+			}
 		}
 		this.watchedByProject.delete(projectId);
 	}
 
 	async dispose(): Promise<void> {
+		// P0-4: 先清所有 debounceTimers,确保已排队的 setTimeout 不会再触发 emit
+		for (const timer of this.debounceTimers.values()) clearTimeout(timer);
+		this.debounceTimers.clear();
+
 		const keys = Array.from(this.watchers.keys());
 		for (const key of keys) {
 			const w = this.watchers.get(key);
@@ -240,6 +261,7 @@ export class WorkspaceTreeService {
 			}
 		}
 		this.watchedByProject.clear();
+		this.emitCallback = null;
 	}
 
 	// ── Path helpers ──

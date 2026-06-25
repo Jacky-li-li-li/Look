@@ -137,17 +137,7 @@ export function RightPanel() {
 					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
 				)}
 				{!collapsed && tab === "shared" && (
-					<SharedAreaPanel
-						projectId={activeProject.id}
-						files={sharedFiles}
-						isLoading={isLoading}
-						onAfterChange={async () => {
-							const result = await window.look.listSharedFiles(activeProject.id);
-							if (result?.success && result.nodes) {
-								appStore.set(sharedFilesAtomFamily(activeProject.id), result.nodes);
-							}
-						}}
-					/>
+					<SharedAreaPanel projectId={activeProject.id} files={sharedFiles} isLoading={isLoading} />
 				)}
 			</aside>
 		</>
