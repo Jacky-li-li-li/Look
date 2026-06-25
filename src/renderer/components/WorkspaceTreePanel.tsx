@@ -399,7 +399,6 @@ function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRo
 			className="group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
 			onDoubleClick={() => {
 				if (isDir) onToggle();
-				else handleOpenInAgent();
 			}}
 		>
 			{isDir ? (

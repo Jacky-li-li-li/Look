@@ -148,10 +148,22 @@ export class SessionRuntimeManager {
 	/** Exact active tool list captured immediately before entering Plan. */
 	private readonly prePlanToolsBySession = new Map<string, string[]>();
 	private readonly dirtyPlanToolSnapshots = new Set<string>();
-	/** Sessions whose latest agent_end had willRetry=false. We override isStreaming
-	 *  to false in all runtime reports until the next agent_start, because the SDK
-	 *  can still report isStreaming=true momentarily after the turn has ended. */
-	private readonly postEndStreamingOff = new Set<string>();
+	/** Per-runtime streaming state machine. The SDK's `session.isStreaming` getter
+	 *  can lag behind events, so we derive a canonical UI state from the event stream:
+	 *  - idle: no turn in progress
+	 *  - streaming: a turn is actively producing output
+	 *  - retrying: the last turn ended but requested a retry (still "running" visually)
+	 *  All renderer-facing reports use this canonical state instead of the raw getter. */
+	private readonly streamingStates = new Map<string, "idle" | "streaming" | "retrying">();
+
+	/** Whether the session should be reported as streaming to the renderer.
+	 *  Falls back to the SDK getter only when no event-derived state exists. */
+	private isStreaming(sessionId: string, sdkValue: boolean): boolean {
+		const state = this.streamingStates.get(sessionId);
+		if (state === "idle") return false;
+		if (state === "streaming" || state === "retrying") return true;
+		return sdkValue;
+	}
 
 	constructor(workspaceFileService?: WorkspaceFileService, workspaceTreeService?: WorkspaceTreeService) {
 		ensureLookDir();
@@ -492,7 +504,7 @@ export class SessionRuntimeManager {
 			thinkingLevel: session.thinkingLevel as ThinkingLevel,
 			modelSupportsThinking: session.supportsThinking(),
 			availableThinkingLevels: session.getAvailableThinkingLevels() as ThinkingLevel[],
-			isStreaming: this.postEndStreamingOff.has(sessionId) ? false : session.isStreaming,
+			isStreaming: this.isStreaming(sessionId, session.isStreaming),
 			isRetrying: session.isRetrying,
 			isCompacting: session.isCompacting,
 			messageCount: stats.totalMessages,
@@ -635,6 +647,9 @@ export class SessionRuntimeManager {
 			createdAt,
 			unsubscribe: () => {},
 		};
+		// Initialize canonical streaming state from the SDK snapshot at bind time.
+		// Subsequent transitions are driven by agent_start / agent_end events.
+		this.streamingStates.set(session.sessionId, session.isStreaming ? "streaming" : "idle");
 		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
 		runtime.setRebindSession(async (nextSession) => this.rebindRuntime(runtime, nextSession));
 		this.runtimes.set(session.sessionId, managed);
@@ -662,6 +677,8 @@ export class SessionRuntimeManager {
 			onError: (error) => this.emit({ type: "error", agentId: session.sessionId, message: String(error) }),
 		});
 		this.runtimes.delete(previousSessionId);
+		this.streamingStates.delete(previousSessionId);
+		this.streamingStates.set(session.sessionId, session.isStreaming ? "streaming" : "idle");
 		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
 		this.runtimes.set(session.sessionId, managed);
 		this.syncPlanToolState(session.sessionId);
@@ -718,7 +735,7 @@ export class SessionRuntimeManager {
 		this.sessionAllowedTools.delete(sessionId);
 		this.prePlanToolsBySession.delete(sessionId);
 		this.dirtyPlanToolSnapshots.delete(sessionId);
-		this.postEndStreamingOff.delete(sessionId);
+		this.streamingStates.delete(sessionId);
 		await managed.runtime.dispose();
 	}
 
@@ -957,16 +974,12 @@ export class SessionRuntimeManager {
 				this.persistPlanToolSnapshotIfPossible(sessionId);
 				// The SDK can still report isStreaming=true momentarily after the turn
 				// has ended. Force the post-end reports to false until the next run starts.
-				if (event.willRetry) {
-					this.postEndStreamingOff.delete(sessionId);
-				} else {
-					this.postEndStreamingOff.add(sessionId);
-				}
+				this.streamingStates.set(sessionId, event.willRetry ? "retrying" : "idle");
 				this.emitSessionState(sessionId, "agent_end");
 				this.refreshAfterTurn(sessionId).catch((error) => this.emitError(error, sessionId));
 				break;
 			case "agent_start":
-				this.postEndStreamingOff.delete(sessionId);
+				this.streamingStates.set(sessionId, "streaming");
 				this.emitSessionUpdated(sessionId);
 				break;
 			case "thinking_level_changed":
@@ -1005,7 +1018,7 @@ export class SessionRuntimeManager {
 				runtime: {
 					model: session.model,
 					thinkingLevel: session.thinkingLevel,
-					isStreaming: this.postEndStreamingOff.has(sessionId) ? false : session.isStreaming,
+					isStreaming: this.isStreaming(sessionId, session.isStreaming),
 					isRetrying: session.isRetrying,
 					isCompacting: session.isCompacting,
 					retryAttempt: session.retryAttempt,

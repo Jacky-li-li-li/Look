@@ -445,6 +445,9 @@ function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: Shared
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
+					<DropdownMenuItem onClick={() => { void navigator.clipboard.writeText(node.absolutePath); toast.success("已复制绝对路径"); }}>
+						复制绝对路径
+					</DropdownMenuItem>
 					<DropdownMenuItem onClick={() => window.look.revealInFinder(node.absolutePath)}>
 						在 Finder 中打开
 					</DropdownMenuItem>
