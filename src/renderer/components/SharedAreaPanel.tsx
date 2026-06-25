@@ -31,12 +31,11 @@ interface SharedAreaPanelProps {
 	projectId: string;
 	files: FileTreeNode[];
 	isLoading: boolean;
-	onAfterChange: () => Promise<void>;
 }
 
 const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
 
-export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: SharedAreaPanelProps) {
+export function SharedAreaPanel({ projectId, files, isLoading }: SharedAreaPanelProps) {
 	const [selectedPath, setSelectedPath] = useAtom(selectedSharedPathAtomFamily(projectId));
 	const [creating, setCreating] = useState<"file" | "dir" | null>(null);
 	const [newName, setNewName] = useState("");
@@ -64,7 +63,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 			} else {
 				await window.look.createSharedDir(projectId, trimmed);
 			}
-			await onAfterChange();
+			// P0-5: 不再主动 onAfterChange,所有刷新都走 chokidar 路径(80ms debounce)
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "创建失败";
 			toast.error(message);
@@ -82,7 +81,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 		try {
 			await window.look.deleteSharedItem(projectId, node.path);
 			if (selectedPath === node.path) setSelectedPath(null);
-			await onAfterChange();
+			// P0-5: 刷新由 chokidar 触发,不再主动 listSharedFiles
 			toast.success("已删除");
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "删除失败";
@@ -92,8 +91,10 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 	};
 
 	const handleRefresh = async () => {
+		// P0-5: 刷新按钮改为启动一个新的 watch 周期,让 chokidar 重新 emit
 		try {
-			await onAfterChange();
+			await window.look.stopSharedWatch(projectId);
+			await window.look.startSharedWatch(projectId);
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "刷新共享区失败";
 			toast.error(message);
@@ -109,7 +110,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 			});
 			if (!result?.success || !result.paths || result.paths.length === 0) return;
 			await window.look.importToShared(projectId, result.paths);
-			await onAfterChange();
+			// P0-5: 刷新由 chokidar 触发
 			toast.success(`已导入 ${result.paths.length} 项`);
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "导入失败";
@@ -272,7 +273,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 				toast.info("无法识别拖入内容,请使用「导入」按钮");
 				return;
 			}
-			await onAfterChange();
+			// P0-5: 刷新由 chokidar 触发
 			const detail = viaContent > 0 ? ` (${viaPath} 个用绝对路径, ${viaContent} 个用内容上传)` : "";
 			toast.success(`已导入 ${total} 项${detail}`);
 		} catch (error: unknown) {

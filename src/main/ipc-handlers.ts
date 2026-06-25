@@ -23,6 +23,10 @@ import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-prof
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
+// 跟踪 runtime event 的 unsubscribe 回调,确保 macOS activate 重建窗口时
+// 清理上一次的 callback,避免 eventCallbacks 数组累积导致事件被发 N 次(P0-1)。
+let unsubscribeRuntimeEvents: (() => void) | null = null;
+
 export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainWindow: BrowserWindow): void {
 	// Clean up previous registrations to support macOS activate re-creation
 	ipcMain.removeHandler("look:invoke");
@@ -45,15 +49,25 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 		}
 	});
 
+	// P0-1: 清理上一次的 runtime event callback(每次 registerIpcHandlers 调用都来自
+	// macOS activate 重建窗口,旧 callback 还在 eventCallbacks 数组里,如果不清理会累积)。
+	if (unsubscribeRuntimeEvents) {
+		unsubscribeRuntimeEvents();
+		unsubscribeRuntimeEvents = null;
+	}
+
 	// Forward session-scoped runtime events to the renderer.
-	const unsubscribeEvents = runtimeManager.onEvent((event: MainToRendererEvent) => {
+	unsubscribeRuntimeEvents = runtimeManager.onEvent((event: MainToRendererEvent) => {
 		if (!mainWindow.isDestroyed()) {
 			mainWindow.webContents.send("look:event", event);
 		}
 	});
 
 	mainWindow.on("closed", () => {
-		unsubscribeEvents();
+		if (unsubscribeRuntimeEvents) {
+			unsubscribeRuntimeEvents();
+			unsubscribeRuntimeEvents = null;
+		}
 		// workspaceFileService.dispose() / workspaceTreeService.dispose() 由 SessionRuntimeManager.dispose() 统一处理
 	});
 
