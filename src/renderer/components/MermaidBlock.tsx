@@ -145,9 +145,9 @@ const MermaidBlock = memo(function MermaidBlock({ children }: MermaidBlockProps)
 	}, [code]);
 
 	return (
-		<div className="group relative my-3 rounded-lg border bg-muted/30 overflow-hidden">
+		<div className="group relative my-2 rounded-lg border border-hairline bg-muted/30 overflow-hidden">
 			{/* Header bar */}
-			<div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/50">
+			<div className="flex items-center justify-between px-3 py-1.5 border-b border-hairline bg-muted/50">
 				<span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">mermaid</span>
 				<div className="flex items-center gap-0.5">
 					<Button

@@ -2,8 +2,10 @@
 // RightPanel — 右侧边栏容器(v0.6:共享区 + 工作区 双 tab)
 // ============================================================
 
+import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { PanelRightClose } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -24,6 +26,7 @@ export function RightPanel() {
 	const activeProject = useAtomValue(activeProjectAtom);
 	const collapsed = useAtomValue(rightPanelCollapsedAtom);
 	const [tab, setTab] = useAtom(rightPanelTabAtom);
+	const setCollapsed = useSetAtom(rightPanelCollapsedAtom);
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
 
 	// 始终调用 hooks;在 effect 内判断 projectId 是否有效
@@ -120,6 +123,16 @@ export function RightPanel() {
 							共享区
 						</button>
 					</nav>
+					<Button
+						size="icon-sm"
+						variant="ghost"
+						className="shrink-0 rounded-md border border-hairline"
+						onClick={() => setCollapsed(true)}
+						aria-label="折叠右侧面板"
+						title="折叠右侧面板"
+					>
+						<PanelRightClose className="size-3.5" />
+					</Button>
 				</header>
 				{tab === "workspace" && <WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />}
 				{tab === "shared" && (

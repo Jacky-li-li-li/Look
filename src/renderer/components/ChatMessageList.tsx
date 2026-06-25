@@ -234,7 +234,7 @@ const ChatMessageList = memo(function ChatMessageList({
 						if (!item) return null;
 						if (item.entry) {
 							return (
-								<div className="px-5 py-2.5">
+								<div className="px-5 py-2">
 									<SessionEntryBubble entry={item.entry} />
 								</div>
 							);
@@ -246,7 +246,7 @@ const ChatMessageList = memo(function ChatMessageList({
 						);
 						const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
 						return (
-							<div className="px-5 py-2.5">
+							<div className="px-5 py-2">
 								<div
 									data-message-id={item.id}
 									className={cn(

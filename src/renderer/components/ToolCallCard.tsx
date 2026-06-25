@@ -243,7 +243,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					>
 						<div className="overflow-hidden">
 							<div className="inset-drawer__content">
-								<div className="flex flex-col gap-3 text-[10px] leading-relaxed">
+								<div className="flex flex-col gap-2 text-[10px] leading-relaxed">
 									<section className="flex flex-col gap-1">
 										<span className="inset-drawer__label text-foreground">{t("tool.arguments")}</span>
 										<pre className="whitespace-pre-wrap break-all text-muted-foreground">

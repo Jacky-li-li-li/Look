@@ -75,7 +75,7 @@ function MessageHeader({
 }) {
 	const { t } = useTranslation();
 	return (
-		<div className={cn("mb-1 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
+		<div className={cn("mb-0.5 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
 			<span className="font-medium uppercase tracking-wider">{sender}</span>
 			<span className="tabular-nums" title={new Date(timestamp).toLocaleString()}>
 				{formatMessageTime(timestamp)}
@@ -105,7 +105,7 @@ function ContentBlocks({
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
 	return (
-		<div className="flex flex-col gap-2">
+		<div className="flex flex-col gap-1.5">
 			{blocks.map((block, index) => {
 				if (block.type === "text") {
 					if (!block.text) return null;
@@ -226,7 +226,7 @@ const MessageBubble = memo(function MessageBubble({
 				/>
 				<div
 					className={cn(
-						"whisper-bubble flex flex-col gap-2 text-[13px] leading-relaxed",
+						"whisper-bubble flex flex-col gap-1.5 text-[13px] leading-relaxed",
 						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant w-full",
 						assistant && isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
 						flash && "bubble-flash",

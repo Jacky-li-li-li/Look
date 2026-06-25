@@ -455,7 +455,6 @@ export default function App() {
 									projects={projects}
 									activeAgentId={activeAgentId}
 									sidebarCollapsed={sidebarCollapsed}
-									rightPanelCollapsed={rightPanelCollapsed}
 									onSelect={handleSelectAgent}
 									onClose={handleCloseSessionSheet}
 									onReorder={handleReorderSessionSheets}

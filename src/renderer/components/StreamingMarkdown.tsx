@@ -29,6 +29,37 @@ function autoCloseCodeFences(text: string): string {
 	return open ? `${text}\n\`\`\`` : text;
 }
 
+/**
+ * Escape asterisks in file globs like `*.md` or `src/*.ts` so they are not
+ * misinterpreted as Markdown emphasis markers. Only touches text outside
+ * fenced code blocks (``` or ~~~) and indented code blocks (4+ spaces).
+ */
+function escapeGlobAsterisks(text: string): string {
+	const lines = text.split("\n");
+	let inFence: string | null = null;
+	const result: string[] = [];
+	for (const line of lines) {
+		const trimmed = line.trimStart();
+		if (inFence) {
+			if (trimmed.startsWith(inFence)) inFence = null;
+			result.push(line);
+			continue;
+		}
+		if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+			inFence = trimmed.startsWith("```") ? "```" : "~~~";
+			result.push(line);
+			continue;
+		}
+		// Skip indented code blocks (4+ leading spaces).
+		if (/^ {4,}/.test(line)) {
+			result.push(line);
+			continue;
+		}
+		result.push(line.replace(/(^|\s|[(/])(\*\.\S+)/g, "$1\\$2"));
+	}
+	return result.join("\n");
+}
+
 import { Check, Copy } from "lucide-react";
 import type React from "react";
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -91,8 +122,8 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({
 	};
 
 	return (
-		<div className="group relative my-3 rounded-lg border bg-muted/30 overflow-hidden">
-			<div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/50">
+		<div className="group relative my-2 rounded-lg border border-hairline bg-muted/30 overflow-hidden">
+			<div className="flex items-center justify-between px-3 py-1.5 border-b border-hairline bg-muted/50">
 				<span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{lang}</span>
 				<Button
 					variant="ghost"
@@ -126,7 +157,7 @@ function InlineCode({ children, ...props }: any) {
 
 function Table({ children, ...props }: any) {
 	return (
-		<div className="my-3 overflow-x-auto rounded-lg border">
+		<div className="my-2 overflow-x-auto rounded-lg border border-hairline">
 			<table className="w-full text-xs" {...props}>
 				{children}
 			</table>
@@ -136,7 +167,7 @@ function Table({ children, ...props }: any) {
 
 function Th({ children, ...props }: any) {
 	return (
-		<th className="border-b bg-muted/50 px-3 py-2 text-left font-semibold text-muted-foreground" {...props}>
+		<th className="border-b border-hairline bg-muted/50 px-3 py-2 text-left font-semibold text-muted-foreground" {...props}>
 			{children}
 		</th>
 	);
@@ -144,7 +175,7 @@ function Th({ children, ...props }: any) {
 
 function Td({ children, ...props }: any) {
 	return (
-		<td className="border-b px-3 py-2" {...props}>
+		<td className="border-b border-hairline px-3 py-2" {...props}>
 			{children}
 		</td>
 	);
@@ -192,45 +223,47 @@ function MarkdownA({ children, href, ...props }: any) {
 }
 function MarkdownBlockquote({ children, ...props }: any) {
 	return (
-		<blockquote className="my-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground" {...props}>
+		<blockquote className="my-2 border-l-2 border-muted-foreground/20 pl-2.5 italic text-muted-foreground" {...props}>
 			{children}
 		</blockquote>
 	);
 }
-function MarkdownHr(props: any) {
-	return <hr className="my-4 border-border" {...props} />;
+function MarkdownHr() {
+	// Render a thematic break as invisible spacing so sections still
+	// breathe, but no visible divider line clutters the output.
+	return <div className="my-2" />;
 }
 function MarkdownUl({ children, ...props }: any) {
 	return (
-		<ul className="my-2 ml-4 list-disc space-y-1" {...props}>
+		<ul className="my-2 ml-4 list-disc space-y-0.5" {...props}>
 			{children}
 		</ul>
 	);
 }
 function MarkdownOl({ children, ...props }: any) {
 	return (
-		<ol className="my-2 ml-4 list-decimal space-y-1" {...props}>
+		<ol className="my-2 ml-4 list-decimal space-y-0.5" {...props}>
 			{children}
 		</ol>
 	);
 }
 function MarkdownH1({ children, ...props }: any) {
 	return (
-		<h1 className="mt-4 mb-2 text-lg font-bold" {...props}>
+		<h1 className="mt-3 mb-1.5 text-lg font-bold" {...props}>
 			{children}
 		</h1>
 	);
 }
 function MarkdownH2({ children, ...props }: any) {
 	return (
-		<h2 className="mt-3 mb-1.5 text-base font-semibold" {...props}>
+		<h2 className="mt-2 mb-1 text-base font-semibold" {...props}>
 			{children}
 		</h2>
 	);
 }
 function MarkdownH3({ children, ...props }: any) {
 	return (
-		<h3 className="mt-2 mb-1 text-sm font-semibold" {...props}>
+		<h3 className="mt-1.5 mb-0.5 text-sm font-semibold" {...props}>
 			{children}
 		</h3>
 	);
@@ -271,7 +304,7 @@ const StreamingMarkdown = memo(function StreamingMarkdown({
 		return isStreaming ? <span className="inline-block w-2 h-4 bg-primary animate-pulse rounded-xs ml-0.5" /> : null;
 	}
 
-	const displayContent = autoCloseCodeFences(throttledContent);
+	const displayContent = escapeGlobAsterisks(autoCloseCodeFences(throttledContent));
 
 	const markdown = (
 		<StreamingContext.Provider value={isStreaming}>
