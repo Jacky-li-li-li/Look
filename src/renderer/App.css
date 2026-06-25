@@ -45,6 +45,7 @@
 :root,
 .theme-ink-wash.tone-light {
   --sidebar-width: 280px;
+  --right-panel-width: 260px;
 
   /* Ink palette — warm offset at oklch 85° / chroma 0.005 */
   --ink-0:    oklch(0.985 0.002 85);
@@ -1227,6 +1228,78 @@ body {
     padding-right: 0;
     transform: translateX(0);
     pointer-events: auto;
+  }
+
+  /* ============================================================
+     Collapsible Right Panel — mirrors sidebar mechanism
+     ============================================================ */
+
+  .right-panel-wrapper {
+    width: var(--right-panel-width);
+    min-width: var(--right-panel-width);
+    max-width: var(--right-panel-width);
+    opacity: 1;
+    transition:
+      width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      min-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 220ms ease,
+      border-radius 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 280ms ease;
+  }
+
+  .right-panel-wrapper[data-collapsed="true"] {
+    width: 0;
+    min-width: 0;
+    max-width: 0;
+    opacity: 0;
+    border-radius: 0;
+    border-width: 0;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  .right-panel-separator {
+    opacity: 1;
+    transition:
+      opacity 220ms ease,
+      margin 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-shell[data-right-panel-collapsed="true"] .right-panel-separator {
+    opacity: 0;
+    margin-left: 0;
+    margin-right: 0;
+    width: 0;
+  }
+
+  .expand-right-panel-btn {
+    opacity: 0;
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    transform: translateX(4px);
+    pointer-events: none;
+    transition:
+      opacity 220ms ease,
+      width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-shell[data-right-panel-collapsed="true"] .expand-right-panel-btn {
+    opacity: 1;
+    width: 1.75rem;
+    padding-left: 0;
+    padding-right: 0;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  .app-shell[data-right-panel-collapsed="true"] {
+    box-shadow: none;
   }
 
 

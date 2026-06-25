@@ -127,6 +127,7 @@ interface LookAPI {
 	listWorkspaceChildren(
 		projectId: string,
 		relativePath: string,
+		showHiddenFiles?: boolean,
 	): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
 	statWorkspaceNode(
 		projectId: string,

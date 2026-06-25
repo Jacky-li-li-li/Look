@@ -46,6 +46,7 @@ import {
 	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
+	rightPanelCollapsedAtom,
 	sessionStateAtomFamily,
 	settingsTabAtom,
 	showSettingsAtom,
@@ -76,6 +77,7 @@ export default function App() {
 	const providerSettings = useAtomValue(providerSettingsAtom);
 	const activeProject = useAtomValue(activeProjectAtom);
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 
 	// SDK-native persisted/live state for the active pi session.
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
@@ -250,6 +252,8 @@ export default function App() {
 
 	const handleExpandSidebar = useCallback(() => appStore.set(sidebarCollapsedAtom, false), []);
 
+	const handleExpandRightPanel = useCallback(() => appStore.set(rightPanelCollapsedAtom, false), []);
+
 	// ---- Side effects ----
 
 	// Auth session restore on mount
@@ -415,6 +419,7 @@ export default function App() {
 				<div
 					className="app-shell flex h-screen overflow-hidden bg-background p-2"
 					data-sidebar-collapsed={sidebarCollapsed}
+					data-right-panel-collapsed={rightPanelCollapsed}
 				>
 					<Sidebar
 						onSelect={handleSelectAgent}
@@ -440,10 +445,12 @@ export default function App() {
 									projects={projects}
 									activeAgentId={activeAgentId}
 									sidebarCollapsed={sidebarCollapsed}
+									rightPanelCollapsed={rightPanelCollapsed}
 									onSelect={handleSelectAgent}
 									onClose={handleCloseSessionSheet}
 									onReorder={handleReorderSessionSheets}
 									onExpandSidebar={handleExpandSidebar}
+									onExpandRightPanel={handleExpandRightPanel}
 								/>
 								{activeAgent ? (
 									<ChatPanel

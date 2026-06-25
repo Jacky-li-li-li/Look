@@ -30,6 +30,7 @@ import {
 	providerSettingsAtom,
 	recentlyCompletedAtom,
 	removeAgentAtoms,
+	removeProjectAtoms,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
 	sharedFilesAtomFamily,
@@ -338,12 +339,26 @@ export function initIpcHandlers(api: any): () => void {
 
 			// ---- Project events ----
 			case "project:list": {
+				const previousIds = new Set(appStore.get(projectsAtom).map((project) => project.id));
 				appStore.set(projectsAtom, event.projects);
 				const projectIds = new Set(event.projects.map((project) => project.id));
 				appStore.set(
 					openProjectIdsAtom,
 					appStore.get(openProjectIdsAtom).filter((projectId) => projectIds.has(projectId)),
 				);
+				// 清理已删除项目的 per-project atom + 待触发的 debounce timer。
+				// 否则 selectedSharedPathAtomFamily 持有被删项目的路径,共享区刷新
+				// 定时器仍会在 200ms 后向已不存在的 projectId atom 写值。
+				for (const projectId of previousIds) {
+					if (!projectIds.has(projectId)) {
+						removeProjectAtoms(projectId);
+						const pendingTimer = sharedRefreshTimers.get(projectId);
+						if (pendingTimer) {
+							clearTimeout(pendingTimer);
+							sharedRefreshTimers.delete(projectId);
+						}
+					}
+				}
 				if (event.activeProjectId !== undefined) {
 					appStore.set(activeProjectIdAtom, event.activeProjectId);
 				}
@@ -432,9 +447,18 @@ export function initIpcHandlers(api: any): () => void {
 								next.set(relativePath, result.nodes ?? []);
 								return next;
 							});
+						} else {
+							console.error(
+								`[WorkspaceTree] Watcher refresh failed for ${projectId}/${relativePath}: ${result?.error ?? "unknown error"}`,
+							);
 						}
 					})
-					.catch(() => undefined);
+					.catch((err: unknown) => {
+						console.error(
+							`[WorkspaceTree] Watcher refresh exception for ${projectId}/${relativePath}:`,
+							err,
+						);
+					});
 				break;
 			}
 

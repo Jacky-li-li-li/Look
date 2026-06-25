@@ -211,8 +211,8 @@ const api = {
     ipcRenderer.invoke("look:invoke", { type: "shared:write-content", projectId, path, content, encoding }),
 
   // ---- Workspace tree (v0.6) ----
-  listWorkspaceChildren: (projectId, relativePath) =>
-    ipcRenderer.invoke("look:invoke", { type: "workspace:list-children", projectId, relativePath }),
+  listWorkspaceChildren: (projectId, relativePath, showHiddenFiles = false) =>
+    ipcRenderer.invoke("look:invoke", { type: "workspace:list-children", projectId, relativePath, showHiddenFiles }),
   statWorkspaceNode: (projectId, relativePath) =>
     ipcRenderer.invoke("look:invoke", { type: "workspace:stat", projectId, relativePath }),
   startWorkspaceWatch: (projectId, relativePath) =>

@@ -2,10 +2,8 @@
 // RightPanel — 右侧边栏容器(v0.6:共享区 + 工作区 双 tab)
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -24,7 +22,7 @@ const PLACEHOLDER_PROJECT_ID = "__right_panel_placeholder__";
 
 export function RightPanel() {
 	const activeProject = useAtomValue(activeProjectAtom);
-	const [collapsed, setCollapsed] = useAtom(rightPanelCollapsedAtom);
+	const collapsed = useAtomValue(rightPanelCollapsedAtom);
 	const [tab, setTab] = useAtom(rightPanelTabAtom);
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
 
@@ -86,57 +84,45 @@ export function RightPanel() {
 
 	return (
 		<>
-			<Separator orientation="vertical" className="mx-1 bg-transparent" />
+			<Separator orientation="vertical" className="right-panel-separator mx-1 bg-transparent" />
 			<aside
-				className="flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
-				style={{ width: collapsed ? 40 : 260 }}
+				className="right-panel-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
 				data-collapsed={collapsed}
 				aria-label="右侧面板"
+				aria-hidden={collapsed || undefined}
 			>
-				<header className="flex h-10 shrink-0 items-center justify-between gap-1 border-b px-2">
-					{!collapsed && (
-						<nav role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
-							<button
-								type="button"
-								role="tab"
-								aria-selected={tab === "workspace"}
-								className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-									tab === "workspace"
-										? "bg-foreground/10 text-foreground"
-										: "text-muted-foreground hover:bg-foreground/5"
-								}`}
-								onClick={() => setTab("workspace")}
-							>
-								工作区
-							</button>
-							<button
-								type="button"
-								role="tab"
-								aria-selected={tab === "shared"}
-								className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-									tab === "shared"
-										? "bg-foreground/10 text-foreground"
-										: "text-muted-foreground hover:bg-foreground/5"
-								}`}
-								onClick={() => setTab("shared")}
-							>
-								共享区
-							</button>
-						</nav>
-					)}
-					<Button
-						variant="ghost"
-						size="icon-xs"
-						onClick={() => setCollapsed((prev) => !prev)}
-						aria-label={collapsed ? "展开右侧面板" : "折叠右侧面板"}
-					>
-						{collapsed ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}
-					</Button>
+				<header className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+					<nav role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
+						<button
+							type="button"
+							role="tab"
+							aria-selected={tab === "workspace"}
+							className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+								tab === "workspace"
+									? "bg-foreground/10 text-foreground"
+									: "text-muted-foreground hover:bg-foreground/5"
+							}`}
+							onClick={() => setTab("workspace")}
+						>
+							工作区
+						</button>
+						<button
+							type="button"
+							role="tab"
+							aria-selected={tab === "shared"}
+							className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+								tab === "shared"
+									? "bg-foreground/10 text-foreground"
+									: "text-muted-foreground hover:bg-foreground/5"
+							}`}
+							onClick={() => setTab("shared")}
+						>
+							共享区
+						</button>
+					</nav>
 				</header>
-				{!collapsed && tab === "workspace" && (
-					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
-				)}
-				{!collapsed && tab === "shared" && (
+				{tab === "workspace" && <WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />}
+				{tab === "shared" && (
 					<SharedAreaPanel
 						projectId={activeProject.id}
 						files={sharedFiles}

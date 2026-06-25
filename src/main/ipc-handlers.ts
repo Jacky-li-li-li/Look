@@ -21,6 +21,7 @@ import type { MainToRendererEvent, PermissionMode, RendererToMainEvent, Thinking
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
+import { SHARED_MAX_CONTENT_BYTES } from "./workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
 export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainWindow: BrowserWindow): void {
@@ -538,6 +539,11 @@ async function handleRendererInvoke(
 			const projectId = guardString(data.projectId, "projectId");
 			const relativePath = guardString(data.path, "path");
 			guardString(data.content, "content");
+			// IPC 入口 size check:防止渲染端提交 1GB+ 字符串 OOM 主进程。
+			// service 也会再检查一次(防绕过),这里是提前 reject 省 realpath。
+			if (Buffer.byteLength(data.content, "utf8") > SHARED_MAX_CONTENT_BYTES) {
+				return { success: false, error: `Content too large (max ${SHARED_MAX_CONTENT_BYTES} bytes)` };
+			}
 			await workspaceFileService.writeSharedFile(projectId, relativePath, data.content);
 			return { success: true };
 		}
@@ -582,7 +588,8 @@ async function handleRendererInvoke(
 			if (!project) throw new Error(`Project not found: ${projectId}`);
 			if (!project.valid) throw new Error(`Project path invalid: ${project.cwd}`);
 			const relativePath = guardString(data.relativePath, "relativePath");
-			const nodes = await workspaceTreeService.listChildren(project.cwd, relativePath);
+			const showHiddenFiles = data.showHiddenFiles === true;
+			const nodes = await workspaceTreeService.listChildren(project.cwd, relativePath, showHiddenFiles);
 			return { success: true, nodes };
 		}
 		case "workspace:stat": {

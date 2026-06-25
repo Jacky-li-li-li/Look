@@ -261,12 +261,17 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 		 * 拖拽接收 WorkspaceTreePanel 的文件/文件夹。
 		 * 自定义 MIME `application/x-look-filerelpath` 携带相对路径,
 		 * 转换为 `@relative-path` 文本插入到光标位置。
+		 *
+		 * 关键:无论 MIME 是否匹配都要 `preventDefault`,否则浏览器默认行为
+		 * 会把外部拖入的文件(Finder / VSCode 等)直接插入到 contenteditable
+		 * 里,破坏 React state 与文档结构。
 		 */
 		const handleDrop = useCallback(
 			(e: React.DragEvent<HTMLDivElement>) => {
-				const relPath = e.dataTransfer.getData("application/x-look-filerelpath");
-				if (!relPath) return; // 不是工作区拖拽,放过默认行为
+				// 始终阻止默认行为,防止外部文件污染编辑器
 				e.preventDefault();
+				const relPath = e.dataTransfer.getData("application/x-look-filerelpath");
+				if (!relPath) return; // 不是工作区拖拽,已经 preventDefault 不会污染,只忽略
 				const text = `@${relPath}`;
 				const el = editorRef.current;
 				if (!el) {

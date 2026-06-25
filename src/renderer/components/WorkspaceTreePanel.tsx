@@ -27,16 +27,24 @@ import {
 	ChevronDown,
 	ChevronRight,
 	ChevronsDownUp,
+	Eye,
+	EyeOff,
 	File,
 	Folder,
 	FolderOpen,
 	MoreHorizontal,
 	RefreshCw,
 } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
-import { expandedWorkspacePathsAtomFamily, loadedWorkspaceChildrenAtomFamily } from "../store/atoms";
+import {
+	expandedWorkspacePathsAtomFamily,
+	loadedWorkspaceChildrenAtomFamily,
+	showHiddenFilesAtom,
+	workspaceTreeErrorAtomFamily,
+	workspaceTreeLoadingAtomFamily,
+} from "../store/atoms";
 
 interface WorkspaceTreePanelProps {
 	projectId: string;
@@ -76,14 +84,46 @@ const INDENT_PX = 14;
 export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelProps) {
 	const [expanded, setExpanded] = useAtom(expandedWorkspacePathsAtomFamily(projectId));
 	const [loaded, setLoaded] = useAtom(loadedWorkspaceChildrenAtomFamily(projectId));
+	const [isLoading, setIsLoading] = useAtom(workspaceTreeLoadingAtomFamily(projectId));
+	const [error, setError] = useAtom(workspaceTreeErrorAtomFamily(projectId));
+	const [showHiddenFiles, setShowHiddenFiles] = useAtom(showHiddenFilesAtom);
 
 	// 根目录 children(loaded map 中 "" key 指向根 children)
 	const rootChildren = loaded.get("") ?? [];
 
+	// 跟踪已启动的 watcher path 集合,卸载 / 切换项目时统一停止(VSCode 模式防句柄累积)。
+	// 用 ref 而非 state 避免触发额外 re-render。必须在 useBootstrapRoot 之前声明。
+	const watchedPathsRef = useRef<Set<string>>(new Set());
+
 	// 首次挂载时如未加载根,自动加载
-	useAtomBootstrapRoot(projectId, setLoaded);
+	useBootstrapRoot(projectId, setLoaded, watchedPathsRef, setIsLoading, setError, showHiddenFiles);
+
+	// showHiddenFiles 切换时：清空缓存、停止 watcher、重新加载根目录
+	useEffect(() => {
+		setExpanded(new Set());
+		for (const relPath of watchedPathsRef.current) {
+			window.look.stopWorkspaceWatch(projectId, relPath).catch(() => undefined);
+		}
+		watchedPathsRef.current.clear();
+		setLoaded(new Map());
+		// useBootstrapRoot 会在 showHiddenFiles 变化后自动重新执行
+	}, [projectId, showHiddenFiles, setExpanded, setLoaded]);
+
+	useEffect(() => {
+		return () => {
+			// 组件卸载 / projectId 变化时清理所有已启动的 watcher
+			for (const relPath of watchedPathsRef.current) {
+				window.look.stopWorkspaceWatch(projectId, relPath).catch(() => undefined);
+			}
+			watchedPathsRef.current.clear();
+		};
+	}, [projectId]);
 
 	const flatRows = useMemo(() => flattenTree(rootChildren, expanded, loaded), [rootChildren, expanded, loaded]);
+
+	const handleToggleShowHidden = useCallback(() => {
+		setShowHiddenFiles((prev) => !prev);
+	}, [setShowHiddenFiles]);
 
 	const handleToggle = useCallback(
 		async (row: FlatRow) => {
@@ -91,61 +131,103 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 			if (node.type !== "directory") return;
 
 			if (expanded.has(node.path)) {
-				// 折叠
+				// 折叠:同时停 watcher,避免无 UI 显示时仍触发 workspace:updated
 				setExpanded((prev) => {
 					const next = new Set(prev);
 					next.delete(node.path);
 					return next;
 				});
+				if (watchedPathsRef.current.delete(node.path)) {
+					window.look.stopWorkspaceWatch(projectId, node.path).catch(() => undefined);
+				}
 				return;
 			}
 
-			// 展开:确保 children 已加载,若未加载则拉取
-			setExpanded((prev) => new Set(prev).add(node.path));
-			if (!loaded.has(node.path)) {
-				try {
-					const result = await window.look.listWorkspaceChildren(projectId, node.path);
-					if (result?.success && result.nodes) {
-						setLoaded((prev) => {
-							const next = new Map(prev);
-							next.set(node.path, result.nodes ?? []);
-							return next;
-						});
-						// 启动该目录的 watcher(只监听直接子项)
-						window.look.startWorkspaceWatch(projectId, node.path).catch(() => undefined);
-					}
-				} catch (error) {
-					const message = error instanceof Error ? error.message : "加载子目录失败";
-					toast.error(message);
-					setExpanded((prev) => {
-						const next = new Set(prev);
-						next.delete(node.path);
+			// 展开:children 已加载直接展开;否则先 load 成功后再 add expanded,
+			// 避免 "展开但无子项" 的中间态(load 失败时回滚更稳)。
+			if (loaded.has(node.path)) {
+				setExpanded((prev) => new Set(prev).add(node.path));
+				return;
+			}
+
+			let cancelled = false;
+			try {
+				const result = await window.look.listWorkspaceChildren(projectId, node.path, showHiddenFiles);
+				if (cancelled) return;
+				if (result?.success && result.nodes) {
+					setError(null);
+					setLoaded((prev) => {
+						const next = new Map(prev);
+						next.set(node.path, result.nodes ?? []);
 						return next;
 					});
+					setExpanded((prev) => new Set(prev).add(node.path));
+					// 启动该目录的 watcher(只监听直接子项)
+					window.look
+						.startWorkspaceWatch(projectId, node.path)
+						.then(() => {
+							if (!cancelled) watchedPathsRef.current.add(node.path);
+						})
+						.catch(() => undefined);
+				} else if (result && !result.success) {
+					toast.error(result.error ?? "加载子目录失败");
 				}
+			} catch (error) {
+				if (cancelled) return;
+				const message = error instanceof Error ? error.message : "加载子目录失败";
+				toast.error(message);
 			}
 			// parentPath 参数保留供后续扩展
 			void parentPath;
+			return () => {
+				cancelled = true;
+			};
 		},
-		[expanded, loaded, projectId, setExpanded, setLoaded],
+		[
+			expanded,
+			loaded,
+			projectId,
+			setExpanded,
+			setLoaded,
+			showHiddenFiles,
+		],
 	);
 
 	const handleRefresh = useCallback(async () => {
+		setIsLoading(true);
+		setError(null);
 		try {
-			const result = await window.look.listWorkspaceChildren(projectId, "");
+			const result = await window.look.listWorkspaceChildren(projectId, "", showHiddenFiles);
 			if (result?.success && result.nodes) {
 				setLoaded((prev) => {
 					const next = new Map(prev);
 					next.set("", result.nodes ?? []);
 					return next;
 				});
-				window.look.startWorkspaceWatch(projectId, "").catch(() => undefined);
+				setError(null);
+				window.look
+					.startWorkspaceWatch(projectId, "")
+					.then(() => {
+						watchedPathsRef.current.add("");
+					})
+					.catch((err: unknown) => {
+						console.error("[WorkspaceTree] Failed to start root watcher on refresh:", err);
+					});
+			} else {
+				const errMsg = result?.error ?? "刷新失败";
+				console.error(`[WorkspaceTree] Refresh failed: ${errMsg}`);
+				setError(errMsg);
+				toast.error(errMsg);
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "刷新失败";
+			console.error("[WorkspaceTree] Refresh exception:", error);
+			setError(message);
 			toast.error(message);
+		} finally {
+			setIsLoading(false);
 		}
-	}, [projectId, setLoaded]);
+	}, [projectId, setLoaded, setIsLoading, setError, showHiddenFiles]);
 
 	const handleCollapseAll = useCallback(() => {
 		setExpanded(new Set());
@@ -160,10 +242,32 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 				<Button variant="ghost" size="icon-xs" onClick={handleCollapseAll} aria-label="折叠全部">
 					<ChevronsDownUp className="size-3.5" />
 				</Button>
+				<div className="flex-1" />
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					onClick={handleToggleShowHidden}
+					aria-label={showHiddenFiles ? "隐藏隐藏文件" : "显示隐藏文件"}
+					title={showHiddenFiles ? "隐藏隐藏文件" : "显示隐藏文件"}
+				>
+					{showHiddenFiles ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+				</Button>
 			</div>
 			<div className="min-h-0 flex-1" role="tree" aria-label="工作区文件树">
-				{rootChildren.length === 0 ? (
-					<div className="px-3 py-8 text-center text-xs text-muted-foreground">加载中…</div>
+				{isLoading ? (
+					<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+						<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+						<span className="text-xs text-muted-foreground">加载中…</span>
+					</div>
+				) : error ? (
+					<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+						<p className="text-xs text-destructive">{error}</p>
+						<Button variant="outline" size="sm" onClick={handleRefresh}>
+							重试
+						</Button>
+					</div>
+				) : rootChildren.length === 0 ? (
+					<div className="px-3 py-8 text-center text-xs text-muted-foreground">目录为空</div>
 				) : (
 					<Virtuoso
 						data={flatRows}
@@ -184,28 +288,77 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 }
 
 // 单独 hook 提取出来,避免 hooks 顺序混淆
-function useAtomBootstrapRoot(
+// 用 useEffect(不是 useMemo 跑副作用):React 19 / Compiler 下 useMemo 副作用可能
+// 被丢弃导致根目录永不加载。
+function useBootstrapRoot(
 	projectId: string,
 	setLoaded: (updater: (prev: Map<string, FileTreeNode[]>) => Map<string, FileTreeNode[]>) => void,
+	watchedPathsRef: React.MutableRefObject<Set<string>>,
+	setIsLoading: (loading: boolean) => void,
+	setError: (error: string | null) => void,
+	showHiddenFiles: boolean,
 ) {
-	useMemo(() => {
+	useEffect(() => {
+		let cancelled = false;
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+		setIsLoading(true);
+		setError(null);
+
+		// 超时保护：IPC 超过 10 秒仍未返回视为超时（例如 NFS 挂载不可达）
+		timeoutId = setTimeout(() => {
+			if (cancelled) return;
+			cancelled = true;
+			setIsLoading(false);
+			setError("加载超时，目录可能不可达");
+			toast.error("加载工作区超时");
+		}, 10_000);
+
 		void (async () => {
 			try {
-				const result = await window.look.listWorkspaceChildren(projectId, "");
-				if (result?.success && result.nodes) {
+				const result = await window.look.listWorkspaceChildren(projectId, "", showHiddenFiles);
+				if (cancelled) return;
+				clearTimeout(timeoutId);
+				if (result?.success) {
 					setLoaded((prev) => {
 						if (prev.has("")) return prev; // 已加载,跳过
 						const next = new Map(prev);
 						next.set("", result.nodes ?? []);
 						return next;
 					});
-					window.look.startWorkspaceWatch(projectId, "").catch(() => undefined);
+					setError(null);
+					// 启动根目录 watcher（best-effort，失败不影响树展示）
+					window.look
+						.startWorkspaceWatch(projectId, "")
+						.then(() => {
+							if (!cancelled) watchedPathsRef.current.add("");
+						})
+						.catch((err: unknown) => {
+							console.error("[WorkspaceTree] Failed to start root watcher:", err);
+						});
+				} else {
+					const errMsg = result?.error ?? "未知错误";
+					console.error(`[WorkspaceTree] Failed to load root children: ${errMsg}`);
+					setError(errMsg);
+					toast.error(`加载工作区失败: ${errMsg}`);
 				}
-			} catch {
-				// best-effort:用户切到空项目时静默
+			} catch (err: unknown) {
+				if (cancelled) return;
+				clearTimeout(timeoutId);
+				const message = err instanceof Error ? err.message : "加载工作区异常";
+				console.error("[WorkspaceTree] Exception loading root children:", err);
+				setError(message);
+				toast.error(message);
+			} finally {
+				if (!cancelled) setIsLoading(false);
 			}
 		})();
-	}, [projectId, setLoaded]);
+
+		return () => {
+			cancelled = true;
+			clearTimeout(timeoutId);
+		};
+	}, [projectId, setLoaded, watchedPathsRef, setIsLoading, setError, showHiddenFiles]);
 }
 
 interface WorkspaceTreeNodeRowProps {

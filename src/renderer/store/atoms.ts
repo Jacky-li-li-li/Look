@@ -150,6 +150,9 @@ export const rightPanelCollapsedAtom = atom(false);
 /** Right panel active tab. */
 export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
 
+/** Whether to show hidden files in the workspace tree panel. */
+export const showHiddenFilesAtom = atom(false);
+
 /** Per-project 已展开的 workspace 路径集合。 */
 export const expandedWorkspacePathsAtomFamily = atomFamily((projectId: string) => atom<Set<string>>(new Set<string>()));
 
@@ -167,6 +170,12 @@ export const sharedFilesAtomFamily = atomFamily((projectId: string) => atom<File
 
 /** Per-project shared area loading state. */
 export const sharedFilesLoadingAtomFamily = atomFamily((projectId: string) => atom(false));
+
+/** Per-project workspace tree loading state. */
+export const workspaceTreeLoadingAtomFamily = atomFamily((projectId: string) => atom(false));
+
+/** Per-project workspace tree error state. null = no error. */
+export const workspaceTreeErrorAtomFamily = atomFamily((projectId: string) => atom<string | null>(null));
 
 // ---- Auto Updater ----
 
@@ -229,4 +238,27 @@ export function removeAgentAtoms(agentId: string): void {
 	planQuestionRequestAtomFamily.remove(agentId);
 	planQuestionDraftAtomFamily.remove(agentId);
 	planApprovalRequestAtomFamily.remove(agentId);
+}
+
+/**
+ * Cleanup: call when a project is deleted to free per-project atom memory.
+ *
+ * Why per-project (and not per-agent): shared-area + workspace-tree state is
+ * keyed by projectId in the store (sharedFilesAtomFamily, expandedWorkspacePathsAtomFamily,
+ * loadedWorkspaceChildrenAtomFamily, selectedSharedPathAtomFamily, sharedFilesLoadingAtomFamily).
+ * Without explicit cleanup, deleting a project leaves these atoms resident
+ * forever — and the selectedSharedPathAtom in particular would still hold a
+ * path string for a project that no longer exists in projectsAtom.
+ *
+ * Must be called from the IPC handler that processes `project:list` (or the
+ * delete-confirmed event) so the cleanup is in lock-step with the new project list.
+ */
+export function removeProjectAtoms(projectId: string): void {
+	expandedWorkspacePathsAtomFamily.remove(projectId);
+	loadedWorkspaceChildrenAtomFamily.remove(projectId);
+	selectedSharedPathAtomFamily.remove(projectId);
+	sharedFilesAtomFamily.remove(projectId);
+	sharedFilesLoadingAtomFamily.remove(projectId);
+	workspaceTreeLoadingAtomFamily.remove(projectId);
+	workspaceTreeErrorAtomFamily.remove(projectId);
 }

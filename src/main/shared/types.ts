@@ -323,7 +323,7 @@ export type RendererToMainEvent =
 	 *  when webUtils.getPathForFile() cannot return an absolute path. */
 	| { type: "shared:write-content"; projectId: string; path: string; content: string; encoding: "base64" | "utf8" }
 	// ---- Workspace tree (renderer → main) ----
-	| { type: "workspace:list-children"; projectId: string; relativePath: string }
+	| { type: "workspace:list-children"; projectId: string; relativePath: string; showHiddenFiles?: boolean }
 	| { type: "workspace:stat"; projectId: string; relativePath: string }
 	| { type: "workspace:watch"; projectId: string; relativePath: string }
 	| { type: "workspace:unwatch"; projectId: string; relativePath: string }

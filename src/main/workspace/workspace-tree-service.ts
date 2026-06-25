@@ -19,6 +19,7 @@ import path from "node:path";
 import type { FSWatcher } from "chokidar";
 import chokidar from "chokidar";
 import type { FileTreeNode, MainToRendererEvent } from "../shared/types.js";
+import { resolveInsideRoot } from "./path-guard.js";
 
 export type WorkspaceTreeEmitCallback = (event: MainToRendererEvent) => void;
 
@@ -41,8 +42,8 @@ const NOISE_DIRS = new Set([
 ]);
 const SYSTEM_FILES = new Set([".DS_Store", "Thumbs.db", "desktop.ini", ".Spotlight-V100", ".Trashes"]);
 
-function shouldIgnore(name: string, isDir: boolean): boolean {
-	if (HIDDEN_PATTERN.test(name)) return true;
+function shouldIgnore(name: string, isDir: boolean, showHiddenFiles = false): boolean {
+	if (!showHiddenFiles && HIDDEN_PATTERN.test(name)) return true;
 	if (isDir && NOISE_DIRS.has(name)) return true;
 	if (!isDir && SYSTEM_FILES.has(name)) return true;
 	return false;
@@ -71,12 +72,15 @@ export class WorkspaceTreeService {
 	 * 列出指定子目录的一层子项(lazy-load 单层,VSCode 模式)。
 	 * relativePath 为 "" 表示项目根(ProjectInfo.cwd)。
 	 */
-	async listChildren(cwd: string, relativePath: string): Promise<FileTreeNode[]> {
+	async listChildren(cwd: string, relativePath: string, showHiddenFiles: boolean = false): Promise<FileTreeNode[]> {
 		const target = await this.resolveWorkspacePath(cwd, relativePath);
-		const entries = await fs.promises.readdir(target, { withFileTypes: true }).catch(() => []);
+		const entries = await fs.promises.readdir(target, { withFileTypes: true }).catch((err: unknown) => {
+			console.error(`[WorkspaceTree] readdir failed for ${target}:`, err);
+			return [];
+		});
 		const nodes: FileTreeNode[] = [];
 		for (const entry of entries) {
-			if (shouldIgnore(entry.name, entry.isDirectory())) continue;
+			if (shouldIgnore(entry.name, entry.isDirectory(), showHiddenFiles)) continue;
 			const absolutePath = path.join(target, entry.name);
 			const childRel = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 			const node: FileTreeNode = {
@@ -118,7 +122,10 @@ export class WorkspaceTreeService {
 	 */
 	async statNode(cwd: string, relativePath: string): Promise<FileTreeNode | null> {
 		const target = await this.resolveWorkspacePath(cwd, relativePath);
-		const stat = await fs.promises.lstat(target).catch(() => null);
+		const stat = await fs.promises.lstat(target).catch((err: unknown) => {
+			console.error(`[WorkspaceTree] lstat failed for ${target}:`, err);
+			return null;
+		});
 		if (!stat) return null;
 		const name = path.basename(target);
 		return {
@@ -246,46 +253,14 @@ export class WorkspaceTreeService {
 
 	/**
 	 * 路径校验:相对 cwd 防 ../ 越界 + realpath 防 symlink 越界。
-	 * 与 v0.5 resolveSharedPath 模式同构,但根目录从 shared 目录改为 cwd。
+	 * 与 v0.5 resolveSharedPath 模式同构,共享 path-guard 实现。
 	 */
 	private async resolveWorkspacePath(cwd: string, relativePath: string): Promise<string> {
 		if (typeof relativePath !== "string") {
 			throw new Error("Invalid path");
 		}
 		if (relativePath === "") return cwd;
-		if (path.isAbsolute(relativePath)) {
-			throw new Error("Path traversal: absolute path not allowed");
-		}
-		const normalized = path.normalize(relativePath);
-		if (normalized.startsWith("..") || normalized === "..") {
-			throw new Error("Path traversal detected");
-		}
-		const target = path.resolve(cwd, normalized);
-
-		let realTarget: string | null = null;
-		let realCwd: string | null = null;
-		try {
-			realTarget = await fs.promises.realpath(target);
-			realCwd = await fs.promises.realpath(cwd);
-		} catch (e: any) {
-			if (e?.code === "ENOENT") {
-				// target 不存在(可能新建中)— 校验 parent 不越界即可
-				const realParent = await fs.promises.realpath(path.dirname(target)).catch(() => null);
-				if (realCwd && realParent) {
-					const prefix = realCwd.endsWith(path.sep) ? realCwd : `${realCwd}${path.sep}`;
-					if (realParent !== realCwd && !realParent.startsWith(prefix)) {
-						throw new Error("Path traversal: parent outside cwd");
-					}
-				}
-				return target;
-			}
-			throw e;
-		}
-		const prefix = realCwd.endsWith(path.sep) ? realCwd : `${realCwd}${path.sep}`;
-		if (realTarget !== realCwd && !realTarget.startsWith(prefix)) {
-			throw new Error("Path traversal: resolved outside cwd");
-		}
-		return target;
+		return resolveInsideRoot({ root: cwd, rootName: "workspace cwd", relativePath });
 	}
 
 	private watcherKey(cwd: string, relativePath: string): string {

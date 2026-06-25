@@ -11,11 +11,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@shared/components/ui/t
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { PanelRightOpen, X } from "lucide-react";
+import { PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { sessionStateAtomFamily } from "../store/atoms";
+import { rightPanelCollapsedAtom, sessionStateAtomFamily } from "../store/atoms";
+import { appStore } from "../store/ipcHandler";
 import { deriveAgentPhase, deriveSessionPhase } from "../store/sessionTypes";
 
 interface SessionSheet {
@@ -30,10 +31,12 @@ interface SessionSheetBarProps {
 	projects: { id: string; name: string }[];
 	activeAgentId: string | null;
 	sidebarCollapsed: boolean;
+	rightPanelCollapsed: boolean;
 	onSelect: (agentId: string) => void;
 	onClose: (agentId: string) => void;
 	onReorder: (agentIds: string[]) => void;
 	onExpandSidebar: () => void;
+	onExpandRightPanel: () => void;
 }
 
 function SortableSheet({
@@ -126,10 +129,12 @@ export default function SessionSheetBar({
 	projects,
 	activeAgentId,
 	sidebarCollapsed,
+	rightPanelCollapsed,
 	onSelect,
 	onClose,
 	onReorder,
 	onExpandSidebar,
+	onExpandRightPanel,
 }: SessionSheetBarProps) {
 	const { t } = useTranslation();
 
@@ -175,7 +180,7 @@ export default function SessionSheetBar({
 				<Button
 					size="icon-sm"
 					variant="ghost"
-					className="shrink-0 rounded-md border border-hairline"
+					className="expand-sidebar-btn shrink-0 rounded-md border border-hairline"
 					onClick={onExpandSidebar}
 					aria-label={t("sidebar.expand", "Expand sidebar")}
 					title={t("sidebar.expand", "Expand sidebar")}
@@ -211,6 +216,19 @@ export default function SessionSheetBar({
 					</DndContext>
 				</div>
 			)}
+			<Button
+				size="icon-sm"
+				variant="ghost"
+				className={cn(
+					"shrink-0 rounded-md border border-hairline",
+					rightPanelCollapsed && "expand-right-panel-btn",
+				)}
+				onClick={() => (rightPanelCollapsed ? onExpandRightPanel() : appStore.set(rightPanelCollapsedAtom, true))}
+				aria-label={rightPanelCollapsed ? "展开右侧面板" : "折叠右侧面板"}
+				title={rightPanelCollapsed ? "展开右侧面板" : "折叠右侧面板"}
+			>
+				{rightPanelCollapsed ? <PanelLeftOpen className="size-3.5" /> : <PanelRightClose className="size-3.5" />}
+			</Button>
 		</header>
 	);
 }

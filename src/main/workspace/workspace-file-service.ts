@@ -14,12 +14,17 @@ import type { FSWatcher } from "chokidar";
 import chokidar from "chokidar";
 import { ensureProjectSharedDir, getProjectSharedDir } from "../shared/look-storage.js";
 import type { FileTreeNode, MainToRendererEvent } from "../shared/types.js";
+import { resolveInsideRoot } from "./path-guard.js";
 
 export type WorkspaceFileServiceEventCallback = (event: MainToRendererEvent) => void;
 
 const WATCHER_DEBOUNCE_MS = 300;
 // 共享区是用户文件空间,只过滤隐藏文件,允许导入 node_modules / .git 等
 const IGNORED_PATTERNS = [/(^|[/\\])\./];
+
+// 共享区单文件最大字节数(防御 OOM:渲染端可通过 shared:write 提交任意大小字符串)。
+// 50 MB 与 drag-drop fallback (writeSharedContent) 对齐,统一上限。
+export const SHARED_MAX_CONTENT_BYTES = 50 * 1024 * 1024;
 
 export class WorkspaceFileService {
 	private readonly watchers = new Map<string, FSWatcher>();
@@ -44,54 +49,12 @@ export class WorkspaceFileService {
 
 	// ── Path helpers ──
 
-	/**
-	 * realpath 的 ENOENT 安全版本:target 不存在时返回 null 而非抛错
-	 * 用于 resolveSharedPath 处理"目标尚未创建"的场景(写入新文件等)
-	 */
-	private async safeRealpath(p: string): Promise<string | null> {
-		try {
-			return await fs.promises.realpath(p);
-		} catch (e: any) {
-			if (e?.code === "ENOENT") return null;
-			throw e;
-		}
-	}
-
 	private async resolveSharedPath(projectId: string, relativePath: string): Promise<string> {
 		if (typeof relativePath !== "string" || relativePath.length === 0) {
 			throw new Error("Invalid path: empty");
 		}
-		if (path.isAbsolute(relativePath)) {
-			throw new Error("Path traversal detected: absolute path");
-		}
-		const normalized = path.normalize(relativePath);
-		if (normalized.startsWith("..") || normalized === "..") {
-			throw new Error("Path traversal detected");
-		}
 		const root = ensureProjectSharedDir(projectId);
-		const target = path.resolve(root, normalized);
-
-		// root 必须存在并解析成功
-		const realRoot = await this.safeRealpath(root);
-		if (!realRoot) throw new Error("Shared area root unavailable");
-
-		const prefix = realRoot.endsWith(path.sep) ? realRoot : `${realRoot}${path.sep}`;
-		const isInsideRoot = (resolved: string): boolean => resolved === realRoot || resolved.startsWith(prefix);
-
-		const realTarget = await this.safeRealpath(target);
-		if (realTarget) {
-			if (!isInsideRoot(realTarget)) {
-				throw new Error("Path traversal detected: resolved outside shared area");
-			}
-			return target;
-		}
-
-		// target 不存在(写操作将要创建),校验 parent 仍在 root 内,防御 symlink 越界
-		const realParent = await this.safeRealpath(path.dirname(target));
-		if (realParent && !isInsideRoot(realParent)) {
-			throw new Error("Path traversal detected: parent outside shared area");
-		}
-		return target;
+		return resolveInsideRoot({ root, rootName: "shared area", relativePath });
 	}
 
 	private async statSafe(targetPath: string): Promise<fs.Stats | null> {
@@ -151,11 +114,16 @@ export class WorkspaceFileService {
 	}
 
 	async writeSharedFile(projectId: string, relativePath: string, content: string | Buffer): Promise<void> {
+		// 字符串内容在 IPC 入口就可能被分配到 V8 堆,提前 size check 防止 OOM。
+		// Buffer 路径(由 writeSharedContent / drag-drop 内部调用)已在调用方检查过。
+		if (typeof content === "string" && Buffer.byteLength(content, "utf8") > SHARED_MAX_CONTENT_BYTES) {
+			throw new Error(`Content too large (max ${SHARED_MAX_CONTENT_BYTES} bytes)`);
+		}
 		const target = await this.resolveSharedPath(projectId, relativePath);
 		const parent = path.dirname(target);
 		await fs.promises.mkdir(parent, { recursive: true });
-		// 使用 randomBytes + pid 避免并发写入同名 tmp 文件冲突
-		const tempPath = `${target}.tmp.${process.pid}.${crypto.randomBytes(6).toString("hex")}`;
+		// randomBytes 8 字节足够防并发同名 tmp 冲突(不暴露 pid)。
+		const tempPath = `${target}.tmp.${crypto.randomBytes(8).toString("hex")}`;
 		try {
 			await fs.promises.writeFile(tempPath, content);
 			await fs.promises.rename(tempPath, target);
@@ -173,7 +141,7 @@ export class WorkspaceFileService {
 	 *
 	 * 安全约束:
 	 *   - relativePath 仍需通过 resolveSharedPath 校验,防 `../` 越界
-	 *   - 解码后大小不超过 MAX_CONTENT_BYTES(防御 OOM)
+	 *   - 解码前先按字符长度粗判上界(防止 4GB base64 字符串 OOM 之后再发现超大)
 	 *   - 二进制内容统一以 base64 字符串形式传输,主端解码
 	 */
 	async writeSharedContent(
@@ -182,10 +150,15 @@ export class WorkspaceFileService {
 		content: string,
 		encoding: "base64" | "utf8" = "utf8",
 	): Promise<void> {
-		const MAX_CONTENT_BYTES = 50 * 1024 * 1024; // 50 MB
+		// 粗判:base64 是 4 char -> 3 bytes,字符数/4 * 3 是解码后字节数上界。
+		// 字符数本身已经超过合理值(>SHARED_MAX_CONTENT_BYTES 的 4 倍)就直接拒。
+		const charLimit = SHARED_MAX_CONTENT_BYTES * 4;
+		if (content.length > charLimit) {
+			throw new Error(`Content too large: ${content.length} chars (max ${charLimit})`);
+		}
 		const buffer = encoding === "base64" ? Buffer.from(content, "base64") : Buffer.from(content, "utf8");
-		if (buffer.byteLength > MAX_CONTENT_BYTES) {
-			throw new Error(`Content too large: ${buffer.byteLength} bytes (max ${MAX_CONTENT_BYTES} bytes)`);
+		if (buffer.byteLength > SHARED_MAX_CONTENT_BYTES) {
+			throw new Error(`Content too large: ${buffer.byteLength} bytes (max ${SHARED_MAX_CONTENT_BYTES} bytes)`);
 		}
 		await this.writeSharedFile(projectId, relativePath, buffer);
 	}
