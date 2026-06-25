@@ -88,7 +88,7 @@ function SortableSheet({
 			className={cn(
 				"group/sheet relative flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors",
 				isActive
-					? "border-foreground/20 bg-foreground/8 text-foreground"
+					? "border-accent/80 bg-accent text-foreground"
 					: "border-hairline bg-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground",
 				isDragging && "opacity-60",
 			)}

@@ -157,6 +157,7 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 			}
 			appStore.set(atom, {
 				...appStore.get(atom),
+				runtime: previous.runtime ? { ...previous.runtime, isStreaming: false, isRetrying: event.willRetry } : null,
 				lastEndedRunId: previous.currentRunId,
 				turnDurationMs: previous.turnStartedAt ? Date.now() - previous.turnStartedAt : null,
 			});

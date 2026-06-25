@@ -102,6 +102,38 @@ describe("SDK event canonical store", () => {
 		expect(duringSecond.turnDurationMs).toBeNull();
 	});
 
+	it("clears runtime.isStreaming on agent_end without waiting for snapshot", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		const msg = assistant("hello");
+		receive({
+			type: "session:snapshot",
+			sessionId: sessionIds[0],
+			reason: "activate",
+			leafId: "persisted",
+			entries: [],
+			runtime,
+		});
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "message_start", message: msg } });
+
+		const during = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(during.runtime?.isStreaming).toBe(true);
+
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "message_end", message: msg } });
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: false } });
+
+		const afterEnd = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(afterEnd.runtime?.isStreaming).toBe(false);
+		expect(afterEnd.runtime?.isRetrying).toBe(false);
+	});
+
 	it("cleans up the ended run's live messages without dropping a retry run", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
