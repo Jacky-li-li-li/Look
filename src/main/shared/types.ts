@@ -157,6 +157,19 @@ export interface ForkedSessionResult {
 	sessionFilePath: string;
 }
 
+export interface FileTreeNode {
+	name: string;
+	path: string;
+	absolutePath: string;
+	type: "file" | "directory";
+	children?: FileTreeNode[];
+	size?: number;
+	modifiedAt?: number;
+	extension?: string;
+	isSymlink?: boolean;
+	isHidden?: boolean;
+}
+
 type WithAgentId<T> = T & { agentId: string };
 
 /** Events sent from main process to renderer */
@@ -187,6 +200,8 @@ export type MainToRendererEvent =
 			agentCount: number;
 			runningCount: number;
 	  }
+	// ---- Shared area events ----
+	| { type: "shared:updated"; projectId: string }
 	// ---- Auto updater events ----
 	| { type: "update:checking" }
 	| { type: "update:available"; version: string; releaseDate?: string }
@@ -239,6 +254,7 @@ export type RendererToMainEvent =
 	| { type: "skills:detect-common" }
 	// ---- OS native dialogs (renderer → main) ----
 	| { type: "dialog:open-directory"; title?: string }
+	| { type: "dialog:open-files"; title?: string; allowDirectories?: boolean; allowMultiple?: boolean }
 	| { type: "shell:reveal-in-finder"; path: string }
 	// ---- OS shell: open project root in file manager ----
 	| { type: "shell:open-project-folder"; projectId?: string }
@@ -292,6 +308,18 @@ export type RendererToMainEvent =
 	| { type: "mcp:restart-server"; name: string }
 	| { type: "mcp:list-tools" }
 	| { type: "mcp:connect-all" }
+	// ---- Shared area (renderer → main) ----
+	| { type: "shared:list"; projectId: string }
+	| { type: "shared:watch"; projectId: string }
+	| { type: "shared:unwatch"; projectId: string }
+	| { type: "shared:write"; projectId: string; path: string; content: string }
+	| { type: "shared:mkdir"; projectId: string; path: string }
+	| { type: "shared:delete"; projectId: string; path: string }
+	| { type: "shared:import"; projectId: string; sources: string[]; targetDir?: string }
+	| { type: "shared:export"; projectId: string; paths: string[]; destDir: string }
+	/** Drag-drop fallback: write file content (base64) to the shared area. Used
+	 *  when webUtils.getPathForFile() cannot return an absolute path. */
+	| { type: "shared:write-content"; projectId: string; path: string; content: string; encoding: "base64" | "utf8" }
 	// ---- Permission events (renderer → main) ----
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
 	| { type: "permission:get-mode"; agentId: string }

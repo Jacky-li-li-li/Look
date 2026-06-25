@@ -9,12 +9,14 @@ import { promptForProjectTrust, registerIpcHandlers } from "./ipc-handlers.js";
 import { SessionRuntimeManager } from "./session-runtime-manager.js";
 import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
+import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let runtimeManager: SessionRuntimeManager | null = null;
+let workspaceFileService: WorkspaceFileService | null = null;
 
 const isDev = !app.isPackaged;
 
@@ -204,7 +206,9 @@ function createWindow(): void {
 async function initSessionRuntime(): Promise<void> {
 	loadShellEnv();
 
-	runtimeManager = new SessionRuntimeManager();
+	// 共享区服务单例:由 SessionRuntimeManager 持有,以便项目生命周期能驱动 watcher 启停
+	workspaceFileService = new WorkspaceFileService();
+	runtimeManager = new SessionRuntimeManager(workspaceFileService);
 
 	// Load project bookmarks and restore the selected session runtime. Other
 	// sessions remain persisted until selected or prompted.
@@ -299,11 +303,12 @@ app.on("window-all-closed", () => {
 });
 
 // Clean up MCP server subprocesses on quit so we don't leave
-// orphaned child processes behind.
+// orphaned child processes behind. `dispose()` first tears down the
+// shared-area watchers (H-1) and then disposes all agent runtimes.
 app.on("before-quit", async () => {
 	if (runtimeManager) {
 		try {
-			await runtimeManager.disposeAllRuntimes();
+			await runtimeManager.dispose();
 			await runtimeManager.getMcpManager().disconnectAll();
 		} catch {
 			// best-effort cleanup

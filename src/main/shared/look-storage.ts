@@ -112,11 +112,32 @@ export function getSessionsDir(): string {
 	return path.join(LOOK_DIR, "sessions");
 }
 
+// ── Shared area (project-level file storage, stable by project id) ──
+
+/** Root directory for all project shared areas. */
+export function getSharedAreasDir(): string {
+	return path.join(LOOK_DIR, "shared");
+}
+
+/** Shared area directory for a specific project. Bound to the stable
+ *  project id so renaming the project display name does not break the path. */
+export function getProjectSharedDir(projectId: string): string {
+	return path.join(getSharedAreasDir(), projectId);
+}
+
+/** Ensure the shared area directory for a project exists. */
+export function ensureProjectSharedDir(projectId: string): string {
+	const dir = getProjectSharedDir(projectId);
+	fs.mkdirSync(dir, { recursive: true });
+	return dir;
+}
+
 // ── Initialization ──
 
 export function ensureLookDir(): void {
 	fs.mkdirSync(getWorkspacesDir(), { recursive: true });
 	fs.mkdirSync(getSessionsDir(), { recursive: true });
+	fs.mkdirSync(getSharedAreasDir(), { recursive: true });
 }
 
 /**

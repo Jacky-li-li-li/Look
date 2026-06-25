@@ -31,6 +31,7 @@ import {
 	removeAgentAtoms,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
+	sharedFilesAtomFamily,
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
@@ -41,6 +42,37 @@ export const appStore = createStore();
 
 /** i18n t-function — use the i18next instance directly outside React. */
 const t = i18n.t.bind(i18n);
+
+/**
+ * 合并 shared:updated 事件,200ms debounce 一次 listSharedFiles。
+ * 防止高频小写入(例如 agent 批量落盘)触发 IPC 风暴(M-10)。
+ */
+const SHARED_REFRESH_DEBOUNCE_MS = 200;
+const sharedRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleSharedRefresh(projectId: string, filesAtom: ReturnType<typeof sharedFilesAtomFamily>): void {
+	const existing = sharedRefreshTimers.get(projectId);
+	if (existing) clearTimeout(existing);
+	sharedRefreshTimers.set(
+		projectId,
+		setTimeout(() => {
+			sharedRefreshTimers.delete(projectId);
+			void window.look
+				.listSharedFiles(projectId)
+				.then((result) => {
+					if (result?.success && result.nodes) {
+						appStore.set(filesAtom, result.nodes);
+					} else if (result && !result.success) {
+						toast.error(result.error ?? "刷新共享区失败");
+					}
+				})
+				.catch((error: unknown) => {
+					const message = error instanceof Error ? error.message : "刷新共享区失败";
+					toast.error(message);
+				});
+		}, SHARED_REFRESH_DEBOUNCE_MS),
+	);
+}
 
 function updateAgentRuntime(
 	sessionId: string,
@@ -371,6 +403,17 @@ export function initIpcHandlers(api: any): () => void {
 					stage: "error",
 					message: event.message,
 				});
+				break;
+			}
+
+			// ---- Shared area events ----
+			case "shared:updated": {
+				const projectId = event.projectId;
+				const filesAtom = sharedFilesAtomFamily(projectId);
+				// 不翻 loading 态,避免 Virtuoso 闪烁(M-2)。
+				// 首次 fetch 由 RightPanel 的 useEffect 走 loading,后续 watcher
+				// 事件直接覆盖已有列表即可。
+				scheduleSharedRefresh(projectId, filesAtom);
 				break;
 			}
 

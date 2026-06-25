@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { AgentInfo, ImageContent } from "@shared/types";
+import type { AgentInfo, FileTreeNode, ImageContent } from "@shared/types";
 
 /**
  * The Look IPC surface injected by preload.js.
@@ -35,6 +35,15 @@ interface LookAPI {
 	openDirectoryDialog(
 		title?: string,
 	): Promise<{ success: boolean; path?: string; canceled?: boolean; error?: string }>;
+	openFileDialog(options?: {
+		title?: string;
+		allowDirectories?: boolean;
+		allowMultiple?: boolean;
+	}): Promise<{ success: boolean; paths?: string[]; canceled?: boolean; error?: string }>;
+	/** Recover the absolute filesystem path from a File object dropped into
+	 *  the sandboxed renderer. Returns null when the File has no recoverable
+	 *  path (e.g. dropped directories in HTML5 dataTransfer). */
+	getPathForFile(file: File): string | null;
 	openProjectFolder(projectId?: string): Promise<{ success: boolean; path?: string; error?: string }>;
 	listProjects(): Promise<any>;
 	createProject(cwd: string, name?: string): Promise<any>;
@@ -92,6 +101,28 @@ interface LookAPI {
 		sessionId: string;
 		action: "approve" | "reject";
 	}): Promise<{ success: boolean; error?: string }>;
+	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
+	// ---- Shared area ----
+	listSharedFiles(projectId: string): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
+	startSharedWatch(projectId: string): Promise<{ success: boolean; error?: string }>;
+	stopSharedWatch(projectId: string): Promise<{ success: boolean; error?: string }>;
+	writeSharedFile(projectId: string, path: string, content: string): Promise<{ success: boolean; error?: string }>;
+	createSharedDir(projectId: string, path: string): Promise<{ success: boolean; error?: string }>;
+	deleteSharedItem(projectId: string, path: string): Promise<{ success: boolean; error?: string }>;
+	importToShared(
+		projectId: string,
+		sources: string[],
+		targetDir?: string,
+	): Promise<{ success: boolean; error?: string }>;
+	exportFromShared(projectId: string, paths: string[], destDir: string): Promise<{ success: boolean; error?: string }>;
+	/** Drag-drop fallback: write base64/utf8 content to shared area when
+	 *  absolute path is unavailable. */
+	writeSharedContent(
+		projectId: string,
+		path: string,
+		content: string,
+		encoding?: "base64" | "utf8",
+	): Promise<{ success: boolean; error?: string }>;
 }
 
 interface SkillEntry {

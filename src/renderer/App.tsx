@@ -24,6 +24,7 @@ import PermissionDialog from "./components/PermissionDialog";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import PlanApprovalDialog from "./components/PlanApprovalDialog";
 import PlanQuestionDialog from "./components/PlanQuestionDialog";
+import { RightPanel } from "./components/RightPanel";
 import SessionSheetBar from "./components/SessionSheetBar";
 import Sidebar from "./components/Sidebar";
 import SettingsDialog from "./components/settings/SettingsDialog";
@@ -488,6 +489,8 @@ export default function App() {
 							</>
 						)}
 					</main>
+
+					<RightPanel />
 
 					{newProjectCwd && (
 						<NewProjectDialog
