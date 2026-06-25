@@ -134,7 +134,7 @@ export function RightPanel() {
 					</Button>
 				</header>
 				{!collapsed && tab === "workspace" && (
-					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
+					<WorkspaceTreePanel projectId={activeProject.id} />
 				)}
 				{!collapsed && tab === "shared" && (
 					<SharedAreaPanel

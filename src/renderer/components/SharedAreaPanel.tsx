@@ -204,7 +204,13 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 		projectId: string,
 		entries: FileSystemEntryLike[],
 		relativeDir: string,
+		depth = 0,
 	): Promise<number> {
+		const MAX_DEPTH = 50;
+		if (depth > MAX_DEPTH) {
+			toast.warning(`目录嵌套过深(${MAX_DEPTH}层),已跳过深层内容`);
+			return 0;
+		}
 		let count = 0;
 		for (const entry of entries) {
 			if (entry.isFile) {
@@ -225,7 +231,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 					if (children.length > 0) allChildren.push(...children);
 					else done = true;
 				}
-				count += await importEntriesByContent(projectId, allChildren, subDir);
+				count += await importEntriesByContent(projectId, allChildren, subDir, depth + 1);
 			}
 		}
 		return count;

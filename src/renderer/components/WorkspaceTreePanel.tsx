@@ -33,14 +33,13 @@ import {
 	MoreHorizontal,
 	RefreshCw,
 } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
 import { expandedWorkspacePathsAtomFamily, loadedWorkspaceChildrenAtomFamily } from "../store/atoms";
 
 interface WorkspaceTreePanelProps {
 	projectId: string;
-	cwd: string;
 }
 
 interface FlatRow {
@@ -73,7 +72,7 @@ function flattenTree(
 
 const INDENT_PX = 14;
 
-export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelProps) {
+export function WorkspaceTreePanel({ projectId }: WorkspaceTreePanelProps) {
 	const [expanded, setExpanded] = useAtom(expandedWorkspacePathsAtomFamily(projectId));
 	const [loaded, setLoaded] = useAtom(loadedWorkspaceChildrenAtomFamily(projectId));
 
@@ -124,9 +123,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 					});
 				}
 			}
-			// parentPath 参数保留供后续扩展
-			void parentPath;
-		},
+			},
 		[expanded, loaded, projectId, setExpanded, setLoaded],
 	);
 
@@ -183,15 +180,17 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 	);
 }
 
-// 单独 hook 提取出来,避免 hooks 顺序混淆
+// 首次挂载时如未加载根,自动拉取
 function useAtomBootstrapRoot(
 	projectId: string,
 	setLoaded: (updater: (prev: Map<string, FileTreeNode[]>) => Map<string, FileTreeNode[]>) => void,
 ) {
-	useMemo(() => {
+	useEffect(() => {
+		let cancelled = false;
 		void (async () => {
 			try {
 				const result = await window.look.listWorkspaceChildren(projectId, "");
+				if (cancelled) return;
 				if (result?.success && result.nodes) {
 					setLoaded((prev) => {
 						if (prev.has("")) return prev; // 已加载,跳过
@@ -205,6 +204,9 @@ function useAtomBootstrapRoot(
 				// best-effort:用户切到空项目时静默
 			}
 		})();
+		return () => {
+			cancelled = true;
+		};
 	}, [projectId, setLoaded]);
 }
 

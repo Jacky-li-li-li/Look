@@ -220,25 +220,29 @@ export class WorkspaceTreeService {
 	async stopAllWatchesForProject(projectId: string): Promise<void> {
 		const keys = this.watchedByProject.get(projectId);
 		if (!keys) return;
-		for (const key of keys) {
-			const watcher = this.watchers.get(key);
-			if (watcher) {
-				await watcher.close();
-				this.watchers.delete(key);
-			}
-		}
+		await Promise.all(
+			Array.from(keys).map(async (key) => {
+				const watcher = this.watchers.get(key);
+				if (watcher) {
+					await watcher.close();
+					this.watchers.delete(key);
+				}
+			}),
+		);
 		this.watchedByProject.delete(projectId);
 	}
 
 	async dispose(): Promise<void> {
 		const keys = Array.from(this.watchers.keys());
-		for (const key of keys) {
-			const w = this.watchers.get(key);
-			if (w) {
-				await w.close();
-				this.watchers.delete(key);
-			}
-		}
+		await Promise.all(
+			keys.map(async (key) => {
+				const w = this.watchers.get(key);
+				if (w) {
+					await w.close();
+					this.watchers.delete(key);
+				}
+			}),
+		);
 		this.watchedByProject.clear();
 	}
 
@@ -289,6 +293,7 @@ export class WorkspaceTreeService {
 	}
 
 	private watcherKey(cwd: string, relativePath: string): string {
-		return `${cwd}::${relativePath}`;
+		// \x00 不能出现在文件系统路径中,比 :: 更安全
+		return `${cwd}\x00${relativePath}`;
 	}
 }

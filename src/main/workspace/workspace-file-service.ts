@@ -24,6 +24,7 @@ const IGNORED_PATTERNS = [/(^|[/\\])\./];
 export class WorkspaceFileService {
 	private readonly watchers = new Map<string, FSWatcher>();
 	private readonly pendingUpdates = new Map<string, ReturnType<typeof setTimeout>>();
+	private readonly starting = new Map<string, Promise<void>>();
 	private emitCallback: WorkspaceFileServiceEventCallback | null = null;
 
 	setEmitCallback(callback: WorkspaceFileServiceEventCallback): void {
@@ -288,6 +289,18 @@ export class WorkspaceFileService {
 
 	async startWatching(projectId: string): Promise<void> {
 		if (this.watchers.has(projectId)) return;
+		const existing = this.starting.get(projectId);
+		if (existing) return existing;
+		const promise = this._doStartWatching(projectId);
+		this.starting.set(projectId, promise);
+		try {
+			await promise;
+		} finally {
+			this.starting.delete(projectId);
+		}
+	}
+
+	private async _doStartWatching(projectId: string): Promise<void> {
 		const root = ensureProjectSharedDir(projectId);
 		const watcher = chokidar.watch(root, {
 			ignored: IGNORED_PATTERNS,
