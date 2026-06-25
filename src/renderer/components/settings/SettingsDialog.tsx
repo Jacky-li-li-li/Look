@@ -61,7 +61,7 @@ const SettingsDialog = memo(function SettingsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-			<DialogContent className="flex h-[82vh] max-h-[82vh] flex-col sm:max-w-3xl" showCloseButton>
+			<DialogContent className="flex h-[82vh] max-h-[82vh] w-[calc(100%-2rem)] max-w-3xl flex-col" showCloseButton>
 				<DialogHeader>
 					<DialogTitle>{t("settings.title")}</DialogTitle>
 					<DialogDescription>{t("settings.description")}</DialogDescription>
@@ -71,21 +71,21 @@ const SettingsDialog = memo(function SettingsDialog({
 					<TabsList className="!h-full !justify-start w-44 shrink-0 flex-col items-stretch rounded-none border-r border-hairline bg-transparent p-0 gap-0">
 						<TabsTrigger
 							value="general"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
 							<Palette className="size-3.5" />
 							{t("settings.general")}
 						</TabsTrigger>
 						<TabsTrigger
 							value="profile"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
 							<UserRound className="size-3.5" />
 							{t("profile.title")}
 						</TabsTrigger>
 						<TabsTrigger
 							value="api-keys"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
 							<Key className="size-3.5" />
 							<span className="flex-1 text-left">{t("settings.apiKeys")}</span>
@@ -97,14 +97,14 @@ const SettingsDialog = memo(function SettingsDialog({
 						</TabsTrigger>
 						<TabsTrigger
 							value="mcp"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
 							<Plug className="size-3.5" />
 							{t("settings.mcp", "MCP")}
 						</TabsTrigger>
 						<TabsTrigger
 							value="about"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 transition-colors"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
 							<Zap className="size-3.5" />
 							{t("settings.about")}

@@ -201,9 +201,9 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 									"bg-muted/40",
 								)}
 							>
-								<div className="flex items-center justify-between gap-3 px-3 py-2">
+								<div className="group flex items-center justify-between gap-3 px-3 py-2">
 									<div className="min-w-0 flex-1">
-										<div className="flex items-center gap-1 text-[13px] font-medium">
+										<div className="flex flex-wrap items-center gap-1 text-[13px] font-medium">
 											<span
 												className={cn(
 													"size-2 shrink-0 rounded-full",
@@ -213,7 +213,7 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 											<ProviderIcon id={p.id} className="size-4 shrink-0" />
 											<span
 												className={cn(
-													"cursor-pointer transition-colors hover:text-foreground",
+													"min-w-0 cursor-pointer truncate transition-colors hover:text-foreground",
 													(!p.models || p.models.length === 0) && "cursor-default",
 												)}
 												onClick={() => p.models && p.models.length > 0 && toggleProviderExpand(p.id)}
@@ -250,7 +250,12 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 											</code>
 										)}
 									</div>
-									<div className="flex shrink-0 items-center gap-1">
+									<div
+										className={cn(
+											"flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100",
+											isEditing && "opacity-100",
+										)}
+									>
 										<Button
 											variant={isEditing ? "line-filled" : "line"}
 											size="xs"

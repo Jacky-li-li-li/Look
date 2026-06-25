@@ -31,14 +31,14 @@ function SettingRow({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className="flex items-center justify-between gap-4 py-2.5">
-			<div className="flex flex-col gap-0.5 min-w-0">
-				<label htmlFor={id} className="text-[13px] font-medium leading-none cursor-pointer">
+		<div className="flex min-w-0 flex-col items-start justify-between gap-3 py-2.5 sm:flex-row sm:items-center sm:gap-4">
+			<div className="flex min-w-0 flex-col gap-0.5">
+				<label htmlFor={id} className="cursor-pointer text-[13px] font-medium leading-snug">
 					{label}
 				</label>
-				<span className="text-[11px] text-muted-foreground leading-tight">{desc}</span>
+				<span className="text-[11px] leading-tight text-muted-foreground">{desc}</span>
 			</div>
-			{children}
+			<div className="shrink-0">{children}</div>
 		</div>
 	);
 }
@@ -69,7 +69,7 @@ export default function GeneralTab() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto gap-3 p-4">
-			<Card size="sm">
+			<Card size="sm" className="overflow-visible">
 				<CardHeader className="border-b border-hairline px-4 py-2.5">
 					<CardTitle className="flex items-center gap-1.5 text-[13px]">
 						<Sun className="size-3.5 text-muted-foreground" />
@@ -104,7 +104,7 @@ export default function GeneralTab() {
 				</CardContent>
 			</Card>
 
-			<Card size="sm">
+			<Card size="sm" className="overflow-visible">
 				<CardHeader className="border-b border-hairline px-4 py-2.5">
 					<CardTitle className="flex items-center gap-1.5 text-[13px]">
 						<Cpu className="size-3.5 text-muted-foreground" />
@@ -126,7 +126,7 @@ export default function GeneralTab() {
 				</CardContent>
 			</Card>
 
-			<Card size="sm">
+			<Card size="sm" className="overflow-visible">
 				<CardHeader className="border-b border-hairline px-4 py-2.5">
 					<CardTitle className="flex items-center gap-1.5 text-[13px]">
 						<Zap className="size-3.5 text-muted-foreground" />
