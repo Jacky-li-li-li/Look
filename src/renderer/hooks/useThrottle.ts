@@ -57,11 +57,7 @@ export function useThrottle<T>(value: T, intervalMs: number, isStreaming: boolea
 				clearTimeout(timer.current);
 				timer.current = null;
 			}
-			// Flush pending value before cleanup
-			if (pending.current !== null) {
-				setThrottled(pending.current);
-				pending.current = null;
-			}
+			pending.current = null;
 		};
 	}, [value, intervalMs, isStreaming]);
 

@@ -74,9 +74,10 @@ const ChatMessageList = memo(function ChatMessageList({
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
 	const timeline = useMemo<TimelineItem[]>(
-		() => buildTimeline(sessionState.entries, sessionState.liveMessages),
-		[sessionState.entries, sessionState.liveMessages],
+		() => buildTimeline(sessionState.entries, sessionState.liveMessages, sessionState.messageDurations),
+		[sessionState.entries, sessionState.liveMessages, sessionState.messageDurations],
 	);
+	const { liveMessages, toolExecutions, turnDurationMs, leafId } = sessionState;
 
 	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
 	const forkingEntry = useAtomValue(forkingEntryAtomFamily(agentId));
@@ -204,6 +205,115 @@ const ChatMessageList = memo(function ChatMessageList({
 		[t],
 	);
 
+	const itemContent = useCallback(
+		(index: number) => {
+			const item = timeline[index];
+			if (!item) return null;
+			if (item.entry) {
+				return (
+					<div className="px-5 py-2">
+						<SessionEntryBubble entry={item.entry} />
+					</div>
+				);
+			}
+			if (!item.message) return null;
+			const entryId = item.entryId;
+			const showActions = Boolean(
+				entryId && (item.message.role === "assistant" || item.message.role === "user"),
+			);
+			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
+			return (
+				<div className="px-5 py-2">
+					<div
+						data-message-id={item.id}
+						className={cn(
+							"group/message flex flex-col",
+							showActions && "gap-1",
+							item.isLive && "animate-draw-in",
+						)}
+					>
+						<MessageBubble
+							message={item.message}
+							agentName={agentName}
+							isStreaming={
+								item.isLive && !liveMessages.find((live) => live.renderId === item.id)?.completed
+							}
+							autoCollapse={autoCollapse}
+							toolExecutions={toolExecutions}
+							toolResultMap={item.toolResultMap}
+							turnDurationMs={item.turnDurationMs ?? (item.isLive ? turnDurationMs : null)}
+							isActiveLeaf={Boolean(entryId && entryId === leafId)}
+							flash={flashEntryId === item.id}
+						/>
+						{showActions && entryId && (
+							<div
+								className={cn(
+									"flex items-center gap-1 opacity-0 transition-opacity group-hover/message:opacity-100",
+									item.message.role === "user" ? "self-end mr-10" : "ml-10",
+								)}
+							>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									disabled={actionBusy}
+									onClick={() => handleBranchFromHere(entryId)}
+								>
+									<Undo2 className="size-3.5" />
+								</Button>
+								{item.message.role !== "user" && (
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										disabled={actionBusy}
+										onClick={() => handleForkToNewChat(entryId)}
+									>
+										<GitBranch className="size-3.5" />
+									</Button>
+								)}
+								{item.message.role === "assistant" && (
+									<>
+										<Button
+											variant="ghost"
+											size="icon-xs"
+											onClick={() => handleCopyMessage(item.id, item.message!)}
+										>
+											{copiedEntryId === item.id ? (
+												<Check className="size-3.5" />
+											) : (
+												<Copy className="size-3.5" />
+											)}
+										</Button>
+										{item.message.usage.totalTokens > 0 && (
+											<span className="ml-2 font-mono text-[10px] text-muted-foreground/60">
+												{fmtUsage(item.message)}
+											</span>
+										)}
+									</>
+								)}
+							</div>
+						)}
+					</div>
+				</div>
+			);
+		},
+		[
+			agentName,
+			autoCollapse,
+			flashEntryId,
+			forkingEntry,
+			isBusy,
+			leafId,
+			liveMessages,
+			navigatingEntry,
+			toolExecutions,
+			turnDurationMs,
+			timeline,
+			handleBranchFromHere,
+			handleCopyMessage,
+			handleForkToNewChat,
+		],
+	);
+
 	if (timeline.length === 0) {
 		return (
 			<>
@@ -229,97 +339,7 @@ const ChatMessageList = memo(function ChatMessageList({
 					totalCount={timeline.length}
 					followOutput="smooth"
 					atBottomStateChange={setIsAtBottom}
-					itemContent={(index) => {
-						const item = timeline[index];
-						if (!item) return null;
-						if (item.entry) {
-							return (
-								<div className="px-5 py-2">
-									<SessionEntryBubble entry={item.entry} />
-								</div>
-							);
-						}
-						if (!item.message) return null;
-						const entryId = item.entryId;
-						const showActions = Boolean(
-							entryId && (item.message.role === "assistant" || item.message.role === "user"),
-						);
-						const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
-						return (
-							<div className="px-5 py-2">
-								<div
-									data-message-id={item.id}
-									className={cn(
-										"group/message flex flex-col",
-										showActions && "gap-1",
-										item.isLive && "animate-draw-in",
-									)}
-								>
-									<MessageBubble
-										message={item.message}
-										agentName={agentName}
-										isStreaming={
-											item.isLive &&
-											!sessionState.liveMessages.find((live) => live.renderId === item.id)?.completed
-										}
-										autoCollapse={autoCollapse}
-										toolExecutions={sessionState.toolExecutions}
-										toolResultMap={item.toolResultMap}
-										turnDurationMs={sessionState.turnDurationMs}
-										isActiveLeaf={Boolean(entryId && entryId === sessionState.leafId)}
-										flash={flashEntryId === item.id}
-									/>
-									{showActions && entryId && (
-										<div
-											className={cn(
-												"flex items-center gap-1 opacity-0 transition-opacity group-hover/message:opacity-100",
-												item.message.role === "user" ? "self-end mr-10" : "ml-10",
-											)}
-										>
-											<Button
-												variant="ghost"
-												size="icon-xs"
-												disabled={actionBusy}
-												onClick={() => handleBranchFromHere(entryId)}
-											>
-												<Undo2 className="size-3.5" />
-											</Button>
-											{item.message.role !== "user" && (
-												<Button
-													variant="ghost"
-													size="icon-xs"
-													disabled={actionBusy}
-													onClick={() => handleForkToNewChat(entryId)}
-												>
-													<GitBranch className="size-3.5" />
-												</Button>
-											)}
-											{item.message.role === "assistant" && (
-												<>
-													<Button
-														variant="ghost"
-														size="icon-xs"
-														onClick={() => handleCopyMessage(item.id, item.message!)}
-													>
-														{copiedEntryId === item.id ? (
-															<Check className="size-3.5" />
-														) : (
-															<Copy className="size-3.5" />
-														)}
-													</Button>
-													{item.message.usage.totalTokens > 0 && (
-														<span className="ml-2 font-mono text-[10px] text-muted-foreground/60">
-															{fmtUsage(item.message)}
-														</span>
-													)}
-												</>
-											)}
-										</div>
-									)}
-								</div>
-							</div>
-						);
-					}}
+					itemContent={itemContent}
 				/>
 				<ScrollToBottomButton isAtBottom={isAtBottom} virtuosoRef={virtuosoRef} />
 			</div>

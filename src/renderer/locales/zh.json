@@ -169,7 +169,12 @@
 		"largeOutputSummary": "{{preview}}（{{lines}} 行, {{chars}} 字符）",
 		"statLines": "{{n}} 行",
 		"statMatches": "{{n}} 处",
-		"statEntries": "{{n}} 项"
+		"statEntries": "{{n}} 项",
+		"executed_one": "执行了 1 个工具",
+		"executed_other": "执行了 {{count}} 个工具",
+		"thinkingExecuted_one": "思考了 1 次",
+		"thinkingExecuted_other": "思考了 {{count}} 次",
+		"mixedExecuted": "{{thinking}} 次思考，{{tools}} 个工具调用"
 	},
 	"executionProcess": {
 		"title": "执行过程",

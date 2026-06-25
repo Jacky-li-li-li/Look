@@ -13,6 +13,8 @@ export interface TimelineItem {
 	isLive: boolean;
 	/** toolResult messages keyed by toolCallId, attached to the preceding assistant. */
 	toolResultMap?: Record<string, ToolResultMessage>;
+	/** Finalized turn duration for this persisted assistant bubble, in milliseconds. */
+	turnDurationMs?: number;
 }
 
 function isToolResultMessage(msg: AgentMessage): msg is ToolResultMessage {
@@ -30,7 +32,11 @@ function mergeAssistantContent(target: AssistantMessage, source: AssistantMessag
 	};
 }
 
-export function buildTimeline(entries: SessionEntry[], liveMessages: RendererLiveMessage[]): TimelineItem[] {
+export function buildTimeline(
+	entries: SessionEntry[],
+	liveMessages: RendererLiveMessage[],
+	messageDurations: Record<string, number> = {},
+): TimelineItem[] {
 	const items: TimelineItem[] = [];
 	let pendingToolResults: ToolResultMessage[] = [];
 	let currentAssistant: TimelineItem | null = null;
@@ -62,6 +68,10 @@ export function buildTimeline(entries: SessionEntry[], liveMessages: RendererLiv
 					currentAssistant.message = mergeAssistantContent(currentAssistant.message, msg);
 					currentAssistant.secondaryEntryIds ??= [];
 					currentAssistant.secondaryEntryIds.push(entry.id);
+					// If the merged entry carries the finalized duration, attach it to the bubble.
+					if (messageDurations[entry.id] != null) {
+						currentAssistant.turnDurationMs = messageDurations[entry.id];
+					}
 					flushToolResults();
 				} else {
 					closeAssistantContext();
@@ -70,6 +80,7 @@ export function buildTimeline(entries: SessionEntry[], liveMessages: RendererLiv
 						entryId: entry.id,
 						message: msg,
 						isLive: false,
+						turnDurationMs: messageDurations[entry.id],
 					};
 					flushToolResults();
 					currentAssistant = item;

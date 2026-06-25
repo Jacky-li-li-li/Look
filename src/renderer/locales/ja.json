@@ -169,7 +169,12 @@
 		"largeOutputSummary": "{{preview}}（{{lines}} 行, {{chars}} 文字）",
 		"statLines": "{{n}} 行",
 		"statMatches": "{{n}} 件",
-		"statEntries": "{{n}} 件"
+		"statEntries": "{{n}} 件",
+		"executed_one": "1 個のツールを実行",
+		"executed_other": "{{count}} 個のツールを実行",
+		"thinkingExecuted_one": "1 回思考",
+		"thinkingExecuted_other": "{{count}} 回思考",
+		"mixedExecuted": "思考 {{thinking}} 回、ツール {{tools}} 個"
 	},
 	"executionProcess": {
 		"title": "実行プロセス",

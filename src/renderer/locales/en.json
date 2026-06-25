@@ -169,7 +169,12 @@
 		"largeOutputSummary": "{{preview}} ({{lines}} lines, {{chars}} chars)",
 		"statLines": "{{n}} lines",
 		"statMatches": "{{n}} matches",
-		"statEntries": "{{n}} items"
+		"statEntries": "{{n}} items",
+		"executed_one": "Executed 1 tool",
+		"executed_other": "Executed {{count}} tools",
+		"thinkingExecuted_one": "Thought 1 time",
+		"thinkingExecuted_other": "Thought {{count}} times",
+		"mixedExecuted": "{{thinking}} thoughts, {{tools}} tool calls"
 	},
 	"executionProcess": {
 		"title": "Execution",

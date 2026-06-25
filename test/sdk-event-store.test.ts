@@ -268,4 +268,93 @@ describe("SDK event canonical store", () => {
 		expect(completed.liveMessages).toEqual([]);
 		expect(completed.toolExecutions).toEqual({});
 	});
+
+	it("computes turnDurationMs even if the agent_end snapshot arrives before the sdk event", async () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		const msg = assistant("hello");
+
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_start", message: msg },
+		});
+		receive({
+			type: "session:sdk-event",
+			sessionId: sessionIds[0],
+			event: { type: "message_end", message: msg },
+		});
+
+		// Snapshot arrives first (race condition).
+		const entries = [
+			{ type: "message", id: "persisted-a1", parentId: null, timestamp: "now", message: msg },
+		];
+		receive({
+			type: "session:snapshot",
+			sessionId: sessionIds[0],
+			reason: "agent_end",
+			leafId: "persisted-a1",
+			entries,
+			runtime: { ...runtime, isStreaming: false },
+		});
+
+		const afterSnapshot = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(afterSnapshot.turnDurationMs).not.toBeNull();
+		expect(afterSnapshot.turnDurationMs).toBeGreaterThan(0);
+		expect(afterSnapshot.messageDurations["persisted-a1"]).toBe(afterSnapshot.turnDurationMs);
+
+		// The matching sdk event arrives afterwards and should not clear the duration.
+		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: false } });
+
+		const afterSdkEvent = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(afterSdkEvent.turnDurationMs).not.toBeNull();
+		expect(afterSdkEvent.turnDurationMs).toBeGreaterThan(0);
+		expect(afterSdkEvent.messageDurations["persisted-a1"]).toBe(afterSdkEvent.turnDurationMs);
+	});
+
+	it("loads persisted per-message durations from look.message-duration custom entries", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		const msg = assistant("hello");
+		const durationEntry = {
+			type: "custom",
+			id: "duration-1",
+			parentId: "persisted-a1",
+			timestamp: "now",
+			customType: "look.message-duration.v1",
+			data: { entryId: "persisted-a1", durationMs: 1234 },
+		};
+		const entries = [
+			{ type: "message", id: "persisted-a1", parentId: null, timestamp: "now", message: msg },
+			durationEntry,
+		];
+
+		receive({
+			type: "session:snapshot",
+			sessionId: sessionIds[0],
+			reason: "activate",
+			leafId: "duration-1",
+			entries,
+			runtime,
+		});
+
+		const state = appStore.get(sessionStateAtomFamily(sessionIds[0]));
+		expect(state.messageDurations["persisted-a1"]).toBe(1234);
+		// Leaf should be mapped back to the assistant message the duration entry belongs to.
+		expect(state.leafId).toBe("persisted-a1");
+	});
 });

@@ -352,3 +352,14 @@ export interface ProviderInfo {
 	hasCredentials: boolean;
 	models: string[];
 }
+
+// ============================================================
+// Per-message turn duration persistence
+// ============================================================
+
+export const LOOK_MESSAGE_DURATION_ENTRY_TYPE = "look.message-duration.v1";
+
+export interface LookMessageDurationEntryData {
+	entryId: string;
+	durationMs: number;
+}

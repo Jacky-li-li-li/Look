@@ -15,6 +15,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../store/authAtoms";
 import type { RendererToolExecutionState } from "../store/sessionTypes";
+import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
@@ -104,60 +105,100 @@ function ContentBlocks({
 	toolExecutions: Record<string, RendererToolExecutionState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
+	// Simple adjacent grouping: a group is just a run of consecutive
+	// (thinking | toolCall) blocks. Text blocks are always rendered
+	// standalone and never absorbed into a group, so user-written notes
+	// between tool calls stay visible at all times.
+	type Segment =
+		| { kind: "single"; block: TextContent | ThinkingContent | ImageContent | ToolCall; index: number }
+		| { kind: "group"; blocks: Array<ThinkingContent | ToolCall>; startIndex: number };
+
+	const segments: Segment[] = [];
+	let i = 0;
+	while (i < blocks.length) {
+		const b = blocks[i];
+		if (b.type === "thinking" || b.type === "toolCall") {
+			const startIndex = i;
+			const groupBlocks: Array<ThinkingContent | ToolCall> = [];
+			while (i < blocks.length && (blocks[i].type === "thinking" || blocks[i].type === "toolCall")) {
+				groupBlocks.push(blocks[i] as ThinkingContent | ToolCall);
+				i++;
+			}
+			segments.push({ kind: "group", blocks: groupBlocks, startIndex });
+		} else {
+			segments.push({ kind: "single", block: b, index: i });
+			i++;
+		}
+	}
+
 	return (
 		<div className="flex flex-col gap-1.5">
-			{blocks.map((block, index) => {
-				if (block.type === "text") {
-					if (!block.text) return null;
+			{segments.map((seg, segIdx) => {
+				if (seg.kind === "single") {
+					const block = seg.block;
+					const index = seg.index;
+					if (block.type === "text") {
+						if (!block.text) return null;
+						return (
+							<div key={`text-${index}`} className="message-prose">
+								<SkillAwareContent content={block.text} isStreaming={isStreaming} />
+							</div>
+						);
+					}
+					if (block.type === "thinking") {
+						if (!block.thinking) return null;
+						return (
+							<ThinkingPanel
+								key={`thinking-${index}`}
+								thinking={block.thinking}
+								isStreaming={isStreaming}
+								autoCollapse={autoCollapse}
+							/>
+						);
+					}
+					if (block.type === "image") return <ImageBlock key={`image-${index}`} block={block} />;
+
+					const execution = toolExecutions[block.id];
+					const persistedResult = toolResultMap?.[block.id];
+
+					const status = execution
+						? execution.phase === "running"
+							? "running"
+							: execution.isError
+								? "error"
+								: "success"
+						: persistedResult
+							? persistedResult.isError
+								? "error"
+								: "success"
+							: "pending";
+
+					const result = execution
+						? resultText(execution.result ?? execution.partialResult)
+						: resultText(persistedResult?.content);
+
 					return (
-						<div key={`text-${index}`} className="message-prose">
-							<SkillAwareContent content={block.text} isStreaming={isStreaming} />
-						</div>
-					);
-				}
-				if (block.type === "thinking") {
-					if (!block.thinking) return null;
-					return (
-						<ThinkingPanel
-							key={`thinking-${index}`}
-							thinking={block.thinking}
-							isStreaming={isStreaming}
-							autoCollapse={autoCollapse}
+						<ToolCallCard
+							key={block.id || `tool-${index}`}
+							toolCall={{
+								callId: block.id,
+								toolName: block.name,
+								args: block.arguments,
+								status,
+								result,
+								isError: execution?.isError ?? persistedResult?.isError,
+							}}
 						/>
 					);
 				}
-				if (block.type === "image") return <ImageBlock key={`image-${index}`} block={block} />;
-
-				const execution = toolExecutions[block.id];
-				const persistedResult = toolResultMap?.[block.id];
-
-				const status = execution
-					? execution.phase === "running"
-						? "running"
-						: execution.isError
-							? "error"
-							: "success"
-					: persistedResult
-						? persistedResult.isError
-							? "error"
-							: "success"
-						: "pending";
-
-				const result = execution
-					? resultText(execution.result ?? execution.partialResult)
-					: resultText(persistedResult?.content);
 
 				return (
-					<ToolCallCard
-						key={block.id || `tool-${index}`}
-						toolCall={{
-							callId: block.id,
-							toolName: block.name,
-							args: block.arguments,
-							status,
-							result,
-							isError: execution?.isError ?? persistedResult?.isError,
-						}}
+					<CollapsibleExecutionGroup
+						key={`group-${seg.startIndex}-${segIdx}`}
+						blocks={seg.blocks}
+						toolExecutions={toolExecutions}
+						toolResultMap={toolResultMap}
+						isStreaming={isStreaming}
 					/>
 				);
 			})}

@@ -31,6 +31,8 @@ export interface RendererSessionState {
 	lastEndedRunId: number | null;
 	turnStartedAt: number;
 	turnDurationMs: number | null;
+	/** Per-entry finalized turn durations. Keyed by SessionEntry.id for persisted assistant messages. */
+	messageDurations: Record<string, number>;
 }
 
 export const emptyRendererSessionState = (): RendererSessionState => ({
@@ -44,6 +46,7 @@ export const emptyRendererSessionState = (): RendererSessionState => ({
 	lastEndedRunId: null,
 	turnStartedAt: 0,
 	turnDurationMs: null,
+	messageDurations: {},
 });
 
 export type RendererSessionPhase = "idle" | "thinking" | "working" | "retrying" | "compacting";

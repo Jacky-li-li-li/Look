@@ -349,4 +349,33 @@ describe("buildTimeline", () => {
 		expect(timeline[0]?.message?.role).toBe("toolResult");
 		expect(timeline[0]?.isLive).toBe(true);
 	});
+
+	it("attaches per-message duration to assistant bubbles", () => {
+		const entries: SessionEntry[] = [
+			messageEntry("u1", baseUser("hello")),
+			messageEntry("a1", baseAssistant("a1", [{ type: "text", text: "first" }])),
+			messageEntry("u2", baseUser("follow up")),
+			messageEntry("a2", baseAssistant("a2", [{ type: "text", text: "second" }])),
+		];
+
+		const timeline = buildTimeline(entries, [], { a1: 1200, a2: 3400 });
+
+		expect(timeline).toHaveLength(4);
+		expect(timeline[1]?.turnDurationMs).toBe(1200);
+		expect(timeline[3]?.turnDurationMs).toBe(3400);
+	});
+
+	it("picks up duration from a merged assistant entry", () => {
+		const entries: SessionEntry[] = [
+			messageEntry("u1", baseUser("hello")),
+			messageEntry("a1", baseAssistant("a1", [{ type: "thinking", thinking: "..." }])),
+			messageEntry("a2", baseAssistant("a2", [{ type: "text", text: "answer" }])),
+		];
+
+		const timeline = buildTimeline(entries, [], { a2: 5100 });
+
+		expect(timeline).toHaveLength(2);
+		expect(timeline[1]?.entryId).toBe("a1");
+		expect(timeline[1]?.turnDurationMs).toBe(5100);
+	});
 });

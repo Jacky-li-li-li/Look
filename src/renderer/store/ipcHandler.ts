@@ -6,7 +6,14 @@
 // Components subscribe only to the session state they render.
 // ============================================================
 
-import type { AgentSessionEvent, MainToRendererEvent, SessionSnapshotEnvelope } from "@shared/types";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import {
+	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
+	type AgentSessionEvent,
+	type LookMessageDurationEntryData,
+	type MainToRendererEvent,
+	type SessionSnapshotEnvelope,
+} from "@shared/types";
 import { createStore } from "jotai";
 import { toast } from "sonner";
 import i18n from "../i18n";
@@ -89,10 +96,48 @@ function updateAgentRuntime(
 function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	const previous = appStore.get(sessionStateAtomFamily(snapshot.sessionId));
 	const isAgentEnd = snapshot.reason === "agent_end";
+	const turnDurationMs =
+		isAgentEnd && previous.turnStartedAt
+			? Date.now() - previous.turnStartedAt
+			: previous.turnDurationMs;
+
+	// Load per-message durations persisted as custom entries by the main process.
+	const messageDurations = { ...previous.messageDurations };
+	for (const entry of snapshot.entries) {
+		if (entry.type === "custom" && entry.customType === LOOK_MESSAGE_DURATION_ENTRY_TYPE) {
+			const data = entry.data as LookMessageDurationEntryData | undefined;
+			if (data?.entryId && data.durationMs != null && data.durationMs > 0) {
+				messageDurations[data.entryId] = data.durationMs;
+			}
+		}
+	}
+
+	// Fallback: if the snapshot raced ahead of the sdk event, still record the
+	// runtime on the last assistant entry so it is visible immediately.
+	if (isAgentEnd && turnDurationMs != null && turnDurationMs > 0) {
+		const lastAssistantEntry = [...snapshot.entries]
+			.reverse()
+			.find((entry) => entry.type === "message" && entry.message.role === "assistant");
+		if (lastAssistantEntry) {
+			messageDurations[lastAssistantEntry.id] = turnDurationMs;
+		}
+	}
+
+	// The main process appends a duration custom entry as the leaf after a turn.
+	// Treat the assistant message it belongs to as the active leaf for the UI.
+	let leafId = snapshot.leafId;
+	if (leafId) {
+		const leafEntry = snapshot.entries.find((entry) => entry.id === leafId);
+		if (leafEntry?.type === "custom" && leafEntry.customType === LOOK_MESSAGE_DURATION_ENTRY_TYPE) {
+			const data = leafEntry.data as LookMessageDurationEntryData | undefined;
+			if (data?.entryId) leafId = data.entryId;
+		}
+	}
+
 	appStore.set(sessionStateAtomFamily(snapshot.sessionId), {
 		...previous,
 		entries: snapshot.entries,
-		leafId: snapshot.leafId,
+		leafId,
 		runtime: {
 			...snapshot.runtime,
 			steering: [...snapshot.runtime.steering],
@@ -101,12 +146,14 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 		currentMessageRenderId: isAgentEnd ? null : previous.currentMessageRenderId,
 		lastEndedRunId: isAgentEnd ? null : previous.lastEndedRunId,
 		turnStartedAt: isAgentEnd ? 0 : previous.turnStartedAt,
+		turnDurationMs,
+		messageDurations,
 		liveMessages: isAgentEnd
 			? previous.liveMessages.filter((item) => item.runId !== (previous.lastEndedRunId ?? previous.currentRunId))
 			: previous.liveMessages,
 		toolExecutions: isAgentEnd ? {} : previous.toolExecutions,
 	});
-	appStore.set(sessionLeafIdAtomFamily(snapshot.sessionId), snapshot.leafId);
+	appStore.set(sessionLeafIdAtomFamily(snapshot.sessionId), leafId);
 	appStore.set(navigatingEntryAtomFamily(snapshot.sessionId), null);
 	appStore.set(forkingEntryAtomFamily(snapshot.sessionId), null);
 	appStore.set(
@@ -159,7 +206,9 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 				...appStore.get(atom),
 				runtime: previous.runtime ? { ...previous.runtime, isStreaming: false, isRetrying: event.willRetry } : null,
 				lastEndedRunId: previous.currentRunId,
-				turnDurationMs: previous.turnStartedAt ? Date.now() - previous.turnStartedAt : null,
+				turnDurationMs: previous.turnStartedAt
+					? Date.now() - previous.turnStartedAt
+					: previous.turnDurationMs,
 			});
 			updateAgentRuntime(sessionId, { isStreaming: false, isRetrying: event.willRetry });
 			break;

@@ -46,22 +46,24 @@ import {
 	getUiSettingsPath,
 	resetLegacySessionsOnce,
 } from "./shared/look-storage.js";
-import type {
-	AgentInfo,
-	ForkedSessionResult,
-	MainToRendererEvent,
-	NavigateTreeResult,
-	PermissionAskEvent,
-	PermissionMode,
-	PermissionRespondPayload,
-	PlanApprovalRequest,
-	PlanApprovalResponse,
-	PlanQuestion,
-	PlanQuestionRequest,
-	PlanQuestionResponse,
-	ProjectInfo,
-	SessionSnapshotEnvelope,
-	ThinkingLevel,
+import {
+	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
+	type AgentInfo,
+	type ForkedSessionResult,
+	type LookMessageDurationEntryData,
+	type MainToRendererEvent,
+	type NavigateTreeResult,
+	type PermissionAskEvent,
+	type PermissionMode,
+	type PermissionRespondPayload,
+	type PlanApprovalRequest,
+	type PlanApprovalResponse,
+	type PlanQuestion,
+	type PlanQuestionRequest,
+	type PlanQuestionResponse,
+	type ProjectInfo,
+	type SessionSnapshotEnvelope,
+	type ThinkingLevel,
 } from "./shared/types.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
@@ -155,6 +157,8 @@ export class SessionRuntimeManager {
 	 *  - retrying: the last turn ended but requested a retry (still "running" visually)
 	 *  All renderer-facing reports use this canonical state instead of the raw getter. */
 	private readonly streamingStates = new Map<string, "idle" | "streaming" | "retrying">();
+	/** Turn start timestamp keyed by pi session id; used to compute and persist per-message runtimes. */
+	private readonly turnStartedAtBySession = new Map<string, number>();
 
 	/** Whether the session should be reported as streaming to the renderer.
 	 *  Falls back to the SDK getter only when no event-derived state exists. */
@@ -736,6 +740,7 @@ export class SessionRuntimeManager {
 		this.prePlanToolsBySession.delete(sessionId);
 		this.dirtyPlanToolSnapshots.delete(sessionId);
 		this.streamingStates.delete(sessionId);
+		this.turnStartedAtBySession.delete(sessionId);
 		await managed.runtime.dispose();
 	}
 
@@ -972,6 +977,7 @@ export class SessionRuntimeManager {
 			case "agent_end":
 				this.persistPermissionModeIfPossible(sessionId);
 				this.persistPlanToolSnapshotIfPossible(sessionId);
+				this.persistTurnDurationIfPossible(sessionId);
 				// The SDK can still report isStreaming=true momentarily after the turn
 				// has ended. Force the post-end reports to false until the next run starts.
 				this.streamingStates.set(sessionId, event.willRetry ? "retrying" : "idle");
@@ -979,6 +985,7 @@ export class SessionRuntimeManager {
 				this.refreshAfterTurn(sessionId).catch((error) => this.emitError(error, sessionId));
 				break;
 			case "agent_start":
+				this.turnStartedAtBySession.set(sessionId, Date.now());
 				this.streamingStates.set(sessionId, "streaming");
 				this.emitSessionUpdated(sessionId);
 				break;
@@ -1257,6 +1264,27 @@ export class SessionRuntimeManager {
 		if (!mode) return;
 		session.sessionManager.appendCustomEntry(PERMISSION_MODE_ENTRY_TYPE, { mode });
 		this.dirtyPermissionModes.delete(sessionId);
+	}
+
+	private persistTurnDurationIfPossible(sessionId: string): void {
+		const session = this.runtimes.get(sessionId)?.runtime.session;
+		if (!session || !session.sessionManager.isPersisted()) return;
+
+		const turnStartedAt = this.turnStartedAtBySession.get(sessionId);
+		this.turnStartedAtBySession.delete(sessionId);
+		if (!turnStartedAt) return;
+
+		const durationMs = Date.now() - turnStartedAt;
+		if (durationMs <= 0) return;
+
+		// Attach the runtime to the most recent assistant entry on the current branch.
+		const assistantEntry = [...session.sessionManager.getBranch()]
+			.reverse()
+			.find((entry) => entry.type === "message" && entry.message.role === "assistant");
+		if (!assistantEntry) return;
+
+		const data: LookMessageDurationEntryData = { entryId: assistantEntry.id, durationMs };
+		session.sessionManager.appendCustomEntry(LOOK_MESSAGE_DURATION_ENTRY_TYPE, data);
 	}
 
 	private finishPermissionRequest(requestId: string, action: "allow" | "deny" | "allow_always"): boolean {
