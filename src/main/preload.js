@@ -72,6 +72,18 @@ const api = {
   testEnvKey: (provider) =>
     ipcRenderer.invoke("look:invoke", { type: "settings:test-env-key", provider }),
 
+  // ---- Custom providers ----
+  addCustomProvider: (input) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:add-custom-provider", payload: input }),
+  updateCustomProvider: (name, patch) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:update-custom-provider", payload: { name, patch } }),
+  removeCustomProvider: (name) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:remove-custom-provider", payload: { name } }),
+  listCustomProviders: () =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:list-custom-providers" }),
+  testCustomProvider: (input) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:test-custom-provider", payload: input }),
+
 
   setApiKey: (provider, key) =>
     ipcRenderer.invoke("look:invoke", { type: "settings:set-api-key", provider, key }),

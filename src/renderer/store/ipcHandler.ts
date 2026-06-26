@@ -6,10 +6,9 @@
 // Components subscribe only to the session state they render.
 // ============================================================
 
-import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
-	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type AgentSessionEvent,
+	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
 	type MainToRendererEvent,
 	type SessionSnapshotEnvelope,
@@ -97,9 +96,7 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	const previous = appStore.get(sessionStateAtomFamily(snapshot.sessionId));
 	const isAgentEnd = snapshot.reason === "agent_end";
 	const turnDurationMs =
-		isAgentEnd && previous.turnStartedAt
-			? Date.now() - previous.turnStartedAt
-			: previous.turnDurationMs;
+		isAgentEnd && previous.turnStartedAt ? Date.now() - previous.turnStartedAt : previous.turnDurationMs;
 
 	// Load per-message durations persisted as custom entries by the main process.
 	const messageDurations = { ...previous.messageDurations };
@@ -206,9 +203,7 @@ function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
 				...appStore.get(atom),
 				runtime: previous.runtime ? { ...previous.runtime, isStreaming: false, isRetrying: event.willRetry } : null,
 				lastEndedRunId: previous.currentRunId,
-				turnDurationMs: previous.turnStartedAt
-					? Date.now() - previous.turnStartedAt
-					: previous.turnDurationMs,
+				turnDurationMs: previous.turnStartedAt ? Date.now() - previous.turnStartedAt : previous.turnDurationMs,
 			});
 			updateAgentRuntime(sessionId, { isStreaming: false, isRetrying: event.willRetry });
 			break;

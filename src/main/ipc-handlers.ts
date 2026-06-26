@@ -3,7 +3,10 @@
 // Bridges Electron IPC between renderer and the pi session runtime registry.
 // ============================================================
 
+import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { type BrowserWindow, dialog, ipcMain } from "electron";
+import { type CustomProviderInput, toProviderConfig } from "./custom-providers-store.js";
 import {
 	guardAgentId,
 	guardBoolean,
@@ -210,6 +213,86 @@ async function handleRendererInvoke(
 			const _provider = guardProvider(data.provider);
 			const result = await runtimeManager.testEnvKey(_provider);
 			return { success: true, result };
+		}
+
+		// === Custom provider management ===
+		case "settings:add-custom-provider": {
+			const input = data.payload as CustomProviderInput;
+			runtimeManager.customProviders.add(input);
+			return { success: true };
+		}
+
+		case "settings:update-custom-provider": {
+			const { name, patch } = data.payload as { name: string; patch: Partial<CustomProviderInput> };
+			runtimeManager.customProviders.update(name, patch);
+			return { success: true };
+		}
+
+		case "settings:remove-custom-provider": {
+			const { name } = data.payload as { name: string };
+			return { success: true, removed: runtimeManager.customProviders.remove(name) };
+		}
+
+		case "settings:list-custom-providers": {
+			return { success: true, providers: runtimeManager.customProviders.list() };
+		}
+
+		case "settings:test-custom-provider": {
+			const input = data.payload as CustomProviderInput;
+			const memAuth = AuthStorage.inMemory(
+				input.apiKey ? { [input.name]: { type: "api_key" as const, key: input.apiKey } } : {},
+			);
+			const memRegistry = ModelRegistry.create(memAuth);
+			try {
+				memRegistry.registerProvider(input.name, toProviderConfig(input));
+			} catch (e: any) {
+				return {
+					success: true,
+					result: {
+						overall: "fail",
+						results: [{ modelId: "registration", ok: false, error: e?.message ?? String(e) }],
+					},
+				};
+			}
+
+			const results = await Promise.all(
+				input.models.map(async (m) => {
+					const start = Date.now();
+					try {
+						const model = memRegistry.find(input.name, m.id);
+						if (!model) {
+							return { modelId: m.id, ok: false, error: "model not found in in-memory registry" };
+						}
+						const auth = await memRegistry.getApiKeyAndHeaders(model);
+						if (!auth.ok) {
+							return { modelId: m.id, ok: false, error: `auth: ${auth.error}` };
+						}
+						let status = 0;
+						const message = await completeSimple(
+							model,
+							{ messages: [{ role: "user", content: "Hi", timestamp: Date.now() }] },
+							{
+								apiKey: auth.apiKey,
+								headers: auth.headers,
+								maxTokens: 1,
+								timeoutMs: 10_000,
+								maxRetries: 0,
+								onResponse: (response: ProviderResponse) => {
+									status = response.status;
+								},
+							},
+						);
+						if (message.stopReason === "error") {
+							return { modelId: m.id, ok: false, error: message.errorMessage ?? `HTTP ${status}` };
+						}
+						return { modelId: m.id, ok: true, latencyMs: Date.now() - start };
+					} catch (e: any) {
+						return { modelId: m.id, ok: false, error: e?.message ?? String(e) };
+					}
+				}),
+			);
+			const overall = results.every((r) => r.ok) ? "ok" : "fail";
+			return { success: true, result: { overall, results } };
 		}
 
 		case "settings:general:get": {

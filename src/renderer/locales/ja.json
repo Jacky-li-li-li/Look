@@ -61,6 +61,10 @@
 		"description": "外観のカスタマイズ、API キーの管理など。",
 		"general": "一般",
 		"apiKeys": "API キー",
+		"apiKeysDescription": "プロバイダーの API キーとカスタム OpenAI 互換エンドポイントを管理します。",
+		"providers": {
+			"title": "API Providers"
+		},
 		"chatPrompt": "チャットプロンプト",
 		"about": "About",
 		"appearance": "外観",
