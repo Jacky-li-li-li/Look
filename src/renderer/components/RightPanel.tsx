@@ -8,15 +8,10 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { PanelRightClose } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { useResize } from "../hooks/useResize";
 import {
 	activeProjectAtom,
-	DEFAULT_RIGHT_PANEL_WIDTH,
-	MAX_RIGHT_PANEL_WIDTH,
-	MIN_RIGHT_PANEL_WIDTH,
 	rightPanelCollapsedAtom,
 	rightPanelTabAtom,
-	rightPanelWidthAtom,
 	sharedFilesAtomFamily,
 	sharedFilesLoadingAtomFamily,
 } from "../store/atoms";
@@ -32,24 +27,7 @@ export function RightPanel() {
 	const collapsed = useAtomValue(rightPanelCollapsedAtom);
 	const [tab, setTab] = useAtom(rightPanelTabAtom);
 	const setCollapsed = useSetAtom(rightPanelCollapsedAtom);
-	const width = useAtomValue(rightPanelWidthAtom);
-	const setWidth = useSetAtom(rightPanelWidthAtom);
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
-
-	// 折叠即重置宽度:展开后始终从默认 260px 开始
-	const handleCollapse = () => {
-		setCollapsed(true);
-		setWidth(DEFAULT_RIGHT_PANEL_WIDTH);
-	};
-
-	const { handleProps, isDragging } = useResize({
-		width,
-		onChange: setWidth,
-		min: MIN_RIGHT_PANEL_WIDTH,
-		max: MAX_RIGHT_PANEL_WIDTH,
-		axis: "east",
-		onReset: () => setWidth(DEFAULT_RIGHT_PANEL_WIDTH),
-	});
 
 	// 始终调用 hooks;在 effect 内判断 projectId 是否有效
 	const filesAtom = sharedFilesAtomFamily(projectId);
@@ -113,18 +91,9 @@ export function RightPanel() {
 			<aside
 				className="right-panel-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
 				data-collapsed={collapsed}
-				data-dragging={isDragging || undefined}
 				aria-label="右侧面板"
 				aria-hidden={collapsed || undefined}
-				style={{ width: collapsed ? 0 : width }}
 			>
-				<div
-					className="right-panel-resize-handle"
-					aria-hidden={collapsed || undefined}
-					aria-label="调整右侧面板宽度(双击复位)"
-					title="拖拽调整宽度,双击复位"
-					{...handleProps}
-				/>
 				<header className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
 					<nav role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
 						<button
@@ -158,7 +127,7 @@ export function RightPanel() {
 						size="icon-sm"
 						variant="ghost"
 						className="shrink-0 rounded-md border border-hairline"
-						onClick={handleCollapse}
+						onClick={() => setCollapsed(true)}
 						aria-label="折叠右侧面板"
 						title="折叠右侧面板"
 					>

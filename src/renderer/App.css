@@ -1235,21 +1235,14 @@ body {
      ============================================================ */
 
   .right-panel-wrapper {
-    /* width 由 inline style 驱动(min/max 放开) */
-    min-width: 0;
-    max-width: none;
+    width: var(--right-panel-width);
+    min-width: var(--right-panel-width);
+    max-width: var(--right-panel-width);
     opacity: 1;
     transition:
-      opacity 220ms ease,
-      border-radius 280ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 280ms ease;
-  }
-
-  /* 非拖拽态补上 width 过渡,让折叠/展开动画顺滑 */
-  .right-panel-wrapper:not([data-dragging="true"]) {
-    transition:
       width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      min-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 220ms ease,
       border-radius 280ms cubic-bezier(0.22, 1, 0.36, 1),
       border-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -1265,41 +1258,6 @@ body {
     border-width: 0;
     box-shadow: none;
     pointer-events: none;
-  }
-
-  /* 6px 命中区,视觉细线见 ::after */
-  .right-panel-resize-handle {
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 6px;
-    transform: translateX(-50%);
-    cursor: col-resize;
-    z-index: 10;
-    touch-action: none;
-  }
-
-  .right-panel-resize-handle::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 25%;
-    bottom: 25%;
-    width: 1px;
-    background: transparent;
-    border-radius: 999px;
-    transition: background 120ms ease;
-  }
-
-  .right-panel-resize-handle:hover::after,
-  .right-panel-wrapper[data-dragging="true"] .right-panel-resize-handle::after {
-    background: var(--ink-3, color-mix(in srgb, currentColor 35%, transparent));
-  }
-
-  .right-panel-wrapper[data-collapsed="true"] .right-panel-resize-handle {
-    pointer-events: none;
-    opacity: 0;
   }
 
   .right-panel-separator {

@@ -159,14 +159,6 @@ export const rightPanelCollapsedAtom = atom(false);
 /** Right panel active tab. */
 export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
 
-// ---- Right panel sizing (in-session only; reset on collapse) ----
-export const DEFAULT_RIGHT_PANEL_WIDTH = 260;
-export const MIN_RIGHT_PANEL_WIDTH = 200;
-export const MAX_RIGHT_PANEL_WIDTH = 600;
-
-/** Right panel width in px. In-session only; reset on collapse. */
-export const rightPanelWidthAtom = atom<number>(DEFAULT_RIGHT_PANEL_WIDTH);
-
 /** Whether to show hidden files in the workspace tree panel. */
 export const showHiddenFilesAtom = atom(false);
 
