@@ -14,12 +14,13 @@ import {
 } from "@shared/components/ui/dialog";
 import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
-import { AlertCircle, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertCircle, Cpu, Eye, EyeOff, Key, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "../ProviderIcon";
-import type { ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
+import AddCustomProviderDialog from "./AddCustomProviderDialog";
+import type { CustomProviderInput, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
 
 const api = (window as any).look;
 
@@ -79,6 +80,45 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 		null,
 	);
 	const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
+
+	// ── Custom providers ──
+	const [customView, setCustomView] = useState<{ type: "list" } | { type: "form"; editing?: CustomProviderInput }>({
+		type: "list",
+	});
+	const [customProviders, setCustomProviders] = useState<CustomProviderInput[]>([]);
+	const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+	const loadCustomProviders = useCallback(async () => {
+		if (!api) return;
+		try {
+			const r = await api.listCustomProviders();
+			if (r?.success) setCustomProviders(r.providers ?? []);
+		} catch {
+			/* ignore */
+		}
+	}, []);
+
+	useEffect(() => {
+		loadCustomProviders();
+	}, [loadCustomProviders]);
+
+	const handleRemoveCustom = async () => {
+		if (!confirmRemove || !api) return;
+		try {
+			const r = await api.removeCustomProvider(confirmRemove);
+			if (r?.success && r.removed) {
+				toast.success(t("settings.customProviders.toast.removed"));
+				loadCustomProviders();
+				try {
+					const providersRes = await api.getSettings();
+					if (providersRes?.success) onProvidersChange(providersRes.providers);
+				} catch {}
+			}
+		} catch (e: any) {
+			toast.error(e?.message ?? t("settings.customProviders.toast.removeFailed"));
+		}
+		setConfirmRemove(null);
+	};
 
 	const toggleProviderExpand = (id: string) => {
 		setExpandedProviders((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -175,9 +215,36 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 
 	const allProviders = [...providers].sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
 
+	// ── Inline form view ──
+	if (customView.type === "form") {
+		return (
+			<AddCustomProviderDialog
+				key={customView.editing ? `edit-${customView.editing.name}` : "add"}
+				open={true}
+				onClose={() => setCustomView({ type: "list" })}
+				initial={customView.editing}
+				onSaved={() => {
+					loadCustomProviders();
+					setCustomView({ type: "list" });
+					api?.getSettings?.()
+						.then((r: any) => {
+							if (r?.success) onProvidersChange(r.providers);
+						})
+						.catch(() => {});
+				}}
+				mode="inline"
+				onBack={() => setCustomView({ type: "list" })}
+			/>
+		);
+	}
+
 	if (providers.length === 0) {
 		return (
 			<div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
+				<div className="mb-3">
+					<h2 className="text-[13px] font-medium">{t("settings.apiKeys")}</h2>
+					<p className="text-[11px] text-muted-foreground">{t("settings.apiKeysDescription")}</p>
+				</div>
 				<div className="flex items-center justify-center py-12 text-[12px] text-muted-foreground">
 					{t("common.loading")}
 				</div>
@@ -188,7 +255,75 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 	return (
 		<>
 			<div className="flex h-full min-h-0 flex-col overflow-y-auto p-0">
-				<div className="flex flex-col gap-0.5 p-3">
+				<div className="px-3 pt-3 pb-1.5">
+					<h2 className="text-[13px] font-medium">{t("settings.apiKeys")}</h2>
+					<p className="text-[11px] text-muted-foreground">{t("settings.apiKeysDescription")}</p>
+				</div>
+				<div className="flex flex-col gap-0.5 p-3 pt-0">
+					{/* Custom providers section */}
+					<div className="border-b border-hairline px-3 py-2">
+						<div className="flex items-center justify-between">
+							<span className="text-[11px] font-medium text-muted-foreground">
+								{t("settings.customProviders.title")}
+							</span>
+							<Button
+								variant="line"
+								size="xs"
+								className="h-7 text-[10px]"
+								onClick={() => setCustomView({ type: "form" })}
+							>
+								<Plus className="size-3" data-icon="inline-start" />
+								{t("settings.customProviders.addButton")}
+							</Button>
+						</div>
+						{customProviders.length > 0 ? (
+							<div className="mt-1.5 space-y-1">
+								{customProviders.map((cp) => (
+									<div
+										key={cp.name}
+										className="flex items-center justify-between rounded-md border border-hairline bg-muted/40 px-2.5 py-1.5"
+									>
+										<div className="min-w-0 flex-1">
+											<span className="inline-block max-w-full truncate font-mono text-[12px]">
+												{cp.name}
+											</span>
+											<span className="ml-2 whitespace-nowrap text-[10px] text-muted-foreground">
+												{t("settings.customProviders.modelCount", { count: cp.models.length })} · {cp.api}
+											</span>
+										</div>
+										<div className="flex shrink-0 items-center gap-1">
+											<Button
+												variant="line"
+												size="xs"
+												className="h-6 text-[10px]"
+												onClick={() => {
+													setCustomView({ type: "form", editing: cp });
+												}}
+											>
+												{t("settings.customProviders.edit")}
+											</Button>
+											<Button
+												variant="line-ghost"
+												size="icon-xs"
+												className="h-6 w-6 text-muted-foreground hover:text-destructive"
+												onClick={() => setConfirmRemove(cp.name)}
+											>
+												<Trash2 className="size-3" />
+											</Button>
+										</div>
+									</div>
+								))}
+							</div>
+						) : (
+							<p className="mt-1 text-[10px] text-muted-foreground">{t("settings.customProviders.empty")}</p>
+						)}
+					</div>
+
+					{/* Provider API section */}
+					<div className="border-b border-hairline px-3 py-2">
+						<span className="text-[11px] font-medium text-muted-foreground">{t("settings.providers.title")}</span>
+					</div>
+
 					{allProviders.map((p) => {
 						const isEditing = editing === p.id;
 						const ts = testStatus[p.id];
@@ -196,24 +331,23 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 							<div
 								key={p.id}
 								className={cn(
-									"overflow-hidden rounded-lg border transition-colors",
-									isEditing ? "border-hairline" : "border-transparent",
-									"bg-muted/40",
+									"overflow-hidden rounded-md border border-hairline bg-muted/40",
+									isEditing && "ring-1 ring-primary/50",
 								)}
 							>
-								<div className="group flex items-center justify-between gap-3 px-3 py-2">
+								<div className="group flex items-center justify-between gap-3 px-2.5 py-1.5">
 									<div className="min-w-0 flex-1">
-										<div className="flex flex-wrap items-center gap-1 text-[13px] font-medium">
+										<div className="flex flex-wrap items-center gap-1.5">
+											<ProviderIcon id={p.id} className="size-4 shrink-0" />
 											<span
 												className={cn(
 													"size-2 shrink-0 rounded-full",
 													p.hasKey ? "bg-emerald-500" : "bg-muted-foreground/30",
 												)}
 											/>
-											<ProviderIcon id={p.id} className="size-4 shrink-0" />
 											<span
 												className={cn(
-													"min-w-0 cursor-pointer truncate transition-colors hover:text-foreground",
+													"min-w-0 cursor-pointer truncate text-[12px] font-medium transition-colors hover:text-foreground",
 													(!p.models || p.models.length === 0) && "cursor-default",
 												)}
 												onClick={() => p.models && p.models.length > 0 && toggleProviderExpand(p.id)}
@@ -259,7 +393,7 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 										<Button
 											variant={isEditing ? "line-filled" : "line"}
 											size="xs"
-											className="h-7 text-[11px]"
+											className="h-6 text-[10px]"
 											onClick={async () => {
 												if (isEditing) {
 													closeEditor();
@@ -289,7 +423,7 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 											<Button
 												variant="line-ghost"
 												size="icon-xs"
-												className="h-7 w-7 text-muted-foreground hover:text-destructive"
+												className="h-6 w-6 text-muted-foreground hover:text-destructive"
 												onClick={() => handleClearKey(p.id)}
 											>
 												<Trash2 className="size-3" />
@@ -395,6 +529,26 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 						</Button>
 						<Button variant="line-filled" size="sm" onClick={handleForceSave}>
 							Save anyway
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Confirm remove custom provider */}
+			<Dialog open={confirmRemove !== null} onOpenChange={(o) => !o && setConfirmRemove(null)}>
+				<DialogContent className="sm:max-w-sm" showCloseButton={false}>
+					<DialogHeader>
+						<DialogTitle>{t("settings.customProviders.confirmRemove.title")}</DialogTitle>
+						<DialogDescription>
+							{t("settings.customProviders.confirmRemove.body", { name: confirmRemove ?? "" })}
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter className="gap-2">
+						<Button variant="line" size="sm" onClick={() => setConfirmRemove(null)}>
+							{t("common.cancel")}
+						</Button>
+						<Button variant="line-filled" size="sm" onClick={handleRemoveCustom}>
+							{t("common.delete")}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

@@ -43,10 +43,12 @@ Every Lobe Icon SVG uses `fill="currentColor"` (single-color path). The actual r
 | `cloudflare-workers-ai` | `cloudflare-workers-ai.svg` |
 | `cloudflare-ai-gateway` | `cloudflare-ai-gateway.svg` |
 | `xiaomi` | `xiaomi.svg` |
+| `nvidia` | `nvidia.svg` |
+| `ant-ling` | `antling.svg` |
 
 ## Notes
 
-- **Region / plan variants** (`minimax-cn`, `moonshotai-cn`, all `xiaomi-token-plan-*`, `opencode-go`) are normalized to the parent brand ID at runtime by `ProviderIcon.tsx` and share the parent SVG. Only the API endpoint differs; the brand identity is the same.
+- **Region / plan variants** (`minimax-cn`, `moonshotai-cn`, all `xiaomi-token-plan-*`, `opencode-go`, `zai-coding-cn`) are normalized to the parent brand ID at runtime by `ProviderIcon.tsx` and share the parent SVG. Only the API endpoint differs; the brand identity is the same.
 - `openai-codex` uses the Codex-specific icon (separate from the OpenAI brand mark) to signal "this is the Codex product line".
 - `amazon-bedrock` uses the Bedrock icon; the underlying model vendors (Anthropic, Meta, Mistral, etc.) are not separately branded.
 - `xai` uses the XAI / Grok mark.

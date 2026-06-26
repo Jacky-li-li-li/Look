@@ -21,6 +21,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
+import { CustomProvidersStore } from "./custom-providers-store.js";
 import {
 	createPermissionExtensionFactory,
 	createPlanModeHandler,
@@ -39,6 +40,7 @@ import {
 	ensureLookDir,
 	ensureWorkspaceDir,
 	getAuthPath,
+	getCustomProvidersPath,
 	getLookDir,
 	getModelsPath,
 	getProjectSharedDir,
@@ -47,9 +49,9 @@ import {
 	resetLegacySessionsOnce,
 } from "./shared/look-storage.js";
 import {
-	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type AgentInfo,
 	type ForkedSessionResult,
+	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
 	type MainToRendererEvent,
 	type NavigateTreeResult,
@@ -122,6 +124,7 @@ export class SessionRuntimeManager {
 	private readonly eventCallbacks: EventCallback[] = [];
 	private readonly authStorage: AuthStorage;
 	private readonly modelRegistry: ModelRegistry;
+	private readonly customProvidersStore: CustomProvidersStore;
 	private readonly trustStore: ProjectTrustStore;
 	private readonly globalSettingsManager: SettingsManager;
 	private readonly userSettings: UserSettingsStore;
@@ -178,6 +181,8 @@ export class SessionRuntimeManager {
 		}
 		this.authStorage = AuthStorage.create(getAuthPath());
 		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
+		this.customProvidersStore = new CustomProvidersStore(this.modelRegistry, getCustomProvidersPath());
+		this.customProvidersStore.load();
 		this.trustStore = new ProjectTrustStore(getLookDir());
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
@@ -207,6 +212,10 @@ export class SessionRuntimeManager {
 			throw new Error("WorkspaceTreeService is not configured for this SessionRuntimeManager");
 		}
 		return this.workspaceTreeService;
+	}
+
+	get customProviders(): CustomProvidersStore {
+		return this.customProvidersStore;
 	}
 
 	/** O(1) lookup by id. */
@@ -1074,18 +1083,21 @@ export class SessionRuntimeManager {
 	}
 
 	getAvailableModelsSync() {
-		return this.modelRegistry
-			.getAll()
-			.filter((model) => this.modelRegistry.getProviderAuthStatus(model.provider).configured)
-			.map((model) => ({
-				provider: model.provider,
-				id: model.id,
-				name: model.name ?? model.id,
-				reasoning: model.reasoning ?? false,
-				contextWindow: model.contextWindow ?? 128000,
-				maxTokens: model.maxTokens ?? 16384,
-				cost: { input: model.cost?.input ?? 0, output: model.cost?.output ?? 0 },
-			}));
+		// Use ModelRegistry.getAvailable() so auth sources that the SDK treats
+		// as configured (stored keys, env vars, runtime overrides, models.json
+		// keys) are all reflected consistently. getProviderAuthStatus().configured
+		// only returns true for a subset of these sources, which caused the API
+		// Keys settings list to hide models that the input-box selector could
+		// still pick.
+		return this.modelRegistry.getAvailable().map((model) => ({
+			provider: model.provider,
+			id: model.id,
+			name: model.name ?? model.id,
+			reasoning: model.reasoning ?? false,
+			contextWindow: model.contextWindow ?? 128000,
+			maxTokens: model.maxTokens ?? 16384,
+			cost: { input: model.cost?.input ?? 0, output: model.cost?.output ?? 0 },
+		}));
 	}
 
 	async getAvailableModels() {
@@ -1109,8 +1121,10 @@ export class SessionRuntimeManager {
 	}
 
 	async getProviderSettings() {
+		const customNames = new Set(this.customProvidersStore.list().map((p) => p.name));
 		const providers = await this.getProviders();
-		return providers.map((provider) => {
+		return providers
+			.filter((provider) => !customNames.has(provider.id)).map((provider) => {
 			const auth = this.modelRegistry.getProviderAuthStatus(provider.id);
 			const models = this.getAvailableModelsSync().filter((model) => model.provider === provider.id);
 			return {

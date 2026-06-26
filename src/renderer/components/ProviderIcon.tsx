@@ -91,9 +91,10 @@ export function ProviderIcon({ id, className, "data-icon": dataIcon }: ProviderI
 
 // Region / plan variants that share the parent brand's icon.
 // e.g. "minimax-cn" → "minimax", "xiaomi-token-plan-ams" → "xiaomi",
-//      "opencode-go" → "opencode"
+//      "opencode-go" → "opencode", "zai-coding-cn" → "zai"
 function resolveIconId(id: string): string {
 	const parent = id.replace(/-(cn|go)$/, "").replace(/-token-plan(-.*)?$/, "");
+	if (parent === "zai-coding") return "zai";
 	return ICONS[parent] ? parent : id;
 }
 

@@ -315,16 +315,7 @@ export default function Sidebar({
 													{shortenPath(project.cwd, homedir)}
 												</span>
 											</span>
-											{runningCount > 0 ? (
-												<span className="workspace-live-count">
-													{runningCount.toString().padStart(2, "0")}
-												</span>
-											) : (
-												<span className="font-mono text-[9px] text-muted-foreground/45">
-													{sessions.length}
-												</span>
-											)}
-										</button>
+											</button>
 									</CollapsibleTrigger>
 									<Button
 										variant="line-ghost"
