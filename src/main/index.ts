@@ -306,14 +306,13 @@ app.on("window-all-closed", () => {
 	}
 });
 
-// Clean up MCP server subprocesses on quit so we don't leave
+// Clean up on quit
 // orphaned child processes behind. `dispose()` first tears down the
 // shared-area watchers (H-1) and then disposes all agent runtimes.
 app.on("before-quit", async () => {
 	if (runtimeManager) {
 		try {
 			await runtimeManager.dispose();
-			await runtimeManager.getMcpManager().disconnectAll();
 		} catch {
 			// best-effort cleanup
 		}

@@ -107,10 +107,6 @@ const api = {
   listSkills: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:list" }),
 
-  // ---- MCP ----
-  listMcpTools: () =>
-    ipcRenderer.invoke("look:invoke", { type: "mcp:list-tools" }),
-  importSkillPaths: (paths) =>
     ipcRenderer.invoke("look:invoke", { type: "skills:import-paths", paths }),
   detectCommonSkillPaths: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:detect-common" }),

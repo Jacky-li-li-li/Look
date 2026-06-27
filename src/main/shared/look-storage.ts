@@ -12,7 +12,6 @@
 //   ├── settings.json     → pi SettingsManager
 //   ├── ui-settings.json  → Look UI preferences
 //   ├── user-profile.json → User profile
-//   ├── mcp-servers.json  → MCP server configs
 //   └── workspaces/
 //       ├── pi/           → project "pi" (derived from cwd basename)
 //       │   └── sessions/ → pi SessionManager .jsonl files
@@ -66,11 +65,6 @@ export function getUiSettingsPath(): string {
 /** User profile (avatar, display name, etc.) */
 export function getUserProfilePath(): string {
 	return path.join(LOOK_DIR, "user-profile.json");
-}
-
-/** MCP server configurations */
-export function getMcpServersPath(): string {
-	return path.join(LOOK_DIR, "mcp-servers.json");
 }
 
 // ── Workspace-per-project session storage ──

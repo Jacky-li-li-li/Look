@@ -562,47 +562,7 @@ async function handleRendererInvoke(
 			return { success: true, profile };
 		}
 
-		// === MCP (Model Context Protocol) ===
-		case "mcp:list-servers": {
-			const servers = runtimeManager.getMcpManager().getServerStatuses();
-			return { success: true, servers };
-		}
-
-		case "mcp:add-server": {
-			guardString(data.name, "name");
-			const config = guardObject(data.config, "config");
-			await runtimeManager.getMcpManager().addServer(data.name, config as any);
-			return { success: true };
-		}
-
-		case "mcp:remove-server": {
-			guardString(data.name, "name");
-			await runtimeManager.getMcpManager().removeServer(data.name);
-			return { success: true };
-		}
-
-		case "mcp:restart-server": {
-			guardString(data.name, "name");
-			await runtimeManager.getMcpManager().restartServer(data.name);
-			return { success: true };
-		}
-
-		case "mcp:list-tools": {
-			const mgr = runtimeManager.getMcpManager();
-			// Auto-connect if nothing is connected yet (lazy init).
-			if (mgr.listAllTools().length === 0) {
-				await mgr.connectAll();
-			}
-			const tools = mgr.listAllTools();
-			return { success: true, tools };
-		}
-
-		case "mcp:connect-all": {
-			await runtimeManager.getMcpManager().connectAll();
-			return { success: true };
-		}
-
-		// === Shared area ===
+// === Shared area ===
 		case "shared:list": {
 			const projectId = guardString(data.projectId, "projectId");
 			const nodes = await workspaceFileService.listSharedFiles(projectId);

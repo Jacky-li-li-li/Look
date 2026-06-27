@@ -10,7 +10,6 @@ import type {
 import { cn } from "@shared/lib/utils";
 import type { SessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { MapPin } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../store/authAtoms";
@@ -29,7 +28,6 @@ interface MessageBubbleProps {
 	autoCollapse: boolean;
 	toolExecutions: Record<string, RendererToolExecutionState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
-	turnDurationMs?: number | null;
 	isActiveLeaf?: boolean;
 	flash?: boolean;
 }
@@ -63,13 +61,11 @@ function ImageBlock({ block }: { block: ImageContent }) {
 
 function MessageHeader({
 	sender,
-	timestamp,
 	isStreaming,
 	isActiveLeaf,
 	isUser,
 }: {
 	sender: string;
-	timestamp: number;
 	isStreaming: boolean;
 	isActiveLeaf: boolean;
 	isUser: boolean;
@@ -78,16 +74,7 @@ function MessageHeader({
 	return (
 		<div className={cn("mb-0.5 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
 			<span className="font-medium uppercase tracking-wider">{sender}</span>
-			<span className="tabular-nums" title={new Date(timestamp).toLocaleString()}>
-				{formatMessageTime(timestamp)}
-			</span>
 			{isStreaming && <span className="status-mark" data-status="thinking" />}
-			{isActiveLeaf && (
-				<span className="inline-flex items-center gap-0.5 rounded-sm border border-hairline px-1 py-px text-[9px] font-medium uppercase tracking-wider text-muted-foreground/80">
-					<MapPin className="size-2.5" />
-					{t("chat.activeLeaf")}
-				</span>
-			)}
 		</div>
 	);
 }
@@ -230,7 +217,6 @@ const MessageBubble = memo(function MessageBubble({
 	autoCollapse,
 	toolExecutions,
 	toolResultMap,
-	turnDurationMs,
 	isActiveLeaf = false,
 	flash = false,
 }: MessageBubbleProps) {
@@ -238,7 +224,6 @@ const MessageBubble = memo(function MessageBubble({
 	const userProfile = useAtomValue(userProfileAtom);
 	const isUser = message.role === "user";
 	const assistant = message.role === "assistant" ? (message as AssistantMessage) : null;
-	const timestamp = "timestamp" in message ? message.timestamp : Date.now();
 	const sender = isUser
 		? userProfile.userName || t("chat.you")
 		: message.role === "custom"
@@ -260,7 +245,6 @@ const MessageBubble = memo(function MessageBubble({
 			<div className="min-w-0 flex-1">
 				<MessageHeader
 					sender={sender}
-					timestamp={timestamp}
 					isStreaming={isStreaming}
 					isActiveLeaf={isActiveLeaf}
 					isUser={isUser}
@@ -269,7 +253,6 @@ const MessageBubble = memo(function MessageBubble({
 					className={cn(
 						"whisper-bubble flex flex-col gap-1.5 text-[13px] leading-relaxed",
 						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant w-full",
-						assistant && isActiveLeaf && "border-l-2 border-foreground/40 pl-3",
 						flash && "bubble-flash",
 					)}
 				>
@@ -286,29 +269,13 @@ const MessageBubble = memo(function MessageBubble({
 							{assistant.stopReason}
 						</div>
 					)}
-					{assistant && (
-						<div className="flex flex-wrap gap-x-2 text-[9px] text-muted-foreground/60">
-							<span>{assistant.model}</span>
-							{turnDurationMs != null && turnDurationMs > 0 && (
-								<span>
-									{" · "}
-									{turnDurationMs >= 60_000
-										? `${(turnDurationMs / 60_000).toFixed(1)}m`
-										: `${(turnDurationMs / 1_000).toFixed(1)}s`}
-								</span>
-							)}
-							{assistant.responseModel && assistant.responseModel !== assistant.model && (
-								<span>→ {assistant.responseModel}</span>
-							)}
-							{assistant.diagnostics && assistant.diagnostics.length > 0 && (
-								<details className="basis-full">
-									<summary className="cursor-pointer">diagnostics ({assistant.diagnostics.length})</summary>
-									<pre className="mt-1 overflow-x-auto whitespace-pre-wrap">
-										{JSON.stringify(assistant.diagnostics, null, 2)}
-									</pre>
-								</details>
-							)}
-						</div>
+					{assistant?.diagnostics && assistant.diagnostics.length > 0 && (
+						<details className="mt-1 text-[10px] text-muted-foreground/60">
+							<summary className="cursor-pointer">diagnostics ({assistant.diagnostics.length})</summary>
+							<pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-[9px]">
+								{JSON.stringify(assistant.diagnostics, null, 2)}
+							</pre>
+						</details>
 					)}
 				</div>
 			</div>
@@ -334,19 +301,6 @@ export function SessionEntryBubble({ entry }: { entry: Exclude<SessionEntry, { t
 			{body && <div className="message-prose whitespace-pre-wrap">{body}</div>}
 		</div>
 	);
-}
-
-function formatMessageTime(ts: number): string {
-	const diff = Date.now() - ts;
-	const seconds = Math.floor(diff / 1000);
-	if (seconds < 60) return "now";
-	const minutes = Math.floor(seconds / 60);
-	if (minutes < 60) return `${minutes}m`;
-	const hours = Math.floor(minutes / 60);
-	if (hours < 24) return `${hours}h`;
-	const days = Math.floor(hours / 24);
-	if (days < 7) return `${days}d`;
-	return new Date(ts).toLocaleDateString();
 }
 
 export default MessageBubble;

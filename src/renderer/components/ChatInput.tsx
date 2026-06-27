@@ -109,10 +109,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		let cancelled = false;
 		(async () => {
 			try {
-				const [list, det, mcp] = await Promise.all([
+				const [list, det] = await Promise.all([
 					window.look.listSkills(),
 					window.look.detectCommonSkillPaths(),
-					window.look.listMcpTools?.() ?? Promise.resolve({ success: false, tools: [] }),
 				]);
 				if (cancelled) return;
 				if (list.success) {
@@ -121,9 +120,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 				}
 				if (det.success) {
 					setDetected(det.detected ?? []);
-				}
-				if (mcp.success) {
-					setMcpTools(mcp.tools ?? []);
 				}
 			} catch {
 				// Non-fatal: the slash menu just won't have data.

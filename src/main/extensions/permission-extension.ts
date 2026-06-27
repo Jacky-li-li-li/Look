@@ -4,7 +4,7 @@
 // Provides two modes via the same ExtensionFactory pattern:
 //   "ask"  → tool_call is intercepted, handled by a callback
 //            (e.g. IPC to renderer for user approval)
-//   "plan" → mutations and MCP are blocked; bash is restricted
+//   "plan" → mutations are blocked; bash is restricted
 //            to a small read-only grammar
 //
 // SDK integration point: registered as an extensionFactory in
@@ -24,13 +24,12 @@ import type {
 /**
  * Tools that require interception.
  * - In "ask" mode: all are prompted for user approval
- * - In "plan" mode: mutations/MCP are blocked and bash is validated
+ * - In "plan" mode: mutations are blocked and bash is validated
  */
 const INTERCEPT_TOOLS = new Set(["write", "edit", "notebook_edit", "bash", "task_create", "task_update"]);
 
-/** MCP tools have no standard read/write metadata, so Ask mode treats them as side-effectful. */
 export function shouldInterceptPermissionTool(toolName: string): boolean {
-	return INTERCEPT_TOOLS.has(toolName) || toolName.startsWith("mcp:");
+	return INTERCEPT_TOOLS.has(toolName);
 }
 
 const PLAN_BLOCKED_TOOLS = new Set(["write", "edit", "notebook_edit", "task_create", "task_update"]);
@@ -282,13 +281,12 @@ export function createPermissionExtensionFactory(handler: ToolCallHandler): Exte
  * Create a handler for "plan" mode.
  *
  * - mutation and task tools are always blocked
- * - MCP tools are always blocked
  * - bash only allows a small read-only command grammar
  */
 export function createPlanModeHandler(_cwd: string): ToolCallHandler {
 	return async (event) => {
 		const toolName = event.toolName;
-		if (PLAN_BLOCKED_TOOLS.has(toolName) || toolName.startsWith("mcp:")) {
+		if (PLAN_BLOCKED_TOOLS.has(toolName)) {
 			return {
 				block: true,
 				reason: `[plan 模式] 已阻止 ${toolName}。当前处于计划模式，不允许执行变更操作。`,

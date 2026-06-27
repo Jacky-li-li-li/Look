@@ -77,7 +77,7 @@ const ChatMessageList = memo(function ChatMessageList({
 		() => buildTimeline(sessionState.entries, sessionState.liveMessages, sessionState.messageDurations),
 		[sessionState.entries, sessionState.liveMessages, sessionState.messageDurations],
 	);
-	const { liveMessages, toolExecutions, turnDurationMs, leafId } = sessionState;
+	const { liveMessages, toolExecutions, leafId } = sessionState;
 
 	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
 	const forkingEntry = useAtomValue(forkingEntryAtomFamily(agentId));
@@ -241,7 +241,6 @@ const ChatMessageList = memo(function ChatMessageList({
 							autoCollapse={autoCollapse}
 							toolExecutions={toolExecutions}
 							toolResultMap={item.toolResultMap}
-							turnDurationMs={item.turnDurationMs ?? (item.isLive ? turnDurationMs : null)}
 							isActiveLeaf={Boolean(entryId && entryId === leafId)}
 							flash={flashEntryId === item.id}
 						/>
@@ -283,9 +282,21 @@ const ChatMessageList = memo(function ChatMessageList({
 												<Copy className="size-3.5" />
 											)}
 										</Button>
+										{"model" in item.message && (
+											<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
+												{(item.message as any).model}
+											</span>
+										)}
 										{item.message.usage.totalTokens > 0 && (
-											<span className="ml-2 font-mono text-[10px] text-muted-foreground/60">
+											<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
 												{fmtUsage(item.message)}
+											</span>
+										)}
+										{item.turnDurationMs != null && item.turnDurationMs > 0 && (
+											<span className="ml-auto font-mono text-[10px] text-muted-foreground/60 tabular-nums">
+												{item.turnDurationMs >= 60_000
+													? `${(item.turnDurationMs / 60_000).toFixed(1)}m`
+													: `${(item.turnDurationMs / 1_000).toFixed(1)}s`}
 											</span>
 										)}
 									</>
@@ -306,7 +317,6 @@ const ChatMessageList = memo(function ChatMessageList({
 			liveMessages,
 			navigatingEntry,
 			toolExecutions,
-			turnDurationMs,
 			timeline,
 			handleBranchFromHere,
 			handleCopyMessage,

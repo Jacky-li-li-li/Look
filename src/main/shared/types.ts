@@ -347,13 +347,6 @@ export type RendererToMainEvent =
 			patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>;
 	  }
 	| { type: "user-profile:reset" }
-	// ---- MCP (Model Context Protocol) ----
-	| { type: "mcp:list-servers" }
-	| { type: "mcp:add-server"; name: string; config: Record<string, unknown> }
-	| { type: "mcp:remove-server"; name: string }
-	| { type: "mcp:restart-server"; name: string }
-	| { type: "mcp:list-tools" }
-	| { type: "mcp:connect-all" }
 	// ---- Shared area (renderer → main) ----
 	| { type: "shared:list"; projectId: string }
 	| { type: "shared:watch"; projectId: string }

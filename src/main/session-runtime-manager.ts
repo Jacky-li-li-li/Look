@@ -33,8 +33,6 @@ import {
 	type PlanApprovalOutcome,
 	type PlanQuestionOutcome,
 } from "./extensions/plan-extension.js";
-import { createMcpExtensionFactory } from "./mcp/mcp-extension.js";
-import { McpManager } from "./mcp/mcp-manager.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
 import {
 	ensureLookDir,
@@ -135,7 +133,6 @@ export class SessionRuntimeManager {
 	private resourceInitializationTail: Promise<void> = Promise.resolve();
 	private activeProjectId: string | null = null;
 	private activeSessionId: string | null = null;
-	private _mcpManager: McpManager | null = null;
 	private defaultPermissionMode: PermissionMode = "ask";
 	private readonly permissionModesBySession = new Map<string, PermissionMode>();
 	private readonly dirtyPermissionModes = new Set<string>();
@@ -243,10 +240,6 @@ export class SessionRuntimeManager {
 		await this.disposeAllRuntimes();
 	}
 
-	getMcpManager(): McpManager {
-		this._mcpManager ??= new McpManager();
-		return this._mcpManager;
-	}
 
 	async loadProjects(): Promise<ProjectInfo[]> {
 		try {
@@ -556,7 +549,6 @@ export class SessionRuntimeManager {
 
 	private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
 		return async ({ cwd, sessionManager, sessionStartEvent }) => {
-			await this.getMcpManager().connectAll();
 			return this.withResourceInitialization(async () => {
 				const settingsManager = SettingsManager.create(cwd, getLookDir());
 				const trusted = this.resolveProjectTrust(cwd);
@@ -615,7 +607,6 @@ export class SessionRuntimeManager {
 				askQuestions: (id, questions, signal) => this.requestPlanQuestions(id, questions, signal),
 				submitPlan: (id, plan, signal) => this.requestPlanApproval(id, plan, signal),
 			}),
-			createMcpExtensionFactory(this.getMcpManager()),
 		];
 	}
 
