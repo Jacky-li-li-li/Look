@@ -315,7 +315,7 @@ export default function Sidebar({
 													{shortenPath(project.cwd, homedir)}
 												</span>
 											</span>
-											</button>
+										</button>
 									</CollapsibleTrigger>
 									<Button
 										variant="line-ghost"

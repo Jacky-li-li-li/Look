@@ -107,6 +107,7 @@ const api = {
   listSkills: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:list" }),
 
+  importSkillPaths: (paths) =>
     ipcRenderer.invoke("look:invoke", { type: "skills:import-paths", paths }),
   detectCommonSkillPaths: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:detect-common" }),

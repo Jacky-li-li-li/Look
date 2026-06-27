@@ -1,7 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { SessionEntry } from "@shared/types";
-import type { RendererLiveMessage } from "../store/sessionTypes";
+import type { LookUiPhase, LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
 
 export interface TimelineItem {
 	id: string;
@@ -15,6 +14,10 @@ export interface TimelineItem {
 	toolResultMap?: Record<string, ToolResultMessage>;
 	/** Finalized turn duration for this persisted assistant bubble, in milliseconds. */
 	turnDurationMs?: number;
+	/** Discrete-event streaming blocks for the active assistant message. */
+	uiBlocks?: LookUiStreamBlock[];
+	/** Discrete-event tool execution states for the active assistant message. */
+	uiTools?: Record<string, LookUiToolExecState>;
 }
 
 function isToolResultMessage(msg: AgentMessage): msg is ToolResultMessage {
@@ -34,8 +37,11 @@ function mergeAssistantContent(target: AssistantMessage, source: AssistantMessag
 
 export function buildTimeline(
 	entries: SessionEntry[],
-	liveMessages: RendererLiveMessage[],
 	messageDurations: Record<string, number> = {},
+	uiBlocks: LookUiStreamBlock[] = [],
+	uiTools: Record<string, LookUiToolExecState> = {},
+	uiPhase: LookUiPhase = "idle",
+	pendingUserMessage: { text: string } | null = null,
 ): TimelineItem[] {
 	const items: TimelineItem[] = [];
 	let pendingToolResults: ToolResultMessage[] = [];
@@ -115,56 +121,37 @@ export function buildTimeline(
 		items.push({ id: entry.id, entryId: entry.id, entry, isLive: false });
 	}
 
-	// Live messages extend the same timeline. They may continue the current assistant
-	// context (e.g. a toolResult streaming in for the last persisted assistant), so we
-	// keep `currentAssistant` open. We also track `liveAssistant` separately so that
-	// consecutive live assistant messages merge without accidentally merging a live
-	// update into a persisted assistant bubble.
-	const liveItems: TimelineItem[] = [];
-	let liveAssistant: TimelineItem | null = null;
-
-	for (const live of liveMessages) {
-		const msg = live.message;
-		if (isToolResultMessage(msg)) {
-			pendingToolResults.push(msg);
-			continue;
-		}
-
-		if (msg.role === "user") {
-			// A user message splits the assistant chain for merging, but keep the
-			// previous assistant as the toolResult context until a new assistant begins.
-			flushToolResults();
-			liveAssistant = null;
-			liveItems.push({ id: live.renderId, message: msg, isLive: true });
-		} else if (isAssistantMessage(msg)) {
-			if (liveAssistant?.message && isAssistantMessage(liveAssistant.message) && liveAssistant.isLive) {
-				// Same live assistant output chain: keep one avatar, append blocks.
-				liveAssistant.message = mergeAssistantContent(liveAssistant.message, msg);
-				flushToolResults();
-			} else {
-				// Flush any pending tool results that belong to the previous assistant
-				// (persisted or live) before starting a new live bubble.
-				flushToolResults();
-				const ti: TimelineItem = { id: live.renderId, message: msg, isLive: true };
-				liveAssistant = ti;
-				currentAssistant = ti;
-				flushToolResults();
-				liveItems.push(ti);
-			}
-		} else {
-			flushToolResults();
-			liveAssistant = null;
-			currentAssistant = null;
-			liveItems.push({ id: live.renderId, message: msg, isLive: true });
-		}
-	}
-
-	// Attach any trailing tool results to the final assistant. If no assistant exists,
-	// render them as standalone items so the content is not silently dropped.
+	// Attach any trailing tool results to the final persisted assistant. If no
+	// assistant exists, they will be orphaned; this preserves existing behavior.
 	flushToolResults();
-	for (const tr of pendingToolResults) {
-		liveItems.push({ id: `orphan-tr-${tr.toolCallId}`, message: tr, isLive: true });
+
+	// Show the pending user message so the user sees their own message
+	// immediately, before the snapshot with persisted entries arrives.
+	// Kept visible even when uiPhase transitions to "idle" before the
+	// snapshot arrives — the snapshot atomically clears pendingUserMessage
+	// and updates entries, so there is no visual duplicate.
+	if (pendingUserMessage) {
+		items.push({
+			id: "pending-user",
+			isLive: false,
+			message: {
+				role: "user",
+				content: [{ type: "text", text: pendingUserMessage.text }],
+			} as AgentMessage,
+		});
 	}
 
-	return [...items, ...liveItems];
+	// Append the active streaming assistant as a single live item. Hide it as
+	// soon as the phase returns to idle so we never duplicate a completed turn
+	// that has already been persisted by a snapshot.
+	if (uiPhase !== "idle") {
+		items.push({
+			id: "streaming-live",
+			isLive: true,
+			uiBlocks,
+			uiTools,
+		});
+	}
+
+	return items;
 }

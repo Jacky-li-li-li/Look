@@ -13,8 +13,11 @@ const pendingCollapses = new Set<() => void>();
 /**
  * Schedule a collapse callback to fire after 300ms, batched with
  * all other collapse callbacks scheduled in the same tick.
+ *
+ * Returns a cancel function. Call it to remove this callback from
+ * the pending batch (e.g. when the component re-opens or unmounts).
  */
-export function scheduleCollapse(fn: () => void): void {
+export function scheduleCollapse(fn: () => void): () => void {
 	pendingCollapses.add(fn);
 	if (!batchCollapseTimer) {
 		batchCollapseTimer = setTimeout(() => {
@@ -25,4 +28,7 @@ export function scheduleCollapse(fn: () => void): void {
 			batchCollapseTimer = null;
 		}, 300);
 	}
+	return () => {
+		pendingCollapses.delete(fn);
+	};
 }

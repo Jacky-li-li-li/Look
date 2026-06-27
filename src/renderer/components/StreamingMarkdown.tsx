@@ -167,7 +167,10 @@ function Table({ children, ...props }: any) {
 
 function Th({ children, ...props }: any) {
 	return (
-		<th className="border-b border-hairline bg-muted/50 px-3 py-2 text-left font-semibold text-muted-foreground" {...props}>
+		<th
+			className="border-b border-hairline bg-muted/50 px-3 py-2 text-left font-semibold text-muted-foreground"
+			{...props}
+		>
 			{children}
 		</th>
 	);

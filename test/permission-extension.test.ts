@@ -7,11 +7,9 @@ import {
 } from "../src/main/extensions/permission-extension";
 
 describe("permission extension", () => {
-	it("intercepts built-in mutations and every MCP tool, but not read-only built-ins", async () => {
+	it("intercepts built-in mutations but not read-only built-ins", async () => {
 		expect(shouldInterceptPermissionTool("write")).toBe(true);
 		expect(shouldInterceptPermissionTool("bash")).toBe(true);
-		expect(shouldInterceptPermissionTool("mcp:github:create_issue")).toBe(true);
-		expect(shouldInterceptPermissionTool("mcp:files:read_file")).toBe(true);
 		expect(shouldInterceptPermissionTool("read")).toBe(false);
 		expect(shouldInterceptPermissionTool("grep")).toBe(false);
 	});
@@ -28,7 +26,7 @@ describe("permission extension", () => {
 
 		expect(listener).toBeTypeOf("function");
 		const context = { sessionManager: { getSessionId: () => "session-a" } };
-		const result = await listener?.({ toolName: "mcp:github:create_issue", input: {} }, context);
+		const result = await listener?.({ toolName: "write", input: { path: "foo.txt", content: "x" } }, context);
 		expect(handler).toHaveBeenCalledOnce();
 		expect(result).toEqual({ block: true, reason: "approval required" });
 	});
@@ -56,10 +54,10 @@ describe("permission extension", () => {
 		}
 	});
 
-	it("blocks writes and MCP in Plan mode while allowing rewritten safe bash", async () => {
+	it("blocks writes in Plan mode while allowing rewritten safe bash", async () => {
 		const handler = createPlanModeHandler("/tmp/project");
 		await expect(handler({ toolName: "write", input: { path: ".context/plan/test.md" } } as any, {} as any)).resolves.toMatchObject({ block: true });
-		await expect(handler({ toolName: "mcp:files:read_file", input: {} } as any, {} as any)).resolves.toMatchObject({ block: true });
+		await expect(handler({ toolName: "read", input: { path: "foo.txt" } } as any, {} as any)).resolves.toMatchObject({ block: true });
 		const event = { toolName: "bash", input: { command: "git log --oneline -n5" } } as any;
 		await expect(handler(event, {} as any)).resolves.toEqual({});
 		expect(event.input.command).toContain("--no-pager");

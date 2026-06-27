@@ -21,7 +21,7 @@ import { appStore } from "../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import { BranchConfirmDialog, type BranchConfirmRequest, type BranchConfirmResult } from "./BranchConfirmDialog";
 import type { ChatInputHandle } from "./ChatInput";
-import MessageBubble, { SessionEntryBubble } from "./MessageBubble";
+import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 interface ChatMessageListProps {
@@ -74,10 +74,26 @@ const ChatMessageList = memo(function ChatMessageList({
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
 	const timeline = useMemo<TimelineItem[]>(
-		() => buildTimeline(sessionState.entries, sessionState.liveMessages, sessionState.messageDurations),
-		[sessionState.entries, sessionState.liveMessages, sessionState.messageDurations],
+		() =>
+			buildTimeline(
+				sessionState.entries,
+				sessionState.messageDurations,
+				sessionState.uiBlocks,
+				sessionState.uiTools,
+				sessionState.uiPhase,
+				sessionState.pendingUserMessage,
+			),
+		[
+			sessionState.entries,
+			sessionState.messageDurations,
+			sessionState.uiBlocks,
+			sessionState.uiTools,
+			sessionState.uiPhase,
+			sessionState.pendingUserMessage,
+		],
 	);
-	const { liveMessages, toolExecutions, leafId } = sessionState;
+
+	const { leafId } = sessionState;
 
 	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
 	const forkingEntry = useAtomValue(forkingEntryAtomFamily(agentId));
@@ -105,6 +121,26 @@ const ChatMessageList = memo(function ChatMessageList({
 		initialScroll.current = false;
 		scrollToBottom();
 	}, [agentId, scrollToBottom]);
+
+	// Virtuoso's built-in SIZE_INCREASED handler is a one-shot subscription —
+	// after the first content growth during streaming it's consumed and never
+	// re-created. Manually keep scrolled to bottom while streaming by detecting
+	// content growth via uiBlocks total text length.
+	const prevStreamLenRef = useRef(0);
+	useEffect(() => {
+		if (!isBusy) {
+			prevStreamLenRef.current = 0;
+			return;
+		}
+		const totalLen = sessionState.uiBlocks.reduce(
+			(sum, b) => sum + (b.text?.length ?? 0) + (b.thinking?.length ?? 0),
+			0,
+		);
+		if (totalLen !== prevStreamLenRef.current) {
+			prevStreamLenRef.current = totalLen;
+			scrollToBottom();
+		}
+	}, [sessionState.uiBlocks, isBusy, scrollToBottom]);
 
 	const [flashEntryId, setFlashEntryId] = useState<string | null>(null);
 	const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -216,11 +252,22 @@ const ChatMessageList = memo(function ChatMessageList({
 					</div>
 				);
 			}
+			if (item.isLive && item.uiBlocks) {
+				return (
+					<div className="px-5 py-2">
+						<StreamingMessageBubble
+							agentName={agentName}
+							blocks={item.uiBlocks}
+							toolExecutions={item.uiTools ?? {}}
+							isStreaming={isBusy}
+							autoCollapse={autoCollapse}
+						/>
+					</div>
+				);
+			}
 			if (!item.message) return null;
 			const entryId = item.entryId;
-			const showActions = Boolean(
-				entryId && (item.message.role === "assistant" || item.message.role === "user"),
-			);
+			const showActions = Boolean(entryId && (item.message.role === "assistant" || item.message.role === "user"));
 			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
 			return (
 				<div className="px-5 py-2">
@@ -235,11 +282,9 @@ const ChatMessageList = memo(function ChatMessageList({
 						<MessageBubble
 							message={item.message}
 							agentName={agentName}
-							isStreaming={
-								item.isLive && !liveMessages.find((live) => live.renderId === item.id)?.completed
-							}
+							isStreaming={false}
 							autoCollapse={autoCollapse}
-							toolExecutions={toolExecutions}
+							toolExecutions={{}}
 							toolResultMap={item.toolResultMap}
 							isActiveLeaf={Boolean(entryId && entryId === leafId)}
 							flash={flashEntryId === item.id}
@@ -314,13 +359,12 @@ const ChatMessageList = memo(function ChatMessageList({
 			forkingEntry,
 			isBusy,
 			leafId,
-			liveMessages,
 			navigatingEntry,
-			toolExecutions,
 			timeline,
 			handleBranchFromHere,
 			handleCopyMessage,
 			handleForkToNewChat,
+			copiedEntryId,
 		],
 	);
 
@@ -347,7 +391,7 @@ const ChatMessageList = memo(function ChatMessageList({
 					ref={virtuosoRef}
 					style={{ height: "100%" }}
 					totalCount={timeline.length}
-					followOutput="smooth"
+					followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
 					atBottomStateChange={setIsAtBottom}
 					itemContent={itemContent}
 				/>

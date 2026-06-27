@@ -8,12 +8,11 @@ import type {
 	ToolResultMessage,
 } from "@earendil-works/pi-ai";
 import { cn } from "@shared/lib/utils";
-import type { SessionEntry } from "@shared/types";
+import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../store/authAtoms";
-import type { RendererToolExecutionState } from "../store/sessionTypes";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 import SkillAwareContent from "./SkillAwareContent";
@@ -26,7 +25,7 @@ interface MessageBubbleProps {
 	agentName?: string;
 	isStreaming?: boolean;
 	autoCollapse: boolean;
-	toolExecutions: Record<string, RendererToolExecutionState>;
+	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 	isActiveLeaf?: boolean;
 	flash?: boolean;
@@ -70,7 +69,6 @@ function MessageHeader({
 	isActiveLeaf: boolean;
 	isUser: boolean;
 }) {
-	const { t } = useTranslation();
 	return (
 		<div className={cn("mb-0.5 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
 			<span className="font-medium uppercase tracking-wider">{sender}</span>
@@ -89,7 +87,7 @@ function ContentBlocks({
 	blocks: Array<TextContent | ThinkingContent | ImageContent | ToolCall>;
 	isStreaming: boolean;
 	autoCollapse: boolean;
-	toolExecutions: Record<string, RendererToolExecutionState>;
+	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
 	// Simple adjacent grouping: a group is just a run of consecutive
@@ -243,12 +241,7 @@ const MessageBubble = memo(function MessageBubble({
 				<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
 			)}
 			<div className="min-w-0 flex-1">
-				<MessageHeader
-					sender={sender}
-					isStreaming={isStreaming}
-					isActiveLeaf={isActiveLeaf}
-					isUser={isUser}
-				/>
+				<MessageHeader sender={sender} isStreaming={isStreaming} isActiveLeaf={isActiveLeaf} isUser={isUser} />
 				<div
 					className={cn(
 						"whisper-bubble flex flex-col gap-1.5 text-[13px] leading-relaxed",
@@ -302,5 +295,131 @@ export function SessionEntryBubble({ entry }: { entry: Exclude<SessionEntry, { t
 		</div>
 	);
 }
+
+// ============================================================
+// Streaming blocks rendering — discrete-event path
+// ============================================================
+
+interface StreamingBlocksBubbleProps {
+	blocks: LookUiStreamBlock[];
+	toolExecutions: Record<string, LookUiToolExecState>;
+	isStreaming: boolean;
+	autoCollapse: boolean;
+}
+
+export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
+	blocks,
+	toolExecutions,
+	isStreaming,
+	autoCollapse,
+}: StreamingBlocksBubbleProps) {
+	if (blocks.length === 0) {
+		// Show a loading indicator while the first streaming blocks are arriving.
+		// This prevents the bubble from appearing empty between assistant_message_start
+		// and the first text_start / text_delta events.
+		if (isStreaming) {
+			return (
+				<div className="flex items-center gap-2 text-muted-foreground text-sm py-1">
+					<span className="inline-block w-2 h-4 bg-primary animate-pulse rounded-xs" />
+					<span>Thinking…</span>
+				</div>
+			);
+		}
+		return null;
+	}
+
+	return (
+		<div className="flex flex-col gap-1.5">
+			{blocks.map((block, idx) => {
+				if (block.kind === "text") {
+					if (!block.text) return null;
+					return (
+						<div key={`txt-${idx}`} className="message-prose">
+							<SkillAwareContent content={block.text} isStreaming={isStreaming && !block.completed} />
+						</div>
+					);
+				}
+				if (block.kind === "thinking") {
+					// Let ThinkingPanel decide — it shows a loading indicator
+					// when streaming with empty content.
+					return (
+						<ThinkingPanel
+							key={`think-${idx}`}
+							thinking={block.thinking}
+							isStreaming={isStreaming && !block.completed}
+							autoCollapse={autoCollapse}
+						/>
+					);
+				}
+				if (block.kind === "toolcall") {
+					const exec = block.toolCallId ? toolExecutions[block.toolCallId] : undefined;
+					const s = exec
+						? exec.phase === "running"
+							? "running"
+							: exec.isError
+								? "error"
+								: "success"
+						: block.completed
+							? "success"
+							: "pending";
+					return (
+						<ToolCallCard
+							key={`tool-${idx}`}
+							toolCall={{
+								callId: block.toolCallId ?? "",
+								toolName: block.toolName ?? "unknown",
+								args: block.args ?? {},
+								status: s,
+								result: exec?.result,
+								isError: exec?.isError,
+							}}
+						/>
+					);
+				}
+				return null;
+			})}
+		</div>
+	);
+});
+
+interface StreamingMessageBubbleProps {
+	agentName?: string;
+	blocks: LookUiStreamBlock[];
+	toolExecutions: Record<string, LookUiToolExecState>;
+	isStreaming: boolean;
+	autoCollapse: boolean;
+}
+
+export const StreamingMessageBubble = memo(function StreamingMessageBubble({
+	agentName,
+	blocks,
+	toolExecutions,
+	isStreaming,
+	autoCollapse,
+}: StreamingMessageBubbleProps) {
+	const { t } = useTranslation();
+
+	return (
+		<div className="flex gap-3" style={{ maxWidth: "98%" }}>
+			<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
+			<div className="min-w-0 flex-1">
+				<MessageHeader
+					sender={agentName ?? t("chat.agent")}
+					isStreaming={isStreaming}
+					isActiveLeaf={false}
+					isUser={false}
+				/>
+				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-1.5">
+					<StreamingBlocksBubble
+						blocks={blocks}
+						toolExecutions={toolExecutions}
+						isStreaming={isStreaming}
+						autoCollapse={autoCollapse}
+					/>
+				</div>
+			</div>
+		</div>
+	);
+});
 
 export default MessageBubble;

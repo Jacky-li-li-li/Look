@@ -94,7 +94,8 @@ describe("workspace ledger sidebar", () => {
 		appStore.set(openProjectIdsAtom, []);
 		appStore.set(sessionStateAtomFamily("session-b"), {
 			...appStore.get(sessionStateAtomFamily("session-b")),
-			toolExecutions: {
+			uiPhase: "working",
+			uiTools: {
 				call: { toolCallId: "call", toolName: "read", args: {}, phase: "running" },
 			},
 		});

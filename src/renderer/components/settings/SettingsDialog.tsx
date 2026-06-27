@@ -21,14 +21,15 @@ import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
 import GeneralTab from "./GeneralTab";
 import ProfileTab from "./ProfileTab";
-import type { ProviderInfo } from "./types";
+import type { CustomProviderStats, ProviderInfo } from "./types";
 
 const api = (window as any).look;
 
 interface SettingsDialogProps {
 	open: boolean;
 	providers: ProviderInfo[];
-	onProvidersChange: (providers: ProviderInfo[]) => void;
+	customStats: CustomProviderStats;
+	onProvidersChange: (data: { providers: ProviderInfo[]; customStats: CustomProviderStats }) => void;
 	onClose: () => void;
 	defaultTab?: "general" | "api-keys" | "about" | "profile";
 }
@@ -36,6 +37,7 @@ interface SettingsDialogProps {
 const SettingsDialog = memo(function SettingsDialog({
 	open,
 	providers,
+	customStats,
 	onProvidersChange,
 	onClose,
 	defaultTab = "general",
@@ -46,7 +48,7 @@ const SettingsDialog = memo(function SettingsDialog({
 		setTab(defaultTab);
 	}, [defaultTab]);
 
-	const configured = providers.filter((p) => p.hasKey).length;
+	const configured = providers.filter((p) => p.hasKey).length + customStats.configured;
 
 	const handleResetDefaults = () => {
 		if (api)
@@ -112,12 +114,11 @@ const SettingsDialog = memo(function SettingsDialog({
 					</TabsContent>
 
 					<TabsContent value="api-keys" className="flex-1 min-h-0 data-[state=inactive]:hidden">
-						<ApiKeysTab providers={providers} onProvidersChange={onProvidersChange} />
+						<ApiKeysTab providers={providers} customStats={customStats} onProvidersChange={onProvidersChange} />
 					</TabsContent>
 
-	
 					<TabsContent value="about" className="flex-1 min-h-0 data-[state=inactive]:hidden">
-						<AboutTab providers={providers} />
+						<AboutTab providers={providers} customStats={customStats} />
 					</TabsContent>
 				</Tabs>
 

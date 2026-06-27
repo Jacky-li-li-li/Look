@@ -17,12 +17,12 @@
 import type { ThinkingContent, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
 import { Badge } from "@shared/components/ui/badge";
 import { cn } from "@shared/lib/utils";
+import type { LookUiToolExecState } from "@shared/types";
 import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
 import { scheduleCollapse } from "../lib/batchCollapse";
-import type { RendererToolExecutionState } from "../store/sessionTypes";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
@@ -33,7 +33,7 @@ export interface CollapsibleExecutionGroupProps {
 	 * source order — preserved as visible labels in both collapsed and
 	 * expanded states so the reader can still follow the narrative. */
 	inlineTexts?: string[];
-	toolExecutions: Record<string, RendererToolExecutionState>;
+	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 	isStreaming: boolean;
 }
@@ -60,7 +60,7 @@ function classify(blocks: Array<ThinkingContent | ToolCall>): {
 
 function isBlockRunning(
 	block: ThinkingContent | ToolCall,
-	toolExecutions: Record<string, RendererToolExecutionState>,
+	toolExecutions: Record<string, LookUiToolExecState>,
 	toolResultMap: Record<string, ToolResultMessage> | undefined,
 ): boolean {
 	if (block.type === "thinking") return false;
@@ -72,7 +72,7 @@ function isBlockRunning(
 
 function statusFor(
 	block: ThinkingContent | ToolCall,
-	toolExecutions: Record<string, RendererToolExecutionState>,
+	toolExecutions: Record<string, LookUiToolExecState>,
 	toolResultMap: Record<string, ToolResultMessage> | undefined,
 ): "pending" | "running" | "success" | "error" {
 	if (block.type === "thinking") return "success";
@@ -87,7 +87,7 @@ function statusFor(
 
 function resultTextFor(
 	block: ThinkingContent | ToolCall,
-	toolExecutions: Record<string, RendererToolExecutionState>,
+	toolExecutions: Record<string, LookUiToolExecState>,
 	toolResultMap: Record<string, ToolResultMessage> | undefined,
 ): string | undefined {
 	if (block.type === "thinking") return undefined;
@@ -247,7 +247,7 @@ function pickSummary(
 function renderBlock(
 	block: ThinkingContent | ToolCall,
 	index: number,
-	toolExecutions: Record<string, RendererToolExecutionState>,
+	toolExecutions: Record<string, LookUiToolExecState>,
 	toolResultMap: Record<string, ToolResultMessage> | undefined,
 	isStreaming: boolean,
 ): React.ReactNode {

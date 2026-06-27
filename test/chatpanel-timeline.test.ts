@@ -5,13 +5,12 @@
 // - consecutive assistant messages in the same output chain merge into one bubble (one avatar)
 // - within the merged bubble, content blocks keep their own types (text/thinking/toolCall cards)
 // - look-specific system entries are hidden from the timeline
+// - discrete-event streaming blocks are appended as a single live item
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
-import type { SessionEntry } from "@shared/types";
+import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
 import { describe, expect, it } from "vitest";
 import { buildTimeline } from "../src/renderer/lib/timeline";
-import type { RendererLiveMessage } from "../src/renderer/store/sessionTypes";
 
 const baseAssistant = (id: string, content: AssistantMessage["content"]): AssistantMessage => ({
 	role: "assistant",
@@ -46,7 +45,7 @@ const baseToolResult = (toolCallId: string, text: string, isError = false): Tool
 	timestamp: Date.now(),
 });
 
-function messageEntry(id: string, message: AgentMessage): SessionEntry {
+function messageEntry(id: string, message: AssistantMessage | UserMessage | ToolResultMessage): SessionEntry {
 	return { type: "message", id, parentId: null, timestamp: new Date().toISOString(), message };
 }
 
@@ -61,6 +60,37 @@ function modelChangeEntry(id: string): SessionEntry {
 	};
 }
 
+const textBlock = (index: number, text: string, completed = false): LookUiStreamBlock => ({
+	contentIndex: index,
+	kind: "text",
+	text,
+	thinking: "",
+	completed,
+});
+
+const toolcallBlock = (
+	index: number,
+	toolCallId: string,
+	toolName: string,
+	completed = false,
+): LookUiStreamBlock => ({
+	contentIndex: index,
+	kind: "toolcall",
+	text: "",
+	thinking: "",
+	toolCallId,
+	toolName,
+	args: {},
+	completed,
+});
+
+const runningTool = (toolCallId: string, toolName: string): LookUiToolExecState => ({
+	toolCallId,
+	toolName,
+	args: {},
+	phase: "running",
+});
+
 describe("buildTimeline", () => {
 	it("attaches toolResult messages to the preceding assistant bubble", () => {
 		const entries: SessionEntry[] = [
@@ -69,7 +99,7 @@ describe("buildTimeline", () => {
 			messageEntry("tr1", baseToolResult("tc1", "file content")),
 		];
 
-		const timeline = buildTimeline(entries, []);
+		const timeline = buildTimeline(entries);
 
 		expect(timeline).toHaveLength(2);
 		expect(timeline[0]?.message?.role).toBe("user");
@@ -86,7 +116,7 @@ describe("buildTimeline", () => {
 			messageEntry("a2", baseAssistant("a2", [{ type: "text", text: "answer" }])),
 		];
 
-		const timeline = buildTimeline(entries, []);
+		const timeline = buildTimeline(entries);
 
 		expect(timeline).toHaveLength(2);
 		const assistantItem = timeline[1];
@@ -108,7 +138,7 @@ describe("buildTimeline", () => {
 			messageEntry("a3", baseAssistant("a3", [{ type: "text", text: "done" }])),
 		];
 
-		const timeline = buildTimeline(entries, []);
+		const timeline = buildTimeline(entries);
 
 		expect(timeline).toHaveLength(2);
 		const content = (timeline[1]?.message as AssistantMessage).content;
@@ -124,7 +154,7 @@ describe("buildTimeline", () => {
 			messageEntry("a2", baseAssistant("a2", [{ type: "text", text: "reply" }])),
 		];
 
-		const timeline = buildTimeline(entries, []);
+		const timeline = buildTimeline(entries);
 
 		expect(timeline).toHaveLength(4);
 		expect(timeline[1]?.entryId).toBe("a1");
@@ -138,216 +168,53 @@ describe("buildTimeline", () => {
 			modelChangeEntry("mc2"),
 		];
 
-		const timeline = buildTimeline(entries, []);
+		const timeline = buildTimeline(entries);
 
 		expect(timeline.map((item) => item.id)).toEqual(["u1"]);
 	});
 
-	it("merges consecutive live assistant updates into one bubble", () => {
-		const liveMessages: RendererLiveMessage[] = [
-			{
-				renderId: "live-a1",
-				runId: 1,
-				message: baseAssistant("live-a1", [{ type: "thinking", thinking: "thinking..." }]),
-				completed: false,
-			},
-			{
-				renderId: "live-a2",
-				runId: 1,
-				message: baseAssistant("live-a2", [{ type: "text", text: "answer" }]),
-				completed: false,
-			},
-		];
-
-		const timeline = buildTimeline([], liveMessages);
+	it("appends a live streaming item when uiPhase is active", () => {
+		const blocks: LookUiStreamBlock[] = [textBlock(0, "hello", false)];
+		const timeline = buildTimeline([], {}, blocks, {}, "streaming");
 
 		expect(timeline).toHaveLength(1);
-		const content = (timeline[0]?.message as AssistantMessage).content;
-		expect(content).toHaveLength(2);
-		expect(content[0].type).toBe("thinking");
-		expect(content[1].type).toBe("text");
-	});
-
-	it("does not merge live assistant messages separated by a user message", () => {
-		const liveMessages: RendererLiveMessage[] = [
-			{
-				renderId: "live-a1",
-				runId: 1,
-				message: baseAssistant("live-a1", [{ type: "text", text: "run 1" }]),
-				completed: false,
-			},
-			{
-				renderId: "live-u1",
-				runId: 1,
-				message: baseUser("steering"),
-				completed: false,
-			},
-			{
-				renderId: "live-a2",
-				runId: 2,
-				message: baseAssistant("live-a2", [{ type: "text", text: "run 2" }]),
-				completed: false,
-			},
-		];
-
-		const timeline = buildTimeline([], liveMessages);
-
-		expect(timeline).toHaveLength(3);
-		expect(timeline[0]?.id).toBe("live-a1");
-		expect(timeline[1]?.id).toBe("live-u1");
-		expect(timeline[2]?.id).toBe("live-a2");
-	});
-
-	it("attaches live toolResult messages to the live assistant bubble", () => {
-		const liveMessages: RendererLiveMessage[] = [
-			{
-				renderId: "live-a1",
-				runId: 1,
-				message: baseAssistant("live-a1", [
-					{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } },
-				]),
-				completed: true,
-			},
-			{
-				renderId: "live-tr1",
-				runId: 1,
-				message: baseToolResult("tc1", "file content"),
-				completed: true,
-			},
-			{
-				renderId: "live-a2",
-				runId: 1,
-				message: baseAssistant("live-a2", [{ type: "text", text: "done" }]),
-				completed: false,
-			},
-		];
-
-		const timeline = buildTimeline([], liveMessages);
-
-		expect(timeline).toHaveLength(1);
-		expect(timeline[0]?.message?.role).toBe("assistant");
+		expect(timeline[0]?.id).toBe("streaming-live");
 		expect(timeline[0]?.isLive).toBe(true);
-		expect(timeline[0]?.toolResultMap).toHaveProperty("tc1");
-		expect(timeline[0]?.toolResultMap?.tc1.content[0].text).toBe("file content");
+		expect(timeline[0]?.uiBlocks).toBe(blocks);
 	});
 
-	it("attaches a live toolResult to a persisted assistant bubble", () => {
+	it("does not append a live item when uiPhase is idle even if blocks remain", () => {
+		const blocks: LookUiStreamBlock[] = [textBlock(0, "hello", true)];
+		const timeline = buildTimeline([], {}, blocks, {}, "idle");
+
+		expect(timeline).toHaveLength(0);
+	});
+
+	it("does not append a live item when idle and no blocks exist", () => {
+		const timeline = buildTimeline([], {}, [], {}, "idle");
+		expect(timeline).toHaveLength(0);
+	});
+
+	it("carries uiTools on the live streaming item", () => {
+		const blocks: LookUiStreamBlock[] = [toolcallBlock(0, "tc1", "read", true)];
+		const tools: Record<string, LookUiToolExecState> = { tc1: runningTool("tc1", "read") };
+		const timeline = buildTimeline([], {}, blocks, tools, "streaming");
+
+		expect(timeline[0]?.uiTools).toBe(tools);
+	});
+
+	it("places the live item after persisted entries", () => {
 		const entries: SessionEntry[] = [
-			messageEntry("u1", baseUser("read x")),
-			messageEntry("a1", baseAssistant("a1", [{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } }])),
+			messageEntry("u1", baseUser("hello")),
+			messageEntry("a1", baseAssistant("a1", [{ type: "text", text: "ok" }])),
 		];
-		const liveMessages: RendererLiveMessage[] = [
-			{
-				renderId: "live-tr1",
-				runId: 1,
-				message: baseToolResult("tc1", "x content"),
-				completed: true,
-			},
-		];
+		const blocks: LookUiStreamBlock[] = [textBlock(0, "streaming", false)];
 
-		const timeline = buildTimeline(entries, liveMessages);
-
-		expect(timeline).toHaveLength(2);
-		expect(timeline[1]?.entryId).toBe("a1");
-		expect(timeline[1]?.toolResultMap?.tc1.content[0].text).toBe("x content");
-	});
-
-	it("keeps a toolResult with the previous assistant when user steering interrupts", () => {
-		const liveMessages: RendererLiveMessage[] = [
-			{
-				renderId: "live-a1",
-				runId: 1,
-				message: baseAssistant("live-a1", [
-					{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } },
-				]),
-				completed: true,
-			},
-			{
-				renderId: "live-u1",
-				runId: 1,
-				message: baseUser("use a different path"),
-				completed: true,
-			},
-			{
-				renderId: "live-tr1",
-				runId: 1,
-				message: baseToolResult("tc1", "original path content"),
-				completed: true,
-			},
-			{
-				renderId: "live-a2",
-				runId: 1,
-				message: baseAssistant("live-a2", [{ type: "text", text: "ok" }]),
-				completed: false,
-			},
-		];
-
-		const timeline = buildTimeline([], liveMessages);
+		const timeline = buildTimeline(entries, {}, blocks, {}, "streaming");
 
 		expect(timeline).toHaveLength(3);
-		expect(timeline[0]?.message?.role).toBe("assistant");
-		expect(timeline[0]?.id).toBe("live-a1");
-		expect(timeline[0]?.toolResultMap?.tc1.content[0].text).toBe("original path content");
-		expect(timeline[1]?.message?.role).toBe("user");
-		expect(timeline[2]?.message?.role).toBe("assistant");
-		expect(timeline[2]?.toolResultMap).toBeUndefined();
-	});
-
-	it("attaches multiple parallel live toolResults to the same assistant bubble", () => {
-		const liveMessages: RendererLiveMessage[] = [
-			{
-				renderId: "live-a1",
-				runId: 1,
-				message: baseAssistant("live-a1", [
-					{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } },
-					{ type: "toolCall", id: "tc2", name: "read", arguments: { path: "y" } },
-				]),
-				completed: true,
-			},
-			{
-				renderId: "live-tr1",
-				runId: 1,
-				message: baseToolResult("tc1", "x content"),
-				completed: true,
-			},
-			{
-				renderId: "live-tr2",
-				runId: 1,
-				message: baseToolResult("tc2", "y content"),
-				completed: true,
-			},
-			{
-				renderId: "live-a2",
-				runId: 1,
-				message: baseAssistant("live-a2", [{ type: "text", text: "done" }]),
-				completed: false,
-			},
-		];
-
-		const timeline = buildTimeline([], liveMessages);
-
-		expect(timeline).toHaveLength(1);
-		expect(timeline[0]?.toolResultMap).toHaveProperty("tc1");
-		expect(timeline[0]?.toolResultMap).toHaveProperty("tc2");
-		expect(timeline[0]?.toolResultMap?.tc1.content[0].text).toBe("x content");
-		expect(timeline[0]?.toolResultMap?.tc2.content[0].text).toBe("y content");
-	});
-
-	it("does not lose an orphaned live toolResult with no assistant", () => {
-		const liveMessages: RendererLiveMessage[] = [
-			{
-				renderId: "live-tr1",
-				runId: 1,
-				message: baseToolResult("tc1", "orphan result"),
-				completed: true,
-			},
-		];
-
-		const timeline = buildTimeline([], liveMessages);
-
-		expect(timeline).toHaveLength(1);
-		expect(timeline[0]?.message?.role).toBe("toolResult");
-		expect(timeline[0]?.isLive).toBe(true);
+		expect(timeline[2]?.isLive).toBe(true);
+		expect(timeline[2]?.uiBlocks).toBe(blocks);
 	});
 
 	it("attaches per-message duration to assistant bubbles", () => {
@@ -358,7 +225,7 @@ describe("buildTimeline", () => {
 			messageEntry("a2", baseAssistant("a2", [{ type: "text", text: "second" }])),
 		];
 
-		const timeline = buildTimeline(entries, [], { a1: 1200, a2: 3400 });
+		const timeline = buildTimeline(entries, { a1: 1200, a2: 3400 });
 
 		expect(timeline).toHaveLength(4);
 		expect(timeline[1]?.turnDurationMs).toBe(1200);
@@ -372,10 +239,68 @@ describe("buildTimeline", () => {
 			messageEntry("a2", baseAssistant("a2", [{ type: "text", text: "answer" }])),
 		];
 
-		const timeline = buildTimeline(entries, [], { a2: 5100 });
+		const timeline = buildTimeline(entries, { a2: 5100 });
 
 		expect(timeline).toHaveLength(2);
 		expect(timeline[1]?.entryId).toBe("a1");
 		expect(timeline[1]?.turnDurationMs).toBe(5100);
+	});
+
+	// ---- pendingUserMessage (streaming user message) ----
+
+	it("shows pending user message during streaming when no entries exist", () => {
+		const timeline = buildTimeline([], {}, [], {}, "streaming", { text: "hello world" });
+
+		expect(timeline).toHaveLength(2);
+		expect(timeline[0]?.id).toBe("pending-user");
+		expect(timeline[0]?.isLive).toBe(false);
+		expect(timeline[0]?.message?.role).toBe("user");
+		expect((timeline[0]?.message as any)?.content[0]?.text).toBe("hello world");
+		expect(timeline[1]?.id).toBe("streaming-live");
+		expect(timeline[1]?.isLive).toBe(true);
+	});
+
+	it("shows pending user message before the streaming live item", () => {
+		const blocks: LookUiStreamBlock[] = [textBlock(0, "streaming...", false)];
+		const timeline = buildTimeline([], {}, blocks, {}, "streaming", { text: "my question" });
+
+		expect(timeline).toHaveLength(2);
+		expect(timeline[0]?.id).toBe("pending-user");
+		expect(timeline[0]?.message?.role).toBe("user");
+		expect(timeline[1]?.id).toBe("streaming-live");
+		expect(timeline[1]?.isLive).toBe(true);
+	});
+
+	it("shows pending user message even when uiPhase is idle (holds until snapshot)", () => {
+		const timeline = buildTimeline([], {}, [], {}, "idle", { text: "hello" });
+
+		// Pending user message now persists through uiPhase transitions
+		// so it won't disappear between run_status("idle") and the snapshot.
+		expect(timeline).toHaveLength(1);
+		expect(timeline[0]?.id).toBe("pending-user");
+	});
+
+	it("does not show pending user message when it is null even during streaming", () => {
+		const blocks: LookUiStreamBlock[] = [textBlock(0, "hi", false)];
+		const timeline = buildTimeline([], {}, blocks, {}, "streaming", null);
+
+		expect(timeline).toHaveLength(1);
+		expect(timeline[0]?.id).toBe("streaming-live");
+	});
+
+	it("places pending user message after persisted entries but before live item", () => {
+		const entries: SessionEntry[] = [
+			messageEntry("u1", baseUser("previous")),
+			messageEntry("a1", baseAssistant("a1", [{ type: "text", text: "ok" }])),
+		];
+		const blocks: LookUiStreamBlock[] = [textBlock(0, "streaming...", false)];
+
+		const timeline = buildTimeline(entries, {}, blocks, {}, "streaming", { text: "new question" });
+
+		expect(timeline).toHaveLength(4); // prev user + prev assistant + pending user + live
+		expect(timeline[0]?.id).toBe("u1"); // persisted user
+		expect(timeline[1]?.id).toBe("a1"); // persisted assistant
+		expect(timeline[2]?.id).toBe("pending-user"); // pending user
+		expect(timeline[3]?.id).toBe("streaming-live"); // live streaming
 	});
 });

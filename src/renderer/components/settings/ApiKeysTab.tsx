@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "../ProviderIcon";
 import AddCustomProviderDialog from "./AddCustomProviderDialog";
-import type { CustomProviderInput, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
+import type { CustomProviderInput, CustomProviderStats, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
 
 const api = (window as any).look;
 
@@ -64,10 +64,11 @@ function ModelList({ models, t }: { models: ProviderModelInfo[]; t: (key: string
 
 interface ApiKeysTabProps {
 	providers: ProviderInfo[];
-	onProvidersChange: (providers: ProviderInfo[]) => void;
+	customStats: CustomProviderStats;
+	onProvidersChange: (data: { providers: ProviderInfo[]; customStats: CustomProviderStats }) => void;
 }
 
-export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabProps) {
+export default function ApiKeysTab({ providers, customStats, onProvidersChange }: ApiKeysTabProps) {
 	const { t } = useTranslation();
 	const [editing, setEditing] = useState<string | null>(null);
 	const [keyInput, setKeyInput] = useState("");
@@ -111,7 +112,7 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 				loadCustomProviders();
 				try {
 					const providersRes = await api.getSettings();
-					if (providersRes?.success) onProvidersChange(providersRes.providers);
+					if (providersRes?.success) onProvidersChange({ providers: providersRes.providers, customStats: providersRes.customStats });
 				} catch {}
 			}
 		} catch (e: any) {
@@ -135,7 +136,7 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 		try {
 			const result = await api.setApiKey(providerId, key);
 			if (result?.success) {
-				onProvidersChange(result.providers);
+				onProvidersChange({ providers: result.providers, customStats: result.customStats });
 				toast.success(t("settings.keyUpdated", { provider: providerId }));
 			} else {
 				toast.error(result?.error ?? t("settings.selfTestFailed"));
@@ -205,7 +206,7 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 		try {
 			const result = await api.setApiKey(providerId, "");
 			if (result?.success) {
-				onProvidersChange(result.providers);
+				onProvidersChange({ providers: result.providers, customStats: result.customStats });
 				toast.success(t("settings.keyRemoved", { provider: providerId }));
 			}
 		} catch (e: any) {
@@ -228,7 +229,7 @@ export default function ApiKeysTab({ providers, onProvidersChange }: ApiKeysTabP
 					setCustomView({ type: "list" });
 					api?.getSettings?.()
 						.then((r: any) => {
-							if (r?.success) onProvidersChange(r.providers);
+							if (r?.success) onProvidersChange({ providers: r.providers, customStats: r.customStats });
 						})
 						.catch(() => {});
 				}}

@@ -530,8 +530,9 @@ export default function App() {
 					{showSettings && (
 						<SettingsDialog
 							open={showSettings}
-							providers={providerSettings}
-							onProvidersChange={(ps) => appStore.set(providerSettingsAtom, ps)}
+							providers={providerSettings.providers}
+							customStats={providerSettings.customStats}
+							onProvidersChange={(data) => appStore.set(providerSettingsAtom, data)}
 							onClose={handleCloseSettings}
 							defaultTab={settingsTab}
 						/>

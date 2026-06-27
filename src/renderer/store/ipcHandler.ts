@@ -7,9 +7,13 @@
 // ============================================================
 
 import {
-	type AgentSessionEvent,
+	type AgentInfo,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
+	type LookUiEvent,
+	type LookUiPhase,
+	type LookUiStreamBlock,
+	type LookUiToolExecState,
 	type MainToRendererEvent,
 	type SessionSnapshotEnvelope,
 } from "@shared/types";
@@ -43,7 +47,6 @@ import {
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
-import type { RendererToolExecutionState } from "./sessionTypes";
 
 /** The global Jotai store — shared by IPC handler and React Provider. */
 export const appStore = createStore();
@@ -82,21 +85,9 @@ function scheduleSharedRefresh(projectId: string, filesAtom: ReturnType<typeof s
 	);
 }
 
-function updateAgentRuntime(
-	sessionId: string,
-	patch: Partial<{ isStreaming: boolean; isRetrying: boolean; isCompacting: boolean }>,
-) {
-	appStore.set(
-		agentsAtom,
-		appStore.get(agentsAtom).map((agent) => (agent.id === sessionId ? { ...agent, ...patch } : agent)),
-	);
-}
-
 function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	const previous = appStore.get(sessionStateAtomFamily(snapshot.sessionId));
 	const isAgentEnd = snapshot.reason === "agent_end";
-	const turnDurationMs =
-		isAgentEnd && previous.turnStartedAt ? Date.now() - previous.turnStartedAt : previous.turnDurationMs;
 
 	// Load per-message durations persisted as custom entries by the main process.
 	const messageDurations = { ...previous.messageDurations };
@@ -106,17 +97,6 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 			if (data?.entryId && data.durationMs != null && data.durationMs > 0) {
 				messageDurations[data.entryId] = data.durationMs;
 			}
-		}
-	}
-
-	// Fallback: if the snapshot raced ahead of the sdk event, still record the
-	// runtime on the last assistant entry so it is visible immediately.
-	if (isAgentEnd && turnDurationMs != null && turnDurationMs > 0) {
-		const lastAssistantEntry = [...snapshot.entries]
-			.reverse()
-			.find((entry) => entry.type === "message" && entry.message.role === "assistant");
-		if (lastAssistantEntry) {
-			messageDurations[lastAssistantEntry.id] = turnDurationMs;
 		}
 	}
 
@@ -140,15 +120,17 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 			steering: [...snapshot.runtime.steering],
 			followUp: [...snapshot.runtime.followUp],
 		},
-		currentMessageRenderId: isAgentEnd ? null : previous.currentMessageRenderId,
-		lastEndedRunId: isAgentEnd ? null : previous.lastEndedRunId,
-		turnStartedAt: isAgentEnd ? 0 : previous.turnStartedAt,
-		turnDurationMs,
 		messageDurations,
-		liveMessages: isAgentEnd
-			? previous.liveMessages.filter((item) => item.runId !== (previous.lastEndedRunId ?? previous.currentRunId))
-			: previous.liveMessages,
-		toolExecutions: isAgentEnd ? {} : previous.toolExecutions,
+		// Snapshots are the source of truth for persisted history. Clear any
+		// live streaming state on agent_end to avoid stale blocks.
+		uiBlocks: isAgentEnd ? [] : previous.uiBlocks,
+		uiTools: isAgentEnd ? {} : previous.uiTools,
+		uiPhase: isAgentEnd ? "idle" : previous.uiPhase,
+		uiSteering: isAgentEnd ? [] : previous.uiSteering,
+		uiFollowUp: isAgentEnd ? [] : previous.uiFollowUp,
+		// Always clear the pending user message after a snapshot — the snapshot
+		// entries are now the source of truth for message history.
+		pendingUserMessage: null,
 	});
 	appStore.set(sessionLeafIdAtomFamily(snapshot.sessionId), leafId);
 	appStore.set(navigatingEntryAtomFamily(snapshot.sessionId), null);
@@ -173,154 +155,247 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	);
 }
 
-function applySdkEvent(sessionId: string, event: AgentSessionEvent): void {
+/**
+ * Apply a batch of discrete LookUiEvent items to the per-session UI state.
+ *
+ * Each event is a flat delta (text_delta, thinking_delta, etc.) — the renderer
+ * simply accumulates strings and tracks block indices. No SDK types are needed.
+ */
+function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
+	if (events.length === 0) return;
+
 	const atom = sessionStateAtomFamily(sessionId);
-	const previous = appStore.get(atom);
-	switch (event.type) {
-		case "agent_start":
-			appStore.set(atom, {
-				...previous,
-				currentRunId: previous.currentRunId + 1,
-				currentMessageRenderId: null,
-				turnStartedAt: Date.now(),
-				turnDurationMs: null,
-				runtime: previous.runtime ? { ...previous.runtime, isStreaming: true } : null,
-			});
-			updateAgentRuntime(sessionId, { isStreaming: true });
-			appStore.set(
-				recentlyCompletedAtom,
-				appStore.get(recentlyCompletedAtom).filter((id) => id !== sessionId),
-			);
-			break;
-		case "agent_end":
-			if (!event.willRetry) {
-				appStore.set(recentlyCompletedAtom, [
-					...appStore.get(recentlyCompletedAtom).filter((id) => id !== sessionId),
-					sessionId,
-				]);
+	const prev = appStore.get(atom);
+
+	let blocks: LookUiStreamBlock[] = prev.uiBlocks;
+	let toolExecs: Record<string, LookUiToolExecState> = prev.uiTools;
+	let phase: LookUiPhase | undefined;
+	let steering: string[] | undefined;
+	let followUp: string[] | undefined;
+	let agentFlags: Partial<AgentInfo> | undefined;
+	let pendingUserMessage: { text: string } | null | undefined;
+
+	for (const ev of events) {
+		switch (ev.type) {
+			case "assistant_text_start":
+				blocks = [
+					...blocks,
+					{ contentIndex: ev.contentIndex, kind: "text", text: "", thinking: "", completed: false },
+				];
+				break;
+			case "assistant_text_delta": {
+				blocks = blocks.map((b) =>
+					// Only update incomplete blocks — completed blocks from a previous
+					// message in the same turn may share the same contentIndex.
+					b.contentIndex === ev.contentIndex && b.kind === "text" && !b.completed
+						? { ...b, text: b.text + ev.delta }
+						: b,
+				);
+				break;
 			}
-			appStore.set(atom, {
-				...appStore.get(atom),
-				runtime: previous.runtime ? { ...previous.runtime, isStreaming: false, isRetrying: event.willRetry } : null,
-				lastEndedRunId: previous.currentRunId,
-				turnDurationMs: previous.turnStartedAt ? Date.now() - previous.turnStartedAt : previous.turnDurationMs,
-			});
-			updateAgentRuntime(sessionId, { isStreaming: false, isRetrying: event.willRetry });
-			break;
-		case "message_start": {
-			const renderId = crypto.randomUUID();
-			appStore.set(atom, {
-				...previous,
-				currentMessageRenderId: renderId,
-				turnStartedAt: event.message.role === "user" ? 0 : previous.turnStartedAt,
-				turnDurationMs: event.message.role === "user" ? null : previous.turnDurationMs,
-				liveMessages: [
-					...previous.liveMessages,
-					{ renderId, runId: previous.currentRunId, message: event.message, completed: false },
-				],
-			});
-			break;
-		}
-		case "message_update": {
-			const renderId = previous.currentMessageRenderId ?? crypto.randomUUID();
-			const exists = previous.liveMessages.some((item) => item.renderId === renderId);
-			appStore.set(atom, {
-				...previous,
-				currentMessageRenderId: renderId,
-				liveMessages: exists
-					? previous.liveMessages.map((item) =>
-							item.renderId === renderId ? { ...item, message: event.message } : item,
-						)
-					: [
-							...previous.liveMessages,
-							{ renderId, runId: previous.currentRunId, message: event.message, completed: false },
-						],
-			});
-			break;
-		}
-		case "message_end": {
-			const renderId = previous.currentMessageRenderId ?? crypto.randomUUID();
-			const exists = previous.liveMessages.some((item) => item.renderId === renderId);
-			appStore.set(atom, {
-				...previous,
-				currentMessageRenderId: null,
-				liveMessages: exists
-					? previous.liveMessages.map((item) =>
-							item.renderId === renderId ? { ...item, message: event.message, completed: true } : item,
-						)
-					: [
-							...previous.liveMessages,
-							{ renderId, runId: previous.currentRunId, message: event.message, completed: true },
-						],
-			});
-			break;
-		}
-		case "queue_update":
-			if (previous.runtime) {
-				appStore.set(atom, {
-					...previous,
-					runtime: { ...previous.runtime, steering: [...event.steering], followUp: [...event.followUp] },
-				});
+			case "assistant_text_end": {
+				blocks = blocks.map((b) =>
+					b.contentIndex === ev.contentIndex && b.kind === "text" && !b.completed
+						? { ...b, completed: true }
+						: b,
+				);
+				break;
 			}
-			break;
-		case "compaction_start":
-			updateAgentRuntime(sessionId, { isCompacting: true });
-			if (previous.runtime)
-				appStore.set(atom, { ...previous, runtime: { ...previous.runtime, isCompacting: true } });
-			break;
-		case "compaction_end":
-			updateAgentRuntime(sessionId, { isCompacting: false });
-			if (previous.runtime)
-				appStore.set(atom, { ...previous, runtime: { ...previous.runtime, isCompacting: false } });
-			break;
-		case "auto_retry_start":
-			updateAgentRuntime(sessionId, { isRetrying: true });
-			if (previous.runtime)
-				appStore.set(atom, {
-					...previous,
-					runtime: { ...previous.runtime, isRetrying: true, retryAttempt: event.attempt },
-				});
-			break;
-		case "auto_retry_end":
-			updateAgentRuntime(sessionId, { isRetrying: false });
-			if (previous.runtime) appStore.set(atom, { ...previous, runtime: { ...previous.runtime, isRetrying: false } });
-			if (!event.success && event.finalError) toast.error(event.finalError);
-			break;
-		case "tool_execution_start":
-		case "tool_execution_update":
-		case "tool_execution_end": {
-			const existing = previous.toolExecutions[event.toolCallId];
-			const next: RendererToolExecutionState =
-				event.type === "tool_execution_start"
-					? {
-							toolCallId: event.toolCallId,
-							toolName: event.toolName,
-							args: event.args,
-							phase: "running",
-						}
-					: event.type === "tool_execution_update"
-						? {
-								...(existing ?? {
-									toolCallId: event.toolCallId,
-									toolName: event.toolName,
-									args: event.args,
-									phase: "running" as const,
-								}),
-								partialResult: event.partialResult,
-							}
-						: {
-								...(existing ?? {
-									toolCallId: event.toolCallId,
-									toolName: event.toolName,
-									args: {},
-								}),
-								phase: "completed",
-								result: event.result,
-								isError: event.isError,
-							};
-			appStore.set(atom, { ...previous, toolExecutions: { ...previous.toolExecutions, [event.toolCallId]: next } });
-			break;
+
+			case "thinking_start":
+				blocks = [
+					...blocks,
+					{ contentIndex: ev.contentIndex, kind: "thinking", text: "", thinking: "", completed: false },
+				];
+				break;
+			case "thinking_delta": {
+				blocks = blocks.map((b) =>
+					b.contentIndex === ev.contentIndex && b.kind === "thinking" && !b.completed
+						? { ...b, thinking: b.thinking + ev.delta }
+						: b,
+				);
+				break;
+			}
+			case "thinking_end": {
+				blocks = blocks.map((b) =>
+					b.contentIndex === ev.contentIndex && b.kind === "thinking" && !b.completed
+						? { ...b, completed: true }
+						: b,
+				);
+				break;
+			}
+
+			case "toolcall_start": {
+				// Only add if no incomplete toolcall block with this contentIndex exists —
+				// completed blocks from a previous message may share the same contentIndex.
+				const alreadyExists = blocks.some(
+					(b) => b.contentIndex === ev.contentIndex && b.kind === "toolcall" && !b.completed,
+				);
+				if (!alreadyExists) {
+					blocks = [
+						...blocks,
+						{
+							contentIndex: ev.contentIndex,
+							kind: "toolcall",
+							text: "",
+							thinking: "",
+							toolCallId: ev.toolCallId,
+							toolName: ev.toolName,
+							completed: false,
+						},
+					];
+				}
+				break;
+			}
+			case "toolcall_arg_delta":
+				break;
+			case "toolcall_end": {
+				// Find the incomplete (most recent) matching block — completed blocks
+				// from a previous message in the same turn may share contentIndex.
+				const idx = blocks.findIndex(
+					(b) => b.contentIndex === ev.contentIndex && b.kind === "toolcall" && !b.completed,
+				);
+				if (idx >= 0) {
+					const updated = { ...blocks[idx]! };
+					updated.toolCallId = ev.toolCallId;
+					updated.toolName = ev.toolName;
+					updated.args = ev.args;
+					updated.completed = true;
+					blocks = [...blocks.slice(0, idx), updated, ...blocks.slice(idx + 1)];
+				} else {
+					blocks = [
+						...blocks,
+						{
+							contentIndex: ev.contentIndex,
+							kind: "toolcall",
+							text: "",
+							thinking: "",
+							toolCallId: ev.toolCallId,
+							toolName: ev.toolName,
+							args: ev.args,
+							completed: true,
+						},
+					];
+				}
+				break;
+			}
+
+			case "tool_exec_start":
+				toolExecs = {
+					...toolExecs,
+					[ev.toolCallId]: { toolCallId: ev.toolCallId, toolName: ev.toolName, args: ev.args, phase: "running" },
+				};
+				break;
+			case "tool_exec_update":
+				if (toolExecs[ev.toolCallId]) {
+					toolExecs = {
+						...toolExecs,
+						[ev.toolCallId]: { ...toolExecs[ev.toolCallId], partialResult: ev.partialResult },
+					};
+				}
+				break;
+			case "tool_exec_end":
+				if (toolExecs[ev.toolCallId]) {
+					toolExecs = {
+						...toolExecs,
+						[ev.toolCallId]: {
+							...toolExecs[ev.toolCallId],
+							phase: "completed",
+							result: ev.result,
+							isError: ev.isError,
+						},
+					};
+				}
+				break;
+
+			case "run_status": {
+				phase = ev.status;
+				if (ev.status === "streaming") {
+					blocks = [];
+					toolExecs = {};
+				}
+				agentFlags = {
+					...agentFlags,
+					isStreaming: ev.status === "streaming" || ev.status === "working",
+					isRetrying: ev.status === "retrying",
+					isCompacting: ev.status === "compacting",
+				};
+				break;
+			}
+
+			case "queue_update":
+				steering = ev.steering;
+				followUp = ev.followUp;
+				break;
+
+			case "compacting":
+				phase = ev.active ? "compacting" : "idle";
+				agentFlags = { ...agentFlags, isCompacting: ev.active };
+				break;
+
+			case "retry_status":
+				phase = ev.status === "start" ? "retrying" : "idle";
+				agentFlags = { ...agentFlags, isRetrying: ev.status === "start" };
+				if (ev.status === "end" && !ev.success && ev.finalError) {
+					toast.error(ev.finalError);
+				}
+				break;
+
+			case "assistant_message_start":
+				blocks = blocks.filter((b) => b.completed);
+				break;
+
+			case "assistant_message_end":
+				blocks = blocks.map((b) => ({ ...b, completed: true }));
+				break;
+
+			case "error":
+				toast.error(ev.message);
+				break;
+
+			case "user_message":
+				pendingUserMessage = { text: ev.text };
+				break;
+
+			case "session_meta":
+				if (ev.field === "name") {
+					appStore.set(
+						agentsAtom,
+						appStore.get(agentsAtom).map((agent) =>
+							agent.id === sessionId ? { ...agent, name: ev.value as string } : agent,
+						),
+					);
+				}
+				break;
+
+			default:
+				break;
 		}
+	}
+
+	const nextPhase = phase ?? prev.uiPhase;
+	// Once the turn is no longer active, discard transient streaming state. The
+	// persisted entries from the next snapshot become the source of truth.
+	if (nextPhase === "idle") {
+		blocks = [];
+		toolExecs = {};
+	}
+
+	appStore.set(atom, {
+		...prev,
+		uiBlocks: blocks,
+		uiTools: toolExecs,
+		uiPhase: nextPhase,
+		uiSteering: steering ?? prev.uiSteering,
+		uiFollowUp: followUp ?? prev.uiFollowUp,
+		pendingUserMessage: pendingUserMessage !== undefined ? pendingUserMessage : prev.pendingUserMessage,
+	});
+
+	if (agentFlags) {
+		appStore.set(
+			agentsAtom,
+			appStore.get(agentsAtom).map((agent) => (agent.id === sessionId ? { ...agent, ...agentFlags } : agent)),
+		);
 	}
 }
 
@@ -383,8 +458,8 @@ export function initIpcHandlers(api: any): () => void {
 				applySnapshot(event);
 				break;
 
-			case "session:sdk-event":
-				applySdkEvent(event.sessionId, event.event);
+			case "session:ui-event":
+				applyUiEventBatch(event.sessionId, event.events);
 				break;
 
 			// ---- Project events ----
@@ -599,7 +674,12 @@ export async function initAppData(api: any): Promise<void> {
 	// 1. Fetch provider settings once at boot (fire-and-forget).
 	api.getSettings()
 		.then((r: any) => {
-			if (r?.success) appStore.set(providerSettingsAtom, r.providers);
+			if (r?.success) {
+				appStore.set(providerSettingsAtom, {
+					providers: r.providers ?? [],
+					customStats: r.customStats ?? { configured: 0, totalModels: 0 },
+				});
+			}
 		})
 		.catch(() => {});
 

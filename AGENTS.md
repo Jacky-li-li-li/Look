@@ -17,7 +17,7 @@ Type: rule
 - Session names must be stored with `AgentSession.setSessionName` or pi's native `SessionManager.appendSessionInfo` for an inactive file.
 - Session history, names, parent links, model changes, thinking changes, compaction and branches are owned by pi JSONL. Do not recreate `agents.json` or a session wrapper.
 - Runtime status, transport stream IDs, subscriptions and queues are session-scoped. Never store them as one global active-stream state.
-- `AuthStorage`, `ModelRegistry`, `ProjectTrustStore` and MCP connections are process-global shared services. Cwd-bound services and extension bindings remain runtime-local.
+- `AuthStorage`, `ModelRegistry`, and `ProjectTrustStore` are process-global shared services. Cwd-bound services and extension bindings remain runtime-local.
 - Resource initialization is serialized to prevent package installation races; initialized sessions may run concurrently without an application hard limit.
 
 ## Extensions, resources and trust
@@ -29,16 +29,6 @@ Type: rule
 - Project resources must be gated with pi `ProjectTrustStore`, `SettingsManager.getDefaultProjectTrust`, and ResourceLoader's `resolveProjectTrust` callback.
 - When the global policy is `ask`, the Electron host must ask once and persist the answer in `ProjectTrustStore`; do not silently trust project resources.
 - Skills are loaded by pi ResourceLoader and invoked through `/skill:name`; do not create a second invocation format.
-
-## MCP
-Type: rule
-
-- MCP is a pi extension in `src/main/mcp/mcp-extension.ts`.
-- Tool names use `mcp:{serverName}:{toolName}` with ASCII colons.
-- MCP JSON Schema is converted to TypeBox for `pi.registerTool`.
-- Connect servers before runtime resource creation so tools exist when the extension loads.
-- `before-quit` disconnects all MCP servers.
-- `@modelcontextprotocol/sdk` remains a direct dependency.
 
 ## Renderer message actions
 Type: design-decision

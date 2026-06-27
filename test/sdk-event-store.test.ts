@@ -1,51 +1,26 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { agentsAtom, removeAgentAtoms, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore, initIpcHandlers } from "../src/renderer/store/ipcHandler";
+import { deriveSessionPhase } from "../src/renderer/store/sessionTypes";
+import type { LookUiEvent } from "../src/main/shared/types";
 
-function assistant(text: string): AgentMessage {
-	return {
-		role: "assistant",
-		content: [{ type: "text", text }],
-		api: "test",
-		provider: "test",
-		model: "test",
-		usage: {
-			input: 0,
-			output: 0,
-			cacheRead: 0,
-			cacheWrite: 0,
-			totalTokens: 0,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		},
-		stopReason: "stop",
-		timestamp: Date.now(),
-	};
+const sessionId = "ui-store-a";
+
+function uiEvent(event: LookUiEvent): { type: "session:ui-event"; sessionId: string; events: LookUiEvent[] } {
+	return { type: "session:ui-event", sessionId, events: [event] };
 }
 
-const runtime = {
-	thinkingLevel: "off",
-	isStreaming: true,
-	isRetrying: false,
-	isCompacting: false,
-	retryAttempt: 0,
-	steering: [],
-	followUp: [],
-	stats: { totalMessages: 0 },
-};
-
 let dispose: (() => void) | undefined;
-const sessionIds = ["sdk-store-a", "sdk-store-b"];
 
 afterEach(() => {
 	dispose?.();
 	dispose = undefined;
-	for (const sessionId of sessionIds) removeAgentAtoms(sessionId);
+	removeAgentAtoms(sessionId);
 	appStore.set(agentsAtom, []);
 });
 
-describe("SDK event canonical store", () => {
-	it("resets streaming cursor fields on run boundaries", () => {
+describe("UI event canonical store (session:ui-event)", () => {
+	it("tracks run_status transitions in uiPhase", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
 			onEvent(callback: (event: any) => void) {
@@ -54,55 +29,17 @@ describe("SDK event canonical store", () => {
 			},
 		});
 
-		const first = assistant("first");
-		const second = assistant("second");
+		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		const during = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(during.uiPhase).toBe("streaming");
+		expect(during.uiBlocks).toEqual([]);
 
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_start", message: first },
-		});
-
-		const duringFirst = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(duringFirst.currentMessageRenderId).not.toBeNull();
-		expect(duringFirst.turnStartedAt).toBeGreaterThan(0);
-
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_end", message: first },
-		});
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: false } });
-		receive({
-			type: "session:snapshot",
-			sessionId: sessionIds[0],
-			reason: "agent_end",
-			leafId: "persisted",
-			entries: [],
-			runtime: { ...runtime, isStreaming: false },
-		});
-
-		const afterEnd = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(afterEnd.currentMessageRenderId).toBeNull();
-		expect(afterEnd.turnStartedAt).toBe(0);
-		expect(afterEnd.turnDurationMs).not.toBeNull();
-
-		const beforeSecondStart = Date.now();
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_start", message: second },
-		});
-
-		const duringSecond = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(duringSecond.currentMessageRenderId).not.toBeNull();
-		expect(duringSecond.turnStartedAt).toBeGreaterThanOrEqual(beforeSecondStart);
-		expect(duringSecond.turnDurationMs).toBeNull();
+		receive(uiEvent({ type: "run_status", status: "idle", timestamp: 2 }));
+		const after = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(after.uiPhase).toBe("idle");
 	});
 
-	it("clears runtime.isStreaming on agent_end without waiting for snapshot", () => {
+	it("accumulates text deltas into uiBlocks", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
 			onEvent(callback: (event: any) => void) {
@@ -111,30 +48,20 @@ describe("SDK event canonical store", () => {
 			},
 		});
 
-		const msg = assistant("hello");
-		receive({
-			type: "session:snapshot",
-			sessionId: sessionIds[0],
-			reason: "activate",
-			leafId: "persisted",
-			entries: [],
-			runtime,
-		});
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "message_start", message: msg } });
+		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		receive(uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
+		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "Hello", timestamp: 3 }));
+		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: " World", timestamp: 4 }));
+		receive(uiEvent({ type: "assistant_text_end", contentIndex: 0, text: "Hello World", timestamp: 5 }));
 
-		const during = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(during.runtime?.isStreaming).toBe(true);
-
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "message_end", message: msg } });
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: false } });
-
-		const afterEnd = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(afterEnd.runtime?.isStreaming).toBe(false);
-		expect(afterEnd.runtime?.isRetrying).toBe(false);
+		const state = appStore.get(sessionStateAtomFamily(sessionId));
+		const block = state.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "text");
+		expect(block).toBeDefined();
+		expect(block!.text).toBe("Hello World");
+		expect(block!.completed).toBe(true);
 	});
 
-	it("cleans up the ended run's live messages without dropping a retry run", () => {
+	it("accumulates thinking deltas and marks completed", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
 			onEvent(callback: (event: any) => void) {
@@ -143,55 +70,23 @@ describe("SDK event canonical store", () => {
 			},
 		});
 
-		const first = assistant("first");
-		const retry = assistant("retry");
+		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		receive(uiEvent({ type: "thinking_start", contentIndex: 0, timestamp: 2 }));
+		receive(uiEvent({ type: "thinking_delta", contentIndex: 0, delta: "Let me think...", timestamp: 3 }));
 
-		// First run ends and requests a retry.
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_start", message: first },
-		});
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_end", message: first },
-		});
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: true } });
+		const mid = appStore.get(sessionStateAtomFamily(sessionId));
+		const midBlock = mid.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
+		expect(midBlock).toBeDefined();
+		expect(midBlock!.thinking).toBe("Let me think...");
+		expect(midBlock!.completed).toBe(false);
 
-		const afterFirstEnd = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(afterFirstEnd.lastEndedRunId).toBe(1);
-
-		// Retry starts before the agent_end snapshot arrives.
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_start", message: retry },
-		});
-
-		const duringRetry = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(duringRetry.currentRunId).toBe(2);
-		expect(duringRetry.liveMessages).toHaveLength(2);
-
-		// Snapshot for the first run finally arrives.
-		receive({
-			type: "session:snapshot",
-			sessionId: sessionIds[0],
-			reason: "agent_end",
-			leafId: "persisted",
-			entries: [],
-			runtime: { ...runtime, isStreaming: true },
-		});
-
-		const afterSnapshot = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(afterSnapshot.liveMessages).toHaveLength(1);
-		expect(afterSnapshot.liveMessages[0]?.runId).toBe(2);
-		expect(afterSnapshot.liveMessages[0]?.message).toBe(retry);
+		receive(uiEvent({ type: "thinking_end", contentIndex: 0, thinking: "Let me think...", timestamp: 4 }));
+		const end = appStore.get(sessionStateAtomFamily(sessionId));
+		const endBlock = end.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
+		expect(endBlock!.completed).toBe(true);
 	});
 
-	it("keeps persisted, live, and cumulative tool execution state separate and session-scoped", () => {
+	it("tracks tool_call lifecycle in uiBlocks", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
 			onEvent(callback: (event: any) => void) {
@@ -199,77 +94,29 @@ describe("SDK event canonical store", () => {
 				return () => {};
 			},
 		});
-		const first = assistant("first");
-		const partial = assistant("partial");
-		const final = assistant("final");
 
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_start", message: first },
-		});
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_update", message: partial, assistantMessageEvent: { type: "text_delta", delta: "x" } },
-		});
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "tool_execution_start", toolCallId: "call", toolName: "read", args: { path: "a" } },
-		});
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: {
-				type: "tool_execution_update",
-				toolCallId: "call",
+		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		receive(uiEvent({ type: "toolcall_start", contentIndex: 0, timestamp: 2 }));
+		receive(
+			uiEvent({
+				type: "toolcall_end",
+				contentIndex: 0,
+				toolCallId: "tc-1",
 				toolName: "read",
-				args: { path: "a" },
-				partialResult: { content: [{ type: "text", text: "second cumulative value" }] },
-			},
-		});
+				args: { path: "foo.ts" },
+				timestamp: 3,
+			}),
+		);
 
-		const beforeSnapshot = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(beforeSnapshot.liveMessages[0]?.message).toBe(partial);
-		expect(beforeSnapshot.toolExecutions.call?.partialResult).toEqual({
-			content: [{ type: "text", text: "second cumulative value" }],
-		});
-		expect(appStore.get(sessionStateAtomFamily(sessionIds[1])).liveMessages).toEqual([]);
-
-		const entries = [{ type: "message", id: "persisted", parentId: null, timestamp: "now", message: first }];
-		receive({
-			type: "session:snapshot",
-			sessionId: sessionIds[0],
-			reason: "activate",
-			leafId: "persisted",
-			entries,
-			runtime,
-		});
-		const activated = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(activated.entries).toBe(entries);
-		expect(activated.liveMessages).toHaveLength(1);
-
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_end", message: final },
-		});
-		receive({
-			type: "session:snapshot",
-			sessionId: sessionIds[0],
-			reason: "agent_end",
-			leafId: "persisted",
-			entries,
-			runtime: { ...runtime, isStreaming: false },
-		});
-		const completed = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(completed.liveMessages).toEqual([]);
-		expect(completed.toolExecutions).toEqual({});
+		const state = appStore.get(sessionStateAtomFamily(sessionId));
+		const tc = state.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "toolcall");
+		expect(tc).toBeDefined();
+		expect(tc!.toolCallId).toBe("tc-1");
+		expect(tc!.toolName).toBe("read");
+		expect(tc!.completed).toBe(true);
 	});
 
-	it("computes turnDurationMs even if the agent_end snapshot arrives before the sdk event", async () => {
+	it("tracks tool execution states in uiTools", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
 			onEvent(callback: (event: any) => void) {
@@ -278,49 +125,39 @@ describe("SDK event canonical store", () => {
 			},
 		});
 
-		const msg = assistant("hello");
+		// Tool execution events are emitted while the assistant phase is active.
+		receive(uiEvent({ type: "run_status", status: "working", timestamp: 0 }));
+		receive(
+			uiEvent({
+				type: "tool_exec_start",
+				toolCallId: "te-1",
+				toolName: "read",
+				args: { path: "bar.ts" },
+				timestamp: 1,
+			}),
+		);
 
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_start" } });
-		await new Promise((resolve) => setTimeout(resolve, 5));
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_start", message: msg },
-		});
-		receive({
-			type: "session:sdk-event",
-			sessionId: sessionIds[0],
-			event: { type: "message_end", message: msg },
-		});
+		let state = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(state.uiTools["te-1"]).toBeDefined();
+		expect(state.uiTools["te-1"].phase).toBe("running");
 
-		// Snapshot arrives first (race condition).
-		const entries = [
-			{ type: "message", id: "persisted-a1", parentId: null, timestamp: "now", message: msg },
-		];
-		receive({
-			type: "session:snapshot",
-			sessionId: sessionIds[0],
-			reason: "agent_end",
-			leafId: "persisted-a1",
-			entries,
-			runtime: { ...runtime, isStreaming: false },
-		});
+		receive(
+			uiEvent({
+				type: "tool_exec_end",
+				toolCallId: "te-1",
+				toolName: "read",
+				result: "content",
+				isError: false,
+				timestamp: 2,
+			}),
+		);
 
-		const afterSnapshot = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(afterSnapshot.turnDurationMs).not.toBeNull();
-		expect(afterSnapshot.turnDurationMs).toBeGreaterThan(0);
-		expect(afterSnapshot.messageDurations["persisted-a1"]).toBe(afterSnapshot.turnDurationMs);
-
-		// The matching sdk event arrives afterwards and should not clear the duration.
-		receive({ type: "session:sdk-event", sessionId: sessionIds[0], event: { type: "agent_end", willRetry: false } });
-
-		const afterSdkEvent = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(afterSdkEvent.turnDurationMs).not.toBeNull();
-		expect(afterSdkEvent.turnDurationMs).toBeGreaterThan(0);
-		expect(afterSdkEvent.messageDurations["persisted-a1"]).toBe(afterSdkEvent.turnDurationMs);
+		state = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(state.uiTools["te-1"].phase).toBe("completed");
+		expect(state.uiTools["te-1"].result).toBe("content");
 	});
 
-	it("loads persisted per-message durations from look.message-duration custom entries", () => {
+	it("resets blocks and tools on new run", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
 			onEvent(callback: (event: any) => void) {
@@ -329,32 +166,115 @@ describe("SDK event canonical store", () => {
 			},
 		});
 
-		const msg = assistant("hello");
-		const durationEntry = {
-			type: "custom",
-			id: "duration-1",
-			parentId: "persisted-a1",
-			timestamp: "now",
-			customType: "look.message-duration.v1",
-			data: { entryId: "persisted-a1", durationMs: 1234 },
-		};
-		const entries = [
-			{ type: "message", id: "persisted-a1", parentId: null, timestamp: "now", message: msg },
-			durationEntry,
-		];
+		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		receive(uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
+		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "old", timestamp: 3 }));
+		receive(uiEvent({ type: "run_status", status: "idle", timestamp: 4 }));
 
-		receive({
-			type: "session:snapshot",
-			sessionId: sessionIds[0],
-			reason: "activate",
-			leafId: "duration-1",
-			entries,
-			runtime,
+		// Completed turns are cleared from transient UI state; the persisted
+		// message will arrive with the next snapshot.
+		const afterFirst = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(afterFirst.uiBlocks.length).toBe(0);
+		expect(afterFirst.uiPhase).toBe("idle");
+
+		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 5 }));
+		receive(uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 6 }));
+		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "new", timestamp: 7 }));
+
+		const afterSecond = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(afterSecond.uiBlocks.length).toBe(1);
+		const block = afterSecond.uiBlocks[0]!;
+		expect(block.text).toBe("new");
+	});
+
+	it("tracks queue_updates", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
 		});
 
-		const state = appStore.get(sessionStateAtomFamily(sessionIds[0]));
-		expect(state.messageDurations["persisted-a1"]).toBe(1234);
-		// Leaf should be mapped back to the assistant message the duration entry belongs to.
-		expect(state.leafId).toBe("persisted-a1");
+		receive(uiEvent({ type: "queue_update", steering: ["s1"], followUp: ["f1"], timestamp: 1 }));
+		const state = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(state.uiSteering).toEqual(["s1"]);
+		expect(state.uiFollowUp).toEqual(["f1"]);
+	});
+
+	it("tracks compacting and retry phases", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		receive(uiEvent({ type: "compacting", active: true, timestamp: 1 }));
+		expect(appStore.get(sessionStateAtomFamily(sessionId)).uiPhase).toBe("compacting");
+
+		receive(
+			uiEvent({
+				type: "retry_status",
+				status: "start",
+				attempt: 1,
+				maxAttempts: 3,
+				delayMs: 1000,
+				errorMessage: "err",
+				timestamp: 2,
+			}),
+		);
+		expect(appStore.get(sessionStateAtomFamily(sessionId)).uiPhase).toBe("retrying");
+
+		receive(uiEvent({ type: "retry_status", status: "end", attempt: 1, success: true, timestamp: 3 }));
+	});
+});
+
+describe("deriveSessionPhase", () => {
+	it("maps uiPhase streaming to thinking, and working when tools are running", () => {
+		expect(deriveSessionPhase({ uiPhase: "streaming", uiTools: {}, runtime: null } as any)).toBe("thinking");
+		expect(
+			deriveSessionPhase({
+				uiPhase: "streaming",
+				uiTools: { t1: { phase: "running" } as any },
+				runtime: null,
+			} as any),
+		).toBe("working");
+	});
+
+	it("maps uiPhase working/retrying/compacting directly", () => {
+		expect(deriveSessionPhase({ uiPhase: "working", uiTools: {}, runtime: null } as any)).toBe("working");
+		expect(deriveSessionPhase({ uiPhase: "retrying", uiTools: {}, runtime: null } as any)).toBe("retrying");
+		expect(deriveSessionPhase({ uiPhase: "compacting", uiTools: {}, runtime: null } as any)).toBe("compacting");
+	});
+
+	it("falls back to runtime flags when uiPhase is idle", () => {
+		expect(
+			deriveSessionPhase({
+				uiPhase: "idle",
+				uiTools: {},
+				runtime: { isStreaming: true } as any,
+			} as any),
+		).toBe("thinking");
+		expect(
+			deriveSessionPhase({
+				uiPhase: "idle",
+				uiTools: {},
+				runtime: { isRetrying: true } as any,
+			} as any),
+		).toBe("retrying");
+		expect(
+			deriveSessionPhase({
+				uiPhase: "idle",
+				uiTools: {},
+				runtime: { isCompacting: true } as any,
+			} as any),
+		).toBe("compacting");
+	});
+
+	it("returns idle by default", () => {
+		expect(deriveSessionPhase({ uiPhase: "idle", uiTools: {}, runtime: null } as any)).toBe("idle");
+		expect(deriveSessionPhase(null)).toBe("idle");
 	});
 });

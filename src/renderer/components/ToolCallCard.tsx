@@ -16,7 +16,7 @@ export interface ToolCallViewModel {
 	callId: string;
 	toolName: string;
 	args: Record<string, unknown>;
-	result?: string;
+	result?: unknown;
 	isError?: boolean;
 	status: "pending" | "running" | "success" | "error";
 }
@@ -30,6 +30,28 @@ const RESULT_SUMMARY_LIMIT = 500;
 
 /** Home dir injected by preload — used to shorten absolute paths to ~/…. */
 const HOME_DIR = typeof window !== "undefined" ? (window.look?.homedir ?? "") : "";
+
+/**
+ * Safely convert a tool execution result to a displayable string.
+ * SDK may return raw objects like { content: [...], details: ... } or
+ * plain strings. This mirrors the SDK's ToolResultMessage.content format.
+ */
+function resultText(value: unknown): string {
+	if (value === undefined || value === null) return "";
+	if (typeof value === "string") return value;
+	if (typeof value === "object" && "content" in value && Array.isArray((value as any).content)) {
+		const text = (value as any).content
+			.filter((block: any) => block?.type === "text")
+			.map((block: any) => block.text)
+			.join("\n");
+		if (text) return text;
+	}
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value);
+	}
+}
 
 function shortenPath(p: string): string {
 	if (!p) return p;
@@ -100,12 +122,14 @@ function formatStatSuffix(
 ): string {
 	const { toolName, result, status } = toolCall;
 	if (status !== "success" || !result) return "";
-	const trimmed = result.trim();
+	const text = resultText(result);
+	if (!text) return "";
+	const trimmed = text.trim();
 	switch (toolName) {
 		case "bash":
-			return ` · ${t("tool.statLines", { n: result.split("\n").length })}`;
+			return ` · ${t("tool.statLines", { n: text.split("\n").length })}`;
 		case "read": {
-			const bytes = result.length;
+			const bytes = text.length;
 			return ` · ${bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`}`;
 		}
 		case "grep": {
@@ -126,7 +150,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const [open, setOpen] = React.useState(toolCall.status === "running");
 	const prevStatus = React.useRef(toolCall.status);
 	const userManuallyToggled = React.useRef(false);
-	const collapseTimerRef = React.useRef<ReturnType<typeof setTimeout>>(undefined as any);
+	const cancelCollapseRef = React.useRef<(() => void) | null>(null);
 
 	// Track status transitions for auto-expand/collapse
 	React.useEffect(() => {
@@ -136,26 +160,32 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 		if (prev !== curr) {
 			if (curr === "running") {
 				// Auto-expand when tool starts running, reset manual override
-				if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+				// and cancel any pending collapse from a previous completion.
+				cancelCollapseRef.current?.();
+				cancelCollapseRef.current = null;
 				userManuallyToggled.current = false;
 				setOpen(true);
 			} else if ((curr === "success" || curr === "error") && !userManuallyToggled.current) {
-				// Batch-collapse: collects N tool completions into a single
-				// setTimeout tick, avoiding 109 independent timers when all
-				// tools finish at once.
-				scheduleCollapse(() => setOpen(false));
+				// Cancel previous collapse before scheduling a new one
+				// (e.g. tool cycled success→running→success within 300ms).
+				cancelCollapseRef.current?.();
+				cancelCollapseRef.current = scheduleCollapse(() => setOpen(false));
 			}
 			prevStatus.current = curr;
 		}
 	}, [toolCall.status]);
 
+	// Clean up pending collapse on unmount.
+	React.useEffect(() => () => cancelCollapseRef.current?.(), []);
+
 	const argsJson = React.useMemo(() => safeJson(toolCall.args), [toolCall.args]);
 	const argsPreview = argsJson.slice(0, 80);
-	const hasBody = (toolCall.result && toolCall.result.length > 0) || argsPreview.length > 0;
+	const resultStr = React.useMemo(() => resultText(toolCall.result), [toolCall.result]);
+	const hasBody = resultStr.length > 0 || argsPreview.length > 0;
 
 	const toolSummary = formatToolSummary(toolCall);
 	const statSuffix = !open ? formatStatSuffix(toolCall, t) : "";
-	const resultTooLong = toolCall.result ? toolCall.result.length > RESULT_SUMMARY_LIMIT : false;
+	const resultTooLong = resultStr.length > RESULT_SUMMARY_LIMIT;
 
 	const statusVariant =
 		toolCall.status === "success" ? "outline" : toolCall.status === "error" ? "destructive" : "secondary";
@@ -250,13 +280,13 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 											{argsJson || "{}"}
 										</pre>
 									</section>
-									{toolCall.result && (
+									{resultStr && (
 										<section className="flex flex-col gap-1">
 											<span className="inset-drawer__label text-foreground">
 												{toolCall.isError ? t("tool.error") : t("tool.result")}
 												{resultTooLong && (
 													<span className="ml-1 text-[9px] text-muted-foreground">
-														({toolCall.result.length} 字符)
+														({resultStr.length} 字符)
 													</span>
 												)}
 											</span>
@@ -266,7 +296,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 													toolCall.isError ? "text-destructive" : "text-muted-foreground",
 												)}
 											>
-												{toolCall.result}
+												{resultStr}
 											</pre>
 										</section>
 									)}
@@ -301,7 +331,7 @@ function StatusIcon({ status }: { status: ToolCallViewModel["status"] }) {
 		);
 	return (
 		<span className="text-muted-foreground">
-			<Wrench className="size-3.5 shrink-0" />
+			<Wrench className="size-3.5 shrink-0 animate-pulse" />
 		</span>
 	);
 }

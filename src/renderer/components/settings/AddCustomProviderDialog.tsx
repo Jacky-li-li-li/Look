@@ -86,11 +86,8 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 	const [apiProtocol, setApiProtocol] = useState<ApiProtocol>(() => normalizeApiProtocol(initial?.api));
 	const [apiKeyVal, setApiKeyVal] = useState(() => initial?.apiKey ?? "");
 	const [showKey, setShowKey] = useState(false);
-	const [headers, setHeaders] = useState<Array<{ id: number; key: string; value: string }>>(
-		() =>
-			initial?.headers
-				? Object.entries(initial.headers).map(([k, v], i) => ({ id: i + 1, key: k, value: v }))
-				: [],
+	const [headers, setHeaders] = useState<Array<{ id: number; key: string; value: string }>>(() =>
+		initial?.headers ? Object.entries(initial.headers).map(([k, v], i) => ({ id: i + 1, key: k, value: v })) : [],
 	);
 	const [models, setModels] = useState<Array<CustomProviderModelInput & { _key: number }>>(
 		() => initial?.models.map((m, i) => ({ ...m, _key: i + 1 })) ?? [],
@@ -104,15 +101,11 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 	const [supportsReasoningEffort, setSupportsReasoningEffort] = useState(
 		() => initial?.compat?.supportsReasoningEffort !== false,
 	);
-	const [forceAdaptiveThinking, setForceAdaptiveThinking] = useState(
-		() => !!initial?.compat?.forceAdaptiveThinking,
-	);
+	const [forceAdaptiveThinking, setForceAdaptiveThinking] = useState(() => !!initial?.compat?.forceAdaptiveThinking);
 	const [supportsEagerToolInputStreaming, setSupportsEagerToolInputStreaming] = useState(
 		() => initial?.compat?.supportsEagerToolInputStreaming !== false,
 	);
-	const [allowEmptySignature, setAllowEmptySignature] = useState(
-		() => !!initial?.compat?.allowEmptySignature,
-	);
+	const [allowEmptySignature, setAllowEmptySignature] = useState(() => !!initial?.compat?.allowEmptySignature);
 
 	// ── Submission state ──
 	const [saving, setSaving] = useState(false);

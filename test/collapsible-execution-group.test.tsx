@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import CollapsibleExecutionGroup from "../src/renderer/components/CollapsibleExecutionGroup";
 import i18n from "../src/renderer/i18n";
-import type { RendererToolExecutionState } from "../src/renderer/store/sessionTypes";
+import type { LookUiToolExecState } from "../src/main/shared/types";
 
 afterEach(() => {
 	cleanup();
@@ -24,24 +24,25 @@ function makeThinking(text: string) {
 	return { type: "thinking" as const, thinking: text };
 }
 
-function completedExec(toolCallId: string): RendererToolExecutionState {
+function completedExec(toolCallId: string, toolName = "bash"): LookUiToolExecState {
 	return {
 		toolCallId,
+		toolName,
+		args: {},
 		phase: "completed",
 		result: "ok",
 		isError: false,
-		startedAt: 0,
-		endedAt: 0,
 	};
 }
 
-function runningExec(toolCallId: string): RendererToolExecutionState {
+function runningExec(toolCallId: string, toolName = "bash"): LookUiToolExecState {
 	return {
 		toolCallId,
+		toolName,
+		args: {},
 		phase: "running",
 		partialResult: "",
 		isError: false,
-		startedAt: 0,
 	};
 }
 

@@ -33,8 +33,8 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("4. transports SDK events and SessionManager entries without a message mirror", () => {
-		expect(runtime).toContain('type: "session:sdk-event"');
-		expect(runtime).toContain("event,");
+		expect(runtime).toContain('type: "session:ui-event"');
+		expect(runtime).toContain("events: uiEvents");
 		expect(runtime).toContain("entries: session.sessionManager.getBranch()");
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');

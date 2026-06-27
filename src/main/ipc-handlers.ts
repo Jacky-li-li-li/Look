@@ -184,8 +184,8 @@ async function handleRendererInvoke(
 
 		// === Settings ===
 		case "settings:get": {
-			const providers = await runtimeManager.getProviderSettings();
-			return { success: true, providers };
+			const result = await runtimeManager.getProviderSettings();
+			return { success: true, ...result };
 		}
 
 		case "settings:get-api-key": {
@@ -198,8 +198,8 @@ async function handleRendererInvoke(
 			const _provider = guardProvider(data.provider);
 			guardString(data.key, "key");
 			runtimeManager.setApiKey(_provider, data.key);
-			const providers = await runtimeManager.getProviderSettings();
-			return { success: true, providers };
+			const result = await runtimeManager.getProviderSettings();
+			return { success: true, ...result };
 		}
 
 		case "settings:test-api-key": {
@@ -562,7 +562,7 @@ async function handleRendererInvoke(
 			return { success: true, profile };
 		}
 
-// === Shared area ===
+		// === Shared area ===
 		case "shared:list": {
 			const projectId = guardString(data.projectId, "projectId");
 			const nodes = await workspaceFileService.listSharedFiles(projectId);

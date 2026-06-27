@@ -58,3 +58,8 @@ export interface TestCustomProviderResult {
 	overall: "ok" | "fail";
 	results: ModelTestResult[];
 }
+
+export interface CustomProviderStats {
+	configured: number;
+	totalModels: number;
+}

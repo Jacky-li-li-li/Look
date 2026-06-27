@@ -8,7 +8,7 @@ import { Loader2, Palette, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { updateStatusAtom } from "../../store/atoms";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
-import type { ProviderInfo } from "./types";
+import type { CustomProviderStats, ProviderInfo } from "./types";
 
 const api = (window as any).look;
 
@@ -80,11 +80,12 @@ function UpdateCheckButton() {
 
 interface AboutTabProps {
 	providers: ProviderInfo[];
+	customStats: CustomProviderStats;
 }
 
-export default function AboutTab({ providers }: AboutTabProps) {
+export default function AboutTab({ providers, customStats }: AboutTabProps) {
 	const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.0.0";
-	const configured = providers.filter((p) => p.hasKey).length;
+	const configured = providers.filter((p) => p.hasKey).length + customStats.configured;
 
 	return (
 		<div className="flex h-full min-h-0 flex-col items-center justify-center gap-5 overflow-y-auto py-10 text-center">
@@ -108,7 +109,7 @@ export default function AboutTab({ providers }: AboutTabProps) {
 			</div>
 			<p className="text-[10px] text-muted-foreground/60 font-mono">
 				{configured} provider{configured !== 1 ? "s" : ""} configured ·{" "}
-				{providers.reduce((s, p) => s + p.modelsAvailable, 0)} models
+				{providers.reduce((s, p) => s + p.modelsAvailable, 0) + customStats.totalModels} models
 			</p>
 			<UpdateCheckButton />
 		</div>

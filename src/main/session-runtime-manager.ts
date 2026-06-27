@@ -1,6 +1,7 @@
 import fs, { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path, { join } from "node:path";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
@@ -51,6 +52,8 @@ import {
 	type ForkedSessionResult,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
+	type LookMessageSubEvent,
+	type LookUiEvent,
 	type MainToRendererEvent,
 	type NavigateTreeResult,
 	type PermissionAskEvent,
@@ -111,6 +114,50 @@ function isPermissionMode(value: unknown): value is PermissionMode {
 	return value === "always" || value === "ask" || value === "plan";
 }
 
+/** Tracks active (started-but-not-ended) content blocks during streaming.
+ *  Used by translateAgentSessionEvent to emit synthetic end events when
+ *  the assistant stream completes or agent turn ends. */
+interface ContentBlockTracker {
+	activeTextIndices: Set<number>;
+	activeThinkingIndices: Set<number>;
+	activeToolCallIndices: Set<number>;
+}
+
+function createContentBlockTracker(): ContentBlockTracker {
+	return {
+		activeTextIndices: new Set(),
+		activeThinkingIndices: new Set(),
+		activeToolCallIndices: new Set(),
+	};
+}
+
+/** Emit synthetic end events for any content blocks that were started but
+ *  never received a corresponding end event from the assistant stream. */
+function finishActiveBlocks(tracker: ContentBlockTracker, events: LookUiEvent[], now: number): void {
+	for (const ci of tracker.activeTextIndices) {
+		events.push({ type: "assistant_text_end", contentIndex: ci, text: "", timestamp: now });
+	}
+	for (const ci of tracker.activeThinkingIndices) {
+		events.push({ type: "thinking_end", contentIndex: ci, thinking: "", timestamp: now });
+	}
+	tracker.activeTextIndices.clear();
+	tracker.activeThinkingIndices.clear();
+	tracker.activeToolCallIndices.clear();
+}
+
+/** Extract plain-text content from a user AgentMessage. */
+function extractUserMessageText(message: AgentMessage): string {
+	const msg = message as unknown as Record<string, unknown>;
+	if (typeof msg.content === "string") return msg.content as string;
+	if (Array.isArray(msg.content)) {
+		return (msg.content as Array<Record<string, unknown>>)
+			.filter((b) => b.type === "text")
+			.map((b) => (b as { text: string }).text)
+			.join("\n");
+	}
+	return "";
+}
+
 /**
  * Hosts independent pi AgentSessionRuntime instances for sessions that are
  * selected or currently running. Each runtime still owns exactly one active pi
@@ -159,6 +206,11 @@ export class SessionRuntimeManager {
 	private readonly streamingStates = new Map<string, "idle" | "streaming" | "retrying">();
 	/** Turn start timestamp keyed by pi session id; used to compute and persist per-message runtimes. */
 	private readonly turnStartedAtBySession = new Map<string, number>();
+
+	/** Per-session content block tracker for the discrete event translator.
+	 *  Tracks active (started but not ended) text/thinking/toolcall blocks so the
+	 *  translator can emit synthetic end events when the assistant stream finishes. */
+	private readonly translationTrackers = new Map<string, ContentBlockTracker>();
 
 	/** Whether the session should be reported as streaming to the renderer.
 	 *  Falls back to the SDK getter only when no event-derived state exists. */
@@ -239,7 +291,6 @@ export class SessionRuntimeManager {
 		}
 		await this.disposeAllRuntimes();
 	}
-
 
 	async loadProjects(): Promise<ProjectInfo[]> {
 		try {
@@ -971,8 +1022,253 @@ export class SessionRuntimeManager {
 		this.emitSessionState(sessionId, "navigate");
 	}
 
+	/**
+	 * Translate a single AgentSessionEvent into zero or more discrete LookUiEvent items.
+	 *
+	 * Uses the fine-grained `assistantMessageEvent` sub-event on `message_update` to
+	 * produce delta-level events (text_delta / thinking_delta / toolcall_arg_delta)
+	 * instead of full message snapshots. The pi SDK already computes the deltas — we
+	 * simply forward them with stable `contentIndex` keys.
+	 */
+	private translateAgentSessionEvent(sessionId: string, event: AgentSessionEvent): LookUiEvent[] {
+		const now = Date.now();
+		const events: LookUiEvent[] = [];
+		let tracker = this.translationTrackers.get(sessionId);
+		if (!tracker) {
+			tracker = createContentBlockTracker();
+			this.translationTrackers.set(sessionId, tracker);
+		}
+
+		switch (event.type) {
+			// ── Run lifecycle ──
+			case "agent_start":
+				tracker.activeTextIndices.clear();
+				tracker.activeThinkingIndices.clear();
+				tracker.activeToolCallIndices.clear();
+				events.push({ type: "run_status", status: "streaming", timestamp: now });
+				break;
+
+			case "agent_end":
+				finishActiveBlocks(tracker, events, now);
+				events.push({
+					type: "run_status",
+					status: event.willRetry ? "retrying" : "idle",
+					willRetry: event.willRetry,
+					timestamp: now,
+				});
+				break;
+
+			// ── Message lifecycle ──
+			case "message_start": {
+				const msg = event.message as unknown as Record<string, unknown>;
+				if (msg.role === "user") {
+					const text = extractUserMessageText(event.message);
+					events.push({ type: "user_message", text, timestamp: now });
+				} else if (msg.role === "assistant") {
+					events.push({ type: "assistant_message_start", timestamp: now });
+				}
+				break;
+			}
+
+			case "message_end": {
+				finishActiveBlocks(tracker, events, now);
+				const msg = event.message as unknown as Record<string, unknown>;
+				const completed = !("stopReason" in msg) || (msg as { stopReason: string }).stopReason !== "aborted";
+				events.push({ type: "assistant_message_end", completed, timestamp: now });
+				break;
+			}
+
+			// ── ★ Core: fine-grained assistantMessageEvent deltas ★ ──
+			case "message_update": {
+				const sub = (event as unknown as { assistantMessageEvent?: LookMessageSubEvent }).assistantMessageEvent;
+				if (!sub) break;
+
+				switch (sub.type) {
+					case "text_start":
+						tracker.activeTextIndices.add(sub.contentIndex);
+						events.push({ type: "assistant_text_start", contentIndex: sub.contentIndex, timestamp: now });
+						break;
+					case "text_delta":
+						events.push({
+							type: "assistant_text_delta",
+							contentIndex: sub.contentIndex,
+							delta: sub.delta,
+							timestamp: now,
+						});
+						break;
+					case "text_end":
+						tracker.activeTextIndices.delete(sub.contentIndex);
+						events.push({
+							type: "assistant_text_end",
+							contentIndex: sub.contentIndex,
+							text: sub.content,
+							timestamp: now,
+						});
+						break;
+
+					case "thinking_start":
+						tracker.activeThinkingIndices.add(sub.contentIndex);
+						events.push({ type: "thinking_start", contentIndex: sub.contentIndex, timestamp: now });
+						break;
+					case "thinking_delta":
+						events.push({
+							type: "thinking_delta",
+							contentIndex: sub.contentIndex,
+							delta: sub.delta,
+							timestamp: now,
+						});
+						break;
+					case "thinking_end":
+						tracker.activeThinkingIndices.delete(sub.contentIndex);
+						events.push({
+							type: "thinking_end",
+							contentIndex: sub.contentIndex,
+							thinking: sub.content,
+							timestamp: now,
+						});
+						break;
+
+					case "toolcall_start":
+						tracker.activeToolCallIndices.add(sub.contentIndex);
+						// SDK 的 toolcall_start 在 partial AssistantMessage 的 content[contentIndex]
+						// 中已包含完整的 ToolCall { id, name, arguments }。提取 toolCallId 和 toolName
+						// 避免渲染层先显示 "unknown" 再闪烁为正确名称。
+						(() => {
+							const sdkPartial = (sub as any).partial;
+							const tcBlock = sdkPartial?.content?.[sub.contentIndex];
+							events.push({
+								type: "toolcall_start",
+								contentIndex: sub.contentIndex,
+								toolCallId: tcBlock?.id ?? "",
+								toolName: tcBlock?.name ?? "unknown",
+								timestamp: now,
+							});
+						})();
+						break;
+					case "toolcall_delta":
+						events.push({
+							type: "toolcall_arg_delta",
+							contentIndex: sub.contentIndex,
+							delta: sub.delta,
+							timestamp: now,
+						});
+						break;
+					case "toolcall_end":
+						tracker.activeToolCallIndices.delete(sub.contentIndex);
+						events.push({
+							type: "toolcall_end",
+							contentIndex: sub.contentIndex,
+							toolCallId: sub.toolCall.id,
+							toolName: sub.toolCall.name,
+							args: sub.toolCall.arguments as Record<string, unknown>,
+							timestamp: now,
+						});
+						break;
+
+					case "done":
+						finishActiveBlocks(tracker, events, now);
+						break;
+
+					case "error":
+						finishActiveBlocks(tracker, events, now);
+						events.push({ type: "error", message: sub.error.errorMessage ?? "Assistant error", timestamp: now });
+						break;
+				}
+				break;
+			}
+
+			// ── Tool execution (independent of message stream) ──
+			case "tool_execution_start":
+				events.push({
+					type: "tool_exec_start",
+					toolCallId: event.toolCallId,
+					toolName: event.toolName,
+					args: event.args as Record<string, unknown>,
+					timestamp: now,
+				});
+				break;
+
+			case "tool_execution_update":
+				events.push({
+					type: "tool_exec_update",
+					toolCallId: event.toolCallId,
+					partialResult: event.partialResult,
+					timestamp: now,
+				});
+				break;
+
+			case "tool_execution_end":
+				events.push({
+					type: "tool_exec_end",
+					toolCallId: event.toolCallId,
+					toolName: event.toolName,
+					result: event.result,
+					isError: event.isError,
+					timestamp: now,
+				});
+				break;
+
+			// ── Compaction ──
+			case "compaction_start":
+				events.push({ type: "compacting", active: true, timestamp: now });
+				break;
+			case "compaction_end":
+				events.push({ type: "compacting", active: false, timestamp: now });
+				break;
+
+			// ── Queue ──
+			case "queue_update":
+				events.push({
+					type: "queue_update",
+					steering: [...event.steering],
+					followUp: [...event.followUp],
+					timestamp: now,
+				});
+				break;
+
+			// ── Auto-retry ──
+			case "auto_retry_start":
+				events.push({
+					type: "retry_status",
+					status: "start",
+					attempt: event.attempt,
+					maxAttempts: event.maxAttempts,
+					delayMs: event.delayMs,
+					errorMessage: event.errorMessage,
+					timestamp: now,
+				});
+				break;
+			case "auto_retry_end":
+				events.push({
+					type: "retry_status",
+					status: "end",
+					attempt: event.attempt,
+					success: event.success,
+					finalError: event.finalError,
+					timestamp: now,
+				});
+				break;
+
+			// ── Session metadata ──
+			case "thinking_level_changed":
+				events.push({ type: "session_meta", field: "thinkingLevel", value: event.level, timestamp: now });
+				break;
+			case "session_info_changed":
+				if (event.name) {
+					events.push({ type: "session_meta", field: "name", value: event.name, timestamp: now });
+				}
+				break;
+		}
+
+		return events;
+	}
+
 	private handleSessionEvent(sessionId: string, event: AgentSessionEvent): void {
-		this.emit({ type: "session:sdk-event", sessionId, event });
+		// Translate SDK event to discrete LookUiEvent set
+		const uiEvents = this.translateAgentSessionEvent(sessionId, event);
+		if (uiEvents.length > 0) {
+			this.emit({ type: "session:ui-event", sessionId, events: uiEvents });
+		}
 		switch (event.type) {
 			case "agent_end":
 				this.persistPermissionModeIfPossible(sessionId);
@@ -995,6 +1291,11 @@ export class SessionRuntimeManager {
 			case "compaction_end":
 			case "auto_retry_start":
 			case "auto_retry_end":
+				// If the retry failed (not just ended successfully before a new agent_start),
+				// reset streaming state so the UI doesn't get stuck in "retrying" forever.
+				if (event.type === "auto_retry_end" && !event.success) {
+					this.streamingStates.set(sessionId, "idle");
+				}
 				this.emitSessionUpdated(sessionId);
 				break;
 		}
@@ -1074,13 +1375,18 @@ export class SessionRuntimeManager {
 	}
 
 	getAvailableModelsSync() {
-		// Use ModelRegistry.getAvailable() so auth sources that the SDK treats
-		// as configured (stored keys, env vars, runtime overrides, models.json
-		// keys) are all reflected consistently. getProviderAuthStatus().configured
-		// only returns true for a subset of these sources, which caused the API
-		// Keys settings list to hide models that the input-box selector could
-		// still pick.
-		return this.modelRegistry.getAvailable().map((model) => ({
+		// Filter to providers with explicitly configured auth (stored keys,
+		// models.json keys, runtime overrides, custom providers). Exclude
+		// providers that are only reachable via environment variables — the
+		// user didn't opt into those through the settings UI and ModelSelector
+		// should align with what the API Keys tab shows as "configured".
+		return this.modelRegistry.getAvailable()
+			.filter((model) => {
+				const auth = this.modelRegistry.getProviderAuthStatus(model.provider);
+				if (auth.source === "environment") return false;
+				return true;
+			})
+			.map((model) => ({
 			provider: model.provider,
 			id: model.id,
 			name: model.name ?? model.id,
@@ -1112,23 +1418,36 @@ export class SessionRuntimeManager {
 	}
 
 	async getProviderSettings() {
-		const customNames = new Set(this.customProvidersStore.list().map((p) => p.name));
+		const customList = this.customProvidersStore.list();
+		const customNames = new Set(customList.map((p) => p.name));
 		const providers = await this.getProviders();
-		return providers
-			.filter((provider) => !customNames.has(provider.id)).map((provider) => {
-			const auth = this.modelRegistry.getProviderAuthStatus(provider.id);
-			const models = this.getAvailableModelsSync().filter((model) => model.provider === provider.id);
-			return {
-				id: provider.id,
-				name: provider.name,
-				hasKey: provider.hasCredentials,
-				envVar: auth.source === "environment" ? auth.label : undefined,
-				modelsAvailable: models.length,
-				models,
-				authSource: auth.source,
-				envLabel: auth.label,
-			};
-		});
+		const filtered = providers
+			.filter((provider) => !customNames.has(provider.id))
+			.map((provider) => {
+				const auth = this.modelRegistry.getProviderAuthStatus(provider.id);
+				const models = this.getAvailableModelsSync().filter((model) => model.provider === provider.id);
+				return {
+					id: provider.id,
+					name: provider.name,
+					hasKey: provider.hasCredentials,
+					envVar: auth.source === "environment" ? auth.label : undefined,
+					modelsAvailable: models.length,
+					models,
+					authSource: auth.source,
+					envLabel: auth.label,
+				};
+			});
+
+		const customConfigured = customList.filter((cp) => !!cp.apiKey).length;
+		const customTotalModels = customList.reduce((sum, cp) => sum + cp.models.length, 0);
+
+		return {
+			providers: filtered,
+			customStats: {
+				configured: customConfigured,
+				totalModels: customTotalModels,
+			},
+		};
 	}
 
 	getPermissionMode(sessionId: string): PermissionMode {

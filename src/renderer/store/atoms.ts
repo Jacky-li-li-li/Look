@@ -231,7 +231,21 @@ interface SettingsProviderInfo {
 	authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
 	envLabel?: string;
 }
-export const providerSettingsAtom = atom<SettingsProviderInfo[]>([]);
+
+export interface CustomProviderStats {
+	configured: number;
+	totalModels: number;
+}
+
+export interface ProviderSettingsData {
+	providers: SettingsProviderInfo[];
+	customStats: CustomProviderStats;
+}
+
+export const providerSettingsAtom = atom<ProviderSettingsData>({
+	providers: [],
+	customStats: { configured: 0, totalModels: 0 },
+});
 
 // ---- Cleanup: call when an agent is destroyed to free atom memory ----
 

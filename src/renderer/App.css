@@ -949,6 +949,11 @@ body {
   .status-mark[data-status="thinking"],
   .status-mark[data-status="working"] {
     background: oklch(0.65 0.17 160);
+    animation: status-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
   }
   .status-mark[data-status="error"] {
     background: oklch(0.55 0.2 20);
