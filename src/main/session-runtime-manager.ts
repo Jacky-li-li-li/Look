@@ -1380,7 +1380,7 @@ export class SessionRuntimeManager {
 			task,
 			signal,
 			onUpdate,
-			title,
+			displayName,
 		);
 
 		// 发送任务 prompt 启动子会话执行
