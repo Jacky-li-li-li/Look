@@ -1332,9 +1332,10 @@ export class SessionRuntimeManager {
 		const childSessionId = session.sessionId;
 
 		// 命名：优先使用 LLM 提供的 title，否则拼接 agentName + task 摘要
-		const displayName = title?.trim()
-			? title.trim().slice(0, MAX_NAME_LENGTH)
-			: `${agent.title || agent.name} · ${task.replace(/\s+/g, " ").trim().slice(0, 48)}`.slice(0, MAX_NAME_LENGTH);
+		const rawName = title?.trim()
+			? title.trim()
+			: `${agent.title || agent.name} · ${task.replace(/\s+/g, " ").trim().slice(0, 48)}`;
+		const displayName = `Agent：${rawName}`.slice(0, MAX_NAME_LENGTH);
 		session.setSessionName(displayName);
 
 		// 工具白名单（与已配置工具取交集，避免激活不存在的工具）
