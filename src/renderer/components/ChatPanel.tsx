@@ -91,10 +91,15 @@ const ChatPanel = memo(function ChatPanel({
 	const doneCount = mergedProgress.filter((e) => e.status === "completed").length;
 	const failedCount = mergedProgress.filter((e) => e.status === "failed" || e.status === "aborted").length;
 
-	// 新子 Agent 启动时自动展开
+	// 新子 Agent 启动时自动展开，全部完成后自动折叠
 	useEffect(() => {
-		if (runningCount > 0) setSubProgressExpanded(true);
-	}, [runningCount]);
+		if (runningCount > 0) {
+			setSubProgressExpanded(true);
+		} else if (doneCount + failedCount > 0) {
+			// 有完成的子 Agent 且没有运行中的 → 全部结束 → 折叠
+			setSubProgressExpanded(false);
+		}
+	}, [runningCount, doneCount, failedCount]);
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
