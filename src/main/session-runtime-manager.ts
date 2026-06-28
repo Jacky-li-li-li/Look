@@ -1017,12 +1017,19 @@ export class SessionRuntimeManager {
 				if (available.length > 0) {
 					const first = available[0];
 					const model = this.modelRegistry.find(first.provider, first.id);
-					if (model) {
+					if (model && this.modelRegistry.hasConfiguredAuth(model)) {
 						try {
 							await session.setModel(model);
-						} catch {
-							// 设置模型失败不阻塞创建
+						} catch (err) {
+							// 设置模型失败不阻塞创建 — 记录错误便于排查
+							console.warn(`[session] Failed to set fallback model ${first.provider}/${first.id}:`, err);
 						}
+					} else if (!model) {
+						console.warn(`[session] Fallback model not found: ${first.provider}/${first.id}`);
+					} else {
+						console.warn(
+							`[session] Fallback model ${first.provider}/${first.id} lacks configured auth, skipping`,
+						);
 					}
 				}
 			}
@@ -1904,11 +1911,17 @@ export class SessionRuntimeManager {
 		// providers that are only reachable via environment variables — the
 		// user didn't opt into those through the settings UI and ModelSelector
 		// should align with what the API Keys tab shows as "configured".
+		// Also exclude providers with no configured auth at all — without this
+		// guard, built-in providers whose key is missing would still appear
+		// here (auth.source is undefined when configured=false) and the new-
+		// session fallback would pick one, fail to setModel, and silently leave
+		// the SDK's default (typically anthropic/claude-opus-4-8) in place.
 		return this.modelRegistry
 			.getAvailable()
 			.filter((model) => {
 				const auth = this.modelRegistry.getProviderAuthStatus(model.provider);
 				if (auth.source === "environment") return false;
+				if (!auth.configured) return false;
 				return true;
 			})
 			.map((model) => ({
