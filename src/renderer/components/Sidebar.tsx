@@ -130,6 +130,19 @@ export default function Sidebar({
 		return grouped;
 	}, [agents, projects]);
 
+	// Stage 4：子会话按父会话 ID 分组
+	const childSessionsByParent = useMemo(() => {
+		const map = new Map<string, AgentInfo[]>();
+		for (const agent of agents) {
+			if (agent.parentSessionId) {
+				const list = map.get(agent.parentSessionId) ?? [];
+				list.push(agent);
+				map.set(agent.parentSessionId, list);
+			}
+		}
+		return map;
+	}, [agents]);
+
 	useEffect(() => {
 		setOpenProjectIds((previousIds) => {
 			const previous = new Set(previousIds);
@@ -397,96 +410,139 @@ export default function Sidebar({
 											const phase = sessionPhases.get(agent.id) ?? "idle";
 											const isCompleted =
 												recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom);
+											const children = childSessionsByParent.get(agent.id) ?? [];
+											const hasChildren = children.length > 0;
 											return (
-												<div
-													key={agent.id}
-													data-agent-id={agent.id}
-													data-agent-status={phase}
-													data-running={isRunning || undefined}
-													data-completed={isCompleted ? "" : undefined}
-													data-active={isActive || undefined}
-													className="session-ledger-row group/session flex h-[38px] items-center gap-2 rounded-md border border-transparent px-2"
-												>
-													<button
-														type="button"
-														className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
-														onClick={() => selectSession(agent)}
-														onDoubleClick={() => beginEdit("session", agent.id, agent.name)}
+												<div key={agent.id}>
+													<div
+														key={agent.id}
+														data-agent-id={agent.id}
+														data-agent-status={phase}
+														data-running={isRunning || undefined}
+														data-completed={isCompleted ? "" : undefined}
+														data-active={isActive || undefined}
+														className="session-ledger-row group/session flex h-[38px] items-center gap-2 rounded-md border border-transparent px-2"
 													>
-														<span className="status-mark" data-status={phase} />
-														<span className="min-w-0 flex-1">
-															{editingSessionId === agent.id ? (
-																<input
-																	ref={editRef}
-																	value={editValue}
-																	onChange={(event) => setEditValue(event.target.value)}
-																	onBlur={commitEdit}
-																	onKeyDown={handleEditKeyDown}
-																	onClick={(event) => event.stopPropagation()}
-																	className="w-full border-b border-foreground/40 bg-transparent text-[11px] font-medium outline-none"
-																/>
-															) : (
-																<span className="block truncate text-[11px] font-medium">
-																	{agent.name}
+														<button
+															type="button"
+															className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
+															onClick={() => selectSession(agent)}
+															onDoubleClick={() => beginEdit("session", agent.id, agent.name)}
+														>
+															<span className="status-mark" data-status={phase} />
+															<span className="min-w-0 flex-1">
+																{editingSessionId === agent.id ? (
+																	<input
+																		ref={editRef}
+																		value={editValue}
+																		onChange={(event) => setEditValue(event.target.value)}
+																		onBlur={commitEdit}
+																		onKeyDown={handleEditKeyDown}
+																		onClick={(event) => event.stopPropagation()}
+																		className="w-full border-b border-foreground/40 bg-transparent text-[11px] font-medium outline-none"
+																	/>
+																) : (
+																	<span className="block truncate text-[11px] font-medium">
+																		{agent.name}
+																		{hasChildren && (
+																			<span className="ml-1 text-[9px] text-muted-foreground/40">
+																				({children.length})
+																			</span>
+																		)}
+																	</span>
+																)}
+																<span className="block truncate font-mono text-[8.5px] leading-tight text-muted-foreground/50">
+																	{isRunning
+																		? t(`session.status.${phase}`, phase)
+																		: agent.model ||
+																			(agent.sessionFilePath
+																				? t("session.messageCount", {
+																						count: agent.messageCount,
+																						defaultValue: "{{count}} messages",
+																					})
+																				: t("session.draft", "draft"))}
 																</span>
-															)}
-															<span className="block truncate font-mono text-[8.5px] leading-tight text-muted-foreground/50">
-																{isRunning
-																	? t(`session.status.${phase}`, phase)
-																	: agent.model ||
-																		(agent.sessionFilePath
-																			? t("session.messageCount", {
-																					count: agent.messageCount,
-																					defaultValue: "{{count}} messages",
-																				})
-																			: t("session.draft", "draft"))}
 															</span>
-														</span>
-														<span className="shrink-0 font-mono text-[9px] text-muted-foreground/45">
-															{fmtRelativeTime(agent.createdAt)}
-														</span>
-													</button>
-													<DropdownMenu>
-														<DropdownMenuTrigger asChild>
-															<Button
-																variant="line-ghost"
-																size="icon-xs"
-																className="-mr-1 opacity-0 group-hover/session:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
-																aria-label={t("session.menu", "Session menu")}
+															<span className="shrink-0 font-mono text-[9px] text-muted-foreground/45">
+																{fmtRelativeTime(agent.createdAt)}
+															</span>
+														</button>
+														<DropdownMenu>
+															<DropdownMenuTrigger asChild>
+																<Button
+																	variant="line-ghost"
+																	size="icon-xs"
+																	className="-mr-1 opacity-0 group-hover/session:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
+																	aria-label={t("session.menu", "Session menu")}
+																>
+																	<MoreHorizontal className="size-3" />
+																</Button>
+															</DropdownMenuTrigger>
+															<DropdownMenuContent align="end" className="w-44">
+																<DropdownMenuItem
+																	onSelect={() => beginEdit("session", agent.id, agent.name)}
+																	className="gap-2 text-[12px]"
+																>
+																	<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
+																</DropdownMenuItem>
+																<DropdownMenuItem
+																	onSelect={() => copySessionId(agent.id)}
+																	className="gap-2 text-[12px]"
+																>
+																	<Copy className="size-3.5" />{" "}
+																	{t("sidebar.copyId", "Copy session ID")}
+																</DropdownMenuItem>
+																<DropdownMenuItem
+																	onSelect={() => exportSession(agent.id)}
+																	className="gap-2 text-[12px]"
+																>
+																	<Download className="size-3.5" />{" "}
+																	{t("sidebar.exportChat", "Export session")}
+																</DropdownMenuItem>
+																<DropdownMenuSeparator />
+																<DropdownMenuItem
+																	variant="destructive"
+																	onSelect={() => onDestroy(agent.id)}
+																	className="gap-2 text-[12px]"
+																>
+																	<Trash2 className="size-3.5" /> {t("sidebar.delete", "Delete")}
+																</DropdownMenuItem>
+															</DropdownMenuContent>
+														</DropdownMenu>
+													</div>
+													{/* Stage 4：子会话缩进嵌套 */}
+													{children.map((child: AgentInfo) => {
+														const childPhase = sessionPhases.get(child.id) ?? "idle";
+														const childRunning = runningAgents.has(child.id);
+														return (
+															<div
+																key={child.id}
+																data-agent-id={child.id}
+																data-agent-status={childPhase}
+																data-running={childRunning || undefined}
+																className="session-ledger-row group/session flex h-[32px] items-center gap-1.5 rounded-md border border-transparent ml-[18px] pl-2 pr-1"
 															>
-																<MoreHorizontal className="size-3" />
-															</Button>
-														</DropdownMenuTrigger>
-														<DropdownMenuContent align="end" className="w-44">
-															<DropdownMenuItem
-																onSelect={() => beginEdit("session", agent.id, agent.name)}
-																className="gap-2 text-[12px]"
-															>
-																<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
-															</DropdownMenuItem>
-															<DropdownMenuItem
-																onSelect={() => copySessionId(agent.id)}
-																className="gap-2 text-[12px]"
-															>
-																<Copy className="size-3.5" /> {t("sidebar.copyId", "Copy session ID")}
-															</DropdownMenuItem>
-															<DropdownMenuItem
-																onSelect={() => exportSession(agent.id)}
-																className="gap-2 text-[12px]"
-															>
-																<Download className="size-3.5" />{" "}
-																{t("sidebar.exportChat", "Export session")}
-															</DropdownMenuItem>
-															<DropdownMenuSeparator />
-															<DropdownMenuItem
-																variant="destructive"
-																onSelect={() => onDestroy(agent.id)}
-																className="gap-2 text-[12px]"
-															>
-																<Trash2 className="size-3.5" /> {t("sidebar.delete", "Delete")}
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
+																<button
+																	type="button"
+																	className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
+																	onClick={() => selectSession(child)}
+																>
+																	<Bot className="size-3 shrink-0 text-muted-foreground/50" />
+																	<span className="status-mark" data-status={childPhase} />
+																	<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
+																		{child.agentConfigName ?? child.name}
+																	</span>
+																	<span className="shrink-0 text-[8px] text-muted-foreground/40">
+																		{childRunning
+																			? "running"
+																			: child.messageCount > 0
+																				? `${child.messageCount} msg`
+																				: ""}
+																	</span>
+																</button>
+															</div>
+														);
+													})}
 												</div>
 											);
 										})}
