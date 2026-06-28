@@ -116,6 +116,22 @@ export default function Sidebar({
 		});
 	}, []);
 
+	// 子会话折叠状态：Set 中是已折叠的父会话 ID（默认全展开）
+	const [collapsedSubSessions, setCollapsedSubSessions] = useState<Set<string>>(() => new Set());
+
+	const toggleSubSessions = useCallback(
+		(parentId: string, e: React.MouseEvent) => {
+			e.stopPropagation(); // 不触发 selectSession
+			setCollapsedSubSessions((prev) => {
+				const next = new Set(prev);
+				if (next.has(parentId)) next.delete(parentId);
+				else next.add(parentId);
+				return next;
+			});
+		},
+		[],
+	);
+
 	const sessionsByProject = useMemo(() => {
 		const grouped = new Map<string, AgentInfo[]>();
 		for (const project of projects) grouped.set(project.id, []);
@@ -514,7 +530,7 @@ export default function Sidebar({
 														</DropdownMenu>
 													</div>
 													{/* Stage 4：子会话缩进嵌套 */}
-													{children.map((child: AgentInfo) => {
+													{!collapsedSubSessions.has(agent.id) && children.map((child: AgentInfo) => {
 														const childPhase = sessionPhases.get(child.id) ?? "idle";
 														const childRunning = runningAgents.has(child.id);
 														return (
