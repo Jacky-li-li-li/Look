@@ -57,6 +57,8 @@ export interface UserSettings {
 	 * tab's "Title generation model" Select.
 	 */
 	autoTitleModel: string | null;
+	/** SubAgent 功能总开关。关闭后所有会话的 subagent 工具对 LLM 不可见。 */
+	subagentEnabled: boolean;
 }
 
 const DEFAULTS: UserSettings = {
@@ -72,6 +74,7 @@ const DEFAULTS: UserSettings = {
 	themeStyle: "ink-wash",
 	themeTone: "dark",
 	autoTitleModel: null,
+	subagentEnabled: true,
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -99,6 +102,8 @@ interface UiSettings {
 	themeTone: LookTone;
 	/** Model used to auto-generate the first session title. See UserSettings.autoTitleModel. */
 	autoTitleModel: string | null;
+	/** SubAgent 功能总开关。 */
+	subagentEnabled: boolean;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -113,6 +118,7 @@ const UI_DEFAULTS: UiSettings = {
 	themeStyle: "ink-wash",
 	themeTone: "dark",
 	autoTitleModel: null,
+	subagentEnabled: true,
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -222,6 +228,7 @@ export class UserSettingsStore {
 		if (partial.themeStyle !== undefined) uiPartial.themeStyle = partial.themeStyle;
 		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
 		if (partial.autoTitleModel !== undefined) uiPartial.autoTitleModel = partial.autoTitleModel;
+		if (partial.subagentEnabled !== undefined) uiPartial.subagentEnabled = partial.subagentEnabled;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

@@ -508,6 +508,7 @@ export type RendererToMainEvent =
 				openProjectIds: string[];
 				themeStyle: "ink-wash" | "swiss" | "bauhaus";
 				themeTone: "light" | "dark";
+				subagentEnabled: boolean;
 			}>;
 	  }
 	| { type: "settings:general:reset" }
@@ -590,6 +591,8 @@ export type RendererToMainEvent =
 	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
 	| { type: "agent:list-subagents"; parentSessionId: string }
 	| { type: "agent:get-parent-session"; childSessionId: string }
+	// ---- SubAgent：Agent 开关（Stage 2，应用到所有活动会话 + 持久化为默认） ----
+	| { type: "agent:set-subagent-enabled"; enabled: boolean }
 	// ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
 	| { type: "agent-definitions:list" }
 	| { type: "agent-definitions:create"; input: AgentDefinitionInput }

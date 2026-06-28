@@ -45,6 +45,7 @@ import {
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
 	sharedFilesAtomFamily,
+	subagentEnabledAtom,
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
@@ -702,6 +703,7 @@ export async function initAppData(api: any): Promise<void> {
 		if (settings.language) await i18n.changeLanguage(settings.language);
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
+		if (settings.subagentEnabled !== undefined) appStore.set(subagentEnabledAtom, settings.subagentEnabled);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
 		if (Array.isArray(settings.openedSessionIds)) appStore.set(openedSessionIdsAtom, settings.openedSessionIds);

@@ -112,6 +112,8 @@ interface LookAPI {
 	): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
 	deleteAgentDefinition(name: string): Promise<{ success: boolean; error?: string }>;
 	installAgentDefinition(name: string): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
+	// ---- SubAgent：Agent 开关（Stage 2） ----
+	setSubagentEnabled(enabled: boolean): Promise<{ success: boolean; enabled?: boolean; error?: string }>;
 	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
 	// ---- Shared area ----
 	listSharedFiles(projectId: string): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
@@ -176,6 +178,8 @@ interface GeneralSettings {
 	lastActiveProjectId: string;
 	openProjectIds: string[];
 	openedSessionIds: string[];
+	/** SubAgent 功能总开关。关闭后所有会话的 subagent 工具对 LLM 不可见。 */
+	subagentEnabled: boolean;
 }
 
 declare global {

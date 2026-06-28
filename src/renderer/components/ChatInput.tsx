@@ -19,6 +19,7 @@ import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
 import PermissionModeSelector from "./PermissionModeSelector";
 import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
+import SubagentToggle from "./SubagentToggle";
 import ThinkingSelector from "./ThinkingSelector";
 
 export interface ChatInputHandle {
@@ -375,6 +376,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 					onChanged={onThinkingChange}
 				/>
 				<PermissionModeSelector agentId={agentId} currentMode={permissionMode} />
+				<SubagentToggle />
 				<Popover open={toolsOpen} onOpenChange={setToolsOpen}>
 					<PopoverTrigger asChild>
 						<Button

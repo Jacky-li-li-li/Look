@@ -267,6 +267,10 @@ const api = {
   installAgentDefinition: (name) =>
     ipcRenderer.invoke("look:invoke", { type: "agent-definitions:install", name }),
 
+  // ---- SubAgent：Agent 开关（Stage 2，应用到所有活动会话 + 持久化为默认） ----
+  setSubagentEnabled: (enabled) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:set-subagent-enabled", enabled }),
+
   // ---- User Profile ----
   getUserProfile: () =>
     ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),

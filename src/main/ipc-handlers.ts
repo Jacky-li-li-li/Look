@@ -344,6 +344,9 @@ async function handleRendererInvoke(
 			if ("autoTitleModel" in settings) {
 				guardNullableString(settings.autoTitleModel, "settings.autoTitleModel");
 			}
+			if ("subagentEnabled" in settings) {
+				guardBoolean(settings.subagentEnabled, "settings.subagentEnabled");
+			}
 			const updated = await runtimeManager.updateGeneralSettings(data.settings ?? {});
 			return { success: true, settings: updated };
 		}
@@ -725,6 +728,13 @@ async function handleRendererInvoke(
 		case "agent:get-parent-session": {
 			const childId = guardAgentId(data.childSessionId, "childSessionId");
 			return { success: true, parentSessionId: runtimeManager.getParentSession(childId) };
+		}
+
+		// === SubAgent：Agent 开关（Stage 2，应用到所有活动会话 + 持久化为默认） ===
+		case "agent:set-subagent-enabled": {
+			guardBoolean(data.enabled, "enabled");
+			await runtimeManager.setSubagentEnabledGlobal(data.enabled);
+			return { success: true, enabled: data.enabled };
 		}
 
 		// === SubAgent：Agent 定义 CRUD（Stage 3 广场） ===

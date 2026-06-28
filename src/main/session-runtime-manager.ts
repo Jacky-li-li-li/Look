@@ -228,6 +228,8 @@ export class SessionRuntimeManager {
 	private readonly pendingSubSessions = new Map<string, PendingSubSession>();
 	/** Agent 开关：sessionId → enabled（Stage 2 持久化；Stage 1 默认 true） */
 	private readonly subagentEnabledBySession = new Map<string, boolean>();
+	/** SubAgent 全局默认开关（新会话继承）。由 user-settings 持久化。 */
+	private subagentDefaultEnabled = true;
 
 	/** Whether the session should be reported as streaming to the renderer.
 	 *  Falls back to the SDK getter only when no event-derived state exists. */
@@ -253,6 +255,7 @@ export class SessionRuntimeManager {
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
 		this.defaultPermissionMode = this.userSettings.getAll().permissionMode;
+		this.subagentDefaultEnabled = this.userSettings.getAll().subagentEnabled;
 		// Tool authorization must never silently grant trust to project resources.
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		this.autoTitleService = new AutoTitleService({
@@ -771,6 +774,7 @@ export class SessionRuntimeManager {
 		runtime.setRebindSession(async (nextSession) => this.rebindRuntime(runtime, nextSession));
 		this.runtimes.set(session.sessionId, managed);
 		this.syncPlanToolState(session.sessionId);
+		this.applySubagentDefaultOnBind(session.sessionId, session);
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 		return managed;
 	}
@@ -805,6 +809,7 @@ export class SessionRuntimeManager {
 		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
 		this.runtimes.set(session.sessionId, managed);
 		this.syncPlanToolState(session.sessionId);
+		this.applySubagentDefaultOnBind(session.sessionId, session);
 		if (this.activeSessionId === previousSessionId) this.activeSessionId = session.sessionId;
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 	}
@@ -984,23 +989,49 @@ export class SessionRuntimeManager {
 	// ============================================================
 
 	isSubagentEnabled(sessionId: string): boolean {
-		return this.subagentEnabledBySession.get(sessionId) ?? true;
+		return this.subagentEnabledBySession.get(sessionId) ?? this.subagentDefaultEnabled;
 	}
 
-	/** Stage 2：切换 Agent 开关。Stage 1 默认 true，此方法为后续阶段预留。 */
-	async setSubagentEnabled(sessionId: string, enabled: boolean): Promise<void> {
+	/**
+	 * 全局切换 SubAgent 开关：应用到所有活动会话（动态增删 subagent 工具），
+	 * 更新默认值（新会话继承），并持久化到 user-settings。
+	 */
+	async setSubagentEnabledGlobal(enabled: boolean): Promise<void> {
+		this.subagentDefaultEnabled = enabled;
+		await this.userSettings.update({ subagentEnabled: enabled });
+		await Promise.all(
+			Array.from(this.runtimes.keys()).map((sessionId) => this.applySubagentEnabled(sessionId, enabled)),
+		);
+	}
+
+	/** 把 enabled 状态应用到单个会话：动态增删 subagent 工具 + 记录 per-session 状态。 */
+	private async applySubagentEnabled(sessionId: string, enabled: boolean): Promise<void> {
 		this.subagentEnabledBySession.set(sessionId, enabled);
 		const managed = this.runtimes.get(sessionId);
 		if (!managed) return;
 		const session = managed.runtime.session;
-		if (!enabled) {
-			// 从活动工具中移除 subagent，LLM 即不可见不可调用。
-			const active = session.getActiveToolNames().filter((name) => name !== "subagent");
-			session.setActiveToolsByName(active);
-		} else {
-			// 恢复：重新激活全部已配置工具（不传 allowlist）。
+		if (enabled) {
+			// 恢复：重新激活全部已配置工具（不传 allowlist，扩展工具保持可用）。
 			session.setActiveToolsByName(session.getAllTools().map((tool) => tool.name));
+		} else {
+			// 关闭：从活动工具中移除 subagent，LLM 即不可见不可调用。
+			session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
 		}
+	}
+
+	/** Stage 2：切换 Agent 开关。Stage 1 默认 true，此方法为后续阶段预留。 */
+	async setSubagentEnabled(sessionId: string, enabled: boolean): Promise<void> {
+		await this.applySubagentEnabled(sessionId, enabled);
+	}
+
+	/**
+	 * 新会话绑定时应用全局默认开关。仅当默认关闭时移除 subagent 工具；
+	 * 默认开启时不触碰活动工具集，避免破坏 plan 模式的工具限制。
+	 */
+	private applySubagentDefaultOnBind(sessionId: string, session: AgentSession): void {
+		if (this.subagentDefaultEnabled) return;
+		this.subagentEnabledBySession.set(sessionId, false);
+		session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
 	}
 
 	/** 列出某父会话下的全部子会话 ID。 */
@@ -2265,12 +2296,21 @@ export class SessionRuntimeManager {
 			}
 		}
 		if (partial.permissionMode !== undefined) this.defaultPermissionMode = partial.permissionMode;
+		if (partial.subagentEnabled !== undefined) {
+			this.subagentDefaultEnabled = partial.subagentEnabled;
+			await Promise.all(
+				Array.from(this.runtimes.keys()).map((sessionId) =>
+					this.applySubagentEnabled(sessionId, partial.subagentEnabled as boolean),
+				),
+			);
+		}
 		return settings;
 	}
 
 	async resetGeneralSettings(): Promise<UserSettings> {
 		const settings = await this.userSettings.reset();
 		this.defaultPermissionMode = settings.permissionMode;
+		this.subagentDefaultEnabled = settings.subagentEnabled;
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		return settings;
 	}

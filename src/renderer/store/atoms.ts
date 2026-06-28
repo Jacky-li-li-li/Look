@@ -109,6 +109,9 @@ export const autoCollapseAtom = atom(true);
 
 export const userPreferredModelAtom = atom<string | null>(null);
 
+/** SubAgent 功能总开关。关闭后所有会话的 subagent 工具对 LLM 不可见（Stage 2）。 */
+export const subagentEnabledAtom = atom(true);
+
 // ---- Permission management ----
 
 export const permissionModeAtomFamily = atomFamily((_agentId: string) => atom<PermissionMode>("ask"));
