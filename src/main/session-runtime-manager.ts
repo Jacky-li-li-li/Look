@@ -60,7 +60,6 @@ import {
 	ensureLookDir,
 	ensureWorkspaceDir,
 	ensureWorkspaceSubsessionsDir,
-	getWorkspaceSubsessionsDir,
 	getAuthPath,
 	getCustomProvidersPath,
 	getLookDir,
@@ -68,6 +67,7 @@ import {
 	getProjectSharedDir,
 	getProjectsIndexPath,
 	getUiSettingsPath,
+	getWorkspaceSubsessionsDir,
 	resetLegacySessionsOnce,
 } from "./shared/look-storage.js";
 import { DEFAULT_SESSION_NAME } from "./shared/session-defaults.js";
@@ -143,6 +143,8 @@ interface PendingSubSession {
 	parentSessionId: string;
 	agent: AgentConfig;
 	task: string;
+	/** 最终计算的显示名（来自 LLM title 或 agent.title 或 agent.name） */
+	displayName: string;
 	resolve: (result: SubagentResult) => void;
 	onUpdate?: (progress: SubagentProgress) => void;
 	usage: SubagentUsage;
@@ -583,7 +585,9 @@ export class SessionRuntimeManager {
 						if (entry.type === "message") {
 							messageCount++;
 							if (!firstMessage) {
-								const msg = entry.message as { content?: string | Array<{ type: string; text: string }> } | undefined;
+								const msg = entry.message as
+									| { content?: string | Array<{ type: string; text: string }> }
+									| undefined;
 								const content = msg?.content;
 								if (typeof content === "string") firstMessage = content;
 								else if (Array.isArray(content) && content[0]?.type === "text") {
@@ -1358,7 +1362,7 @@ export class SessionRuntimeManager {
 			parentSessionId,
 			agentName: agent.name,
 		});
-		this.registerSubSession(parentSessionId, childSessionId, agent.name);
+		this.registerSubSession(parentSessionId, childSessionId, displayName);
 
 		// 通知渲染层子会话已创建（含 parentSessionId，Stage 4 据此嵌套）
 		this.emit({
@@ -1375,6 +1379,7 @@ export class SessionRuntimeManager {
 			task,
 			signal,
 			onUpdate,
+			title,
 		);
 
 		// 发送任务 prompt 启动子会话执行
@@ -1411,12 +1416,14 @@ export class SessionRuntimeManager {
 		task: string,
 		signal: AbortSignal | undefined,
 		onUpdate?: (progress: SubagentProgress) => void,
+		displayName?: string,
 	): Promise<SubagentResult> {
 		const pending: PendingSubSession = {
 			childSessionId,
 			parentSessionId,
 			agent,
 			task,
+			displayName: displayName || agent.title || agent.name,
 			resolve: undefined!,
 			onUpdate,
 			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
@@ -1459,7 +1466,7 @@ export class SessionRuntimeManager {
 
 		const result: SubagentResult = {
 			sessionId: childSessionId,
-			agentName: pending.agent.name,
+			agentName: pending.displayName,
 			agentSource: pending.agent.source,
 			task: pending.task,
 			status,
@@ -1474,7 +1481,7 @@ export class SessionRuntimeManager {
 			type: "session:subagent-completed",
 			parentSessionId: pending.parentSessionId,
 			childSessionId,
-			agentName: pending.agent.name,
+			agentName: pending.displayName,
 			result: {
 				sessionId: result.sessionId,
 				agentName: result.agentName,
@@ -1540,7 +1547,7 @@ export class SessionRuntimeManager {
 			type: "session:subagent-progress",
 			parentSessionId: pending.parentSessionId,
 			childSessionId: sessionId,
-			agentName: pending.agent.name,
+			agentName: pending.displayName,
 			task: pending.task,
 			status: "running",
 			partialOutput,
@@ -1557,7 +1564,7 @@ export class SessionRuntimeManager {
 		pending.onUpdate?.({
 			childSessionId: sessionId,
 			parentSessionId: pending.parentSessionId,
-			agentName: pending.agent.name,
+			agentName: pending.displayName,
 			task: pending.task,
 			status: "running",
 			partialOutput,
