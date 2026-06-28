@@ -13,6 +13,7 @@ import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import {
 	AlertTriangle,
+	Bot,
 	ChevronRight,
 	ChevronsDownUp,
 	ChevronsUpDown,
@@ -40,6 +41,8 @@ import {
 	recentlyCompletedAtom,
 	runningAgentsAtom,
 	sessionPhasesAtom,
+	settingsTabAtom,
+	showSettingsAtom,
 	sidebarCollapsedAtom,
 } from "../store/atoms";
 import { userProfileAtom } from "../store/authAtoms";
@@ -548,6 +551,19 @@ export default function Sidebar({
 					)}
 				</div>
 			</ScrollArea>
+
+			<button
+				type="button"
+				onClick={() => {
+					appStore.set(settingsTabAtom, "agents");
+					appStore.set(showSettingsAtom, true);
+				}}
+				className="flex h-8 shrink-0 items-center gap-2 border-t border-hairline px-3 text-left transition-colors hover:bg-foreground/[0.035]"
+				title="Agent 广场"
+			>
+				<Bot className="size-3.5 text-sky-500" />
+				<span className="text-[11px] text-muted-foreground">Agent 广场</span>
+			</button>
 
 			<button
 				type="button"

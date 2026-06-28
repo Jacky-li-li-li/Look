@@ -151,7 +151,7 @@ export const activeChatAtBottomAtom = atom(true);
 // ---- UI state ----
 
 export const showSettingsAtom = atom(false);
-export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile">("general");
+export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile" | "agents">("general");
 export const sidebarCollapsedAtom = atom(false);
 
 // ---- v0.5 Shared area ----
