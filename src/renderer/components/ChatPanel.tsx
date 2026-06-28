@@ -122,11 +122,10 @@ const ChatPanel = memo(function ChatPanel({
 						className="mx-4 flex items-center gap-2 rounded-lg border border-hairline bg-card/30 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-card/50"
 					>
 						<Bot className="size-3.5 shrink-0 text-sky-500" />
-						<span className="font-medium">{mergedProgress.length} 个 SubAgent</span>
-						<span className="text-[10px] text-muted-foreground">
-							{runningCount > 0 && `${runningCount} 执行中`}
-							{doneCount > 0 && `${runningCount > 0 ? ", " : ""}${doneCount} 已完成`}
-							{failedCount > 0 && `, ${failedCount} 失败`}
+						<span className="font-medium">
+							{runningCount > 0
+								? `${runningCount} 执行中${doneCount > 0 ? ` · ${doneCount} 已完成` : ""}${failedCount > 0 ? ` · ${failedCount} 失败` : ""}`
+								: `${doneCount + failedCount} 个 SubAgent 已完成`}
 						</span>
 						<span className="ml-auto text-[10px] text-muted-foreground/50">
 							{subProgressExpanded ? "收起" : "展开"}
