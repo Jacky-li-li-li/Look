@@ -282,13 +282,15 @@ export default function Sidebar({
 				<div className="space-y-1.5 px-2 py-2">
 					{projects.map((project) => {
 						const sessions = sessionsByProject.get(project.id) ?? [];
-						const runningCount = sessions.filter((session) => runningAgents.has(session.id)).length;
+						// Stage 4：子会话不渲染为顶层行，在父会话下方嵌套
+						const topLevelSessions = sessions.filter((s) => !s.parentSessionId);
 						const isOpen = openProjects.has(project.id);
 						const isActiveProject = project.id === activeProjectId;
 						const isExpanded = expandedProjectIds.has(project.id);
-						const shouldCollapse = sessions.length > SESSION_COLLAPSE_THRESHOLD && !isExpanded;
-						const visibleSessions = shouldCollapse ? sessions.slice(0, SESSION_COLLAPSE_THRESHOLD) : sessions;
-						const hiddenCount = sessions.length - SESSION_COLLAPSE_THRESHOLD;
+						const shouldCollapse = topLevelSessions.length > SESSION_COLLAPSE_THRESHOLD && !isExpanded;
+						const visibleSessions = shouldCollapse ? topLevelSessions.slice(0, SESSION_COLLAPSE_THRESHOLD) : topLevelSessions;
+						const hiddenCount = topLevelSessions.length - SESSION_COLLAPSE_THRESHOLD;
+						const runningCount = sessions.filter((session) => runningAgents.has(session.id)).length;
 						return (
 							<Collapsible
 								key={project.id}
