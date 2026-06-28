@@ -16,6 +16,7 @@ interface Props {
 	onClick?: () => void;
 }
 
+
 const STATUS_ICONS: Record<string, typeof CheckCircle2> = {
 	running: Loader2,
 	completed: CheckCircle2,
@@ -24,7 +25,7 @@ const STATUS_ICONS: Record<string, typeof CheckCircle2> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-	running: "text-amber-500",
+	running: "text-sky-500",
 	completed: "text-emerald-500",
 	failed: "text-red-500",
 	aborted: "text-muted-foreground/50",
@@ -58,7 +59,8 @@ const SubagentProgressCard = memo(function SubagentProgressCard({ entry, onClick
 			type="button"
 			onClick={onClick}
 			className={cn(
-				"w-full rounded-lg border border-hairline bg-card/30 px-3 py-2 text-left transition-colors hover:bg-card/50",
+				"w-full rounded-lg border bg-card/30 px-3 py-2 text-left transition-colors hover:bg-card/50",
+				"border-hairline",
 				onClick && "cursor-pointer",
 			)}
 		>

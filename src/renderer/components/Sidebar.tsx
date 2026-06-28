@@ -564,7 +564,7 @@ export default function Sidebar({
 																data-agent-id={child.id}
 																data-agent-status={childPhase}
 																data-running={childRunning || undefined}
-																className="session-ledger-row group/session flex h-[32px] items-center gap-1.5 rounded-md border border-transparent ml-[18px] pl-2 pr-1"
+																className="session-ledger-row group/session flex h-[32px] items-center gap-1.5 rounded-md border-sky-500/20 ml-[18px] pl-2 pr-1"
 															>
 																<button
 																	type="button"
