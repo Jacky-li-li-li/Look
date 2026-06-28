@@ -249,6 +249,24 @@ const api = {
   respondPlanApproval: (payload) =>
     ipcRenderer.invoke("look:invoke", { type: "plan:approval-respond", payload }),
 
+  // ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
+  listSubSessions: (parentSessionId) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:list-subagents", parentSessionId }),
+  getParentSession: (childSessionId) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent:get-parent-session", childSessionId }),
+
+  // ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
+  listAgentDefinitions: () =>
+    ipcRenderer.invoke("look:invoke", { type: "agent-definitions:list" }),
+  createAgentDefinition: (input) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent-definitions:create", input }),
+  updateAgentDefinition: (name, input) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent-definitions:update", name, input }),
+  deleteAgentDefinition: (name) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent-definitions:delete", name }),
+  installAgentDefinition: (name) =>
+    ipcRenderer.invoke("look:invoke", { type: "agent-definitions:install", name }),
+
   // ---- User Profile ----
   getUserProfile: () =>
     ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),

@@ -111,6 +111,13 @@ export interface AgentInfo {
 	sessionFilePath?: string;
 	/** Immutable project binding for this runtime/session row. */
 	projectId: string;
+	// ---- SubAgent 子会话字段（Stage 1+） ----
+	/** 父会话 ID。存在则表示本会话是 subagent 子会话，渲染层据此嵌套（Stage 4）。 */
+	parentSessionId?: string;
+	/** 是否为 subagent 子会话。 */
+	isSubagentSession?: boolean;
+	/** 触发本子会话的 Agent 定义名（如 "scout"）。 */
+	agentConfigName?: string;
 }
 
 export interface SessionRuntimeSnapshot {
@@ -293,6 +300,43 @@ export interface ForkedSessionResult {
 	sessionFilePath: string;
 }
 
+// ============================================================
+// SubAgent — Agent 定义（渲染层友好的传输类型）
+// ============================================================
+
+/** Agent 定义来源 */
+export type AgentDefinitionSource = "user" | "project" | "marketplace";
+
+/** 渲染层使用的 Agent 定义（与扩展内部 AgentConfig 对齐，去除系统提示等内部字段的可选项） */
+export interface AgentDefinitionInfo {
+	name: string;
+	title?: string;
+	description: string;
+	tools?: string[];
+	model?: string;
+	systemPrompt: string;
+	source: AgentDefinitionSource;
+	filePath: string;
+	icon?: string;
+	tags?: string[];
+	version?: string;
+	author?: string;
+}
+
+/** 创建 / 更新 Agent 定义的输入（name 不可变，作为文件名标识） */
+export interface AgentDefinitionInput {
+	name: string;
+	title?: string;
+	description: string;
+	tools?: string[];
+	model?: string;
+	systemPrompt: string;
+	icon?: string;
+	tags?: string[];
+	version?: string;
+	author?: string;
+}
+
 export interface FileTreeNode {
 	name: string;
 	path: string;
@@ -326,6 +370,43 @@ export type MainToRendererEvent =
 	| { type: "plan:question-resolved"; agentId: string; requestId: string }
 	| { type: "plan:approval-requested"; agentId: string; request: PlanApprovalRequest }
 	| { type: "plan:approval-resolved"; agentId: string; requestId: string }
+	// ---- SubAgent 事件 ----
+	// Agent 定义变更通知（Stage 3 广场刷新）
+	| { type: "subagent:definitions-updated" }
+	// 进度 / 完成事件（父会话感知子会话，Stage 5）
+	| {
+			type: "session:subagent-progress";
+			parentSessionId: string;
+			childSessionId: string;
+			agentName: string;
+			task: string;
+			status: "running" | "completed" | "failed" | "aborted";
+			partialOutput: string;
+			usage: {
+				input: number;
+				output: number;
+				cacheRead: number;
+				cacheWrite: number;
+				cost: number;
+				turns: number;
+			};
+			model?: string;
+	  }
+	| {
+			type: "session:subagent-completed";
+			parentSessionId: string;
+			childSessionId: string;
+			agentName: string;
+			result: {
+				sessionId: string;
+				agentName: string;
+				status: "completed" | "failed" | "aborted";
+				finalOutput: string;
+				model?: string;
+				stopReason?: string;
+				errorMessage?: string;
+			};
+	  }
 	// ---- Project events ----
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
@@ -505,7 +586,16 @@ export type RendererToMainEvent =
 	| { type: "permission:get-mode"; agentId: string }
 	| { type: "permission:respond"; payload: PermissionRespondPayload }
 	| { type: "plan:question-respond"; payload: PlanQuestionResponse }
-	| { type: "plan:approval-respond"; payload: PlanApprovalResponse };
+	| { type: "plan:approval-respond"; payload: PlanApprovalResponse }
+	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
+	| { type: "agent:list-subagents"; parentSessionId: string }
+	| { type: "agent:get-parent-session"; childSessionId: string }
+	// ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
+	| { type: "agent-definitions:list" }
+	| { type: "agent-definitions:create"; input: AgentDefinitionInput }
+	| { type: "agent-definitions:update"; name: string; input: AgentDefinitionInput }
+	| { type: "agent-definitions:delete"; name: string }
+	| { type: "agent-definitions:install"; name: string; source: "marketplace" };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

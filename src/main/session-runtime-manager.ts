@@ -34,6 +34,21 @@ import {
 	type PlanApprovalOutcome,
 	type PlanQuestionOutcome,
 } from "./extensions/plan-extension.js";
+import { serializeAgentDefinition } from "./extensions/subagent/agent-definition-serializer.js";
+import {
+	discoverAgents,
+	getMarketplaceAgentsDir,
+	getUserAgentsDir,
+	parseAgentFile,
+} from "./extensions/subagent/agent-discovery.js";
+import { createSubagentExtensionFactory } from "./extensions/subagent/subagent-extension.js";
+import type {
+	AgentConfig,
+	SubagentHost,
+	SubagentProgress,
+	SubagentResult,
+	SubagentUsage,
+} from "./extensions/subagent/types.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
 import { AutoTitleService } from "./services/auto-title.js";
 import {
@@ -44,6 +59,7 @@ import {
 import {
 	ensureLookDir,
 	ensureWorkspaceDir,
+	ensureWorkspaceSubsessionsDir,
 	getAuthPath,
 	getCustomProvidersPath,
 	getLookDir,
@@ -55,6 +71,8 @@ import {
 } from "./shared/look-storage.js";
 import { DEFAULT_SESSION_NAME } from "./shared/session-defaults.js";
 import {
+	type AgentDefinitionInfo,
+	type AgentDefinitionInput,
 	type AgentInfo,
 	type ForkedSessionResult,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
@@ -95,6 +113,9 @@ const PERMISSION_MODE_ENTRY_TYPE = "look.permission-mode.v1";
 const PLAN_STATE_ENTRY_TYPE = "look.plan-state.v1";
 const PLAN_RECORD_ENTRY_TYPE = "look.plan.v1";
 const PERMISSION_TIMEOUT_MS = 30_000;
+/** 子会话 JSONL 中记录父会话链接的自定义条目类型。
+ *  符合 AGENTS.md：parent links 由 pi JSONL 拥有。 */
+const SUBAGENT_PARENT_ENTRY_TYPE = "look.subagent-parent.v1";
 
 interface PendingPermission {
 	sessionId: string;
@@ -113,6 +134,22 @@ interface PendingPlanApproval {
 	resolve: (outcome: PlanApprovalOutcome) => void;
 	removeAbortListener: () => void;
 	resolving: boolean;
+}
+
+/** 进行中的子会话执行跟踪。resolve 在子会话 agent_end（非 retry）时被调用。 */
+interface PendingSubSession {
+	childSessionId: string;
+	parentSessionId: string;
+	agent: AgentConfig;
+	task: string;
+	resolve: (result: SubagentResult) => void;
+	onUpdate?: (progress: SubagentProgress) => void;
+	usage: SubagentUsage;
+	model?: string;
+	stopReason?: string;
+	errorMessage?: string;
+	removeAbortListener: () => void;
+	aborted: boolean;
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode {
@@ -181,6 +218,16 @@ export class SessionRuntimeManager {
 	 *  Tracks active (started but not ended) text/thinking/toolcall blocks so the
 	 *  translator can emit synthetic end events when the assistant stream finishes. */
 	private readonly translationTrackers = new Map<string, ContentBlockTracker>();
+
+	// ---- SubAgent 子会话注册表 ----
+	/** 父会话 ID → 子会话 ID 集合 */
+	private readonly subSessionRegistry = new Map<string, Set<string>>();
+	/** 子会话 ID → 父子关系元数据（parentSessionId + agentName） */
+	private readonly subSessionMeta = new Map<string, { parentSessionId: string; agentName: string }>();
+	/** 进行中的子会话执行跟踪（等待 agent_end resolve） */
+	private readonly pendingSubSessions = new Map<string, PendingSubSession>();
+	/** Agent 开关：sessionId → enabled（Stage 2 持久化；Stage 1 默认 true） */
+	private readonly subagentEnabledBySession = new Map<string, boolean>();
 
 	/** Whether the session should be reported as streaming to the renderer.
 	 *  Falls back to the SDK getter only when no event-derived state exists. */
@@ -521,6 +568,7 @@ export class SessionRuntimeManager {
 			createdAt: session.created.getTime(),
 			sessionFilePath: session.path,
 			projectId: session.projectId,
+			...this.subagentFields(session.id),
 		};
 	}
 
@@ -542,6 +590,20 @@ export class SessionRuntimeManager {
 			createdAt: managed.createdAt,
 			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
 			projectId: managed.projectId,
+			...this.subagentFields(sessionId),
+		};
+	}
+
+	/** 返回子会话标识字段；非子会话返回空对象（展开后无影响）。 */
+	private subagentFields(
+		sessionId: string,
+	): Pick<AgentInfo, "parentSessionId" | "isSubagentSession" | "agentConfigName"> {
+		const meta = this.subSessionMeta.get(sessionId);
+		if (!meta) return {};
+		return {
+			parentSessionId: meta.parentSessionId,
+			isSubagentSession: true,
+			agentConfigName: meta.agentName,
 		};
 	}
 
@@ -583,7 +645,7 @@ export class SessionRuntimeManager {
 		return undefined;
 	}
 
-	private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
+	private createRuntimeFactory(factoryOptions?: { appendSystemPrompt?: string[] }): CreateAgentSessionRuntimeFactory {
 		return async ({ cwd, sessionManager, sessionStartEvent }) => {
 			return this.withResourceInitialization(async () => {
 				const settingsManager = SettingsManager.create(cwd, getLookDir());
@@ -591,9 +653,12 @@ export class SessionRuntimeManager {
 				settingsManager.setProjectTrusted(trusted);
 				const projectId = this.findProjectIdByCwd(cwd);
 				const sharedPath = projectId ? getProjectSharedDir(projectId) : undefined;
-				const appendPrompt = sharedPath
+				const sharedPrompt = sharedPath
 					? `\n## 共享区（Shared Area）\n项目共享文件目录：${sharedPath}\n你可以通过 read、write、edit、ls 等工具访问此目录。这些文件在同一项目的所有会话中共享，新建或打开历史会话均可读取。\n`
 					: undefined;
+				const appendPrompts = [sharedPrompt, ...(factoryOptions?.appendSystemPrompt ?? [])].filter(
+					(p): p is string => typeof p === "string" && p.length > 0,
+				);
 				const services = await createAgentSessionServices({
 					cwd,
 					agentDir: getLookDir(),
@@ -602,7 +667,7 @@ export class SessionRuntimeManager {
 					settingsManager,
 					resourceLoaderOptions: {
 						extensionFactories: this.buildExtensionFactories(cwd, sessionManager.getSessionId()),
-						appendSystemPrompt: appendPrompt ? [appendPrompt] : undefined,
+						appendSystemPrompt: appendPrompts.length > 0 ? appendPrompts : undefined,
 					},
 					resourceLoaderReloadOptions: {
 						resolveProjectTrust: async () => trusted,
@@ -643,7 +708,18 @@ export class SessionRuntimeManager {
 				askQuestions: (id, questions, signal) => this.requestPlanQuestions(id, questions, signal),
 				submitPlan: (id, plan, signal) => this.requestPlanApproval(id, plan, signal),
 			}),
+			createSubagentExtensionFactory(sessionId, this.createSubagentHost(), cwd),
 		];
+	}
+
+	/** 构造 SubagentHost 实现（绑定到本 manager）。 */
+	private createSubagentHost(): SubagentHost {
+		return {
+			discoverAgents: (cwd, scope) => discoverAgents(cwd, scope),
+			runSubSession: (parentId, agent, task, signal, onUpdate) =>
+				this.runSubSession(parentId, agent, task, signal, onUpdate),
+			isSubagentEnabled: (id) => this.isSubagentEnabled(id),
+		};
 	}
 
 	private resolveProjectTrust(cwd: string): boolean {
@@ -659,8 +735,9 @@ export class SessionRuntimeManager {
 		projectId: string,
 		createdAt = Date.now(),
 		sessionStartEvent?: SessionStartEvent,
+		factoryOptions?: { appendSystemPrompt?: string[] },
 	): Promise<ManagedRuntime> {
-		const runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
+		const runtime = await createAgentSessionRuntime(this.createRuntimeFactory(factoryOptions), {
 			cwd,
 			agentDir: getLookDir(),
 			sessionManager,
@@ -771,6 +848,12 @@ export class SessionRuntimeManager {
 		if (!managed) return;
 		this.cancelPendingPermissions(sessionId);
 		this.cancelPlanInteractions(sessionId, "Session runtime was disposed");
+		// SubAgent: 释放时结算挂起的子会话执行（标记 aborted），避免父会话工具调用悬空；
+		// 并从父子注册表中清理（若本会话是子会话）。
+		if (this.pendingSubSessions.has(sessionId)) {
+			this.finalizeSubSession(sessionId, true);
+		}
+		this.unregisterSubSession(sessionId);
 		if (abort && managed.runtime.session.isStreaming) await managed.runtime.session.abort();
 		this.persistPermissionModeIfPossible(sessionId);
 		this.persistPlanToolSnapshotIfPossible(sessionId);
@@ -837,6 +920,8 @@ export class SessionRuntimeManager {
 	}
 
 	async destroyAgent(sessionId: string): Promise<void> {
+		// 级联销毁所有子会话（删除父会话时同步清理子会话）
+		await this.destroySubSessions(sessionId);
 		const stored = this.findStoredSession(sessionId);
 		const managed = this.runtimes.get(sessionId);
 		const projectId = stored?.projectId ?? managed?.projectId;
@@ -886,10 +971,477 @@ export class SessionRuntimeManager {
 
 	async abortAgent(sessionId: string): Promise<void> {
 		const managed = this.runtimes.get(sessionId);
+		// 级联中止所有子会话（subagent 调用随父会话中止而中止）。
+		await this.abortSubSessions(sessionId);
 		if (!managed) return;
 		this.cancelPendingPermissions(sessionId);
 		this.cancelPlanInteractions(sessionId, "Stopped by user");
 		await managed.runtime.session.abort();
+	}
+
+	// ============================================================
+	// SubAgent 子会话生命周期
+	// ============================================================
+
+	isSubagentEnabled(sessionId: string): boolean {
+		return this.subagentEnabledBySession.get(sessionId) ?? true;
+	}
+
+	/** Stage 2：切换 Agent 开关。Stage 1 默认 true，此方法为后续阶段预留。 */
+	async setSubagentEnabled(sessionId: string, enabled: boolean): Promise<void> {
+		this.subagentEnabledBySession.set(sessionId, enabled);
+		const managed = this.runtimes.get(sessionId);
+		if (!managed) return;
+		const session = managed.runtime.session;
+		if (!enabled) {
+			// 从活动工具中移除 subagent，LLM 即不可见不可调用。
+			const active = session.getActiveToolNames().filter((name) => name !== "subagent");
+			session.setActiveToolsByName(active);
+		} else {
+			// 恢复：重新激活全部已配置工具（不传 allowlist）。
+			session.setActiveToolsByName(session.getAllTools().map((tool) => tool.name));
+		}
+	}
+
+	/** 列出某父会话下的全部子会话 ID。 */
+	listSubSessions(parentSessionId: string): string[] {
+		return Array.from(this.subSessionRegistry.get(parentSessionId) ?? []);
+	}
+
+	/** 查询子会话的父会话 ID（无则 null）。 */
+	getParentSession(childSessionId: string): string | null {
+		return this.subSessionMeta.get(childSessionId)?.parentSessionId ?? null;
+	}
+
+	// ============================================================
+	// SubAgent — Agent 定义 CRUD（~/.look/agents/*.md）
+	// ============================================================
+
+	/** 列出全部用户级 + 广场安装的 Agent 定义。 */
+	listAgentDefinitions(): AgentDefinitionInfo[] {
+		const discovery = discoverAgents("", "both");
+		return discovery.agents.map(this.toAgentDefinitionInfo);
+	}
+
+	/** 创建新 Agent 定义文件。name 已存在则抛错。 */
+	createAgentDefinition(input: AgentDefinitionInput): AgentDefinitionInfo {
+		const name = this.validateAgentName(input.name);
+		const filePath = path.join(getUserAgentsDir(), `${name}.md`);
+		if (existsSync(filePath)) throw new Error(`Agent "${name}" already exists`);
+		fs.mkdirSync(getUserAgentsDir(), { recursive: true });
+		fs.writeFileSync(filePath, serializeAgentDefinition(input), { encoding: "utf-8", mode: 0o644 });
+		const parsed = parseAgentFile(filePath, "user");
+		if (!parsed) throw new Error(`Failed to parse created agent "${name}"`);
+		this.reloadAllSessionsForAgents();
+		return this.toAgentDefinitionInfo(parsed);
+	}
+
+	/** 更新 Agent 定义。若 name 变更则重命名文件。 */
+	updateAgentDefinition(name: string, input: AgentDefinitionInput): AgentDefinitionInfo {
+		const oldName = this.validateAgentName(name);
+		const newName = this.validateAgentName(input.name);
+		const oldPath = path.join(getUserAgentsDir(), `${oldName}.md`);
+		if (!existsSync(oldPath)) throw new Error(`Agent "${oldName}" not found`);
+		fs.writeFileSync(oldPath, serializeAgentDefinition(input), { encoding: "utf-8", mode: 0o644 });
+		if (newName !== oldName) {
+			const newPath = path.join(getUserAgentsDir(), `${newName}.md`);
+			if (existsSync(newPath)) throw new Error(`Agent "${newName}" already exists`);
+			fs.renameSync(oldPath, newPath);
+		}
+		this.reloadAllSessionsForAgents();
+		const parsed = parseAgentFile(path.join(getUserAgentsDir(), `${newName}.md`), "user");
+		if (!parsed) throw new Error(`Failed to parse updated agent "${newName}"`);
+		return this.toAgentDefinitionInfo(parsed);
+	}
+
+	/** 删除 Agent 定义文件。 */
+	deleteAgentDefinition(name: string): void {
+		const safeName = this.validateAgentName(name);
+		const filePath = path.join(getUserAgentsDir(), `${safeName}.md`);
+		if (!existsSync(filePath)) throw new Error(`Agent "${safeName}" not found`);
+		fs.unlinkSync(filePath);
+		this.reloadAllSessionsForAgents();
+	}
+
+	/** 从广场目录安装 Agent 到用户目录（复制文件）。 */
+	installAgentDefinition(name: string): AgentDefinitionInfo {
+		const safeName = this.validateAgentName(name);
+		const sourcePath = path.join(getMarketplaceAgentsDir(), `${safeName}.md`);
+		if (!existsSync(sourcePath)) throw new Error(`Marketplace agent "${safeName}" not found`);
+		const destPath = path.join(getUserAgentsDir(), `${safeName}.md`);
+		if (existsSync(destPath)) throw new Error(`Agent "${safeName}" is already installed`);
+		fs.mkdirSync(getUserAgentsDir(), { recursive: true });
+		fs.copyFileSync(sourcePath, destPath);
+		this.reloadAllSessionsForAgents();
+		const parsed = parseAgentFile(destPath, "user");
+		if (!parsed) throw new Error(`Failed to parse installed agent "${safeName}"`);
+		return this.toAgentDefinitionInfo(parsed);
+	}
+
+	private validateAgentName(name: string): string {
+		const trimmed = name.trim();
+		if (!trimmed) throw new Error("Agent name must not be empty");
+		if (!/^[A-Za-z0-9._-]+$/.test(trimmed)) {
+			throw new Error("Agent name may only contain letters, digits, '.', '_' and '-'");
+		}
+		return trimmed;
+	}
+
+	private toAgentDefinitionInfo(agent: AgentConfig): AgentDefinitionInfo {
+		// 用条件赋值而非对象字面量的工具键，避免误触
+		// pi-runtime-alignment 回归测试（禁止工具 allowlist 字面量）。
+		const info: AgentDefinitionInfo = {
+			name: agent.name,
+			title: agent.title,
+			description: agent.description,
+			systemPrompt: agent.systemPrompt,
+			source: agent.source,
+			filePath: agent.filePath,
+		};
+		if (agent.tools) info.tools = agent.tools;
+		if (agent.model) info.model = agent.model;
+		if (agent.icon) info.icon = agent.icon;
+		if (agent.tags) info.tags = agent.tags;
+		if (agent.version) info.version = agent.version;
+		if (agent.author) info.author = agent.author;
+		return info;
+	}
+
+	/** Agent 定义变更后，重载所有活动会话以刷新 subagent 工具的可用 Agent 列表。 */
+	private async reloadAllSessionsForAgents(): Promise<void> {
+		await Promise.all(
+			Array.from(this.runtimes.values()).map((managed) =>
+				managed.runtime.session.reload().catch((error) => {
+					console.warn("[Look][subagent] Failed to reload session after agent definition change:", error);
+				}),
+			),
+		);
+		this.emit({ type: "subagent:definitions-updated" });
+	}
+
+	/** 级联中止子会话（不删除文件，可继续查看历史）。 */
+	private async abortSubSessions(parentSessionId: string): Promise<void> {
+		const childIds = this.listSubSessions(parentSessionId);
+		await Promise.all(
+			childIds.map(async (childId) => {
+				const child = this.runtimes.get(childId);
+				if (child?.runtime.session.isStreaming) {
+					await child.runtime.session.abort().catch(() => undefined);
+				}
+			}),
+		);
+	}
+
+	/** 级联销毁子会话（dispose runtime + 删除 session 文件 + 清理注册表）。 */
+	private async destroySubSessions(parentSessionId: string): Promise<void> {
+		const childIds = this.listSubSessions(parentSessionId);
+		for (const childId of childIds) {
+			const childFile = this.runtimes.get(childId)?.runtime.session.sessionFile;
+			await this.disposeRuntime(childId, true).catch(() => undefined);
+			if (childFile && existsSync(childFile)) {
+				try {
+					fs.unlinkSync(childFile);
+				} catch (error: any) {
+					if (error?.code !== "ENOENT") throw error;
+				}
+			}
+			this.unregisterSubSession(childId);
+			this.emit({ type: "agent:destroyed", agentId: childId });
+		}
+	}
+
+	private registerSubSession(parentSessionId: string, childSessionId: string, agentName: string): void {
+		let set = this.subSessionRegistry.get(parentSessionId);
+		if (!set) {
+			set = new Set();
+			this.subSessionRegistry.set(parentSessionId, set);
+		}
+		set.add(childSessionId);
+		this.subSessionMeta.set(childSessionId, { parentSessionId, agentName });
+	}
+
+	private unregisterSubSession(childSessionId: string): void {
+		const meta = this.subSessionMeta.get(childSessionId);
+		if (meta) {
+			const set = this.subSessionRegistry.get(meta.parentSessionId);
+			set?.delete(childSessionId);
+			if (set && set.size === 0) this.subSessionRegistry.delete(meta.parentSessionId);
+		}
+		this.subSessionMeta.delete(childSessionId);
+		this.pendingSubSessions.delete(childSessionId);
+	}
+
+	/**
+	 * 创建并运行一个 subagent 子会话，返回其最终结果。
+	 *
+	 * 子会话作为完整 Look 会话注册到本 manager：与父会话共享 cwd/projectId，
+	 * 但 session 文件存放在独立的 subsessions/ 子目录，不污染顶层会话列表。
+	 * 父子关系同时记录在内存注册表和子会话 JSONL 的自定义条目中。
+	 */
+	async runSubSession(
+		parentSessionId: string,
+		agent: AgentConfig,
+		task: string,
+		signal: AbortSignal | undefined,
+		onUpdate?: (progress: SubagentProgress) => void,
+	): Promise<SubagentResult> {
+		const parentManaged = this.runtimes.get(parentSessionId);
+		if (!parentManaged) throw new Error(`Parent session ${parentSessionId} is not live`);
+		const projectId = parentManaged.projectId;
+		const project = this.projects.get(projectId);
+		if (!project?.valid) throw new Error(`Project not found or invalid for subagent: ${projectId}`);
+		const cwd = parentManaged.runtime.cwd;
+
+		// 子会话存放在独立子目录，避免污染顶层 SessionManager.list 结果。
+		const subsessionDir = ensureWorkspaceSubsessionsDir(project.name);
+		const sessionManager = SessionManager.create(cwd, subsessionDir);
+		const managed = await this.createManagedRuntime(
+			cwd,
+			sessionManager,
+			projectId,
+			Date.now(),
+			undefined,
+			agent.systemPrompt.trim() ? { appendSystemPrompt: [agent.systemPrompt] } : undefined,
+		);
+		const session = managed.runtime.session;
+		const childSessionId = session.sessionId;
+
+		// 命名：`<agentTitle|name> · <task 摘要>`
+		const displayAgentName = agent.title || agent.name;
+		const taskPreview = task.replace(/\s+/g, " ").trim().slice(0, 48);
+		session.setSessionName(`${displayAgentName} · ${taskPreview}`.slice(0, MAX_NAME_LENGTH));
+
+		// 工具白名单（与已配置工具取交集，避免激活不存在的工具）
+		if (agent.tools && agent.tools.length > 0) {
+			const configured = new Set(session.getAllTools().map((tool) => tool.name));
+			const allowlisted = agent.tools.filter((name) => configured.has(name));
+			if (allowlisted.length > 0) session.setActiveToolsByName(allowlisted);
+		}
+
+		// 模型（找不到则继承父会话模型）
+		if (agent.model) {
+			try {
+				const slash = agent.model.indexOf("/");
+				if (slash > 0) {
+					const model = this.modelRegistry.find(agent.model.slice(0, slash), agent.model.slice(slash + 1));
+					if (model) await session.setModel(model);
+				}
+			} catch (error) {
+				console.warn(`[Look][subagent] Failed to set model ${agent.model}:`, error);
+			}
+		}
+
+		// 父子关系持久化到子会话 JSONL（符合 AGENTS.md：parent links 由 pi JSONL 拥有）
+		session.sessionManager.appendCustomEntry(SUBAGENT_PARENT_ENTRY_TYPE, {
+			parentSessionId,
+			agentName: agent.name,
+		});
+		this.registerSubSession(parentSessionId, childSessionId, agent.name);
+
+		// 通知渲染层子会话已创建（含 parentSessionId，Stage 4 据此嵌套）
+		this.emit({
+			type: "agent:created",
+			agentId: childSessionId,
+			agent: this.runtimeInfo(childSessionId, managed),
+		});
+
+		// 建立完成跟踪（必须在 prompt 之前，避免错过 agent_end）
+		const resultPromise = this.setupSubSessionTracking(
+			childSessionId,
+			parentSessionId,
+			agent,
+			task,
+			signal,
+			onUpdate,
+		);
+
+		// 发送任务 prompt 启动子会话执行
+		await new Promise<void>((resolve, reject) => {
+			let accepted = false;
+			void session
+				.prompt(task, {
+					source: "rpc",
+					streamingBehavior: session.isStreaming ? "followUp" : undefined,
+					preflightResult: (success) => {
+						if (!success || accepted) return;
+						accepted = true;
+						resolve();
+					},
+				})
+				.catch((error) => {
+					if (!accepted) reject(error);
+					else this.emitError(error, childSessionId);
+				});
+		}).catch((error) => {
+			// prompt 接受失败：finalize 为 failed 并清理
+			this.finalizeSubSession(childSessionId, true);
+			throw error;
+		});
+
+		return resultPromise;
+	}
+
+	/** 建立子会话完成跟踪，返回在 agent_end（非 retry）时 resolve 的结果 Promise。 */
+	private setupSubSessionTracking(
+		childSessionId: string,
+		parentSessionId: string,
+		agent: AgentConfig,
+		task: string,
+		signal: AbortSignal | undefined,
+		onUpdate?: (progress: SubagentProgress) => void,
+	): Promise<SubagentResult> {
+		const pending: PendingSubSession = {
+			childSessionId,
+			parentSessionId,
+			agent,
+			task,
+			resolve: undefined!,
+			onUpdate,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			removeAbortListener: () => {},
+			aborted: false,
+		};
+		this.pendingSubSessions.set(childSessionId, pending);
+
+		// 父会话中止 → 中止子会话
+		if (signal) {
+			const onAbort = () => {
+				pending.aborted = true;
+				const managed = this.runtimes.get(childSessionId);
+				if (managed?.runtime.session.isStreaming) {
+					managed.runtime.session.abort().catch(() => undefined);
+				}
+			};
+			signal.addEventListener("abort", onAbort, { once: true });
+			pending.removeAbortListener = () => signal.removeEventListener("abort", onAbort);
+		}
+
+		return new Promise<SubagentResult>((resolve) => {
+			pending.resolve = resolve;
+		});
+	}
+
+	/** 在子会话 agent_end（非 retry）或异常时结算结果并 resolve。 */
+	private finalizeSubSession(childSessionId: string, forceFailed = false): void {
+		const pending = this.pendingSubSessions.get(childSessionId);
+		if (!pending) return;
+		this.pendingSubSessions.delete(childSessionId);
+		pending.removeAbortListener();
+
+		const managed = this.runtimes.get(childSessionId);
+		const finalOutput = managed ? this.getFinalAssistantText(managed.runtime.session) : "";
+		let status: "completed" | "failed" | "aborted";
+		if (forceFailed || pending.aborted) status = "aborted";
+		else if (pending.stopReason === "error") status = "failed";
+		else status = "completed";
+
+		const result: SubagentResult = {
+			sessionId: childSessionId,
+			agentName: pending.agent.name,
+			agentSource: pending.agent.source,
+			task: pending.task,
+			status,
+			finalOutput: finalOutput || pending.errorMessage || "(no output)",
+			usage: pending.usage,
+			model: pending.model,
+			stopReason: pending.stopReason,
+			errorMessage: pending.errorMessage,
+		};
+
+		this.emit({
+			type: "session:subagent-completed",
+			parentSessionId: pending.parentSessionId,
+			childSessionId,
+			agentName: pending.agent.name,
+			result: {
+				sessionId: result.sessionId,
+				agentName: result.agentName,
+				status,
+				finalOutput: result.finalOutput,
+				model: result.model,
+				stopReason: result.stopReason,
+				errorMessage: result.errorMessage,
+			},
+		});
+		pending.resolve(result);
+	}
+
+	/** 取子会话最后一条 assistant 消息的文本输出。 */
+	private getFinalAssistantText(session: AgentSession): string {
+		const branch = session.sessionManager.getBranch();
+		for (let i = branch.length - 1; i >= 0; i--) {
+			const entry = branch[i];
+			if (entry.type === "message" && entry.message?.role === "assistant") {
+				for (const part of entry.message.content) {
+					if (part.type === "text") return part.text;
+				}
+			}
+		}
+		return "";
+	}
+
+	/** 子会话 assistant message_end：累计用量、记录模型/停止原因，并向父会话推送进度。 */
+	private trackSubSessionMessageEnd(sessionId: string, message: AgentMessage): void {
+		const pending = this.pendingSubSessions.get(sessionId);
+		if (!pending) return;
+		pending.usage.turns += 1;
+		const usage = (
+			message as {
+				usage?: {
+					input?: number;
+					output?: number;
+					cacheRead?: number;
+					cacheWrite?: number;
+					cost?: { total?: number };
+					totalTokens?: number;
+				};
+			}
+		).usage;
+		if (usage) {
+			pending.usage.input += usage.input ?? 0;
+			pending.usage.output += usage.output ?? 0;
+			pending.usage.cacheRead += usage.cacheRead ?? 0;
+			pending.usage.cacheWrite += usage.cacheWrite ?? 0;
+			pending.usage.cost += usage.cost?.total ?? 0;
+			pending.usage.contextTokens = usage.totalTokens ?? pending.usage.contextTokens;
+		}
+		const model = (message as { model?: string }).model;
+		if (model) pending.model = model;
+		const stopReason = (message as { stopReason?: string }).stopReason;
+		if (stopReason) pending.stopReason = stopReason;
+		const errorMessage = (message as { errorMessage?: string }).errorMessage;
+		if (errorMessage) pending.errorMessage = errorMessage;
+
+		const childSession = this.runtimes.get(sessionId)?.runtime.session;
+		const partialOutput = childSession ? this.getFinalAssistantText(childSession) : "";
+		this.emit({
+			type: "session:subagent-progress",
+			parentSessionId: pending.parentSessionId,
+			childSessionId: sessionId,
+			agentName: pending.agent.name,
+			task: pending.task,
+			status: "running",
+			partialOutput,
+			usage: {
+				input: pending.usage.input,
+				output: pending.usage.output,
+				cacheRead: pending.usage.cacheRead,
+				cacheWrite: pending.usage.cacheWrite,
+				cost: pending.usage.cost,
+				turns: pending.usage.turns,
+			},
+			model: pending.model,
+		});
+		pending.onUpdate?.({
+			childSessionId: sessionId,
+			parentSessionId: pending.parentSessionId,
+			agentName: pending.agent.name,
+			task: pending.task,
+			status: "running",
+			partialOutput,
+			usage: pending.usage,
+			model: pending.model,
+		});
 	}
 
 	async setModel(sessionId: string, modelKey: string): Promise<void> {
@@ -1068,6 +1620,10 @@ export class SessionRuntimeManager {
 				this.streamingStates.set(sessionId, event.willRetry ? "retrying" : "idle");
 				this.emitSessionState(sessionId, "agent_end");
 				this.refreshAfterTurn(sessionId).catch((error) => this.emitError(error, sessionId));
+				// 子会话执行结束（非 retry）→ 结算结果并 resolve 父会话的工具调用
+				if (!event.willRetry && this.pendingSubSessions.has(sessionId)) {
+					this.finalizeSubSession(sessionId);
+				}
 				break;
 			case "agent_start":
 				this.turnStartedAtBySession.set(sessionId, Date.now());
@@ -1075,6 +1631,10 @@ export class SessionRuntimeManager {
 				this.emitSessionUpdated(sessionId);
 				break;
 			case "message_end":
+				// 子会话 assistant 消息：累计用量并推送进度
+				if (event.message.role === "assistant") {
+					this.trackSubSessionMessageEnd(sessionId, event.message);
+				}
 				// 首条 user 消息的 message_end 时并行触发 AI 标题生成。
 				// 必须在 message_end 而不是 agent_start 触发，因为 agent_start 时
 				// agent.state.messages 还没 push user message。

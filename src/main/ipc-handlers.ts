@@ -21,7 +21,13 @@ import {
 	guardStringArray,
 } from "./ipc-guards.js";
 import type { SessionRuntimeManager } from "./session-runtime-manager.js";
-import type { MainToRendererEvent, PermissionMode, RendererToMainEvent, ThinkingLevel } from "./shared/types.js";
+import type {
+	AgentDefinitionInput,
+	MainToRendererEvent,
+	PermissionMode,
+	RendererToMainEvent,
+	ThinkingLevel,
+} from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
@@ -710,9 +716,67 @@ async function handleRendererInvoke(
 			return { success: accepted, error: accepted ? undefined : "Plan approval request is no longer pending" };
 		}
 
+		// === SubAgent：子会话关系查询（Stage 4 嵌套） ===
+		case "agent:list-subagents": {
+			const parentId = guardAgentId(data.parentSessionId, "parentSessionId");
+			return { success: true, childSessionIds: runtimeManager.listSubSessions(parentId) };
+		}
+
+		case "agent:get-parent-session": {
+			const childId = guardAgentId(data.childSessionId, "childSessionId");
+			return { success: true, parentSessionId: runtimeManager.getParentSession(childId) };
+		}
+
+		// === SubAgent：Agent 定义 CRUD（Stage 3 广场） ===
+		case "agent-definitions:list": {
+			return { success: true, agents: runtimeManager.listAgentDefinitions() };
+		}
+
+		case "agent-definitions:create": {
+			const input = guardAgentDefinitionInput(data.input);
+			const agent = runtimeManager.createAgentDefinition(input);
+			return { success: true, agent };
+		}
+
+		case "agent-definitions:update": {
+			guardString(data.name, "name");
+			const input = guardAgentDefinitionInput(data.input);
+			const agent = runtimeManager.updateAgentDefinition(data.name, input);
+			return { success: true, agent };
+		}
+
+		case "agent-definitions:delete": {
+			guardString(data.name, "name");
+			runtimeManager.deleteAgentDefinition(data.name);
+			return { success: true };
+		}
+
+		case "agent-definitions:install": {
+			guardString(data.name, "name");
+			const agent = runtimeManager.installAgentDefinition(data.name);
+			return { success: true, agent };
+		}
+
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };
 	}
+}
+
+/** 校验 Agent 定义输入（Stage 3 广场创建/编辑） */
+function guardAgentDefinitionInput(input: unknown): AgentDefinitionInput {
+	const obj = guardObject(input, "input");
+	const name = guardString(obj.name, "input.name");
+	const description = guardString(obj.description, "input.description");
+	const systemPrompt = guardString(obj.systemPrompt, "input.systemPrompt");
+	const result: AgentDefinitionInput = { name, description, systemPrompt };
+	if (obj.title !== undefined) result.title = guardString(obj.title, "input.title");
+	if (obj.model !== undefined) result.model = guardString(obj.model, "input.model");
+	if (obj.icon !== undefined) result.icon = guardString(obj.icon, "input.icon");
+	if (obj.version !== undefined) result.version = guardString(obj.version, "input.version");
+	if (obj.author !== undefined) result.author = guardString(obj.author, "input.author");
+	if (obj.tools !== undefined) result.tools = guardStringArray(obj.tools, "input.tools");
+	if (obj.tags !== undefined) result.tags = guardStringArray(obj.tags, "input.tags");
+	return result;
 }
 
 export async function promptForProjectTrust(

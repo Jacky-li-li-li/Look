@@ -25,6 +25,11 @@ function createRuntime() {
 	runtime.permissionAwaiting = new Map();
 	runtime.sessionAllowedTools = new Map();
 	runtime.dirtyPermissionModes = new Set();
+	// SubAgent 子会话注册表（abortAgent 会级联查询）
+	runtime.subSessionRegistry = new Map();
+	runtime.subSessionMeta = new Map();
+	runtime.pendingSubSessions = new Map();
+	runtime.subagentEnabledBySession = new Map();
 	return runtime;
 }
 

@@ -99,6 +99,25 @@ export function getWorkspaceSessionsDir(name: string): string {
 }
 
 /**
+ * SubAgent 子会话的独立存储目录。
+ *
+ * 子会话与父会话共享 cwd / projectId，但 session 文件存放在
+ * 工作区下的 `subsessions/` 子目录，与 `getWorkspaceSessionsDir`
+ * 分离——这样 `SessionManager.list(cwd, sessionsDir)` 列出的顶层
+ * 会话列表不会被子会话污染，Stage 4 再从该目录单独列表实现嵌套。
+ */
+export function getWorkspaceSubsessionsDir(name: string): string {
+	return path.join(getWorkspaceDir(name), "subsessions");
+}
+
+/** Ensure the subsessions directory for a project exists. */
+export function ensureWorkspaceSubsessionsDir(name: string): string {
+	const dir = getWorkspaceSubsessionsDir(name);
+	fs.mkdirSync(dir, { recursive: true });
+	return dir;
+}
+
+/**
  * Deprecated — legacy flat sessions directory kept for resetLegacySessionsOnce.
  * New sessions use getWorkspaceSessionsDir(projectName).
  */

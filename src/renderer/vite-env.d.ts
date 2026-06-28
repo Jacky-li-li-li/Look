@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { AgentInfo, FileTreeNode, ImageContent } from "@shared/types";
+import type { AgentDefinitionInfo, AgentDefinitionInput, AgentInfo, FileTreeNode, ImageContent } from "@shared/types";
 
 /**
  * The Look IPC surface injected by preload.js.
@@ -96,6 +96,22 @@ interface LookAPI {
 		sessionId: string;
 		action: "approve" | "reject";
 	}): Promise<{ success: boolean; error?: string }>;
+	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
+	listSubSessions(parentSessionId: string): Promise<{ success: boolean; childSessionIds?: string[]; error?: string }>;
+	getParentSession(
+		childSessionId: string,
+	): Promise<{ success: boolean; parentSessionId?: string | null; error?: string }>;
+	// ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
+	listAgentDefinitions(): Promise<{ success: boolean; agents?: AgentDefinitionInfo[]; error?: string }>;
+	createAgentDefinition(
+		input: AgentDefinitionInput,
+	): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
+	updateAgentDefinition(
+		name: string,
+		input: AgentDefinitionInput,
+	): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
+	deleteAgentDefinition(name: string): Promise<{ success: boolean; error?: string }>;
+	installAgentDefinition(name: string): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
 	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
 	// ---- Shared area ----
 	listSharedFiles(projectId: string): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
