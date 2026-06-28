@@ -308,7 +308,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 													</span>
 												)}
 											</span>
-												<div
+											<div
 												className={cn(
 													"whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono text-[10px]",
 													toolCall.isError ? "text-destructive" : "text-muted-foreground",
@@ -320,9 +320,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 									)}
 									{resultImages.length > 0 && (
 										<section className="flex flex-col gap-1">
-											<span className="inset-drawer__label text-foreground">
-												{t("tool.result")}
-											</span>
+											<span className="inset-drawer__label text-foreground">{t("tool.result")}</span>
 											<div className="flex flex-wrap gap-2">
 												{resultImages.map((img, i) => (
 													<img

@@ -63,9 +63,10 @@
 		"description": "外観のカスタマイズ、API キーの管理など。",
 		"general": "一般",
 		"apiKeys": "API キー",
-		"apiKeysDescription": "プロバイダーの API キーとカスタム OpenAI 互換エンドポイントを管理します。",
+		"apiKeysDescription": "カスタム互換エンドポイント。",
 		"providers": {
-			"title": "API Providers"
+			"title": "API Providers",
+			"summary": "{{configured}}/{{total}} 設定済み"
 		},
 		"chatPrompt": "チャットプロンプト",
 		"about": "About",
@@ -98,6 +99,32 @@
 		"authSourceRuntime": "ランタイムで提供",
 		"authSourceConfig": "~/.look/models.json で設定",
 		"authSourceAuto": "自動設定",
+		"authSourceStored": "Look に保存済み",
+		"authSourceMissing": "キー未設定",
+		"addKey": "キーを追加",
+		"replaceKey": "キーを置換",
+		"statusConfigured": "設定済み",
+		"statusVerified": "確認済み",
+		"statusEnv": "環境変数",
+		"statusRuntime": "ランタイム",
+		"statusNeedsKey": "キーが必要",
+		"statusFailed": "失敗",
+		"statusUntested": "未確認",
+		"testingKey": "キーをテスト中",
+		"testAndSaveKey": "テストして保存",
+		"retryTest": "再試行",
+		"saveAnyway": "そのまま保存",
+		"envKeyHint": "または設定",
+		"confirmClear": {
+			"title": "API キーをクリアしますか？",
+			"body": "{{provider}} の保存済みキーをクリアしますか？環境変数と設定ファイルのキーは変更されません。"
+		},
+		"modelTable": {
+			"name": "モデル",
+			"id": "ID",
+			"type": "種類",
+			"context": "コンテキスト"
+		},
 		"themeInkWash": "インクウォッシュ",
 		"themeInkWashDesc": "墨色モノクロ + フロストガラス + ヘアライン",
 		"themeSwiss": "スイスグリッド",
@@ -118,7 +145,128 @@
 		"themeEditorialDesc": "雑誌スプレッド — 大型セリフ",
 		"themeCrt": "CRT ターミナル",
 		"themeCrtDesc": "蛍光グリーン走査線",
-		"themeToneRecommended": "このスタイルには推奨"
+		"themeToneRecommended": "このスタイルには推奨",
+		"customProviders": {
+			"title": "カスタム Provider",
+			"addButton": "カスタム Provider を追加",
+			"empty": "プライベートゲートウェイまたは OpenAI 互換エンドポイントを接続します。",
+			"sectionLabel": "カスタム",
+			"totalModels": "{{count}} 個のカスタムモデル",
+			"dialog": {
+				"titleAdd": "カスタム Provider を追加",
+				"titleEdit": "カスタム Provider を編集",
+				"field": {
+					"name": "名前",
+					"nameHint": "小文字、数字、ハイフンのみ。作成後は変更できません。",
+					"baseUrl": "Base URL",
+					"api": "Provider 互換プロトコル",
+					"apiKey": "API Key",
+					"apiKeyHint": "キー文字列または !shell コマンドを使用できます（例: 1Password）",
+					"headers": "カスタムヘッダー",
+					"headerKey": "キー",
+					"headerValue": "値",
+					"addHeader": "ヘッダーを追加",
+					"models": "モデル",
+					"modelId": "モデル ID",
+					"modelName": "表示名",
+					"reasoning": "推論",
+					"contextWindow": "コンテキストウィンドウ",
+					"maxTokens": "最大トークン",
+					"inputType": "入力タイプ",
+					"addModel": "モデルを追加",
+					"compat": "高度な互換性",
+					"removeModel": "削除"
+				},
+				"action": {
+					"cancel": "キャンセル",
+					"testAndSave": "テストして保存"
+				},
+				"connection": "接続",
+				"description": "OpenAI、Anthropic、Google 互換の API エンドポイントを接続します。",
+				"descriptionEdit": "{{name}} のエンドポイント、認証情報、モデルを調整します。",
+				"backToApiKeys": "API キーに戻る",
+				"protocol": {
+					"openai-completions": "OpenAI Chat Completions",
+					"anthropic-messages": "Anthropic Messages",
+					"google-generative-ai": "Google Generative AI",
+					"openai-responses": "OpenAI Responses"
+				},
+				"modelIdHint": "プロバイダー API のモデル ID と一致させてください",
+        "compatHint": "デフォルトのままで問題ありません。OpenAI / Anthropic 仕様から逸脱するプロキシの場合のみ調整してください。",
+				"testing": "テスト中…",
+				"issuesToFix": "{{count}} 件の修正が必要",
+				"readyToTest": "{{count}} 個のモデルをテストできます",
+				"noCustomHeaders": "カスタムヘッダーはありません。",
+				"addHeader": "ヘッダーを追加",
+				"noModels": "モデルがありません。Provider API に合わせてモデル ID を少なくとも 1 つ追加してください。",
+				"addFirstModel": "最初のモデルを追加",
+				"addModel": "追加",
+				"think": "推論",
+				"noCompatOptions": "Google Generative AI の互換性オプションはありません。",
+				"validation": {
+					"nameFormat": "Provider 名は kebab-case（小文字、数字、ハイフン）にしてください",
+					"baseUrlFormat": "Base URL は http:// または https:// で始めてください",
+					"apiKeyRequired": "API Key は必須です",
+					"modelsRequired": "少なくとも 1 つのモデルが必要です",
+					"modelIdEmpty": "モデル ID は空にできません",
+					"modelIdDuplicate": "モデル ID \"{{id}}\" が重複しています"
+				},
+				"placeholder": {
+					"name": "deepseek-anthropic",
+					"baseUrl": "https://api.example.com/v1",
+					"api": "API プロトコルを選択",
+					"apiKey": "sk-... または $MY_KEY",
+					"headerKey": "ヘッダー名",
+					"headerValue": "値",
+					"modelId": "model-id",
+					"modelName": "名前（任意）"
+				}
+			},
+			"confirmRemove": {
+				"title": "カスタム Provider を削除しますか？",
+				"body": "\"{{name}}\" を削除しますか？この操作は元に戻せません。"
+			},
+			"test": {
+				"title": "{{count}} 個のモデルをテスト中…",
+				"progress": "{{done}}/{{total}} 完了",
+				"cancel": "キャンセル",
+				"resultOk": "✅ {{modelId}}（{{latencyMs}}ms）",
+				"resultFail": "❌ {{modelId}} — {{error}}",
+				"summaryAllOk": "全 {{count}} モデルが通過しました",
+				"summaryPartialFail": "{{failCount}} 個のモデルが失敗しました — 保存できません",
+				"actionRetry": "再試行",
+				"actionSave": "保存",
+				"actionEdit": "設定を編集"
+			},
+			"toast": {
+				"added": "カスタム Provider を追加しました",
+				"updated": "カスタム Provider を更新しました",
+				"removed": "カスタム Provider を削除しました",
+				"selfTestFailed": "セルフテストに失敗しました",
+				"selfTestUnavailable": "セルフテストを利用できません",
+				"saveFailed": "保存に失敗しました",
+				"removeFailed": "削除に失敗しました",
+				"testFailed": "セルフテストに失敗しました: {{message}}"
+			},
+			"edit": "編集",
+			"modelCount": "{{count}} 個のモデル",
+			"compat": {
+				"anthropic": {
+					"forceAdaptiveThinking": "適応型 thinking を強制（Anthropic 互換プロキシ推奨）",
+					"forceAdaptiveThinkingTip": "Claude Opus/Sonnet 4+ に必要です。従来の予算指定ではなく adaptive thinking を送信します。",
+					"supportsEagerToolInputStreaming": "Eager tool input streaming（プロキシが拒否する場合は無効化）",
+					"supportsEagerToolInputStreamingTip": "プロキシが tools[].eager_input_streaming を拒否する場合は無効化します。",
+					"allowEmptySignature": "空の thinking signature を許可",
+					"allowEmptySignatureTip": "空の thinking block signature を許可します。実際の Anthropic は拒否します。"
+				},
+				"openai": {
+					"supportsDeveloperRole": "developer ロールをサポート",
+					"supportsDeveloperRoleTip": "サーバーが developer ロールではなく system メッセージを必要とする場合は無効化します（Ollama、vLLM）。",
+					"supportsReasoningEffort": "reasoning_effort をサポート",
+					"supportsReasoningEffortTip": "サーバーが reasoning_effort を理解しない場合は無効化します（ローカルモデル）。"
+				}
+			}
+		}
 	},
 	"agent": {
 		"model": "モデル",

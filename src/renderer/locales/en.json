@@ -63,7 +63,7 @@
     "description": "Customize appearance, manage API keys, and more.",
     "general": "General",
     "apiKeys": "API Keys",
-    "apiKeysDescription": "Manage provider API keys and custom OpenAI-compatible endpoints.",
+    "apiKeysDescription": "Custom compatible endpoints.",
     "chatPrompt": "Chat Prompt",
     "about": "About",
     "appearance": "Appearance",
@@ -95,6 +95,32 @@
     "authSourceRuntime": "Provided at runtime",
     "authSourceConfig": "Configured via ~/.look/models.json",
     "authSourceAuto": "Auto-configured",
+    "authSourceStored": "Stored in Look",
+    "authSourceMissing": "No key configured",
+    "addKey": "Add key",
+    "replaceKey": "Replace key",
+    "statusConfigured": "Configured",
+    "statusVerified": "Verified",
+    "statusEnv": "Env",
+    "statusRuntime": "Runtime",
+    "statusNeedsKey": "Needs key",
+    "statusFailed": "Failed",
+    "statusUntested": "Untested",
+    "testingKey": "Testing key",
+    "testAndSaveKey": "Test & save",
+    "retryTest": "Retry",
+    "saveAnyway": "Save anyway",
+    "envKeyHint": "Or set",
+    "confirmClear": {
+      "title": "Clear API key?",
+      "body": "Clear the stored key for {{provider}}? Environment and config keys will not be changed."
+    },
+    "modelTable": {
+      "name": "Model",
+      "id": "ID",
+      "type": "Type",
+      "context": "Context"
+    },
     "themeInkWash": "Ink Wash",
     "themeInkWashDesc": "Oil-ink monochrome with frosted glass and hairline borders",
     "themeSwiss": "Swiss Grid",
@@ -117,13 +143,15 @@
     "themeCrtDesc": "Phosphor green scanlines",
     "themeToneRecommended": "Recommended for this style",
     "providers": {
-      "title": "API Providers"
+      "title": "API Providers",
+      "summary": "{{configured}}/{{total}} configured"
     },
     "customProviders": {
       "title": "Custom Providers",
-      "addButton": "+ Add Custom Provider",
-      "empty": "No custom providers yet. Click the button above to add one.",
+      "addButton": "Add Custom Provider",
+      "empty": "Connect a private gateway or OpenAI-compatible endpoint.",
       "sectionLabel": "Custom",
+      "totalModels": "{{count}} custom model(s)",
       "dialog": {
         "titleAdd": "Add Custom Provider",
         "titleEdit": "Edit Custom Provider",
@@ -155,7 +183,16 @@
         },
         "connection": "Connection",
         "description": "Connect any OpenAI, Anthropic, or Google-compatible API endpoint.",
+        "descriptionEdit": "Adjust endpoint, credentials and models for {{name}}.",
         "backToApiKeys": "Back to API Keys",
+        "protocol": {
+          "openai-completions": "OpenAI Chat Completions",
+          "anthropic-messages": "Anthropic Messages",
+          "google-generative-ai": "Google Generative AI",
+          "openai-responses": "OpenAI Responses"
+        },
+        "modelIdHint": "Match the model ID served by the provider's API",
+        "compatHint": "Leave defaults on. Adjust only when your proxy deviates from the OpenAI / Anthropic spec.",
         "testing": "Testing…",
         "issuesToFix": "{{count}} issue(s) to fix",
         "readyToTest": "Ready to test {{count}} model(s)",

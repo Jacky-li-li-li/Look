@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 
 /**
  * URL-matching regex. Captures:
@@ -8,8 +8,7 @@ import React from "react";
  * Stops at whitespace or common enclosing punctuation like ) . , ; : ! ?
  * (but not when the punctuation is part of the URL path/query).
  */
-const URL_RE =
-	/\b(https?:\/\/[^\s<>"{}|\\^`[\]]+|(?<!\/)www\.[^\s<>"{}|\\^`[\]]+\.[^\s<>"{}|\\^`[\]]+)/gi;
+const URL_RE = /\b(https?:\/\/[^\s<>"{}|\\^`[\]]+|(?<!\/)www\.[^\s<>"{}|\\^`[\]]+\.[^\s<>"{}|\\^`[\]]+)/gi;
 
 /**
  * Convert plain text URLs into clickable JSX <a> elements.
@@ -43,8 +42,7 @@ export function linkifyText(text: string, className?: string): React.ReactNode {
 				target="_blank"
 				rel="noopener noreferrer"
 				className={
-					className ??
-					"text-blue-400 underline decoration-blue-400/30 hover:decoration-blue-400 transition-colors"
+					className ?? "text-blue-400 underline decoration-blue-400/30 hover:decoration-blue-400 transition-colors"
 				}
 			>
 				{url}
@@ -59,5 +57,5 @@ export function linkifyText(text: string, className?: string): React.ReactNode {
 		parts.push(text.slice(lastIndex));
 	}
 
-	return parts.length === 1 ? parts[0] : <>{parts}</>;
+	return parts.length === 1 ? parts[0] : parts;
 }

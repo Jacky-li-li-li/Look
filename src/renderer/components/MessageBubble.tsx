@@ -158,9 +158,7 @@ function ContentBlocks({
 								: "success"
 							: "pending";
 
-					const result = execution
-						? (execution.result ?? execution.partialResult)
-						: persistedResult?.content;
+					const result = execution ? (execution.result ?? execution.partialResult) : persistedResult?.content;
 
 					return (
 						<ToolCallCard

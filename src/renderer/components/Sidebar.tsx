@@ -128,20 +128,21 @@ export default function Sidebar({
 		}
 	});
 
-	const toggleSubSessions = useCallback(
-		(parentId: string, e: React.MouseEvent) => {
-			e.stopPropagation(); // 不触发 selectSession
-			setCollapsedSubSessions((prev) => {
-				const next = new Set(prev);
-				if (next.has(parentId)) next.delete(parentId);
-				else next.add(parentId);
-				// 持久化
-				try { localStorage.setItem(LS_KEY, JSON.stringify([...next])); } catch { /* noop */ }
-				return next;
-			});
-		},
-		[],
-	);
+	const toggleSubSessions = useCallback((parentId: string, e: React.MouseEvent) => {
+		e.stopPropagation(); // 不触发 selectSession
+		setCollapsedSubSessions((prev) => {
+			const next = new Set(prev);
+			if (next.has(parentId)) next.delete(parentId);
+			else next.add(parentId);
+			// 持久化
+			try {
+				localStorage.setItem(LS_KEY, JSON.stringify([...next]));
+			} catch {
+				/* noop */
+			}
+			return next;
+		});
+	}, []);
 
 	const sessionsByProject = useMemo(() => {
 		const grouped = new Map<string, AgentInfo[]>();
@@ -497,20 +498,20 @@ export default function Sidebar({
 																{fmtRelativeTime(agent.createdAt)}
 															</span>
 														</button>
-						{hasChildren && (
-							<button
-								type="button"
-								className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
-								onClick={(e) => toggleSubSessions(agent.id, e)}
-								title={collapsedSubSessions.has(agent.id) ? "展开子会话" : "折叠子会话"}
-							>
-								{collapsedSubSessions.has(agent.id) ? (
-									<ChevronRight className="size-3" />
-								) : (
-									<ChevronDown className="size-3" />
-								)}
-							</button>
-						)}
+														{hasChildren && (
+															<button
+																type="button"
+																className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
+																onClick={(e) => toggleSubSessions(agent.id, e)}
+																title={collapsedSubSessions.has(agent.id) ? "展开子会话" : "折叠子会话"}
+															>
+																{collapsedSubSessions.has(agent.id) ? (
+																	<ChevronRight className="size-3" />
+																) : (
+																	<ChevronDown className="size-3" />
+																)}
+															</button>
+														)}
 														<DropdownMenu>
 															<DropdownMenuTrigger asChild>
 																<Button
@@ -555,30 +556,31 @@ export default function Sidebar({
 														</DropdownMenu>
 													</div>
 													{/* Stage 4：子会话缩进嵌套 */}
-													{!collapsedSubSessions.has(agent.id) && children.map((child: AgentInfo) => {
-														const childPhase = sessionPhases.get(child.id) ?? "idle";
-														const childRunning = runningAgents.has(child.id);
-														return (
-															<div
-																key={child.id}
-																data-agent-id={child.id}
-																data-agent-status={childPhase}
-																data-running={childRunning || undefined}
-																className="session-ledger-row group/session flex h-[32px] items-center gap-1.5 rounded-md border-sky-500/20 ml-[18px] pl-2 pr-1"
-															>
-																<button
-																	type="button"
-																	className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
-																	onClick={() => selectSession(child)}
+													{!collapsedSubSessions.has(agent.id) &&
+														children.map((child: AgentInfo) => {
+															const childPhase = sessionPhases.get(child.id) ?? "idle";
+															const childRunning = runningAgents.has(child.id);
+															return (
+																<div
+																	key={child.id}
+																	data-agent-id={child.id}
+																	data-agent-status={childPhase}
+																	data-running={childRunning || undefined}
+																	className="session-ledger-row group/session flex h-[32px] items-center gap-1.5 rounded-md border-sky-500/20 ml-[18px] pl-2 pr-1"
 																>
-																	<Bot className="size-3 shrink-0 text-sky-500" />
-																	<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
-																		{child.name || child.agentConfigName}
-																	</span>
-																</button>
-															</div>
-														);
-													})}
+																	<button
+																		type="button"
+																		className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
+																		onClick={() => selectSession(child)}
+																	>
+																		<Bot className="size-3 shrink-0 text-sky-500" />
+																		<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
+																			{child.name || child.agentConfigName}
+																		</span>
+																	</button>
+																</div>
+															);
+														})}
 												</div>
 											);
 										})}

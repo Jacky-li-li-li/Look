@@ -22,7 +22,7 @@ import {
 	Trash2,
 	XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { CustomProviderInput, CustomProviderModelInput, TestCustomProviderResult } from "./types";
@@ -54,23 +54,17 @@ function normalizeApiProtocol(value: unknown, fallback: ApiProtocol = "openai-co
 interface Props {
 	open: boolean;
 	onClose: () => void;
-	/** Editing mode: pre-fill form with existing provider */
 	initial?: CustomProviderInput;
-	/** Called after successful add/update to refresh provider list */
 	onSaved: () => void;
-	/** Render mode: dialog popup (default) or inline page */
 	mode?: "dialog" | "inline";
-	/** Back button handler (inline mode only) */
 	onBack?: () => void;
 }
-
-// ── Section header helper ──
 
 function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
 	return (
 		<div className={cn("mb-2 flex items-center gap-2", className)}>
 			<div className="h-3 w-0.5 rounded-full bg-border" />
-			<span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{children}</span>
+			<span className="text-[11px] font-medium text-muted-foreground">{children}</span>
 		</div>
 	);
 }
@@ -79,8 +73,8 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 	const { t } = useTranslation();
 	const isEdit = !!initial;
 	const isInline = mode === "inline";
+	const keyCounterRef = useRef(Date.now());
 
-	// ── Form state ──
 	const [name, setName] = useState(() => initial?.name ?? "");
 	const [baseUrl, setBaseUrl] = useState(() => initial?.baseUrl ?? "");
 	const [apiProtocol, setApiProtocol] = useState<ApiProtocol>(() => normalizeApiProtocol(initial?.api));
@@ -92,9 +86,8 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 	const [models, setModels] = useState<Array<CustomProviderModelInput & { _key: number }>>(
 		() => initial?.models.map((m, i) => ({ ...m, _key: i + 1 })) ?? [],
 	);
-	const [compatSection, setCompatSection] = useState(false);
 	const [headersOpen, setHeadersOpen] = useState(false);
-	// Compat toggles
+
 	const [supportsDeveloperRole, setSupportsDeveloperRole] = useState(
 		() => initial?.compat?.supportsDeveloperRole !== false,
 	);
@@ -107,27 +100,26 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 	);
 	const [allowEmptySignature, setAllowEmptySignature] = useState(() => !!initial?.compat?.allowEmptySignature);
 
-	// ── Submission state ──
 	const [saving, setSaving] = useState(false);
 	const [testResult, setTestResult] = useState<TestCustomProviderResult | null>(null);
 
-	// ── Init / reset on open ──
 	useEffect(() => {
 		if (!open) return;
 		setSaving(false);
 		setTestResult(null);
-		setCompatSection(false);
 		setHeadersOpen(false);
 	}, [open]);
 
-	// ── Model helpers ──
-	let _modelKeyCounter = 0;
-	const newModelKey = () => ++_modelKeyCounter + Date.now();
+	const newItemKey = () => {
+		keyCounterRef.current += 1;
+		return keyCounterRef.current;
+	};
+
 	const addModel = () => {
 		setModels((prev) => [
 			...prev,
 			{
-				_key: newModelKey(),
+				_key: newItemKey(),
 				id: "",
 				name: "",
 				reasoning: false,
@@ -144,14 +136,12 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 		setModels((prev) => prev.filter((m) => m._key !== key));
 	};
 
-	// ── Header helpers ──
-	const addHeader = () => setHeaders((prev) => [...prev, { id: newModelKey(), key: "", value: "" }]);
+	const addHeader = () => setHeaders((prev) => [...prev, { id: newItemKey(), key: "", value: "" }]);
 	const updateHeader = (id: number, field: "key" | "value", val: string) => {
 		setHeaders((prev) => prev.map((h) => (h.id === id ? { ...h, [field]: val } : h)));
 	};
 	const removeHeader = (id: number) => setHeaders((prev) => prev.filter((h) => h.id !== id));
 
-	// ── Build input ──
 	const buildInput = useCallback((): CustomProviderInput => {
 		const compat: Record<string, unknown> = {};
 		if (apiProtocol === "anthropic-messages") {
@@ -162,6 +152,9 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 		if (apiProtocol === "openai-completions") {
 			if (!supportsDeveloperRole) compat.supportsDeveloperRole = false;
 			if (!supportsReasoningEffort) compat.supportsReasoningEffort = false;
+		}
+		if (apiProtocol === "openai-responses" && !supportsDeveloperRole) {
+			compat.supportsDeveloperRole = false;
 		}
 		const headerObj: Record<string, string> | undefined =
 			headers.length > 0
@@ -198,13 +191,13 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 		supportsReasoningEffort,
 	]);
 
-	// ── Validate ──
 	const validationErrors: string[] = [];
-	if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(name))
-		validationErrors.push(t("settings.customProviders.dialog.validation.nameFormat"));
-	if (!/^https?:\/\//.test(baseUrl))
-		validationErrors.push(t("settings.customProviders.dialog.validation.baseUrlFormat"));
-	if (!apiKeyVal.trim()) validationErrors.push(t("settings.customProviders.dialog.validation.apiKeyRequired"));
+	const hasNameError = !/^[a-z0-9][a-z0-9-]{0,40}$/.test(name);
+	const hasBaseUrlError = !/^https?:\/\//.test(baseUrl);
+	const hasApiKeyError = !apiKeyVal.trim();
+	if (hasNameError) validationErrors.push(t("settings.customProviders.dialog.validation.nameFormat"));
+	if (hasBaseUrlError) validationErrors.push(t("settings.customProviders.dialog.validation.baseUrlFormat"));
+	if (hasApiKeyError) validationErrors.push(t("settings.customProviders.dialog.validation.apiKeyRequired"));
 	if (models.length === 0) validationErrors.push(t("settings.customProviders.dialog.validation.modelsRequired"));
 	const modelIds = new Set<string>();
 	for (const m of models) {
@@ -214,14 +207,12 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 		else modelIds.add(m.id.trim());
 	}
 
-	// ── Submit ──
 	const handleSubmit = async () => {
 		if (validationErrors.length > 0 || !api) return;
 		setSaving(true);
 		setTestResult(null);
 		const input = buildInput();
 
-		// Step 1: self-test all models (方案B)
 		let test: TestCustomProviderResult;
 		try {
 			const r = await api.testCustomProvider(input);
@@ -235,7 +226,6 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 		setTestResult(test);
 
 		if (test.overall === "ok") {
-			// Step 2: persist
 			try {
 				let persistResult: { success?: boolean; error?: string } | undefined;
 				if (isEdit) {
@@ -263,20 +253,15 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 		onClose();
 	};
 
-	// ═══════════════════════════════════════
-	// RENDER
-	// ═══════════════════════════════════════
-
 	if (isInline && !open) return null;
 
-	// ── Header block (shared) ──
 	const headerBlock = (
 		<>
 			{isInline && (
 				<button
 					type="button"
 					onClick={onBack}
-					className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+					className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
 				>
 					<ArrowLeft className="size-3" />
 					{t("settings.customProviders.dialog.backToApiKeys")}
@@ -288,704 +273,379 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 				</div>
 				<p className="text-[12px] text-muted-foreground">
 					{isEdit
-						? t("settings.customProviders.dialog.titleEdit")
+						? t("settings.customProviders.dialog.descriptionEdit", { name: initial?.name ?? "" })
 						: t("settings.customProviders.dialog.description")}
 				</p>
 			</div>
 		</>
 	);
 
-	// ── Inline mode ──
-	if (isInline) {
-		return (
-			<div className="flex h-full flex-col overflow-y-auto p-4">
-				{headerBlock}
+	const formBody = (
+		<form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+			<section>
+				<SectionLabel>{t("settings.customProviders.dialog.connection")}</SectionLabel>
+				<div className="space-y-3">
+					<div className="space-y-1">
+						<Label className="text-[11px] text-muted-foreground">
+							{t("settings.customProviders.dialog.field.api")}
+						</Label>
+						<Select value={apiProtocol} onValueChange={(v) => setApiProtocol(v as ApiProtocol)}>
+							<SelectTrigger className="h-8 w-full text-[12px]">
+								<SelectValue placeholder={t("settings.customProviders.dialog.placeholder.api")}>
+									{t(
+										`settings.customProviders.dialog.protocol.${apiProtocol}`,
+										API_PROTOCOL_LABELS[apiProtocol] ?? "",
+									)}
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="openai-completions">OpenAI Chat Completions</SelectItem>
+								<SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
+								<SelectItem value="google-generative-ai">Google Generative AI</SelectItem>
+								<SelectItem value="openai-responses">OpenAI Responses</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
 
-				<form className="flex-1 space-y-5" onSubmit={(e) => e.preventDefault()}>
-					{/* ══ Connection ══ */}
-					<section>
-						<SectionLabel>{t("settings.customProviders.dialog.connection")}</SectionLabel>
-						<div className="grid grid-cols-2 gap-3">
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.api")}
-								</Label>
-								<Select value={apiProtocol} onValueChange={(v) => setApiProtocol(v as ApiProtocol)}>
-									<SelectTrigger className="h-8 text-[12px]">
-										<SelectValue placeholder={t("settings.customProviders.dialog.placeholder.api")}>
-											{`[${apiProtocol}] ${API_PROTOCOL_LABELS[apiProtocol] ?? ""}`}
-										</SelectValue>
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="openai-completions">OpenAI Chat Completions</SelectItem>
-										<SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
-										<SelectItem value="google-generative-ai">Google Generative AI</SelectItem>
-										<SelectItem value="openai-responses">OpenAI Responses</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.name")} <span className="text-rose-500">*</span>
-								</Label>
-								<Input
-									value={name}
-									onChange={(e) => setName(e.target.value)}
-									placeholder={t("settings.customProviders.dialog.placeholder.name")}
-									disabled={isEdit}
-									className="h-8 text-[12px] font-mono"
-								/>
-								<p className="text-[10px] text-muted-foreground/60 leading-tight">
-									{t("settings.customProviders.dialog.field.nameHint")}
-								</p>
-							</div>
-						</div>
-
-						<div className="mt-3 grid grid-cols-2 gap-3">
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.baseUrl")} <span className="text-rose-500">*</span>
-								</Label>
-								<Input
-									value={baseUrl}
-									onChange={(e) => setBaseUrl(e.target.value)}
-									placeholder={t("settings.customProviders.dialog.placeholder.baseUrl")}
-									className="h-8 text-[12px] font-mono"
-								/>
-							</div>
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.apiKey")}
-								</Label>
-								<div className="relative">
-									<Input
-										type={showKey ? "text" : "password"}
-										autoComplete="new-password"
-										value={apiKeyVal}
-										onChange={(e) => setApiKeyVal(e.target.value)}
-										placeholder={t("settings.customProviders.dialog.placeholder.apiKey")}
-										className="h-8 pr-9 text-[12px] font-mono"
-									/>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="absolute right-0 top-0 size-8"
-										onClick={() => setShowKey(!showKey)}
-										tabIndex={-1}
-									>
-										{showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-									</Button>
-								</div>
-								<p className="text-[10px] text-muted-foreground/60 leading-tight">
-									{t("settings.customProviders.dialog.field.apiKeyHint")}
-								</p>
-							</div>
-						</div>
-					</section>
-
-					{/* ══ Custom Headers (collapsible) ══ */}
-					<section>
-						<button
-							type="button"
-							className="group mb-2 flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-							onClick={() => setHeadersOpen(!headersOpen)}
-						>
-							<ChevronRight className={cn("size-3 transition-transform", headersOpen && "rotate-90")} />
-							<div className="h-3 w-0.5 rounded-full bg-border group-hover:bg-foreground/20 transition-colors" />
-							<span className="uppercase tracking-wider">
-								{t("settings.customProviders.dialog.field.headers")}
-							</span>
-							{headers.length > 0 && (
-								<span className="rounded-full bg-muted px-1.5 text-[10px]">{headers.length}</span>
-							)}
-						</button>
-						{headersOpen && (
-							<div className="space-y-1.5 pl-5">
-								{headers.map((h) => (
-									<div key={h.id} className="flex items-center gap-1.5">
-										<Input
-											value={h.key}
-											onChange={(e) => updateHeader(h.id, "key", e.target.value)}
-											placeholder={t("settings.customProviders.dialog.placeholder.headerKey")}
-											className="h-7 flex-1 text-[11px] font-mono"
-										/>
-										<Input
-											value={h.value}
-											onChange={(e) => updateHeader(h.id, "value", e.target.value)}
-											placeholder={t("settings.customProviders.dialog.placeholder.headerValue")}
-											className="h-7 flex-1 text-[11px] font-mono"
-										/>
-										<Button
-											variant="line-ghost"
-											size="icon-xs"
-											className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-											onClick={() => removeHeader(h.id)}
-										>
-											<Trash2 className="size-3" />
-										</Button>
-									</div>
-								))}
-								{headers.length === 0 && (
-									<p className="py-1 text-[10px] text-muted-foreground/60">
-										{t("settings.customProviders.dialog.noCustomHeaders")}
-									</p>
+					<div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2">
+						<div className="space-y-1">
+							<Label className="text-[11px] text-muted-foreground">
+								{t("settings.customProviders.dialog.field.name")} <span className="text-rose-500">*</span>
+							</Label>
+							<Input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder={t("settings.customProviders.dialog.placeholder.name")}
+								disabled={isEdit}
+								aria-invalid={hasNameError}
+								className="h-8 text-[12px] font-mono"
+							/>
+							<p
+								className={cn(
+									"text-[10px] leading-tight",
+									hasNameError ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground/60",
 								)}
-								<Button variant="line" size="xs" onClick={addHeader} className="text-[10px]">
-									<Plus className="size-3" /> {t("settings.customProviders.dialog.addHeader")}
-								</Button>
-							</div>
-						)}
-					</section>
-
-					{/* ══ Models ══ */}
-					<section>
-						<div className="mb-2 flex items-center justify-between">
-							<div className="flex items-center gap-2">
-								<div className="h-3 w-0.5 rounded-full bg-border" />
-								<span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-									{t("settings.customProviders.dialog.field.models")}
-								</span>
-								<span className="rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-									{models.length}
-								</span>
-							</div>
-							<Button variant="line" size="xs" onClick={addModel} className="h-6 text-[10px]">
-								<Plus className="size-3" /> {t("settings.customProviders.dialog.addModel")}
-							</Button>
-						</div>
-
-						{models.length === 0 ? (
-							<div className="rounded-lg border border-dashed border-hairline py-6 text-center">
-								<p className="text-[11px] text-muted-foreground/60">
-									{t("settings.customProviders.dialog.noModels")}
-								</p>
-								<Button variant="line" size="xs" onClick={addModel} className="mt-2 text-[10px]">
-									<Plus className="size-3" /> {t("settings.customProviders.dialog.addFirstModel")}
-								</Button>
-							</div>
-						) : (
-							<div className="space-y-1">
-								{models.map((m) => (
-									<div
-										key={m._key}
-										className="group flex items-center gap-2 rounded-md border border-transparent bg-muted/30 px-2.5 py-1.5 transition-colors hover:border-hairline hover:bg-muted/50"
-									>
-										{/* Model ID */}
-										<Input
-											value={m.id}
-											onChange={(e) => updateModel(m._key, { id: e.target.value })}
-											placeholder={t("settings.customProviders.dialog.placeholder.modelId")}
-											className="h-7 min-w-0 flex-[2] text-[12px] font-mono"
-										/>
-										{/* Display name */}
-										<Input
-											value={m.name ?? ""}
-											onChange={(e) => updateModel(m._key, { name: e.target.value || undefined })}
-											placeholder={t("settings.customProviders.dialog.placeholder.modelName")}
-											className="h-7 min-w-0 flex-[1.5] text-[12px]"
-										/>
-										{/* Reasoning toggle */}
-										<div className="flex shrink-0 items-center gap-1.5">
-											<span className="text-[10px] text-muted-foreground/60 select-none">
-												{t("settings.customProviders.dialog.think")}
-											</span>
-											<Switch
-												checked={m.reasoning ?? false}
-												onCheckedChange={(v) => updateModel(m._key, { reasoning: v })}
-												className="scale-75"
-											/>
-										</div>
-										{/* Delete */}
-										<Button
-											variant="line-ghost"
-											size="icon-xs"
-											className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-											onClick={() => removeModel(m._key)}
-										>
-											<Trash2 className="size-3" />
-										</Button>
-									</div>
-								))}
-							</div>
-						)}
-					</section>
-
-					{/* ══ Advanced Compatibility ══ */}
-					<section>
-						<button
-							type="button"
-							className="group mb-2 flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-							onClick={() => setCompatSection(!compatSection)}
-						>
-							<ChevronRight className={cn("size-3 transition-transform", compatSection && "rotate-90")} />
-							<div className="h-3 w-0.5 rounded-full bg-border group-hover:bg-foreground/20 transition-colors" />
-							<span className="uppercase tracking-wider">
-								{t("settings.customProviders.dialog.field.compat")}
-							</span>
-						</button>
-
-						{compatSection && (
-							<div className="space-y-1.5 rounded-lg border border-hairline bg-muted/20 p-3 pl-5">
-								{apiProtocol === "anthropic-messages" && (
-									<>
-										<CompatToggle
-											checked={forceAdaptiveThinking}
-											onChange={setForceAdaptiveThinking}
-											label={t("settings.customProviders.compat.anthropic.forceAdaptiveThinking")}
-											tip={t("settings.customProviders.compat.anthropic.forceAdaptiveThinkingTip")}
-										/>
-										<CompatToggle
-											checked={supportsEagerToolInputStreaming}
-											onChange={setSupportsEagerToolInputStreaming}
-											label={t("settings.customProviders.compat.anthropic.supportsEagerToolInputStreaming")}
-											tip={t("settings.customProviders.compat.anthropic.supportsEagerToolInputStreamingTip")}
-										/>
-										<CompatToggle
-											checked={allowEmptySignature}
-											onChange={setAllowEmptySignature}
-											label={t("settings.customProviders.compat.anthropic.allowEmptySignature")}
-											tip={t("settings.customProviders.compat.anthropic.allowEmptySignatureTip")}
-										/>
-									</>
-								)}
-								{apiProtocol === "openai-completions" && (
-									<>
-										<CompatToggle
-											checked={supportsDeveloperRole}
-											onChange={setSupportsDeveloperRole}
-											label={t("settings.customProviders.compat.openai.supportsDeveloperRole")}
-											tip={t("settings.customProviders.compat.openai.supportsDeveloperRoleTip")}
-										/>
-										<CompatToggle
-											checked={supportsReasoningEffort}
-											onChange={setSupportsReasoningEffort}
-											label={t("settings.customProviders.compat.openai.supportsReasoningEffort")}
-											tip={t("settings.customProviders.compat.openai.supportsReasoningEffortTip")}
-										/>
-									</>
-								)}
-								{apiProtocol === "openai-responses" && (
-									<CompatToggle
-										checked={supportsDeveloperRole}
-										onChange={setSupportsDeveloperRole}
-										label={t("settings.customProviders.compat.openai.supportsDeveloperRole")}
-										tip={t("settings.customProviders.compat.openai.supportsDeveloperRoleTip")}
-									/>
-								)}
-								{apiProtocol === "google-generative-ai" && (
-									<p className="py-1 text-[10px] text-muted-foreground/60">
-										{t("settings.customProviders.dialog.noCompatOptions")}
-									</p>
-								)}
-							</div>
-						)}
-					</section>
-
-					{/* ══ Validation errors ══ */}
-					{validationErrors.length > 0 && (
-						<div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3 space-y-1">
-							{validationErrors.map((e, i) => (
-								<p key={i} className="flex items-center gap-1.5 text-[11px] text-rose-600 dark:text-rose-400">
-									<AlertCircle className="size-3 shrink-0" /> {e}
-								</p>
-							))}
-						</div>
-					)}
-
-					{/* ══ Self-test results ══ */}
-				</form>
-
-				<div className="sticky bottom-0 mt-4 border-t border-hairline bg-background pt-3">
-					<div className="flex items-center justify-between gap-3">
-						<p className="text-[10px] text-muted-foreground/60">
-							{validationErrors.length > 0
-								? t("settings.customProviders.dialog.issuesToFix", { count: validationErrors.length })
-								: t("settings.customProviders.dialog.readyToTest", { count: models.length })}
-						</p>
-						<div className="flex items-center gap-2">
-							<Button variant="line" size="sm" onClick={onBack} disabled={saving} className="h-7 text-[11px]">
-								{t("settings.customProviders.dialog.action.cancel")}
-							</Button>
-							<Button
-								variant="line-filled"
-								size="sm"
-								onClick={handleSubmit}
-								disabled={saving || validationErrors.length > 0}
-								className="h-7 text-[11px]"
 							>
-								{saving ? (
-									<>
-										<Loader2 className="size-3 animate-spin" data-icon="inline-start" />
-										{t("settings.customProviders.dialog.testing")}
-									</>
-								) : (
-									t("settings.customProviders.dialog.action.testAndSave")
-								)}
-							</Button>
+								{t("settings.customProviders.dialog.field.nameHint")}
+							</p>
+						</div>
+						<div className="space-y-1">
+							<Label className="text-[11px] text-muted-foreground">
+								{t("settings.customProviders.dialog.field.baseUrl")} <span className="text-rose-500">*</span>
+							</Label>
+							<Input
+								value={baseUrl}
+								onChange={(e) => setBaseUrl(e.target.value)}
+								placeholder={t("settings.customProviders.dialog.placeholder.baseUrl")}
+								aria-invalid={hasBaseUrlError}
+								className="h-8 text-[12px] font-mono"
+							/>
 						</div>
 					</div>
+
+					<div className="space-y-1">
+						<Label className="text-[11px] text-muted-foreground">
+							{t("settings.customProviders.dialog.field.apiKey")} <span className="text-rose-500">*</span>
+						</Label>
+						<div className="relative">
+							<Input
+								type={showKey ? "text" : "password"}
+								autoComplete="new-password"
+								value={apiKeyVal}
+								onChange={(e) => setApiKeyVal(e.target.value)}
+								placeholder={t("settings.customProviders.dialog.placeholder.apiKey")}
+								aria-invalid={hasApiKeyError}
+								className="h-8 pr-9 text-[12px] font-mono"
+							/>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="absolute right-0 top-0 size-8"
+								onClick={() => setShowKey(!showKey)}
+								tabIndex={-1}
+							>
+								{showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+							</Button>
+						</div>
+						<p className="text-[10px] text-muted-foreground/60 leading-tight">
+							{t("settings.customProviders.dialog.field.apiKeyHint")}
+						</p>
+					</div>
 				</div>
+			</section>
+
+			<section>
+				<button
+					type="button"
+					className="group mb-2 flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+					onClick={() => setHeadersOpen(!headersOpen)}
+					aria-expanded={headersOpen}
+				>
+					<ChevronRight className={cn("size-3 transition-transform", headersOpen && "rotate-90")} />
+					<div className="h-3 w-0.5 rounded-full bg-border transition-colors group-hover:bg-foreground/20" />
+					<span>{t("settings.customProviders.dialog.field.headers")}</span>
+					{headers.length > 0 && (
+						<span className="rounded-full bg-muted px-1.5 text-[10px]">{headers.length}</span>
+					)}
+				</button>
+				{headersOpen && (
+					<div className="space-y-1.5 pl-5">
+						{headers.map((h) => (
+							<div key={h.id} className="flex items-center gap-1.5">
+								<Input
+									value={h.key}
+									onChange={(e) => updateHeader(h.id, "key", e.target.value)}
+									placeholder={t("settings.customProviders.dialog.placeholder.headerKey")}
+									className="h-7 flex-1 text-[11px] font-mono"
+								/>
+								<Input
+									value={h.value}
+									onChange={(e) => updateHeader(h.id, "value", e.target.value)}
+									placeholder={t("settings.customProviders.dialog.placeholder.headerValue")}
+									className="h-7 flex-1 text-[11px] font-mono"
+								/>
+								<Button
+									variant="line-ghost"
+									size="icon-xs"
+									className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+									onClick={() => removeHeader(h.id)}
+								>
+									<Trash2 className="size-3" />
+								</Button>
+							</div>
+						))}
+						{headers.length === 0 && (
+							<p className="py-1 text-[10px] text-muted-foreground/60">
+								{t("settings.customProviders.dialog.noCustomHeaders")}
+							</p>
+						)}
+						<Button variant="line" size="xs" onClick={addHeader} className="text-[10px]">
+							<Plus className="size-3" /> {t("settings.customProviders.dialog.addHeader")}
+						</Button>
+					</div>
+				)}
+			</section>
+
+			<section>
+				<div className="mb-2 flex items-center justify-between">
+					<div className="flex items-center gap-2">
+						<div className="h-3 w-0.5 rounded-full bg-border" />
+						<span className="text-[11px] font-medium text-muted-foreground">
+							{t("settings.customProviders.dialog.field.models")}
+						</span>
+						<span className="rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+							{models.length}
+						</span>
+					</div>
+					<Button variant="line" size="xs" onClick={addModel} className="h-6 text-[10px]">
+						<Plus className="size-3" /> {t("settings.customProviders.dialog.addModel")}
+					</Button>
+				</div>
+
+				{models.length === 0 ? (
+					<div className="rounded-lg border border-dashed border-hairline py-6 text-center">
+						<p className="text-[11px] text-muted-foreground/60">
+							{t("settings.customProviders.dialog.noModels")}
+						</p>
+						<Button variant="line" size="xs" onClick={addModel} className="mt-2 text-[10px]">
+							<Plus className="size-3" /> {t("settings.customProviders.dialog.addFirstModel")}
+						</Button>
+					</div>
+				) : (
+					<div className="space-y-1">
+						{models.map((m) => (
+							<div
+								key={m._key}
+								className="group grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_auto_auto] items-center gap-2 rounded-md border border-transparent bg-muted/30 px-2.5 py-1.5 transition-colors hover:border-hairline hover:bg-muted/50"
+							>
+								<Input
+									value={m.id}
+									onChange={(e) => updateModel(m._key, { id: e.target.value })}
+									placeholder={t("settings.customProviders.dialog.placeholder.modelId")}
+									title={m.id || undefined}
+									aria-invalid={!m.id.trim()}
+									className="h-7 min-w-0 truncate text-[12px] font-mono"
+								/>
+								<Input
+									value={m.name ?? ""}
+									onChange={(e) => updateModel(m._key, { name: e.target.value || undefined })}
+									placeholder={t("settings.customProviders.dialog.placeholder.modelName")}
+									title={m.name ?? undefined}
+									className="h-7 min-w-0 truncate text-[12px]"
+								/>
+								<Switch
+									checked={m.reasoning ?? false}
+									onCheckedChange={(v) => updateModel(m._key, { reasoning: v })}
+									className="scale-75"
+									aria-label={t("settings.customProviders.dialog.think")}
+								/>
+								<Button
+									variant="line-ghost"
+									size="icon-xs"
+									className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+									onClick={() => removeModel(m._key)}
+									aria-label={t("settings.customProviders.dialog.field.removeModel")}
+								>
+									<Trash2 className="size-3" />
+								</Button>
+							</div>
+						))}
+					</div>
+				)}
+			</section>
+
+			<section>
+				<SectionLabel>{t("settings.customProviders.dialog.field.compat")}</SectionLabel>
+				<p className="mb-2 text-[10px] leading-snug text-muted-foreground/60">
+					{t("settings.customProviders.dialog.compatHint")}
+				</p>
+				<div className="space-y-1.5 rounded-md border border-hairline bg-muted/15 p-2.5">
+					{apiProtocol === "anthropic-messages" && (
+						<>
+							<CompatToggle
+								checked={forceAdaptiveThinking}
+								onChange={setForceAdaptiveThinking}
+								label={t("settings.customProviders.compat.anthropic.forceAdaptiveThinking")}
+								tip={t("settings.customProviders.compat.anthropic.forceAdaptiveThinkingTip")}
+							/>
+							<CompatToggle
+								checked={supportsEagerToolInputStreaming}
+								onChange={setSupportsEagerToolInputStreaming}
+								label={t("settings.customProviders.compat.anthropic.supportsEagerToolInputStreaming")}
+								tip={t("settings.customProviders.compat.anthropic.supportsEagerToolInputStreamingTip")}
+							/>
+							<CompatToggle
+								checked={allowEmptySignature}
+								onChange={setAllowEmptySignature}
+								label={t("settings.customProviders.compat.anthropic.allowEmptySignature")}
+								tip={t("settings.customProviders.compat.anthropic.allowEmptySignatureTip")}
+							/>
+						</>
+					)}
+					{apiProtocol === "openai-completions" && (
+						<>
+							<CompatToggle
+								checked={supportsDeveloperRole}
+								onChange={setSupportsDeveloperRole}
+								label={t("settings.customProviders.compat.openai.supportsDeveloperRole")}
+								tip={t("settings.customProviders.compat.openai.supportsDeveloperRoleTip")}
+							/>
+							<CompatToggle
+								checked={supportsReasoningEffort}
+								onChange={setSupportsReasoningEffort}
+								label={t("settings.customProviders.compat.openai.supportsReasoningEffort")}
+								tip={t("settings.customProviders.compat.openai.supportsReasoningEffortTip")}
+							/>
+						</>
+					)}
+					{apiProtocol === "openai-responses" && (
+						<CompatToggle
+							checked={supportsDeveloperRole}
+							onChange={setSupportsDeveloperRole}
+							label={t("settings.customProviders.compat.openai.supportsDeveloperRole")}
+							tip={t("settings.customProviders.compat.openai.supportsDeveloperRoleTip")}
+						/>
+					)}
+					{apiProtocol === "google-generative-ai" && (
+						<p className="py-1 text-[10px] text-muted-foreground/60">
+							{t("settings.customProviders.dialog.noCompatOptions")}
+						</p>
+					)}
+				</div>
+			</section>
+
+			{validationErrors.length > 0 && (
+				<div className="space-y-1 rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3">
+					{validationErrors.map((e, i) => (
+						<p
+							key={`${e}-${i}`}
+							className="flex items-center gap-1.5 text-[11px] text-rose-600 dark:text-rose-400"
+						>
+							<AlertCircle className="size-3 shrink-0" /> {e}
+						</p>
+					))}
+				</div>
+			)}
+
+			{testResult && <TestResultsPanel result={testResult} t={t} />}
+		</form>
+	);
+
+	const footer = (
+		<div
+			className={cn(
+				"shrink-0 border-t border-hairline bg-background",
+				isInline
+					? "sticky bottom-0 z-10 -mx-4 mt-4 px-4 pt-3 shadow-[0_-8px_12px_-8px_rgba(0,0,0,0.08)]"
+					: "px-6 py-3",
+			)}
+		>
+			<div className="flex items-center justify-between gap-3">
+				<p className="text-[10px] text-muted-foreground/60">
+					{validationErrors.length > 0
+						? t("settings.customProviders.dialog.issuesToFix", { count: validationErrors.length })
+						: t("settings.customProviders.dialog.readyToTest", { count: models.length })}
+				</p>
+				<div className="flex items-center gap-2">
+					<Button
+						variant="line"
+						size="sm"
+						onClick={isInline ? onBack : handleClose}
+						disabled={saving}
+						className="h-7 text-[11px]"
+					>
+						{t("settings.customProviders.dialog.action.cancel")}
+					</Button>
+					<Button
+						variant="line-filled"
+						size="sm"
+						onClick={handleSubmit}
+						disabled={saving || validationErrors.length > 0}
+						className="h-7 text-[11px]"
+					>
+						{saving ? (
+							<>
+								<Loader2 className="size-3 animate-spin" data-icon="inline-start" />
+								{t("settings.customProviders.dialog.testing")}
+							</>
+						) : (
+							t("settings.customProviders.dialog.action.testAndSave")
+						)}
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+
+	if (isInline) {
+		return (
+			<div className="flex h-full min-h-0 flex-col overflow-hidden p-4">
+				{headerBlock}
+				<div className="mt-4 flex-1 overflow-y-auto">{formBody}</div>
+				{footer}
 			</div>
 		);
 	}
 
-	// ── Dialog mode ──
 	return (
 		<Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-			<DialogContent className="sm:max-w-xl max-h-[92vh] overflow-hidden flex flex-col" showCloseButton={!saving}>
-				{/* ── Header ── */}
+			<DialogContent className="flex max-h-[92vh] flex-col overflow-hidden sm:max-w-2xl" showCloseButton={!saving}>
 				<DialogHeader className="shrink-0">
 					<DialogTitle>
 						{t(isEdit ? "settings.customProviders.dialog.titleEdit" : "settings.customProviders.dialog.titleAdd")}
 					</DialogTitle>
 					<DialogDescription className="text-[12px]">
 						{isEdit
-							? t("settings.customProviders.dialog.titleEdit")
+							? t("settings.customProviders.dialog.descriptionEdit", { name: initial?.name ?? "" })
 							: t("settings.customProviders.dialog.description")}
 					</DialogDescription>
 				</DialogHeader>
-
-				{/* ── Scrollable form body ── */}
-				<div className="flex-1 overflow-y-auto px-0.5 py-4 space-y-5">
-					{/* ══ Connection ══ */}
-					<section>
-						<SectionLabel>{t("settings.customProviders.dialog.connection")}</SectionLabel>
-						<div className="grid grid-cols-2 gap-3">
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.api")}
-								</Label>
-								<Select value={apiProtocol} onValueChange={(v) => setApiProtocol(v as ApiProtocol)}>
-									<SelectTrigger className="h-8 text-[12px]">
-										<SelectValue placeholder={t("settings.customProviders.dialog.placeholder.api")}>
-											{`[${apiProtocol}] ${API_PROTOCOL_LABELS[apiProtocol] ?? ""}`}
-										</SelectValue>
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="openai-completions">OpenAI Chat Completions</SelectItem>
-										<SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
-										<SelectItem value="google-generative-ai">Google Generative AI</SelectItem>
-										<SelectItem value="openai-responses">OpenAI Responses</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.name")} <span className="text-rose-500">*</span>
-								</Label>
-								<Input
-									value={name}
-									onChange={(e) => setName(e.target.value)}
-									placeholder={t("settings.customProviders.dialog.placeholder.name")}
-									disabled={isEdit}
-									className="h-8 text-[12px] font-mono"
-								/>
-								<p className="text-[10px] text-muted-foreground/60 leading-tight">
-									{t("settings.customProviders.dialog.field.nameHint")}
-								</p>
-							</div>
-						</div>
-
-						<div className="mt-3 grid grid-cols-2 gap-3">
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.baseUrl")} <span className="text-rose-500">*</span>
-								</Label>
-								<Input
-									value={baseUrl}
-									onChange={(e) => setBaseUrl(e.target.value)}
-									placeholder={t("settings.customProviders.dialog.placeholder.baseUrl")}
-									className="h-8 text-[12px] font-mono"
-								/>
-							</div>
-							<div className="space-y-1">
-								<Label className="text-[11px] text-muted-foreground">
-									{t("settings.customProviders.dialog.field.apiKey")}
-								</Label>
-								<div className="relative">
-									<Input
-										type={showKey ? "text" : "password"}
-										autoComplete="new-password"
-										value={apiKeyVal}
-										onChange={(e) => setApiKeyVal(e.target.value)}
-										placeholder={t("settings.customProviders.dialog.placeholder.apiKey")}
-										className="h-8 pr-9 text-[12px] font-mono"
-									/>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="absolute right-0 top-0 size-8"
-										onClick={() => setShowKey(!showKey)}
-										tabIndex={-1}
-									>
-										{showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-									</Button>
-								</div>
-								<p className="text-[10px] text-muted-foreground/60 leading-tight">
-									{t("settings.customProviders.dialog.field.apiKeyHint")}
-								</p>
-							</div>
-						</div>
-					</section>
-
-					{/* ══ Custom Headers (collapsible) ══ */}
-					<section>
-						<button
-							type="button"
-							className="group mb-2 flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-							onClick={() => setHeadersOpen(!headersOpen)}
-						>
-							<ChevronRight className={cn("size-3 transition-transform", headersOpen && "rotate-90")} />
-							<div className="h-3 w-0.5 rounded-full bg-border group-hover:bg-foreground/20 transition-colors" />
-							<span className="uppercase tracking-wider">
-								{t("settings.customProviders.dialog.field.headers")}
-							</span>
-							{headers.length > 0 && (
-								<span className="rounded-full bg-muted px-1.5 text-[10px]">{headers.length}</span>
-							)}
-						</button>
-						{headersOpen && (
-							<div className="space-y-1.5 pl-5">
-								{headers.map((h) => (
-									<div key={h.id} className="flex items-center gap-1.5">
-										<Input
-											value={h.key}
-											onChange={(e) => updateHeader(h.id, "key", e.target.value)}
-											placeholder={t("settings.customProviders.dialog.placeholder.headerKey")}
-											className="h-7 flex-1 text-[11px] font-mono"
-										/>
-										<Input
-											value={h.value}
-											onChange={(e) => updateHeader(h.id, "value", e.target.value)}
-											placeholder={t("settings.customProviders.dialog.placeholder.headerValue")}
-											className="h-7 flex-1 text-[11px] font-mono"
-										/>
-										<Button
-											variant="line-ghost"
-											size="icon-xs"
-											className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-											onClick={() => removeHeader(h.id)}
-										>
-											<Trash2 className="size-3" />
-										</Button>
-									</div>
-								))}
-								{headers.length === 0 && (
-									<p className="py-1 text-[10px] text-muted-foreground/60">
-										{t("settings.customProviders.dialog.noCustomHeaders")}
-									</p>
-								)}
-								<Button variant="line" size="xs" onClick={addHeader} className="text-[10px]">
-									<Plus className="size-3" /> {t("settings.customProviders.dialog.addHeader")}
-								</Button>
-							</div>
-						)}
-					</section>
-
-					{/* ══ Models ══ */}
-					<section>
-						<div className="mb-2 flex items-center justify-between">
-							<div className="flex items-center gap-2">
-								<div className="h-3 w-0.5 rounded-full bg-border" />
-								<span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-									{t("settings.customProviders.dialog.field.models")}
-								</span>
-								<span className="rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-									{models.length}
-								</span>
-							</div>
-							<Button variant="line" size="xs" onClick={addModel} className="h-6 text-[10px]">
-								<Plus className="size-3" /> {t("settings.customProviders.dialog.addModel")}
-							</Button>
-						</div>
-
-						{models.length === 0 ? (
-							<div className="rounded-lg border border-dashed border-hairline py-6 text-center">
-								<p className="text-[11px] text-muted-foreground/60">
-									{t("settings.customProviders.dialog.noModels")}
-								</p>
-								<Button variant="line" size="xs" onClick={addModel} className="mt-2 text-[10px]">
-									<Plus className="size-3" /> {t("settings.customProviders.dialog.addFirstModel")}
-								</Button>
-							</div>
-						) : (
-							<div className="space-y-1">
-								{models.map((m) => (
-									<div
-										key={m._key}
-										className="group flex items-center gap-2 rounded-md border border-transparent bg-muted/30 px-2.5 py-1.5 transition-colors hover:border-hairline hover:bg-muted/50"
-									>
-										{/* Model ID */}
-										<Input
-											value={m.id}
-											onChange={(e) => updateModel(m._key, { id: e.target.value })}
-											placeholder={t("settings.customProviders.dialog.placeholder.modelId")}
-											className="h-7 min-w-0 flex-[2] text-[12px] font-mono"
-										/>
-										{/* Display name */}
-										<Input
-											value={m.name ?? ""}
-											onChange={(e) => updateModel(m._key, { name: e.target.value || undefined })}
-											placeholder={t("settings.customProviders.dialog.placeholder.modelName")}
-											className="h-7 min-w-0 flex-[1.5] text-[12px]"
-										/>
-										{/* Reasoning toggle */}
-										<div className="flex shrink-0 items-center gap-1.5">
-											<span className="text-[10px] text-muted-foreground/60 select-none">
-												{t("settings.customProviders.dialog.think")}
-											</span>
-											<Switch
-												checked={m.reasoning ?? false}
-												onCheckedChange={(v) => updateModel(m._key, { reasoning: v })}
-												className="scale-75"
-											/>
-										</div>
-										{/* Delete */}
-										<Button
-											variant="line-ghost"
-											size="icon-xs"
-											className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-											onClick={() => removeModel(m._key)}
-										>
-											<Trash2 className="size-3" />
-										</Button>
-									</div>
-								))}
-							</div>
-						)}
-					</section>
-
-					{/* ══ Advanced Compatibility ══ */}
-					<section>
-						<button
-							type="button"
-							className="group mb-2 flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-							onClick={() => setCompatSection(!compatSection)}
-						>
-							<ChevronRight className={cn("size-3 transition-transform", compatSection && "rotate-90")} />
-							<div className="h-3 w-0.5 rounded-full bg-border group-hover:bg-foreground/20 transition-colors" />
-							<span className="uppercase tracking-wider">
-								{t("settings.customProviders.dialog.field.compat")}
-							</span>
-						</button>
-
-						{compatSection && (
-							<div className="space-y-1.5 rounded-lg border border-hairline bg-muted/20 p-3 pl-5">
-								{apiProtocol === "anthropic-messages" && (
-									<>
-										<CompatToggle
-											checked={forceAdaptiveThinking}
-											onChange={setForceAdaptiveThinking}
-											label={t("settings.customProviders.compat.anthropic.forceAdaptiveThinking")}
-											tip={t("settings.customProviders.compat.anthropic.forceAdaptiveThinkingTip")}
-										/>
-										<CompatToggle
-											checked={supportsEagerToolInputStreaming}
-											onChange={setSupportsEagerToolInputStreaming}
-											label={t("settings.customProviders.compat.anthropic.supportsEagerToolInputStreaming")}
-											tip={t("settings.customProviders.compat.anthropic.supportsEagerToolInputStreamingTip")}
-										/>
-										<CompatToggle
-											checked={allowEmptySignature}
-											onChange={setAllowEmptySignature}
-											label={t("settings.customProviders.compat.anthropic.allowEmptySignature")}
-											tip={t("settings.customProviders.compat.anthropic.allowEmptySignatureTip")}
-										/>
-									</>
-								)}
-								{apiProtocol === "openai-completions" && (
-									<>
-										<CompatToggle
-											checked={supportsDeveloperRole}
-											onChange={setSupportsDeveloperRole}
-											label={t("settings.customProviders.compat.openai.supportsDeveloperRole")}
-											tip={t("settings.customProviders.compat.openai.supportsDeveloperRoleTip")}
-										/>
-										<CompatToggle
-											checked={supportsReasoningEffort}
-											onChange={setSupportsReasoningEffort}
-											label={t("settings.customProviders.compat.openai.supportsReasoningEffort")}
-											tip={t("settings.customProviders.compat.openai.supportsReasoningEffortTip")}
-										/>
-									</>
-								)}
-								{apiProtocol === "openai-responses" && (
-									<CompatToggle
-										checked={supportsDeveloperRole}
-										onChange={setSupportsDeveloperRole}
-										label={t("settings.customProviders.compat.openai.supportsDeveloperRole")}
-										tip={t("settings.customProviders.compat.openai.supportsDeveloperRoleTip")}
-									/>
-								)}
-								{apiProtocol === "google-generative-ai" && (
-									<p className="py-1 text-[10px] text-muted-foreground/60">
-										{t("settings.customProviders.dialog.noCompatOptions")}
-									</p>
-								)}
-							</div>
-						)}
-					</section>
-
-					{/* ══ Validation errors ══ */}
-					{validationErrors.length > 0 && (
-						<div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-3 space-y-1">
-							{validationErrors.map((e, i) => (
-								<p key={i} className="flex items-center gap-1.5 text-[11px] text-rose-600 dark:text-rose-400">
-									<AlertCircle className="size-3 shrink-0" /> {e}
-								</p>
-							))}
-						</div>
-					)}
-
-					{/* ══ Self-test results ══ */}
-					{testResult && <TestResultsPanel result={testResult} t={t} />}
-				</div>
-
-				{/* ── Footer ── */}
-				<div className="shrink-0 border-t border-hairline bg-muted/20 px-6 py-3">
-					<div className="flex items-center justify-between gap-3">
-						<p className="text-[10px] text-muted-foreground/60">
-							{validationErrors.length > 0
-								? t("settings.customProviders.dialog.issuesToFix", { count: validationErrors.length })
-								: t("settings.customProviders.dialog.readyToTest", { count: models.length })}
-						</p>
-						<div className="flex items-center gap-2">
-							<Button
-								variant="line"
-								size="sm"
-								onClick={handleClose}
-								disabled={saving}
-								className="h-7 text-[11px]"
-							>
-								{t("settings.customProviders.dialog.action.cancel")}
-							</Button>
-							<Button
-								variant="line-filled"
-								size="sm"
-								onClick={handleSubmit}
-								disabled={saving || validationErrors.length > 0}
-								className="h-7 text-[11px]"
-							>
-								{saving ? (
-									<>
-										<Loader2 className="size-3 animate-spin" data-icon="inline-start" />
-										{t("settings.customProviders.dialog.testing")}
-									</>
-								) : (
-									t("settings.customProviders.dialog.action.testAndSave")
-								)}
-							</Button>
-						</div>
-					</div>
-				</div>
+				<div className="flex-1 space-y-5 overflow-y-auto px-0.5 py-4">{formBody}</div>
+				{footer}
 			</DialogContent>
 		</Dialog>
 	);
 }
-
-// ═══════════════════════════════════════
-// Sub-components
-// ═══════════════════════════════════════
 
 function CompatToggle({
 	checked,
@@ -999,13 +659,18 @@ function CompatToggle({
 	tip: string;
 }) {
 	return (
-		<label className="flex cursor-pointer items-center justify-between gap-4 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/30">
-			<span className="flex min-w-0 items-center gap-1.5 text-[11px]" title={tip}>
-				<Info className="size-3 text-muted-foreground/40" />
-				{label}
-			</span>
-			<Switch checked={checked} onCheckedChange={onChange} className="scale-75" />
-		</label>
+		<div className="group flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/30">
+			<button
+				type="button"
+				title={tip}
+				onClick={() => onChange(!checked)}
+				className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left text-[11px] text-muted-foreground transition-colors group-hover:text-foreground"
+			>
+				<Info className="size-3 shrink-0 text-muted-foreground/40" />
+				<span className="truncate">{label}</span>
+			</button>
+			<Switch checked={checked} onCheckedChange={onChange} className="scale-75 shrink-0" />
+		</div>
 	);
 }
 
@@ -1050,7 +715,7 @@ function TestResultsPanel({
 						)}
 						<span className="min-w-0 truncate font-mono font-medium">{r.modelId}</span>
 						{r.ok && r.latencyMs !== undefined && (
-							<span className="ml-auto rounded-full bg-muted px-1.5 py-0 text-[10px] font-mono text-muted-foreground">
+							<span className="ml-auto rounded-full bg-muted px-1.5 py-0 font-mono text-[10px] text-muted-foreground">
 								{r.latencyMs}ms
 							</span>
 						)}

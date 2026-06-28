@@ -334,11 +334,7 @@ const ChatMessageList = memo(function ChatMessageList({
 									size="icon-xs"
 									onClick={() => handleCopyMessage(item.id, item.message!)}
 								>
-									{copiedEntryId === item.id ? (
-										<Check className="size-3.5" />
-									) : (
-										<Copy className="size-3.5" />
-									)}
+									{copiedEntryId === item.id ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
 								</Button>
 								{item.message.role === "assistant" && (
 									<>

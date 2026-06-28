@@ -477,10 +477,13 @@ export class SessionRuntimeManager {
 	}
 
 	async executeDeleteProject(projectId: string): Promise<void> {
+		const project = this.projects.get(projectId);
 		const sessions = this.sessionsByProject.get(projectId) ?? [];
 		const runtimeIds = Array.from(this.runtimes.entries())
 			.filter(([, managed]) => managed.projectId === projectId)
 			.map(([sessionId]) => sessionId);
+		const sharedDir = getProjectSharedDir(projectId);
+		const subsessionsDir = project ? getWorkspaceSubsessionsDir(project.name) : null;
 		await Promise.all(runtimeIds.map((sessionId) => this.disposeRuntime(sessionId, true)));
 		// 先停 watcher,再删目录,避免 chokidar 监听已删 inode 持续报错
 		if (this.workspaceFileService) {
@@ -507,7 +510,6 @@ export class SessionRuntimeManager {
 		this.sessionsByProject.delete(projectId);
 		this.projects.delete(projectId);
 		// 删除项目时清理共享区 + 子会话目录
-		const sharedDir = getProjectSharedDir(projectId);
 		if (existsSync(sharedDir)) {
 			try {
 				fs.rmSync(sharedDir, { recursive: true, force: true });
@@ -517,8 +519,6 @@ export class SessionRuntimeManager {
 				}
 			}
 		}
-		const project = this.projects.get(projectId);
-		const subsessionsDir = project ? getWorkspaceSubsessionsDir(project.name) : null;
 		if (subsessionsDir && existsSync(subsessionsDir)) {
 			try {
 				fs.rmSync(subsessionsDir, { recursive: true, force: true });
@@ -745,8 +745,12 @@ export class SessionRuntimeManager {
 		return async ({ cwd, sessionManager, sessionStartEvent }) => {
 			return this.withResourceInitialization(async () => {
 				const settingsManager = SettingsManager.create(cwd, getLookDir());
-				const trusted = this.resolveProjectTrust(cwd);
-				settingsManager.setProjectTrusted(trusted);
+				const resolveLatestProjectTrust = () => {
+					const trusted = this.resolveProjectTrust(cwd);
+					settingsManager.setProjectTrusted(trusted);
+					return trusted;
+				};
+				resolveLatestProjectTrust();
 				const projectId = this.findProjectIdByCwd(cwd);
 				const sharedPath = projectId ? getProjectSharedDir(projectId) : undefined;
 				const sharedPrompt = sharedPath
@@ -766,7 +770,7 @@ export class SessionRuntimeManager {
 						appendSystemPrompt: appendPrompts.length > 0 ? appendPrompts : undefined,
 					},
 					resourceLoaderReloadOptions: {
-						resolveProjectTrust: async () => trusted,
+						resolveProjectTrust: async () => resolveLatestProjectTrust(),
 					},
 				});
 				const result = await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent });
@@ -1007,9 +1011,7 @@ export class SessionRuntimeManager {
 		// 回退到第一个已配置的可用模型
 		if (!this.userSettings.getAll().preferredModel) {
 			const currentModel = session.model;
-			const currentAuth = currentModel
-				? this.modelRegistry.getProviderAuthStatus(currentModel.provider)
-				: null;
+			const currentAuth = currentModel ? this.modelRegistry.getProviderAuthStatus(currentModel.provider) : null;
 			if (!currentModel || currentAuth?.source === "environment" || !currentAuth?.configured) {
 				const available = this.getAvailableModelsSync();
 				if (available.length > 0) {
@@ -1125,9 +1127,16 @@ export class SessionRuntimeManager {
 		const managed = this.runtimes.get(sessionId);
 		if (!managed) return;
 		const session = managed.runtime.session;
+		if (this.getPermissionMode(sessionId) === "plan") {
+			this.syncPlanToolState(sessionId);
+			return;
+		}
 		if (enabled) {
-			// 恢复：重新激活全部已配置工具（不传 allowlist，扩展工具保持可用）。
-			session.setActiveToolsByName(session.getAllTools().map((tool) => tool.name));
+			// 只恢复 subagent 工具本身,不要重置当前会话已有的 active tools。
+			const configured = new Set(session.getAllTools().map((tool) => tool.name));
+			if (!configured.has("subagent")) return;
+			const active = session.getActiveToolNames();
+			if (!active.includes("subagent")) session.setActiveToolsByName([...active, "subagent"]);
 		} else {
 			// 关闭：从活动工具中移除 subagent，LLM 即不可见不可调用。
 			session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
@@ -1282,7 +1291,8 @@ export class SessionRuntimeManager {
 	private async destroySubSessions(parentSessionId: string): Promise<void> {
 		const childIds = this.listSubSessions(parentSessionId);
 		for (const childId of childIds) {
-			const childFile = this.runtimes.get(childId)?.runtime.session.sessionFile;
+			const childFile =
+				this.runtimes.get(childId)?.runtime.session.sessionFile ?? this.findStoredSession(childId)?.path;
 			await this.disposeRuntime(childId, true).catch(() => undefined);
 			if (childFile && existsSync(childFile)) {
 				try {

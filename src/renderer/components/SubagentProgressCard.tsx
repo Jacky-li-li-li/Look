@@ -16,7 +16,6 @@ interface Props {
 	onClick?: () => void;
 }
 
-
 const STATUS_ICONS: Record<string, typeof CheckCircle2> = {
 	running: Loader2,
 	completed: CheckCircle2,
@@ -66,9 +65,7 @@ const SubagentProgressCard = memo(function SubagentProgressCard({ entry, onClick
 		>
 			{/* 顶行：状态图标 · Agent名称(截断) · token用量 · 状态标签(最右) */}
 			<div className="flex items-center gap-1.5">
-				<Icon
-					className={cn("size-3.5 shrink-0", STATUS_COLORS[entry.status] ?? "", isRunning && "animate-spin")}
-				/>
+				<Icon className={cn("size-3.5 shrink-0", STATUS_COLORS[entry.status] ?? "", isRunning && "animate-spin")} />
 				<span className="min-w-0 truncate text-[11px] font-medium">{entry.agentName}</span>
 
 				{entry.usage && (

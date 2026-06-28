@@ -6,6 +6,36 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session-runtime-manager";
 
+function installFakeRuntime(manager: SessionRuntimeManager, sessionId: string, activeTools: string[], allTools: string[]) {
+	let active = [...activeTools];
+	const session = {
+		getActiveToolNames: () => [...active],
+		setActiveToolsByName: (tools: string[]) => {
+			active = [...tools];
+		},
+		getAllTools: () => allTools.map((name) => ({ name })),
+		sessionManager: { isPersisted: () => false },
+	};
+	const internal = manager as any;
+	internal.runtimes.set(sessionId, {
+		runtime: { session },
+		projectId: "test-project",
+		createdAt: Date.now(),
+		unsubscribe: () => {},
+	});
+	internal.permissionModesBySession.set(sessionId, "ask");
+	return {
+		getActiveTools: () => [...active],
+		cleanup: () => {
+			internal.runtimes.delete(sessionId);
+			internal.permissionModesBySession.delete(sessionId);
+			internal.prePlanToolsBySession.delete(sessionId);
+			internal.dirtyPlanToolSnapshots.delete(sessionId);
+			internal.subagentEnabledBySession.delete(sessionId);
+		},
+	};
+}
+
 describe("SubAgent toggle — API-level behavior", () => {
 	const manager = new SessionRuntimeManager();
 	let savedDefault: boolean;
@@ -62,5 +92,46 @@ describe("SubAgent toggle — API-level behavior", () => {
 
 		await manager.setSubagentEnabledGlobal(true);
 		expect(manager.isSubagentEnabled("session-x")).toBe(true);
+	});
+
+	it("7. enabling only adds subagent and does not restore all configured tools", async () => {
+		const fake = installFakeRuntime(manager, "fake-toggle-session", ["read"], ["read", "write", "bash", "subagent"]);
+		try {
+			await (manager as any).applySubagentEnabled("fake-toggle-session", true);
+			expect(fake.getActiveTools()).toEqual(["read", "subagent"]);
+		} finally {
+			fake.cleanup();
+		}
+	});
+
+	it("8. plan mode toggle keeps Plan tool restrictions instead of restoring mutations", async () => {
+		const fake = installFakeRuntime(
+			manager,
+			"fake-plan-session",
+			["read", "write", "bash", "subagent"],
+			["read", "write", "bash", "subagent", "AskUserQuestion", "ExitPlanMode"],
+		);
+		try {
+			(manager as any).permissionModesBySession.set("fake-plan-session", "plan");
+			await (manager as any).applySubagentEnabled("fake-plan-session", true);
+			expect(fake.getActiveTools()).toEqual(["read", "bash", "AskUserQuestion", "ExitPlanMode"]);
+		} finally {
+			fake.cleanup();
+		}
+	});
+
+	it("9. disabling only removes subagent from the current active tools", async () => {
+		const fake = installFakeRuntime(
+			manager,
+			"fake-disable-session",
+			["read", "custom-tool", "subagent"],
+			["read", "write", "custom-tool", "subagent"],
+		);
+		try {
+			await (manager as any).applySubagentEnabled("fake-disable-session", false);
+			expect(fake.getActiveTools()).toEqual(["read", "custom-tool"]);
+		} finally {
+			fake.cleanup();
+		}
 	});
 });

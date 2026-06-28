@@ -63,7 +63,7 @@
     "description": "自定义外观、管理 API 密钥等。",
     "general": "通用",
     "apiKeys": "API 密钥",
-    "apiKeysDescription": "管理 Provider API 密钥与自定义 OpenAI 兼容端点。",
+    "apiKeysDescription": "自定义兼容端点。",
     "chatPrompt": "对话提示",
     "about": "关于",
     "appearance": "外观",
@@ -95,6 +95,32 @@
     "authSourceRuntime": "运行时提供",
     "authSourceConfig": "通过 ~/.look/models.json 配置",
     "authSourceAuto": "自动配置",
+    "authSourceStored": "存储在 Look",
+    "authSourceMissing": "未配置密钥",
+    "addKey": "添加密钥",
+    "replaceKey": "替换密钥",
+    "statusConfigured": "已配置",
+    "statusVerified": "已验证",
+    "statusEnv": "环境变量",
+    "statusRuntime": "运行时",
+    "statusNeedsKey": "需密钥",
+    "statusFailed": "失败",
+    "statusUntested": "未验证",
+    "testingKey": "正在测试",
+    "testAndSaveKey": "测试并保存",
+    "retryTest": "重试",
+    "saveAnyway": "仍然保存",
+    "envKeyHint": "也可以设置",
+    "confirmClear": {
+      "title": "清除 API 密钥？",
+      "body": "清除 {{provider}} 存储在 Look 中的密钥？环境变量和配置文件中的密钥不会被修改。"
+    },
+    "modelTable": {
+      "name": "模型",
+      "id": "ID",
+      "type": "类型",
+      "context": "上下文"
+    },
     "themeInkWash": "墨水",
     "themeInkWashDesc": "墨色单色 + 玻璃磨砂 + 发丝线边框",
     "themeSwiss": "瑞士网格",
@@ -117,13 +143,15 @@
     "themeCrtDesc": "磷光绿扫描线",
     "themeToneRecommended": "该风格推荐此色调",
     "providers": {
-      "title": "API Providers"
+      "title": "API Providers",
+      "summary": "已配置 {{configured}}/{{total}}"
     },
     "customProviders": {
       "title": "自定义 Provider",
-      "addButton": "＋ 添加自定义 Provider",
-      "empty": "还没有自定义 Provider，点击上方按钮添加",
+      "addButton": "添加自定义 Provider",
+      "empty": "连接私有网关或 OpenAI 兼容端点。",
       "sectionLabel": "自定义",
+      "totalModels": "{{count}} 个自定义模型",
       "dialog": {
         "titleAdd": "添加自定义 Provider",
         "titleEdit": "编辑自定义 Provider",
@@ -155,7 +183,16 @@
         },
         "connection": "连接",
         "description": "连接任何兼容 OpenAI、Anthropic 或 Google 的 API 端点。",
+        "descriptionEdit": "调整 {{name}} 的端点、密钥与模型。",
         "backToApiKeys": "返回 API 密钥",
+        "protocol": {
+          "openai-completions": "OpenAI Chat Completions",
+          "anthropic-messages": "Anthropic Messages",
+          "google-generative-ai": "Google Generative AI",
+          "openai-responses": "OpenAI Responses"
+        },
+        "modelIdHint": "匹配服务商 API 路径中的模型 ID",
+        "compatHint": "默认无需修改。仅当你的代理偏离 OpenAI / Anthropic 标准协议时调整。",
         "testing": "测试中…",
         "issuesToFix": "还有 {{count}} 处问题待修复",
         "readyToTest": "准备测试 {{count}} 个模型",
