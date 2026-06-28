@@ -535,13 +535,6 @@ export default function Sidebar({
 																	<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
 																		{child.name || child.agentConfigName}
 																	</span>
-																	<span className="shrink-0 text-[8px] text-muted-foreground/40">
-																		{childRunning
-																			? "running"
-																			: child.messageCount > 0
-																				? `${child.messageCount} msg`
-																				: ""}
-																	</span>
 																</button>
 															</div>
 														);
