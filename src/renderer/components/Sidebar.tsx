@@ -117,8 +117,16 @@ export default function Sidebar({
 		});
 	}, []);
 
-	// 子会话折叠状态：Set 中是已折叠的父会话 ID（默认全展开）
-	const [collapsedSubSessions, setCollapsedSubSessions] = useState<Set<string>>(() => new Set());
+	// 子会话折叠状态：Set 中是已折叠的父会话 ID，持久化到 localStorage
+	const LS_KEY = "look-collapsed-subsessions";
+	const [collapsedSubSessions, setCollapsedSubSessions] = useState<Set<string>>(() => {
+		try {
+			const raw = localStorage.getItem(LS_KEY);
+			return raw ? new Set<string>(JSON.parse(raw)) : new Set();
+		} catch {
+			return new Set();
+		}
+	});
 
 	const toggleSubSessions = useCallback(
 		(parentId: string, e: React.MouseEvent) => {
@@ -127,6 +135,8 @@ export default function Sidebar({
 				const next = new Set(prev);
 				if (next.has(parentId)) next.delete(parentId);
 				else next.add(parentId);
+				// 持久化
+				try { localStorage.setItem(LS_KEY, JSON.stringify([...next])); } catch { /* noop */ }
 				return next;
 			});
 		},
