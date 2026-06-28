@@ -92,7 +92,7 @@ export function RightPanel() {
 				className="right-panel-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
 				data-collapsed={collapsed}
 				aria-label="右侧面板"
-				aria-hidden={collapsed || undefined}
+				inert={collapsed || undefined}
 			>
 				<header className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
 					<nav role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
