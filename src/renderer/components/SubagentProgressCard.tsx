@@ -1,10 +1,9 @@
 // ============================================================
 // SubagentProgressCard — 父会话消息流中的子 Agent 进度卡（Stage 5）
 //
-// 布局结构（水平一行）：
+// 布局结构（水平一行 + 副行）：
 //   [状态图标]  Agent名称(截断)  token用量  [状态标签]
-//
-// 若 finalOutput / errorMessage 存在，在下方另起行展示。
+//   模型 · 停止原因（仅非正常停止时显示）
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
@@ -36,6 +35,12 @@ const STATUS_LABELS: Record<string, string> = {
 	completed: "已完成",
 	failed: "失败",
 	aborted: "已中止",
+};
+
+const STOP_REASON_LABELS: Record<string, string> = {
+	max_tokens: "达到 token 上限",
+	tool_use: "工具调用结束",
+	stop_sequence: "停止序列触发",
 };
 
 function formatTokens(count: number): string {
@@ -76,11 +81,15 @@ const SubagentProgressCard = memo(function SubagentProgressCard({ entry, onClick
 				</span>
 			</div>
 
-			{/* 子行：finalOutput / errorMessage */}
-			{entry.finalOutput && (
-				<p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{entry.finalOutput}</p>
+			{/* 副行：模型 · 停止原因（end_turn 为正常停止，不显示） */}
+			{(entry.model || (entry.stopReason && entry.stopReason !== "end_turn")) && (
+				<div className="mt-1 flex items-center gap-2 text-[9px] text-muted-foreground/50">
+					{entry.model && <span>{entry.model}</span>}
+					{entry.stopReason && entry.stopReason !== "end_turn" && (
+						<span>⏹ {STOP_REASON_LABELS[entry.stopReason] ?? entry.stopReason}</span>
+					)}
+				</div>
 			)}
-			{entry.errorMessage && <p className="mt-0.5 text-[10px] leading-snug text-red-500">{entry.errorMessage}</p>}
 		</button>
 	);
 });
