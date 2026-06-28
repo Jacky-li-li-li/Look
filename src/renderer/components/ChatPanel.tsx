@@ -7,7 +7,7 @@
 // in ChatInput.
 // ============================================================
 
-import type { ThinkingLevel } from "@shared/types";
+import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { memo, useCallback, useRef } from "react";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
@@ -24,7 +24,7 @@ interface ChatPanelProps {
 	currentModel: string;
 	currentThinking: string;
 	availableThinkingLevels?: ThinkingLevel[];
-	onSend: (text: string) => Promise<boolean>;
+	onSend: (text: string, images?: ImageContent[]) => Promise<boolean>;
 	onThinkingChange: (level: string) => void;
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;

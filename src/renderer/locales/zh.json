@@ -25,7 +25,9 @@
     "addFirstProject": "添加项目文件夹",
     "addFirstProjectHint": "会话将限定在项目 cwd 中",
     "noSessionSelected": "尚未选择会话",
-    "emptyProjectHint": "在工作区中创建会话后即可开始。"
+    "emptyProjectHint": "在工作区中创建会话后即可开始。",
+    "expandMore": "展开更多 ({{count}})",
+    "collapseSessions": "收起"
   },
   "sheet": {
     "close": "关闭会话标签",

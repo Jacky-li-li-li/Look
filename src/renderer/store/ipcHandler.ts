@@ -8,6 +8,7 @@
 
 import {
 	type AgentInfo,
+	type ImageContent,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
 	type LookUiEvent,
@@ -173,7 +174,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	let steering: string[] | undefined;
 	let followUp: string[] | undefined;
 	let agentFlags: Partial<AgentInfo> | undefined;
-	let pendingUserMessage: { text: string } | null | undefined;
+	let pendingUserMessage: { text: string; images?: ImageContent[] } | null | undefined;
 
 	for (const ev of events) {
 		switch (ev.type) {
@@ -211,7 +212,11 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				break;
 			case "thinking_delta": {
 				for (let i = 0; i < blocks.length; i++) {
-					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
+					if (
+						blocks[i]!.contentIndex === ev.contentIndex &&
+						blocks[i]!.kind === "thinking" &&
+						!blocks[i]!.completed
+					) {
 						blocks[i] = { ...blocks[i]!, thinking: blocks[i]!.thinking + ev.delta };
 						break;
 					}
@@ -220,7 +225,11 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			}
 			case "thinking_end": {
 				for (let i = 0; i < blocks.length; i++) {
-					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
+					if (
+						blocks[i]!.contentIndex === ev.contentIndex &&
+						blocks[i]!.kind === "thinking" &&
+						!blocks[i]!.completed
+					) {
 						blocks[i] = { ...blocks[i]!, completed: true };
 						break;
 					}
@@ -357,7 +366,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				break;
 
 			case "user_message":
-				pendingUserMessage = { text: ev.text };
+				pendingUserMessage = { text: ev.text, images: ev.images };
 				break;
 
 			case "session_meta":

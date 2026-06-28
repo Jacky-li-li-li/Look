@@ -9,7 +9,7 @@
 import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
-import type { ProjectInfo, ThinkingLevel } from "@shared/types";
+import type { ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { FolderOpen } from "lucide-react";
 import { ThemeProvider } from "next-themes";
@@ -139,11 +139,11 @@ export default function App() {
 
 	// ---- Callbacks: use appStore.get() to read latest value, avoiding stale closures ----
 
-	const handleSendMessage = useCallback(async (text: string): Promise<boolean> => {
+	const handleSendMessage = useCallback(async (text: string, images?: ImageContent[]): Promise<boolean> => {
 		const id = appStore.get(activeAgentIdAtom);
 		if (!id || !api) return false;
 		try {
-			const result = await api.sendMessage(id, text);
+			const result = await api.sendMessage(id, text, images);
 			if (!result?.success) {
 				toast.error(result?.error ?? "Message was not accepted");
 				return false;

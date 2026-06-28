@@ -1,3 +1,4 @@
+import type { ImageContent } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentInfo,
@@ -25,8 +26,11 @@ export interface RendererSessionState {
 	uiSteering: string[];
 	/** Discrete-event path: followUp queue. */
 	uiFollowUp: string[];
-	/** Pending user message from `user_message` UI event, before the snapshot arrives. */
-	pendingUserMessage: { text: string } | null;
+	/** Pending user message from `user_message` UI event, before the snapshot arrives.
+	 *  `images` mirrors the ImageContent[] from the IPC event so the user sees
+	 *  their pasted/attached images immediately on `message_start` instead of
+	 *  having to wait for the next session:snapshot. */
+	pendingUserMessage: { text: string; images?: ImageContent[] } | null;
 }
 
 export const emptyRendererSessionState = (): RendererSessionState => ({

@@ -222,7 +222,7 @@ export type LookUiEvent =
 	| { type: "run_status"; status: LookUiPhase; willRetry?: boolean; timestamp: number }
 
 	// ── 用户消息（由主进程在 message_start 时 emit） ──
-	| { type: "user_message"; text: string; timestamp: number }
+	| { type: "user_message"; text: string; images?: ImageContent[]; timestamp: number }
 
 	// ── 队列 ──
 	| { type: "queue_update"; steering: string[]; followUp: string[]; timestamp: number }

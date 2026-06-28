@@ -25,7 +25,9 @@
     "addFirstProject": "Add a project folder",
     "addFirstProjectHint": "Sessions stay scoped to its cwd",
     "noSessionSelected": "No session selected",
-    "emptyProjectHint": "Create a session inside a workspace to begin."
+    "emptyProjectHint": "Create a session inside a workspace to begin.",
+    "expandMore": "Show more ({{count}})",
+    "collapseSessions": "Show less"
   },
   "sheet": {
     "close": "Close session sheet",

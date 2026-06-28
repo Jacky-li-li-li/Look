@@ -1405,6 +1405,17 @@ body {
     border-color: color-mix(in oklch, var(--foreground), transparent 72%);
     background: color-mix(in oklch, var(--foreground), transparent 96%);
   }
+
+  .workspace-toggle-sessions {
+    border: 1px dashed transparent;
+    transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+  }
+
+  .workspace-toggle-sessions:hover {
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--foreground), transparent 84%);
+    background: color-mix(in oklch, var(--foreground), transparent 97%);
+  }
 }
 
 @keyframes workspace-reveal {

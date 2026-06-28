@@ -25,7 +25,9 @@
 		"addFirstProject": "プロジェクトフォルダを追加",
 		"addFirstProjectHint": "セッションはプロジェクトの cwd に限定されます",
 		"noSessionSelected": "セッションが選択されていません",
-		"emptyProjectHint": "ワークスペース内にセッションを作成してください。"
+		"emptyProjectHint": "ワークスペース内にセッションを作成してください。",
+		"expandMore": "さらに表示 ({{count}})",
+		"collapseSessions": "折りたたむ"
 	},
 	"sheet": {
 		"close": "セッションシートを閉じる",

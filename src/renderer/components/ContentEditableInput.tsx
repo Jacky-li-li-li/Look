@@ -28,6 +28,7 @@
 //     in the candidate.
 // ============================================================
 
+import type { ImageContent } from "@shared/types";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { parseSkillSegments } from "./skillSegments";
 
@@ -43,6 +44,9 @@ interface ContentEditableInputProps {
 	 *  via user input (typing, paste, delete). External `setText`
 	 *  calls do NOT fire this — only user-driven edits do. */
 	onChange: (text: string) => void;
+	/** Called when one or more images are pasted from the clipboard.
+	 *  The consumer (ChatInput) manages the image list and preview UI. */
+	onImagesPasted?: (images: ImageContent[]) => void;
 	/** Tab pressed while the editor is focused. */
 	onTab?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 	/** All other keydowns (including Enter, ArrowUp/Down, Escape).
@@ -95,7 +99,10 @@ function placeCaretAtEnd(container: HTMLElement) {
 }
 
 export const ContentEditableInput = forwardRef<ContentEditableInputHandle, ContentEditableInputProps>(
-	function ContentEditableInput({ placeholder, onChange, onTab, onKeyDown, className, minRows = 2 }, ref) {
+	function ContentEditableInput(
+		{ placeholder, onChange, onImagesPasted, onTab, onKeyDown, className, minRows = 2 },
+		ref,
+	) {
 		const editorRef = useRef<HTMLDivElement>(null);
 		const [editorContent, setEditorContent] = useState("");
 		const isComposingRef = useRef(false);
@@ -217,6 +224,71 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 
 		const handlePaste = useCallback(
 			(e: React.ClipboardEvent<HTMLDivElement>) => {
+				// ---- Image paste detection ----
+				// Check clipboard items for image data BEFORE
+				// extracting plain text, because the browser may
+				// include both an image file and a text/plain
+				// fallback in the same event.
+				//
+				// On macOS + Electron, `DataTransferItem.type` is
+				// often empty for clipboard images because Cocoa's
+				// UTIs (public.png, public.tiff) don't always map
+				// to standard MIME types. We use `File.type` instead,
+				// which reads the blob header and is more reliable.
+				const items = e.clipboardData.items;
+				const pastedImages: ImageContent[] = [];
+				let imageFileCount = 0;
+				if (items && onImagesPasted) {
+					// Count image items FIRST (before async readers),
+					// then read each one. The onload callback uses the
+					// count to know when all readers have finished.
+					for (let i = 0; i < items.length; i++) {
+						const item = items[i];
+						if (item.kind !== "file") continue;
+						const file = item.getAsFile();
+						if (file && (file.type.startsWith("image/") || file.type === "")) {
+							imageFileCount++;
+						}
+					}
+					for (let i = 0; i < items.length; i++) {
+						const item = items[i];
+						if (item.kind !== "file") continue;
+						const file = item.getAsFile();
+						if (!file) continue;
+						// Accept known image MIME types, or empty type
+						// (macOS clipboard quirk — we fall back to the
+						// data URL prefix to detect the real format).
+						if (!file.type.startsWith("image/") && file.type !== "") continue;
+						const mimeType = file.type || "image/png";
+						const reader = new FileReader();
+						reader.onload = () => {
+							const dataUrl = reader.result as string;
+							// "data:image/png;base64,iVBORw0KGgo…"
+							const comma = dataUrl.indexOf(",");
+							const rawBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+							// If the blob didn't have a MIME, extract
+							// it from the data URL ("data:image/png;…").
+							let resolvedType = mimeType;
+							if (!file.type && comma >= 0) {
+								const prefix = dataUrl.slice(0, comma); // "data:image/png;base64"
+								const m = prefix.match(/^data:(image\/\w+);/);
+								if (m) resolvedType = m[1];
+							}
+							pastedImages.push({
+								type: "image" as const,
+								data: rawBase64,
+								mimeType: resolvedType,
+							});
+							// Fire callback once all readers done.
+							if (pastedImages.length === imageFileCount) {
+								onImagesPasted(pastedImages);
+							}
+						};
+						reader.readAsDataURL(file);
+					}
+				}
+
+				// ---- Text paste (existing logic) ----
 				// Always sanitize to plain text. Pasting a `/skill:foo`
 				// snippet should flow through `parseSkillSegments` so
 				// it becomes a chip. Pasting HTML (e.g. from a
@@ -256,7 +328,7 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 				setEditorContent(newText);
 				onChange(newText);
 			},
-			[onChange],
+			[onChange, onImagesPasted],
 		);
 
 		/**

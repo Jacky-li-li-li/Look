@@ -14,6 +14,8 @@ import { useAtom, useAtomValue } from "jotai";
 import {
 	AlertTriangle,
 	ChevronRight,
+	ChevronsDownUp,
+	ChevronsUpDown,
 	Copy,
 	Download,
 	Folder,
@@ -45,6 +47,8 @@ import { appStore } from "../store/ipcHandler";
 import UserAvatar from "./UserAvatar";
 
 const api = (window as any).look;
+
+const SESSION_COLLAPSE_THRESHOLD = 5;
 
 interface SidebarProps {
 	onSelect: (agentId: string) => void;
@@ -99,6 +103,16 @@ export default function Sidebar({
 	const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 	const editRef = useRef<HTMLInputElement>(null);
+	const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => new Set());
+
+	const toggleProjectExpansion = useCallback((projectId: string) => {
+		setExpandedProjectIds((previous) => {
+			const next = new Set(previous);
+			if (next.has(projectId)) next.delete(projectId);
+			else next.add(projectId);
+			return next;
+		});
+	}, []);
 
 	const sessionsByProject = useMemo(() => {
 		const grouped = new Map<string, AgentInfo[]>();
@@ -255,6 +269,10 @@ export default function Sidebar({
 						const runningCount = sessions.filter((session) => runningAgents.has(session.id)).length;
 						const isOpen = openProjects.has(project.id);
 						const isActiveProject = project.id === activeProjectId;
+						const isExpanded = expandedProjectIds.has(project.id);
+						const shouldCollapse = sessions.length > SESSION_COLLAPSE_THRESHOLD && !isExpanded;
+						const visibleSessions = shouldCollapse ? sessions.slice(0, SESSION_COLLAPSE_THRESHOLD) : sessions;
+						const hiddenCount = sessions.length - SESSION_COLLAPSE_THRESHOLD;
 						return (
 							<Collapsible
 								key={project.id}
@@ -370,7 +388,7 @@ export default function Sidebar({
 												{t("project.pathMissing", "Project folder is unavailable")}
 											</div>
 										)}
-										{sessions.map((agent) => {
+										{visibleSessions.map((agent) => {
 											const isActive = agent.id === activeAgentId;
 											const isRunning = runningAgents.has(agent.id);
 											const phase = sessionPhases.get(agent.id) ?? "idle";
@@ -469,6 +487,33 @@ export default function Sidebar({
 												</div>
 											);
 										})}
+
+										{shouldCollapse && (
+											<button
+												type="button"
+												onClick={() => toggleProjectExpansion(project.id)}
+												aria-expanded={isExpanded}
+												className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
+											>
+												<ChevronsUpDown className="size-3" />
+												{t("workspace.expandMore", {
+													count: hiddenCount,
+													defaultValue: "展开更多 ({{count}})",
+												})}
+											</button>
+										)}
+
+										{!shouldCollapse && hiddenCount > 0 && (
+											<button
+												type="button"
+												onClick={() => toggleProjectExpansion(project.id)}
+												aria-expanded={isExpanded}
+												className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
+											>
+												<ChevronsDownUp className="size-3" />
+												{t("workspace.collapseSessions", "收起")}
+											</button>
+										)}
 
 										{sessions.length === 0 && project.valid && (
 											<button

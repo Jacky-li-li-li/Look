@@ -4,11 +4,12 @@
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@shared/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@shared/components/ui/popover";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
-import type { ThinkingLevel } from "@shared/types";
+import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtom } from "jotai";
-import { Puzzle, Search, Send, Square } from "lucide-react";
+import { Puzzle, Search, Send, Square, X } from "lucide-react";
 import type React from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,7 +33,7 @@ interface ChatInputProps {
 	currentThinking: string;
 	availableThinkingLevels?: ThinkingLevel[];
 	isBusy: boolean;
-	onSend: (text: string) => Promise<boolean>;
+	onSend: (text: string, images?: ImageContent[]) => Promise<boolean>;
 	onThinkingChange: (level: string) => void;
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
@@ -58,6 +59,10 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	const [permissionMode, setPermissionMode] = useAtom(permissionModeAtomFamily(agentId));
 	const [input, setInputState] = useState("");
 	const inputRef = useRef<ContentEditableInputHandle>(null);
+	// Pending images pasted from clipboard, shown as thumbnails above the input.
+	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
+	// Index of the image currently shown in the zoom dialog (-1 = closed).
+	const [zoomedImageIndex, setZoomedImageIndex] = useState(-1);
 
 	// setInput is the single mutation entry-point: every
 	// programmatic change (slash menu pick, tools picker, send
@@ -204,10 +209,31 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		inputRef.current?.focus();
 	}, []);
 
+	// ---- Image paste handler ----
+	const handleImagesPasted = useCallback((images: ImageContent[]) => {
+		setPendingImages((prev) => [...prev, ...images]);
+	}, []);
+
+	const handleRemoveImage = useCallback((index: number) => {
+		setPendingImages((prev) => prev.filter((_, i) => i !== index));
+	}, []);
+
+	const hasContent = input.trim().length > 0 || pendingImages.length > 0;
+
 	const handleSend = async () => {
 		const text = (inputRef.current?.getText() ?? "").trim();
-		if (!text) return;
-		if (await onSend(text)) setInput("");
+		if (!text && pendingImages.length === 0) return;
+		const images = pendingImages.length > 0 ? pendingImages : undefined;
+		if (images) {
+			console.log(
+				"[ChatInput] sending images:",
+				images.map((img) => ({ mimeType: img.mimeType, dataLen: img.data.length })),
+			);
+		}
+		if (await onSend(text || "", images)) {
+			setInput("");
+			setPendingImages([]);
+		}
 	};
 
 	const handleAbort = () => {
@@ -269,10 +295,71 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 					onClose={() => setInput("")}
 				/>
 			) : null}
+
+			{/* Pending image previews */}
+			{pendingImages.length > 0 && (
+				<div className="flex flex-wrap gap-2 px-3 pt-2.5">
+					{pendingImages.map((img, idx) => (
+						<div
+							key={`${img.mimeType}-${idx}`}
+							className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-hairline bg-muted"
+						>
+							<button
+								type="button"
+								onClick={() => setZoomedImageIndex(idx)}
+								className="h-full w-full cursor-zoom-in"
+								aria-label={`View image ${idx + 1}`}
+							>
+								<img
+									src={`data:${img.mimeType};base64,${img.data}`}
+									alt={`Pasted image ${idx + 1}`}
+									className="h-full w-full object-cover"
+								/>
+							</button>
+							<button
+								type="button"
+								onClick={() => handleRemoveImage(idx)}
+								className="absolute top-0.5 right-0.5 flex size-4 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
+								aria-label={`Remove image ${idx + 1}`}
+							>
+								<X className="size-3" />
+							</button>
+						</div>
+					))}
+				</div>
+			)}
+
+			{/* Enlarged image dialog */}
+			<Dialog
+				open={zoomedImageIndex >= 0}
+				onOpenChange={(open) => {
+					if (!open) setZoomedImageIndex(-1);
+				}}
+			>
+				<DialogContent
+					showCloseButton={false}
+					className="max-w-[90vw] max-h-[90vh] border-0 bg-transparent p-0 shadow-none"
+					onClick={() => setZoomedImageIndex(-1)}
+				>
+					<DialogTitle className="sr-only">
+						{zoomedImageIndex >= 0 ? `Image ${zoomedImageIndex + 1}` : "Image preview"}
+					</DialogTitle>
+					{zoomedImageIndex >= 0 && pendingImages[zoomedImageIndex] && (
+						<img
+							src={`data:${pendingImages[zoomedImageIndex].mimeType};base64,${pendingImages[zoomedImageIndex].data}`}
+							alt={`Image ${zoomedImageIndex + 1}`}
+							className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+							onClick={(e) => e.stopPropagation()}
+						/>
+					)}
+				</DialogContent>
+			</Dialog>
+
 			<ContentEditableInput
 				ref={inputRef}
 				placeholder={isBusy ? `${t("chat.send")}… (Enter to queue)` : `${t("chat.placeholder")}`}
 				onChange={handleEditorChange}
+				onImagesPasted={handleImagesPasted}
 				onKeyDown={handleEditorKeyDown}
 			/>
 			<div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
@@ -359,10 +446,10 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 							<Square data-icon="inline-start" className="size-3 fill-current" />
 						</Button>
 						<Button
-							variant={input.trim() ? "line-filled" : "line"}
+							variant={hasContent ? "line-filled" : "line"}
 							size="icon-sm"
 							onClick={() => void handleSend()}
-							disabled={!input.trim()}
+							disabled={!hasContent}
 							aria-label={t("chat.send")}
 						>
 							<Send data-icon="inline-start" className="size-3.5" />
@@ -370,10 +457,10 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 					</>
 				) : (
 					<Button
-						variant={input.trim() ? "line-filled" : "line"}
+						variant={hasContent ? "line-filled" : "line"}
 						size="icon-sm"
 						onClick={() => void handleSend()}
-						disabled={!input.trim()}
+						disabled={!hasContent}
 						aria-label={t("chat.send")}
 					>
 						<Send data-icon="inline-start" className="size-3.5" />

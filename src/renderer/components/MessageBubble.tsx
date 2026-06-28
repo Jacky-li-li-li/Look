@@ -53,7 +53,7 @@ function ImageBlock({ block }: { block: ImageContent }) {
 		<img
 			src={`data:${block.mimeType};base64,${block.data}`}
 			alt="SDK message attachment"
-			className="max-h-96 max-w-full rounded-md border border-hairline object-contain"
+			className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
 		/>
 	);
 }

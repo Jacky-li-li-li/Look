@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ImageContent, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { LookUiPhase, LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
 
 export interface TimelineItem {
@@ -41,7 +41,7 @@ export function buildTimeline(
 	uiBlocks: LookUiStreamBlock[] = [],
 	uiTools: Record<string, LookUiToolExecState> = {},
 	uiPhase: LookUiPhase = "idle",
-	pendingUserMessage: { text: string } | null = null,
+	pendingUserMessage: { text: string; images?: ImageContent[] } | null = null,
 ): TimelineItem[] {
 	const items: TimelineItem[] = [];
 	let pendingToolResults: ToolResultMessage[] = [];
@@ -131,12 +131,14 @@ export function buildTimeline(
 	// snapshot arrives — the snapshot atomically clears pendingUserMessage
 	// and updates entries, so there is no visual duplicate.
 	if (pendingUserMessage) {
+		const textBlock: TextContent[] = pendingUserMessage.text ? [{ type: "text", text: pendingUserMessage.text }] : [];
+		const imageBlocks: ImageContent[] = pendingUserMessage.images ?? [];
 		items.push({
 			id: "pending-user",
 			isLive: false,
 			message: {
 				role: "user",
-				content: [{ type: "text", text: pendingUserMessage.text }],
+				content: [...textBlock, ...imageBlocks],
 			} as AgentMessage,
 		});
 	}
