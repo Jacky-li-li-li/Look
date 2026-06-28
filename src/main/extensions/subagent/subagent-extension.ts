@@ -28,11 +28,13 @@ import {
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task to delegate to the agent" }),
+	title: Type.Optional(Type.String({ description: "Short display title for this sub-session (shown in sidebar)" })),
 });
 
 const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior step output" }),
+	title: Type.Optional(Type.String({ description: "Short display title for this sub-session" })),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {

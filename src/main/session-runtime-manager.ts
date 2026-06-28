@@ -808,8 +808,8 @@ export class SessionRuntimeManager {
 	private createSubagentHost(): SubagentHost {
 		return {
 			discoverAgents: (cwd, scope) => discoverAgents(cwd, scope),
-			runSubSession: (parentId, agent, task, signal, onUpdate) =>
-				this.runSubSession(parentId, agent, task, signal, onUpdate),
+			runSubSession: (parentId, agent, task, signal, onUpdate, title) =>
+				this.runSubSession(parentId, agent, task, signal, onUpdate, title),
 			isSubagentEnabled: (id) => this.isSubagentEnabled(id),
 		};
 	}
@@ -1304,6 +1304,7 @@ export class SessionRuntimeManager {
 		task: string,
 		signal: AbortSignal | undefined,
 		onUpdate?: (progress: SubagentProgress) => void,
+		title?: string,
 	): Promise<SubagentResult> {
 		const parentManaged = this.runtimes.get(parentSessionId);
 		if (!parentManaged) throw new Error(`Parent session ${parentSessionId} is not live`);
@@ -1326,10 +1327,11 @@ export class SessionRuntimeManager {
 		const session = managed.runtime.session;
 		const childSessionId = session.sessionId;
 
-		// 命名：`<agentTitle|name> · <task 摘要>`
-		const displayAgentName = agent.title || agent.name;
-		const taskPreview = task.replace(/\s+/g, " ").trim().slice(0, 48);
-		session.setSessionName(`${displayAgentName} · ${taskPreview}`.slice(0, MAX_NAME_LENGTH));
+		// 命名：优先使用 LLM 提供的 title，否则拼接 agentName + task 摘要
+		const displayName = title?.trim()
+			? title.trim().slice(0, MAX_NAME_LENGTH)
+			: `${agent.title || agent.name} · ${task.replace(/\s+/g, " ").trim().slice(0, 48)}`.slice(0, MAX_NAME_LENGTH);
+		session.setSessionName(displayName);
 
 		// 工具白名单（与已配置工具取交集，避免激活不存在的工具）
 		if (agent.tools && agent.tools.length > 0) {

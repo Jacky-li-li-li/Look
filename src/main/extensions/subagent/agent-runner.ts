@@ -50,10 +50,11 @@ export async function runSingleAgent(
 	signal: AbortSignal | undefined,
 	onUpdate?: (progress: SubagentProgress) => void,
 	step?: number,
+	title?: string,
 ): Promise<SubagentResult> {
 	const agent = resolveAgent(agents, agentName);
 	if (!agent) return unknownAgentResult(agentName, task, agents);
-	const result = await host.runSubSession(parentSessionId, agent, task, signal, onUpdate);
+	const result = await host.runSubSession(parentSessionId, agent, task, signal, onUpdate, title);
 	if (step !== undefined) result.step = step;
 	return result;
 }
@@ -71,7 +72,9 @@ export async function runParallelAgents(
 	onUpdate?: (progress: SubagentProgress) => void,
 ): Promise<SubagentResult[]> {
 	return Promise.all(
-		tasks.map((t) => runSingleAgent(host, parentSessionId, agents, t.agent, t.task, signal, onUpdate)),
+		tasks.map((t) =>
+			runSingleAgent(host, parentSessionId, agents, t.agent, t.task, signal, onUpdate, undefined, t.title),
+		),
 	);
 }
 
@@ -103,6 +106,7 @@ export async function runChainAgents(
 			signal,
 			onUpdate,
 			i + 1,
+			item.title,
 		);
 		results.push(result);
 		if (result.status !== "completed") {
