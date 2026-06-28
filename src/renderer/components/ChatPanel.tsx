@@ -11,7 +11,12 @@ import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { Bot } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activeAgentIdAtom, type SubagentProgressEntry, subagentProgressAtomFamily, subSessionsAtomFamily } from "../store/atoms";
+import {
+	activeAgentIdAtom,
+	type SubagentProgressEntry,
+	subagentProgressAtomFamily,
+	subSessionsAtomFamily,
+} from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";

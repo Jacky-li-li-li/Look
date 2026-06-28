@@ -149,7 +149,9 @@ export function RightPanel() {
 						<PanelRightClose className="size-3.5" />
 					</Button>
 				</header>
-				{tab === "workspace" && activeProject && <WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />}
+				{tab === "workspace" && activeProject && (
+					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
+				)}
 				{tab === "agents" && <AgentMarketplacePanel />}
 				{tab === "shared" && activeProject && (
 					<SharedAreaPanel
