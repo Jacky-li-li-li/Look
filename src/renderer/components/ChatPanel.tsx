@@ -9,9 +9,9 @@
 
 import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
-import { activeAgentIdAtom, subagentProgressAtomFamily } from "../store/atoms";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { activeAgentIdAtom, type SubagentProgressEntry, subagentProgressAtomFamily, subSessionsAtomFamily } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
@@ -62,12 +62,29 @@ const ChatPanel = memo(function ChatPanel({
 		onAbort?.();
 	}, [onAbort]);
 
-	const subagentProgress = useAtomValue(subagentProgressAtomFamily(agentId));
+	const _subagentProgress = useAtomValue(subagentProgressAtomFamily(agentId));
 	const [subProgressExpanded, setSubProgressExpanded] = useState(false);
 
-	const runningCount = subagentProgress.filter((e) => e.status === "running").length;
-	const doneCount = subagentProgress.filter((e) => e.status === "completed").length;
-	const failedCount = subagentProgress.filter((e) => e.status === "failed" || e.status === "aborted").length;
+	// 合并实时进度事件 + 已持久化/已完成的子会话（重启后不丢失）
+	const childSessions = useAtomValue(subSessionsAtomFamily(agentId));
+	const mergedProgress = useMemo(() => {
+		const fromEvents = new Map(_subagentProgress.map((e: SubagentProgressEntry) => [e.childSessionId, e]));
+		// 已持久化的子会话（不在事件列表中），作为 completed entry 补充
+		for (const child of childSessions) {
+			if (!fromEvents.has(child.id)) {
+				fromEvents.set(child.id, {
+					childSessionId: child.id,
+					agentName: child.name,
+					status: child.isStreaming ? "running" : "completed",
+				});
+			}
+		}
+		return Array.from(fromEvents.values());
+	}, [_subagentProgress, childSessions]);
+
+	const runningCount = mergedProgress.filter((e) => e.status === "running").length;
+	const doneCount = mergedProgress.filter((e) => e.status === "completed").length;
+	const failedCount = mergedProgress.filter((e) => e.status === "failed" || e.status === "aborted").length;
 
 	// 新子 Agent 启动时自动展开
 	useEffect(() => {
@@ -87,7 +104,7 @@ const ChatPanel = memo(function ChatPanel({
 				onSend={onSend}
 			/>
 			{/* Stage 5：子 Agent 进度卡片（可折叠） */}
-			{subagentProgress.length > 0 && (
+			{mergedProgress.length > 0 && (
 				<div className="shrink-0 px-1 pb-1">
 					<button
 						type="button"
@@ -95,7 +112,7 @@ const ChatPanel = memo(function ChatPanel({
 						className="mx-4 flex items-center gap-2 rounded-lg border border-hairline bg-card/30 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-card/50"
 					>
 						<Bot className="size-3.5 shrink-0 text-sky-500" />
-						<span className="font-medium">{subagentProgress.length} 个 SubAgent</span>
+						<span className="font-medium">{mergedProgress.length} 个 SubAgent</span>
 						<span className="text-[10px] text-muted-foreground">
 							{runningCount > 0 && `${runningCount} 执行中`}
 							{doneCount > 0 && `${runningCount > 0 ? ", " : ""}${doneCount} 已完成`}
@@ -107,7 +124,7 @@ const ChatPanel = memo(function ChatPanel({
 					</button>
 					{subProgressExpanded && (
 						<div className="space-y-1 px-3 pt-1 pb-1">
-							{subagentProgress.map((entry) => (
+							{mergedProgress.map((entry) => (
 								<SubagentProgressCard
 									key={entry.childSessionId}
 									entry={entry}
