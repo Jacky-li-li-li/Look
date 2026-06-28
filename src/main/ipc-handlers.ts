@@ -11,6 +11,7 @@ import {
 	guardAgentId,
 	guardBoolean,
 	guardEnum,
+	guardNullableString,
 	guardObject,
 	guardOptionalBoolean,
 	guardOptionalString,
@@ -333,6 +334,9 @@ async function handleRendererInvoke(
 			}
 			if ("themeTone" in settings) {
 				guardEnum(settings.themeTone, "settings.themeTone", ["light", "dark"] as const);
+			}
+			if ("autoTitleModel" in settings) {
+				guardNullableString(settings.autoTitleModel, "settings.autoTitleModel");
 			}
 			const updated = await runtimeManager.updateGeneralSettings(data.settings ?? {});
 			return { success: true, settings: updated };

@@ -112,7 +112,8 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 				loadCustomProviders();
 				try {
 					const providersRes = await api.getSettings();
-					if (providersRes?.success) onProvidersChange({ providers: providersRes.providers, customStats: providersRes.customStats });
+					if (providersRes?.success)
+						onProvidersChange({ providers: providersRes.providers, customStats: providersRes.customStats });
 				} catch {}
 			}
 		} catch (e: any) {

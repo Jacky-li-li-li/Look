@@ -127,11 +127,26 @@ const ChatMessageList = memo(function ChatMessageList({
 	// re-created. Manually keep scrolled to bottom while streaming by detecting
 	// content growth via uiBlocks total text length.
 	const prevStreamLenRef = useRef(0);
+	const prevBlockCountRef = useRef(0);
 	useEffect(() => {
 		if (!isBusy) {
 			prevStreamLenRef.current = 0;
+			prevBlockCountRef.current = 0;
 			return;
 		}
+		// Fast path: block count unchanged means only deltas — compare
+		// reference identity of the first block's text to detect growth.
+		const blockCount = sessionState.uiBlocks.length;
+		if (blockCount === prevBlockCountRef.current) {
+			const block = sessionState.uiBlocks[0];
+			const blockLen = (block?.text?.length ?? 0) + (block?.thinking?.length ?? 0);
+			if (blockLen !== prevStreamLenRef.current) {
+				prevStreamLenRef.current = blockLen;
+				scrollToBottom();
+			}
+			return;
+		}
+		prevBlockCountRef.current = blockCount;
 		const totalLen = sessionState.uiBlocks.reduce(
 			(sum, b) => sum + (b.text?.length ?? 0) + (b.thinking?.length ?? 0),
 			0,

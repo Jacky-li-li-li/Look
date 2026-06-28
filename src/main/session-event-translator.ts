@@ -1,5 +1,5 @@
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { LookMessageSubEvent, LookUiEvent } from "./shared/types.js";
 
 /** Tracks active (started-but-not-ended) content blocks during streaming.
@@ -25,11 +25,10 @@ export function createContentBlockTracker(): ContentBlockTracker {
  *  Text and thinking blocks can be closed with an empty payload because the
  *  renderer has already accumulated the live content via delta events.
  *
- *  Toolcall blocks are *not* synthesized here: `toolcall_start` does not carry
- *  the toolCallId/name/args metadata required for a valid `toolcall_end`, and
- *  the SDK always emits the real `toolcall_end` before the stream finishes.
- *  On the rare path where it does not, the renderer drops incomplete transient
- *  blocks when the run status returns to idle. */
+ *  Toolcall blocks are *not* synthesized here: the SDK always emits the real
+ *  `toolcall_end` before the stream finishes. On the rare path where it does
+ *  not, the renderer drops incomplete transient blocks when the run status
+ *  returns to idle. */
 export function finishActiveBlocks(tracker: ContentBlockTracker, events: LookUiEvent[], now: number): void {
 	for (const ci of tracker.activeTextIndices) {
 		events.push({ type: "assistant_text_end", contentIndex: ci, text: "", timestamp: now });
@@ -43,7 +42,7 @@ export function finishActiveBlocks(tracker: ContentBlockTracker, events: LookUiE
 }
 
 /** Extract plain-text content from a user AgentMessage. */
-function extractUserMessageText(message: AgentMessage): string {
+export function extractUserMessageText(message: AgentMessage): string {
 	const msg = message as unknown as Record<string, unknown>;
 	if (typeof msg.content === "string") return msg.content as string;
 	if (Array.isArray(msg.content)) {
@@ -156,20 +155,19 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 					});
 					break;
 
-				case "toolcall_start":
+				case "toolcall_start": {
+					const tcBlock = sub.partial?.content?.[sub.contentIndex];
+					if (!tcBlock?.id) break; // insufficient data — toolcall_end will carry the full metadata
 					tracker.activeToolCallIndices.add(sub.contentIndex);
-					(() => {
-						const sdkPartial = (sub as any).partial;
-						const tcBlock = sdkPartial?.content?.[sub.contentIndex];
-						events.push({
-							type: "toolcall_start",
-							contentIndex: sub.contentIndex,
-							toolCallId: tcBlock?.id ?? "",
-							toolName: tcBlock?.name ?? "unknown",
-							timestamp: now,
-						});
-					})();
+					events.push({
+						type: "toolcall_start",
+						contentIndex: sub.contentIndex,
+						toolCallId: tcBlock.id,
+						toolName: tcBlock.name ?? "unknown",
+						timestamp: now,
+					});
 					break;
+				}
 				case "toolcall_delta":
 					events.push({
 						type: "toolcall_arg_delta",

@@ -22,6 +22,13 @@ export function guardOptionalString(x: unknown, label: string): string | undefin
 	return guardString(x, label);
 }
 
+/** Like guardOptionalString but also accepts an explicit `null`. Used for
+ *  fields that may be cleared (e.g. "use the default" vs. "use this value"). */
+export function guardNullableString(x: unknown, label: string): string | null {
+	if (x === null) return null;
+	return guardString(x, label);
+}
+
 export function guardEnum<T extends string>(x: unknown, label: string, values: readonly T[]): T {
 	if (!values.includes(x as T)) {
 		throw new Error(`Invalid ${label}: ${JSON.stringify(x)} (expected one of ${values.join(", ")})`);

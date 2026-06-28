@@ -43,9 +43,7 @@ export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: T
 				<div className="inset-drawer__trigger cursor-default">
 					<ChevronRight className="size-3 shrink-0" />
 					<Brain className="size-3.5 shrink-0 text-blue-400" />
-					<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">
-						Reasoning
-					</span>
+					<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
 					<span className="inline-block w-2 h-4 bg-blue-400 animate-pulse rounded-xs" />
 				</div>
 			</div>

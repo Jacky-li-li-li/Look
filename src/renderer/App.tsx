@@ -160,10 +160,16 @@ export default function App() {
 		const result = await api.activateSession(agentId);
 		if (result?.success) {
 			appStore.set(activeAgentIdAtom, agentId);
+			// Open the session as a sheet in the top tab bar if it is not
+			// already open. Append (not prepend) so the existing tab order is
+			// preserved — already-open tabs do not visually jump. The user
+			// can still reorder via drag (handleReorderSessionSheets).
+			appStore.set(openedSessionIdsAtom, (previous) => {
+				if (previous.includes(agentId)) return previous;
+				return [...previous, agentId];
+			});
 			// Track activation order (most recent first) for close-fallback neighbor
-			// selection. Do NOT mutate openedSessionIdsAtom here — that would reorder
-			// the tab bar DOM and visually jump the clicked tab. Tab order is
-			// user-controlled via drag (handleReorderSessionSheets).
+			// selection.
 			appStore.set(recentlyActiveSessionIdsAtom, (previous) => {
 				const filtered = previous.filter((id) => id !== agentId);
 				return [agentId, ...filtered];
@@ -233,7 +239,20 @@ export default function App() {
 	const handleCreateClick = useCallback(async (projectId: string) => {
 		if (!api) return;
 		const result = await api.createAgent({ projectId });
-		if (result?.success && result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
+		if (result?.success && result.agentId) {
+			appStore.set(activeAgentIdAtom, result.agentId);
+			// Open the freshly created session as a sheet so it appears in
+			// the top tab bar. Append so existing tab order is preserved.
+			appStore.set(openedSessionIdsAtom, (previous) => {
+				if (previous.includes(result.agentId)) return previous;
+				return [...previous, result.agentId];
+			});
+			// Seed activation history so close-fallback has a sensible default.
+			appStore.set(recentlyActiveSessionIdsAtom, (previous) => [
+				result.agentId,
+				...previous.filter((id) => id !== result.agentId),
+			]);
+		}
 	}, []);
 
 	const handleRenameProject = useCallback(async (projectId: string, name: string) => {

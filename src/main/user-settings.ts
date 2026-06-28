@@ -50,6 +50,13 @@ export interface UserSettings {
 	themeStyle: LookStyle;
 	/** Active tone variant (light / dark). */
 	themeTone: LookTone;
+	/**
+	 * Model used to auto-generate the first session title.
+	 * Format: "provider/model-id". `null` means "inherit the session's
+	 * current model at generation time". UI surface is the Behavior
+	 * tab's "Title generation model" Select.
+	 */
+	autoTitleModel: string | null;
 }
 
 const DEFAULTS: UserSettings = {
@@ -64,6 +71,7 @@ const DEFAULTS: UserSettings = {
 	openedSessionIds: [],
 	themeStyle: "ink-wash",
 	themeTone: "dark",
+	autoTitleModel: null,
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -89,6 +97,8 @@ interface UiSettings {
 	themeStyle: LookStyle;
 	/** Active tone variant (light / dark). */
 	themeTone: LookTone;
+	/** Model used to auto-generate the first session title. See UserSettings.autoTitleModel. */
+	autoTitleModel: string | null;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -102,6 +112,7 @@ const UI_DEFAULTS: UiSettings = {
 	openedSessionIds: [],
 	themeStyle: "ink-wash",
 	themeTone: "dark",
+	autoTitleModel: null,
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -210,6 +221,7 @@ export class UserSettingsStore {
 		if (partial.openedSessionIds !== undefined) uiPartial.openedSessionIds = [...partial.openedSessionIds];
 		if (partial.themeStyle !== undefined) uiPartial.themeStyle = partial.themeStyle;
 		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
+		if (partial.autoTitleModel !== undefined) uiPartial.autoTitleModel = partial.autoTitleModel;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

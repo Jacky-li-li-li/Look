@@ -49,7 +49,13 @@ function resultText(value: unknown): string {
 	try {
 		return JSON.stringify(value, null, 2);
 	} catch {
-		return String(value);
+		// Circular reference, BigInt, Symbol etc. — use the object's own
+		// toString() if it differs from the default, otherwise describe the type.
+		const str = String(value);
+		if (str !== "[object Object]") return str;
+		return typeof value === "object" && value !== null
+			? `[${Object.getPrototypeOf(value)?.constructor?.name ?? "Object"}]`
+			: str;
 	}
 }
 

@@ -19,6 +19,12 @@ import { ThemePicker } from "./ThemePicker";
 
 const api = (window as any).look;
 
+/** Sentinel value for the "Title generation model" Select. Models are
+ *  serialized as `"provider/model-id"`, so this string can never collide
+ *  with a real option; we use it to represent `null` (inherit the current
+ *  session's model) so Radix Select always has a controlled value. */
+const USE_SESSION_MODEL = "__session__";
+
 function SettingRow({
 	label,
 	desc,
@@ -48,6 +54,8 @@ export default function GeneralTab() {
 	const [language, setLanguage] = useState("en");
 	const [autoCollapse, setAutoCollapse] = useState(true);
 	const [compactionEnabled, setCompactionEnabled] = useState(true);
+	const [autoTitleModel, setAutoTitleModel] = useState<string | null>(null);
+	const [availableModels, setAvailableModels] = useState<Array<{ provider: string; id: string; name: string }>>([]);
 
 	useEffect(() => {
 		if (!api) return;
@@ -57,6 +65,20 @@ export default function GeneralTab() {
 					if (r.settings.language) setLanguage(r.settings.language);
 					if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
 					if (r.settings.compactionEnabled !== undefined) setCompactionEnabled(r.settings.compactionEnabled);
+					if ("autoTitleModel" in r.settings) setAutoTitleModel(r.settings.autoTitleModel);
+				}
+			})
+			.catch(() => {});
+		api.getModels()
+			.then((r: any) => {
+				if (r?.models) {
+					setAvailableModels(
+						r.models.map((m: any) => ({
+							provider: m.provider,
+							id: m.id,
+							name: m.name ?? m.id,
+						})),
+					);
 				}
 			})
 			.catch(() => {});
@@ -122,6 +144,34 @@ export default function GeneralTab() {
 								persistSettings({ autoCollapse: v });
 							}}
 						/>
+					</SettingRow>
+					<SettingRow
+						id="autotitle-model"
+						label={t("settings.autoTitleModel")}
+						desc={t("settings.autoTitleModelDesc")}
+					>
+						<Select
+							value={autoTitleModel ?? USE_SESSION_MODEL}
+							onValueChange={(v) => {
+								const next = v === USE_SESSION_MODEL ? null : v;
+								setAutoTitleModel(next);
+								persistSettings({ autoTitleModel: next });
+							}}
+						>
+							<SelectTrigger id="autotitle-model" size="sm" className="w-[240px]">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									<SelectItem value={USE_SESSION_MODEL}>{t("settings.autoTitleUseSessionModel")}</SelectItem>
+									{availableModels.map((m) => (
+										<SelectItem key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+											{m.name} ({m.provider})
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
 					</SettingRow>
 				</CardContent>
 			</Card>

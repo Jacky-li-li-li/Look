@@ -157,7 +157,13 @@ export type LookMessageSubEvent =
 	| { type: "thinking_start"; contentIndex: number }
 	| { type: "thinking_delta"; contentIndex: number; delta: string }
 	| { type: "thinking_end"; contentIndex: number; content: string }
-	| { type: "toolcall_start"; contentIndex: number }
+	| {
+			type: "toolcall_start";
+			contentIndex: number;
+			/** SDK partial assistant message snapshot — used to extract the
+			 *  toolCallId and toolName before the full toolcall_end arrives. */
+			partial: { content?: Array<{ id?: string; name?: string }> };
+	  }
 	| { type: "toolcall_delta"; contentIndex: number; delta: string }
 	| {
 			type: "toolcall_end";

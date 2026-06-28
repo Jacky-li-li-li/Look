@@ -35,6 +35,12 @@ import {
 	type PlanQuestionOutcome,
 } from "./extensions/plan-extension.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
+import { AutoTitleService } from "./services/auto-title.js";
+import {
+	type ContentBlockTracker,
+	createContentBlockTracker,
+	translateAgentSessionEvent,
+} from "./session-event-translator.js";
 import {
 	ensureLookDir,
 	ensureWorkspaceDir,
@@ -47,13 +53,12 @@ import {
 	getUiSettingsPath,
 	resetLegacySessionsOnce,
 } from "./shared/look-storage.js";
+import { DEFAULT_SESSION_NAME } from "./shared/session-defaults.js";
 import {
 	type AgentInfo,
 	type ForkedSessionResult,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
-	type LookMessageSubEvent,
-	type LookUiEvent,
 	type MainToRendererEvent,
 	type NavigateTreeResult,
 	type PermissionAskEvent,
@@ -114,50 +119,6 @@ function isPermissionMode(value: unknown): value is PermissionMode {
 	return value === "always" || value === "ask" || value === "plan";
 }
 
-/** Tracks active (started-but-not-ended) content blocks during streaming.
- *  Used by translateAgentSessionEvent to emit synthetic end events when
- *  the assistant stream completes or agent turn ends. */
-interface ContentBlockTracker {
-	activeTextIndices: Set<number>;
-	activeThinkingIndices: Set<number>;
-	activeToolCallIndices: Set<number>;
-}
-
-function createContentBlockTracker(): ContentBlockTracker {
-	return {
-		activeTextIndices: new Set(),
-		activeThinkingIndices: new Set(),
-		activeToolCallIndices: new Set(),
-	};
-}
-
-/** Emit synthetic end events for any content blocks that were started but
- *  never received a corresponding end event from the assistant stream. */
-function finishActiveBlocks(tracker: ContentBlockTracker, events: LookUiEvent[], now: number): void {
-	for (const ci of tracker.activeTextIndices) {
-		events.push({ type: "assistant_text_end", contentIndex: ci, text: "", timestamp: now });
-	}
-	for (const ci of tracker.activeThinkingIndices) {
-		events.push({ type: "thinking_end", contentIndex: ci, thinking: "", timestamp: now });
-	}
-	tracker.activeTextIndices.clear();
-	tracker.activeThinkingIndices.clear();
-	tracker.activeToolCallIndices.clear();
-}
-
-/** Extract plain-text content from a user AgentMessage. */
-function extractUserMessageText(message: AgentMessage): string {
-	const msg = message as unknown as Record<string, unknown>;
-	if (typeof msg.content === "string") return msg.content as string;
-	if (Array.isArray(msg.content)) {
-		return (msg.content as Array<Record<string, unknown>>)
-			.filter((b) => b.type === "text")
-			.map((b) => (b as { text: string }).text)
-			.join("\n");
-	}
-	return "";
-}
-
 /**
  * Hosts independent pi AgentSessionRuntime instances for sessions that are
  * selected or currently running. Each runtime still owns exactly one active pi
@@ -206,6 +167,15 @@ export class SessionRuntimeManager {
 	private readonly streamingStates = new Map<string, "idle" | "streaming" | "retrying">();
 	/** Turn start timestamp keyed by pi session id; used to compute and persist per-message runtimes. */
 	private readonly turnStartedAtBySession = new Map<string, number>();
+	/** AI 标题生成并发锁/已生成标记已移入 AutoTitleService。
+	 *  Sessions whose current name is still the default placeholder. The auto-title
+	 *  generator acts only on sessions in this set so i18n-safe (independent of
+	 *  the "New chat" string), and so a manual rename removes the session from
+	 *  the set. */
+	private readonly createdAtDefaultName = new Set<string>();
+	/** AI 标题生成服务。所有并发 / abort / generated-标记逻辑封装在这里，
+	 *  SessionRuntimeManager 只负责传上下文和触发。 */
+	private readonly autoTitleService: AutoTitleService;
 
 	/** Per-session content block tracker for the discrete event translator.
 	 *  Tracks active (started but not ended) text/thinking/toolcall blocks so the
@@ -238,6 +208,10 @@ export class SessionRuntimeManager {
 		this.defaultPermissionMode = this.userSettings.getAll().permissionMode;
 		// Tool authorization must never silently grant trust to project resources.
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
+		this.autoTitleService = new AutoTitleService({
+			modelRegistry: this.modelRegistry,
+			getUserSettings: () => this.userSettings.getAll(),
+		});
 		this.projectsIndexPath = getProjectsIndexPath();
 		this.workspaceFileService = workspaceFileService ?? null;
 		this.workspaceTreeService = workspaceTreeService ?? null;
@@ -535,7 +509,7 @@ export class SessionRuntimeManager {
 		const model = piSession?.model;
 		return {
 			id: session.id,
-			name: (session.name || session.firstMessage || "New chat").slice(0, MAX_NAME_LENGTH),
+			name: (session.name || session.firstMessage || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH),
 			model: model ? `${model.provider}/${model.id}` : "",
 			thinkingLevel: (piSession?.thinkingLevel as ThinkingLevel | undefined) ?? "off",
 			modelSupportsThinking: piSession?.supportsThinking() ?? false,
@@ -556,7 +530,7 @@ export class SessionRuntimeManager {
 		const model = session.model;
 		return {
 			id: sessionId,
-			name: (session.sessionManager.getSessionName() || "New chat").slice(0, MAX_NAME_LENGTH),
+			name: (session.sessionManager.getSessionName() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH),
 			model: model ? `${model.provider}/${model.id}` : "",
 			thinkingLevel: session.thinkingLevel as ThinkingLevel,
 			modelSupportsThinking: session.supportsThinking(),
@@ -576,8 +550,19 @@ export class SessionRuntimeManager {
 	}
 
 	listAgentsInProject(projectId: string): AgentInfo[] {
-		const persisted = (this.sessionsByProject.get(projectId) ?? []).map((session) => this.sessionInfo(session));
-		const persistedIds = new Set(persisted.map((session) => session.id));
+		const persistedEntries = this.sessionsByProject.get(projectId) ?? [];
+		// For sessions that still have a live runtime, prefer the runtime's
+		// view (which reads `session.sessionManager.getSessionName()`) over
+		// the cached `StoredSession`. The cache only refreshes on
+		// `refreshProjectSessions`, but `setSessionName` writes to the
+		// session file in-place — so a freshly applied auto-title would be
+		// invisible in the cached `session.name` until the next refresh,
+		// causing `agent:list` to roll the tab title back to the default.
+		const persisted = persistedEntries.map((session) => {
+			const managed = this.runtimes.get(session.id);
+			return managed ? this.runtimeInfo(session.id, managed) : this.sessionInfo(session);
+		});
+		const persistedIds = new Set(persistedEntries.map((session) => session.id));
 		const drafts = Array.from(this.runtimes.entries())
 			.filter(([sessionId, managed]) => managed.projectId === projectId && !persistedIds.has(sessionId))
 			.map(([sessionId, managed]) => this.runtimeInfo(sessionId, managed));
@@ -725,6 +710,12 @@ export class SessionRuntimeManager {
 		this.sessionAllowedTools.delete(previousSessionId);
 		this.prePlanToolsBySession.delete(previousSessionId);
 		this.dirtyPlanToolSnapshots.delete(previousSessionId);
+		// Tear down per-session state that was bound to the previous id so
+		// it does not leak into the freshly rebound runtime. The new
+		// sessionId will re-acquire these on the next user turn.
+		this.autoTitleService.dispose(previousSessionId);
+		this.createdAtDefaultName.delete(previousSessionId);
+		this.translationTrackers.delete(previousSessionId);
 		this.restorePermissionMode(session.sessionId, session.sessionManager);
 		this.restorePlanToolSnapshot(session.sessionId, session.sessionManager);
 		await session.bindExtensions({
@@ -783,6 +774,9 @@ export class SessionRuntimeManager {
 		if (abort && managed.runtime.session.isStreaming) await managed.runtime.session.abort();
 		this.persistPermissionModeIfPossible(sessionId);
 		this.persistPlanToolSnapshotIfPossible(sessionId);
+		// 取消 AI 标题生成请求并清理 Set 标记。
+		this.autoTitleService.dispose(sessionId);
+		this.createdAtDefaultName.delete(sessionId);
 		managed.unsubscribe();
 		this.runtimes.delete(sessionId);
 		this.permissionModesBySession.delete(sessionId);
@@ -792,6 +786,7 @@ export class SessionRuntimeManager {
 		this.dirtyPlanToolSnapshots.delete(sessionId);
 		this.streamingStates.delete(sessionId);
 		this.turnStartedAtBySession.delete(sessionId);
+		this.translationTrackers.delete(sessionId);
 		await managed.runtime.dispose();
 	}
 
@@ -826,7 +821,9 @@ export class SessionRuntimeManager {
 			projectId,
 		);
 		const session = managed.runtime.session;
-		session.setSessionName((input.name?.trim() || "New chat").slice(0, MAX_NAME_LENGTH));
+		session.setSessionName((input.name?.trim() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH));
+		// 标记为"刚创建、还是默认名"，AI 标题生成只覆盖此集合。
+		this.createdAtDefaultName.add(session.sessionId);
 		this.activeProjectId = projectId;
 		this.activeSessionId = session.sessionId;
 		await this.refreshProjectSessions(projectId);
@@ -925,6 +922,13 @@ export class SessionRuntimeManager {
 			const manager = this.sessionManagerFor(sessionId);
 			manager?.appendSessionInfo(trimmed);
 		}
+		// User-initiated rename: drop the session from the "still on default
+		// name" set so the auto-title gate closes permanently. The service's
+		// `generated` Set never needs clearing here — once the gate is closed
+		// by the Set deletion, the next message_end computes `isDefaultName
+		// === false` and the service short-circuits before reaching any
+		// `generated` check.
+		this.createdAtDefaultName.delete(sessionId);
 		const stored = this.findStoredSession(sessionId);
 		if (stored) stored.name = trimmed;
 		this.emitSessionUpdated(sessionId);
@@ -981,6 +985,8 @@ export class SessionRuntimeManager {
 				);
 				const session = forkedManaged.runtime.session;
 				if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, MAX_NAME_LENGTH));
+				// Fork 出的新 session：若没有指定名字，也加入"刚创建默认名"集合。
+				if (!opts?.name?.trim()) this.createdAtDefaultName.add(session.sessionId);
 				if (!session.sessionFile) throw new Error("Forked session was not persisted");
 				await this.refreshProjectSessions(managed.projectId);
 				this.activeProjectId = managed.projectId;
@@ -1023,249 +1029,32 @@ export class SessionRuntimeManager {
 	}
 
 	/**
-	 * Translate a single AgentSessionEvent into zero or more discrete LookUiEvent items.
-	 *
-	 * Uses the fine-grained `assistantMessageEvent` sub-event on `message_update` to
-	 * produce delta-level events (text_delta / thinking_delta / toolcall_arg_delta)
-	 * instead of full message snapshots. The pi SDK already computes the deltas — we
-	 * simply forward them with stable `contentIndex` keys.
+	 * 首条 user 消息 message_end 事件时调用。
+	 * 仅在 `createdAtDefaultName` 集合内的 session（即尚未被用户改名）触发，
+	 * 把决策权完全交给 Service 内部的并发 / abort / generated 守卫。
 	 */
-	private translateAgentSessionEvent(sessionId: string, event: AgentSessionEvent): LookUiEvent[] {
-		const now = Date.now();
-		const events: LookUiEvent[] = [];
+	private async onUserMessageEndForTitle(sessionId: string, userMsg: AgentMessage): Promise<void> {
+		const managed = this.runtimes.get(sessionId);
+		if (!managed) return;
+		const currentName = managed.runtime.session.sessionManager.getSessionName();
+		const isDefaultName =
+			this.createdAtDefaultName.has(sessionId) && (!currentName || currentName === DEFAULT_SESSION_NAME);
+		await this.autoTitleService.generateForFirstUserMessage(
+			managed.runtime.session,
+			userMsg,
+			isDefaultName,
+			sessionId,
+		);
+	}
+
+	private handleSessionEvent(sessionId: string, event: AgentSessionEvent): void {
+		// Translate SDK event to discrete LookUiEvent set
 		let tracker = this.translationTrackers.get(sessionId);
 		if (!tracker) {
 			tracker = createContentBlockTracker();
 			this.translationTrackers.set(sessionId, tracker);
 		}
-
-		switch (event.type) {
-			// ── Run lifecycle ──
-			case "agent_start":
-				tracker.activeTextIndices.clear();
-				tracker.activeThinkingIndices.clear();
-				tracker.activeToolCallIndices.clear();
-				events.push({ type: "run_status", status: "streaming", timestamp: now });
-				break;
-
-			case "agent_end":
-				finishActiveBlocks(tracker, events, now);
-				events.push({
-					type: "run_status",
-					status: event.willRetry ? "retrying" : "idle",
-					willRetry: event.willRetry,
-					timestamp: now,
-				});
-				break;
-
-			// ── Message lifecycle ──
-			case "message_start": {
-				const msg = event.message as unknown as Record<string, unknown>;
-				if (msg.role === "user") {
-					const text = extractUserMessageText(event.message);
-					events.push({ type: "user_message", text, timestamp: now });
-				} else if (msg.role === "assistant") {
-					events.push({ type: "assistant_message_start", timestamp: now });
-				}
-				break;
-			}
-
-			case "message_end": {
-				finishActiveBlocks(tracker, events, now);
-				const msg = event.message as unknown as Record<string, unknown>;
-				const completed = !("stopReason" in msg) || (msg as { stopReason: string }).stopReason !== "aborted";
-				events.push({ type: "assistant_message_end", completed, timestamp: now });
-				break;
-			}
-
-			// ── ★ Core: fine-grained assistantMessageEvent deltas ★ ──
-			case "message_update": {
-				const sub = (event as unknown as { assistantMessageEvent?: LookMessageSubEvent }).assistantMessageEvent;
-				if (!sub) break;
-
-				switch (sub.type) {
-					case "text_start":
-						tracker.activeTextIndices.add(sub.contentIndex);
-						events.push({ type: "assistant_text_start", contentIndex: sub.contentIndex, timestamp: now });
-						break;
-					case "text_delta":
-						events.push({
-							type: "assistant_text_delta",
-							contentIndex: sub.contentIndex,
-							delta: sub.delta,
-							timestamp: now,
-						});
-						break;
-					case "text_end":
-						tracker.activeTextIndices.delete(sub.contentIndex);
-						events.push({
-							type: "assistant_text_end",
-							contentIndex: sub.contentIndex,
-							text: sub.content,
-							timestamp: now,
-						});
-						break;
-
-					case "thinking_start":
-						tracker.activeThinkingIndices.add(sub.contentIndex);
-						events.push({ type: "thinking_start", contentIndex: sub.contentIndex, timestamp: now });
-						break;
-					case "thinking_delta":
-						events.push({
-							type: "thinking_delta",
-							contentIndex: sub.contentIndex,
-							delta: sub.delta,
-							timestamp: now,
-						});
-						break;
-					case "thinking_end":
-						tracker.activeThinkingIndices.delete(sub.contentIndex);
-						events.push({
-							type: "thinking_end",
-							contentIndex: sub.contentIndex,
-							thinking: sub.content,
-							timestamp: now,
-						});
-						break;
-
-					case "toolcall_start":
-						tracker.activeToolCallIndices.add(sub.contentIndex);
-						// SDK 的 toolcall_start 在 partial AssistantMessage 的 content[contentIndex]
-						// 中已包含完整的 ToolCall { id, name, arguments }。提取 toolCallId 和 toolName
-						// 避免渲染层先显示 "unknown" 再闪烁为正确名称。
-						(() => {
-							const sdkPartial = (sub as any).partial;
-							const tcBlock = sdkPartial?.content?.[sub.contentIndex];
-							events.push({
-								type: "toolcall_start",
-								contentIndex: sub.contentIndex,
-								toolCallId: tcBlock?.id ?? "",
-								toolName: tcBlock?.name ?? "unknown",
-								timestamp: now,
-							});
-						})();
-						break;
-					case "toolcall_delta":
-						events.push({
-							type: "toolcall_arg_delta",
-							contentIndex: sub.contentIndex,
-							delta: sub.delta,
-							timestamp: now,
-						});
-						break;
-					case "toolcall_end":
-						tracker.activeToolCallIndices.delete(sub.contentIndex);
-						events.push({
-							type: "toolcall_end",
-							contentIndex: sub.contentIndex,
-							toolCallId: sub.toolCall.id,
-							toolName: sub.toolCall.name,
-							args: sub.toolCall.arguments as Record<string, unknown>,
-							timestamp: now,
-						});
-						break;
-
-					case "done":
-						finishActiveBlocks(tracker, events, now);
-						break;
-
-					case "error":
-						finishActiveBlocks(tracker, events, now);
-						events.push({ type: "error", message: sub.error.errorMessage ?? "Assistant error", timestamp: now });
-						break;
-				}
-				break;
-			}
-
-			// ── Tool execution (independent of message stream) ──
-			case "tool_execution_start":
-				events.push({
-					type: "tool_exec_start",
-					toolCallId: event.toolCallId,
-					toolName: event.toolName,
-					args: event.args as Record<string, unknown>,
-					timestamp: now,
-				});
-				break;
-
-			case "tool_execution_update":
-				events.push({
-					type: "tool_exec_update",
-					toolCallId: event.toolCallId,
-					partialResult: event.partialResult,
-					timestamp: now,
-				});
-				break;
-
-			case "tool_execution_end":
-				events.push({
-					type: "tool_exec_end",
-					toolCallId: event.toolCallId,
-					toolName: event.toolName,
-					result: event.result,
-					isError: event.isError,
-					timestamp: now,
-				});
-				break;
-
-			// ── Compaction ──
-			case "compaction_start":
-				events.push({ type: "compacting", active: true, timestamp: now });
-				break;
-			case "compaction_end":
-				events.push({ type: "compacting", active: false, timestamp: now });
-				break;
-
-			// ── Queue ──
-			case "queue_update":
-				events.push({
-					type: "queue_update",
-					steering: [...event.steering],
-					followUp: [...event.followUp],
-					timestamp: now,
-				});
-				break;
-
-			// ── Auto-retry ──
-			case "auto_retry_start":
-				events.push({
-					type: "retry_status",
-					status: "start",
-					attempt: event.attempt,
-					maxAttempts: event.maxAttempts,
-					delayMs: event.delayMs,
-					errorMessage: event.errorMessage,
-					timestamp: now,
-				});
-				break;
-			case "auto_retry_end":
-				events.push({
-					type: "retry_status",
-					status: "end",
-					attempt: event.attempt,
-					success: event.success,
-					finalError: event.finalError,
-					timestamp: now,
-				});
-				break;
-
-			// ── Session metadata ──
-			case "thinking_level_changed":
-				events.push({ type: "session_meta", field: "thinkingLevel", value: event.level, timestamp: now });
-				break;
-			case "session_info_changed":
-				if (event.name) {
-					events.push({ type: "session_meta", field: "name", value: event.name, timestamp: now });
-				}
-				break;
-		}
-
-		return events;
-	}
-
-	private handleSessionEvent(sessionId: string, event: AgentSessionEvent): void {
-		// Translate SDK event to discrete LookUiEvent set
-		const uiEvents = this.translateAgentSessionEvent(sessionId, event);
+		const uiEvents = translateAgentSessionEvent(event, tracker);
 		if (uiEvents.length > 0) {
 			this.emit({ type: "session:ui-event", sessionId, events: uiEvents });
 		}
@@ -1284,6 +1073,19 @@ export class SessionRuntimeManager {
 				this.turnStartedAtBySession.set(sessionId, Date.now());
 				this.streamingStates.set(sessionId, "streaming");
 				this.emitSessionUpdated(sessionId);
+				break;
+			case "message_end":
+				// 首条 user 消息的 message_end 时并行触发 AI 标题生成。
+				// 必须在 message_end 而不是 agent_start 触发，因为 agent_start 时
+				// agent.state.messages 还没 push user message。
+				if (event.message.role === "user") {
+					this.onUserMessageEndForTitle(sessionId, event.message).catch((err) => {
+						// 仅 DEBUG_AUTO_TITLE=1 时打印；service 内部已记录细节。
+						if (process.env.DEBUG_AUTO_TITLE === "1") {
+							console.warn("[Look][autoTitle] trigger failed:", err);
+						}
+					});
+				}
 				break;
 			case "thinking_level_changed":
 			case "session_info_changed":
@@ -1380,21 +1182,22 @@ export class SessionRuntimeManager {
 		// providers that are only reachable via environment variables — the
 		// user didn't opt into those through the settings UI and ModelSelector
 		// should align with what the API Keys tab shows as "configured".
-		return this.modelRegistry.getAvailable()
+		return this.modelRegistry
+			.getAvailable()
 			.filter((model) => {
 				const auth = this.modelRegistry.getProviderAuthStatus(model.provider);
 				if (auth.source === "environment") return false;
 				return true;
 			})
 			.map((model) => ({
-			provider: model.provider,
-			id: model.id,
-			name: model.name ?? model.id,
-			reasoning: model.reasoning ?? false,
-			contextWindow: model.contextWindow ?? 128000,
-			maxTokens: model.maxTokens ?? 16384,
-			cost: { input: model.cost?.input ?? 0, output: model.cost?.output ?? 0 },
-		}));
+				provider: model.provider,
+				id: model.id,
+				name: model.name ?? model.id,
+				reasoning: model.reasoning ?? false,
+				contextWindow: model.contextWindow ?? 128000,
+				maxTokens: model.maxTokens ?? 16384,
+				cost: { input: model.cost?.input ?? 0, output: model.cost?.output ?? 0 },
+			}));
 	}
 
 	async getAvailableModels() {

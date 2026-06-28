@@ -167,8 +167,8 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	const atom = sessionStateAtomFamily(sessionId);
 	const prev = appStore.get(atom);
 
-	let blocks: LookUiStreamBlock[] = prev.uiBlocks;
-	let toolExecs: Record<string, LookUiToolExecState> = prev.uiTools;
+	let blocks: LookUiStreamBlock[] = [...prev.uiBlocks];
+	let toolExecs: Record<string, LookUiToolExecState> = { ...prev.uiTools };
 	let phase: LookUiPhase | undefined;
 	let steering: string[] | undefined;
 	let followUp: string[] | undefined;
@@ -184,21 +184,22 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				];
 				break;
 			case "assistant_text_delta": {
-				blocks = blocks.map((b) =>
-					// Only update incomplete blocks — completed blocks from a previous
-					// message in the same turn may share the same contentIndex.
-					b.contentIndex === ev.contentIndex && b.kind === "text" && !b.completed
-						? { ...b, text: b.text + ev.delta }
-						: b,
-				);
+				// Mutate in-place on the mutable copy to avoid per-delta array rebuilds.
+				for (let i = 0; i < blocks.length; i++) {
+					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "text" && !blocks[i]!.completed) {
+						blocks[i] = { ...blocks[i]!, text: blocks[i]!.text + ev.delta };
+						break;
+					}
+				}
 				break;
 			}
 			case "assistant_text_end": {
-				blocks = blocks.map((b) =>
-					b.contentIndex === ev.contentIndex && b.kind === "text" && !b.completed
-						? { ...b, completed: true }
-						: b,
-				);
+				for (let i = 0; i < blocks.length; i++) {
+					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "text" && !blocks[i]!.completed) {
+						blocks[i] = { ...blocks[i]!, completed: true };
+						break;
+					}
+				}
 				break;
 			}
 
@@ -209,19 +210,21 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				];
 				break;
 			case "thinking_delta": {
-				blocks = blocks.map((b) =>
-					b.contentIndex === ev.contentIndex && b.kind === "thinking" && !b.completed
-						? { ...b, thinking: b.thinking + ev.delta }
-						: b,
-				);
+				for (let i = 0; i < blocks.length; i++) {
+					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
+						blocks[i] = { ...blocks[i]!, thinking: blocks[i]!.thinking + ev.delta };
+						break;
+					}
+				}
 				break;
 			}
 			case "thinking_end": {
-				blocks = blocks.map((b) =>
-					b.contentIndex === ev.contentIndex && b.kind === "thinking" && !b.completed
-						? { ...b, completed: true }
-						: b,
-				);
+				for (let i = 0; i < blocks.length; i++) {
+					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
+						blocks[i] = { ...blocks[i]!, completed: true };
+						break;
+					}
+				}
 				break;
 			}
 
@@ -361,9 +364,9 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				if (ev.field === "name") {
 					appStore.set(
 						agentsAtom,
-						appStore.get(agentsAtom).map((agent) =>
-							agent.id === sessionId ? { ...agent, name: ev.value as string } : agent,
-						),
+						appStore
+							.get(agentsAtom)
+							.map((agent) => (agent.id === sessionId ? { ...agent, name: ev.value as string } : agent)),
 					);
 				}
 				break;
