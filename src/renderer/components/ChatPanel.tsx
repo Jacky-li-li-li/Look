@@ -8,11 +8,15 @@
 // ============================================================
 
 import type { ImageContent, ThinkingLevel } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { memo, useCallback, useRef } from "react";
+import { activeAgentIdAtom, subagentProgressAtomFamily } from "../store/atoms";
+import { appStore } from "../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
 import ChatMessageList from "./ChatMessageList";
 import ChatQueueDrawer from "./ChatQueueDrawer";
+import SubagentProgressCard from "./SubagentProgressCard";
 
 interface ChatPanelProps {
 	agentId: string;
@@ -57,6 +61,8 @@ const ChatPanel = memo(function ChatPanel({
 		onAbort?.();
 	}, [onAbort]);
 
+	const subagentProgress = useAtomValue(subagentProgressAtomFamily(agentId));
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<ChatMessageList
@@ -69,6 +75,18 @@ const ChatPanel = memo(function ChatPanel({
 				inputRef={inputRef}
 				onSend={onSend}
 			/>
+			{/* Stage 5：子 Agent 进度卡片 */}
+			{subagentProgress.length > 0 && (
+				<div className="shrink-0 space-y-1 px-1 pb-1">
+					{subagentProgress.map((entry) => (
+						<SubagentProgressCard
+							key={entry.childSessionId}
+							entry={entry}
+							onClick={() => appStore.set(activeAgentIdAtom, entry.childSessionId)}
+						/>
+					))}
+				</div>
+			)}
 			<ChatQueueDrawer queue={queue} />
 			<ChatInput
 				ref={inputRef}

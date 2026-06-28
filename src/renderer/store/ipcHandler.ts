@@ -42,10 +42,12 @@ import {
 	recentlyCompletedAtom,
 	removeAgentAtoms,
 	removeProjectAtoms,
+	type SubagentProgressEntry,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
 	sharedFilesAtomFamily,
 	subagentEnabledAtom,
+	subagentProgressAtomFamily,
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
@@ -474,6 +476,54 @@ export function initIpcHandlers(api: any): () => void {
 			case "session:ui-event":
 				applyUiEventBatch(event.sessionId, event.events);
 				break;
+
+			// ---- SubAgent 进度事件（Stage 5）----
+			case "session:subagent-progress": {
+				const progressAtom = subagentProgressAtomFamily(event.parentSessionId);
+				const prev = appStore.get(progressAtom);
+				const existing = prev.findIndex((e) => e.childSessionId === event.childSessionId);
+				const entry: SubagentProgressEntry = {
+					childSessionId: event.childSessionId,
+					agentName: event.agentName,
+					status: event.status,
+					partialOutput: event.partialOutput,
+					model: event.model,
+					usage: event.usage,
+				};
+				if (existing >= 0) {
+					appStore.set(
+						progressAtom,
+						prev.map((e, i) => (i === existing ? { ...e, ...entry } : e)),
+					);
+				} else {
+					appStore.set(progressAtom, [...prev, entry]);
+				}
+				break;
+			}
+
+			case "session:subagent-completed": {
+				const progressAtom = subagentProgressAtomFamily(event.parentSessionId);
+				const prev = appStore.get(progressAtom);
+				const existing = prev.findIndex((e) => e.childSessionId === event.childSessionId);
+				const entry: SubagentProgressEntry = {
+					childSessionId: event.childSessionId,
+					agentName: event.agentName,
+					status: event.result.status,
+					finalOutput: event.result.finalOutput,
+					model: event.result.model,
+					stopReason: event.result.stopReason,
+					errorMessage: event.result.errorMessage,
+				};
+				if (existing >= 0) {
+					appStore.set(
+						progressAtom,
+						prev.map((e, i) => (i === existing ? { ...e, ...entry } : e)),
+					);
+				} else {
+					appStore.set(progressAtom, [...prev, entry]);
+				}
+				break;
+			}
 
 			// ---- Project events ----
 			case "project:list": {
