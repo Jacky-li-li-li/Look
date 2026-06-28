@@ -272,6 +272,21 @@ function MarkdownH3({ children, ...props }: any) {
 	);
 }
 
+function MarkdownImg({ src, alt, ...props }: any) {
+	const [error, setError] = useState(false);
+	if (!src || error) return null;
+	return (
+		<img
+			src={src}
+			alt={alt ?? ""}
+			loading="lazy"
+			className="max-h-96 max-w-full rounded-md border border-hairline object-contain my-2"
+			onError={() => setError(true)}
+			{...props}
+		/>
+	);
+}
+
 const COMPONENTS_BLOCK = {
 	p: BlockP,
 	code: CodeRenderer,
@@ -282,6 +297,7 @@ const COMPONENTS_BLOCK = {
 	a: MarkdownA,
 	blockquote: MarkdownBlockquote,
 	hr: MarkdownHr,
+	img: MarkdownImg,
 	ul: MarkdownUl,
 	ol: MarkdownOl,
 	h1: MarkdownH1,

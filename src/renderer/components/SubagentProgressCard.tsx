@@ -1,9 +1,14 @@
 // ============================================================
 // SubagentProgressCard — 父会话消息流中的子 Agent 进度卡（Stage 5）
+//
+// 布局结构（水平一行）：
+//   [状态图标]  Agent名称(截断)  token用量  [状态标签]
+//
+// 若 finalOutput / errorMessage 存在，在下方另起行展示。
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
-import { Bot, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { memo } from "react";
 import type { SubagentProgressEntry } from "../store/atoms";
 
@@ -48,31 +53,34 @@ const SubagentProgressCard = memo(function SubagentProgressCard({ entry, onClick
 			type="button"
 			onClick={onClick}
 			className={cn(
-				"mx-5 mb-1.5 flex items-center gap-2.5 rounded-lg border border-hairline bg-card/30 px-3 py-2 text-left transition-colors hover:bg-card/50",
+				"w-full rounded-lg border border-hairline bg-card/30 px-3 py-2 text-left transition-colors hover:bg-card/50",
 				onClick && "cursor-pointer",
 			)}
 		>
-			<Bot className="size-3.5 shrink-0 text-muted-foreground/50" />
-			<Icon className={cn("size-3.5 shrink-0", STATUS_COLORS[entry.status] ?? "", isRunning && "animate-spin")} />
-			<div className="min-w-0 flex-1">
-				<span className="text-[11px] font-medium">
-					{entry.agentName}
-					<span className={cn("ml-1.5 text-[10px]", STATUS_COLORS[entry.status] ?? "")}>
-						{STATUS_LABELS[entry.status] ?? entry.status}
-					</span>
-				</span>
+			{/* 顶行：状态图标 · Agent名称(截断) · token用量 · 状态标签(最右) */}
+			<div className="flex items-center gap-1.5">
+				<Icon
+					className={cn("size-3.5 shrink-0", STATUS_COLORS[entry.status] ?? "", isRunning && "animate-spin")}
+				/>
+				<span className="min-w-0 truncate text-[11px] font-medium">{entry.agentName}</span>
+
 				{entry.usage && (
-					<span className="ml-2 font-mono text-[9px] text-muted-foreground/50">
-						{entry.usage.turns > 0 && `${entry.usage.turns} turns, `}↑{formatTokens(entry.usage.input)} ↓
-						{formatTokens(entry.usage.output)}
+					<span className="shrink-0 font-mono text-[9px] text-muted-foreground/50">
+						↑{formatTokens(entry.usage.input)} ↓{formatTokens(entry.usage.output)}
 						{entry.usage.cost > 0 && ` $${entry.usage.cost.toFixed(4)}`}
 					</span>
 				)}
-				{entry.finalOutput && (
-					<p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{entry.finalOutput}</p>
-				)}
-				{entry.errorMessage && <p className="mt-0.5 text-[10px] leading-snug text-red-500">{entry.errorMessage}</p>}
+
+				<span className={cn("ml-auto shrink-0 text-[10px]", STATUS_COLORS[entry.status] ?? "")}>
+					{STATUS_LABELS[entry.status] ?? entry.status}
+				</span>
 			</div>
+
+			{/* 子行：finalOutput / errorMessage */}
+			{entry.finalOutput && (
+				<p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{entry.finalOutput}</p>
+			)}
+			{entry.errorMessage && <p className="mt-0.5 text-[10px] leading-snug text-red-500">{entry.errorMessage}</p>}
 		</button>
 	);
 });

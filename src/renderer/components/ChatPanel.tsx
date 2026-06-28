@@ -115,11 +115,11 @@ const ChatPanel = memo(function ChatPanel({
 			/>
 			{/* Stage 5：子 Agent 进度卡片（可折叠） */}
 			{mergedProgress.length > 0 && (
-				<div className="shrink-0 px-1 pb-1">
+				<div className="shrink-0 px-3 pb-1">
 					<button
 						type="button"
 						onClick={() => setSubProgressExpanded(!subProgressExpanded)}
-						className="mx-4 flex items-center gap-2 rounded-lg border border-hairline bg-card/30 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-card/50"
+						className="flex w-full items-center gap-2 rounded-lg border border-hairline bg-card/30 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-card/50"
 					>
 						<Bot className="size-3.5 shrink-0 text-sky-500" />
 						<span className="font-medium">
@@ -132,7 +132,7 @@ const ChatPanel = memo(function ChatPanel({
 						</span>
 					</button>
 					{subProgressExpanded && (
-						<div className="space-y-1 px-3 pt-1 pb-1">
+						<div className="space-y-1 pt-1 pb-1">
 							{mergedProgress.map((entry) => (
 								<SubagentProgressCard
 									key={entry.childSessionId}

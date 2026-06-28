@@ -191,7 +191,7 @@ export const showAgentMarketplaceAtom = atom(false);
 export const rightPanelCollapsedAtom = atom(false);
 
 /** Right panel active tab. */
-export const rightPanelTabAtom = atom<"shared" | "workspace" | "agents">("workspace");
+export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
 
 /** Whether to show hidden files in the workspace tree panel. */
 export const showHiddenFilesAtom = atom(false);

@@ -18,13 +18,27 @@ async function loadAutoUpdater(): Promise<AppUpdater | null> {
 	if (loadFailed) return null;
 	try {
 		const mod = await import("electron-updater");
-		autoUpdater = mod.autoUpdater;
+		autoUpdater = resolveAutoUpdater(mod);
 		return autoUpdater;
 	} catch (err) {
 		loadFailed = true;
-		console.warn(`[updater] electron-updater not available: ${(err as Error).message}`);
+		const errMsg = (err as Error).message;
+		const errStack = (err as Error).stack;
+		console.warn(`[updater] electron-updater not available: ${errMsg}`);
+		console.warn(`[updater] stack:\n${errStack ?? "(no stack)"}`);
 		return null;
 	}
+}
+
+/**
+ * electron-updater exports autoUpdater via Object.defineProperty getter on
+ * its CJS exports object. When loaded via ESM import(), that getter is NOT
+ * promoted to a named export — mod.autoUpdater is undefined.
+ * Access mod.default.autoUpdater (the underlying CJS exports) instead.
+ * See: https://github.com/electron-userland/electron-builder/issues/8399
+ */
+function resolveAutoUpdater(mod: Record<string, any>): AppUpdater | null {
+	return (mod.default?.autoUpdater as AppUpdater) ?? (mod.autoUpdater as AppUpdater) ?? null;
 }
 
 export function initUpdater(mainWindow: BrowserWindow): void {
@@ -35,7 +49,8 @@ export function initUpdater(mainWindow: BrowserWindow): void {
 		if (!updater) {
 			emit(mainWindow, {
 				type: "update:error",
-				message: "electron-updater module not available. Run `npm install electron-updater`.",
+				message:
+					"Updater not available. Check console logs for details, or run `npm install` to ensure all dependencies are present.",
 			});
 			return;
 		}

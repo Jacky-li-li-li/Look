@@ -159,8 +159,8 @@ function ContentBlocks({
 							: "pending";
 
 					const result = execution
-						? resultText(execution.result ?? execution.partialResult)
-						: resultText(persistedResult?.content);
+						? (execution.result ?? execution.partialResult)
+						: persistedResult?.content;
 
 					return (
 						<ToolCallCard
@@ -375,6 +375,10 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 							}}
 						/>
 					);
+				}
+				if (block.kind === "image") {
+					if (!block.image) return null;
+					return <ImageBlock key={`img-${idx}`} block={block.image} />;
 				}
 				return null;
 			})}

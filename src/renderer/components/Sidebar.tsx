@@ -475,7 +475,7 @@ export default function Sidebar({
 																	<span className="block truncate text-[11px] font-medium">
 																		{agent.name}
 																		{hasChildren && (
-																			<span className="ml-1 text-[9px] text-muted-foreground/40">
+																			<span className="ml-1 text-[9px] text-sky-500">
 																				({children.length})
 																			</span>
 																		)}
@@ -571,8 +571,7 @@ export default function Sidebar({
 																	className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
 																	onClick={() => selectSession(child)}
 																>
-																	<Bot className="size-3 shrink-0 text-muted-foreground/50" />
-																	<span className="status-mark" data-status={childPhase} />
+																	<Bot className="size-3 shrink-0 text-sky-500" />
 																	<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
 																		{child.name || child.agentConfigName}
 																	</span>

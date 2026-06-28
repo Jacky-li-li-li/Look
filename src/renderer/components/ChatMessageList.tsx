@@ -329,19 +329,19 @@ const ChatMessageList = memo(function ChatMessageList({
 										<GitBranch className="size-3.5" />
 									</Button>
 								)}
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={() => handleCopyMessage(item.id, item.message!)}
+								>
+									{copiedEntryId === item.id ? (
+										<Check className="size-3.5" />
+									) : (
+										<Copy className="size-3.5" />
+									)}
+								</Button>
 								{item.message.role === "assistant" && (
 									<>
-										<Button
-											variant="ghost"
-											size="icon-xs"
-											onClick={() => handleCopyMessage(item.id, item.message!)}
-										>
-											{copiedEntryId === item.id ? (
-												<Check className="size-3.5" />
-											) : (
-												<Copy className="size-3.5" />
-											)}
-										</Button>
 										{"model" in item.message && (
 											<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
 												{(item.message as any).model}

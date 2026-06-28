@@ -85,39 +85,19 @@ function statusFor(
 	return "pending";
 }
 
-function resultTextFor(
+function resultFor(
 	block: ThinkingContent | ToolCall,
 	toolExecutions: Record<string, LookUiToolExecState>,
 	toolResultMap: Record<string, ToolResultMessage> | undefined,
-): string | undefined {
+): unknown {
 	if (block.type === "thinking") return undefined;
 	const execution = toolExecutions[block.id];
 	if (execution) {
-		const r = execution.result ?? execution.partialResult;
-		if (typeof r === "string") return r;
-		if (r && typeof r === "object" && "content" in r && Array.isArray((r as { content: unknown }).content)) {
-			const text = (r as { content: Array<{ type: string; text?: string }> }).content
-				.filter((c) => c?.type === "text" && typeof c.text === "string")
-				.map((c) => c.text as string)
-				.join("\n");
-			if (text) return text;
-		}
-		try {
-			return JSON.stringify(r, null, 2);
-		} catch {
-			return String(r);
-		}
+		return execution.result ?? execution.partialResult;
 	}
 	const persisted = toolResultMap?.[block.id];
 	if (!persisted) return undefined;
-	if (typeof persisted.content === "string") return persisted.content;
-	if (Array.isArray(persisted.content)) {
-		return persisted.content
-			.filter((c): c is { type: "text"; text: string } => c?.type === "text")
-			.map((c) => c.text)
-			.join("\n");
-	}
-	return undefined;
+	return persisted.content;
 }
 
 const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup({
@@ -262,7 +242,7 @@ function renderBlock(
 		);
 	}
 	const status = statusFor(block, toolExecutions, toolResultMap);
-	const result = resultTextFor(block, toolExecutions, toolResultMap);
+	const result = resultFor(block, toolExecutions, toolResultMap);
 	const isError = status === "error";
 	return (
 		<ToolCallCard

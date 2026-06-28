@@ -60,6 +60,13 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	const [permissionMode, setPermissionMode] = useAtom(permissionModeAtomFamily(agentId));
 	const [input, setInputState] = useState("");
 	const inputRef = useRef<ContentEditableInputHandle>(null);
+	// Undo stack — user-driven edits push the previous text; Cmd+Z pops.
+	const undoStackRef = useRef<string[]>([]);
+	const MAX_UNDO = 80;
+	// Snapshot of `input` kept in-sync via a ref so the onChange callback
+	// (which has an empty deps array) always sees the current value.
+	const inputSnapshotRef = useRef(input);
+	inputSnapshotRef.current = input;
 	// Pending images pasted from clipboard, shown as thumbnails above the input.
 	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
 	// Index of the image currently shown in the zoom dialog (-1 = closed).
@@ -247,10 +254,26 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		// already mirrors the DOM. Programmatic setInput
 		// (commitSlashSelection, setText from outside, …) is a
 		// separate path that also re-renders the editor DOM.
+		const prev = inputSnapshotRef.current;
+		if (text !== prev) {
+			undoStackRef.current.push(prev);
+			if (undoStackRef.current.length > MAX_UNDO) {
+				undoStackRef.current.shift();
+			}
+		}
 		setInputState(text);
 	}, []);
 
 	const handleEditorKeyDown = (e: React.KeyboardEvent) => {
+		// Cmd+Z / Ctrl+Z — undo last user edit
+		if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+			e.preventDefault();
+			const prev = undoStackRef.current.pop();
+			if (prev !== undefined) {
+				setInput(prev);
+			}
+			return;
+		}
 		// Slash (/) menu — skills
 		if (
 			slashOpen &&

@@ -270,12 +270,14 @@ export interface SessionUiEventEnvelope {
 /** 渲染进程用流式块状态 — 由 LookUiEvent 增量更新 */
 export interface LookUiStreamBlock {
 	contentIndex: number;
-	kind: "text" | "thinking" | "toolcall";
+	kind: "text" | "thinking" | "toolcall" | "image";
 	text: string;
 	thinking: string;
 	toolCallId?: string;
 	toolName?: string;
 	args?: Record<string, unknown>;
+	/** Image content block (when kind === "image"). */
+	image?: ImageContent;
 	completed: boolean;
 }
 

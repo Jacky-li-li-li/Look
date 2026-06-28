@@ -6,6 +6,7 @@ import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { promptForProjectTrust, registerIpcHandlers } from "./ipc-handlers.js";
+import { syncLookDefaultSkills } from "./look-default-skills.js";
 import { SessionRuntimeManager } from "./session-runtime-manager.js";
 import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
@@ -250,6 +251,19 @@ async function initSessionRuntime(): Promise<void> {
 			}
 		}
 		console.log("[Look] IPC handlers registered");
+
+		// 同步 Look 内置 Skills 到 ~/.look/builtin-skills/ 并注册路径
+		try {
+			const projectDir = path.resolve(__dirname, "../..");
+			const builtinPath = syncLookDefaultSkills(projectDir);
+			if (builtinPath) {
+				runtimeManager.importSkillPaths([builtinPath]).catch((err) => {
+					console.warn("[Look] 注册内置 Skills 路径失败:", err);
+				});
+			}
+		} catch (err) {
+			console.warn("[Look] 同步内置 Skills 失败:", err);
+		}
 
 		// Auto-updater: check for updates 3s after startup
 		initUpdater(mainWindow);

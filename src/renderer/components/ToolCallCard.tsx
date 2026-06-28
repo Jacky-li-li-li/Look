@@ -6,11 +6,13 @@
 
 import { Badge } from "@shared/components/ui/badge";
 import { cn } from "@shared/lib/utils";
+import type { ImageContent } from "@shared/types";
 import { Check, ChevronRight, Loader2, Wrench, X } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
 import { scheduleCollapse } from "../lib/batchCollapse";
+import { linkifyText } from "../lib/linkify";
 
 export interface ToolCallViewModel {
 	callId: string;
@@ -32,30 +34,38 @@ const RESULT_SUMMARY_LIMIT = 500;
 const HOME_DIR = typeof window !== "undefined" ? (window.look?.homedir ?? "") : "";
 
 /**
- * Safely convert a tool execution result to a displayable string.
+ * Extract text and images from a tool execution result.
  * SDK may return raw objects like { content: [...], details: ... } or
- * plain strings. This mirrors the SDK's ToolResultMessage.content format.
+ * plain strings. This mirrors the SDK's ToolResultMessage.content format
+ * but preserves image blocks alongside text.
  */
-function resultText(value: unknown): string {
-	if (value === undefined || value === null) return "";
-	if (typeof value === "string") return value;
+function extractToolResult(value: unknown): { text: string; images: ImageContent[] } {
+	if (value === undefined || value === null) return { text: "", images: [] };
+	if (typeof value === "string") return { text: value, images: [] };
 	if (typeof value === "object" && "content" in value && Array.isArray((value as any).content)) {
-		const text = (value as any).content
-			.filter((block: any) => block?.type === "text")
-			.map((block: any) => block.text)
-			.join("\n");
-		if (text) return text;
+		const textParts: string[] = [];
+		const images: ImageContent[] = [];
+		for (const block of (value as any).content) {
+			if (block?.type === "text" && typeof block.text === "string") {
+				textParts.push(block.text);
+			} else if (block?.type === "image" && typeof block.data === "string" && typeof block.mimeType === "string") {
+				images.push({ type: "image", data: block.data, mimeType: block.mimeType });
+			}
+		}
+		return { text: textParts.join("\n"), images };
 	}
 	try {
-		return JSON.stringify(value, null, 2);
+		return { text: JSON.stringify(value, null, 2), images: [] };
 	} catch {
-		// Circular reference, BigInt, Symbol etc. — use the object's own
-		// toString() if it differs from the default, otherwise describe the type.
 		const str = String(value);
-		if (str !== "[object Object]") return str;
-		return typeof value === "object" && value !== null
-			? `[${Object.getPrototypeOf(value)?.constructor?.name ?? "Object"}]`
-			: str;
+		if (str !== "[object Object]") return { text: str, images: [] };
+		return {
+			text:
+				typeof value === "object" && value !== null
+					? `[${Object.getPrototypeOf(value)?.constructor?.name ?? "Object"}]`
+					: str,
+			images: [],
+		};
 	}
 }
 
@@ -128,7 +138,7 @@ function formatStatSuffix(
 ): string {
 	const { toolName, result, status } = toolCall;
 	if (status !== "success" || !result) return "";
-	const text = resultText(result);
+	const { text } = extractToolResult(result);
 	if (!text) return "";
 	const trimmed = text.trim();
 	switch (toolName) {
@@ -186,8 +196,10 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
 	const argsJson = React.useMemo(() => safeJson(toolCall.args), [toolCall.args]);
 	const argsPreview = argsJson.slice(0, 80);
-	const resultStr = React.useMemo(() => resultText(toolCall.result), [toolCall.result]);
-	const hasBody = resultStr.length > 0 || argsPreview.length > 0;
+	const extracted = React.useMemo(() => extractToolResult(toolCall.result), [toolCall.result]);
+	const resultStr = extracted.text;
+	const resultImages = extracted.images;
+	const hasBody = resultStr.length > 0 || resultImages.length > 0 || argsPreview.length > 0;
 
 	const toolSummary = formatToolSummary(toolCall);
 	const statSuffix = !open ? formatStatSuffix(toolCall, t) : "";
@@ -296,14 +308,31 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 													</span>
 												)}
 											</span>
-											<pre
+												<div
 												className={cn(
-													"whitespace-pre-wrap break-words max-h-64 overflow-y-auto",
+													"whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono text-[10px]",
 													toolCall.isError ? "text-destructive" : "text-muted-foreground",
 												)}
 											>
-												{resultStr}
-											</pre>
+												{linkifyText(resultStr)}
+											</div>
+										</section>
+									)}
+									{resultImages.length > 0 && (
+										<section className="flex flex-col gap-1">
+											<span className="inset-drawer__label text-foreground">
+												{t("tool.result")}
+											</span>
+											<div className="flex flex-wrap gap-2">
+												{resultImages.map((img, i) => (
+													<img
+														key={`result-img-${i}`}
+														src={`data:${img.mimeType};base64,${img.data}`}
+														alt={`Tool result image ${i + 1}`}
+														className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
+													/>
+												))}
+											</div>
 										</section>
 									)}
 								</div>
