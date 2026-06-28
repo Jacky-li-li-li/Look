@@ -1361,7 +1361,7 @@ export class SessionRuntimeManager {
 		// 父子关系持久化到子会话 JSONL（符合 AGENTS.md：parent links 由 pi JSONL 拥有）
 		session.sessionManager.appendCustomEntry(SUBAGENT_PARENT_ENTRY_TYPE, {
 			parentSessionId,
-			agentName: agent.name,
+			agentName: displayName,
 		});
 		this.registerSubSession(parentSessionId, childSessionId, displayName);
 

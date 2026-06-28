@@ -288,7 +288,9 @@ export default function Sidebar({
 						const isActiveProject = project.id === activeProjectId;
 						const isExpanded = expandedProjectIds.has(project.id);
 						const shouldCollapse = topLevelSessions.length > SESSION_COLLAPSE_THRESHOLD && !isExpanded;
-						const visibleSessions = shouldCollapse ? topLevelSessions.slice(0, SESSION_COLLAPSE_THRESHOLD) : topLevelSessions;
+						const visibleSessions = shouldCollapse
+							? topLevelSessions.slice(0, SESSION_COLLAPSE_THRESHOLD)
+							: topLevelSessions;
 						const hiddenCount = topLevelSessions.length - SESSION_COLLAPSE_THRESHOLD;
 						const runningCount = sessions.filter((session) => runningAgents.has(session.id)).length;
 						return (
@@ -532,7 +534,7 @@ export default function Sidebar({
 																	<Bot className="size-3 shrink-0 text-muted-foreground/50" />
 																	<span className="status-mark" data-status={childPhase} />
 																	<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
-																		{child.agentConfigName ?? child.name}
+																		{child.name || child.agentConfigName}
 																	</span>
 																	<span className="shrink-0 text-[8px] text-muted-foreground/40">
 																		{childRunning
