@@ -1003,6 +1003,28 @@ export class SessionRuntimeManager {
 		);
 		const session = managed.runtime.session;
 		session.setSessionName((input.name?.trim() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH));
+		// 如果用户未设置偏好模型，且 SDK 分配的模型来自未配 API key 的 provider，
+		// 回退到第一个已配置的可用模型
+		if (!this.userSettings.getAll().preferredModel) {
+			const currentModel = session.model;
+			const currentAuth = currentModel
+				? this.modelRegistry.getProviderAuthStatus(currentModel.provider)
+				: null;
+			if (!currentModel || currentAuth?.source === "environment" || !currentAuth?.configured) {
+				const available = this.getAvailableModelsSync();
+				if (available.length > 0) {
+					const first = available[0];
+					const model = this.modelRegistry.find(first.provider, first.id);
+					if (model) {
+						try {
+							await session.setModel(model);
+						} catch {
+							// 设置模型失败不阻塞创建
+						}
+					}
+				}
+			}
+		}
 		// 标记为"刚创建、还是默认名"，AI 标题生成只覆盖此集合。
 		this.createdAtDefaultName.add(session.sessionId);
 		this.activeProjectId = projectId;
