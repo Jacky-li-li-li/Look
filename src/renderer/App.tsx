@@ -16,6 +16,7 @@ import { ThemeProvider } from "next-themes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import AgentMarketplacePanel from "./components/AgentMarketplace/AgentMarketplacePanel";
 import ChatPanel from "./components/ChatPanel";
 import DeleteProjectDialog from "./components/DeleteProjectDialog";
 import LoginScreen from "./components/LoginScreen";
@@ -50,6 +51,7 @@ import {
 	rightPanelCollapsedAtom,
 	sessionStateAtomFamily,
 	settingsTabAtom,
+	showAgentMarketplaceAtom,
 	showSettingsAtom,
 	sidebarCollapsedAtom,
 	userPreferredModelAtom,
@@ -79,6 +81,7 @@ export default function App() {
 	const activeProject = useAtomValue(activeProjectAtom);
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
+	const [showAgentMarketplace, setShowAgentMarketplace] = useAtom(showAgentMarketplaceAtom);
 
 	// SDK-native persisted/live state for the active pi session.
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
@@ -466,6 +469,23 @@ export default function App() {
 					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
 						{!api ? null : projects.length === 0 ? (
 							<WelcomeScreen onOpenProject={handleOpenProject} />
+						) : showAgentMarketplace ? (
+							<div className="flex h-full flex-col">
+								<div className="flex h-10 shrink-0 items-center gap-2 border-b border-hairline px-3">
+									<Button
+										variant="ghost"
+										size="sm"
+										className="h-7 gap-1 text-[11px]"
+										onClick={() => setShowAgentMarketplace(false)}
+									>
+										← 返回
+									</Button>
+									<span className="text-xs font-medium">Agent 广场</span>
+								</div>
+								<div className="flex-1 min-h-0 p-3">
+									<AgentMarketplacePanel />
+								</div>
+							</div>
 						) : (
 							<>
 								<SessionSheetBar

@@ -39,10 +39,9 @@ import {
 	openProjectIdsAtom,
 	projectsAtom,
 	recentlyCompletedAtom,
-	rightPanelCollapsedAtom,
-	rightPanelTabAtom,
 	runningAgentsAtom,
 	sessionPhasesAtom,
+	showAgentMarketplaceAtom,
 	sidebarCollapsedAtom,
 } from "../store/atoms";
 import { userProfileAtom } from "../store/authAtoms";
@@ -614,10 +613,7 @@ export default function Sidebar({
 
 			<button
 				type="button"
-				onClick={() => {
-					appStore.set(rightPanelTabAtom, "agents");
-					appStore.set(rightPanelCollapsedAtom, false);
-				}}
+				onClick={() => appStore.set(showAgentMarketplaceAtom, true)}
 				className="flex h-8 shrink-0 items-center gap-2 border-t border-hairline px-3 text-left transition-colors hover:bg-foreground/[0.035]"
 				title="Agent 广场"
 			>
