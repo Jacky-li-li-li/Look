@@ -179,7 +179,7 @@ export const activeChatAtBottomAtom = atom(true);
 // ---- UI state ----
 
 export const showSettingsAtom = atom(false);
-export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile" | "agents">("general");
+export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile">("general");
 export const sidebarCollapsedAtom = atom(false);
 
 // ---- v0.5 Shared area ----
@@ -188,7 +188,7 @@ export const sidebarCollapsedAtom = atom(false);
 export const rightPanelCollapsedAtom = atom(false);
 
 /** Right panel active tab. */
-export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
+export const rightPanelTabAtom = atom<"shared" | "workspace" | "agents">("workspace");
 
 /** Whether to show hidden files in the workspace tree panel. */
 export const showHiddenFilesAtom = atom(false);

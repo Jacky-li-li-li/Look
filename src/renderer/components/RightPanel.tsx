@@ -5,7 +5,7 @@
 import { Button } from "@shared/components/ui/button";
 import { Separator } from "@shared/components/ui/separator";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { PanelRightClose } from "lucide-react";
+import { Bot, PanelRightClose } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,7 @@ import {
 	sharedFilesLoadingAtomFamily,
 } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
+import AgentMarketplacePanel from "./AgentMarketplace/AgentMarketplacePanel";
 import { SharedAreaPanel } from "./SharedAreaPanel";
 import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
 
@@ -83,7 +84,7 @@ export function RightPanel() {
 		};
 	}, [projectId]);
 
-	if (!activeProject) return null;
+	if (!activeProject && tab !== "agents") return null;
 
 	return (
 		<>
@@ -122,6 +123,20 @@ export function RightPanel() {
 						>
 							共享区
 						</button>
+						<button
+							type="button"
+							role="tab"
+							aria-selected={tab === "agents"}
+							className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+								tab === "agents"
+									? "bg-foreground/10 text-foreground"
+									: "text-muted-foreground hover:bg-foreground/5"
+							}`}
+							onClick={() => setTab("agents")}
+						>
+							<Bot className="mr-1 inline size-3" />
+							Agents
+						</button>
 					</nav>
 					<Button
 						size="icon-sm"
@@ -134,16 +149,17 @@ export function RightPanel() {
 						<PanelRightClose className="size-3.5" />
 					</Button>
 				</header>
-				{tab === "workspace" && <WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />}
-				{tab === "shared" && (
+				{tab === "workspace" && activeProject && <WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />}
+				{tab === "agents" && <AgentMarketplacePanel />}
+				{tab === "shared" && activeProject && (
 					<SharedAreaPanel
 						projectId={activeProject.id}
 						files={sharedFiles}
 						isLoading={isLoading}
 						onAfterChange={async () => {
-							const result = await window.look.listSharedFiles(activeProject.id);
+							const result = await window.look.listSharedFiles(activeProject!.id);
 							if (result?.success && result.nodes) {
-								appStore.set(sharedFilesAtomFamily(activeProject.id), result.nodes);
+								appStore.set(sharedFilesAtomFamily(activeProject!.id), result.nodes);
 							}
 						}}
 					/>

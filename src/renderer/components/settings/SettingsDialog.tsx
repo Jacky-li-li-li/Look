@@ -13,11 +13,10 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import { Bot, Key, Palette, UserRound, Zap } from "lucide-react";
+import { Key, Palette, UserRound, Zap } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import AgentMarketplacePanel from "../AgentMarketplace/AgentMarketplacePanel";
 import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
 import GeneralTab from "./GeneralTab";
@@ -32,7 +31,7 @@ interface SettingsDialogProps {
 	customStats: CustomProviderStats;
 	onProvidersChange: (data: { providers: ProviderInfo[]; customStats: CustomProviderStats }) => void;
 	onClose: () => void;
-	defaultTab?: "general" | "api-keys" | "about" | "profile" | "agents";
+	defaultTab?: "general" | "api-keys" | "about" | "profile";
 }
 
 const SettingsDialog = memo(function SettingsDialog({
@@ -104,13 +103,6 @@ const SettingsDialog = memo(function SettingsDialog({
 							<Zap className="size-3.5" />
 							{t("settings.about")}
 						</TabsTrigger>
-						<TabsTrigger
-							value="agents"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
-						>
-							<Bot className="size-3.5" />
-							Agents
-						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="profile" className="flex-1 min-h-0 data-[state=inactive]:hidden">
@@ -127,10 +119,6 @@ const SettingsDialog = memo(function SettingsDialog({
 
 					<TabsContent value="about" className="flex-1 min-h-0 data-[state=inactive]:hidden">
 						<AboutTab providers={providers} customStats={customStats} />
-					</TabsContent>
-
-					<TabsContent value="agents" className="flex-1 min-h-0 data-[state=inactive]:hidden">
-						<AgentMarketplacePanel />
 					</TabsContent>
 				</Tabs>
 
