@@ -14,6 +14,7 @@ import { useAtom, useAtomValue } from "jotai";
 import {
 	AlertTriangle,
 	Bot,
+	ChevronDown,
 	ChevronRight,
 	ChevronsDownUp,
 	ChevronsUpDown,
@@ -486,6 +487,20 @@ export default function Sidebar({
 																{fmtRelativeTime(agent.createdAt)}
 															</span>
 														</button>
+						{hasChildren && (
+							<button
+								type="button"
+								className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
+								onClick={(e) => toggleSubSessions(agent.id, e)}
+								title={collapsedSubSessions.has(agent.id) ? "展开子会话" : "折叠子会话"}
+							>
+								{collapsedSubSessions.has(agent.id) ? (
+									<ChevronRight className="size-3" />
+								) : (
+									<ChevronDown className="size-3" />
+								)}
+							</button>
+						)}
 														<DropdownMenu>
 															<DropdownMenuTrigger asChild>
 																<Button
