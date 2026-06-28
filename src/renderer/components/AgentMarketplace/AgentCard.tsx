@@ -30,9 +30,11 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const AgentCard = memo(function AgentCard({ agent, selected, onSelect, onEdit, onDelete }: AgentCardProps) {
 	return (
-		<button
-			type="button"
+		<div
+			role="button"
+			tabIndex={0}
 			onClick={() => onSelect(agent)}
+			onKeyDown={(e) => { if (e.key === "Enter") onSelect(agent); }}
 			className={`group flex w-full flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
 				selected
 					? "border-accent bg-accent/10"
@@ -96,7 +98,7 @@ const AgentCard = memo(function AgentCard({ agent, selected, onSelect, onEdit, o
 					</div>
 				)}
 			</div>
-		</button>
+		</div>
 	);
 });
 
