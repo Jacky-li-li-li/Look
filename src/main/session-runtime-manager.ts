@@ -60,6 +60,7 @@ import {
 	ensureLookDir,
 	ensureWorkspaceDir,
 	ensureWorkspaceSubsessionsDir,
+	getWorkspaceSubsessionsDir,
 	getAuthPath,
 	getCustomProvidersPath,
 	getLookDir,
@@ -503,7 +504,7 @@ export class SessionRuntimeManager {
 		}
 		this.sessionsByProject.delete(projectId);
 		this.projects.delete(projectId);
-		// 删除项目时清理共享区
+		// 删除项目时清理共享区 + 子会话目录
 		const sharedDir = getProjectSharedDir(projectId);
 		if (existsSync(sharedDir)) {
 			try {
@@ -511,6 +512,17 @@ export class SessionRuntimeManager {
 			} catch (error: any) {
 				if (error?.code !== "ENOENT") {
 					console.error(`Failed to remove shared area for project ${projectId}:`, error);
+				}
+			}
+		}
+		const project = this.projects.get(projectId);
+		const subsessionsDir = project ? getWorkspaceSubsessionsDir(project.name) : null;
+		if (subsessionsDir && existsSync(subsessionsDir)) {
+			try {
+				fs.rmSync(subsessionsDir, { recursive: true, force: true });
+			} catch (error: any) {
+				if (error?.code !== "ENOENT") {
+					console.error(`Failed to remove subsessions dir for project ${projectId}:`, error);
 				}
 			}
 		}
@@ -540,6 +552,83 @@ export class SessionRuntimeManager {
 			...session,
 			projectId,
 		}));
+
+		// Stage 4：同时扫描 subsessions/ 目录恢复子会话（跨应用重启持久化）
+		const subsessionsDir = getWorkspaceSubsessionsDir(project.name);
+		if (existsSync(subsessionsDir)) {
+			let subsessionFiles: string[];
+			try {
+				subsessionFiles = fs.readdirSync(subsessionsDir).filter((f) => f.endsWith(".jsonl"));
+			} catch {
+				subsessionFiles = [];
+			}
+			for (const file of subsessionFiles) {
+				try {
+					const filePath = path.join(subsessionsDir, file);
+					const sm = SessionManager.open(filePath);
+					const sessionId = sm.getSessionId();
+					const name = sm.getSessionName() ?? "";
+					// 提取父子关系 + Agent 名
+					let parentSessionId: string | undefined;
+					let agentName: string | undefined;
+					let firstMessage: string | undefined;
+					let messageCount = 0;
+					let created = Date.now();
+					for (const entry of sm.getEntries()) {
+						if (entry.type === "custom" && entry.customType === SUBAGENT_PARENT_ENTRY_TYPE) {
+							const data = entry.data as { parentSessionId?: string; agentName?: string } | undefined;
+							if (data?.parentSessionId) parentSessionId = data.parentSessionId;
+							if (data?.agentName) agentName = data.agentName;
+						}
+						if (entry.type === "message") {
+							messageCount++;
+							if (!firstMessage) {
+								const msg = entry.message as { content?: string | Array<{ type: string; text: string }> } | undefined;
+								const content = msg?.content;
+								if (typeof content === "string") firstMessage = content;
+								else if (Array.isArray(content) && content[0]?.type === "text") {
+									firstMessage = (content[0] as { text: string }).text;
+								}
+							}
+							// 取最早的消息时间戳
+							const timestamp = (entry.message as { timestamp?: number })?.timestamp;
+							if (timestamp && timestamp < created) created = timestamp;
+						}
+					}
+					// 填充内存注册表（供 sessionInfo → subagentFields 消费）
+					if (parentSessionId) {
+						this.subSessionMeta.set(sessionId, { parentSessionId, agentName: agentName ?? "" });
+						// 恢复父子关系集合（后续 listSubSessions 需要）
+						let childSet = this.subSessionRegistry.get(parentSessionId);
+						if (!childSet) {
+							childSet = new Set();
+							this.subSessionRegistry.set(parentSessionId, childSet);
+						}
+						childSet.add(sessionId);
+					}
+					const stored: StoredSession = {
+						id: sessionId,
+						name: name || firstMessage || "",
+						firstMessage: firstMessage || "",
+						messageCount,
+						created: new Date(created),
+						path: filePath,
+						cwd: project.cwd,
+						projectId,
+						modified: new Date(created),
+						allMessagesText: "",
+					};
+					// 避免同 ID（不太可能但防御）
+					if (!sessions.some((s) => s.id === sessionId)) {
+						sessions.push(stored);
+					}
+				} catch (err) {
+					// 单个子会话文件损坏或解析失败，跳过不影响整体
+					console.warn(`[Look] Failed to restore subagent session from ${file}:`, err);
+				}
+			}
+		}
+
 		this.sessionsByProject.set(projectId, sessions);
 		return sessions;
 	}
