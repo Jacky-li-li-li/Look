@@ -307,7 +307,7 @@ export interface ForkedSessionResult {
 // ============================================================
 
 /** Agent 定义来源 */
-export type AgentDefinitionSource = "user" | "project" | "marketplace";
+export type AgentDefinitionSource = "user" | "project" | "builtin";
 
 /** 渲染层使用的 Agent 定义（与扩展内部 AgentConfig 对齐，去除系统提示等内部字段的可选项） */
 export interface AgentDefinitionInfo {
@@ -323,6 +323,9 @@ export interface AgentDefinitionInfo {
 	tags?: string[];
 	version?: string;
 	author?: string;
+	createdBy?: string;
+	createdAt?: number;
+	installedAt?: number;
 }
 
 /** 创建 / 更新 Agent 定义的输入（name 不可变，作为文件名标识） */
@@ -337,6 +340,9 @@ export interface AgentDefinitionInput {
 	tags?: string[];
 	version?: string;
 	author?: string;
+	createdBy?: string;
+	createdAt?: number;
+	installedAt?: number;
 }
 
 export interface FileTreeNode {
@@ -600,7 +606,11 @@ export type RendererToMainEvent =
 	| { type: "agent-definitions:create"; input: AgentDefinitionInput }
 	| { type: "agent-definitions:update"; name: string; input: AgentDefinitionInput }
 	| { type: "agent-definitions:delete"; name: string }
-	| { type: "agent-definitions:install"; name: string; source: "marketplace" };
+	| { type: "agent-definitions:install"; name: string; source: "builtin" }
+	// ---- SubAgent：Agent 定义开关 ----
+	| { type: "agent-definitions:set-enabled"; name: string; enabled: boolean }
+	// ---- Skills：Skill 开关 ----
+	| { type: "skills:set-enabled"; name: string; enabled: boolean };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

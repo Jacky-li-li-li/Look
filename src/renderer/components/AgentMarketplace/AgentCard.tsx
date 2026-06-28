@@ -1,9 +1,14 @@
 // ============================================================
 // AgentCard — Agent 广场中的单个 Agent 卡片（Stage 3）
+//
+// 每个卡片带 Switch 开关，支持逐项启用/禁用。
+// "我的"模块额外显示编辑/删除按钮（hover 可见）。
+// 禁用状态的卡片整体 opacity-50 以视觉区分。
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
+import { Switch } from "@shared/components/ui/switch";
 import type { AgentDefinitionInfo } from "@shared/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
@@ -11,6 +16,8 @@ import { memo } from "react";
 interface AgentCardProps {
 	agent: AgentDefinitionInfo;
 	selected: boolean;
+	enabled?: boolean;
+	onToggle?: (enabled: boolean) => void;
 	onSelect: (agent: AgentDefinitionInfo) => void;
 	onEdit: (agent: AgentDefinitionInfo) => void;
 	onDelete: (agent: AgentDefinitionInfo) => void;
@@ -19,16 +26,33 @@ interface AgentCardProps {
 const SOURCE_COLORS: Record<string, string> = {
 	user: "text-amber-500 border-amber-500/30",
 	project: "text-sky-500 border-sky-500/30",
-	marketplace: "text-emerald-500 border-emerald-500/30",
+	builtin: "text-emerald-500 border-emerald-500/30",
 };
 
-const SOURCE_LABELS: Record<string, string> = {
-	user: "用户",
+export const SOURCE_LABELS: Record<string, string> = {
+	user: "我的",
 	project: "项目",
-	marketplace: "广场",
+	builtin: "内置",
 };
 
-const AgentCard = memo(function AgentCard({ agent, selected, onSelect, onEdit, onDelete }: AgentCardProps) {
+const CREATION_LABELS: Record<string, string> = {
+	editor: "手动创建",
+	skill: "Skill 创建",
+	install: "从内置安装",
+	drag: "文件导入",
+	seed: "系统预置",
+	unknown: "",
+};
+
+const AgentCard = memo(function AgentCard({
+	agent,
+	selected,
+	enabled = true,
+	onToggle,
+	onSelect,
+	onEdit,
+	onDelete,
+}: AgentCardProps) {
 	return (
 		<div
 			role="button"
@@ -41,7 +65,7 @@ const AgentCard = memo(function AgentCard({ agent, selected, onSelect, onEdit, o
 				selected
 					? "border-accent bg-accent/10"
 					: "border-hairline bg-card/40 hover:border-hairline hover:bg-accent/5"
-			}`}
+			} ${!enabled ? "opacity-50 hover:opacity-70" : ""}`}
 		>
 			{/* 图标 + 名称 + 来源 */}
 			<div className="flex w-full items-center gap-2">
@@ -57,7 +81,14 @@ const AgentCard = memo(function AgentCard({ agent, selected, onSelect, onEdit, o
 			{/* 描述 */}
 			<p className="line-clamp-2 w-full text-[11px] leading-snug text-muted-foreground">{agent.description}</p>
 
-			{/* 模型 + 标签 + 操作 */}
+			{/* 创建方式（仅用户 Agent 且非 unknown 时显示） */}
+			{agent.source === "user" && agent.createdBy && agent.createdBy !== "unknown" && (
+				<span className="text-[9px] text-muted-foreground/60">
+					{CREATION_LABELS[agent.createdBy] ?? agent.createdBy}
+				</span>
+			)}
+
+			{/* 模型 + 标签 + Switch + 操作 */}
 			<div className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground">
 				{agent.model && (
 					<span className="mr-auto truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[9px]">
@@ -69,6 +100,18 @@ const AgentCard = memo(function AgentCard({ agent, selected, onSelect, onEdit, o
 						{tag}
 					</Badge>
 				))}
+				{/* Switch 开关 */}
+				{onToggle && (
+					<Switch
+						checked={enabled}
+						onCheckedChange={(checked) => {
+							onToggle(checked);
+						}}
+						onClick={(e) => e.stopPropagation()}
+						className="scale-75"
+					/>
+				)}
+				{/* 编辑/删除（仅 user 来源） */}
 				{agent.source === "user" && (
 					<div className="ml-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
 						<Button

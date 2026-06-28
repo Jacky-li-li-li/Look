@@ -64,27 +64,56 @@ function renderToDOM(container: HTMLElement, content: string) {
 	// loop would re-parent the contenteditable selection state and
 	// break caret restoration when we refocus.
 	container.textContent = "";
-	const segments = parseSkillSegments(content);
-	for (const seg of segments) {
-		if (seg.kind === "text") {
-			// Plain text node — preserves whitespace including
-			// the trailing space we add after each chip.
-			container.appendChild(document.createTextNode(seg.value));
-			continue;
+	_renderCombinedSegments(container, content);
+}
+
+/**
+ * 合并渲染 agent chip 和 skill chip。
+ * 扫描内容中的 #agentName 和 /skill:name 模式，渲染为 chip DOM 元素。
+ */
+function _renderCombinedSegments(container: HTMLElement, content: string) {
+	// 合并正则：匹配 #agentName 或 /skill:name（需行首或空白前缀）
+	const COMBINED_RE = /(?:^|\s)((?:#([^\s#]+))|(?:\/skill:([^\s]+)))/g;
+
+	let cursor = 0;
+	for (const match of content.matchAll(COMBINED_RE)) {
+		const matchStart = match.index ?? 0;
+		const agentName = match[2];
+		const skillName = match[3];
+		const fullMatch = match[0]!;
+		// fullToken 是不含前导空白的 token 部分
+		const fullToken = match[1]!;
+		const tokenStart = matchStart + (fullMatch.length - fullToken.length);
+
+		if (tokenStart > cursor) {
+			container.appendChild(document.createTextNode(content.slice(cursor, tokenStart)));
 		}
-		const chip = document.createElement("span");
-		chip.setAttribute("data-skill-chip", "");
-		chip.setAttribute("data-name", seg.name);
-		chip.className = "skill-chip";
-		chip.setAttribute("contenteditable", "false");
-		chip.textContent = `/skill:${seg.name}`;
-		container.appendChild(chip);
-		// One space after each chip so the caret has somewhere
-		// to land when the user arrows past the chip. Without
-		// it, the caret jumps over the chip and lands on the
-		// next chip's prefix with no editable character in
-		// between.
-		container.appendChild(document.createTextNode(" "));
+
+		if (agentName) {
+			const chip = document.createElement("span");
+			chip.setAttribute("data-agent-chip", "");
+			chip.setAttribute("data-name", agentName);
+			chip.className = "agent-chip";
+			chip.setAttribute("contenteditable", "false");
+			chip.textContent = `#${agentName}`;
+			container.appendChild(chip);
+			container.appendChild(document.createTextNode(" "));
+		} else if (skillName) {
+			const chip = document.createElement("span");
+			chip.setAttribute("data-skill-chip", "");
+			chip.setAttribute("data-name", skillName);
+			chip.className = "skill-chip";
+			chip.setAttribute("contenteditable", "false");
+			chip.textContent = `/skill:${skillName}`;
+			container.appendChild(chip);
+			container.appendChild(document.createTextNode(" "));
+		}
+
+		cursor = tokenStart + fullToken.length;
+	}
+
+	if (cursor < content.length) {
+		container.appendChild(document.createTextNode(content.slice(cursor)));
 	}
 }
 
@@ -401,7 +430,7 @@ export const ContentEditableInput = forwardRef<ContentEditableInputHandle, Conte
 			// so the caret can't land *inside* it; selecting
 			// the surrounding range is the cleanest UX.
 			const target = e.target as HTMLElement;
-			if (target.dataset.skillChip !== undefined) {
+			if (target.dataset.skillChip !== undefined || target.dataset.agentChip !== undefined) {
 				const el = editorRef.current;
 				if (!el) return;
 				const range = document.createRange();

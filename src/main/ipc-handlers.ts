@@ -347,6 +347,16 @@ async function handleRendererInvoke(
 			if ("subagentEnabled" in settings) {
 				guardBoolean(settings.subagentEnabled, "settings.subagentEnabled");
 			}
+			if ("enabledAgentDefinitions" in settings) {
+				if (settings.enabledAgentDefinitions !== null) {
+					guardStringArray(settings.enabledAgentDefinitions, "settings.enabledAgentDefinitions");
+				}
+			}
+			if ("enabledSkills" in settings) {
+				if (settings.enabledSkills !== null) {
+					guardStringArray(settings.enabledSkills, "settings.enabledSkills");
+				}
+			}
 			const updated = await runtimeManager.updateGeneralSettings(data.settings ?? {});
 			return { success: true, settings: updated };
 		}
@@ -765,6 +775,22 @@ async function handleRendererInvoke(
 			guardString(data.name, "name");
 			const agent = runtimeManager.installAgentDefinition(data.name);
 			return { success: true, agent };
+		}
+
+		// ---- SubAgent：Agent 定义开关 ----
+		case "agent-definitions:set-enabled": {
+			guardString(data.name, "name");
+			guardBoolean(data.enabled, "enabled");
+			await runtimeManager.setAgentDefinitionEnabled(data.name, data.enabled);
+			return { success: true };
+		}
+
+		// ---- Skills：Skill 开关 ----
+		case "skills:set-enabled": {
+			guardString(data.name, "name");
+			guardBoolean(data.enabled, "enabled");
+			await runtimeManager.setSkillEnabled(data.name, data.enabled);
+			return { success: true };
 		}
 
 		default:

@@ -31,7 +31,7 @@ const TITLE_SYSTEM_PROMPT = [
 	"",
 	"## Rules:",
 	"1. Extract the core action and subject from the user's question.",
-	'2. Remove redundant politeness phrases (e.g. "Please help me", "Can you tell me", "I want to know").',
+	"2. Remove redundant politeness phrases (e.g. \"Please help me\", \"Can you tell me\", \"I want to know\").",
 	"3. Title format: [Core domain/tech/tool] + [Core action] + [Target].",
 	"4. Keep the title concise — aim for 6~15 characters for Chinese, 3~8 words for English/Japanese.",
 	"5. If the question involves a specific technology (e.g. Python, React, Docker), place it at the beginning.",

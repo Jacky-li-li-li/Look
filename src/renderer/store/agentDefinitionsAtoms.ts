@@ -22,3 +22,24 @@ export const agentSearchTextAtom = atom("");
 
 /** 是否正在加载 Agent 列表 */
 export const agentDefinitionsLoadingAtom = atom(false);
+
+// ---- Agent 广场 Tab 切换（Phase 1） ----
+
+/** Agent 广场内的 Tab 状态：SubAgent / Agent Skills */
+export const agentSquareTabAtom = atom<"subagent" | "skills">("subagent");
+
+// ---- SubAgent 页面筛选 ----
+
+/** SubAgent 页面的来源筛选：内置 / 我的 */
+export const subagentSourceTabAtom = atom<"builtin" | "mine">("builtin");
+
+// ---- Skill 页面 ----
+
+/** 已加载的 Skill 列表（来自 listSkills IPC） */
+export const agentSkillsAtom = atom<any[]>([]);
+
+/** 是否正在加载 Skill 列表 */
+export const agentSkillsLoadingAtom = atom(false);
+
+/** Skill 页面的来源筛选：内置 / 我的 */
+export const skillSourceTabAtom = atom<"builtin" | "mine">("builtin");

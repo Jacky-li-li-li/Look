@@ -8,7 +8,6 @@
 
 import {
 	type AgentInfo,
-	type ImageContent,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
 	type LookUiEvent,
@@ -42,15 +41,13 @@ import {
 	recentlyCompletedAtom,
 	removeAgentAtoms,
 	removeProjectAtoms,
-	type SubagentProgressEntry,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
 	sharedFilesAtomFamily,
-	subagentEnabledAtom,
-	subagentProgressAtomFamily,
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
+import { agentDefinitionsAtom } from "./agentDefinitionsAtoms";
 
 /** The global Jotai store — shared by IPC handler and React Provider. */
 export const appStore = createStore();
@@ -177,7 +174,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	let steering: string[] | undefined;
 	let followUp: string[] | undefined;
 	let agentFlags: Partial<AgentInfo> | undefined;
-	let pendingUserMessage: { text: string; images?: ImageContent[] } | null | undefined;
+	let pendingUserMessage: { text: string } | null | undefined;
 
 	for (const ev of events) {
 		switch (ev.type) {
@@ -215,11 +212,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				break;
 			case "thinking_delta": {
 				for (let i = 0; i < blocks.length; i++) {
-					if (
-						blocks[i]!.contentIndex === ev.contentIndex &&
-						blocks[i]!.kind === "thinking" &&
-						!blocks[i]!.completed
-					) {
+					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
 						blocks[i] = { ...blocks[i]!, thinking: blocks[i]!.thinking + ev.delta };
 						break;
 					}
@@ -228,11 +221,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			}
 			case "thinking_end": {
 				for (let i = 0; i < blocks.length; i++) {
-					if (
-						blocks[i]!.contentIndex === ev.contentIndex &&
-						blocks[i]!.kind === "thinking" &&
-						!blocks[i]!.completed
-					) {
+					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
 						blocks[i] = { ...blocks[i]!, completed: true };
 						break;
 					}
@@ -369,7 +358,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				break;
 
 			case "user_message":
-				pendingUserMessage = { text: ev.text, images: ev.images };
+				pendingUserMessage = { text: ev.text };
 				break;
 
 			case "session_meta":
@@ -476,54 +465,6 @@ export function initIpcHandlers(api: any): () => void {
 			case "session:ui-event":
 				applyUiEventBatch(event.sessionId, event.events);
 				break;
-
-			// ---- SubAgent 进度事件（Stage 5）----
-			case "session:subagent-progress": {
-				const progressAtom = subagentProgressAtomFamily(event.parentSessionId);
-				const prev = appStore.get(progressAtom);
-				const existing = prev.findIndex((e) => e.childSessionId === event.childSessionId);
-				const entry: SubagentProgressEntry = {
-					childSessionId: event.childSessionId,
-					agentName: event.agentName,
-					status: event.status,
-					partialOutput: event.partialOutput,
-					model: event.model,
-					usage: event.usage,
-				};
-				if (existing >= 0) {
-					appStore.set(
-						progressAtom,
-						prev.map((e, i) => (i === existing ? { ...e, ...entry } : e)),
-					);
-				} else {
-					appStore.set(progressAtom, [...prev, entry]);
-				}
-				break;
-			}
-
-			case "session:subagent-completed": {
-				const progressAtom = subagentProgressAtomFamily(event.parentSessionId);
-				const prev = appStore.get(progressAtom);
-				const existing = prev.findIndex((e) => e.childSessionId === event.childSessionId);
-				const entry: SubagentProgressEntry = {
-					childSessionId: event.childSessionId,
-					agentName: event.agentName,
-					status: event.result.status,
-					finalOutput: event.result.finalOutput,
-					model: event.result.model,
-					stopReason: event.result.stopReason,
-					errorMessage: event.result.errorMessage,
-				};
-				if (existing >= 0) {
-					appStore.set(
-						progressAtom,
-						prev.map((e, i) => (i === existing ? { ...e, ...entry } : e)),
-					);
-				} else {
-					appStore.set(progressAtom, [...prev, entry]);
-				}
-				break;
-			}
 
 			// ---- Project events ----
 			case "project:list": {
@@ -753,7 +694,6 @@ export async function initAppData(api: any): Promise<void> {
 		if (settings.language) await i18n.changeLanguage(settings.language);
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
-		if (settings.subagentEnabled !== undefined) appStore.set(subagentEnabledAtom, settings.subagentEnabled);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
 		if (Array.isArray(settings.openedSessionIds)) appStore.set(openedSessionIdsAtom, settings.openedSessionIds);
@@ -772,10 +712,16 @@ export async function initAppData(api: any): Promise<void> {
 		if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
 	}
 
-	// 5. Auto-restore / fallback after agents are loaded.
+	// 5. 预加载 Agent 定义列表（# 选择面板 + Agent 广场需要）
+	const agentDefsResult = await api.listAgentDefinitions().catch(() => null);
+	if (agentDefsResult?.success && Array.isArray(agentDefsResult.agents)) {
+		appStore.set(agentDefinitionsAtom, agentDefsResult.agents);
+	}
+
+	// 6. Auto-restore / fallback after agents are loaded.
 	_autoSelectAgent();
 
-	// 6. Subscribe: whenever agents change (e.g. `agent:list` IPC),
+	// 7. Subscribe: whenever agents change (e.g. `agent:list` IPC),
 	//    re-evaluate auto-select if nothing is active.
 	appStore.sub(agentsAtom, () => _autoSelectAgent());
 }

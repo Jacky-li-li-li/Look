@@ -1,8 +1,9 @@
 // ============================================================
-// AgentMarketplacePanel — Agent 广场主面板（Stage 3）
+// SubAgentPanel — SubAgent 管理页面（从 AgentMarketplacePanel 重构）
 //
-// 搜索 + 分类筛选 + Agent 卡片网格 + 新建/编辑/删除操作。
-// 作为 SettingsDialog 的 "Agents" 标签页内容嵌入。
+// 搜索 + 内置/我的 Segment 切换 + 标签筛选 + Agent 卡片网格。
+// 每张卡片带 Switch 开关，支持逐项启用/禁用。
+// "我的"模块显示新建按钮和编辑/删除操作。
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
@@ -10,7 +11,7 @@ import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import type { AgentDefinitionInfo } from "@shared/types";
 import { useAtom } from "jotai";
-import { Plus, Search, X } from "lucide-react";
+import { Bot, Plus, Search, User, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -19,13 +20,15 @@ import {
 	agentEditorTargetAtom,
 	agentFilterTagAtom,
 	agentSearchTextAtom,
+	subagentSourceTabAtom,
 } from "../../store/agentDefinitionsAtoms";
 import AgentCard from "./AgentCard";
 import AgentEditor from "./AgentEditor";
+import { useToggleEnabled } from "./useToggleEnabled";
 
 const ALL_TAG = "__all__";
 
-/** 从已有 Agent 的 tags 中提取全部独特标签，并以"全部"为首项 */
+/** 从已有 Agent 的 tags 中提取全部独特标签 */
 function useFilterTags(agents: AgentDefinitionInfo[]): string[] {
 	return useMemo(() => {
 		const seen = new Set<string>();
@@ -38,15 +41,25 @@ function useFilterTags(agents: AgentDefinitionInfo[]): string[] {
 	}, [agents]);
 }
 
-export default function AgentMarketplacePanel() {
+export default function SubAgentPanel() {
 	const [agents, setAgents] = useAtom(agentDefinitionsAtom);
 	const [editorTarget, setEditorTarget] = useAtom(agentEditorTargetAtom);
 	const [filterTag, setFilterTag] = useAtom(agentFilterTagAtom);
 	const [searchText, setSearchText] = useAtom(agentSearchTextAtom);
 	const [loading, setLoading] = useAtom(agentDefinitionsLoadingAtom);
+	const [sourceTab, setSourceTab] = useAtom(subagentSourceTabAtom);
 	const [selected, setSelected] = useState<AgentDefinitionInfo | null>(null);
 
 	const filterTags = useFilterTags(agents);
+
+	const { isEnabled, toggle, setEnabledNames: loadEnabled } = useToggleEnabled({
+		getAllNames: useCallback(() => agents.map((a) => a.name), [agents]),
+		setEnabled: useCallback(
+			async (name: string, enabled: boolean) =>
+				window.look.setAgentDefinitionEnabled(name, enabled),
+			[],
+		),
+	});
 
 	// 加载 Agent 列表
 	const loadAgents = useCallback(async () => {
@@ -56,10 +69,10 @@ export default function AgentMarketplacePanel() {
 			if (result?.success && Array.isArray(result.agents)) {
 				setAgents(result.agents);
 			} else {
-				toast.error(result?.error ?? "无法加载 Agent 列表");
+				toast.error(result?.error ?? "无法加载 SubAgent 列表");
 			}
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "加载 Agent 列表失败");
+			toast.error(error instanceof Error ? error.message : "加载 SubAgent 列表失败");
 		} finally {
 			setLoading(false);
 		}
@@ -67,11 +80,23 @@ export default function AgentMarketplacePanel() {
 
 	useEffect(() => {
 		loadAgents();
-	}, [loadAgents]);
+		loadEnabled();
+	}, [loadAgents, loadEnabled]);
 
-	// 筛选 + 搜索
-	const filteredAgents = useMemo(() => {
+	// 来源筛选："内置"=仅 Look 预装，"我的"=用户创建 + 项目专属
+	const sourceFiltered = useMemo(() => {
 		let list = agents;
+		if (sourceTab === "builtin") {
+			list = list.filter((a) => a.source === "builtin");
+		} else {
+			list = list.filter((a) => a.source === "user" || a.source === "project");
+		}
+		return list;
+	}, [agents, sourceTab]);
+
+	// 标签筛选 + 搜索
+	const filteredAgents = useMemo(() => {
+		let list = sourceFiltered;
 		if (filterTag && filterTag !== ALL_TAG) {
 			list = list.filter((a) => (a.tags ?? []).includes(filterTag));
 		}
@@ -85,11 +110,10 @@ export default function AgentMarketplacePanel() {
 			);
 		}
 		return list;
-	}, [agents, filterTag, searchText]);
+	}, [sourceFiltered, filterTag, searchText]);
 
 	const handleSaved = useCallback(
 		(saved: AgentDefinitionInfo) => {
-			// 更新列表：替换已有或追加
 			setAgents((prev) => {
 				const idx = prev.findIndex((a) => a.name === saved.name);
 				if (idx >= 0) {
@@ -105,7 +129,7 @@ export default function AgentMarketplacePanel() {
 
 	return (
 		<div className="flex h-full flex-col gap-3">
-			{/* 顶栏：搜索 + 新建 */}
+			{/* 顶栏：搜索 + 新建（仅"我的"模块） */}
 			<div className="flex items-center gap-2">
 				<div className="relative flex-1">
 					<Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -125,19 +149,49 @@ export default function AgentMarketplacePanel() {
 						</button>
 					)}
 				</div>
-				<Button
-					variant="line-filled"
-					size="sm"
-					className="h-7 gap-1 text-[11px]"
-					onClick={() => setEditorTarget("create")}
-				>
-					<Plus className="size-3.5" />
-					新建
-				</Button>
+				{sourceTab === "mine" && (
+					<Button
+						variant="line-filled"
+						size="sm"
+						className="h-7 gap-1 text-[11px]"
+						onClick={() => setEditorTarget("create")}
+					>
+						<Plus className="size-3.5" />
+						新建
+					</Button>
+				)}
 			</div>
 
-			{/* 分类筛选 */}
-			{filterTags.length > 1 && (
+			{/* 内置/我的 Segment 切换 */}
+			<div className="inline-flex items-center rounded-md p-0.5 border border-hairline bg-muted/20 w-fit">
+				<button
+					type="button"
+					onClick={() => setSourceTab("builtin")}
+					className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm text-[11px] transition-colors ${
+						sourceTab === "builtin"
+							? "bg-background shadow-sm text-foreground font-medium"
+							: "text-muted-foreground hover:text-foreground"
+					}`}
+				>
+					<Bot className="size-3" />
+					内置
+				</button>
+				<button
+					type="button"
+					onClick={() => setSourceTab("mine")}
+					className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-sm text-[11px] transition-colors ${
+						sourceTab === "mine"
+							? "bg-background shadow-sm text-foreground font-medium"
+							: "text-muted-foreground hover:text-foreground"
+					}`}
+				>
+					<User className="size-3" />
+					我的
+				</button>
+			</div>
+
+			{/* 分类标签 */}
+			{sourceTab === "builtin" && filterTags.length > 1 && (
 				<div className="flex flex-wrap items-center gap-1.5">
 					{filterTags.map((tag) => {
 						const active = (filterTag ?? ALL_TAG) === tag;
@@ -162,11 +216,28 @@ export default function AgentMarketplacePanel() {
 				) : filteredAgents.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
 						{searchText || (filterTag && filterTag !== ALL_TAG) ? (
-							<>没有匹配的 Agent</>
+							<>
+								<p>没有匹配的 Agent</p>
+								<button
+									type="button"
+									className="text-[10px] underline hover:text-foreground"
+									onClick={() => {
+										setSearchText("");
+										setFilterTag(null);
+									}}
+								>
+									清除筛选
+								</button>
+							</>
+						) : sourceTab === "builtin" ? (
+							<>
+								<p>暂无内置 Agent</p>
+								<p className="text-[10px]">请重启应用以加载内置 Agent</p>
+							</>
 						) : (
 							<>
-								<p>暂无 Agent 定义</p>
-								<p className="text-[10px]">点击"新建"创建第一个 Agent，或从广场安装</p>
+								<p>还没有自定义 Agent</p>
+								<p className="text-[10px]">点击「新建」或对 Look 说「帮我创建一个 XX Agent」</p>
 							</>
 						)}
 					</div>
@@ -178,6 +249,8 @@ export default function AgentMarketplacePanel() {
 								agent={agent}
 								selected={selected?.name === agent.name}
 								onSelect={setSelected}
+								enabled={isEnabled(agent.name)}
+								onToggle={(enabled) => toggle(agent.name, enabled)}
 								onEdit={(a) => setEditorTarget(a.name)}
 								onDelete={(a) => {
 									if (window.confirm(`确定删除 Agent "${a.title || a.name}"？`)) {

@@ -5,21 +5,21 @@
 
 import { Button } from "@shared/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@shared/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@shared/components/ui/popover";
-import { ScrollArea } from "@shared/components/ui/scroll-area";
 import type { ImageContent, ThinkingLevel } from "@shared/types";
-import { useAtom } from "jotai";
-import { Puzzle, Search, Send, Square, X } from "lucide-react";
+import { useAtom, useAtomValue } from "jotai";
+import { Send, Square, X } from "lucide-react";
 import type React from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { permissionModeAtomFamily } from "../store/atoms";
+import { permissionModeAtomFamily, subagentEnabledAtom } from "../store/atoms";
 import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
 import PermissionModeSelector from "./PermissionModeSelector";
 import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
+import { AgentHashMenu } from "./AgentHashMenu";
 import SubagentToggle from "./SubagentToggle";
+import { agentDefinitionsAtom } from "../store/agentDefinitionsAtoms";
 import ThinkingSelector from "./ThinkingSelector";
 
 export interface ChatInputHandle {
@@ -142,6 +142,42 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	useEffect(() => {
 		if (slashOpen) setSlashIndex(0);
 	}, [slashOpen]);
+	// ---- # Agent 选择菜单 ----
+	const agentDefs = useAtomValue(agentDefinitionsAtom);
+	const subagentOn = useAtomValue(subagentEnabledAtom);
+	const [hashIndex, setHashIndex] = useState(0);
+	// 输入中包含独立的 # 时显示 Agent 选择面板（支持开头或中间触发）
+	const hashOpen = useMemo(() => /(?:^|\s)#[^\s]*$/.test(input), [input]);
+	useEffect(() => {
+		if (hashOpen) setHashIndex(0);
+	}, [hashOpen]);
+	// 提取最后一个 # 后的搜索关键词
+	const hashSearchTerm = useMemo(() => {
+		const m = input.match(/#([^\s]*)$/);
+		return m ? m[1] : "";
+	}, [input]);
+	// 按名称、标题、描述过滤 Agent
+	const filteredAgents = useMemo(() => {
+		if (!hashSearchTerm) return agentDefs;
+		const term = hashSearchTerm.toLowerCase();
+		return agentDefs.filter(
+			(a) =>
+				a.name.toLowerCase().includes(term) ||
+				(a.title ?? "").toLowerCase().includes(term) ||
+				a.description.toLowerCase().includes(term),
+		);
+	}, [agentDefs, hashSearchTerm]);
+	// 提交选中的 Agent：替换最后一个 #term 为 #agentName
+	const commitHashSelection = useCallback(
+		(index: number) => {
+			const a = filteredAgents[index];
+			if (!a) return;
+			const replaced = input.replace(/#[^\s]*$/, `#${a.name} `);
+			setInput(replaced);
+		},
+		[filteredAgents, setInput, input],
+	);
+
 	// Compute pickable count so handleSlashMenuKey can wrap-around.
 	const visibleSkills = useMemo(() => skills.filter((s) => !s.disableModelInvocation), [skills]);
 	// Extract the search term after `/` for skill filtering.
@@ -188,30 +224,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		[filteredSkills, importableDetected, importDetected, setInput],
 	);
 
-	// ---- Tools popover (manual skill picker) ----
-	const [toolsOpen, setToolsOpen] = useState(false);
-	const [toolsSearch, setToolsSearch] = useState("");
-	useEffect(() => {
-		if (!toolsOpen) setToolsSearch("");
-	}, [toolsOpen]);
-
-	const searchedSkills = useMemo(() => {
-		if (!toolsSearch.trim()) return visibleSkills;
-		const term = toolsSearch.toLowerCase();
-		return visibleSkills.filter(
-			(s) => s.name.toLowerCase().includes(term) || s.description.toLowerCase().includes(term),
-		);
-	}, [visibleSkills, toolsSearch]);
-
-	const handlePickSkill = useCallback(
-		(name: string) => {
-			setInput(`/skill:${name} `);
-			setToolsOpen(false);
-			setToolsSearch("");
-			inputRef.current?.focus();
-		},
-		[setInput],
-	);
 
 	useEffect(() => {
 		inputRef.current?.focus();
@@ -274,6 +286,23 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 			}
 			return;
 		}
+		// # Agent 选择菜单键盘处理
+		if (hashOpen && filteredAgents.length > 0) {
+			const handled = handleSlashMenuKey(
+				e,
+				{ open: true, selectedIndex: hashIndex, pickableCount: filteredAgents.length },
+				(next) => {
+					setHashIndex(next.selectedIndex);
+					if (!next.open) setInput(input.replace(/#[^\s]*$/, "").trimEnd());
+				},
+			);
+			if (handled) {
+				if (e.key === "Enter" || e.key === "Tab") {
+					commitHashSelection(hashIndex);
+				}
+				return;
+			}
+		}
 		// Slash (/) menu — skills
 		if (
 			slashOpen &&
@@ -303,6 +332,23 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
 	return (
 		<div className="relative mx-5 mb-2.5 rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
+			{hashOpen ? (
+				<AgentHashMenu
+					agents={filteredAgents}
+					searchTerm={hashSearchTerm}
+					selectedIndex={hashIndex}
+					onSelectedIndexChange={setHashIndex}
+					onSelectAgent={(a) => {
+						const replaced = input.replace(/#[^\s]*$/, `#${a.name} `);
+						setInput(replaced);
+					}}
+					onClose={() => {
+						const cleaned = input.replace(/#[^\s]*$/, "").trimEnd();
+						setInput(cleaned);
+					}}
+					subagentEnabled={subagentOn}
+				/>
+			) : null}
 			{slashOpen ? (
 				<SkillSlashMenu
 					skills={filteredSkills}
@@ -400,62 +446,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 				/>
 				<PermissionModeSelector agentId={agentId} currentMode={permissionMode} />
 				<SubagentToggle />
-				<Popover open={toolsOpen} onOpenChange={setToolsOpen}>
-					<PopoverTrigger asChild>
-						<Button
-							variant="line"
-							size="icon-sm"
-							aria-label={t("chat.tools", "Tools")}
-							title={t("chat.tools", "Tools")}
-						>
-							<Puzzle className="size-3.5" />
-						</Button>
-					</PopoverTrigger>
-					<PopoverContent
-						align="end"
-						className="flex w-80 flex-col overflow-hidden rounded-lg border border-hairline bg-popover p-0 shadow-lg"
-					>
-						<div className="border-b border-hairline px-2 py-2">
-							<div className="relative">
-								<Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-								<input
-									type="text"
-									value={toolsSearch}
-									onChange={(e) => setToolsSearch(e.target.value)}
-									placeholder={t("chat.searchTools", "Search tools...")}
-									className="h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs outline-none ring-0 placeholder:text-muted-foreground focus:border-foreground focus-visible:ring-0"
-								/>
-							</div>
-						</div>
-						<ScrollArea className="h-60">
-							{searchedSkills.length > 0 ? (
-								<div className="p-1.5">
-									{searchedSkills.map((s) => (
-										<button
-											key={`skill-${s.name}`}
-											type="button"
-											className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-											onClick={() => handlePickSkill(s.name)}
-										>
-											<span className="font-medium">/skill:{s.name}</span>
-											{s.description && (
-												<span className="line-clamp-1 text-[10px] text-muted-foreground">
-													{s.description}
-												</span>
-											)}
-										</button>
-									))}
-								</div>
-							) : (
-								<div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
-									{toolsSearch.trim()
-										? t("chat.noSkillsFound", "No skills match your search.")
-										: t("chat.noSkills", "No skills available.")}
-								</div>
-							)}
-						</ScrollArea>
-					</PopoverContent>
-				</Popover>
 				<div className="flex-1" />
 				<ContextRing />
 				{isBusy ? (

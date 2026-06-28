@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { promptForProjectTrust, registerIpcHandlers } from "./ipc-handlers.js";
 import { syncLookDefaultSkills } from "./look-default-skills.js";
+import { syncLookDefaultAgents } from "./look-default-agents.js";
 import { SessionRuntimeManager } from "./session-runtime-manager.js";
 import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
@@ -225,7 +226,7 @@ async function initSessionRuntime(): Promise<void> {
 	}
 
 	// The app requires the user to select a project folder first
-	// before any agent can be created. No auto-creation of default agents.
+	// before any agent can be created. Builtin agents are synced below.
 
 	if (mainWindow) {
 		registerIpcHandlers(runtimeManager, mainWindow);
@@ -257,12 +258,18 @@ async function initSessionRuntime(): Promise<void> {
 			const projectDir = path.resolve(__dirname, "../..");
 			const builtinPath = syncLookDefaultSkills(projectDir);
 			if (builtinPath) {
-				runtimeManager.importSkillPaths([builtinPath]).catch((err) => {
-					console.warn("[Look] 注册内置 Skills 路径失败:", err);
-				});
+				await runtimeManager.importSkillPaths([builtinPath]);
 			}
 		} catch (err) {
 			console.warn("[Look] 同步内置 Skills 失败:", err);
+		}
+
+		// 同步 Look 内置 Agent 到 ~/.look/agents/marketplace/
+		try {
+			const projectDir = path.resolve(__dirname, "../..");
+			syncLookDefaultAgents(projectDir);
+		} catch (err) {
+			console.warn("[Look] 同步内置 Agent 失败:", err);
 		}
 
 		// Auto-updater: check for updates 3s after startup

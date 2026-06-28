@@ -111,3 +111,38 @@ export function renderSkillSegments(
 		return seg.kind === "text" ? renderText(seg.value, key) : renderSkill(seg.name, key);
 	});
 }
+
+// ============================================================
+// ============================================================
+// Agent 分段解析（对标 skill 分段，解析 #agentName 模式）
+// ============================================================
+
+export type AgentSegment = { kind: "text"; value: string } | { kind: "agent"; name: string };
+
+/** 匹配行首或空白后的 #agentName，# 后必须紧跟非空白、非 # 字符 */
+const HASH_AGENT_RE = /(?:^|\s)(#([^\s#]+))/g;
+
+export function parseAgentSegments(content: string): AgentSegment[] {
+	if (!content) return [];
+
+	const segments: AgentSegment[] = [];
+	let cursor = 0;
+
+	for (const match of content.matchAll(HASH_AGENT_RE)) {
+		const matchStart = match.index ?? 0;
+		const fullToken = match[1]!; // "#scout"
+		const name = match[2]!;      // "scout"
+		const tokenStart = matchStart + (match[0]!.length - fullToken.length);
+
+		if (tokenStart > cursor) {
+			segments.push({ kind: "text", value: content.slice(cursor, tokenStart) });
+		}
+		segments.push({ kind: "agent", name });
+		cursor = tokenStart + fullToken.length;
+	}
+
+	if (cursor < content.length) {
+		segments.push({ kind: "text", value: content.slice(cursor) });
+	}
+	return segments;
+}

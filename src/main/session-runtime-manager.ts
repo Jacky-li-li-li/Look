@@ -37,11 +37,12 @@ import {
 import { serializeAgentDefinition } from "./extensions/subagent/agent-definition-serializer.js";
 import {
 	discoverAgents,
-	getMarketplaceAgentsDir,
+	getBuiltinAgentsDir,
 	getUserAgentsDir,
 	parseAgentFile,
 } from "./extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "./extensions/subagent/subagent-extension.js";
+import { getBuiltinSkillsDir } from "./look-default-skills.js";
 import type {
 	AgentConfig,
 	SubagentHost,
@@ -815,7 +816,15 @@ export class SessionRuntimeManager {
 	/** 构造 SubagentHost 实现（绑定到本 manager）。 */
 	private createSubagentHost(): SubagentHost {
 		return {
-			discoverAgents: (cwd, scope) => discoverAgents(cwd, scope),
+			discoverAgents: (cwd, scope) => {
+				const result = discoverAgents(cwd, scope);
+				const settings = this.userSettings.getAll();
+				const enabledList = settings.enabledAgentDefinitions;
+				if (enabledList !== null) {
+					result.agents = result.agents.filter((a) => enabledList.includes(a.name));
+				}
+				return result;
+			},
 			runSubSession: (parentId, agent, task, signal, onUpdate, title) =>
 				this.runSubSession(parentId, agent, task, signal, onUpdate, title),
 			isSubagentEnabled: (id) => this.isSubagentEnabled(id),
@@ -1078,6 +1087,28 @@ export class SessionRuntimeManager {
 
 	async sendMessage(sessionId: string, text: string, images?: ImageContent[]): Promise<void> {
 		const session = (await this.ensureRuntime(sessionId)).runtime.session;
+
+		// 解析 #agentName 模式：检测用户是否通过 # 指定了 SubAgent
+		const agentTokens = text.match(/(?:^|\s)#(\w[\w.-]*)/g);
+		if (agentTokens && agentTokens.length > 0) {
+			const cwd = session.sessionManager.getCwd();
+			const discovery = discoverAgents(cwd, "both");
+			const agentNames = agentTokens.map((t) => t.replace(/^\s*#/, ""));
+			const foundAgents = agentNames
+				.map((name) => discovery.agents.find((a) => a.name === name))
+				.filter(Boolean) as AgentConfig[];
+
+			if (foundAgents.length > 0) {
+				// 保留原文 #agentName chip，仅追加一行最小指令
+				const names = foundAgents.map((a) => a.name).join(", ");
+				const hint = foundAgents.length === 1
+					? `[Use subagent: ${names}]`
+					: `[Use subagents: ${names}]`;
+				text = `${hint}\n\n${text}`;
+			}
+		}
+
+		// 统一发送路径
 		await new Promise<void>((resolve, reject) => {
 			let accepted = false;
 			void session
@@ -1126,6 +1157,34 @@ export class SessionRuntimeManager {
 		await Promise.all(
 			Array.from(this.runtimes.keys()).map((sessionId) => this.applySubagentEnabled(sessionId, enabled)),
 		);
+	}
+
+	/** 设置单个 Agent 定义的启用状态。 */
+	async setAgentDefinitionEnabled(name: string, enabled: boolean): Promise<void> {
+		const settings = this.userSettings.getAll();
+		let list = settings.enabledAgentDefinitions;
+		if (list === null) {
+			const all = this.listAgentDefinitions().map((a) => a.name);
+			list = enabled ? all : all.filter((n) => n !== name);
+		} else {
+			list = enabled ? [...new Set([...list, name])] : list.filter((n) => n !== name);
+		}
+		await this.userSettings.update({ enabledAgentDefinitions: list });
+		this.reloadAllSessionsForAgents();
+	}
+
+	/** 设置单个 Skill 的启用状态。 */
+	async setSkillEnabled(name: string, enabled: boolean): Promise<void> {
+		const settings = this.userSettings.getAll();
+		let list = settings.enabledSkills;
+		if (list === null) {
+			const all = this.listSkillsForUI().skills.map((s) => s.name);
+			if (all.length === 0) return;
+			list = enabled ? all : all.filter((n) => n !== name);
+		} else {
+			list = enabled ? [...new Set([...list, name])] : list.filter((n) => n !== name);
+		}
+		await this.userSettings.update({ enabledSkills: list });
 	}
 
 	/** 把 enabled 状态应用到单个会话：动态增删 subagent 工具 + 记录 per-session 状态。 */
@@ -1185,13 +1244,19 @@ export class SessionRuntimeManager {
 		return discovery.agents.map(this.toAgentDefinitionInfo);
 	}
 
-	/** 创建新 Agent 定义文件。name 已存在则抛错。 */
+	/** 创建新 Agent 定义文件。name 已存在则抛错。自动注入创建方式与时间戳。 */
 	createAgentDefinition(input: AgentDefinitionInput): AgentDefinitionInfo {
 		const name = this.validateAgentName(input.name);
 		const filePath = path.join(getUserAgentsDir(), `${name}.md`);
 		if (existsSync(filePath)) throw new Error(`Agent "${name}" already exists`);
 		fs.mkdirSync(getUserAgentsDir(), { recursive: true });
-		fs.writeFileSync(filePath, serializeAgentDefinition(input), { encoding: "utf-8", mode: 0o644 });
+		// 注入系统元数据：创建方式 + 时间戳
+		const enriched: AgentDefinitionInput = {
+			...input,
+			createdBy: "editor",
+			createdAt: Date.now(),
+		};
+		fs.writeFileSync(filePath, serializeAgentDefinition(enriched), { encoding: "utf-8", mode: 0o644 });
 		const parsed = parseAgentFile(filePath, "user");
 		if (!parsed) throw new Error(`Failed to parse created agent "${name}"`);
 		this.reloadAllSessionsForAgents();
@@ -1225,19 +1290,40 @@ export class SessionRuntimeManager {
 		this.reloadAllSessionsForAgents();
 	}
 
-	/** 从广场目录安装 Agent 到用户目录（复制文件）。 */
+	/** 从内置目录安装 Agent 到用户目录（复制文件并注入安装元数据）。 */
 	installAgentDefinition(name: string): AgentDefinitionInfo {
 		const safeName = this.validateAgentName(name);
-		const sourcePath = path.join(getMarketplaceAgentsDir(), `${safeName}.md`);
-		if (!existsSync(sourcePath)) throw new Error(`Marketplace agent "${safeName}" not found`);
+		const sourcePath = path.join(getBuiltinAgentsDir(), `${safeName}.md`);
+		if (!existsSync(sourcePath)) throw new Error(`Builtin agent "${safeName}" not found`);
 		const destPath = path.join(getUserAgentsDir(), `${safeName}.md`);
 		if (existsSync(destPath)) throw new Error(`Agent "${safeName}" is already installed`);
 		fs.mkdirSync(getUserAgentsDir(), { recursive: true });
-		fs.copyFileSync(sourcePath, destPath);
+		// 解析源文件，注入安装元数据后一次写入（避免两次写盘）
+		const parsed = parseAgentFile(sourcePath, "builtin");
+		if (!parsed) throw new Error(`Failed to parse builtin agent "${safeName}"`);
+		fs.writeFileSync(
+			destPath,
+			serializeAgentDefinition({
+				name: parsed.name,
+				title: parsed.title,
+				description: parsed.description,
+				tools: parsed.tools,
+				model: parsed.model,
+				systemPrompt: parsed.systemPrompt,
+				icon: parsed.icon,
+				tags: parsed.tags,
+				version: parsed.version,
+				author: parsed.author,
+				createdBy: "install",
+				createdAt: parsed.createdAt,
+				installedAt: Date.now(),
+			}),
+			{ encoding: "utf-8", mode: 0o644 },
+		);
 		this.reloadAllSessionsForAgents();
-		const parsed = parseAgentFile(destPath, "user");
-		if (!parsed) throw new Error(`Failed to parse installed agent "${safeName}"`);
-		return this.toAgentDefinitionInfo(parsed);
+		const installedParsed = parseAgentFile(destPath, "user");
+		if (!installedParsed) throw new Error(`Failed to parse installed agent "${safeName}"`);
+		return this.toAgentDefinitionInfo(installedParsed);
 	}
 
 	private validateAgentName(name: string): string {
@@ -1266,6 +1352,9 @@ export class SessionRuntimeManager {
 		if (agent.tags) info.tags = agent.tags;
 		if (agent.version) info.version = agent.version;
 		if (agent.author) info.author = agent.author;
+		if (agent.createdBy) info.createdBy = agent.createdBy;
+		if (agent.createdAt != null) info.createdAt = agent.createdAt;
+		if (agent.installedAt != null) info.installedAt = agent.installedAt;
 		return info;
 	}
 
@@ -2461,12 +2550,22 @@ export class SessionRuntimeManager {
 
 	listSkillsForUI() {
 		const activeRuntime = this.activeSessionId ? this.runtimes.get(this.activeSessionId)?.runtime : undefined;
+		const skillPaths =
+			activeRuntime?.services.settingsManager.getSkillPaths() ?? this.globalSettingsManager.getSkillPaths();
 		const loaded = activeRuntime?.services.resourceLoader.getSkills() ?? { skills: [], diagnostics: [] };
+
+		const rawSkills =
+			loaded.skills.length > 0
+				? loaded.skills
+				: discoverSkillsFromPaths(skillPaths);
+		const skillsWithCategory = (rawSkills as any[]).map((s) => ({
+			...s,
+			category: isBuiltinSkillPath(s) ? "builtin" as const : "mine" as const,
+		}));
 		return {
-			skills: loaded.skills,
+			skills: skillsWithCategory,
 			diagnostics: loaded.diagnostics,
-			importedPaths:
-				activeRuntime?.services.settingsManager.getSkillPaths() ?? this.globalSettingsManager.getSkillPaths(),
+			importedPaths: skillPaths,
 		};
 	}
 
@@ -2526,4 +2625,65 @@ export class SessionRuntimeManager {
 			message: error instanceof Error ? error.message : String(error),
 		});
 	}
+}
+// ============================================================
+// 独立辅助函数
+// ============================================================
+
+function isBuiltinSkillPath(s: any): boolean {
+	const paths = [s.filePath, s.baseDir].filter(Boolean) as string[];
+	return paths.some(
+		(p) => p.replace(/\\\\/g, "/").includes("/.look/builtin-skills/"),
+	);
+}
+
+function discoverSkillsFromPaths(paths: string[]): Array<{
+	name: string;
+	description: string;
+	filePath: string;
+	baseDir: string;
+	source: string;
+}> {
+	const results: Array<{
+		name: string;
+		description: string;
+		filePath: string;
+		baseDir: string;
+		source: string;
+	}> = [];
+
+	for (const dir of paths) {
+		if (!existsSync(dir)) continue;
+		try {
+			const entries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
+			for (const entry of entries) {
+				if (!entry.isFile() || entry.name !== "SKILL.md") continue;
+				const filePath = join(entry.parentPath ?? join(dir, entry.name), entry.name);
+				const baseDir = entry.parentPath ?? dir;
+				try {
+					const raw = fs.readFileSync(filePath, "utf-8");
+					const fmMatch = raw.match(/^---\\s*\\n([\\s\\S]*?)\\n---/);
+					let name = baseDir.split("/").pop() ?? entry.name;
+					let description = "";
+					if (fmMatch?.[1]) {
+						for (const line of fmMatch[1].split("\\n")) {
+							const colonIdx = line.indexOf(":");
+							if (colonIdx === -1) continue;
+							const key = line.slice(0, colonIdx).trim();
+							const value = line.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, "");
+							if (key === "name") name = value;
+							else if (key === "description") description = value;
+						}
+					}
+					results.push({ name, description, filePath, baseDir, source: "path" });
+				} catch {
+					// 跳过不可读的文件
+				}
+			}
+		} catch {
+			// 跳过不可读的目录
+		}
+	}
+
+	return results;
 }

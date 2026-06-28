@@ -59,6 +59,10 @@ export interface UserSettings {
 	autoTitleModel: string | null;
 	/** SubAgent 功能总开关。关闭后所有会话的 subagent 工具对 LLM 不可见。 */
 	subagentEnabled: boolean;
+	/** 已启用的 SubAgent 定义名称列表。null=全部启用（向后兼容） */
+	enabledAgentDefinitions: string[] | null;
+	/** 已启用的 Skill 名称列表。null=全部启用（向后兼容） */
+	enabledSkills: string[] | null;
 }
 
 const DEFAULTS: UserSettings = {
@@ -75,6 +79,8 @@ const DEFAULTS: UserSettings = {
 	themeTone: "dark",
 	autoTitleModel: null,
 	subagentEnabled: true,
+	enabledAgentDefinitions: null,
+	enabledSkills: null,
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -104,6 +110,10 @@ interface UiSettings {
 	autoTitleModel: string | null;
 	/** SubAgent 功能总开关。 */
 	subagentEnabled: boolean;
+	/** 已启用的 SubAgent 定义名称列表。null=全部启用（向后兼容） */
+	enabledAgentDefinitions: string[] | null;
+	/** 已启用的 Skill 名称列表。null=全部启用（向后兼容） */
+	enabledSkills: string[] | null;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -119,6 +129,8 @@ const UI_DEFAULTS: UiSettings = {
 	themeTone: "dark",
 	autoTitleModel: null,
 	subagentEnabled: true,
+	enabledAgentDefinitions: null,
+	enabledSkills: null,
 };
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -229,6 +241,8 @@ export class UserSettingsStore {
 		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
 		if (partial.autoTitleModel !== undefined) uiPartial.autoTitleModel = partial.autoTitleModel;
 		if (partial.subagentEnabled !== undefined) uiPartial.subagentEnabled = partial.subagentEnabled;
+		if (partial.enabledAgentDefinitions !== undefined) uiPartial.enabledAgentDefinitions = partial.enabledAgentDefinitions === null ? null : [...partial.enabledAgentDefinitions];
+		if (partial.enabledSkills !== undefined) uiPartial.enabledSkills = partial.enabledSkills === null ? null : [...partial.enabledSkills];
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

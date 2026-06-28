@@ -45,6 +45,9 @@ export function serializeAgentDefinition(input: AgentDefinitionInput): string {
 	}
 	if (input.version?.trim()) lines.push(`version: ${yamlScalar(input.version.trim())}`);
 	if (input.author?.trim()) lines.push(`author: ${yamlScalar(input.author.trim())}`);
+	if (input.createdBy?.trim()) lines.push(`createdBy: ${yamlScalar(input.createdBy.trim())}`);
+	if (input.createdAt != null) lines.push(`createdAt: ${input.createdAt}`);
+	if (input.installedAt != null) lines.push(`installedAt: ${input.installedAt}`);
 	lines.push("---", "");
 	lines.push(input.systemPrompt.trimEnd());
 	return `${lines.join("\n")}\n`;

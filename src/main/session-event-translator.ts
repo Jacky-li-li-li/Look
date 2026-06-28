@@ -1,5 +1,4 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ImageContent } from "@earendil-works/pi-ai";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { LookMessageSubEvent, LookUiEvent } from "./shared/types.js";
 
@@ -55,25 +54,6 @@ export function extractUserMessageText(message: AgentMessage): string {
 	return "";
 }
 
-/** Extract image attachments from a user AgentMessage.
- *  Returns an empty array if the message has no image blocks or its content
- *  is a plain string. Used so the renderer can show pending user images
- *  immediately on `message_start` instead of waiting for the next snapshot.
- *  Validates `data` and `mimeType` are strings at runtime so the produced
- *  objects match the `ImageContent` type — image blocks from a misbehaving
- *  renderer are silently dropped. */
-export function extractUserMessageImages(message: AgentMessage): ImageContent[] {
-	const msg = message as unknown as Record<string, unknown>;
-	if (!Array.isArray(msg.content)) return [];
-	const out: ImageContent[] = [];
-	for (const b of msg.content as Array<Record<string, unknown>>) {
-		if (b?.type !== "image") continue;
-		if (typeof b.data !== "string" || typeof b.mimeType !== "string") continue;
-		out.push({ type: "image", data: b.data, mimeType: b.mimeType });
-	}
-	return out;
-}
-
 /**
  * Translate a single AgentSessionEvent into zero or more discrete LookUiEvent items.
  *
@@ -110,13 +90,7 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 			const msg = event.message as unknown as Record<string, unknown>;
 			if (msg.role === "user") {
 				const text = extractUserMessageText(event.message);
-				const images = extractUserMessageImages(event.message);
-				events.push({
-					type: "user_message",
-					text,
-					images: images.length > 0 ? images : undefined,
-					timestamp: now,
-				});
+				events.push({ type: "user_message", text, timestamp: now });
 			} else if (msg.role === "assistant") {
 				events.push({ type: "assistant_message_start", timestamp: now });
 			}

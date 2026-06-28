@@ -643,11 +643,11 @@ body {
     padding: 0 0.45em;
     margin: 0 0.08em;
     border-radius: calc(var(--radius) * 0.5);
-    background: color-mix(in oklch, var(--primary), transparent 88%);
-    color: var(--primary);
+    background: color-mix(in oklch, oklch(0.65 0.22 0), transparent 88%);
+    color: oklch(0.55 0.22 0);
     font-weight: 500;
-    border: 1px solid color-mix(in oklch, var(--primary), transparent 70%);
-    box-shadow: inset 0 1px 0 color-mix(in oklch, var(--primary), transparent 92%);
+    border: 1px solid color-mix(in oklch, oklch(0.65 0.22 0), transparent 70%);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, oklch(0.65 0.22 0), transparent 92%);
     white-space: nowrap;
     user-select: text;
     cursor: default;
@@ -656,11 +656,46 @@ body {
     transition: background-color 120ms ease, border-color 120ms ease;
   }
   .skill-chip:hover {
-    background: color-mix(in oklch, var(--primary), transparent 82%);
-    border-color: color-mix(in oklch, var(--primary), transparent 55%);
+    background: color-mix(in oklch, oklch(0.65 0.22 0), transparent 82%);
+    border-color: color-mix(in oklch, oklch(0.65 0.22 0), transparent 55%);
   }
   .skill-chip::before {
     content: "✦";
+    display: inline-block;
+    margin-right: 0.3em;
+    font-size: 0.85em;
+    vertical-align: 0.02em;
+    opacity: 0.85;
+  }
+
+  /* ============================================================
+     Agent chip — ContentEditableInput renders #agentName as a
+     <span data-agent-chip> element, mirroring skill-chip styling
+     but with chart-2 (secondary) color and @ prefix icon.
+     ============================================================ */
+  .agent-chip {
+    display: inline-block;
+    padding: 0 0.45em;
+    margin: 0 0.08em;
+    border-radius: calc(var(--radius) * 0.5);
+    background: color-mix(in oklch, oklch(0.65 0.14 230), transparent 88%);
+    color: oklch(0.55 0.14 230);
+    font-weight: 500;
+    border: 1px solid color-mix(in oklch, oklch(0.65 0.14 230), transparent 70%);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, oklch(0.65 0.14 230), transparent 92%);
+    white-space: nowrap;
+    user-select: text;
+    cursor: default;
+    vertical-align: baseline;
+    line-height: inherit;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  .agent-chip:hover {
+    background: color-mix(in oklch, oklch(0.65 0.14 230), transparent 82%);
+    border-color: color-mix(in oklch, oklch(0.65 0.14 230), transparent 55%);
+  }
+  .agent-chip::before {
+    content: "@";
     display: inline-block;
     margin-right: 0.3em;
     font-size: 0.85em;

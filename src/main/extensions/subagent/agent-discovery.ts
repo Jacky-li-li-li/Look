@@ -11,15 +11,15 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { getLookDir } from "../../shared/look-storage.js";
-import type { AgentConfig, AgentDiscoveryResult, AgentScope, AgentSource } from "./types.js";
+import type { AgentConfig, AgentCreationMethod, AgentDiscoveryResult, AgentScope, AgentSource } from "./types.js";
 
 /** 用户级 Agent 目录：~/.look/agents */
 export function getUserAgentsDir(): string {
 	return path.join(getLookDir(), "agents");
 }
 
-/** 广场安装的 Agent 目录：~/.look/agents/marketplace */
-export function getMarketplaceAgentsDir(): string {
+/** 内置 Agent 目录：~/.look/agents/marketplace（物理目录名保留兼容） */
+export function getBuiltinAgentsDir(): string {
 	return path.join(getUserAgentsDir(), "marketplace");
 }
 
@@ -72,6 +72,14 @@ export function parseAgentFile(filePath: string, source: AgentSource): AgentConf
 		.split(",")
 		.map((t) => t.trim())
 		.filter(Boolean);
+	const createdByRaw = typeof frontmatter.createdBy === "string" ? frontmatter.createdBy.trim() : "";
+	const createdBy: AgentCreationMethod | undefined =
+		createdByRaw === "editor" || createdByRaw === "skill" || createdByRaw === "install" ||
+		createdByRaw === "drag" || createdByRaw === "seed" || createdByRaw === "unknown"
+			? createdByRaw
+			: createdByRaw ? "unknown" : undefined;
+	const createdAt = typeof frontmatter.createdAt === "number" ? frontmatter.createdAt : undefined;
+	const installedAt = typeof frontmatter.installedAt === "number" ? frontmatter.installedAt : undefined;
 
 	return {
 		name,
@@ -86,6 +94,9 @@ export function parseAgentFile(filePath: string, source: AgentSource): AgentConf
 		tags: tags.length > 0 ? tags : undefined,
 		version,
 		author,
+		createdBy,
+		createdAt,
+		installedAt,
 	};
 }
 
@@ -103,7 +114,7 @@ function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 	for (const entry of entries) {
 		if (!entry.name.endsWith(".md")) continue;
 		if (!entry.isFile() && !entry.isSymbolicLink()) continue;
-		// marketplace 子目录单独处理，不在此处重复扫描
+		// marketplace 子目录单独处理，不在此处重复扫描（由 listBuiltinAgents 处理）
 		if (entry.isDirectory()) continue;
 		const filePath = path.join(dir, entry.name);
 		const agent = parseAgentFile(filePath, source);
@@ -112,9 +123,9 @@ function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 	return agents;
 }
 
-/** 加载广场安装的 Agent（~/.look/agents/marketplace/*.md） */
-export function listInstalledMarketplaceAgents(): AgentConfig[] {
-	return loadAgentsFromDir(getMarketplaceAgentsDir(), "marketplace");
+/** 加载内置 Agent（~/.look/agents/marketplace/*.md，source="builtin"） */
+export function listBuiltinAgents(): AgentConfig[] {
+	return loadAgentsFromDir(getBuiltinAgentsDir(), "builtin");
 }
 
 /**
@@ -125,19 +136,19 @@ export function listInstalledMarketplaceAgents(): AgentConfig[] {
  *   - "project"  → 仅 .pi/agents
  *   - "both"     → user + project（项目级覆盖同名用户级）
  *
- * marketplace Agent 始终并入用户级结果（作为 user 来源的补充）。
+ * builtin Agent 始终并入用户级结果（作为最底层的 fallback）。
  */
 export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
 	const userDir = getUserAgentsDir();
 	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
 
 	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
-	const marketplaceAgents = scope === "project" ? [] : listInstalledMarketplaceAgents();
+	const builtinAgents = scope === "project" ? [] : listBuiltinAgents();
 	const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
 
-	// 同名优先级：project > user > marketplace
+	// 同名优先级：project > user > builtin
 	const agentMap = new Map<string, AgentConfig>();
-	for (const agent of marketplaceAgents) agentMap.set(agent.name, agent);
+	for (const agent of builtinAgents) agentMap.set(agent.name, agent);
 	for (const agent of userAgents) agentMap.set(agent.name, agent);
 	for (const agent of projectAgents) agentMap.set(agent.name, agent);
 

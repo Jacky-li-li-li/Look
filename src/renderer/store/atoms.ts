@@ -183,7 +183,7 @@ export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile"
 export const sidebarCollapsedAtom = atom(false);
 
 /** Agent 广场是否占据主区域（替代聊天面板） */
-export const showAgentMarketplaceAtom = atom(false);
+export const showAgentSquareAtom = atom(false);
 
 // ---- v0.5 Shared area ----
 

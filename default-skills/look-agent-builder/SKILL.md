@@ -116,8 +116,10 @@ tools: tool1, tool2     # 可选，逗号+空格分割
 model: <model>          # 可选
 icon: <emoji>           # 可选
 tags: tag1, tag2        # 可选，逗号+空格分割
-version: <version>      # 可选
+version: <version>      # 可选，默认 1.0.0
 author: <author>        # 可选
+createdBy: skill        # 必填：由 Skill 自动注入
+createdAt: <timestamp>  # 必填：创建时间戳（毫秒）
 ---
 <systemPrompt>
 ```
@@ -213,6 +215,8 @@ Agent "code-reviewer" 已存在（~/.look/agents/code-reviewer.md）。
 - `description`：非空，一句话
 - `systemPrompt`：非空，至少 50 字符
 - `tools`：每个工具名是有效工具（read, write, edit, grep, find, ls, bash）
+- `createdBy`：必须为 `skill`（由 Skill 自动注入）
+- `createdAt`：当前时间的毫秒时间戳（由 Skill 自动注入）
 - 文件内容 frontmatter 的 `---` 分隔正确
 
 ### 文件系统错误

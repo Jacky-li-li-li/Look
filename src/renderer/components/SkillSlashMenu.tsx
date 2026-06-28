@@ -16,6 +16,7 @@
 import { ChevronRight, FileCode2, FolderGit2, Sparkles } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { usePickerMenu } from "./usePickerMenu";
 
 /**
  * Mirrors pi SDK's `Skill` shape (from @earendil-works/pi-coding-agent).
@@ -163,26 +164,6 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 		onClose,
 		searchTerm,
 	} = props;
-	const menuRef = useRef<HTMLDivElement>(null);
-
-	// Click-outside dismiss.
-	// Uses `click` (not `mousedown`) because clicking a scrollbar
-	// fires `mousedown` on the scrollable container — which would
-	// close the menu the instant the user tries to scroll. `click`
-	// does NOT fire on scrollbar interactions in any major browser,
-	// so the user can scroll the messages area freely while the
-	// slash menu stays open. Real outside clicks (on empty space,
-	// other buttons, etc.) fire `click` after mouseup as expected.
-	useEffect(() => {
-		const onDocClick = (e: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-				onClose();
-			}
-		};
-		document.addEventListener("click", onDocClick);
-		return () => document.removeEventListener("click", onDocClick);
-	}, [onClose]);
-
 	// Filter out hidden (disableModelInvocation) skills — workers can't
 	// invoke them via /skill:, so showing them would mislead.
 	const visible = skills.filter((s) => !s.disableModelInvocation);
@@ -198,19 +179,13 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 		...importable.map((d) => ({ kind: "import" as const, detected: d })),
 	];
 
-	const total = pickable.length;
-	const clampedIndex = Math.max(0, Math.min(selectedIndex, total - 1));
+	const { menuRef, containerClassName, onKeyDown, refs } = usePickerMenu({
+		total: pickable.length,
+		selectedIndex,
+		onClose,
+	});
+	const { clampedIndex, setRowRef } = refs;
 	const current = pickable[clampedIndex];
-
-	// Scroll active row into view
-	const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
-	useEffect(() => {
-		rowRefs.current[clampedIndex]?.scrollIntoView({ block: "nearest" });
-	}, [clampedIndex]);
-
-	const setRowRef = (i: number) => (el: HTMLButtonElement | null) => {
-		rowRefs.current[i] = el;
-	};
 
 	// Handlers
 	const onClickPick = (i: number) => {
@@ -221,14 +196,7 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 	};
 
 	return (
-		<div
-			ref={menuRef}
-			// Stop propagation so the parent's keydown handlers
-			// (Enter to send, etc.) don't fire while the menu owns
-			// the keyboard.
-			onKeyDown={(e) => e.stopPropagation()}
-			className="absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-lg border border-hairline bg-card/95 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.18)] backdrop-blur-md"
-		>
+		<div ref={menuRef} onKeyDown={onKeyDown} className={containerClassName}>
 			{/* Header */}
 			<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
 				<Sparkles className="size-3" />
