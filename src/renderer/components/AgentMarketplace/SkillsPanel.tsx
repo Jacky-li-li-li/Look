@@ -2,20 +2,15 @@
 // SkillsPanel — Agent Skill 管理页面
 //
 // 搜索 + 内置/我的 Segment 切换 + Skill 卡片网格。
-// 无 CRUD（Skill 通过文件系统管理），底部有"从其他工具导入"入口。
+// 进入"我的"tab 时自动检测并导入常见工具目录下的 Skill。
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { useAtom } from "jotai";
-import { Download, FolderOpen, Loader2, Search, Sparkles, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { FolderOpen, Loader2, Search, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-	agentSkillsAtom,
-	agentSkillsLoadingAtom,
-	skillSourceTabAtom,
-} from "../../store/agentDefinitionsAtoms";
+import { agentSkillsAtom, agentSkillsLoadingAtom, skillSourceTabAtom } from "../../store/agentDefinitionsAtoms";
 import { enabledSkillsAtom } from "../../store/atoms";
 import SkillCard from "./SkillCard";
 import { useToggleEnabled } from "./useToggleEnabled";
@@ -26,19 +21,17 @@ export default function SkillsPanel() {
 	const [sourceTab, setSourceTab] = useAtom(skillSourceTabAtom);
 	const [searchText, setSearchText] = useState("");
 	const [, setEnabledSkills] = useAtom(enabledSkillsAtom);
+	const autoImported = useRef(false);
 
-	const { isEnabled, toggle, setEnabledNames: loadEnabled } = useToggleEnabled({
+	const {
+		isEnabled,
+		toggle,
+		setEnabledNames: loadEnabled,
+	} = useToggleEnabled({
 		getAllNames: useCallback(() => skills.map((s: any) => s.name), [skills]),
-		setEnabled: useCallback(
-			async (name: string, enabled: boolean) =>
-				window.look.setSkillEnabled(name, enabled),
-			[],
-		),
+		setEnabled: useCallback(async (name: string, enabled: boolean) => window.look.setSkillEnabled(name, enabled), []),
 		// 同步启用集合到全局 atom,供输入框 / 弹窗等跨组件读取
-		onChange: useCallback(
-			(names: string[] | null) => setEnabledSkills(names),
-			[setEnabledSkills],
-		),
+		onChange: useCallback((names: string[] | null) => setEnabledSkills(names), [setEnabledSkills]),
 	});
 
 	const loadSkills = useCallback(async () => {
@@ -62,6 +55,24 @@ export default function SkillsPanel() {
 		loadEnabled();
 	}, [loadSkills, loadEnabled]);
 
+	// 自动检测并导入常见工具目录下的 Skill（仅首次进入"我的"tab 时执行）
+	useEffect(() => {
+		if (sourceTab !== "mine" || autoImported.current) return;
+		autoImported.current = true;
+
+		window.look.detectCommonSkillPaths().then((detected) => {
+			if (!detected?.success || !detected.detected) return;
+			const paths = detected.detected.filter((d: any) => d.exists && d.skillCount > 0).map((d: any) => d.path);
+			if (paths.length > 0) {
+				window.look.importSkillPaths(paths).then((result) => {
+					if (result?.success && result.importedCount > 0) {
+						loadSkills();
+					}
+				});
+			}
+		});
+	}, [sourceTab, loadSkills]);
+
 	const filteredSkills = useMemo(() => {
 		let list = skills;
 		if (sourceTab === "builtin") {
@@ -73,45 +84,11 @@ export default function SkillsPanel() {
 		if (term) {
 			list = list.filter(
 				(s: any) =>
-					(s.name ?? "").toLowerCase().includes(term) ||
-					(s.description ?? "").toLowerCase().includes(term),
+					(s.name ?? "").toLowerCase().includes(term) || (s.description ?? "").toLowerCase().includes(term),
 			);
 		}
 		return list;
 	}, [skills, sourceTab, searchText]);
-
-	const handleImport = useCallback(async () => {
-		try {
-			const detected = await window.look.detectCommonSkillPaths();
-			if (detected?.success && detected.detected && detected.detected.length > 0) {
-				const paths = detected.detected
-					.filter((d: any) => d.exists && d.skillCount > 0)
-					.map((d: any) => d.path);
-				if (paths.length > 0) {
-					const result = await window.look.importSkillPaths(paths);
-					if (result?.success) {
-						toast.success(`已导入 ${result.importedCount} 个 Skill`);
-						loadSkills();
-					} else {
-						toast.error(result?.error ?? "导入失败");
-					}
-					return;
-				}
-			}
-			const dirResult = await window.look.openDirectoryDialog("选择包含 SKILL.md 的目录");
-			if (dirResult?.success && dirResult.path) {
-				const result = await window.look.importSkillPaths([dirResult.path]);
-				if (result?.success) {
-					toast.success(`已导入 ${result.importedCount} 个 Skill`);
-					loadSkills();
-				} else {
-					toast.error(result?.error ?? "导入失败");
-				}
-			}
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "导入失败");
-		}
-	}, [loadSkills]);
 
 	return (
 		<div className="flex h-full flex-col gap-3">
@@ -186,7 +163,6 @@ export default function SkillsPanel() {
 							<>
 								<FolderOpen className="size-5 text-muted-foreground/40" />
 								<p>暂无自定义 Skill</p>
-								<p className="text-[10px]">可从其他工具导入 Skill</p>
 							</>
 						)}
 					</div>
@@ -203,21 +179,6 @@ export default function SkillsPanel() {
 					</div>
 				)}
 			</div>
-
-			{/* 底部导入 */}
-			{sourceTab === "mine" && (
-				<div className="shrink-0 border-t border-hairline pt-2">
-					<Button
-						variant="line"
-						size="sm"
-						className="w-full gap-1.5 text-[11px]"
-						onClick={handleImport}
-					>
-						<Download className="size-3.5" />
-						从其他工具导入
-					</Button>
-				</div>
-			)}
 		</div>
 	);
 }

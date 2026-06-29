@@ -1,12 +1,11 @@
 // ============================================================
 // SubAgentPanel — SubAgent 管理页面（从 AgentMarketplacePanel 重构）
 //
-// 搜索 + 内置/我的 Segment 切换 + 标签筛选 + Agent 卡片网格。
+// 搜索 + 内置/我的 Segment 切换 + Agent 卡片网格。
 // 每张卡片带 Switch 开关，支持逐项启用/禁用。
 // "我的"模块显示新建按钮和编辑/删除操作。
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import type { AgentDefinitionInfo } from "@shared/types";
@@ -18,7 +17,6 @@ import {
 	agentDefinitionsAtom,
 	agentDefinitionsLoadingAtom,
 	agentEditorTargetAtom,
-	agentFilterTagAtom,
 	agentSearchTextAtom,
 	subagentSourceTabAtom,
 } from "../../store/agentDefinitionsAtoms";
@@ -27,32 +25,14 @@ import AgentCard from "./AgentCard";
 import AgentEditor from "./AgentEditor";
 import { useToggleEnabled } from "./useToggleEnabled";
 
-const ALL_TAG = "__all__";
-
-/** 从已有 Agent 的 tags 中提取全部独特标签 */
-function useFilterTags(agents: AgentDefinitionInfo[]): string[] {
-	return useMemo(() => {
-		const seen = new Set<string>();
-		for (const agent of agents) {
-			for (const tag of agent.tags ?? []) {
-				seen.add(tag);
-			}
-		}
-		return [ALL_TAG, ...Array.from(seen).sort()];
-	}, [agents]);
-}
-
 export default function SubAgentPanel() {
 	const [agents, setAgents] = useAtom(agentDefinitionsAtom);
 	const [editorTarget, setEditorTarget] = useAtom(agentEditorTargetAtom);
-	const [filterTag, setFilterTag] = useAtom(agentFilterTagAtom);
 	const [searchText, setSearchText] = useAtom(agentSearchTextAtom);
 	const [loading, setLoading] = useAtom(agentDefinitionsLoadingAtom);
 	const [sourceTab, setSourceTab] = useAtom(subagentSourceTabAtom);
 	const [selected, setSelected] = useState<AgentDefinitionInfo | null>(null);
 	const [, setEnabledAgentDefs] = useAtom(enabledAgentDefinitionsAtom);
-
-	const filterTags = useFilterTags(agents);
 
 	const { isEnabled, toggle, setEnabledNames: loadEnabled } = useToggleEnabled({
 		getAllNames: useCallback(() => agents.map((a) => a.name), [agents]),
@@ -101,12 +81,9 @@ export default function SubAgentPanel() {
 		return list;
 	}, [agents, sourceTab]);
 
-	// 标签筛选 + 搜索
+	// 搜索
 	const filteredAgents = useMemo(() => {
 		let list = sourceFiltered;
-		if (filterTag && filterTag !== ALL_TAG) {
-			list = list.filter((a) => (a.tags ?? []).includes(filterTag));
-		}
 		const term = searchText.trim().toLowerCase();
 		if (term) {
 			list = list.filter(
@@ -117,7 +94,7 @@ export default function SubAgentPanel() {
 			);
 		}
 		return list;
-	}, [sourceFiltered, filterTag, searchText]);
+	}, [sourceFiltered, searchText]);
 
 	const handleSaved = useCallback(
 		(saved: AgentDefinitionInfo) => {
@@ -197,43 +174,21 @@ export default function SubAgentPanel() {
 				</button>
 			</div>
 
-			{/* 分类标签 */}
-			{sourceTab === "builtin" && filterTags.length > 1 && (
-				<div className="flex flex-wrap items-center gap-1.5">
-					{filterTags.map((tag) => {
-						const active = (filterTag ?? ALL_TAG) === tag;
-						return (
-							<Badge
-								key={tag}
-								variant={active ? "default" : "outline"}
-								className="h-5 cursor-pointer px-2 text-[10px] transition-colors hover:bg-accent"
-								onClick={() => setFilterTag(tag === ALL_TAG ? null : tag)}
-							>
-								{tag === ALL_TAG ? "全部" : tag}
-							</Badge>
-						);
-					})}
-				</div>
-			)}
-
 			{/* Agent 卡片网格 */}
 			<div className="flex-1 overflow-y-auto">
 				{loading ? (
 					<p className="py-12 text-center text-xs text-muted-foreground">加载中...</p>
 				) : filteredAgents.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
-						{searchText || (filterTag && filterTag !== ALL_TAG) ? (
+						{searchText ? (
 							<>
 								<p>没有匹配的 Agent</p>
 								<button
 									type="button"
 									className="text-[10px] underline hover:text-foreground"
-									onClick={() => {
-										setSearchText("");
-										setFilterTag(null);
-									}}
+									onClick={() => setSearchText("")}
 								>
-									清除筛选
+									清除搜索
 								</button>
 							</>
 						) : sourceTab === "builtin" ? (

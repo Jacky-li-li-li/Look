@@ -40,6 +40,7 @@ import {
 	openProjectIdsAtom,
 	projectsAtom,
 	recentlyCompletedAtom,
+	rightPanelCollapsedAtom,
 	runningAgentsAtom,
 	sessionPhasesAtom,
 	showAgentSquareAtom,
@@ -242,6 +243,7 @@ export default function Sidebar({
 					recentlyCompleted.filter((id) => id !== agent.id),
 				);
 			}
+			appStore.set(showAgentSquareAtom, false);
 			onSelect(agent.id);
 		},
 		[onSelect, recentlyCompleted],
@@ -444,7 +446,11 @@ export default function Sidebar({
 											const children = childSessionsByParent.get(agent.id) ?? [];
 											const hasChildren = children.length > 0;
 											return (
-												<div key={agent.id} className="session-tree-group" data-has-children={hasChildren || undefined}>
+												<div
+													key={agent.id}
+													className="session-tree-group"
+													data-has-children={hasChildren || undefined}
+												>
 													<div
 														key={agent.id}
 														data-agent-id={agent.id}
@@ -648,12 +654,17 @@ export default function Sidebar({
 
 			<button
 				type="button"
-				onClick={() => appStore.set(showAgentSquareAtom, true)}
-				className="flex h-8 shrink-0 items-center gap-2 border-t border-hairline px-3 text-left transition-colors hover:bg-foreground/[0.035]"
+				onClick={() => {
+					appStore.set(showAgentSquareAtom, true);
+					appStore.set(rightPanelCollapsedAtom, true);
+				}}
+				className="group flex h-10 shrink-0 items-center gap-2.5 border-t border-hairline px-3 text-left transition-colors hover:bg-foreground/[0.02]"
 				title="Agent 广场"
 			>
-				<Bot className="size-3.5 text-sky-500" />
-				<span className="text-[11px] text-muted-foreground">Agent 广场</span>
+				<span className="text-[9px] leading-none text-foreground/[0.15] transition-all duration-500 group-hover:text-foreground/[0.35]">
+					◆
+				</span>
+				<span className="text-[11px] font-normal tracking-[0.03em] text-foreground/[0.52]">Agent 广场</span>
 			</button>
 
 			<button

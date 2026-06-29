@@ -23,12 +23,6 @@ interface AgentCardProps {
 	onDelete: (agent: AgentDefinitionInfo) => void;
 }
 
-const SOURCE_COLORS: Record<string, string> = {
-	user: "text-amber-500 border-amber-500/30",
-	project: "text-sky-500 border-sky-500/30",
-	builtin: "text-emerald-500 border-emerald-500/30",
-};
-
 export const SOURCE_LABELS: Record<string, string> = {
 	user: "我的",
 	project: "项目",
@@ -67,15 +61,22 @@ const AgentCard = memo(function AgentCard({
 					: "border-hairline bg-card/40 hover:border-hairline hover:bg-accent/5"
 			} ${!enabled ? "opacity-50 hover:opacity-70" : ""}`}
 		>
-			{/* 图标 + 名称 + 来源 */}
+			{/* 图标 + 名称 + Switch */}
 			<div className="flex w-full items-center gap-2">
 				<span className="text-lg leading-none" aria-hidden>
 					{agent.icon ?? "🤖"}
 				</span>
 				<span className="min-w-0 flex-1 truncate text-[13px] font-medium">{agent.title || agent.name}</span>
-				<Badge variant="outline" className={`h-4 shrink-0 px-1.5 text-[9px] ${SOURCE_COLORS[agent.source] ?? ""}`}>
-					{SOURCE_LABELS[agent.source] ?? agent.source}
-				</Badge>
+				{onToggle && (
+					<Switch
+						checked={enabled}
+						onCheckedChange={(checked) => {
+							onToggle(checked);
+						}}
+						onClick={(e) => e.stopPropagation()}
+						className="scale-75 shrink-0"
+					/>
+				)}
 			</div>
 
 			{/* 描述 */}
@@ -88,7 +89,7 @@ const AgentCard = memo(function AgentCard({
 				</span>
 			)}
 
-			{/* 模型 + 标签 + Switch + 操作 */}
+			{/* 模型 + 标签 + 操作 */}
 			<div className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground">
 				{agent.model && (
 					<span className="mr-auto truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[9px]">
@@ -100,17 +101,6 @@ const AgentCard = memo(function AgentCard({
 						{tag}
 					</Badge>
 				))}
-				{/* Switch 开关 */}
-				{onToggle && (
-					<Switch
-						checked={enabled}
-						onCheckedChange={(checked) => {
-							onToggle(checked);
-						}}
-						onClick={(e) => e.stopPropagation()}
-						className="scale-75"
-					/>
-				)}
 				{/* 编辑/删除（仅 user 来源） */}
 				{agent.source === "user" && (
 					<div className="ml-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">

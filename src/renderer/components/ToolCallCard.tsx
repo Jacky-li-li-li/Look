@@ -7,6 +7,7 @@
 import { cn } from "@shared/lib/utils";
 import type { ImageContent } from "@shared/types";
 import {
+	Bot,
 	Brain,
 	ChevronRight,
 	Code2,
@@ -320,7 +321,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 											</span>
 											<div
 												className={cn(
-													"whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono text-[10px]",
+													"whitespace-pre-wrap break-words font-mono text-[10px]",
 													toolCall.isError ? "text-destructive" : "text-muted-foreground",
 												)}
 											>
@@ -378,6 +379,7 @@ function pickToolIcon(toolName: string, className?: string): React.ReactElement 
 	if (["find", "glob"].includes(name)) return <FileSearch className={cls} />;
 	if (["webfetch", "websearch", "curl", "fetch", "web"].includes(name)) return <Globe className={cls} />;
 	if (["think", "reason", "brain"].includes(name)) return <Brain className={cls} />;
+		if (["agent", "subagent", "delegate_agent", "delegate_agents"].includes(name)) return <Bot className={cls} />;
 	return <Code2 className={cls} />;
 }
 
