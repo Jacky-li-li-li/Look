@@ -115,7 +115,7 @@ const ChatPanel = memo(function ChatPanel({
 			/>
 			{/* Stage 5：子 Agent 进度卡片（可折叠） */}
 			{mergedProgress.length > 0 && (
-				<div className="shrink-0 px-3 pb-1">
+				<div className="shrink-0 mx-5 pb-1">
 					<button
 						type="button"
 						onClick={() => setSubProgressExpanded(!subProgressExpanded)}

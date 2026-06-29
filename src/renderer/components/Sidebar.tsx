@@ -444,7 +444,7 @@ export default function Sidebar({
 											const children = childSessionsByParent.get(agent.id) ?? [];
 											const hasChildren = children.length > 0;
 											return (
-												<div key={agent.id}>
+												<div key={agent.id} className="session-tree-group" data-has-children={hasChildren || undefined}>
 													<div
 														key={agent.id}
 														data-agent-id={agent.id}
@@ -557,7 +557,7 @@ export default function Sidebar({
 													</div>
 													{/* Stage 4：子会话缩进嵌套 */}
 													{!collapsedSubSessions.has(agent.id) &&
-														children.map((child: AgentInfo) => {
+														children.map((child: AgentInfo, childIndex) => {
 															const childPhase = sessionPhases.get(child.id) ?? "idle";
 															const childRunning = runningAgents.has(child.id);
 															return (
@@ -566,7 +566,7 @@ export default function Sidebar({
 																	data-agent-id={child.id}
 																	data-agent-status={childPhase}
 																	data-running={childRunning || undefined}
-																	className="session-ledger-row group/session flex h-[32px] items-center gap-1.5 rounded-md border-sky-500/20 ml-[18px] pl-2 pr-1"
+																	className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[32px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
 																>
 																	<button
 																		type="button"

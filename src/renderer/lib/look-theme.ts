@@ -1,13 +1,13 @@
 // ============================================================
 // Look theme system — visual style + tone dimensions
 //
-// style: the aesthetic language (ink-wash / swiss / bauhaus)
+// style: the aesthetic language
 // tone:  the lightness variant of that style (light / dark)
 //
 // HTML class shape: <html class="theme-{style} tone-{tone}">
 // ============================================================
 
-export type LookStyle = "ink-wash" | "swiss" | "bauhaus";
+export type LookStyle = "ink-wash" | "swiss" | "bauhaus" | "hara" | "field" | "braun" | "editorial" | "crt";
 export type LookTone = "light" | "dark";
 
 export interface LookTheme {
@@ -15,7 +15,16 @@ export interface LookTheme {
 	tone: LookTone;
 }
 
-export const ALL_STYLES: readonly LookStyle[] = ["ink-wash", "swiss", "bauhaus"] as const;
+export const ALL_STYLES: readonly LookStyle[] = [
+	"ink-wash",
+	"swiss",
+	"bauhaus",
+	"hara",
+	"field",
+	"braun",
+	"editorial",
+	"crt",
+] as const;
 export const ALL_TONES: readonly LookTone[] = ["light", "dark"] as const;
 
 /** Recommended tone for each style (used as new-user default). */
@@ -23,6 +32,11 @@ export const STYLE_DEFAULT_TONE: Record<LookStyle, LookTone> = {
 	"ink-wash": "dark",
 	swiss: "light",
 	bauhaus: "light",
+	hara: "light",
+	field: "dark",
+	braun: "light",
+	editorial: "light",
+	crt: "dark",
 };
 
 /** UI metadata for each style (used by ThemePicker). */
@@ -63,6 +77,56 @@ export const STYLE_META: Record<LookStyle, LookStyleMeta> = {
 			bg: "#fafafa",
 			fg: "#0a0a0a",
 			accent: "#e2231a",
+		},
+	},
+	hara: {
+		id: "hara",
+		nameKey: "settings.themeHara",
+		descKey: "settings.themeHaraDesc",
+		swatches: {
+			bg: "#f8fbff",
+			fg: "#102033",
+			accent: "#1d5fd1",
+		},
+	},
+	field: {
+		id: "field",
+		nameKey: "settings.themeField",
+		descKey: "settings.themeFieldDesc",
+		swatches: {
+			bg: "#09061f",
+			fg: "#f1eeff",
+			accent: "#7df7ff",
+		},
+	},
+	braun: {
+		id: "braun",
+		nameKey: "settings.themeBraun",
+		descKey: "settings.themeBraunDesc",
+		swatches: {
+			bg: "#e7e4dc",
+			fg: "#20201d",
+			accent: "#ff5a1f",
+		},
+	},
+	editorial: {
+		id: "editorial",
+		nameKey: "settings.themeEditorial",
+		descKey: "settings.themeEditorialDesc",
+		swatches: {
+			bg: "#fff6e8",
+			fg: "#19120d",
+			accent: "#e0003c",
+		},
+	},
+	crt: {
+		id: "crt",
+		nameKey: "settings.themeCrt",
+		descKey: "settings.themeCrtDesc",
+		swatches: {
+			bg: "#02110a",
+			fg: "#b6ffcf",
+			accent: "#31ff75",
 		},
 	},
 };

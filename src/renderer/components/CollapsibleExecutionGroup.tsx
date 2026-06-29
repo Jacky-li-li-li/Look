@@ -23,6 +23,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
 import { scheduleCollapse } from "../lib/batchCollapse";
+import type { LookStyle } from "../lib/look-theme";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
@@ -262,7 +263,7 @@ function renderBlock(
 interface BadgeTriggerProps {
 	summary: string;
 	kind: GroupKind;
-	themeStyle: "swiss" | "bauhaus" | "ink-wash";
+	themeStyle: LookStyle;
 	isOpen: boolean;
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
