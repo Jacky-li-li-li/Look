@@ -22,6 +22,7 @@ import {
 	agentSearchTextAtom,
 	subagentSourceTabAtom,
 } from "../../store/agentDefinitionsAtoms";
+import { enabledAgentDefinitionsAtom } from "../../store/atoms";
 import AgentCard from "./AgentCard";
 import AgentEditor from "./AgentEditor";
 import { useToggleEnabled } from "./useToggleEnabled";
@@ -49,6 +50,7 @@ export default function SubAgentPanel() {
 	const [loading, setLoading] = useAtom(agentDefinitionsLoadingAtom);
 	const [sourceTab, setSourceTab] = useAtom(subagentSourceTabAtom);
 	const [selected, setSelected] = useState<AgentDefinitionInfo | null>(null);
+	const [, setEnabledAgentDefs] = useAtom(enabledAgentDefinitionsAtom);
 
 	const filterTags = useFilterTags(agents);
 
@@ -58,6 +60,11 @@ export default function SubAgentPanel() {
 			async (name: string, enabled: boolean) =>
 				window.look.setAgentDefinitionEnabled(name, enabled),
 			[],
+		),
+		// 同步启用集合到全局 atom,供输入框 # 弹窗等跨组件读取
+		onChange: useCallback(
+			(names: string[] | null) => setEnabledAgentDefs(names),
+			[setEnabledAgentDefs],
 		),
 	});
 

@@ -271,6 +271,20 @@ const api = {
   setSubagentEnabled: (enabled) =>
     ipcRenderer.invoke("look:invoke", { type: "agent:set-subagent-enabled", enabled }),
 
+  // ---- SubAgent：单个 Agent 定义 / Skill 的启用开关（Agent 广场） ----
+  setAgentDefinitionEnabled: (name, enabled) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "agent-definitions:set-enabled",
+      name,
+      enabled,
+    }),
+  setSkillEnabled: (name, enabled) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "skills:set-enabled",
+      name,
+      enabled,
+    }),
+
   // ---- User Profile ----
   getUserProfile: () =>
     ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),

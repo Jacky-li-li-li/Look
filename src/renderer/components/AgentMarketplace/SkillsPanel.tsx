@@ -16,6 +16,7 @@ import {
 	agentSkillsLoadingAtom,
 	skillSourceTabAtom,
 } from "../../store/agentDefinitionsAtoms";
+import { enabledSkillsAtom } from "../../store/atoms";
 import SkillCard from "./SkillCard";
 import { useToggleEnabled } from "./useToggleEnabled";
 
@@ -24,6 +25,7 @@ export default function SkillsPanel() {
 	const [loading, setLoading] = useAtom(agentSkillsLoadingAtom);
 	const [sourceTab, setSourceTab] = useAtom(skillSourceTabAtom);
 	const [searchText, setSearchText] = useState("");
+	const [, setEnabledSkills] = useAtom(enabledSkillsAtom);
 
 	const { isEnabled, toggle, setEnabledNames: loadEnabled } = useToggleEnabled({
 		getAllNames: useCallback(() => skills.map((s: any) => s.name), [skills]),
@@ -31,6 +33,11 @@ export default function SkillsPanel() {
 			async (name: string, enabled: boolean) =>
 				window.look.setSkillEnabled(name, enabled),
 			[],
+		),
+		// 同步启用集合到全局 atom,供输入框 / 弹窗等跨组件读取
+		onChange: useCallback(
+			(names: string[] | null) => setEnabledSkills(names),
+			[setEnabledSkills],
 		),
 	});
 

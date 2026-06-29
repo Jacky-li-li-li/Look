@@ -11,7 +11,12 @@ import { Send, Square, X } from "lucide-react";
 import type React from "react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { permissionModeAtomFamily, subagentEnabledAtom } from "../store/atoms";
+import {
+	enabledAgentDefinitionsAtom,
+	enabledSkillsAtom,
+	permissionModeAtomFamily,
+	subagentEnabledAtom,
+} from "../store/atoms";
 import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
@@ -135,6 +140,29 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 			cancelled = true;
 		};
 	}, []);
+
+	// ---- 已启用集合（来自主进程 general settings,广场关闭后弹窗要隐藏） ----
+	// `null` 表示"全部启用"。广场 onChange 也会即时更新此 atom,
+	// 挂载时再拉一次作为兜底,覆盖应用启动 / 跨会话 / 外部修改等场景。
+	const [enabledAgentDefs, setEnabledAgentDefs] = useAtom(enabledAgentDefinitionsAtom);
+	const [enabledSkills, setEnabledSkills] = useAtom(enabledSkillsAtom);
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const result = await window.look.getGeneralSettings();
+				if (cancelled || !result?.success || !result.settings) return;
+				const settings = result.settings as { enabledAgentDefinitions?: string[] | null; enabledSkills?: string[] | null };
+				setEnabledAgentDefs(settings.enabledAgentDefinitions ?? null);
+				setEnabledSkills(settings.enabledSkills ?? null);
+			} catch {
+				// Non-fatal: 默认全启用,不会隐藏任何选项。
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [setEnabledAgentDefs, setEnabledSkills]);
 	// Slash menu visibility — true when the input looks like `/xxx`
 	// without any whitespace (so mid-sentence `/` doesn't trigger).
 	const slashOpen = useMemo(() => /^\/[^\s]*$/.test(input), [input]);
@@ -156,17 +184,21 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		const m = input.match(/#([^\s]*)$/);
 		return m ? m[1] : "";
 	}, [input]);
-	// 按名称、标题、描述过滤 Agent
+	// 按名称、标题、描述过滤 Agent（先按广场启用状态过滤掉关闭的）
 	const filteredAgents = useMemo(() => {
-		if (!hashSearchTerm) return agentDefs;
+		let list = agentDefs;
+		if (enabledAgentDefs !== null) {
+			list = list.filter((a) => enabledAgentDefs.includes(a.name));
+		}
+		if (!hashSearchTerm) return list;
 		const term = hashSearchTerm.toLowerCase();
-		return agentDefs.filter(
+		return list.filter(
 			(a) =>
 				a.name.toLowerCase().includes(term) ||
 				(a.title ?? "").toLowerCase().includes(term) ||
 				a.description.toLowerCase().includes(term),
 		);
-	}, [agentDefs, hashSearchTerm]);
+	}, [agentDefs, hashSearchTerm, enabledAgentDefs]);
 	// 提交选中的 Agent：替换最后一个 #term 为 #agentName
 	const commitHashSelection = useCallback(
 		(index: number) => {
@@ -179,7 +211,14 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	);
 
 	// Compute pickable count so handleSlashMenuKey can wrap-around.
-	const visibleSkills = useMemo(() => skills.filter((s) => !s.disableModelInvocation), [skills]);
+	// 过滤掉广场关闭的 Skill（null = 全部启用）和 disableModelInvocation 的隐藏项
+	const visibleSkills = useMemo(() => {
+		let list = skills.filter((s) => !s.disableModelInvocation);
+		if (enabledSkills !== null) {
+			list = list.filter((s) => enabledSkills.includes(s.name));
+		}
+		return list;
+	}, [skills, enabledSkills]);
 	// Extract the search term after `/` for skill filtering.
 	const slashSearchTerm = useMemo(() => {
 		const m = input.match(/^\/(.+)$/);
