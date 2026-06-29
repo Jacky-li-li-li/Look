@@ -15,7 +15,6 @@
 // ============================================================
 
 import type { ThinkingContent, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
-import { Badge } from "@shared/components/ui/badge";
 import { cn } from "@shared/lib/utils";
 import type { LookUiToolExecState } from "@shared/types";
 import { Brain, ChevronRight, Wrench } from "lucide-react";
@@ -329,16 +328,16 @@ function BadgeTrigger({ summary, kind, themeStyle, isOpen, onClick, onKeyDown }:
 			onKeyDown={onKeyDown}
 			aria-expanded={isOpen}
 			className={cn(
-				"inset-drawer__trigger cursor-pointer",
-				"font-mono text-[10px] hover:text-foreground",
+				"flex w-full items-center gap-2 pr-2.5 py-1 text-left outline-none cursor-pointer",
+				"font-mono text-[10px] hover:text-foreground transition-colors",
 				isOpen ? "text-foreground" : "text-muted-foreground",
 			)}
 		>
 			{chevron}
 			<Icon className="size-3.5 shrink-0 text-muted-foreground" />
-			<Badge variant="outline" className="h-5 rounded px-1.5 font-mono text-[9px]">
+			<span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
 				{summary}
-			</Badge>
+			</span>
 		</button>
 	);
 }

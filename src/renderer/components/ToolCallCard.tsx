@@ -4,10 +4,20 @@
 // completion. Manual toggle overrides until next status change.
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
 import { cn } from "@shared/lib/utils";
 import type { ImageContent } from "@shared/types";
-import { Check, ChevronRight, Loader2, Wrench, X } from "lucide-react";
+import {
+	Brain,
+	ChevronRight,
+	Code2,
+	FileSearch,
+	FileText,
+	Folder,
+	Globe,
+	Pencil,
+	Search,
+	Terminal,
+} from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
@@ -218,9 +228,12 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
 	return (
 		<div>
-			<div className="inset-drawer">
+			<div>
 				<button
-					className={cn("inset-drawer__trigger", !hasBody && "cursor-default")}
+					className={cn(
+						"flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+						!hasBody && "cursor-default",
+					)}
 					disabled={!hasBody}
 					onClick={() => {
 						if (hasBody) {
@@ -230,7 +243,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					}}
 				>
 					<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
-					<StatusIcon status={toolCall.status} />
+					<ToolTypeIcon toolName={toolCall.toolName} status={toolCall.status} />
 					<span
 						className={cn(
 							"shrink-0 font-medium text-foreground",
@@ -275,12 +288,9 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 							</span>
 						</span>
 					) : (
-						<Badge
-							variant={statusVariant as any}
-							className={cn("h-5 shrink-0 rounded px-1.5 font-mono text-[9px]", statusBadgeColor)}
-						>
+						<span className={cn("ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider", statusBadgeColor)}>
 							{toolCall.status}
-						</Badge>
+						</span>
 					)}
 				</button>
 
@@ -290,17 +300,17 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 						style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}
 					>
 						<div className="overflow-hidden">
-							<div className="inset-drawer__content">
+							<div className="px-3 py-2.5 max-h-72 overflow-auto text-[11px] leading-relaxed text-muted-foreground">
 								<div className="flex flex-col gap-2 text-[10px] leading-relaxed">
 									<section className="flex flex-col gap-1">
-										<span className="inset-drawer__label text-foreground">{t("tool.arguments")}</span>
-										<pre className="whitespace-pre-wrap break-all text-muted-foreground">
+										<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">{t("tool.arguments")}</span>
+										<pre className="whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
 											{argsJson || "{}"}
 										</pre>
 									</section>
 									{resultStr && (
 										<section className="flex flex-col gap-1">
-											<span className="inset-drawer__label text-foreground">
+											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">
 												{toolCall.isError ? t("tool.error") : t("tool.result")}
 												{resultTooLong && (
 													<span className="ml-1 text-[9px] text-muted-foreground">
@@ -320,7 +330,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 									)}
 									{resultImages.length > 0 && (
 										<section className="flex flex-col gap-1">
-											<span className="inset-drawer__label text-foreground">{t("tool.result")}</span>
+											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">{t("tool.result")}</span>
 											<div className="flex flex-wrap gap-2">
 												{resultImages.map((img, i) => (
 													<img
@@ -343,30 +353,32 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	);
 }
 
-function StatusIcon({ status }: { status: ToolCallViewModel["status"] }) {
-	if (status === "success")
-		return (
-			<span className="text-emerald-500">
-				<Check className="size-3.5 shrink-0" />
-			</span>
-		);
-	if (status === "error")
-		return (
-			<span className="text-red-500">
-				<X className="size-3.5 shrink-0" />
-			</span>
-		);
-	if (status === "running")
-		return (
-			<span className="text-amber-500">
-				<Loader2 className="size-3.5 shrink-0 animate-spin" />
-			</span>
-		);
+function ToolTypeIcon({ toolName, status }: { toolName: string; status: ToolCallViewModel["status"] }) {
+	const colorClass =
+		status === "success" ? "text-emerald-500"
+		: status === "error" ? "text-red-500"
+		: status === "running" ? "text-amber-500"
+		: "text-muted-foreground";
+	const spinClass = status === "running" ? "animate-spin" : status === "pending" ? "animate-pulse" : "";
 	return (
-		<span className="text-muted-foreground">
-			<Wrench className="size-3.5 shrink-0 animate-pulse" />
+		<span className={cn(colorClass, "inline-flex")}>
+			{pickToolIcon(toolName, cn("size-3.5 shrink-0", spinClass))}
 		</span>
 	);
+}
+
+function pickToolIcon(toolName: string, className?: string): React.ReactElement {
+	const name = toolName.toLowerCase();
+	const cls = className ?? "size-3.5 shrink-0";
+	if (["bash", "terminal", "shell", "sh", "zsh", "python", "node"].includes(name)) return <Terminal className={cls} />;
+	if (["read"].includes(name)) return <FileText className={cls} />;
+	if (["write", "edit", "apply_diff", "create", "modify"].includes(name)) return <Pencil className={cls} />;
+	if (["grep", "search"].includes(name)) return <Search className={cls} />;
+	if (["ls", "dir", "list"].includes(name)) return <Folder className={cls} />;
+	if (["find", "glob"].includes(name)) return <FileSearch className={cls} />;
+	if (["webfetch", "websearch", "curl", "fetch", "web"].includes(name)) return <Globe className={cls} />;
+	if (["think", "reason", "brain"].includes(name)) return <Brain className={cls} />;
+	return <Code2 className={cls} />;
 }
 
 function safeJson(value: unknown): string {
