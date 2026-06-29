@@ -5,9 +5,10 @@
 import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { promptForProjectTrust, registerIpcHandlers } from "./ipc-handlers.js";
-import { syncLookDefaultSkills } from "./look-default-skills.js";
 import { syncLookDefaultAgents } from "./look-default-agents.js";
+import { syncLookDefaultSkills } from "./look-default-skills.js";
 import { SessionRuntimeManager } from "./session-runtime-manager.js";
 import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
@@ -21,6 +22,7 @@ let mainWindow: BrowserWindow | null = null;
 let runtimeManager: SessionRuntimeManager | null = null;
 let workspaceFileService: WorkspaceFileService | null = null;
 let workspaceTreeService: WorkspaceTreeService | null = null;
+let larkChannelManager: LarkChannelManager | null = null;
 
 const isDev = !app.isPackaged;
 
@@ -229,7 +231,11 @@ async function initSessionRuntime(): Promise<void> {
 	// before any agent can be created. Builtin agents are synced below.
 
 	if (mainWindow) {
-		registerIpcHandlers(runtimeManager, mainWindow);
+		larkChannelManager = new LarkChannelManager(mainWindow);
+		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager);
+		await larkChannelManager.initialize().catch((err) => {
+			console.warn("[Look] Failed to initialize Feishu channel manager:", err);
+		});
 
 		// Push initial project/session summaries. Message history is loaded
 		// on activation as a raw SDK SessionEntry snapshot.
@@ -297,7 +303,8 @@ app.whenReady().then(async () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
 			if (mainWindow && runtimeManager) {
-				registerIpcHandlers(runtimeManager, mainWindow);
+				registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager ?? undefined);
+				larkChannelManager?.setMainWindow(mainWindow);
 				const allProjects = runtimeManager.listProjects();
 				const activeProject = runtimeManager.getActiveProject();
 				mainWindow.webContents.send("look:event", {
@@ -331,6 +338,13 @@ app.on("window-all-closed", () => {
 // orphaned child processes behind. `dispose()` first tears down the
 // shared-area watchers (H-1) and then disposes all agent runtimes.
 app.on("before-quit", async () => {
+	if (larkChannelManager) {
+		try {
+			await larkChannelManager.dispose();
+		} catch {
+			// best-effort cleanup
+		}
+	}
 	if (runtimeManager) {
 		try {
 			await runtimeManager.dispose();

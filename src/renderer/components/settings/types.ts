@@ -63,3 +63,19 @@ export interface CustomProviderStats {
 	configured: number;
 	totalModels: number;
 }
+
+// ── IM channel types ──
+
+export interface ImChannelInfo {
+	provider: string;
+	appId: string;
+	name?: string;
+	status: "connected" | "disconnected" | "connecting" | "error";
+	connected: boolean;
+	error?: string;
+}
+
+export interface FeishuConnectOptions {
+	appName?: string;
+	description?: string;
+}

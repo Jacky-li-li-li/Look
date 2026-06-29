@@ -292,6 +292,30 @@ const api = {
     ipcRenderer.invoke("look:invoke", { type: "user-profile:update", patch }),
   resetUserProfile: () =>
     ipcRenderer.invoke("look:invoke", { type: "user-profile:reset" }),
+
+  // ---- IM Channels ----
+  getImChannels: () =>
+    ipcRenderer.invoke("look:invoke", { type: "im:get-channels" }),
+  connectFeishuChannel: (options) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "im:connect-feishu",
+      appName: options?.appName,
+      description: options?.description,
+    }),
+  cancelFeishuRegistration: (registrationId) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "im:cancel-registration",
+      registrationId,
+    }),
+  disconnectImChannel: (provider) =>
+    ipcRenderer.invoke("look:invoke", { type: "im:disconnect-channel", provider }),
+  sendImTestMessage: (input) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "im:send-test-message",
+      receiveIdType: input.receiveIdType,
+      receiveId: input.receiveId,
+      text: input.text,
+    }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

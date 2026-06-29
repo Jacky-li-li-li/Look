@@ -34,7 +34,11 @@ import type { WorkspaceFileService } from "./workspace/workspace-file-service.js
 import { SHARED_MAX_CONTENT_BYTES } from "./workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
-export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainWindow: BrowserWindow): void {
+export function registerIpcHandlers(
+	runtimeManager: SessionRuntimeManager,
+	mainWindow: BrowserWindow,
+	larkChannelManager?: import("./im/lark-channel-manager.js").LarkChannelManager,
+): void {
 	// Clean up previous registrations to support macOS activate re-creation
 	ipcMain.removeHandler("look:invoke");
 	ipcMain.removeAllListeners("look:event");
@@ -82,6 +86,7 @@ export function registerIpcHandlers(runtimeManager: SessionRuntimeManager, mainW
 				mainWindow,
 				workspaceFileService,
 				workspaceTreeService,
+				larkChannelManager,
 			);
 		} catch (err: any) {
 			return {
@@ -108,6 +113,7 @@ async function handleRendererInvoke(
 	mainWindow: BrowserWindow,
 	workspaceFileService: WorkspaceFileService,
 	workspaceTreeService: WorkspaceTreeService,
+	larkChannelManager: import("./im/lark-channel-manager.js").LarkChannelManager | undefined,
 ): Promise<any> {
 	switch (data.type) {
 		// === Agent messaging ===
@@ -791,6 +797,45 @@ async function handleRendererInvoke(
 			guardBoolean(data.enabled, "enabled");
 			await runtimeManager.setSkillEnabled(data.name, data.enabled);
 			return { success: true };
+		}
+
+		// ---- IM / Feishu channel management ----
+		case "im:get-channels": {
+			return { success: true, channels: larkChannelManager?.getChannels() ?? [] };
+		}
+
+		case "im:connect-feishu": {
+			guardOptionalString(data.appName, "appName");
+			guardOptionalString(data.description, "description");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			return await larkChannelManager.startRegistration({
+				appName: data.appName,
+				description: data.description,
+			});
+		}
+
+		case "im:cancel-registration": {
+			const registrationId = guardString(data.registrationId, "registrationId");
+			larkChannelManager?.cancelRegistration(registrationId);
+			return { success: true };
+		}
+
+		case "im:disconnect-channel": {
+			guardString(data.provider, "provider");
+			await larkChannelManager?.disconnect();
+			return { success: true };
+		}
+
+		case "im:send-test-message": {
+			const receiveIdType = guardString(data.receiveIdType, "receiveIdType");
+			const receiveId = guardString(data.receiveId, "receiveId");
+			const text = guardString(data.text, "text");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			return await larkChannelManager.sendTestMessage({ receiveIdType, receiveId, text });
 		}
 
 		default:

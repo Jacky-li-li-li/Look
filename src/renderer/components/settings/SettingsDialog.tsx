@@ -13,13 +13,14 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import { Key, Palette, UserRound, Zap } from "lucide-react";
+import { Key, MessageCircle, Palette, UserRound, Zap } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
 import GeneralTab from "./GeneralTab";
+import ImChannelsTab from "./ImChannelsTab";
 import ProfileTab from "./ProfileTab";
 import type { CustomProviderStats, ProviderInfo } from "./types";
 
@@ -31,7 +32,7 @@ interface SettingsDialogProps {
 	customStats: CustomProviderStats;
 	onProvidersChange: (data: { providers: ProviderInfo[]; customStats: CustomProviderStats }) => void;
 	onClose: () => void;
-	defaultTab?: "general" | "api-keys" | "about" | "profile";
+	defaultTab?: "general" | "api-keys" | "im-channels" | "about" | "profile";
 }
 
 const SettingsDialog = memo(function SettingsDialog({
@@ -97,6 +98,13 @@ const SettingsDialog = memo(function SettingsDialog({
 							)}
 						</TabsTrigger>
 						<TabsTrigger
+							value="im-channels"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
+						>
+							<MessageCircle className="size-3.5" />
+							{t("settings.imChannels")}
+						</TabsTrigger>
+						<TabsTrigger
 							value="about"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
@@ -115,6 +123,10 @@ const SettingsDialog = memo(function SettingsDialog({
 
 					<TabsContent value="api-keys" className="flex-1 min-h-0 data-[state=inactive]:hidden">
 						<ApiKeysTab providers={providers} customStats={customStats} onProvidersChange={onProvidersChange} />
+					</TabsContent>
+
+					<TabsContent value="im-channels" className="flex-1 min-h-0 data-[state=inactive]:hidden">
+						<ImChannelsTab />
 					</TabsContent>
 
 					<TabsContent value="about" className="flex-1 min-h-0 data-[state=inactive]:hidden">

@@ -435,7 +435,33 @@ export type MainToRendererEvent =
 	| { type: "update:not-available" }
 	| { type: "update:download-progress"; percent: number }
 	| { type: "update:downloaded"; version: string }
-	| { type: "update:error"; message: string };
+	| { type: "update:error"; message: string }
+	// ---- IM / Feishu channel events ----
+	| {
+			type: "im:registration-update";
+			registrationId: string;
+			phase: "qr" | "polling" | "success" | "error";
+			url?: string;
+			expireIn?: number;
+			error?: string;
+			appId?: string;
+	  }
+	| {
+			type: "im:channel-status";
+			provider: string;
+			status: "connected" | "disconnected" | "connecting" | "error";
+			appId?: string;
+			error?: string;
+	  }
+	| {
+			type: "im:message-received";
+			provider: string;
+			messageId: string;
+			chatId: string;
+			senderOpenId: string;
+			content: unknown;
+			createTime: number;
+	  };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
 export interface CustomProviderModelInput {
@@ -610,7 +636,13 @@ export type RendererToMainEvent =
 	// ---- SubAgent：Agent 定义开关 ----
 	| { type: "agent-definitions:set-enabled"; name: string; enabled: boolean }
 	// ---- Skills：Skill 开关 ----
-	| { type: "skills:set-enabled"; name: string; enabled: boolean };
+	| { type: "skills:set-enabled"; name: string; enabled: boolean }
+	// ---- IM / Feishu channel management ----
+	| { type: "im:get-channels" }
+	| { type: "im:connect-feishu"; appName?: string; description?: string }
+	| { type: "im:cancel-registration"; registrationId: string }
+	| { type: "im:disconnect-channel"; provider: string }
+	| { type: "im:send-test-message"; receiveIdType: string; receiveId: string; text: string };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {
