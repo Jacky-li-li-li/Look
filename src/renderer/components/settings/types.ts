@@ -72,6 +72,7 @@ export interface ImChannelInfo {
 	name?: string;
 	status: "connected" | "disconnected" | "connecting" | "error";
 	connected: boolean;
+	enabled: boolean;
 	error?: string;
 }
 

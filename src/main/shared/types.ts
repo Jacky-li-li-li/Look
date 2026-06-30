@@ -640,9 +640,15 @@ export type RendererToMainEvent =
 	// ---- IM / Feishu channel management ----
 	| { type: "im:get-channels" }
 	| { type: "im:connect-feishu"; appName?: string; description?: string }
+	| { type: "im:connect-feishu-manual"; appId: string; appSecret: string; name?: string }
 	| { type: "im:cancel-registration"; registrationId: string }
-	| { type: "im:disconnect-channel"; provider: string }
-	| { type: "im:send-test-message"; receiveIdType: string; receiveId: string; text: string };
+	| { type: "im:disconnect-channel"; provider: string; appId?: string }
+	| { type: "im:remove-channel"; provider: string; appId: string }
+	| { type: "im:reconnect-channel"; provider: string; appId: string }
+	| { type: "im:send-test-message"; receiveIdType: string; receiveId: string; text: string }
+	| { type: "im:test-connection"; appId: string }
+	| { type: "im:test-connection-direct"; appId: string; appSecret: string; name?: string }
+	| { type: "im:update-channel"; appId: string; name?: string }
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

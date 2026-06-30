@@ -87,6 +87,8 @@ const FEISHU_TENANT_SCOPES = [
 interface FeishuCredentials {
 	appId: string;
 	appSecret: string;
+		name?: string;
+	tenantBrand?: "feishu" | "lark";
 }
 
 export interface LarkChannelListItem {
@@ -95,12 +97,20 @@ export interface LarkChannelListItem {
 	name?: string;
 	status: string;
 	connected: boolean;
+	enabled: boolean;
 }
+
 
 export interface SendTestMessageInput {
 	receiveIdType: string;
 	receiveId: string;
 	text: string;
+}
+
+export interface ManualConnectInput {
+	appId: string;
+	appSecret: string;
+		name?: string;
 }
 
 export class LarkChannelManager {
@@ -137,7 +147,11 @@ export class LarkChannelManager {
 
 		try {
 			const appSecret = decryptSecret(enabled);
-			await this.connect({ appId: enabled.appId, appSecret });
+			await this.connect({
+				appId: enabled.appId,
+				appSecret,
+				tenantBrand: enabled.tenantBrand,
+			});
 		} catch (err) {
 			console.warn("[LarkChannelManager] Failed to connect on initialize:", err);
 			this.setStatus("error", enabled.appId, err);
@@ -182,15 +196,14 @@ export class LarkChannelManager {
 							registrationId,
 							phase: "qr",
 							url: info.url,
-							expireIn: info.expireIn,
+							expireIn: Math.min(info.expireIn, 180),
 						});
 					},
-					onStatusChange: (info) => {
-						this.sendRendererEvent({
-							type: "im:registration-update",
-							registrationId,
-							phase: info.status === "polling" ? "polling" : "polling",
-						});
+					onStatusChange: (_info) => {
+						// SDK statuses here describe the device-code polling loop
+						// (polling | slow_down | domain_switched). They are not UI
+						// phases and must not overwrite the QR URL emitted by
+						// onQRCodeReady.
 					},
 				});
 
@@ -201,13 +214,20 @@ export class LarkChannelManager {
 					name: appName,
 					enabled: true,
 					createdAt: Date.now(),
+					tenantBrand: result.user_info?.tenant_brand,
 					...(encrypted && "encrypted" in encrypted
 						? { appSecretEncrypted: encrypted.encrypted }
 						: { appSecretPlain: encrypted.plain }),
 				};
-				this.channels = this.channels.filter((c) => c.provider !== "feishu" || c.appId !== result.client_id);
+				this.channels = this.channels.filter((c) => !(c.provider === "feishu" && c.appId === result.client_id));
 				this.channels.push(channel);
 				saveChannels(this.channels);
+
+				await this.connect({
+					appId: result.client_id,
+					appSecret: result.client_secret,
+					tenantBrand: channel.tenantBrand,
+				});
 
 				this.sendRendererEvent({
 					type: "im:registration-update",
@@ -215,8 +235,6 @@ export class LarkChannelManager {
 					phase: "success",
 					appId: result.client_id,
 				});
-
-				await this.connect({ appId: result.client_id, appSecret: result.client_secret });
 			} catch (err) {
 				const message = err instanceof Error ? err.message : String(err);
 				this.sendRendererEvent({
@@ -242,17 +260,54 @@ export class LarkChannelManager {
 		}
 	}
 
+	async connectManual(input: ManualConnectInput): Promise<void> {
+		const appId = input.appId.trim();
+		const appSecret = input.appSecret.trim();
+		if (!appId) {
+			throw new Error("App ID is required");
+		}
+		if (!appSecret) {
+			throw new Error("App Secret is required");
+		}
+
+		await this.connect({ appId, appSecret });
+
+		const encrypted = encryptSecret(appSecret);
+		const channel: ImChannelConfig = {
+			provider: "feishu",
+			appId,
+			name: input.name ?? `Feishu (${appId.slice(0, 8)}...)`,
+			enabled: true,
+			createdAt: Date.now(),
+			...(encrypted && "encrypted" in encrypted
+				? { appSecretEncrypted: encrypted.encrypted }
+				: { appSecretPlain: encrypted.plain }),
+		};
+		// Replace existing feishu channel with same appId, or add new one
+		this.channels = this.channels.filter((c) => !(c.provider === "feishu" && c.appId === appId));
+		this.channels.push(channel);
+		saveChannels(this.channels);
+	}
+
 	async connect(credentials: FeishuCredentials): Promise<void> {
-		const { appId, appSecret } = credentials;
+		const { appId, appSecret, tenantBrand } = credentials;
+
+		// Prevent duplicate/leaked WebSocket clients if connect is called while
+		// already connected or connecting.
+		if (this.wsClient) {
+			this.closeConnection();
+		}
+
 		this.currentAppId = appId;
 		this.setStatus("connecting", appId);
 
 		try {
+			const domain = tenantBrand === "lark" ? lark.Domain.Lark : lark.Domain.Feishu;
 			this.client = new lark.Client({
 				appId,
 				appSecret,
 				appType: lark.AppType.SelfBuild,
-				domain: lark.Domain.Feishu,
+				domain,
 			});
 
 			this.eventDispatcher = new lark.EventDispatcher({}).register({
@@ -264,7 +319,11 @@ export class LarkChannelManager {
 			this.wsClient = new lark.WSClient({
 				appId,
 				appSecret,
+				domain,
 				loggerLevel: lark.LoggerLevel.info,
+				// Disable SDK auto-reconnect; lifecycle is managed explicitly so
+				// manual disconnect does not turn into a zombie reconnect loop.
+				autoReconnect: false,
 				onReady: () => {
 					this.setStatus("connected", appId);
 				},
@@ -281,7 +340,7 @@ export class LarkChannelManager {
 		}
 	}
 
-	async disconnect(): Promise<void> {
+	private closeConnection(): void {
 		try {
 			this.wsClient?.close({ force: true });
 		} catch {
@@ -291,10 +350,53 @@ export class LarkChannelManager {
 		this.wsClient = undefined;
 		this.eventDispatcher = undefined;
 		const previousAppId = this.currentAppId;
-		this.channels = this.channels.filter((c) => c.provider !== "feishu");
-		saveChannels(this.channels);
-		this.setStatus("disconnected", previousAppId);
 		this.currentAppId = undefined;
+		if (previousAppId) {
+			this.setStatus("disconnected", previousAppId);
+		} else {
+			this.status = "disconnected";
+			this.lastError = undefined;
+		}
+	}
+
+	async disconnect(provider?: string, appId?: string): Promise<void> {
+		const previousAppId = this.currentAppId;
+		this.closeConnection();
+		this.channels = loadChannels();
+		// Mark the matching channel as disabled rather than deleting it, so the
+		// user can reconnect later without re-registering.
+		const targetProvider = provider ?? "feishu";
+		const targetAppId = appId ?? previousAppId;
+		let changed = false;
+		for (const c of this.channels) {
+			if (c.provider === targetProvider && (!targetAppId || c.appId === targetAppId)) {
+				c.enabled = false;
+				changed = true;
+			}
+		}
+		if (changed) saveChannels(this.channels);
+	}
+
+	async removeChannel(provider: string, appId: string): Promise<void> {
+		// If the channel being removed is currently connected, close it first.
+		if (this.currentAppId === appId) {
+			this.closeConnection();
+		}
+		this.channels = loadChannels();
+		this.channels = this.channels.filter((c) => c.provider !== provider || c.appId !== appId);
+		saveChannels(this.channels);
+	}
+
+	async reconnect(provider: string, appId: string): Promise<void> {
+		this.channels = loadChannels();
+		const channel = this.channels.find((c) => c.provider === provider && c.appId === appId);
+		if (!channel) {
+			throw new Error(`Channel not found: ${provider}:${appId}`);
+		}
+		const appSecret = decryptSecret(channel);
+		await this.connect({ appId: channel.appId, appSecret, tenantBrand: channel.tenantBrand });
+		channel.enabled = true;
+		saveChannels(this.channels);
 	}
 
 	getChannels(): LarkChannelListItem[] {
@@ -304,9 +406,9 @@ export class LarkChannelManager {
 			name: c.name,
 			status: this.status,
 			connected: this.status === "connected" && this.currentAppId === c.appId,
+			enabled: c.enabled,
 		}));
 	}
-
 	async sendTestMessage(input: SendTestMessageInput): Promise<{ success: boolean; error?: string }> {
 		if (!this.client) {
 			return { success: false, error: "Feishu client is not connected" };
@@ -328,6 +430,66 @@ export class LarkChannelManager {
 			return { success: false, error: message };
 		}
 	}
+
+
+
+	async testConnection(appId: string): Promise<{ success: boolean; message: string }> {
+		const channels = loadChannels();
+		const channel = channels.find((c) => c.appId === appId);
+		if (!channel) {
+			return { success: false, message: "Channel not found" };
+		}
+		const appSecret = decryptSecret(channel);
+		try {
+			const client = new lark.Client({
+				appId,
+				appSecret,
+				appType: lark.AppType.SelfBuild,
+				domain: channel.tenantBrand === "lark" ? lark.Domain.Lark : lark.Domain.Feishu,
+			});
+			const resp = await client.auth.tenantAccessToken.internal({
+				data: { app_id: appId, app_secret: appSecret },
+			});
+			if (resp.code === 0) {
+				return { success: true, message: "连接成功" };
+			}
+			return { success: false, message: `飞书 API 错误: ${resp.msg ?? "未知错误"} (code: ${resp.code})` };
+		} catch (error) {
+			return { success: false, message: `连接失败: ${error instanceof Error ? error.message : String(error)}` };
+		}
+	}
+
+	async testConnectionDirect(appId: string, appSecret: string, tenantBrand?: "feishu" | "lark"): Promise<{ success: boolean; message: string }> {
+		try {
+			const client = new lark.Client({
+				appId,
+				appSecret,
+				appType: lark.AppType.SelfBuild,
+				domain: tenantBrand === "lark" ? lark.Domain.Lark : lark.Domain.Feishu,
+			});
+			const resp = await client.auth.tenantAccessToken.internal({
+				data: { app_id: appId, app_secret: appSecret },
+			});
+			if (resp.code === 0) {
+				return { success: true, message: "连接成功" };
+			}
+			return { success: false, message: `飞书 API 错误: ${resp.msg ?? "未知错误"} (code: ${resp.code})` };
+		} catch (error) {
+			return { success: false, message: `连接失败: ${error instanceof Error ? error.message : String(error)}` };
+		}
+	}
+
+	async updateChannel(appId: string, updates: { name?: string }): Promise<void> {
+		const channel = this.channels.find((c) => c.appId === appId);
+		if (!channel) {
+			throw new Error("Channel not found");
+		}
+		if (updates.name !== undefined) {
+			channel.name = updates.name;
+		}
+		saveChannels(this.channels);
+	}
+
 
 	handleMessage(data: {
 		sender?: {
@@ -364,7 +526,9 @@ export class LarkChannelManager {
 			controller.abort();
 			this.registrations.delete(id);
 		}
-		await this.disconnect();
+		// Close the WebSocket without deleting saved channels so the Feishu
+		// integration survives an app restart.
+		this.closeConnection();
 	}
 
 	private setStatus(

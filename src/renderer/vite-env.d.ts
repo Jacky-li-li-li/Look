@@ -152,6 +152,41 @@ interface LookAPI {
 	): Promise<{ success: boolean; node?: FileTreeNode | null; error?: string }>;
 	startWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
 	stopWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
+	// ---- IM Channels ----
+	getImChannels(): Promise<{
+		success: boolean;
+		channels?: Array<{
+			provider: string;
+			appId: string;
+			name?: string;
+			status: string;
+			connected: boolean;
+			enabled: boolean;
+			error?: string;
+		}>;
+		error?: string;
+	}>;
+	connectFeishuChannel(options?: {
+		appName?: string;
+		description?: string;
+	}): Promise<{ success: boolean; registrationId?: string; error?: string }>;
+	connectFeishuManualChannel(input: {
+		appId: string;
+		appSecret: string;
+		name?: string;
+	}): Promise<{ success: boolean; error?: string }>;
+	cancelFeishuRegistration(registrationId: string): Promise<{ success: boolean; error?: string }>;
+	disconnectImChannel(provider: string, appId?: string): Promise<{ success: boolean; error?: string }>;
+	removeImChannel(provider: string, appId: string): Promise<{ success: boolean; error?: string }>;
+	reconnectImChannel(provider: string, appId: string): Promise<{ success: boolean; error?: string }>;
+	sendImTestMessage(input: {
+		receiveIdType: string;
+		receiveId: string;
+		text: string;
+	}): Promise<{ success: boolean; error?: string }>;
+	testImConnection(appId: string): Promise<{ success: boolean; message: string }>;
+	testImConnectionDirect(appId: string, appSecret: string): Promise<{ success: boolean; message: string }>;
+	updateImChannel(appId: string, updates: { name?: string }): Promise<{ success: boolean; error?: string }>;
 }
 
 interface SkillEntry {

@@ -302,19 +302,47 @@ const api = {
       appName: options?.appName,
       description: options?.description,
     }),
+  connectFeishuManualChannel: (input) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "im:connect-feishu-manual",
+      appId: input.appId,
+      appSecret: input.appSecret,
+      name: input.name,
+    }),
   cancelFeishuRegistration: (registrationId) =>
     ipcRenderer.invoke("look:invoke", {
       type: "im:cancel-registration",
       registrationId,
     }),
-  disconnectImChannel: (provider) =>
-    ipcRenderer.invoke("look:invoke", { type: "im:disconnect-channel", provider }),
+  disconnectImChannel: (provider, appId) =>
+    ipcRenderer.invoke("look:invoke", { type: "im:disconnect-channel", provider, appId }),
+  removeImChannel: (provider, appId) =>
+    ipcRenderer.invoke("look:invoke", { type: "im:remove-channel", provider, appId }),
+  reconnectImChannel: (provider, appId) =>
+    ipcRenderer.invoke("look:invoke", { type: "im:reconnect-channel", provider, appId }),
   sendImTestMessage: (input) =>
     ipcRenderer.invoke("look:invoke", {
       type: "im:send-test-message",
       receiveIdType: input.receiveIdType,
       receiveId: input.receiveId,
       text: input.text,
+    }),
+  testImConnection: (appId) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "im:test-connection",
+      appId,
+    }),
+  testImConnectionDirect: (appId, appSecret) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "im:test-connection-direct",
+      appId,
+      appSecret,
+    }),
+  updateImChannel: (appId, updates) =>
+    ipcRenderer.invoke("look:invoke", {
+      type: "im:update-channel",
+      appId,
+      name: updates.name,
     }),
 };
 

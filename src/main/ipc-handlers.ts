@@ -816,6 +816,21 @@ async function handleRendererInvoke(
 			});
 		}
 
+		case "im:connect-feishu-manual": {
+			const appId = guardString(data.appId, "appId");
+			const appSecret = guardString(data.appSecret, "appSecret");
+			guardOptionalString(data.name, "name");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			try {
+				await larkChannelManager.connectManual({ appId, appSecret, name: data.name });
+				return { success: true };
+			} catch (err: any) {
+				return { success: false, error: err?.message ?? String(err) };
+			}
+		}
+
 		case "im:cancel-registration": {
 			const registrationId = guardString(data.registrationId, "registrationId");
 			larkChannelManager?.cancelRegistration(registrationId);
@@ -823,11 +838,38 @@ async function handleRendererInvoke(
 		}
 
 		case "im:disconnect-channel": {
-			guardString(data.provider, "provider");
-			await larkChannelManager?.disconnect();
+			const _provider = guardString(data.provider, "provider");
+			guardOptionalString(data.appId, "appId");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			await larkChannelManager.disconnect(_provider, data.appId);
 			return { success: true };
 		}
 
+		case "im:remove-channel": {
+			const _provider = guardString(data.provider, "provider");
+			const _appId = guardString(data.appId, "appId");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			await larkChannelManager.removeChannel(_provider, _appId);
+			return { success: true };
+		}
+
+		case "im:reconnect-channel": {
+			const _provider = guardString(data.provider, "provider");
+			const _appId = guardString(data.appId, "appId");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			try {
+				await larkChannelManager.reconnect(_provider, _appId);
+				return { success: true };
+			} catch (err: any) {
+				return { success: false, error: err?.message ?? String(err) };
+			}
+		}
 		case "im:send-test-message": {
 			const receiveIdType = guardString(data.receiveIdType, "receiveIdType");
 			const receiveId = guardString(data.receiveId, "receiveId");
@@ -838,6 +880,36 @@ async function handleRendererInvoke(
 			return await larkChannelManager.sendTestMessage({ receiveIdType, receiveId, text });
 		}
 
+
+
+		case "im:test-connection": {
+			const appId = guardString(data.appId, "appId");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			return await larkChannelManager.testConnection(appId);
+		}
+
+
+		case "im:test-connection-direct": {
+			const appId = guardString(data.appId, "appId");
+			const appSecret = guardString(data.appSecret, "appSecret");
+			guardOptionalString(data.name, "name");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			return await larkChannelManager.testConnectionDirect(appId, appSecret);
+		}
+
+		case "im:update-channel": {
+			const appId = guardString(data.appId, "appId");
+			guardOptionalString(data.name, "name");
+			if (!larkChannelManager) {
+				return { success: false, error: "Feishu channel manager is not available" };
+			}
+			await larkChannelManager.updateChannel(appId, { name: data.name });
+			return { success: true };
+		}
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };
 	}

@@ -62,13 +62,17 @@ function CustomProviderRow({
 	return (
 		<div className="group/custom-provider relative overflow-hidden rounded-md border border-hairline bg-background/35 transition-colors hover:bg-muted/40">
 			<div className="absolute left-0 top-0 h-full w-0.5 bg-emerald-500" />
-			<button
-				type="button"
-				className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 pl-4 pr-2.5 w-full text-left bg-transparent border-0"
-				aria-expanded={isExpanded}
-				onClick={() => hasCustomModels && onToggleExpand()}
-			>
-				<div className="min-w-0">
+			<div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 pl-4 pr-2.5">
+				<button
+					type="button"
+					className={cn(
+						"min-w-0 text-left bg-transparent border-0",
+						hasCustomModels ? "cursor-pointer" : "cursor-default",
+					)}
+					aria-expanded={hasCustomModels ? isExpanded : undefined}
+					disabled={!hasCustomModels}
+					onClick={onToggleExpand}
+				>
 					<div className="flex min-w-0 flex-wrap items-center gap-1.5">
 						<ChevronRight
 							className={cn(
@@ -84,7 +88,7 @@ function CustomProviderRow({
 						</Badge>
 					</div>
 					<div className="mt-0.5 truncate text-[10px] text-muted-foreground">{cp.api}</div>
-				</div>
+				</button>
 				<div
 					className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/custom-provider:opacity-100 group-focus-within/custom-provider:opacity-100"
 					onClick={(e) => e.stopPropagation()}
@@ -101,7 +105,7 @@ function CustomProviderRow({
 						<Trash2 className="size-3" />
 					</Button>
 				</div>
-			</button>
+			</div>
 
 			{isExpanded && hasCustomModels && (
 				<ModelList

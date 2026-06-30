@@ -17,6 +17,8 @@ export interface ImChannelConfig {
 	name?: string;
 	enabled: boolean;
 	createdAt: number;
+	/** Tenant brand returned by registerApp: 'feishu' | 'lark'. */
+	tenantBrand?: "feishu" | "lark";
 }
 
 export type EncryptedSecretResult = { encrypted: string } | { plain: string };
