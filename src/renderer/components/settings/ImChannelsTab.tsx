@@ -294,8 +294,11 @@ function ChannelCard({
 	const { t } = useTranslation();
 	return (
 		<div
+			role="button"
+			tabIndex={0}
 			className="cursor-pointer rounded-lg border border-hairline bg-background/45 p-4 transition-colors hover:bg-accent/10"
 			onClick={onClick}
+			onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
 		>
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0 flex-1">
