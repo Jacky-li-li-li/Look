@@ -162,6 +162,8 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
  * Each event is a flat delta (text_delta, thinking_delta, etc.) — the renderer
  * simply accumulates strings and tracks block indices. No SDK types are needed.
  */
+let _nextBlockUid = 0;
+
 function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	if (events.length === 0) return;
 
@@ -190,7 +192,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "assistant_text_start":
 				blocks = [
 					...blocks,
-					{ contentIndex: ev.contentIndex, kind: "text", text: "", thinking: "", completed: false },
+					{ contentIndex: ev.contentIndex, kind: "text", text: "", thinking: "", completed: false, uid: _nextBlockUid++ },
 				];
 				break;
 			case "assistant_text_delta": {
@@ -216,7 +218,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "thinking_start":
 				blocks = [
 					...blocks,
-					{ contentIndex: ev.contentIndex, kind: "thinking", text: "", thinking: "", completed: false },
+					{ contentIndex: ev.contentIndex, kind: "thinking", text: "", thinking: "", completed: false, uid: _nextBlockUid++ },
 				];
 				break;
 			case "thinking_delta": {
@@ -260,6 +262,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 							toolCallId: ev.toolCallId,
 							toolName: ev.toolName,
 							completed: false,
+							uid: _nextBlockUid++,
 						},
 					];
 					pendingToolcallIndex.set(ev.contentIndex, blocks.length - 1);
@@ -292,6 +295,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 							toolName: ev.toolName,
 							args: ev.args,
 							completed: true,
+							uid: _nextBlockUid++,
 						},
 					];
 				}

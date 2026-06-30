@@ -270,6 +270,8 @@ export interface SessionUiEventEnvelope {
 /** 渲染进程用流式块状态 — 由 LookUiEvent 增量更新 */
 export interface LookUiStreamBlock {
 	contentIndex: number;
+	/** Monotonic UID unique per block within a session turn. Used as React key. */
+	uid?: number;
 	kind: "text" | "thinking" | "toolcall" | "image";
 	text: string;
 	thinking: string;
