@@ -333,7 +333,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 				if (block.kind === "text") {
 					if (!block.text) return null;
 					return (
-						<div key={`txt-${block.contentIndex}`} className="message-prose">
+						<div key={`txt-${i}`} className="message-prose">
 							<SkillAwareContent content={block.text} isStreaming={isStreaming && !block.completed} />
 						</div>
 					);
@@ -343,7 +343,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 					// when streaming with empty content.
 					return (
 						<ThinkingPanel
-							key={`think-${block.contentIndex}`}
+							key={`think-${i}`}
 							thinking={block.thinking}
 							isStreaming={isStreaming && !block.completed}
 							autoCollapse={autoCollapse}
@@ -363,7 +363,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 							: "pending";
 					return (
 						<ToolCallCard
-							key={block.toolCallId ?? `tool-${block.contentIndex}`}
+							key={block.toolCallId ?? `tool-${i}`}
 							toolCall={{
 								callId: block.toolCallId ?? "",
 								toolName: block.toolName ?? "unknown",
@@ -377,7 +377,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 				}
 				if (block.kind === "image") {
 					if (!block.image) return null;
-					return <ImageBlock key={`img-${block.contentIndex}`} block={block.image} />;
+					return <ImageBlock key={`img-${i}`} block={block.image} />;
 				}
 				return null;
 			})}
