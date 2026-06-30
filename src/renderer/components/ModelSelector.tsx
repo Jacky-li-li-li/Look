@@ -66,6 +66,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 			if (modelKey === cur) return;
 			setSwitching(true);
 			try {
+				// react-doctor-disable-next-line async-defer-await -- 切换模型后需重新检查 agent 是否已变更
 				const result = await api.switchModel(targetAgentId, modelKey);
 				// Re-check at the top of the callback: if the user
 				// switched agents *during* the await, the `onChange`

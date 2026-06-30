@@ -14,6 +14,7 @@ import {
 } from "@shared/components/ui/dialog";
 import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
+import type { TFunction } from "i18next";
 import { AlertCircle, ChevronRight, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -596,70 +597,150 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 						</span>
 					</div>
 
-					{allProviders.map((p) => {
-						const isEditing = keyEdit.editing === p.id;
-						const isExpanded = !!accordion.providers[p.id];
-						return (
-							<BuiltInProviderRow
-								key={p.id}
-								provider={p}
-								isEditing={isEditing}
-								isExpanded={isExpanded}
-								testStatus={ui.testStatus}
-								editor={{
-									editing: keyEdit.editing,
-									input: keyEdit.input,
-									showKey: keyEdit.showKey,
-									setInput: (v) => patchKeyEdit("input", v),
-									setShowKey: (v) => patchKeyEdit("showKey", v),
-								}}
-								saving={ui.saving}
-								loadingKey={ui.loadingKey}
-								forceSave={ui.forceSave}
-								onToggleExpand={() => toggleProviderExpand(p.id)}
-								onOpenEditor={() => openEditor(p)}
-								onCloseEditor={closeEditor}
-								onSave={handleSave}
-								onForceSave={handleForceSave}
-								onClearClick={() => patchCustom("confirmClear", p)}
-							/>
-						);
-					})}
+					<BuiltInProviderList
+						providers={allProviders}
+						accordionProviders={accordion.providers}
+						keyEdit={keyEdit}
+						ui={ui}
+						patchKeyEdit={patchKeyEdit}
+						toggleProviderExpand={toggleProviderExpand}
+						openEditor={openEditor}
+						closeEditor={closeEditor}
+						handleSave={handleSave}
+						handleForceSave={handleForceSave}
+						onClearClick={(p) => patchCustom("confirmClear", p)}
+					/>
 				</div>
 			</div>
 
-			<Dialog open={custom.confirmClear !== null} onOpenChange={(o) => !o && patchCustom("confirmClear", null)}>
+			<ApiKeysTabDialogs
+				confirmClear={custom.confirmClear}
+				confirmRemove={custom.confirmRemove}
+				onCloseClear={() => patchCustom("confirmClear", null)}
+				onConfirmClear={handleClearKey}
+				onCloseRemove={() => patchCustom("confirmRemove", null)}
+				onConfirmRemove={handleRemoveCustom}
+				t={t}
+			/>
+		</>
+	);
+}
+
+interface BuiltInProviderListProps {
+	providers: ProviderInfo[];
+	accordionProviders: Record<string, boolean>;
+	keyEdit: KeyEditState;
+	ui: UiState;
+	patchKeyEdit: <K extends keyof KeyEditState>(key: K, value: KeyEditState[K]) => void;
+	toggleProviderExpand: (id: string) => void;
+	openEditor: (provider: ProviderInfo) => void;
+	closeEditor: () => void;
+	handleSave: () => void;
+	handleForceSave: () => void;
+	onClearClick: (provider: ProviderInfo) => void;
+}
+
+function BuiltInProviderList({
+	providers,
+	accordionProviders,
+	keyEdit,
+	ui,
+	patchKeyEdit,
+	toggleProviderExpand,
+	openEditor,
+	closeEditor,
+	handleSave,
+	handleForceSave,
+	onClearClick,
+}: BuiltInProviderListProps) {
+	return (
+		<>
+			{providers.map((p) => {
+				const isEditing = keyEdit.editing === p.id;
+				const isExpanded = !!accordionProviders[p.id];
+				return (
+					<BuiltInProviderRow
+						key={p.id}
+						provider={p}
+						isEditing={isEditing}
+						isExpanded={isExpanded}
+						testStatus={ui.testStatus}
+						editor={{
+							editing: keyEdit.editing,
+							input: keyEdit.input,
+							showKey: keyEdit.showKey,
+							setInput: (v) => patchKeyEdit("input", v),
+							setShowKey: (v) => patchKeyEdit("showKey", v),
+						}}
+						saving={ui.saving}
+						loadingKey={ui.loadingKey}
+						forceSave={ui.forceSave}
+						onToggleExpand={() => toggleProviderExpand(p.id)}
+						onOpenEditor={() => openEditor(p)}
+						onCloseEditor={closeEditor}
+						onSave={handleSave}
+						onForceSave={handleForceSave}
+						onClearClick={() => onClearClick(p)}
+					/>
+				);
+			})}
+		</>
+	);
+}
+
+interface ApiKeysTabDialogsProps {
+	confirmClear: ProviderInfo | null;
+	confirmRemove: string | null;
+	onCloseClear: () => void;
+	onConfirmClear: () => void;
+	onCloseRemove: () => void;
+	onConfirmRemove: () => void;
+	t: TFunction;
+}
+
+function ApiKeysTabDialogs({
+	confirmClear,
+	confirmRemove,
+	onCloseClear,
+	onConfirmClear,
+	onCloseRemove,
+	onConfirmRemove,
+	t,
+}: ApiKeysTabDialogsProps) {
+	return (
+		<>
+			<Dialog open={confirmClear !== null} onOpenChange={(o) => !o && onCloseClear()}>
 				<DialogContent className="sm:max-w-sm" showCloseButton={false}>
 					<DialogHeader>
 						<DialogTitle>{t("settings.confirmClear.title")}</DialogTitle>
 						<DialogDescription>
-							{t("settings.confirmClear.body", { provider: custom.confirmClear?.name ?? "" })}
+							{t("settings.confirmClear.body", { provider: confirmClear?.name ?? "" })}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter className="gap-2">
-						<Button variant="line" size="sm" onClick={() => patchCustom("confirmClear", null)}>
+						<Button variant="line" size="sm" onClick={onCloseClear}>
 							{t("common.cancel")}
 						</Button>
-						<Button variant="line-filled" size="sm" onClick={handleClearKey}>
+						<Button variant="line-filled" size="sm" onClick={onConfirmClear}>
 							{t("settings.clearKey")}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 
-			<Dialog open={custom.confirmRemove !== null} onOpenChange={(o) => !o && patchCustom("confirmRemove", null)}>
+			<Dialog open={confirmRemove !== null} onOpenChange={(o) => !o && onCloseRemove()}>
 				<DialogContent className="sm:max-w-sm" showCloseButton={false}>
 					<DialogHeader>
 						<DialogTitle>{t("settings.customProviders.confirmRemove.title")}</DialogTitle>
 						<DialogDescription>
-							{t("settings.customProviders.confirmRemove.body", { name: custom.confirmRemove ?? "" })}
+							{t("settings.customProviders.confirmRemove.body", { name: confirmRemove ?? "" })}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter className="gap-2">
-						<Button variant="line" size="sm" onClick={() => patchCustom("confirmRemove", null)}>
+						<Button variant="line" size="sm" onClick={onCloseRemove}>
 							{t("common.cancel")}
 						</Button>
-						<Button variant="line-filled" size="sm" onClick={handleRemoveCustom}>
+						<Button variant="line-filled" size="sm" onClick={onConfirmRemove}>
 							{t("common.delete")}
 						</Button>
 					</DialogFooter>

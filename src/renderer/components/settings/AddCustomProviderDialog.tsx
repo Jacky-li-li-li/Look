@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { cn } from "@shared/lib/utils";
 import type { TFunction } from "i18next";
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -354,31 +355,6 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 	if (isInline && !open) return null;
 
 	// ── header / footer / form ──
-	const headerBlock = (
-		<>
-			{isInline && (
-				<button
-					type="button"
-					onClick={onBack}
-					className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-				>
-					<ArrowLeft className="size-3" />
-					{t("settings.customProviders.dialog.backToApiKeys")}
-				</button>
-			)}
-			<div className="shrink-0">
-				<div className="mb-1 text-[15px] font-semibold">
-					{t(isEdit ? "settings.customProviders.dialog.titleEdit" : "settings.customProviders.dialog.titleAdd")}
-				</div>
-				<p className="text-[12px] text-muted-foreground">
-					{isEdit
-						? t("settings.customProviders.dialog.descriptionEdit", { name: initial?.name ?? "" })
-						: t("settings.customProviders.dialog.description")}
-				</p>
-			</div>
-		</>
-	);
-
 	const formBody = (
 		<FormBody
 			form={form}
@@ -399,7 +375,108 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 		/>
 	);
 
-	const footer = (
+	if (isInline) {
+		return (
+			<ProviderDialogShell
+				isInline
+				header={<DialogHeaderBlock isEdit={isEdit} initialName={initial?.name} isInline onBack={onBack} t={t} />}
+				form={formBody}
+				footer={
+					<DialogFooterBlock
+						isInline
+						saving={saving}
+						validationErrors={validationErrors}
+						modelsCount={form.models.length}
+						onCancel={onBack}
+						onSubmit={handleSubmit}
+						t={t}
+					/>
+				}
+			/>
+		);
+	}
+
+	return (
+		<ProviderDialogShell
+			form={formBody}
+			footer={
+				<DialogFooterBlock
+					isInline={false}
+					saving={saving}
+					validationErrors={validationErrors}
+					modelsCount={form.models.length}
+					onCancel={handleClose}
+					onSubmit={handleSubmit}
+					t={t}
+				/>
+			}
+			dialogProps={{
+				open,
+				onOpenChange: (o: boolean) => !o && handleClose(),
+				showCloseButton: !saving,
+				isEdit,
+				initialName: initial?.name,
+				t,
+			}}
+		/>
+	);
+}
+
+interface DialogHeaderBlockProps {
+	isEdit: boolean;
+	initialName?: string;
+	isInline: boolean;
+	onBack?: () => void;
+	t: TFunction;
+}
+
+function DialogHeaderBlock({ isEdit, initialName, isInline, onBack, t }: DialogHeaderBlockProps) {
+	return (
+		<>
+			{isInline && (
+				<button
+					type="button"
+					onClick={onBack}
+					className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+				>
+					<ArrowLeft className="size-3" />
+					{t("settings.customProviders.dialog.backToApiKeys")}
+				</button>
+			)}
+			<div className="shrink-0">
+				<div className="mb-1 text-[15px] font-semibold">
+					{t(isEdit ? "settings.customProviders.dialog.titleEdit" : "settings.customProviders.dialog.titleAdd")}
+				</div>
+				<p className="text-[12px] text-muted-foreground">
+					{isEdit
+						? t("settings.customProviders.dialog.descriptionEdit", { name: initialName ?? "" })
+						: t("settings.customProviders.dialog.description")}
+				</p>
+			</div>
+		</>
+	);
+}
+
+interface DialogFooterBlockProps {
+	isInline: boolean;
+	saving: boolean;
+	validationErrors: string[];
+	modelsCount: number;
+	onCancel?: () => void;
+	onSubmit: () => void;
+	t: TFunction;
+}
+
+function DialogFooterBlock({
+	isInline,
+	saving,
+	validationErrors,
+	modelsCount,
+	onCancel,
+	onSubmit,
+	t,
+}: DialogFooterBlockProps) {
+	return (
 		<div
 			className={cn(
 				"shrink-0 border-t border-hairline bg-background",
@@ -412,22 +489,16 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 				<p className="text-[10px] text-muted-foreground/60">
 					{validationErrors.length > 0
 						? t("settings.customProviders.dialog.issuesToFix", { count: validationErrors.length })
-						: t("settings.customProviders.dialog.readyToTest", { count: form.models.length })}
+						: t("settings.customProviders.dialog.readyToTest", { count: modelsCount })}
 				</p>
 				<div className="flex items-center gap-2">
-					<Button
-						variant="line"
-						size="sm"
-						onClick={isInline ? onBack : handleClose}
-						disabled={saving}
-						className="h-7 text-[11px]"
-					>
+					<Button variant="line" size="sm" onClick={onCancel} disabled={saving} className="h-7 text-[11px]">
 						{t("settings.customProviders.dialog.action.cancel")}
 					</Button>
 					<Button
 						variant="line-filled"
 						size="sm"
-						onClick={handleSubmit}
+						onClick={onSubmit}
 						disabled={saving || validationErrors.length > 0}
 						className="h-7 text-[11px]"
 					>
@@ -444,31 +515,53 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 			</div>
 		</div>
 	);
+}
 
+interface ProviderDialogShellProps {
+	isInline?: boolean;
+	header?: React.ReactNode;
+	form: React.ReactNode;
+	footer: React.ReactNode;
+	dialogProps?: {
+		open: boolean;
+		onOpenChange: (open: boolean) => void;
+		showCloseButton: boolean;
+		isEdit: boolean;
+		initialName?: string;
+		t: TFunction;
+	};
+}
+
+function ProviderDialogShell({ isInline, header, form, footer, dialogProps }: ProviderDialogShellProps) {
 	if (isInline) {
 		return (
 			<div className="flex h-full min-h-0 flex-col overflow-hidden p-4">
-				{headerBlock}
-				<div className="mt-4 flex-1 overflow-y-auto">{formBody}</div>
+				{header}
+				<div className="mt-4 flex-1 overflow-y-auto">{form}</div>
 				{footer}
 			</div>
 		);
 	}
 
+	if (!dialogProps) return null;
+	const { open, onOpenChange, showCloseButton, isEdit, initialName, t } = dialogProps;
 	return (
-		<Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-			<DialogContent className="flex max-h-[92vh] flex-col overflow-hidden sm:max-w-2xl" showCloseButton={!saving}>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent
+				className="flex max-h-[92vh] flex-col overflow-hidden sm:max-w-2xl"
+				showCloseButton={showCloseButton}
+			>
 				<DialogHeader className="shrink-0">
 					<DialogTitle>
 						{t(isEdit ? "settings.customProviders.dialog.titleEdit" : "settings.customProviders.dialog.titleAdd")}
 					</DialogTitle>
 					<DialogDescription className="text-[12px]">
 						{isEdit
-							? t("settings.customProviders.dialog.descriptionEdit", { name: initial?.name ?? "" })
+							? t("settings.customProviders.dialog.descriptionEdit", { name: initialName ?? "" })
 							: t("settings.customProviders.dialog.description")}
 					</DialogDescription>
 				</DialogHeader>
-				<div className="flex-1 space-y-5 overflow-y-auto px-0.5 py-4">{formBody}</div>
+				<div className="flex-1 space-y-5 overflow-y-auto px-0.5 py-4">{form}</div>
 				{footer}
 			</DialogContent>
 		</Dialog>

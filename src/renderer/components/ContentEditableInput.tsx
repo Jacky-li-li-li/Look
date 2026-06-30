@@ -293,6 +293,7 @@ export const ContentEditableInput = function ContentEditableInput({
 					{placeholder}
 				</div>
 			) : null}
+			{/* react-doctor-disable-next-line prefer-tag-over-role -- 需要 contentEditable 以支持提及、文件 pill 等富文本交互 */}
 			<div
 				ref={editorRef}
 				tabIndex={0}

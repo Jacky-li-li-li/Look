@@ -75,57 +75,60 @@ function SortableSheet({
 	};
 
 	return (
-		<div
-			ref={setNodeRef}
-			style={style}
-			{...attributes}
-			{...listeners}
-			role="button"
-			tabIndex={0}
-			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault();
-					onSelect(sheet.id);
-				}
-			}}
-			data-agent-id={sheet.id}
-			data-agent-status={status}
-			data-running={isRunning || undefined}
-			className={cn(
-				"group/sheet relative flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors",
-				isActive
-					? "border-accent/80 bg-accent text-foreground"
-					: "border-hairline bg-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-				isDragging && "opacity-60",
-			)}
-			onClick={() => onSelect(sheet.id)}
-		>
-			{isRunning && <span className="status-mark block" data-status={status} />}
-			<span className="truncate font-medium">{agent?.name ?? t("sheet.unknownSession", "Unknown")}</span>
-			{sheet.projectName && (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<span className="max-w-24 truncate rounded bg-muted px-1 py-0 text-[10px] text-muted-foreground">
-							{sheet.projectName}
-						</span>
-					</TooltipTrigger>
-					<TooltipContent side="bottom" className="text-xs">
-						{sheet.projectName}
-					</TooltipContent>
-				</Tooltip>
-			)}
-			<Button
-				variant="ghost"
-				size="icon-xs"
-				className="-mr-1 size-5 opacity-0 transition-opacity group-hover/sheet:opacity-100 focus-visible:opacity-100 group-focus-visible/sheet:opacity-100 data-[active]:opacity-100"
-				data-active={isActive || undefined}
-				aria-label={t("sheet.close", "Close session sheet")}
-				title={t("sheet.close", "Close session sheet")}
-				onClick={handleClose}
+		<>
+			{/* react-doctor-disable-next-line prefer-tag-over-role -- dnd-kit sortable 默认使用 role=button，且内部嵌套关闭按钮，不适合改为 button */}
+			<div
+				ref={setNodeRef}
+				style={style}
+				{...attributes}
+				{...listeners}
+				role="button"
+				tabIndex={0}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						onSelect(sheet.id);
+					}
+				}}
+				data-agent-id={sheet.id}
+				data-agent-status={status}
+				data-running={isRunning || undefined}
+				className={cn(
+					"group/sheet relative flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors",
+					isActive
+						? "border-accent/80 bg-accent text-foreground"
+						: "border-hairline bg-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+					isDragging && "opacity-60",
+				)}
+				onClick={() => onSelect(sheet.id)}
 			>
-				<X className="size-3" />
-			</Button>
-		</div>
+				{isRunning && <span className="status-mark block" data-status={status} />}
+				<span className="truncate font-medium">{agent?.name ?? t("sheet.unknownSession", "Unknown")}</span>
+				{sheet.projectName && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<span className="max-w-24 truncate rounded bg-muted px-1 py-0 text-[10px] text-muted-foreground">
+								{sheet.projectName}
+							</span>
+						</TooltipTrigger>
+						<TooltipContent side="bottom" className="text-xs">
+							{sheet.projectName}
+						</TooltipContent>
+					</Tooltip>
+				)}
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					className="-mr-1 size-5 opacity-0 transition-opacity group-hover/sheet:opacity-100 focus-visible:opacity-100 group-focus-visible/sheet:opacity-100 data-[active]:opacity-100"
+					data-active={isActive || undefined}
+					aria-label={t("sheet.close", "Close session sheet")}
+					title={t("sheet.close", "Close session sheet")}
+					onClick={handleClose}
+				>
+					<X className="size-3" />
+				</Button>
+			</div>
+		</>
 	);
 }
 

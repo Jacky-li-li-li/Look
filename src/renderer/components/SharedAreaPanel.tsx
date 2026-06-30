@@ -106,6 +106,7 @@ async function importEntriesByContent(
 				const allChildren: FileSystemEntryLike[] = [];
 				// createReader 一次最多返回 100 条,需要循环到空数组
 				while (!done) {
+					// react-doctor-disable-next-line async-await-in-loop -- createReader 分批返回，必须顺序读取直至空数组
 					const children = await readDirectoryEntries(reader);
 					if (children.length > 0) allChildren.push(...children);
 					else done = true;

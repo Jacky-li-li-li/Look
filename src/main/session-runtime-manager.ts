@@ -1145,9 +1145,9 @@ export class SessionRuntimeManager {
 
 	async abortAgent(sessionId: string): Promise<void> {
 		const managed = this.runtimes.get(sessionId);
+		if (!managed) return;
 		// 级联中止所有子会话（subagent 调用随父会话中止而中止）。
 		await this.abortSubSessions(sessionId);
-		if (!managed) return;
 		this.cancelPendingPermissions(sessionId);
 		this.cancelPlanInteractions(sessionId, "Stopped by user");
 		await managed.runtime.session.abort();
@@ -2384,17 +2384,22 @@ export class SessionRuntimeManager {
 	}
 
 	private async ensurePlanDirectory(cwd: string): Promise<string> {
-		const contextDir = path.join(cwd, ".context");
-		const planDir = path.join(contextDir, "plan");
-		for (const directory of [contextDir, planDir]) {
-			await fs.promises.mkdir(directory).catch((error: NodeJS.ErrnoException) => {
+		const ensureDir = async (dir: string) => {
+			await fs.promises.mkdir(dir).catch((error: NodeJS.ErrnoException) => {
 				if (error.code !== "EEXIST") throw error;
 			});
-			const stat = await fs.promises.lstat(directory);
+			const stat = await fs.promises.lstat(dir);
 			if (!stat.isDirectory() || stat.isSymbolicLink()) {
-				throw new Error(`Plan path must be a real directory, not a symlink: ${directory}`);
+				throw new Error(`Plan path must be a real directory, not a symlink: ${dir}`);
 			}
-		}
+		};
+
+		const contextDir = path.join(cwd, ".context");
+		const planDir = path.join(contextDir, "plan");
+
+		await ensureDir(contextDir);
+		await ensureDir(planDir);
+
 		return planDir;
 	}
 

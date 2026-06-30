@@ -97,6 +97,7 @@ export async function runChainAgents(
 	for (let i = 0; i < chain.length; i++) {
 		const item = chain[i];
 		const taskWithContext = item.task.replace(/\{previous\}/g, previousOutput);
+		// react-doctor-disable-next-line async-await-in-loop -- 子会话链必须顺序执行，下一步依赖上一步输出
 		const result = await runSingleAgent(
 			host,
 			parentSessionId,

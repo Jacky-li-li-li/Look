@@ -118,12 +118,14 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 	}, [projectId, showHiddenFiles, setExpanded, setLoaded, watchedPathsRef]);
 
 	useEffect(() => {
+		const paths = watchedPathsRef.current;
+		const currentProjectId = projectId;
 		return () => {
 			// 组件卸载 / projectId 变化时清理所有已启动的 watcher
-			for (const relPath of watchedPathsRef.current) {
-				window.look.stopWorkspaceWatch(projectId, relPath).catch(() => undefined);
+			for (const relPath of paths) {
+				window.look.stopWorkspaceWatch(currentProjectId, relPath).catch(() => undefined);
 			}
-			watchedPathsRef.current.clear();
+			paths.clear();
 		};
 	}, [projectId, watchedPathsRef]);
 
@@ -161,6 +163,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 
 			const gen = operationGenRef.current;
 			try {
+				// react-doctor-disable-next-line async-defer-await -- 加载后需用 generation 检查请求是否已过期
 				const result = await window.look.listWorkspaceChildren(projectId, node.path, showHiddenFiles);
 				if (operationGenRef.current !== gen) return;
 				if (result?.success && result.nodes) {
@@ -208,6 +211,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 		setIsLoading(true);
 		setError(null);
 		try {
+			// react-doctor-disable-next-line async-defer-await -- 刷新后需用 generation 检查请求是否已过期
 			const result = await window.look.listWorkspaceChildren(projectId, "", showHiddenFiles);
 			if (operationGenRef.current !== gen) return;
 			if (result?.success && result.nodes) {

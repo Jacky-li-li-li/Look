@@ -108,63 +108,66 @@ export function AgentHashMenu(props: AgentHashMenuProps) {
 	const { clampedIndex, setRowRef } = refs;
 
 	return (
-		<div ref={menuRef} role="listbox" tabIndex={0} onKeyDown={onKeyDown} className={containerClassName}>
-			{/* Header */}
-			<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-				<Bot className="size-3" />
-				<span>Available agents</span>
-				<span className="ml-auto rounded-sm border border-hairline bg-background/40 px-1 py-px text-[9px]">
-					{agents.length} · ↑↓ Enter · Esc
-				</span>
-			</div>
-
-			{/* SubAgent 关闭提示 */}
-			{subagentEnabled === false && (
-				<div className="border-b border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10px] text-amber-600 dark:text-amber-400">
-					当前会话暂未开启 SubAgent 模式，请点击输入框下方的
-					<span className="inline-flex items-center gap-0.5 mx-0.5 px-1 rounded-sm bg-amber-500/20 font-medium">
-						<Bot className="size-3" /> 机器人图标
+		<>
+			{/* react-doctor-disable-next-line prefer-tag-over-role -- 自定义菜单包含标题/提示/复杂项，不适合原生 datalist */}
+			<div ref={menuRef} role="listbox" tabIndex={0} onKeyDown={onKeyDown} className={containerClassName}>
+				{/* Header */}
+				<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+					<Bot className="size-3" />
+					<span>Available agents</span>
+					<span className="ml-auto rounded-sm border border-hairline bg-background/40 px-1 py-px text-[9px]">
+						{agents.length} · ↑↓ Enter · Esc
 					</span>
-					开启
 				</div>
-			)}
 
-			{/* Agent list */}
-			<ul className="max-h-72 list-none overflow-y-auto p-1.5">
-				{agents.length === 0 ? (
-					<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
-						<Bot className="size-5 text-muted-foreground/60" />
-						<div className="text-[11.5px] text-muted-foreground">
-							{searchTerm ? `没有匹配 "${searchTerm}" 的 Agent` : "没有可用的 Agent"}
-						</div>
-						<div className="text-[10px] text-muted-foreground/70">
-							{searchTerm ? "尝试其他关键词" : "在 Agent 广场中启用 SubAgent 后即可使用"}
-						</div>
-					</li>
-				) : (
-					agents.map((agent, i) => {
-						const src = agent.source;
-						const badge = sourceBadge(src);
-						return (
-							<li key={`agent-${agent.name}`}>
-								<MenuRow
-									rowRef={setRowRef(i)}
-									active={clampedIndex === i}
-									agent={agent}
-									badge={badge.label}
-									onClick={() => onSelectAgent(agent)}
-									onMouseEnter={() => props.onSelectedIndexChange(i)}
-								/>
-							</li>
-						);
-					})
+				{/* SubAgent 关闭提示 */}
+				{subagentEnabled === false && (
+					<div className="border-b border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+						当前会话暂未开启 SubAgent 模式，请点击输入框下方的
+						<span className="inline-flex items-center gap-0.5 mx-0.5 px-1 rounded-sm bg-amber-500/20 font-medium">
+							<Bot className="size-3" /> 机器人图标
+						</span>
+						开启
+					</div>
 				)}
-			</ul>
 
-			{/* Footer */}
-			<div className="border-t border-hairline bg-background/30 px-2.5 py-1 text-[10px] text-muted-foreground">
-				输入 # 选择 SubAgent，多个 Agent 用多个 # 指定
+				{/* Agent list */}
+				<ul className="max-h-72 list-none overflow-y-auto p-1.5">
+					{agents.length === 0 ? (
+						<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
+							<Bot className="size-5 text-muted-foreground/60" />
+							<div className="text-[11.5px] text-muted-foreground">
+								{searchTerm ? `没有匹配 "${searchTerm}" 的 Agent` : "没有可用的 Agent"}
+							</div>
+							<div className="text-[10px] text-muted-foreground/70">
+								{searchTerm ? "尝试其他关键词" : "在 Agent 广场中启用 SubAgent 后即可使用"}
+							</div>
+						</li>
+					) : (
+						agents.map((agent, i) => {
+							const src = agent.source;
+							const badge = sourceBadge(src);
+							return (
+								<li key={`agent-${agent.name}`}>
+									<MenuRow
+										rowRef={setRowRef(i)}
+										active={clampedIndex === i}
+										agent={agent}
+										badge={badge.label}
+										onClick={() => onSelectAgent(agent)}
+										onMouseEnter={() => props.onSelectedIndexChange(i)}
+									/>
+								</li>
+							);
+						})
+					)}
+				</ul>
+
+				{/* Footer */}
+				<div className="border-t border-hairline bg-background/30 px-2.5 py-1 text-[10px] text-muted-foreground">
+					输入 # 选择 SubAgent，多个 Agent 用多个 # 指定
+				</div>
 			</div>
-		</div>
+		</>
 	);
 }

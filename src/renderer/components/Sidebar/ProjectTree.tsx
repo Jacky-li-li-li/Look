@@ -224,131 +224,226 @@ export default function ProjectTree({
 
 	return (
 		<>
-			{projects.map((project: ProjectInfo) => {
-				const sessions = sessionsByProject.get(project.id) ?? [];
-				const topLevelSessions = sessions.filter((s) => !s.parentSessionId);
-				const isOpen = openProjects.has(project.id);
-				const isActiveProject = project.id === activeProjectId;
-				const isExpanded = expandedProjectIds.has(project.id);
-				const shouldCollapse = topLevelSessions.length > SESSION_COLLAPSE_THRESHOLD && !isExpanded;
-				const visibleSessions = shouldCollapse
-					? topLevelSessions.slice(0, SESSION_COLLAPSE_THRESHOLD)
-					: topLevelSessions;
-				const hiddenCount = topLevelSessions.length - SESSION_COLLAPSE_THRESHOLD;
-				const runningCount = sessions.filter((session) => runningAgents.has(session.id)).length;
-				return (
-					<Collapsible
-						key={project.id}
-						open={isOpen}
-						onOpenChange={(open) => {
-							setOpenProjectIds((previousIds) => {
-								const previous = new Set(previousIds);
-								const next = new Set(previous);
-								if (open) next.add(project.id);
-								else next.delete(project.id);
-								return [...next];
-							});
-						}}
-						className="workspace-group"
-						data-active={isActiveProject || undefined}
-						data-running={runningCount > 0 || undefined}
-					>
-						<ProjectHeader
-							project={project}
-							isOpen={isOpen}
-							editingProjectId={editingProjectId}
-							editRef={editRef}
-							editValue={editValue}
-							setEditValue={setEditValue}
-							commitEdit={commitEdit}
-							handleEditKeyDown={handleEditKeyDown}
-							beginEdit={beginEdit}
-							onCreateClick={onCreateClick}
-							onOpenProject={onOpenProject}
-							onDeleteProject={onDeleteProject}
-						/>
-
-						<CollapsibleContent className="workspace-group-content">
-							<div className="workspace-session-rail ml-[18px] space-y-0.5 pb-1 pl-2">
-								{!project.valid && (
-									<div className="mx-1 my-1 rounded-md border border-amber-500/25 bg-amber-500/8 px-2 py-1.5 text-[10px] text-amber-600 dark:text-amber-400">
-										{t("project.pathMissing", "Project folder is unavailable")}
-									</div>
-								)}
-								{visibleSessions.map((agent) => {
-									const isActive = agent.id === activeAgentId;
-									const isRunning = runningAgents.has(agent.id);
-									const phase = sessionPhases.get(agent.id) ?? "idle";
-									const isCompleted =
-										recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom);
-									const childrenList = childSessionsByParent.get(agent.id) ?? [];
-									return (
-										<SessionRow
-											key={agent.id}
-											agent={agent}
-											isActive={isActive}
-											isRunning={isRunning}
-											phase={phase}
-											isCompleted={isCompleted}
-											editingSessionId={editingSessionId}
-											editRef={editRef}
-											editValue={editValue}
-											setEditValue={setEditValue}
-											commitEdit={commitEdit}
-											handleEditKeyDown={handleEditKeyDown}
-											beginEdit={beginEdit}
-											selectSession={selectSession}
-											collapsedSubSessions={collapsedSubSessions}
-											toggleSubSessions={toggleSubSessions}
-											childrenList={childrenList}
-											copySessionId={copySessionId}
-											exportSession={exportSession}
-											onDestroy={onDestroy}
-										/>
-									);
-								})}
-
-								{shouldCollapse && (
-									<button
-										type="button"
-										onClick={() => toggleProjectExpansion(project.id)}
-										aria-expanded={isExpanded}
-										className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
-									>
-										<ChevronsUpDown className="size-3" />
-										{t("workspace.expandMore", {
-											count: hiddenCount,
-											defaultValue: "展开更多 ({{count}})",
-										})}
-									</button>
-								)}
-
-								{!shouldCollapse && hiddenCount > 0 && (
-									<button
-										type="button"
-										onClick={() => toggleProjectExpansion(project.id)}
-										aria-expanded={isExpanded}
-										className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
-									>
-										<ChevronsDownUp className="size-3" />
-										{t("workspace.collapseSessions", "收起")}
-									</button>
-								)}
-
-								{sessions.length === 0 && project.valid && (
-									<button
-										type="button"
-										onClick={() => onCreateClick(project.id)}
-										className="workspace-empty-session flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-[10px] text-muted-foreground"
-									>
-										<Plus className="size-3" /> {t("workspace.createFirstSession", "Create first session")}
-									</button>
-								)}
-							</div>
-						</CollapsibleContent>
-					</Collapsible>
-				);
-			})}
+			{projects.map((project) => (
+				<ProjectTreeItem
+					key={project.id}
+					project={project}
+					sessions={sessionsByProject.get(project.id) ?? []}
+					isOpen={openProjects.has(project.id)}
+					isActiveProject={project.id === activeProjectId}
+					activeAgentId={activeAgentId}
+					runningAgents={runningAgents}
+					sessionPhases={sessionPhases}
+					recentlyCompleted={recentlyCompleted}
+					activeChatAtBottom={activeChatAtBottom}
+					childSessionsByParent={childSessionsByParent}
+					editingProjectId={editingProjectId}
+					editingSessionId={editingSessionId}
+					editValue={editValue}
+					editRef={editRef}
+					setEditValue={setEditValue}
+					commitEdit={commitEdit}
+					handleEditKeyDown={handleEditKeyDown}
+					beginEdit={beginEdit}
+					selectSession={selectSession}
+					collapsedSubSessions={collapsedSubSessions}
+					toggleSubSessions={toggleSubSessions}
+					copySessionId={copySessionId}
+					exportSession={exportSession}
+					onDestroy={onDestroy}
+					onCreateClick={onCreateClick}
+					onOpenProject={onOpenProject}
+					onDeleteProject={onDeleteProject}
+					setOpenProjectIds={setOpenProjectIds}
+					expandedProjectIds={expandedProjectIds}
+					toggleProjectExpansion={toggleProjectExpansion}
+				/>
+			))}
 		</>
+	);
+}
+
+interface ProjectTreeItemProps {
+	project: ProjectInfo;
+	sessions: AgentInfo[];
+	isOpen: boolean;
+	isActiveProject: boolean;
+	activeAgentId: string | null;
+	runningAgents: Set<string>;
+	sessionPhases: Map<string, string>;
+	recentlyCompleted: string[];
+	activeChatAtBottom: boolean;
+	childSessionsByParent: Map<string, AgentInfo[]>;
+	editingProjectId: string | null;
+	editingSessionId: string | null;
+	editValue: string;
+	editRef: React.RefObject<HTMLInputElement | null>;
+	setEditValue: (value: string) => void;
+	commitEdit: () => void;
+	handleEditKeyDown: (event: React.KeyboardEvent) => void;
+	beginEdit: (kind: "project" | "session", id: string, value: string) => void;
+	selectSession: (agent: AgentInfo) => void;
+	collapsedSubSessions: Set<string>;
+	toggleSubSessions: (parentId: string, event: React.MouseEvent) => void;
+	copySessionId: (sessionId: string) => Promise<void>;
+	exportSession: (sessionId: string) => Promise<void>;
+	onDestroy: (sessionId: string) => void;
+	onCreateClick: (projectId: string) => void;
+	onOpenProject: (projectId: string) => void;
+	onDeleteProject: (project: ProjectInfo) => void;
+	setOpenProjectIds: (update: React.SetStateAction<string[]>) => void;
+	expandedProjectIds: Set<string>;
+	toggleProjectExpansion: (projectId: string) => void;
+}
+
+function ProjectTreeItem({
+	project,
+	sessions,
+	isOpen,
+	isActiveProject,
+	activeAgentId,
+	runningAgents,
+	sessionPhases,
+	recentlyCompleted,
+	activeChatAtBottom,
+	childSessionsByParent,
+	editingProjectId,
+	editingSessionId,
+	editValue,
+	editRef,
+	setEditValue,
+	commitEdit,
+	handleEditKeyDown,
+	beginEdit,
+	selectSession,
+	collapsedSubSessions,
+	toggleSubSessions,
+	copySessionId,
+	exportSession,
+	onDestroy,
+	onCreateClick,
+	onOpenProject,
+	onDeleteProject,
+	setOpenProjectIds,
+	expandedProjectIds,
+	toggleProjectExpansion,
+}: ProjectTreeItemProps) {
+	const { t } = useTranslation();
+	const topLevelSessions = sessions.filter((s) => !s.parentSessionId);
+	const isExpanded = expandedProjectIds.has(project.id);
+	const shouldCollapse = topLevelSessions.length > SESSION_COLLAPSE_THRESHOLD && !isExpanded;
+	const visibleSessions = shouldCollapse ? topLevelSessions.slice(0, SESSION_COLLAPSE_THRESHOLD) : topLevelSessions;
+	const hiddenCount = topLevelSessions.length - SESSION_COLLAPSE_THRESHOLD;
+	const runningCount = sessions.filter((session) => runningAgents.has(session.id)).length;
+
+	return (
+		<Collapsible
+			open={isOpen}
+			onOpenChange={(open) => {
+				setOpenProjectIds((previousIds) => {
+					const previous = new Set(previousIds);
+					const next = new Set(previous);
+					if (open) next.add(project.id);
+					else next.delete(project.id);
+					return [...next];
+				});
+			}}
+			className="workspace-group"
+			data-active={isActiveProject || undefined}
+			data-running={runningCount > 0 || undefined}
+		>
+			<ProjectHeader
+				project={project}
+				isOpen={isOpen}
+				editingProjectId={editingProjectId}
+				editRef={editRef}
+				editValue={editValue}
+				setEditValue={setEditValue}
+				commitEdit={commitEdit}
+				handleEditKeyDown={handleEditKeyDown}
+				beginEdit={beginEdit}
+				onCreateClick={onCreateClick}
+				onOpenProject={onOpenProject}
+				onDeleteProject={onDeleteProject}
+			/>
+
+			<CollapsibleContent className="workspace-group-content">
+				<div className="workspace-session-rail ml-[18px] space-y-0.5 pb-1 pl-2">
+					{!project.valid && (
+						<div className="mx-1 my-1 rounded-md border border-amber-500/25 bg-amber-500/8 px-2 py-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+							{t("project.pathMissing", "Project folder is unavailable")}
+						</div>
+					)}
+					{visibleSessions.map((agent) => {
+						const isActive = agent.id === activeAgentId;
+						const isRunning = runningAgents.has(agent.id);
+						const phase = sessionPhases.get(agent.id) ?? "idle";
+						const isCompleted = recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom);
+						const childrenList = childSessionsByParent.get(agent.id) ?? [];
+						return (
+							<SessionRow
+								key={agent.id}
+								agent={agent}
+								isActive={isActive}
+								isRunning={isRunning}
+								phase={phase}
+								isCompleted={isCompleted}
+								editingSessionId={editingSessionId}
+								editRef={editRef}
+								editValue={editValue}
+								setEditValue={setEditValue}
+								commitEdit={commitEdit}
+								handleEditKeyDown={handleEditKeyDown}
+								beginEdit={beginEdit}
+								selectSession={selectSession}
+								collapsedSubSessions={collapsedSubSessions}
+								toggleSubSessions={toggleSubSessions}
+								childrenList={childrenList}
+								copySessionId={copySessionId}
+								exportSession={exportSession}
+								onDestroy={onDestroy}
+							/>
+						);
+					})}
+
+					{shouldCollapse && (
+						<button
+							type="button"
+							onClick={() => toggleProjectExpansion(project.id)}
+							aria-expanded={isExpanded}
+							className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
+						>
+							<ChevronsUpDown className="size-3" />
+							{t("workspace.expandMore", {
+								count: hiddenCount,
+								defaultValue: "展开更多 ({{count}})",
+							})}
+						</button>
+					)}
+
+					{!shouldCollapse && hiddenCount > 0 && (
+						<button
+							type="button"
+							onClick={() => toggleProjectExpansion(project.id)}
+							aria-expanded={isExpanded}
+							className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
+						>
+							<ChevronsDownUp className="size-3" />
+							{t("workspace.collapseSessions", "收起")}
+						</button>
+					)}
+
+					{sessions.length === 0 && project.valid && (
+						<button
+							type="button"
+							onClick={() => onCreateClick(project.id)}
+							className="workspace-empty-session flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-[10px] text-muted-foreground"
+						>
+							<Plus className="size-3" /> {t("workspace.createFirstSession", "Create first session")}
+						</button>
+					)}
+				</div>
+			</CollapsibleContent>
+		</Collapsible>
 	);
 }

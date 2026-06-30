@@ -195,37 +195,42 @@ export class WorkspaceFileService {
 		}
 		const imported: string[] = [];
 		try {
-			for (const source of sources) {
-				const resolved = path.resolve(source);
-				if (path.isAbsolute(source) || path.isAbsolute(resolved)) {
-					const prefix = homeDir.endsWith(path.sep) ? homeDir : `${homeDir}${path.sep}`;
-					if (resolved !== homeDir && !resolved.startsWith(prefix)) {
-						throw new Error(`Import source must be within the user home directory: ${source}`);
+			// 并行导入所有源，提升批量导入吞吐；allSettled 确保全部尝试后才取首个 rejection，
+			// 失败时 catch 块统一回滚已成功项，保证原子性语义。
+			const outcomes = await Promise.allSettled(
+				sources.map(async (source) => {
+					const resolved = path.resolve(source);
+					if (path.isAbsolute(source) || path.isAbsolute(resolved)) {
+						const prefix = homeDir.endsWith(path.sep) ? homeDir : `${homeDir}${path.sep}`;
+						if (resolved !== homeDir && !resolved.startsWith(prefix)) {
+							throw new Error(`Import source must be within the user home directory: ${source}`);
+						}
 					}
-				}
-				const srcStat = await this.statSafe(resolved);
-				if (!srcStat) continue;
-				const dest = path.join(destRoot, path.basename(resolved));
-				const destExists = await this.statSafe(dest);
-				if (destExists) {
-					throw new Error(`Import target already exists: ${path.basename(resolved)}`);
-				}
-				if (srcStat.isDirectory()) {
-					await fs.promises.cp(resolved, dest, { recursive: true, errorOnExist: true });
-				} else {
-					await fs.promises.cp(resolved, dest, { errorOnExist: true });
-				}
-				imported.push(dest);
+					const srcStat = await this.statSafe(resolved);
+					if (!srcStat) return null;
+					const dest = path.join(destRoot, path.basename(resolved));
+					const destExists = await this.statSafe(dest);
+					if (destExists) {
+						throw new Error(`Import target already exists: ${path.basename(resolved)}`);
+					}
+					if (srcStat.isDirectory()) {
+						await fs.promises.cp(resolved, dest, { recursive: true, errorOnExist: true });
+					} else {
+						await fs.promises.cp(resolved, dest, { errorOnExist: true });
+					}
+					return dest;
+				}),
+			);
+			const firstRejection = outcomes.find((o): o is PromiseRejectedResult => o.status === "rejected");
+			if (firstRejection) throw firstRejection.reason;
+			for (const outcome of outcomes) {
+				if (outcome.status === "fulfilled" && outcome.value) imported.push(outcome.value);
 			}
 		} catch (error) {
 			// 单条失败时回滚已导入项,避免脏状态
-			for (const item of imported) {
-				try {
-					await fs.promises.rm(item, { recursive: true, force: true });
-				} catch {
-					// 忽略清理失败
-				}
-			}
+			await Promise.all(
+				imported.map((item) => fs.promises.rm(item, { recursive: true, force: true }).catch(() => undefined)),
+			);
 			throw error;
 		}
 	}
@@ -270,6 +275,7 @@ export class WorkspaceFileService {
 			persistent: true,
 		});
 
+		// react-doctor-disable-next-line async-defer-await -- 必须等待 watcher ready 后才能判断并发注册
 		await new Promise<void>((resolve, reject) => {
 			watcher.once("ready", resolve);
 			watcher.once("error", (error) => {

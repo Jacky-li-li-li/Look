@@ -194,121 +194,124 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 	};
 
 	return (
-		<div ref={menuRef} role="listbox" tabIndex={0} onKeyDown={onKeyDown} className={containerClassName}>
-			{/* Header */}
-			<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-				<Sparkles className="size-3" />
-				<span>Available skills</span>
-				<span className="ml-auto rounded-sm border border-hairline bg-background/40 px-1 py-px text-[9px]">
-					{visible.length} · ↑↓ Enter · Esc
-				</span>
-			</div>
+		<>
+			{/* react-doctor-disable-next-line prefer-tag-over-role -- 自定义菜单包含标题/导入按钮/复杂项，不适合原生 datalist */}
+			<div ref={menuRef} role="listbox" tabIndex={0} onKeyDown={onKeyDown} className={containerClassName}>
+				{/* Header */}
+				<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+					<Sparkles className="size-3" />
+					<span>Available skills</span>
+					<span className="ml-auto rounded-sm border border-hairline bg-background/40 px-1 py-px text-[9px]">
+						{visible.length} · ↑↓ Enter · Esc
+					</span>
+				</div>
 
-			{/* Skills list */}
-			<ul className="max-h-72 list-none overflow-y-auto p-1.5">
-				{visible.length === 0 ? (
-					<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
-						<FileCode2 className="size-5 text-muted-foreground/60" />
-						<div className="text-[11.5px] text-muted-foreground">
-							{searchTerm ? `No skills matching "${searchTerm}"` : "No skills available yet."}
-						</div>
-						<div className="text-[10px] text-muted-foreground/70">
-							{searchTerm ? (
-								"Try a different keyword or type / to see all skills."
-							) : (
-								<>
-									Drop a <span className="font-mono">SKILL.md</span> into{" "}
-									<span className="font-mono">~/.look/skills/</span> to get started.
-								</>
-							)}
-						</div>
-					</li>
-				) : (
-					visible.map((skill, i) => {
-						// Read source from the SDK's `sourceInfo` first,
-						// then fall back to the legacy `source` field.
-						// Either may be undefined; `sourceBadge` handles it.
-						const src = skill.sourceInfo?.source ?? skill.source;
-						const badge = sourceBadge(src);
-						return (
-							<li key={`skill-${skill.name}`}>
-								<MenuRow
-									rowRef={setRowRef(i)}
-									active={current?.kind === "skill" && clampedIndex === i}
-									label={skill.name}
-									hint={skill.description}
-									badge={badge.label}
-									onClick={() => onClickPick(i)}
-									onMouseEnter={() => props.onSelectedIndexChange(i)}
-								/>
-							</li>
-						);
-					})
-				)}
-			</ul>
-
-			{/* Import from other tools */}
-			{importable.length > 0 ? (
-				<div className="border-t border-hairline px-2.5 py-1.5">
-					<div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-						<FolderGit2 className="size-3" />
-						<span>Import from</span>
-					</div>
-					<div className="flex flex-wrap gap-1.5">
-						{importable.map((d) => {
-							// The flat list indices for import rows follow
-							// after the skills. Compute on the fly.
-							const i = visible.length + importable.indexOf(d);
+				{/* Skills list */}
+				<ul className="max-h-72 list-none overflow-y-auto p-1.5">
+					{visible.length === 0 ? (
+						<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
+							<FileCode2 className="size-5 text-muted-foreground/60" />
+							<div className="text-[11.5px] text-muted-foreground">
+								{searchTerm ? `No skills matching "${searchTerm}"` : "No skills available yet."}
+							</div>
+							<div className="text-[10px] text-muted-foreground/70">
+								{searchTerm ? (
+									"Try a different keyword or type / to see all skills."
+								) : (
+									<>
+										Drop a <span className="font-mono">SKILL.md</span> into{" "}
+										<span className="font-mono">~/.look/skills/</span> to get started.
+									</>
+								)}
+							</div>
+						</li>
+					) : (
+						visible.map((skill, i) => {
+							// Read source from the SDK's `sourceInfo` first,
+							// then fall back to the legacy `source` field.
+							// Either may be undefined; `sourceBadge` handles it.
+							const src = skill.sourceInfo?.source ?? skill.source;
+							const badge = sourceBadge(src);
 							return (
-								<button
-									key={`import-${d.tool}`}
-									ref={setRowRef(i)}
-									type="button"
-									onClick={() => onClickPick(i)}
-									onMouseEnter={() => props.onSelectedIndexChange(i)}
-									className={[
-										"flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors",
-										current?.kind === "import" && clampedIndex === i
-											? "border-accent/50 bg-accent/15 text-foreground"
-											: "border-hairline bg-background/40 text-foreground/80 hover:bg-accent/10",
-									].join(" ")}
-								>
-									<span>
-										{d.skillCount} skill{d.skillCount === 1 ? "" : "s"}
-									</span>
-									<span className="text-muted-foreground">·</span>
-									<span className="font-medium">{d.tool}</span>
-									<ChevronRight className="size-3 text-muted-foreground" />
-								</button>
+								<li key={`skill-${skill.name}`}>
+									<MenuRow
+										rowRef={setRowRef(i)}
+										active={current?.kind === "skill" && clampedIndex === i}
+										label={skill.name}
+										hint={skill.description}
+										badge={badge.label}
+										onClick={() => onClickPick(i)}
+										onMouseEnter={() => props.onSelectedIndexChange(i)}
+									/>
+								</li>
 							);
-						})}
-					</div>
-				</div>
-			) : null}
+						})
+					)}
+				</ul>
 
-			{importableMissing.length > 0 ? (
-				<div className="border-t border-hairline px-2.5 py-1">
-					<div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-						<span>Imported:</span>
-						{importableMissing.map((d) => (
-							<span key={`m-${d.tool}`} className="rounded-sm bg-background/40 px-1 py-px">
-								{d.tool} ({d.skillCount})
-							</span>
-						))}
+				{/* Import from other tools */}
+				{importable.length > 0 ? (
+					<div className="border-t border-hairline px-2.5 py-1.5">
+						<div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+							<FolderGit2 className="size-3" />
+							<span>Import from</span>
+						</div>
+						<div className="flex flex-wrap gap-1.5">
+							{importable.map((d) => {
+								// The flat list indices for import rows follow
+								// after the skills. Compute on the fly.
+								const i = visible.length + importable.indexOf(d);
+								return (
+									<button
+										key={`import-${d.tool}`}
+										ref={setRowRef(i)}
+										type="button"
+										onClick={() => onClickPick(i)}
+										onMouseEnter={() => props.onSelectedIndexChange(i)}
+										className={[
+											"flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors",
+											current?.kind === "import" && clampedIndex === i
+												? "border-accent/50 bg-accent/15 text-foreground"
+												: "border-hairline bg-background/40 text-foreground/80 hover:bg-accent/10",
+										].join(" ")}
+									>
+										<span>
+											{d.skillCount} skill{d.skillCount === 1 ? "" : "s"}
+										</span>
+										<span className="text-muted-foreground">·</span>
+										<span className="font-medium">{d.tool}</span>
+										<ChevronRight className="size-3 text-muted-foreground" />
+									</button>
+								);
+							})}
+						</div>
 					</div>
-				</div>
-			) : null}
+				) : null}
 
-			{/* Footer hint */}
-			<div className="border-t border-hairline bg-background/30 px-2.5 py-1 text-[10px] text-muted-foreground">
-				{onImportRequest ? (
-					<button type="button" onClick={onImportRequest} className="hover:text-foreground/80 hover:underline">
-						+ Add a custom skill path…
-					</button>
-				) : (
-					<span>Skills follow the agentskills.io open standard.</span>
-				)}
+				{importableMissing.length > 0 ? (
+					<div className="border-t border-hairline px-2.5 py-1">
+						<div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+							<span>Imported:</span>
+							{importableMissing.map((d) => (
+								<span key={`m-${d.tool}`} className="rounded-sm bg-background/40 px-1 py-px">
+									{d.tool} ({d.skillCount})
+								</span>
+							))}
+						</div>
+					</div>
+				) : null}
+
+				{/* Footer hint */}
+				<div className="border-t border-hairline bg-background/30 px-2.5 py-1 text-[10px] text-muted-foreground">
+					{onImportRequest ? (
+						<button type="button" onClick={onImportRequest} className="hover:text-foreground/80 hover:underline">
+							+ Add a custom skill path…
+						</button>
+					) : (
+						<span>Skills follow the agentskills.io open standard.</span>
+					)}
+				</div>
 			</div>
-		</div>
+		</>
 	);
 }
