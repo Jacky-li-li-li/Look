@@ -14,17 +14,51 @@ import {
 } from "@shared/components/ui/dialog";
 import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
-import { AlertCircle, ChevronRight, Cpu, Eye, EyeOff, Key, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertCircle, ChevronRight, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "../ProviderIcon";
 import AddCustomProviderDialog from "./AddCustomProviderDialog";
+import CustomProvidersSection from "./CustomProvidersSection";
 import type { CustomProviderInput, CustomProviderStats, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
 
 const api = (window as any).look;
 
 type ForceSaveState = { provider: string; key: string; reason: string; status: number } | null;
+
+// ═══════════════════════════════════════════
+// grouped state types
+// ═══════════════════════════════════════════
+
+interface KeyEditState {
+	editing: string | null;
+	input: string;
+	showKey: boolean;
+}
+
+interface UiState {
+	saving: boolean;
+	loadingKey: boolean;
+	testStatus: Record<string, TestVerdict>;
+	forceSave: ForceSaveState;
+}
+
+interface AccordionState {
+	providers: Record<string, boolean>;
+	customProviders: Record<string, boolean>;
+}
+
+interface CustomPanelState {
+	view: { type: "list" } | { type: "form"; editing?: CustomProviderInput };
+	list: CustomProviderInput[];
+	confirmRemove: string | null;
+	confirmClear: ProviderInfo | null;
+}
+
+// ═══════════════════════════════════════════
+// helpers
+// ═══════════════════════════════════════════
 
 function formatContextWindow(tokens: number): string {
 	if (tokens >= 1_000_000) {
@@ -96,91 +130,16 @@ function providerTrack(provider: ProviderInfo, status: TestVerdict): string {
 	return "bg-emerald-500";
 }
 
-function CustomProviderRow({
-	cp,
-	isCustomExpanded,
-	onToggleExpand,
-	onEdit,
-	onRemove,
-}: {
-	cp: CustomProviderInput;
-	isCustomExpanded: boolean;
-	onToggleExpand: () => void;
-	onEdit: () => void;
-	onRemove: () => void;
-}) {
-	const { t } = useTranslation();
-	const hasCustomModels = cp.models.length > 0;
-	return (
-		<div className="group/custom-provider relative overflow-hidden rounded-md border border-hairline bg-background/35 transition-colors hover:bg-muted/40">
-			<div className="absolute left-0 top-0 h-full w-0.5 bg-emerald-500" />
-			<button
-				type="button"
-				className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 pl-4 pr-2.5 w-full text-left bg-transparent border-0"
-				aria-expanded={isCustomExpanded}
-				onClick={() => hasCustomModels && onToggleExpand()}
-			>
-				<div className="min-w-0">
-					<div className="flex min-w-0 flex-wrap items-center gap-1.5">
-						<ChevronRight
-							className={cn(
-								"size-3 shrink-0 text-muted-foreground transition-transform",
-								isCustomExpanded && "rotate-90",
-								!hasCustomModels && "opacity-30",
-							)}
-						/>
-						<span className="min-w-0 truncate font-mono text-[12px] font-medium">{cp.name}</span>
-						<Badge variant="outline" className="h-5 gap-1 px-1.5 font-mono text-[10px]">
-							<Cpu className="size-2.5" />
-							{cp.models.length}
-						</Badge>
-					</div>
-					<div className="mt-0.5 truncate text-[10px] text-muted-foreground">{cp.api}</div>
-				</div>
-				<div
-					className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/custom-provider:opacity-100 group-focus-within/custom-provider:opacity-100"
-					onClick={(e) => e.stopPropagation()}
-				>
-					<Button variant="line" size="xs" className="h-6 text-[10px]" onClick={onEdit}>
-						{t("settings.customProviders.edit")}
-					</Button>
-					<Button
-						variant="line-ghost"
-						size="icon-xs"
-						className="h-6 w-6 text-muted-foreground hover:text-destructive"
-						onClick={onRemove}
-					>
-						<Trash2 className="size-3" />
-					</Button>
-				</div>
-			</button>
-
-			{isCustomExpanded && hasCustomModels && (
-				<ModelList
-					models={cp.models.map((m) => ({
-						id: m.id,
-						name: m.name ?? m.id,
-						reasoning: m.reasoning ?? false,
-						contextWindow: m.contextWindow ?? 0,
-						maxTokens: m.maxTokens ?? 0,
-					}))}
-					t={t}
-				/>
-			)}
-		</div>
-	);
-}
+// ═══════════════════════════════════════════
+// sub-components
+// ═══════════════════════════════════════════
 
 function BuiltInProviderRow({
 	provider,
 	isEditing,
 	isExpanded,
 	testStatus,
-	editing,
-	keyInput,
-	setKeyInput,
-	showKey,
-	setShowKey,
+	editor,
 	saving,
 	loadingKey,
 	forceSave,
@@ -195,18 +154,20 @@ function BuiltInProviderRow({
 	isEditing: boolean;
 	isExpanded: boolean;
 	testStatus: Record<string, TestVerdict>;
-	editing: string | null;
-	keyInput: string;
-	setKeyInput: (v: string) => void;
-	showKey: boolean;
-	setShowKey: (v: boolean) => void;
+	editor: {
+		editing: string | null;
+		input: string;
+		showKey: boolean;
+		setInput: (v: string) => void;
+		setShowKey: (v: boolean) => void;
+	};
 	saving: boolean;
 	loadingKey: boolean;
-	forceSave: { provider: string; key: string; reason: string; status: number } | null;
+	forceSave: ForceSaveState;
 	onToggleExpand: () => void;
 	onOpenEditor: () => void;
 	onCloseEditor: () => void;
-	onSave: () => Promise<void>;
+	onSave: () => void;
 	onForceSave: () => void;
 	onClearClick: () => void;
 }) {
@@ -280,10 +241,10 @@ function BuiltInProviderRow({
 					<div className="flex items-start gap-2">
 						<div className="relative min-w-0 flex-1">
 							<Input
-								type={showKey ? "text" : "password"}
-								value={keyInput}
+								type={editor.showKey ? "text" : "password"}
+								value={editor.input}
 								onChange={(e) => {
-									setKeyInput(e.target.value);
+									editor.setInput(e.target.value);
 								}}
 								onKeyDown={(e) => {
 									if (e.key === "Enter") onSave();
@@ -299,10 +260,10 @@ function BuiltInProviderRow({
 								variant="ghost"
 								size="icon"
 								className="absolute right-0 top-0 size-8"
-								onClick={() => setShowKey(!showKey)}
+								onClick={() => editor.setShowKey(!editor.showKey)}
 								tabIndex={-1}
 							>
-								{showKey ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+								{editor.showKey ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
 							</Button>
 						</div>
 						<Button
@@ -310,7 +271,7 @@ function BuiltInProviderRow({
 							size="sm"
 							className="h-8 text-[11px]"
 							onClick={onSave}
-							disabled={saving || loadingKey || !keyInput.trim()}
+							disabled={saving || loadingKey || !editor.input.trim()}
 						>
 							{saving ? (
 								<>
@@ -372,66 +333,68 @@ function BuiltInProviderRow({
 	);
 }
 
+// ═══════════════════════════════════════════
+// main component
+// ═══════════════════════════════════════════
+
 export default function ApiKeysTab({ providers, customStats, onProvidersChange }: ApiKeysTabProps) {
 	const { t } = useTranslation();
-	const [editing, setEditing] = useState<string | null>(null);
-	const [keyInput, setKeyInput] = useState("");
-	const [showKey, setShowKey] = useState(false);
-	const [saving, setSaving] = useState(false);
-	const [loadingKey, setLoadingKey] = useState(false);
-	const [testStatus, setTestStatus] = useState<Record<string, TestVerdict>>({});
-	const [forceSave, setForceSave] = useState<ForceSaveState>(null);
-	const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
-	const [expandedCustomProviders, setExpandedCustomProviders] = useState<Record<string, boolean>>({});
 
-	const [customView, setCustomView] = useState<{ type: "list" } | { type: "form"; editing?: CustomProviderInput }>({
-		type: "list",
+	// ── grouped state (13 → 4 useState) ──
+	const [keyEdit, setKeyEdit] = useState<KeyEditState>({ editing: null, input: "", showKey: false });
+	const [ui, setUi] = useState<UiState>({ saving: false, loadingKey: false, testStatus: {}, forceSave: null });
+	const [accordion, setAccordion] = useState<AccordionState>({ providers: {}, customProviders: {} });
+	const [custom, setCustom] = useState<CustomPanelState>({
+		view: { type: "list" },
+		list: [],
+		confirmRemove: null,
+		confirmClear: null,
 	});
-	const [customProviders, setCustomProviders] = useState<CustomProviderInput[]>([]);
-	const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-	const [confirmClear, setConfirmClear] = useState<ProviderInfo | null>(null);
 
+	// ── patch helpers ──
+	const patchKeyEdit = useCallback(
+		<K extends keyof KeyEditState>(key: K, value: KeyEditState[K]) =>
+			setKeyEdit((prev) => ({ ...prev, [key]: value })),
+		[],
+	);
+	const patchUi = useCallback(
+		<K extends keyof UiState>(key: K, value: UiState[K]) => setUi((prev) => ({ ...prev, [key]: value })),
+		[],
+	);
+	const patchCustom = useCallback(
+		<K extends keyof CustomPanelState>(key: K, value: CustomPanelState[K]) =>
+			setCustom((prev) => ({ ...prev, [key]: value })),
+		[],
+	);
+
+	// ── load custom providers ──
 	const loadCustomProviders = useCallback(async () => {
 		if (!api) return;
 		try {
 			const r = await api.listCustomProviders();
-			if (r?.success) setCustomProviders(r.providers ?? []);
+			if (r?.success) patchCustom("list", r.providers ?? []);
 		} catch {
 			/* ignore */
 		}
-	}, []);
+	}, [patchCustom]);
 
 	useEffect(() => {
 		loadCustomProviders();
 	}, [loadCustomProviders]);
 
-	const handleRemoveCustom = async () => {
-		if (!confirmRemove || !api) return;
-		try {
-			const r = await api.removeCustomProvider(confirmRemove);
-			if (r?.success && r.removed) {
-				toast.success(t("settings.customProviders.toast.removed"));
-				loadCustomProviders();
-				try {
-					const providersRes = await api.getSettings();
-					if (providersRes?.success)
-						onProvidersChange({ providers: providersRes.providers, customStats: providersRes.customStats });
-				} catch {}
-			}
-		} catch (e: any) {
-			toast.error(e?.message ?? t("settings.customProviders.toast.removeFailed"));
-		}
-		setConfirmRemove(null);
-	};
-
+	// ── accordion toggles ──
 	const toggleProviderExpand = (id: string) => {
-		setExpandedProviders((prev) => ({ ...prev, [id]: !prev[id] }));
+		setAccordion((prev) => ({ ...prev, providers: { ...prev.providers, [id]: !prev.providers[id] } }));
 	};
 
 	const toggleCustomProviderExpand = (name: string) => {
-		setExpandedCustomProviders((prev) => ({ ...prev, [name]: !prev[name] }));
+		setAccordion((prev) => ({
+			...prev,
+			customProviders: { ...prev.customProviders, [name]: !prev.customProviders[name] },
+		}));
 	};
 
+	// ── key management ──
 	const persistKey = async (providerId: string, key: string) => {
 		if (!api) return false;
 		try {
@@ -453,39 +416,39 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 	};
 
 	const closeEditor = () => {
-		setSaving(false);
-		setEditing(null);
-		setKeyInput("");
-		setShowKey(false);
-		setLoadingKey(false);
-		setForceSave(null);
+		patchUi("saving", false);
+		patchKeyEdit("editing", null);
+		patchKeyEdit("input", "");
+		patchKeyEdit("showKey", false);
+		patchUi("loadingKey", false);
+		patchUi("forceSave", null);
 	};
 
 	const openEditor = async (provider: ProviderInfo) => {
-		setEditing(provider.id);
-		setShowKey(false);
-		setForceSave(null);
+		patchKeyEdit("editing", provider.id);
+		patchKeyEdit("showKey", false);
+		patchUi("forceSave", null);
 		if (provider.hasKey && canClearProviderKey(provider) && api) {
-			setLoadingKey(true);
-			setKeyInput("");
+			patchUi("loadingKey", true);
+			patchKeyEdit("input", "");
 			try {
 				const r = await api.getApiKey(provider.id);
-				if (r?.success && r.key) setKeyInput(r.key);
+				if (r?.success && r.key) patchKeyEdit("input", r.key);
 			} catch {
 				/* leave empty */
 			}
-			setLoadingKey(false);
+			patchUi("loadingKey", false);
 		} else {
-			setKeyInput("");
+			patchKeyEdit("input", "");
 		}
 	};
 
 	const handleSave = async () => {
-		if (!editing || !api || !keyInput.trim()) return;
-		const providerId = editing;
-		const key = keyInput.trim();
-		setSaving(true);
-		setForceSave(null);
+		if (!keyEdit.editing || !api || !keyEdit.input.trim()) return;
+		const providerId = keyEdit.editing;
+		const key = keyEdit.input.trim();
+		patchUi("saving", true);
+		patchUi("forceSave", null);
 		let testResult: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } | null =
 			null;
 		try {
@@ -499,20 +462,26 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 		}
 		if (testResult.ok === true) {
 			if (await persistKey(providerId, key)) {
-				setTestStatus((prev) => ({ ...prev, [providerId]: { verdict: "ok" } }));
+				setUi((prev) => ({
+					...prev,
+					testStatus: { ...prev.testStatus, [providerId]: { verdict: "ok" } },
+				}));
 				closeEditor();
 			}
 			return;
 		}
 		if (testResult.skipped) {
 			if (await persistKey(providerId, key)) {
-				setTestStatus((prev) => ({ ...prev, [providerId]: { verdict: "skipped", reason: testResult.reason } }));
+				setUi((prev) => ({
+					...prev,
+					testStatus: { ...prev.testStatus, [providerId]: { verdict: "skipped", reason: testResult.reason } },
+				}));
 				closeEditor();
 			}
 			return;
 		}
-		setSaving(false);
-		setForceSave({
+		patchUi("saving", false);
+		patchUi("forceSave", {
 			provider: providerId,
 			key,
 			reason: testResult.error ?? "Unknown error",
@@ -521,38 +490,58 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 	};
 
 	const handleForceSave = async () => {
-		if (!forceSave) return;
-		const { provider, key, reason } = forceSave;
-		setSaving(true);
+		if (!ui.forceSave) return;
+		const { provider, key, reason } = ui.forceSave;
+		patchUi("saving", true);
 		if (await persistKey(provider, key)) {
-			setTestStatus((prev) => ({ ...prev, [provider]: { verdict: "error", reason } }));
+			setUi((prev) => ({ ...prev, testStatus: { ...prev.testStatus, [provider]: { verdict: "error", reason } } }));
 			toast.warning(t("settings.failedSelfTest", { provider, reason }));
 			closeEditor();
 		}
 	};
 
 	const handleClearKey = async () => {
-		if (!confirmClear) return;
-		const providerId = confirmClear.id;
+		if (!custom.confirmClear) return;
+		const providerId = custom.confirmClear.id;
 		if (await persistKey(providerId, "")) {
-			setTestStatus((prev) => ({ ...prev, [providerId]: null }));
-			if (editing === providerId) closeEditor();
+			setUi((prev) => ({ ...prev, testStatus: { ...prev.testStatus, [providerId]: null } }));
+			if (keyEdit.editing === providerId) closeEditor();
 		}
-		setConfirmClear(null);
+		patchCustom("confirmClear", null);
 	};
 
+	const handleRemoveCustom = async () => {
+		if (!custom.confirmRemove || !api) return;
+		try {
+			const r = await api.removeCustomProvider(custom.confirmRemove);
+			if (r?.success && r.removed) {
+				toast.success(t("settings.customProviders.toast.removed"));
+				loadCustomProviders();
+				try {
+					const providersRes = await api.getSettings();
+					if (providersRes?.success)
+						onProvidersChange({ providers: providersRes.providers, customStats: providersRes.customStats });
+				} catch {}
+			}
+		} catch (e: any) {
+			toast.error(e?.message ?? t("settings.customProviders.toast.removeFailed"));
+		}
+		patchCustom("confirmRemove", null);
+	};
+
+	// ── render ──
 	const allProviders = [...providers].sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
 
-	if (customView.type === "form") {
+	if (custom.view.type === "form") {
 		return (
 			<AddCustomProviderDialog
-				key={customView.editing ? `edit-${customView.editing.name}` : "add"}
+				key={custom.view.editing ? `edit-${custom.view.editing.name}` : "add"}
 				open={true}
-				onClose={() => setCustomView({ type: "list" })}
-				initial={customView.editing}
+				onClose={() => patchCustom("view", { type: "list" })}
+				initial={custom.view.editing}
 				onSaved={() => {
 					loadCustomProviders();
-					setCustomView({ type: "list" });
+					patchCustom("view", { type: "list" });
 					api?.getSettings?.()
 						.then((r: any) => {
 							if (r?.success) onProvidersChange({ providers: r.providers, customStats: r.customStats });
@@ -560,7 +549,7 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 						.catch(() => {});
 				}}
 				mode="inline"
-				onBack={() => setCustomView({ type: "list" })}
+				onBack={() => patchCustom("view", { type: "list" })}
 			/>
 		);
 	}
@@ -587,54 +576,15 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 					<p className="text-[11px] text-muted-foreground">{t("settings.apiKeysDescription")}</p>
 				</div>
 				<div className="flex flex-col gap-2 p-3 pt-0">
-					<section className="rounded-lg border border-hairline bg-muted/20 p-2.5">
-						<div className="flex items-center justify-between gap-3">
-							<div className="min-w-0">
-								<div className="flex items-center gap-2">
-									<span className="text-[11px] font-medium text-foreground">
-										{t("settings.customProviders.title")}
-									</span>
-									<Badge variant="outline" className="h-5 px-1.5 font-mono text-[10px]">
-										{customProviders.length}
-									</Badge>
-									<span className="text-[10px] text-muted-foreground">
-										{t("settings.customProviders.totalModels", { count: customStats.totalModels })}
-									</span>
-								</div>
-								{customProviders.length === 0 && (
-									<p className="mt-0.5 text-[10px] text-muted-foreground">
-										{t("settings.customProviders.empty")}
-									</p>
-								)}
-							</div>
-							<Button
-								variant="line"
-								size="xs"
-								className="h-7 text-[10px]"
-								onClick={() => setCustomView({ type: "form" })}
-							>
-								<Plus className="size-3" data-icon="inline-start" />
-								{t("settings.customProviders.addButton")}
-							</Button>
-						</div>
-						{customProviders.length > 0 && (
-							<div className="mt-2 grid grid-cols-1 gap-1.5">
-								{customProviders.map((cp) => {
-									const isCustomExpanded = !!expandedCustomProviders[cp.name];
-									return (
-										<CustomProviderRow
-											key={cp.name}
-											cp={cp}
-											isCustomExpanded={isCustomExpanded}
-											onToggleExpand={() => toggleCustomProviderExpand(cp.name)}
-											onEdit={() => setCustomView({ type: "form", editing: cp })}
-											onRemove={() => setConfirmRemove(cp.name)}
-										/>
-									);
-								})}
-							</div>
-						)}
-					</section>
+					<CustomProvidersSection
+						customProviders={custom.list}
+						expanded={accordion.customProviders}
+						customStats={customStats}
+						onToggleExpand={toggleCustomProviderExpand}
+						onEdit={(cp) => patchCustom("view", { type: "form", editing: cp })}
+						onRemove={(name) => patchCustom("confirmRemove", name)}
+						onAdd={() => patchCustom("view", { type: "form" })}
+					/>
 
 					<div className="flex items-center justify-between border-b border-hairline px-1 pb-1">
 						<span className="text-[11px] font-medium text-muted-foreground">{t("settings.providers.title")}</span>
@@ -647,45 +597,47 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 					</div>
 
 					{allProviders.map((p) => {
-						const isEditing = editing === p.id;
-						const isExpanded = !!expandedProviders[p.id];
+						const isEditing = keyEdit.editing === p.id;
+						const isExpanded = !!accordion.providers[p.id];
 						return (
 							<BuiltInProviderRow
 								key={p.id}
 								provider={p}
 								isEditing={isEditing}
 								isExpanded={isExpanded}
-								testStatus={testStatus}
-								editing={editing}
-								keyInput={keyInput}
-								setKeyInput={setKeyInput}
-								showKey={showKey}
-								setShowKey={setShowKey}
-								saving={saving}
-								loadingKey={loadingKey}
-								forceSave={forceSave}
+								testStatus={ui.testStatus}
+								editor={{
+									editing: keyEdit.editing,
+									input: keyEdit.input,
+									showKey: keyEdit.showKey,
+									setInput: (v) => patchKeyEdit("input", v),
+									setShowKey: (v) => patchKeyEdit("showKey", v),
+								}}
+								saving={ui.saving}
+								loadingKey={ui.loadingKey}
+								forceSave={ui.forceSave}
 								onToggleExpand={() => toggleProviderExpand(p.id)}
 								onOpenEditor={() => openEditor(p)}
 								onCloseEditor={closeEditor}
 								onSave={handleSave}
 								onForceSave={handleForceSave}
-								onClearClick={() => setConfirmClear(p)}
+								onClearClick={() => patchCustom("confirmClear", p)}
 							/>
 						);
 					})}
 				</div>
 			</div>
 
-			<Dialog open={confirmClear !== null} onOpenChange={(o) => !o && setConfirmClear(null)}>
+			<Dialog open={custom.confirmClear !== null} onOpenChange={(o) => !o && patchCustom("confirmClear", null)}>
 				<DialogContent className="sm:max-w-sm" showCloseButton={false}>
 					<DialogHeader>
 						<DialogTitle>{t("settings.confirmClear.title")}</DialogTitle>
 						<DialogDescription>
-							{t("settings.confirmClear.body", { provider: confirmClear?.name ?? "" })}
+							{t("settings.confirmClear.body", { provider: custom.confirmClear?.name ?? "" })}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter className="gap-2">
-						<Button variant="line" size="sm" onClick={() => setConfirmClear(null)}>
+						<Button variant="line" size="sm" onClick={() => patchCustom("confirmClear", null)}>
 							{t("common.cancel")}
 						</Button>
 						<Button variant="line-filled" size="sm" onClick={handleClearKey}>
@@ -695,16 +647,16 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 				</DialogContent>
 			</Dialog>
 
-			<Dialog open={confirmRemove !== null} onOpenChange={(o) => !o && setConfirmRemove(null)}>
+			<Dialog open={custom.confirmRemove !== null} onOpenChange={(o) => !o && patchCustom("confirmRemove", null)}>
 				<DialogContent className="sm:max-w-sm" showCloseButton={false}>
 					<DialogHeader>
 						<DialogTitle>{t("settings.customProviders.confirmRemove.title")}</DialogTitle>
 						<DialogDescription>
-							{t("settings.customProviders.confirmRemove.body", { name: confirmRemove ?? "" })}
+							{t("settings.customProviders.confirmRemove.body", { name: custom.confirmRemove ?? "" })}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter className="gap-2">
-						<Button variant="line" size="sm" onClick={() => setConfirmRemove(null)}>
+						<Button variant="line" size="sm" onClick={() => patchCustom("confirmRemove", null)}>
 							{t("common.cancel")}
 						</Button>
 						<Button variant="line-filled" size="sm" onClick={handleRemoveCustom}>

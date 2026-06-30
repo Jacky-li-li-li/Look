@@ -30,6 +30,8 @@
 
 import type { ImageContent } from "@shared/types";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useContentEditablePaste } from "../hooks/useContentEditablePaste";
+import { placeCaretAtEnd, renderToDOM } from "./contentEditableUtils";
 
 export interface ContentEditableInputHandle {
 	getText: () => string;
@@ -57,74 +59,6 @@ interface ContentEditableInputProps {
 	/** Minimum number of visible text rows. Default 2. */
 	minRows?: number;
 	ref?: React.Ref<ContentEditableInputHandle>;
-}
-
-function renderToDOM(container: HTMLElement, content: string) {
-	// textContent = "" is the fastest reset; using removeChild in a
-	// loop would re-parent the contenteditable selection state and
-	// break caret restoration when we refocus.
-	container.textContent = "";
-	_renderCombinedSegments(container, content);
-}
-
-/**
- * 合并渲染 agent chip 和 skill chip。
- * 扫描内容中的 #agentName 和 /skill:name 模式，渲染为 chip DOM 元素。
- */
-function _renderCombinedSegments(container: HTMLElement, content: string) {
-	// 合并正则：匹配 #agentName 或 /skill:name（需行首或空白前缀）
-	const COMBINED_RE = /(?:^|\s)((?:#([^\s#]+))|(?:\/skill:([^\s]+)))/g;
-
-	let cursor = 0;
-	for (const match of content.matchAll(COMBINED_RE)) {
-		const matchStart = match.index ?? 0;
-		const agentName = match[2];
-		const skillName = match[3];
-		const fullMatch = match[0]!;
-		// fullToken 是不含前导空白的 token 部分
-		const fullToken = match[1]!;
-		const tokenStart = matchStart + (fullMatch.length - fullToken.length);
-
-		if (tokenStart > cursor) {
-			container.appendChild(document.createTextNode(content.slice(cursor, tokenStart)));
-		}
-
-		if (agentName) {
-			const chip = document.createElement("span");
-			chip.setAttribute("data-agent-chip", "");
-			chip.setAttribute("data-name", agentName);
-			chip.className = "agent-chip";
-			chip.setAttribute("contenteditable", "false");
-			chip.textContent = `#${agentName}`;
-			container.appendChild(chip);
-			container.appendChild(document.createTextNode(" "));
-		} else if (skillName) {
-			const chip = document.createElement("span");
-			chip.setAttribute("data-skill-chip", "");
-			chip.setAttribute("data-name", skillName);
-			chip.className = "skill-chip";
-			chip.setAttribute("contenteditable", "false");
-			chip.textContent = `/skill:${skillName}`;
-			container.appendChild(chip);
-			container.appendChild(document.createTextNode(" "));
-		}
-
-		cursor = tokenStart + fullToken.length;
-	}
-
-	if (cursor < content.length) {
-		container.appendChild(document.createTextNode(content.slice(cursor)));
-	}
-}
-
-export function placeCaretAtEnd(container: HTMLElement) {
-	const range = document.createRange();
-	range.selectNodeContents(container);
-	range.collapse(false);
-	const selection = window.getSelection();
-	if (!selection) return;
-	selection.removeAllRanges();
-	selection.addRange(range);
 }
 
 export const ContentEditableInput = function ContentEditableInput({
@@ -256,114 +190,13 @@ export const ContentEditableInput = function ContentEditableInput({
 		[onKeyDown, onTab],
 	);
 
-	const handlePaste = useCallback(
-		(e: React.ClipboardEvent<HTMLDivElement>) => {
-			// ---- Image paste detection ----
-			// Check clipboard items for image data BEFORE
-			// extracting plain text, because the browser may
-			// include both an image file and a text/plain
-			// fallback in the same event.
-			//
-			// On macOS + Electron, `DataTransferItem.type` is
-			// often empty for clipboard images because Cocoa's
-			// UTIs (public.png, public.tiff) don't always map
-			// to standard MIME types. We use `File.type` instead,
-			// which reads the blob header and is more reliable.
-			const items = e.clipboardData.items;
-			const pastedImages: ImageContent[] = [];
-			let imageFileCount = 0;
-			if (items && onImagesPasted) {
-				// Count image items FIRST (before async readers),
-				// then read each one. The onload callback uses the
-				// count to know when all readers have finished.
-				for (let i = 0; i < items.length; i++) {
-					const item = items[i];
-					if (item.kind !== "file") continue;
-					const file = item.getAsFile();
-					if (file && (file.type.startsWith("image/") || file.type === "")) {
-						imageFileCount++;
-					}
-				}
-				for (let i = 0; i < items.length; i++) {
-					const item = items[i];
-					if (item.kind !== "file") continue;
-					const file = item.getAsFile();
-					if (!file) continue;
-					// Accept known image MIME types, or empty type
-					// (macOS clipboard quirk — we fall back to the
-					// data URL prefix to detect the real format).
-					if (!file.type.startsWith("image/") && file.type !== "") continue;
-					const mimeType = file.type || "image/png";
-					const reader = new FileReader();
-					reader.onload = () => {
-						const dataUrl = reader.result as string;
-						// "data:image/png;base64,iVBORw0KGgo…"
-						const comma = dataUrl.indexOf(",");
-						const rawBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
-						// If the blob didn't have a MIME, extract
-						// it from the data URL ("data:image/png;…").
-						let resolvedType = mimeType;
-						if (!file.type && comma >= 0) {
-							const prefix = dataUrl.slice(0, comma); // "data:image/png;base64"
-							const m = prefix.match(/^data:(image\/\w+);/);
-							if (m) resolvedType = m[1];
-						}
-						pastedImages.push({
-							type: "image" as const,
-							data: rawBase64,
-							mimeType: resolvedType,
-						});
-						// Fire callback once all readers done.
-						if (pastedImages.length === imageFileCount) {
-							onImagesPasted(pastedImages);
-						}
-					};
-					reader.readAsDataURL(file);
-				}
-			}
-
-			// ---- Text paste (existing logic) ----
-			// Always sanitize to plain text. Pasting a `/skill:foo`
-			// snippet should flow through `parseSkillSegments` so
-			// it becomes a chip. Pasting HTML (e.g. from a
-			// doc-copy) would otherwise dump `<div>`/`<span>`
-			// nodes into the editor.
-			e.preventDefault();
-			const text = e.clipboardData.getData("text/plain");
-			const el = editorRef.current;
-			if (!el) {
-				setEditorContent(text);
-				onChange(text);
-				return;
-			}
-			// Insert at caret using a text node so we keep
-			// the existing selection state.
-			const selection = window.getSelection();
-			if (!selection || selection.rangeCount === 0) {
-				// No active selection — append to end.
-				el.appendChild(document.createTextNode(text));
-			} else {
-				const range = selection.getRangeAt(0);
-				range.deleteContents();
-				range.insertNode(document.createTextNode(text));
-				// Move caret to the end of the inserted text.
-				range.collapse(false);
-				selection.removeAllRanges();
-				selection.addRange(range);
-			}
-			// Now re-render the whole editor so the pasted
-			// `/skill:foo` (if any) becomes a chip. We can't
-			// just patch the inserted text node — chips need
-			// the data-skill-chip span wrapper.
-			const newText = el.textContent ?? "";
-			renderToDOM(el, newText);
-			placeCaretAtEnd(el);
-			lastRenderedRef.current = newText;
-			setEditorContent(newText);
-			onChange(newText);
-		},
-		[onChange, onImagesPasted],
-	);
+	const handlePaste = useContentEditablePaste({
+		editorRef,
+		setEditorContent,
+		lastRenderedRef,
+		onChange,
+		onImagesPasted,
+	});
 
 	/**
 	 * 拖拽接收 WorkspaceTreePanel 的文件/文件夹。
@@ -462,12 +295,12 @@ export const ContentEditableInput = function ContentEditableInput({
 			) : null}
 			<div
 				ref={editorRef}
-				role="textbox"
 				tabIndex={0}
 				aria-multiline="true"
 				aria-label="chat input"
 				contentEditable
 				suppressContentEditableWarning
+				role="textbox"
 				spellCheck={false}
 				onInput={handleInput}
 				onKeyDown={handleKeyDown}

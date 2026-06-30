@@ -341,11 +341,11 @@ export class SessionRuntimeManager {
 	}
 
 	async restoreWorkspace(): Promise<number> {
-		const results = await Promise.all(
-			Array.from(this.projects.values())
-				.filter((p) => p.valid)
-				.map((p) => this.refreshProjectSessions(p.id)),
-		);
+		const refreshPromises: Promise<StoredSession[]>[] = [];
+		for (const p of this.projects.values()) {
+			if (p.valid) refreshPromises.push(this.refreshProjectSessions(p.id));
+		}
+		const results = await Promise.all(refreshPromises);
 		const total = results.reduce((sum, sessions) => sum + sessions.length, 0);
 
 		const settings = this.userSettings.getAll();
@@ -410,14 +410,17 @@ export class SessionRuntimeManager {
 		const project = this.projects.get(projectId);
 		if (!project?.valid) throw new Error(`Project ${projectId} not found`);
 		this.trustStore.set(project.cwd, trusted);
-		await Promise.all(
-			Array.from(this.runtimes.values())
-				.flatMap((managed) => (managed.runtime.cwd === project.cwd ? [managed] : []))
-				.map(async (managed) => {
+		const reloadPromises: Promise<void>[] = [];
+		for (const managed of this.runtimes.values()) {
+			if (managed.runtime.cwd !== project.cwd) continue;
+			reloadPromises.push(
+				(async () => {
 					managed.runtime.services.settingsManager.setProjectTrusted(trusted);
 					await managed.runtime.session.reload();
-				}),
-		);
+				})(),
+			);
+		}
+		await Promise.all(reloadPromises);
 	}
 
 	async createProject(cwd: string, name?: string): Promise<{ project: ProjectInfo; isDuplicate: boolean }> {
@@ -481,9 +484,10 @@ export class SessionRuntimeManager {
 	async executeDeleteProject(projectId: string): Promise<void> {
 		const project = this.projects.get(projectId);
 		const sessions = this.sessionsByProject.get(projectId) ?? [];
-		const runtimeIds = Array.from(this.runtimes.entries())
-			.filter(([, managed]) => managed.projectId === projectId)
-			.map(([sessionId]) => sessionId);
+		const runtimeIds: string[] = [];
+		for (const [sessionId, managed] of this.runtimes.entries()) {
+			if (managed.projectId === projectId) runtimeIds.push(sessionId);
+		}
 		const sharedDir = getProjectSharedDir(projectId);
 		const subsessionsDir = project ? getWorkspaceSubsessionsDir(project.name) : null;
 		await Promise.all(runtimeIds.map((sessionId) => this.disposeRuntime(sessionId, true)));

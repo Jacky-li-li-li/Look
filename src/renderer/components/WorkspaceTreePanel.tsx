@@ -71,6 +71,13 @@ function flattenTree(
 
 const INDENT_PX = 14;
 
+/** Initialize a ref lazily so expensive values are not rebuilt on every render. */
+function useLazyRef<T>(factory: () => T): React.MutableRefObject<T> {
+	const ref = useRef<T | null>(null);
+	if (ref.current === null) ref.current = factory();
+	return ref as React.MutableRefObject<T>;
+}
+
 export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelProps) {
 	const [expanded, setExpanded] = useAtom(expandedWorkspacePathsAtomFamily(projectId));
 	const [loaded, setLoaded] = useAtom(loadedWorkspaceChildrenAtomFamily(projectId));
@@ -79,11 +86,11 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 	const [showHiddenFiles, setShowHiddenFiles] = useAtom(showHiddenFilesAtom);
 
 	// 根目录 children(loaded map 中 "" key 指向根 children)
-	const rootChildren = loaded.get("") ?? [];
+	const rootChildren = useMemo(() => loaded.get("") ?? [], [loaded]);
 
 	// 跟踪已启动的 watcher path 集合,卸载 / 切换项目时统一停止(VSCode 模式防句柄累积)。
 	// 用 ref 而非 state 避免触发额外 re-render。必须在 useBootstrapRoot 之前声明。
-	const watchedPathsRef = useRef<Set<string>>(new Set());
+	const watchedPathsRef = useLazyRef(() => new Set<string>());
 
 	// 异步操作世代号:projectId 变化或卸载时递增,丢弃旧 project 的异步回调。
 	const operationGenRef = useRef(0);
@@ -108,7 +115,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 		watchedPathsRef.current.clear();
 		setLoaded(new Map());
 		// useBootstrapRoot 会在 showHiddenFiles 变化后自动重新执行
-	}, [projectId, showHiddenFiles, setExpanded, setLoaded]);
+	}, [projectId, showHiddenFiles, setExpanded, setLoaded, watchedPathsRef]);
 
 	useEffect(() => {
 		return () => {
@@ -118,7 +125,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 			}
 			watchedPathsRef.current.clear();
 		};
-	}, [projectId]);
+	}, [projectId, watchedPathsRef]);
 
 	const flatRows = useMemo(() => flattenTree(rootChildren, expanded, loaded), [rootChildren, expanded, loaded]);
 
@@ -126,6 +133,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 		setShowHiddenFiles((prev) => !prev);
 	}, [setShowHiddenFiles]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: watchedPathsRef is a stable mutable ref, not a reactive dependency
 	const handleToggle = useCallback(
 		async (row: FlatRow) => {
 			const { node, parentPath } = row;
@@ -181,9 +189,20 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 			// parentPath 参数保留供后续扩展
 			void parentPath;
 		},
-		[expanded, loaded, projectId, setError, setExpanded, setLoaded, showHiddenFiles],
+		[
+			expanded,
+			loaded,
+			projectId,
+			setError,
+			setExpanded,
+			setLoaded,
+			showHiddenFiles,
+			watchedPathsRef,
+			operationGenRef,
+		],
 	);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: watchedPathsRef is a stable mutable ref, not a reactive dependency
 	const handleRefresh = useCallback(async () => {
 		const gen = operationGenRef.current;
 		setIsLoading(true);
@@ -221,7 +240,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 		} finally {
 			if (operationGenRef.current === gen) setIsLoading(false);
 		}
-	}, [projectId, setLoaded, setIsLoading, setError, showHiddenFiles]);
+	}, [projectId, setLoaded, setIsLoading, setError, showHiddenFiles, watchedPathsRef, operationGenRef]);
 
 	const handleCollapseAll = useCallback(() => {
 		setExpanded(new Set());

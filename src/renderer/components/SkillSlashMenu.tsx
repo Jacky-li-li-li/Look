@@ -205,9 +205,9 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 			</div>
 
 			{/* Skills list */}
-			<div className="max-h-72 overflow-y-auto p-1.5">
+			<ul className="max-h-72 list-none overflow-y-auto p-1.5">
 				{visible.length === 0 ? (
-					<div className="flex flex-col items-center gap-1 px-3 py-6 text-center">
+					<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
 						<FileCode2 className="size-5 text-muted-foreground/60" />
 						<div className="text-[11.5px] text-muted-foreground">
 							{searchTerm ? `No skills matching "${searchTerm}"` : "No skills available yet."}
@@ -222,7 +222,7 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 								</>
 							)}
 						</div>
-					</div>
+					</li>
 				) : (
 					visible.map((skill, i) => {
 						// Read source from the SDK's `sourceInfo` first,
@@ -231,20 +231,21 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 						const src = skill.sourceInfo?.source ?? skill.source;
 						const badge = sourceBadge(src);
 						return (
-							<MenuRow
-								key={`skill-${skill.name}`}
-								rowRef={setRowRef(i)}
-								active={current?.kind === "skill" && clampedIndex === i}
-								label={skill.name}
-								hint={skill.description}
-								badge={badge.label}
-								onClick={() => onClickPick(i)}
-								onMouseEnter={() => props.onSelectedIndexChange(i)}
-							/>
+							<li key={`skill-${skill.name}`}>
+								<MenuRow
+									rowRef={setRowRef(i)}
+									active={current?.kind === "skill" && clampedIndex === i}
+									label={skill.name}
+									hint={skill.description}
+									badge={badge.label}
+									onClick={() => onClickPick(i)}
+									onMouseEnter={() => props.onSelectedIndexChange(i)}
+								/>
+							</li>
 						);
 					})
 				)}
-			</div>
+			</ul>
 
 			{/* Import from other tools */}
 			{importable.length > 0 ? (
@@ -311,6 +312,3 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 		</div>
 	);
 }
-
-/** @deprecated Import from ./handleSlashMenuKey instead */
-export { handleSlashMenuKey } from "./handleSlashMenuKey";

@@ -11,7 +11,7 @@
 
 import type { AgentDefinitionInfo } from "@shared/types";
 import { Bot } from "lucide-react";
-import { SOURCE_LABELS } from "./AgentMarketplace/AgentCard";
+import { SOURCE_LABELS } from "./AgentMarketplace/agentLabels";
 import { usePickerMenu } from "./usePickerMenu";
 
 // ---- 来源标签 ----
@@ -130,9 +130,9 @@ export function AgentHashMenu(props: AgentHashMenuProps) {
 			)}
 
 			{/* Agent list */}
-			<div className="max-h-72 overflow-y-auto p-1.5">
+			<ul className="max-h-72 list-none overflow-y-auto p-1.5">
 				{agents.length === 0 ? (
-					<div className="flex flex-col items-center gap-1 px-3 py-6 text-center">
+					<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
 						<Bot className="size-5 text-muted-foreground/60" />
 						<div className="text-[11.5px] text-muted-foreground">
 							{searchTerm ? `没有匹配 "${searchTerm}" 的 Agent` : "没有可用的 Agent"}
@@ -140,25 +140,26 @@ export function AgentHashMenu(props: AgentHashMenuProps) {
 						<div className="text-[10px] text-muted-foreground/70">
 							{searchTerm ? "尝试其他关键词" : "在 Agent 广场中启用 SubAgent 后即可使用"}
 						</div>
-					</div>
+					</li>
 				) : (
 					agents.map((agent, i) => {
 						const src = agent.source;
 						const badge = sourceBadge(src);
 						return (
-							<MenuRow
-								key={`agent-${agent.name}`}
-								rowRef={setRowRef(i)}
-								active={clampedIndex === i}
-								agent={agent}
-								badge={badge.label}
-								onClick={() => onSelectAgent(agent)}
-								onMouseEnter={() => props.onSelectedIndexChange(i)}
-							/>
+							<li key={`agent-${agent.name}`}>
+								<MenuRow
+									rowRef={setRowRef(i)}
+									active={clampedIndex === i}
+									agent={agent}
+									badge={badge.label}
+									onClick={() => onSelectAgent(agent)}
+									onMouseEnter={() => props.onSelectedIndexChange(i)}
+								/>
+							</li>
 						);
 					})
 				)}
-			</div>
+			</ul>
 
 			{/* Footer */}
 			<div className="border-t border-hairline bg-background/30 px-2.5 py-1 text-[10px] text-muted-foreground">

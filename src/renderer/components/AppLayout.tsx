@@ -1,0 +1,224 @@
+// ============================================================
+// AppLayout — 主应用布局（Sidebar + 主内容区 + RightPanel + Dialogs）
+// ============================================================
+
+import { Separator } from "@shared/components/ui/separator";
+import { TooltipProvider } from "@shared/components/ui/tooltip";
+import type { ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
+import { ThemeProvider } from "next-themes";
+import { DEFAULT_THEME } from "../lib/look-theme";
+import type { RendererSessionPhase } from "../store/sessionTypes";
+import AgentSquare from "./AgentMarketplace/AgentSquare";
+import ChatPanel from "./ChatPanel";
+import DeleteProjectDialog from "./DeleteProjectDialog";
+import EmptySessionState from "./EmptySessionState";
+import NewProjectDialog from "./NewProjectDialog";
+import PermissionDialog from "./PermissionDialog";
+import PlanApprovalDialog from "./PlanApprovalDialog";
+import PlanQuestionDialog from "./PlanQuestionDialog";
+import { RightPanel } from "./RightPanel";
+import SessionSheetBar from "./SessionSheetBar";
+import Sidebar from "./Sidebar";
+import SettingsDialog from "./settings/SettingsDialog";
+import UpdateNotification from "./UpdateNotification";
+import WelcomeScreen from "./WelcomeScreen";
+
+interface AppLayoutProps {
+	sidebarCollapsed: boolean;
+	rightPanelCollapsed: boolean;
+	agents: any[];
+	openedSessionIds: string[];
+	activeAgent: any;
+	activeAgentId: string | null;
+	activeSessionState: any;
+	activeQueue: { steering: string[]; followUp: string[] };
+	activePhase: RendererSessionPhase;
+	autoCollapse: boolean;
+	thinkingLevels: ThinkingLevel[];
+	projects: ProjectInfo[];
+	activeProject: any;
+	showAgentSquare: boolean;
+	newProjectCwd: string | null;
+	setNewProjectCwd: (v: string | null) => void;
+	pendingDelete: any;
+	showSettings: boolean;
+	settingsTab?: "general" | "api-keys" | "im-channels" | "about" | "profile";
+	providerSettings: any;
+	handleSendMessage: (text: string, images?: ImageContent[]) => Promise<boolean>;
+	handleSelectAgent: (agentId: string) => void;
+	handleCloseSessionSheet: (agentId: string) => void;
+	handleReorderSessionSheets: (nextIds: string[]) => void;
+	handleDestroyAgent: (agentId: string) => void;
+	handleAbortAgent: () => void;
+	handleThinkingChange: (level: string) => void;
+	handleModelChanged: (model: string) => void;
+	handleCreateClick: (projectId: string) => void;
+	handleRequestApiKeys: () => void;
+	handleOpenProject: () => void;
+	handleDeleteProject: (project: ProjectInfo) => void;
+	handleProjectCreated: (projectId: string) => void;
+	handleDeleteProjectCancelled: () => void;
+	handleDeleteProjectConfirmed: () => void;
+	handleRenameProject: (projectId: string, name: string) => void;
+	handleOpenProjectFolderById: (projectId: string) => void;
+	handleSettingsClick: () => void;
+	handleCloseSettings: () => void;
+	handleExpandSidebar: () => void;
+	handleExpandRightPanel: () => void;
+	onProvidersChange: (data: any) => void;
+}
+
+export default function AppLayout({
+	sidebarCollapsed,
+	rightPanelCollapsed,
+	agents,
+	openedSessionIds,
+	activeAgent,
+	activeAgentId,
+	activeSessionState,
+	activeQueue,
+	activePhase,
+	autoCollapse,
+	thinkingLevels,
+	projects,
+	activeProject,
+	showAgentSquare,
+	newProjectCwd,
+	setNewProjectCwd,
+	pendingDelete,
+	showSettings,
+	settingsTab,
+	providerSettings,
+	handleSendMessage,
+	handleSelectAgent,
+	handleCloseSessionSheet,
+	handleReorderSessionSheets,
+	handleDestroyAgent,
+	handleAbortAgent,
+	handleThinkingChange,
+	handleModelChanged,
+	handleCreateClick,
+	handleRequestApiKeys,
+	handleOpenProject,
+	handleDeleteProject,
+	handleProjectCreated,
+	handleDeleteProjectCancelled,
+	handleDeleteProjectConfirmed,
+	handleRenameProject,
+	handleOpenProjectFolderById,
+	handleSettingsClick,
+	handleCloseSettings,
+	handleExpandSidebar,
+	handleExpandRightPanel,
+	onProvidersChange,
+}: AppLayoutProps) {
+	return (
+		<ThemeProvider
+			attribute="data-theme"
+			defaultTheme={DEFAULT_THEME.tone}
+			themes={["light", "dark"]}
+			enableSystem={false}
+			disableTransitionOnChange
+		>
+			<TooltipProvider>
+				<div
+					className="app-shell flex h-screen overflow-hidden bg-background p-2"
+					data-sidebar-collapsed={sidebarCollapsed}
+					data-right-panel-collapsed={rightPanelCollapsed}
+				>
+					<Sidebar
+						onSelect={handleSelectAgent}
+						onDestroy={handleDestroyAgent}
+						onCreateClick={handleCreateClick}
+						onSettingsClick={handleSettingsClick}
+						onCreateProject={handleOpenProject}
+						onDeleteProject={handleDeleteProject}
+						onOpenProject={handleOpenProjectFolderById}
+						onRenameProject={handleRenameProject}
+					/>
+
+					<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
+
+					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
+						{projects.length === 0 ? (
+							<WelcomeScreen onOpenProject={handleOpenProject} />
+						) : showAgentSquare ? (
+							<AgentSquare />
+						) : (
+							<>
+								<SessionSheetBar
+									agentIds={openedSessionIds}
+									agents={agents}
+									projects={projects}
+									activeAgentId={activeAgentId}
+									sidebarCollapsed={sidebarCollapsed}
+									onSelect={handleSelectAgent}
+									onClose={handleCloseSessionSheet}
+									onReorder={handleReorderSessionSheets}
+									onExpandSidebar={handleExpandSidebar}
+									onExpandRightPanel={handleExpandRightPanel}
+								/>
+								{activeAgent ? (
+									<ChatPanel
+										agentId={activeAgent.id}
+										agentName={activeAgent.name}
+										sessionState={activeSessionState}
+										autoCollapse={autoCollapse}
+										queue={activeQueue}
+										phase={activePhase}
+										currentModel={activeAgent.model}
+										currentThinking={activeAgent.thinkingLevel}
+										availableThinkingLevels={thinkingLevels}
+										onSend={handleSendMessage}
+										onThinkingChange={handleThinkingChange}
+										onModelChange={handleModelChanged}
+										onRequestApiKeys={handleRequestApiKeys}
+										onAbort={handleAbortAgent}
+									/>
+								) : (
+									<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
+								)}
+							</>
+						)}
+					</main>
+
+					<RightPanel />
+
+					{newProjectCwd && (
+						<NewProjectDialog
+							open={!!newProjectCwd}
+							cwd={newProjectCwd}
+							onClose={() => setNewProjectCwd(null)}
+							onCreated={handleProjectCreated}
+						/>
+					)}
+					{pendingDelete && (
+						<DeleteProjectDialog
+							open={!!pendingDelete}
+							projectId={pendingDelete.projectId}
+							projectName={pendingDelete.projectName}
+							agentCount={pendingDelete.agentCount}
+							runningCount={pendingDelete.runningCount}
+							onClose={handleDeleteProjectCancelled}
+							onDeleted={handleDeleteProjectConfirmed}
+						/>
+					)}
+					{showSettings && (
+						<SettingsDialog
+							open={showSettings}
+							providers={providerSettings.providers}
+							customStats={providerSettings.customStats}
+							onProvidersChange={onProvidersChange}
+							onClose={handleCloseSettings}
+							defaultTab={settingsTab}
+						/>
+					)}
+					<PermissionDialog />
+					<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
+					<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
+				</div>
+			</TooltipProvider>
+			<UpdateNotification />
+		</ThemeProvider>
+	);
+}

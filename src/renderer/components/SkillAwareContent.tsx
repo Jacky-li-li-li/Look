@@ -8,6 +8,7 @@
 // ============================================================
 
 import { cn } from "@shared/lib/utils";
+import { hashKey } from "../lib/stableKey";
 import { AgentTag } from "./AgentTag";
 import { SkillTag } from "./SkillTag";
 import StreamingMarkdown from "./StreamingMarkdown";
@@ -49,24 +50,29 @@ export function SkillAwareContent({ content, isStreaming }: SkillAwareContentPro
 		>
 			{agentSegments.map((seg, i) => {
 				if (seg.kind === "agent") {
-					return <AgentTag key={`a-${seg.name}-${i}`} name={seg.name} />;
+					return <AgentTag key={`a-${seg.name}-${hashKey(seg.name)}`} name={seg.name} />;
 				}
 				// 文本段：递归解析 skill
 				if (!seg.value) return null;
 				const skillSegs = parseSkillSegments(seg.value);
 				if (!skillSegs.some((s) => s.kind === "skill")) {
 					return (
-						<StreamingMarkdown key={`t-${i}`} content={seg.value} isStreaming={isStreaming ?? false} inline />
+						<StreamingMarkdown
+							key={`t-${hashKey(seg.value)}`}
+							content={seg.value}
+							isStreaming={isStreaming ?? false}
+							inline
+						/>
 					);
 				}
 				return skillSegs.map((ss, j) => {
 					if (ss.kind === "skill") {
-						return <SkillTag key={`s-${ss.name}-${i}-${j}`} name={ss.name} />;
+						return <SkillTag key={`s-${ss.name}-${hashKey(ss.name)}`} name={ss.name} />;
 					}
 					if (!ss.value) return null;
 					return (
 						<StreamingMarkdown
-							key={`st-${i}-${j}`}
+							key={`st-${hashKey(ss.value)}`}
 							content={ss.value}
 							isStreaming={isStreaming ?? false}
 							inline

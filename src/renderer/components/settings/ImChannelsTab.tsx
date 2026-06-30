@@ -8,7 +8,7 @@ import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { Loader2, MessageCircle, Send, Unlink } from "lucide-react";
 import QRCode from "qrcode";
-import { createElement, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { createElement, type ReactNode, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { ImChannelInfo } from "./types";
@@ -245,15 +245,86 @@ function RecentMessageCard({ message }: { message: IncomingMessage }) {
 	);
 }
 
+interface ConnectionState {
+	channels: ImChannelInfo[];
+	loading: boolean;
+	registration: RegistrationState | null;
+	qrSvg: { viewBox?: string; nodes: ReactNode[] } | null;
+	recentMessage: IncomingMessage | null;
+}
+
+interface TestState {
+	form: { receiveIdType: string; receiveId: string; text: string };
+	sending: boolean;
+}
+
 export default function ImChannelsTab() {
 	const { t } = useTranslation();
-	const [channels, setChannels] = useState<ImChannelInfo[]>([]);
-	const [loading, setLoading] = useState(false);
-	const [registration, setRegistration] = useState<RegistrationState | null>(null);
-	const [qrSvg, setQrSvg] = useState<{ viewBox?: string; nodes: ReactNode[] } | null>(null);
-	const [recentMessage, setRecentMessage] = useState<IncomingMessage | null>(null);
-	const [testForm, setTestForm] = useState({ receiveIdType: "open_id", receiveId: "", text: "" });
-	const [sendingTest, setSendingTest] = useState(false);
+	const [conn, setConn] = useState<ConnectionState>({
+		channels: [],
+		loading: false,
+		registration: null,
+		qrSvg: null,
+		recentMessage: null,
+	});
+	const [test, setTest] = useState<TestState>({
+		form: { receiveIdType: "open_id", receiveId: "", text: "" },
+		sending: false,
+	});
+
+	const { channels, loading, registration, qrSvg, recentMessage } = conn;
+	const { form: testForm, sending: sendingTest } = test;
+
+	const setChannels = useCallback(
+		(value: SetStateAction<ImChannelInfo[]>) =>
+			setConn((prev) => ({
+				...prev,
+				channels:
+					typeof value === "function"
+						? (value as (prev: ImChannelInfo[]) => ImChannelInfo[])(prev.channels)
+						: value,
+			})),
+		[],
+	);
+	const setLoading = useCallback((next: boolean) => setConn((prev) => ({ ...prev, loading: next })), []);
+	const setRegistration = useCallback(
+		(value: SetStateAction<RegistrationState | null>) =>
+			setConn((prev) => ({
+				...prev,
+				registration:
+					typeof value === "function"
+						? (value as (prev: RegistrationState | null) => RegistrationState | null)(prev.registration)
+						: value,
+			})),
+		[],
+	);
+	const setQrSvg = useCallback(
+		(next: { viewBox?: string; nodes: ReactNode[] } | null) => setConn((prev) => ({ ...prev, qrSvg: next })),
+		[],
+	);
+	const setRecentMessage = useCallback(
+		(next: IncomingMessage | null) => setConn((prev) => ({ ...prev, recentMessage: next })),
+		[],
+	);
+	const setTestForm = useCallback(
+		(value: SetStateAction<{ receiveIdType: string; receiveId: string; text: string }>) =>
+			setTest((prev) => ({
+				...prev,
+				form:
+					typeof value === "function"
+						? (
+								value as (prev: { receiveIdType: string; receiveId: string; text: string }) => {
+									receiveIdType: string;
+									receiveId: string;
+									text: string;
+								}
+							)(prev.form)
+						: value,
+			})),
+		[],
+	);
+	const setSendingTest = useCallback((next: boolean) => setTest((prev) => ({ ...prev, sending: next })), []);
+
 	const qrUrlRef = useRef<string | undefined>(undefined);
 
 	const loadChannels = useCallback(async () => {
@@ -266,7 +337,7 @@ export default function ImChannelsTab() {
 		} catch (_err) {
 			toast.error(t("settings.imConnectionError"));
 		}
-	}, [t]);
+	}, [t, setChannels]);
 
 	useEffect(() => {
 		loadChannels();
@@ -325,7 +396,6 @@ export default function ImChannelsTab() {
 				);
 				if (statusEvent.status === "connected") {
 					setRegistration(null);
-					setQrSvg(null);
 				}
 			} else if (type === "im:message-received") {
 				const msg = e as unknown as IncomingMessage & { type: string };
@@ -333,7 +403,7 @@ export default function ImChannelsTab() {
 			}
 		});
 		return unsubscribe;
-	}, [loadChannels, t]);
+	}, [loadChannels, t, setChannels, setRecentMessage, setRegistration]);
 
 	useEffect(() => {
 		if (!registration?.url || registration.url === qrUrlRef.current) return;
@@ -355,7 +425,7 @@ export default function ImChannelsTab() {
 		return () => {
 			cancelled = true;
 		};
-	}, [registration?.url]);
+	}, [registration?.url, setQrSvg]);
 
 	useEffect(() => {
 		if (registration?.expireIn == null || registration.phase !== "qr") return;
@@ -366,7 +436,7 @@ export default function ImChannelsTab() {
 			});
 		}, 1000);
 		return () => clearInterval(interval);
-	}, [registration?.expireIn, registration?.phase]);
+	}, [registration?.expireIn, registration?.phase, setRegistration]);
 
 	const handleConnect = async () => {
 		if (!api) return;

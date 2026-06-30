@@ -103,6 +103,19 @@ const ChatMessageList = memo(function ChatMessageList({
 	const [isAtBottom, setIsAtBottom] = useState(true);
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	useEffect(() => setAtBottomAtom(isAtBottom), [isAtBottom, setAtBottomAtom]);
+	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	const handleAtBottomChange = useCallback(
+		(atBottom: boolean) => {
+			setIsAtBottom(atBottom);
+			if (atBottom && activeAgentId) {
+				appStore.set(
+					recentlyCompletedAtom,
+					appStore.get(recentlyCompletedAtom).filter((id) => id !== activeAgentId),
+				);
+			}
+		},
+		[activeAgentId],
+	);
 
 	const scrollToBottom = useCallback(() => {
 		requestAnimationFrame(() =>
@@ -403,7 +416,7 @@ const ChatMessageList = memo(function ChatMessageList({
 					style={{ height: "100%" }}
 					totalCount={timeline.length}
 					followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
-					atBottomStateChange={setIsAtBottom}
+					atBottomStateChange={handleAtBottomChange}
 					itemContent={itemContent}
 				/>
 				<ScrollToBottomButton isAtBottom={isAtBottom} virtuosoRef={virtuosoRef} />
@@ -422,17 +435,6 @@ export function ScrollToBottomButton({ isAtBottom, virtuosoRef }: ScrollToBottom
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const runningAgents = useAtomValue(runningAgentsAtom);
 	const isAgentRunning = activeAgentId ? runningAgents.has(activeAgentId) : false;
-	const wasAtBottomRef = useRef(isAtBottom);
-	useEffect(() => {
-		const justLandedAtBottom = isAtBottom && !wasAtBottomRef.current;
-		wasAtBottomRef.current = isAtBottom;
-		if (justLandedAtBottom && activeAgentId) {
-			appStore.set(
-				recentlyCompletedAtom,
-				appStore.get(recentlyCompletedAtom).filter((id) => id !== activeAgentId),
-			);
-		}
-	}, [isAtBottom, activeAgentId]);
 	if (isAtBottom) return null;
 	return (
 		<button

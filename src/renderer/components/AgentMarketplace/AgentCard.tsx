@@ -23,12 +23,6 @@ interface AgentCardProps {
 	onDelete: (agent: AgentDefinitionInfo) => void;
 }
 
-export const SOURCE_LABELS: Record<string, string> = {
-	user: "我的",
-	project: "项目",
-	builtin: "内置",
-};
-
 const CREATION_LABELS: Record<string, string> = {
 	editor: "手动创建",
 	skill: "Skill 创建",

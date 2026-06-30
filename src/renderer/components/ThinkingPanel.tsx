@@ -20,18 +20,13 @@ interface ThinkingPanelProps {
 }
 
 export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: ThinkingPanelProps) {
-	const [open, setOpen] = React.useState(isStreaming);
-	const userManuallyToggled = React.useRef(false);
-	const prevStreaming = React.useRef(isStreaming);
+	// Derive open state from streaming, but allow manual toggle to override.
+	// null means "follow isStreaming"; boolean means user has taken control.
+	const [manualOpen, setManualOpen] = React.useState<boolean | null>(null);
+	const open = manualOpen ?? (isStreaming || !autoCollapse);
 
-	// When streaming ends, auto-collapse if setting enabled and user hasn't manually toggled
-	React.useEffect(() => {
-		if (prevStreaming.current === true && isStreaming === false) {
-			if (autoCollapse && !userManuallyToggled.current) {
-				setOpen(false);
-			}
-		}
-		prevStreaming.current = isStreaming;
+	const handleToggle = React.useCallback(() => {
+		setManualOpen((prev) => !(prev ?? (isStreaming || !autoCollapse)));
 	}, [isStreaming, autoCollapse]);
 
 	// When streaming but no thinking content has arrived yet, show a loading
@@ -53,10 +48,7 @@ export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: T
 			<button
 				type="button"
 				className="flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-				onClick={() => {
-					userManuallyToggled.current = true;
-					setOpen((v) => !v);
-				}}
+				onClick={handleToggle}
 			>
 				<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
 				<Brain className="size-3.5 shrink-0 text-blue-400" />

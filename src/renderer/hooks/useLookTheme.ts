@@ -8,7 +8,7 @@
 // the initial class on boot.
 // ============================================================
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import {
 	ALL_STYLES,
 	DEFAULT_THEME,
@@ -20,6 +20,18 @@ import {
 } from "../lib/look-theme";
 
 const api = (window as any).look;
+
+let cachedTheme: LookTheme | null = null;
+
+/** Read theme from current <html> class. Returns a stable reference while the values stay the same. */
+function getSnapshot(): LookTheme {
+	const next = readLookThemeFromDom();
+	if (cachedTheme && cachedTheme.style === next.style && cachedTheme.tone === next.tone) {
+		return cachedTheme;
+	}
+	cachedTheme = next;
+	return next;
+}
 
 /** Read theme from current <html> class. */
 export function readLookThemeFromDom(): LookTheme {
@@ -62,23 +74,19 @@ export interface UseLookThemeResult extends LookTheme {
 }
 
 export function useLookTheme(): UseLookThemeResult {
-	const [theme, setLocal] = useState<LookTheme>(() => readLookThemeFromDom());
-
-	// Keep React state in sync with the DOM (handles boot-time writes
-	// from App.tsx and external mutations).
-	useEffect(() => {
-		if (typeof document === "undefined") return;
-		const obs = new MutationObserver(() => {
-			const next = readLookThemeFromDom();
-			setLocal((prev) => (prev.style === next.style && prev.tone === next.tone ? prev : next));
-		});
-		obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-		return () => obs.disconnect();
-	}, []);
+	const theme = useSyncExternalStore(
+		(callback) => {
+			if (typeof document === "undefined") return () => {};
+			const obs = new MutationObserver(callback);
+			obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+			return () => obs.disconnect();
+		},
+		getSnapshot,
+		() => DEFAULT_THEME,
+	);
 
 	const setTheme = useCallback((style: LookStyle, tone: LookTone) => {
 		writeLookThemeToDom({ style, tone });
-		setLocal({ style, tone });
 		// Persist via IPC; failures are non-fatal — the DOM update already happened.
 		api?.setGeneralSettings?.({ themeStyle: style, themeTone: tone }).catch(() => {});
 	}, []);

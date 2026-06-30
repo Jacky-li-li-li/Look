@@ -12,6 +12,7 @@ import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shar
 import { useAtomValue } from "jotai";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
+import { hashKey } from "../lib/stableKey";
 import { userProfileAtom } from "../store/authAtoms";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
@@ -125,7 +126,7 @@ function ContentBlocks({
 					if (block.type === "text") {
 						if (!block.text) return null;
 						return (
-							<div key={`text-${index}`} className="message-prose">
+							<div key={`text-${hashKey(block.text)}`} className="message-prose">
 								<SkillAwareContent content={block.text} isStreaming={isStreaming} />
 							</div>
 						);
@@ -134,14 +135,14 @@ function ContentBlocks({
 						if (!block.thinking) return null;
 						return (
 							<ThinkingPanel
-								key={`thinking-${index}`}
+								key={`thinking-${hashKey(block.thinking)}`}
 								thinking={block.thinking}
 								isStreaming={isStreaming}
 								autoCollapse={autoCollapse}
 							/>
 						);
 					}
-					if (block.type === "image") return <ImageBlock key={`image-${index}`} block={block} />;
+					if (block.type === "image") return <ImageBlock key={`image-${hashKey(block.data)}`} block={block} />;
 
 					const execution = toolExecutions[block.id];
 					const persistedResult = toolResultMap?.[block.id];

@@ -4,6 +4,7 @@
 
 import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
+import DOMPurify from "dompurify";
 
 /**
  * Auto-close unclosed fenced code blocks (```) so ReactMarkdown
@@ -62,7 +63,7 @@ function escapeGlobAsterisks(text: string): string {
 
 import { Check, Copy } from "lucide-react";
 import type React from "react";
-import { createContext, lazy, memo, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, lazy, memo, Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useThrottle } from "../hooks/useThrottle";
@@ -92,7 +93,7 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({
 	language: string;
 	children: React.ReactNode;
 }) {
-	const isStreaming = useContext(StreamingContext);
+	const isStreaming = use(StreamingContext);
 	const [copied, setCopied] = useState(false);
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const code = String(children).replace(/\n$/, "");
@@ -137,8 +138,8 @@ const ShikiCodeBlock = memo(function ShikiCodeBlock({
 				</Button>
 			</div>
 			{html ? (
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki returns renderer-generated highlight markup for code blocks.
-				<div className="shiki-code-output" dangerouslySetInnerHTML={{ __html: html }} />
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki output sanitized with DOMPurify before rendering.
+				<div className="shiki-code-output" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
 			) : (
 				<pre className="overflow-x-auto p-3 text-[12px] leading-relaxed font-mono">
 					<code>{code}</code>

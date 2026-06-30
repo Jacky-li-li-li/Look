@@ -9,7 +9,7 @@ import { Switch } from "@shared/components/ui/switch";
 import { cn } from "@shared/lib/utils";
 import { useAtom } from "jotai";
 import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
@@ -17,6 +17,26 @@ import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authA
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const api = (window as any).look;
+
+interface LoginState {
+	mode: "login" | "register" | "forgot";
+	email: string;
+	password: string;
+	rememberMe: boolean;
+	submitting: boolean;
+	error: string | null;
+	sent: boolean;
+}
+
+const INITIAL_LOGIN_STATE: LoginState = {
+	mode: "login",
+	email: "",
+	password: "",
+	rememberMe: true,
+	submitting: false,
+	error: null,
+	sent: false,
+};
 
 // ── Sub-components ──
 
@@ -308,18 +328,19 @@ export default function LoginScreen() {
 	const [, setAuthLoading] = useAtom(authLoadingAtom);
 	const [, setUserProfile] = useAtom(userProfileAtom);
 
-	const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [rememberMe, setRememberMe] = useState(true);
-	const [submitting, setSubmitting] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [sent, setSent] = useState(false);
+	const [state, setState] = useState(INITIAL_LOGIN_STATE);
+	const { mode, email, password, rememberMe, submitting, error, sent } = state;
+
+	const setMode = useCallback((next: LoginState["mode"]) => setState((prev) => ({ ...prev, mode: next })), []);
+	const setEmail = useCallback((next: string) => setState((prev) => ({ ...prev, email: next })), []);
+	const setPassword = useCallback((next: string) => setState((prev) => ({ ...prev, password: next })), []);
+	const setRememberMe = useCallback((next: boolean) => setState((prev) => ({ ...prev, rememberMe: next })), []);
+	const setSubmitting = useCallback((next: boolean) => setState((prev) => ({ ...prev, submitting: next })), []);
+	const setError = useCallback((next: string | null) => setState((prev) => ({ ...prev, error: next })), []);
+	const setSent = useCallback((next: boolean) => setState((prev) => ({ ...prev, sent: next })), []);
 
 	function reset() {
-		setError(null);
-		setPassword("");
-		setSent(false);
+		setState((prev) => ({ ...prev, error: null, password: "", sent: false }));
 	}
 
 	// ── Login ──

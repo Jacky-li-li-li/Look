@@ -173,34 +173,45 @@ function formatStatSuffix(
 function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { t } = useTranslation();
 	const { style: themeStyle } = useLookTheme();
-	// Auto open when running, auto close on completion
-	const [open, setOpen] = React.useState(toolCall.status === "running");
-	const prevStatus = React.useRef(toolCall.status);
-	const userManuallyToggled = React.useRef(false);
+	// Auto open when running, auto close on completion after a short delay.
+	// manualOpen = null means "follow derived state"; true/false override it.
+	const [{ manualOpen, collapseAfter }, setPanelState] = React.useState<{
+		manualOpen: boolean | null;
+		collapseAfter: number | null;
+	}>({ manualOpen: null, collapseAfter: null });
+	const prevStatusRef = React.useRef<string | undefined>(undefined);
 	const cancelCollapseRef = React.useRef<(() => void) | null>(null);
 
-	// Track status transitions for auto-expand/collapse
-	React.useEffect(() => {
-		const prev = prevStatus.current;
-		const curr = toolCall.status;
+	const isRunning = toolCall.status === "running";
+	const open = manualOpen ?? (isRunning || (collapseAfter != null && Date.now() < collapseAfter));
 
-		if (prev !== curr) {
-			if (curr === "running") {
-				// Auto-expand when tool starts running, reset manual override
-				// and cancel any pending collapse from a previous completion.
-				cancelCollapseRef.current?.();
-				cancelCollapseRef.current = null;
-				userManuallyToggled.current = false;
-				setOpen(true);
-			} else if ((curr === "success" || curr === "error") && !userManuallyToggled.current) {
-				// Cancel previous collapse before scheduling a new one
-				// (e.g. tool cycled success→running→success within 300ms).
-				cancelCollapseRef.current?.();
-				cancelCollapseRef.current = scheduleCollapse(() => setOpen(false));
-			}
-			prevStatus.current = curr;
+	// Reset panel state when the tool starts running. Doing this inline
+	// during render avoids the extra stale frame of an effect-based sync.
+	if (toolCall.status !== prevStatusRef.current) {
+		const curr = toolCall.status;
+		prevStatusRef.current = curr;
+		if (curr === "running") {
+			cancelCollapseRef.current?.();
+			cancelCollapseRef.current = null;
+			setPanelState({ manualOpen: null, collapseAfter: null });
 		}
-	}, [toolCall.status]);
+	}
+
+	// Schedule delayed collapse once when the tool completes.
+	React.useEffect(() => {
+		if (
+			(toolCall.status === "success" || toolCall.status === "error") &&
+			manualOpen === null &&
+			collapseAfter === null
+		) {
+			cancelCollapseRef.current?.();
+			cancelCollapseRef.current = scheduleCollapse(() => {
+				setPanelState((state) => ({ ...state, collapseAfter: Date.now() }));
+				cancelCollapseRef.current = null;
+			});
+		}
+		return () => cancelCollapseRef.current?.();
+	}, [toolCall.status, manualOpen, collapseAfter]);
 
 	// Clean up pending collapse on unmount.
 	React.useEffect(() => () => cancelCollapseRef.current?.(), []);
@@ -239,8 +250,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					disabled={!hasBody}
 					onClick={() => {
 						if (hasBody) {
-							userManuallyToggled.current = true;
-							setOpen((v) => !v);
+							setPanelState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? open) }));
 						}
 					}}
 				>

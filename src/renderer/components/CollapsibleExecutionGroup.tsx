@@ -22,6 +22,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
 import type { LookStyle } from "../lib/look-theme";
+import { hashKey } from "../lib/stableKey";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
@@ -126,17 +127,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 		if (anyRunning) setManuallyOpened(false);
 	}, [anyRunning]);
 
-	// While streaming is on, expanded; once it flips off and everything is
-	// done, switch back to badge (unless the user is currently inspecting).
-	const streamingRef = React.useRef(isStreaming);
-	React.useEffect(() => {
-		const wasStreaming = streamingRef.current;
-		streamingRef.current = isStreaming;
-		if (wasStreaming && !isStreaming && allCompleted && !manuallyOpened) {
-			// No-op: collapsed-badge is the default rendering path; nothing to do.
-		}
-	}, [isStreaming, allCompleted, manuallyOpened]);
-
 	const expanded = isStreaming || manuallyOpened || !allCompleted;
 
 	const handleBadgeClick = React.useCallback(() => {
@@ -195,7 +185,10 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 				<div className="flex flex-col gap-1.5">
 					{interleaved.map((node, i) =>
 						node.kind === "text" ? (
-							<div key={`note-${i}`} className="message-prose text-[10px] text-muted-foreground">
+							<div
+								key={`note-${hashKey(node.text)}`}
+								className="message-prose text-[10px] text-muted-foreground"
+							>
 								<SkillAwareContent content={node.text} isStreaming={isStreaming} />
 							</div>
 						) : (
@@ -235,7 +228,7 @@ function renderBlock(
 			<ThinkingPanel
 				key={
 					(block as ThinkingContent).thinkingSignature ??
-					`group-thinking-${(block as ThinkingContent).thinking?.slice(0, 32) ?? index}`
+					`group-thinking-${hashKey((block as ThinkingContent).thinking ?? "")}`
 				}
 				thinking={block.thinking}
 				isStreaming={isStreaming}

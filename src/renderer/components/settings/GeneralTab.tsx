@@ -54,36 +54,53 @@ function SettingRow({
 	);
 }
 
+interface GeneralSettingsState {
+	language: string;
+	autoCollapse: boolean;
+	compactionEnabled: boolean;
+	autoTitleModel: string | null;
+	availableModels: Array<{ provider: string; id: string; name: string }>;
+}
+
 export default function GeneralTab() {
 	const { t, i18n } = useTranslation();
-	const [language, setLanguage] = useState("en");
-	const [autoCollapse, setAutoCollapse] = useState(true);
-	const [compactionEnabled, setCompactionEnabled] = useState(true);
-	const [autoTitleModel, setAutoTitleModel] = useState<string | null>(null);
-	const [availableModels, setAvailableModels] = useState<Array<{ provider: string; id: string; name: string }>>([]);
+	const [state, setState] = useState<GeneralSettingsState>({
+		language: "en",
+		autoCollapse: true,
+		compactionEnabled: true,
+		autoTitleModel: null,
+		availableModels: [],
+	});
+	const { language, autoCollapse, compactionEnabled, autoTitleModel, availableModels } = state;
 
 	useEffect(() => {
 		if (!api) return;
 		api.getGeneralSettings()
 			.then((r: any) => {
 				if (r?.success && r.settings) {
-					if (r.settings.language) setLanguage(r.settings.language);
-					if (r.settings.autoCollapse !== undefined) setAutoCollapse(r.settings.autoCollapse);
-					if (r.settings.compactionEnabled !== undefined) setCompactionEnabled(r.settings.compactionEnabled);
-					if ("autoTitleModel" in r.settings) setAutoTitleModel(r.settings.autoTitleModel);
+					setState((prev) => ({
+						...prev,
+						...(r.settings.language ? { language: r.settings.language } : {}),
+						...(r.settings.autoCollapse !== undefined ? { autoCollapse: r.settings.autoCollapse } : {}),
+						...(r.settings.compactionEnabled !== undefined
+							? { compactionEnabled: r.settings.compactionEnabled }
+							: {}),
+						...("autoTitleModel" in r.settings ? { autoTitleModel: r.settings.autoTitleModel } : {}),
+					}));
 				}
 			})
 			.catch(() => {});
 		api.getModels()
 			.then((r: any) => {
 				if (r?.models) {
-					setAvailableModels(
-						r.models.map((m: any) => ({
+					setState((prev) => ({
+						...prev,
+						availableModels: r.models.map((m: any) => ({
 							provider: m.provider,
 							id: m.id,
 							name: m.name ?? m.id,
 						})),
-					);
+					}));
 				}
 			})
 			.catch(() => {});
@@ -106,7 +123,7 @@ export default function GeneralTab() {
 						<Select
 							value={language}
 							onValueChange={(v) => {
-								setLanguage(v);
+								setState((prev) => ({ ...prev, language: v }));
 								i18n.changeLanguage(v);
 								persistSettings({ language: v });
 							}}
@@ -140,7 +157,7 @@ export default function GeneralTab() {
 							size="sm"
 							checked={autoCollapse}
 							onCheckedChange={(v) => {
-								setAutoCollapse(v);
+								setState((prev) => ({ ...prev, autoCollapse: v }));
 								persistSettings({ autoCollapse: v });
 							}}
 						/>
@@ -154,7 +171,7 @@ export default function GeneralTab() {
 							value={autoTitleModel ?? USE_SESSION_MODEL}
 							onValueChange={(v) => {
 								const next = v === USE_SESSION_MODEL ? null : v;
-								setAutoTitleModel(next);
+								setState((prev) => ({ ...prev, autoTitleModel: next }));
 								persistSettings({ autoTitleModel: next });
 							}}
 						>
@@ -190,7 +207,7 @@ export default function GeneralTab() {
 							size="sm"
 							checked={compactionEnabled}
 							onCheckedChange={(v) => {
-								setCompactionEnabled(v);
+								setState((prev) => ({ ...prev, compactionEnabled: v }));
 								persistSettings({ compactionEnabled: v });
 							}}
 						/>

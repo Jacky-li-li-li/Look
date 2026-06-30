@@ -74,8 +74,11 @@ function ZoomControls({
 const MermaidBlock = memo(function MermaidBlock({ children }: MermaidBlockProps) {
 	const [copied, setCopied] = useState(false);
 	const [showCode, setShowCode] = useState(false);
-	const [svg, setSvg] = useState<string | null>(null);
-	const [error, setError] = useState<string | null>(null);
+	const [renderResult, setRenderResult] = useState<{ svg: string | null; error: string | null }>({
+		svg: null,
+		error: null,
+	});
+	const { svg, error } = renderResult;
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const renderIdRef = useRef(`mermaid-${Math.random().toString(36).slice(2, 9)}`);
 	const code = String(children).replace(/\n$/, "");
@@ -99,11 +102,6 @@ const MermaidBlock = memo(function MermaidBlock({ children }: MermaidBlockProps)
 		maxScale: 8,
 	});
 
-	// Reset zoom when diagram content changes
-	useEffect(() => {
-		if (svg) reset();
-	}, [svg, reset]);
-
 	useEffect(() => {
 		initMermaid();
 		let cancelled = false;
@@ -117,14 +115,13 @@ const MermaidBlock = memo(function MermaidBlock({ children }: MermaidBlockProps)
 						/<svg([^>]*?)height="[^"]*"([^>]*)>/,
 						'<svg$1$2 style="max-width: 100%; height: auto; display: block;">',
 					);
-					setSvg(cleaned);
-					setError(null);
+					setRenderResult({ svg: cleaned, error: null });
+					reset();
 				}
 			})
 			.catch((err) => {
 				if (!cancelled) {
-					setSvg(null);
-					setError(err?.message ?? "Mermaid render failed");
+					setRenderResult({ svg: null, error: err?.message ?? "Mermaid render failed" });
 				}
 			});
 
@@ -133,7 +130,7 @@ const MermaidBlock = memo(function MermaidBlock({ children }: MermaidBlockProps)
 			const el = document.getElementById(id);
 			if (el) el.remove();
 		};
-	}, [code]);
+	}, [code, reset]);
 
 	useEffect(() => () => clearTimeout(timerRef.current), []);
 
