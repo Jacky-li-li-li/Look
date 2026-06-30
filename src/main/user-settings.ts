@@ -241,8 +241,11 @@ export class UserSettingsStore {
 		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
 		if (partial.autoTitleModel !== undefined) uiPartial.autoTitleModel = partial.autoTitleModel;
 		if (partial.subagentEnabled !== undefined) uiPartial.subagentEnabled = partial.subagentEnabled;
-		if (partial.enabledAgentDefinitions !== undefined) uiPartial.enabledAgentDefinitions = partial.enabledAgentDefinitions === null ? null : [...partial.enabledAgentDefinitions];
-		if (partial.enabledSkills !== undefined) uiPartial.enabledSkills = partial.enabledSkills === null ? null : [...partial.enabledSkills];
+		if (partial.enabledAgentDefinitions !== undefined)
+			uiPartial.enabledAgentDefinitions =
+				partial.enabledAgentDefinitions === null ? null : [...partial.enabledAgentDefinitions];
+		if (partial.enabledSkills !== undefined)
+			uiPartial.enabledSkills = partial.enabledSkills === null ? null : [...partial.enabledSkills];
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

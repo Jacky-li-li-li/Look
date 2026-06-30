@@ -62,7 +62,7 @@ export default function SkillsPanel() {
 
 		window.look.detectCommonSkillPaths().then((detected) => {
 			if (!detected?.success || !detected.detected) return;
-			const paths = detected.detected.filter((d: any) => d.exists && d.skillCount > 0).map((d: any) => d.path);
+			const paths = detected.detected.flatMap((d: any) => (d.exists && d.skillCount > 0 ? [d.path] : []));
 			if (paths.length > 0) {
 				window.look.importSkillPaths(paths).then((result) => {
 					if (result?.success && result.importedCount > 0) {

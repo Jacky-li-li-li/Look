@@ -42,7 +42,6 @@ import {
 	parseAgentFile,
 } from "./extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "./extensions/subagent/subagent-extension.js";
-import { getBuiltinSkillsDir } from "./look-default-skills.js";
 import type {
 	AgentConfig,
 	SubagentHost,
@@ -168,6 +167,7 @@ function isPermissionMode(value: unknown): value is PermissionMode {
 export class SessionRuntimeManager {
 	private readonly projects = new Map<string, ProjectInfo>();
 	private readonly sessionsByProject = new Map<string, StoredSession[]>();
+	private readonly sessionsById = new Map<string, StoredSession>();
 	private readonly eventCallbacks: EventCallback[] = [];
 	private readonly authStorage: AuthStorage;
 	private readonly modelRegistry: ModelRegistry;
@@ -341,11 +341,12 @@ export class SessionRuntimeManager {
 	}
 
 	async restoreWorkspace(): Promise<number> {
-		let total = 0;
-		for (const project of this.projects.values()) {
-			if (!project.valid) continue;
-			total += (await this.refreshProjectSessions(project.id)).length;
-		}
+		const results = await Promise.all(
+			Array.from(this.projects.values())
+				.filter((p) => p.valid)
+				.map((p) => this.refreshProjectSessions(p.id)),
+		);
+		const total = results.reduce((sum, sessions) => sum + sessions.length, 0);
 
 		const settings = this.userSettings.getAll();
 		const preferredProject = this.projects.get(settings.lastActiveProjectId);
@@ -411,7 +412,7 @@ export class SessionRuntimeManager {
 		this.trustStore.set(project.cwd, trusted);
 		await Promise.all(
 			Array.from(this.runtimes.values())
-				.filter((managed) => managed.runtime.cwd === project.cwd)
+				.flatMap((managed) => (managed.runtime.cwd === project.cwd ? [managed] : []))
 				.map(async (managed) => {
 					managed.runtime.services.settingsManager.setProjectTrusted(trusted);
 					await managed.runtime.session.reload();
@@ -462,9 +463,9 @@ export class SessionRuntimeManager {
 		const project = this.projects.get(projectId);
 		if (!project) return;
 		const persisted = this.sessionsByProject.get(projectId) ?? [];
-		const runtimeIds = Array.from(this.runtimes.entries())
-			.filter(([, managed]) => managed.projectId === projectId)
-			.map(([sessionId]) => sessionId);
+		const runtimeIds = Array.from(this.runtimes.entries()).flatMap(([sessionId, managed]) =>
+			managed.projectId === projectId ? [sessionId] : [],
+		);
 		this.emit({
 			type: "project:confirm-delete",
 			projectId,
@@ -635,17 +636,27 @@ export class SessionRuntimeManager {
 		}
 
 		this.sessionsByProject.set(projectId, sessions);
+		this.rebuildSessionsIndex();
 		return sessions;
 	}
 
 	private findStoredSession(sessionId: string): StoredSession | undefined {
-		for (const sessions of this.sessionsByProject.values()) {
-			const found = sessions.find((session) => session.id === sessionId);
-			if (found) return found;
-		}
-		return undefined;
+		return (
+			this.sessionsById.get(sessionId) ??
+			Array.from(this.sessionsByProject.values())
+				.flat()
+				.find((s) => s.id === sessionId)
+		);
 	}
 
+	private rebuildSessionsIndex(): void {
+		this.sessionsById.clear();
+		for (const sessions of this.sessionsByProject.values()) {
+			for (const session of sessions) {
+				this.sessionsById.set(session.id, session);
+			}
+		}
+	}
 	private sessionInfo(session: StoredSession): AgentInfo {
 		const managed = this.runtimes.get(session.id);
 		const piSession = managed?.runtime.session;
@@ -722,9 +733,9 @@ export class SessionRuntimeManager {
 			return managed ? this.runtimeInfo(session.id, managed) : this.sessionInfo(session);
 		});
 		const persistedIds = new Set(persistedEntries.map((session) => session.id));
-		const drafts = Array.from(this.runtimes.entries())
-			.filter(([sessionId, managed]) => managed.projectId === projectId && !persistedIds.has(sessionId))
-			.map(([sessionId, managed]) => this.runtimeInfo(sessionId, managed));
+		const drafts = Array.from(this.runtimes.entries()).flatMap(([sessionId, managed]) =>
+			managed.projectId === projectId && !persistedIds.has(sessionId) ? [this.runtimeInfo(sessionId, managed)] : [],
+		);
 		return [...drafts, ...persisted];
 	}
 
@@ -1094,16 +1105,15 @@ export class SessionRuntimeManager {
 			const cwd = session.sessionManager.getCwd();
 			const discovery = discoverAgents(cwd, "both");
 			const agentNames = agentTokens.map((t) => t.replace(/^\s*#/, ""));
-			const foundAgents = agentNames
-				.map((name) => discovery.agents.find((a) => a.name === name))
-				.filter(Boolean) as AgentConfig[];
+			const foundAgents = agentNames.flatMap((name) => {
+				const found = discovery.agents.find((a) => a.name === name);
+				return found ? [found] : [];
+			});
 
 			if (foundAgents.length > 0) {
 				// 保留原文 #agentName chip，仅追加一行最小指令
 				const names = foundAgents.map((a) => a.name).join(", ");
-				const hint = foundAgents.length === 1
-					? `[Use subagent: ${names}]`
-					: `[Use subagents: ${names}]`;
+				const hint = foundAgents.length === 1 ? `[Use subagent: ${names}]` : `[Use subagents: ${names}]`;
 				text = `${hint}\n\n${text}`;
 			}
 		}
@@ -1301,25 +1311,25 @@ export class SessionRuntimeManager {
 		// 解析源文件，注入安装元数据后一次写入（避免两次写盘）
 		const parsed = parseAgentFile(sourcePath, "builtin");
 		if (!parsed) throw new Error(`Failed to parse builtin agent "${safeName}"`);
-		fs.writeFileSync(
-			destPath,
-			serializeAgentDefinition({
-				name: parsed.name,
-				title: parsed.title,
-				description: parsed.description,
-				tools: parsed.tools,
-				model: parsed.model,
-				systemPrompt: parsed.systemPrompt,
-				icon: parsed.icon,
-				tags: parsed.tags,
-				version: parsed.version,
-				author: parsed.author,
-				createdBy: "install",
-				createdAt: parsed.createdAt,
-				installedAt: Date.now(),
-			}),
-			{ encoding: "utf-8", mode: 0o644 },
-		);
+		const agentDef: Record<string, unknown> = {
+			name: parsed.name,
+			title: parsed.title,
+			description: parsed.description,
+			model: parsed.model,
+			systemPrompt: parsed.systemPrompt,
+			icon: parsed.icon,
+			tags: parsed.tags,
+			version: parsed.version,
+			author: parsed.author,
+			createdBy: "install",
+			createdAt: parsed.createdAt,
+			installedAt: Date.now(),
+		};
+		if (parsed.tools) agentDef.tools = parsed.tools;
+		fs.writeFileSync(destPath, serializeAgentDefinition(agentDef as unknown as AgentDefinitionInput), {
+			encoding: "utf-8",
+			mode: 0o644,
+		});
 		this.reloadAllSessionsForAgents();
 		const installedParsed = parseAgentFile(destPath, "user");
 		if (!installedParsed) throw new Error(`Failed to parse installed agent "${safeName}"`);
@@ -1386,20 +1396,22 @@ export class SessionRuntimeManager {
 	/** 级联销毁子会话（dispose runtime + 删除 session 文件 + 清理注册表）。 */
 	private async destroySubSessions(parentSessionId: string): Promise<void> {
 		const childIds = this.listSubSessions(parentSessionId);
-		for (const childId of childIds) {
-			const childFile =
-				this.runtimes.get(childId)?.runtime.session.sessionFile ?? this.findStoredSession(childId)?.path;
-			await this.disposeRuntime(childId, true).catch(() => undefined);
-			if (childFile && existsSync(childFile)) {
-				try {
-					fs.unlinkSync(childFile);
-				} catch (error: any) {
-					if (error?.code !== "ENOENT") throw error;
+		await Promise.all(
+			childIds.map(async (childId) => {
+				const childFile =
+					this.runtimes.get(childId)?.runtime.session.sessionFile ?? this.findStoredSession(childId)?.path;
+				await this.disposeRuntime(childId, true).catch(() => undefined);
+				if (childFile && existsSync(childFile)) {
+					try {
+						fs.unlinkSync(childFile);
+					} catch (error: any) {
+						if (error?.code !== "ENOENT") throw error;
+					}
 				}
-			}
-			this.unregisterSubSession(childId);
-			this.emit({ type: "agent:destroyed", agentId: childId });
-		}
+				this.unregisterSubSession(childId);
+				this.emit({ type: "agent:destroyed", agentId: childId });
+			}),
+		);
 	}
 
 	private registerSubSession(parentSessionId: string, childSessionId: string, agentName: string): void {
@@ -2005,23 +2017,22 @@ export class SessionRuntimeManager {
 		// here (auth.source is undefined when configured=false) and the new-
 		// session fallback would pick one, fail to setModel, and silently leave
 		// the SDK's default (typically anthropic/claude-opus-4-8) in place.
-		return this.modelRegistry
-			.getAvailable()
-			.filter((model) => {
-				const auth = this.modelRegistry.getProviderAuthStatus(model.provider);
-				if (auth.source === "environment") return false;
-				if (!auth.configured) return false;
-				return true;
-			})
-			.map((model) => ({
-				provider: model.provider,
-				id: model.id,
-				name: model.name ?? model.id,
-				reasoning: model.reasoning ?? false,
-				contextWindow: model.contextWindow ?? 128000,
-				maxTokens: model.maxTokens ?? 16384,
-				cost: { input: model.cost?.input ?? 0, output: model.cost?.output ?? 0 },
-			}));
+		return this.modelRegistry.getAvailable().flatMap((model) => {
+			const auth = this.modelRegistry.getProviderAuthStatus(model.provider);
+			if (auth.source === "environment") return [];
+			if (!auth.configured) return [];
+			return [
+				{
+					provider: model.provider,
+					id: model.id,
+					name: model.name ?? model.id,
+					reasoning: model.reasoning ?? false,
+					contextWindow: model.contextWindow ?? 128000,
+					maxTokens: model.maxTokens ?? 16384,
+					cost: { input: model.cost?.input ?? 0, output: model.cost?.output ?? 0 },
+				},
+			];
+		});
 	}
 
 	async getAvailableModels() {
@@ -2037,10 +2048,7 @@ export class SessionRuntimeManager {
 			id,
 			name,
 			hasCredentials: this.modelRegistry.getProviderAuthStatus(id).configured,
-			models: this.modelRegistry
-				.getAvailable()
-				.filter((model) => model.provider === id)
-				.map((model) => model.id),
+			models: this.modelRegistry.getAvailable().flatMap((model) => (model.provider === id ? [model.id] : [])),
 		}));
 	}
 
@@ -2048,12 +2056,12 @@ export class SessionRuntimeManager {
 		const customList = this.customProvidersStore.list();
 		const customNames = new Set(customList.map((p) => p.name));
 		const providers = await this.getProviders();
-		const filtered = providers
-			.filter((provider) => !customNames.has(provider.id))
-			.map((provider) => {
-				const auth = this.modelRegistry.getProviderAuthStatus(provider.id);
-				const models = this.getAvailableModelsSync().filter((model) => model.provider === provider.id);
-				return {
+		const filtered = providers.flatMap((provider) => {
+			if (customNames.has(provider.id)) return [];
+			const auth = this.modelRegistry.getProviderAuthStatus(provider.id);
+			const models = this.getAvailableModelsSync().filter((model) => model.provider === provider.id);
+			return [
+				{
 					id: provider.id,
 					name: provider.name,
 					hasKey: provider.hasCredentials,
@@ -2062,8 +2070,9 @@ export class SessionRuntimeManager {
 					models,
 					authSource: auth.source,
 					envLabel: auth.label,
-				};
-			});
+				},
+			];
+		});
 
 		const customConfigured = customList.filter((cp) => !!cp.apiKey).length;
 		const customTotalModels = customList.reduce((sum, cp) => sum + cp.models.length, 0);
@@ -2554,13 +2563,10 @@ export class SessionRuntimeManager {
 			activeRuntime?.services.settingsManager.getSkillPaths() ?? this.globalSettingsManager.getSkillPaths();
 		const loaded = activeRuntime?.services.resourceLoader.getSkills() ?? { skills: [], diagnostics: [] };
 
-		const rawSkills =
-			loaded.skills.length > 0
-				? loaded.skills
-				: discoverSkillsFromPaths(skillPaths);
+		const rawSkills = loaded.skills.length > 0 ? loaded.skills : discoverSkillsFromPaths(skillPaths);
 		const skillsWithCategory = (rawSkills as any[]).map((s) => ({
 			...s,
-			category: isBuiltinSkillPath(s) ? "builtin" as const : "mine" as const,
+			category: isBuiltinSkillPath(s) ? ("builtin" as const) : ("mine" as const),
 		}));
 		return {
 			skills: skillsWithCategory,
@@ -2575,9 +2581,10 @@ export class SessionRuntimeManager {
 			const settingsManager = activeRuntime?.services.settingsManager ?? this.globalSettingsManager;
 			const merged = Array.from(
 				new Set(
-					[...settingsManager.getSkillPaths(), ...paths]
-						.map((item) => (item.startsWith("~") ? join(homedir(), item.slice(1)) : item))
-						.filter((item) => existsSync(item)),
+					[...settingsManager.getSkillPaths(), ...paths].flatMap((item) => {
+						const resolved = item.startsWith("~") ? join(homedir(), item.slice(1)) : item;
+						return existsSync(resolved) ? [resolved] : [];
+					}),
 				),
 			);
 			settingsManager.setSkillPaths(merged);
@@ -2632,9 +2639,7 @@ export class SessionRuntimeManager {
 
 function isBuiltinSkillPath(s: any): boolean {
 	const paths = [s.filePath, s.baseDir].filter(Boolean) as string[];
-	return paths.some(
-		(p) => p.replace(/\\\\/g, "/").includes("/.look/builtin-skills/"),
-	);
+	return paths.some((p) => p.replace(/\\\\/g, "/").includes("/.look/builtin-skills/"));
 }
 
 function discoverSkillsFromPaths(paths: string[]): Array<{
@@ -2670,7 +2675,10 @@ function discoverSkillsFromPaths(paths: string[]): Array<{
 							const colonIdx = line.indexOf(":");
 							if (colonIdx === -1) continue;
 							const key = line.slice(0, colonIdx).trim();
-							const value = line.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, "");
+							const value = line
+								.slice(colonIdx + 1)
+								.trim()
+								.replace(/^["']|["']$/g, "");
 							if (key === "name") name = value;
 							else if (key === "description") description = value;
 						}

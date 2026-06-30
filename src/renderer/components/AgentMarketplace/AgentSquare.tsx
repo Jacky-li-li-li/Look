@@ -21,7 +21,12 @@ export default function AgentSquare() {
 		<div className="flex h-full flex-col">
 			{/* Tab 切换栏 + 返回按钮 */}
 			<div className="flex items-center gap-2 px-2 h-10">
-				<Button variant="outline" size="sm" className="gap-1 px-2.5 text-[11px]" onClick={() => setShowSquare(false)}>
+				<Button
+					variant="outline"
+					size="sm"
+					className="gap-1 px-2.5 text-[11px]"
+					onClick={() => setShowSquare(false)}
+				>
 					<ArrowLeft className="size-3.5" />
 					返回
 				</Button>
@@ -54,7 +59,9 @@ export default function AgentSquare() {
 			</div>
 
 			{/* 内容区 */}
-			<div className="flex-1 min-h-0 border-t border-hairline p-3">{tab === "subagent" ? <SubAgentPanel /> : <SkillsPanel />}</div>
+			<div className="flex-1 min-h-0 border-t border-hairline p-3">
+				{tab === "subagent" ? <SubAgentPanel /> : <SkillsPanel />}
+			</div>
 		</div>
 	);
 }

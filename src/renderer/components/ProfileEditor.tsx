@@ -20,18 +20,21 @@ export default function ProfileEditor() {
 	const [nameValue, setNameValue] = useState(profile.userName);
 	const nameRef = useRef<HTMLInputElement>(null);
 
-	function commitName() {
+	async function commitName() {
 		const trimmed = nameValue.trim();
 		if (trimmed && trimmed !== profile.userName) {
 			setProfile((prev) => ({ ...prev, userName: trimmed }));
 			if (api?.updateUserProfile) {
 				api.updateUserProfile({ userName: trimmed }).catch(() => {});
 			}
-			if (profile.userId) {
+			// RLS enforces auth.uid() = id on user_profiles;
+			// the id comes from supabase.auth.getUser() — server-verified identity
+			const { data: authData } = await supabase.auth.getUser();
+			if (authData.user) {
 				supabase
 					.from("user_profiles")
 					.upsert({
-						id: profile.userId,
+						id: authData.user.id,
 						email: profile.email,
 						user_name: trimmed,
 						avatar: profile.avatar,
@@ -44,25 +47,28 @@ export default function ProfileEditor() {
 		setEditingName(false);
 	}
 
-	function handleAvatarUpload() {
+	async function handleAvatarUpload() {
 		const input = document.createElement("input");
 		input.type = "file";
 		input.accept = "image/*";
-		input.onchange = () => {
+		input.onchange = async () => {
 			const file = input.files?.[0];
 			if (!file) return;
 			const reader = new FileReader();
-			reader.onload = () => {
+			reader.onload = async () => {
 				const dataUrl = reader.result as string;
 				setProfile((prev) => ({ ...prev, avatar: dataUrl }));
 				if (api?.updateUserProfile) {
 					api.updateUserProfile({ avatar: dataUrl }).catch(() => {});
 				}
-				if (profile.userId) {
+				// RLS enforces auth.uid() = id on user_profiles;
+				// the id comes from supabase.auth.getUser() — server-verified identity
+				const { data: authData } = await supabase.auth.getUser();
+				if (authData.user) {
 					supabase
 						.from("user_profiles")
 						.upsert({
-							id: profile.userId,
+							id: authData.user.id,
 							email: profile.email,
 							user_name: profile.userName,
 							avatar: dataUrl,
@@ -98,6 +104,7 @@ export default function ProfileEditor() {
 				{editingName ? (
 					<input
 						ref={nameRef}
+						aria-label={t("profile.userName")}
 						value={nameValue}
 						onChange={(e) => setNameValue(e.target.value)}
 						onBlur={commitName}
@@ -110,7 +117,6 @@ export default function ProfileEditor() {
 						}}
 						className="h-8 w-36 rounded-md border border-border bg-transparent px-2 text-[13px] outline-none focus:border-foreground"
 						maxLength={30}
-						autoFocus
 					/>
 				) : (
 					<button

@@ -26,22 +26,12 @@ export function serializeAgentDefinition(input: AgentDefinitionInput): string {
 	if (input.title?.trim()) lines.push(`title: ${yamlScalar(input.title.trim())}`);
 	lines.push(`description: ${yamlScalar(input.description.trim())}`);
 	if (input.tools && input.tools.length > 0) {
-		lines.push(
-			`tools: ${input.tools
-				.map((t) => t.trim())
-				.filter(Boolean)
-				.join(", ")}`,
-		);
+		lines.push(`tools: ${input.tools.flatMap((t) => t.trim() || []).join(", ")}`);
 	}
 	if (input.model?.trim()) lines.push(`model: ${yamlScalar(input.model.trim())}`);
 	if (input.icon?.trim()) lines.push(`icon: ${yamlScalar(input.icon.trim())}`);
 	if (input.tags && input.tags.length > 0) {
-		lines.push(
-			`tags: ${input.tags
-				.map((t) => t.trim())
-				.filter(Boolean)
-				.join(", ")}`,
-		);
+		lines.push(`tags: ${input.tags.flatMap((t) => t.trim() || []).join(", ")}`);
 	}
 	if (input.version?.trim()) lines.push(`version: ${yamlScalar(input.version.trim())}`);
 	if (input.author?.trim()) lines.push(`author: ${yamlScalar(input.author.trim())}`);

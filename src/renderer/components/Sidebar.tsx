@@ -79,6 +79,295 @@ function shortenPath(cwd: string, homedir: string): string {
 	return homedir && cwd.startsWith(homedir) ? `~${cwd.slice(homedir.length)}` : cwd;
 }
 
+function ProjectHeader({
+	project,
+	isOpen,
+	editingProjectId,
+	editRef,
+	editValue,
+	setEditValue,
+	commitEdit,
+	handleEditKeyDown,
+	beginEdit,
+	onCreateClick,
+	onOpenProject,
+	onDeleteProject,
+}: {
+	project: ProjectInfo;
+	isOpen: boolean;
+	editingProjectId: string | null;
+	editRef: React.RefObject<HTMLInputElement | null>;
+	editValue: string;
+	setEditValue: (v: string) => void;
+	commitEdit: () => void;
+	handleEditKeyDown: (e: React.KeyboardEvent) => void;
+	beginEdit: (kind: "project" | "session", id: string, value: string) => void;
+	onCreateClick: (id: string) => void;
+	onOpenProject: (id: string) => void;
+	onDeleteProject: (project: ProjectInfo) => void;
+}) {
+	const { t } = useTranslation();
+	const homedir = (window as any).look?.homedir || "";
+	return (
+		<div className="group/project flex h-10 items-center gap-1 rounded-lg px-1 transition-colors hover:bg-foreground/[0.035]">
+			<CollapsibleTrigger asChild>
+				<button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left">
+					<ChevronRight
+						className={cn("size-3 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")}
+					/>
+					<span className="workspace-folder-mark">
+						{project.valid ? <Folder className="size-3.5" /> : <AlertTriangle className="size-3.5" />}
+					</span>
+					<span className="min-w-0 flex-1">
+						{editingProjectId === project.id ? (
+							<input
+								ref={editRef}
+								aria-label="编辑项目名称"
+								value={editValue}
+								onChange={(event) => setEditValue(event.target.value)}
+								onBlur={commitEdit}
+								onKeyDown={handleEditKeyDown}
+								onClick={(event) => event.stopPropagation()}
+								className="w-full border-b border-foreground/40 bg-transparent text-[12px] font-semibold outline-none"
+								maxLength={64}
+							/>
+						) : (
+							<span
+								className="block truncate text-[12px] font-semibold"
+								onDoubleClick={(event) => {
+									event.stopPropagation();
+									beginEdit("project", project.id, project.name);
+								}}
+							>
+								{project.name}
+							</span>
+						)}
+						<span className="block truncate font-mono text-[9px] leading-tight text-muted-foreground/55">
+							{shortenPath(project.cwd, homedir)}
+						</span>
+					</span>
+				</button>
+			</CollapsibleTrigger>
+			<Button
+				variant="line-ghost"
+				size="icon-xs"
+				className="opacity-0 group-hover/project:opacity-100 focus-visible:opacity-100"
+				disabled={!project.valid}
+				onClick={() => onCreateClick(project.id)}
+				aria-label={t("sidebar.newSession", "New session")}
+			>
+				<Plus className="size-3" />
+			</Button>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button
+						variant="line-ghost"
+						size="icon-xs"
+						className="opacity-0 group-hover/project:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
+						aria-label={t("workspace.projectMenu", "Project menu")}
+					>
+						<MoreHorizontal className="size-3" />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end" className="w-44">
+					<DropdownMenuItem onSelect={() => onOpenProject(project.id)} className="gap-2 text-[12px]">
+						<FolderOpen className="size-3.5" /> {t("workspace.openFolder", "Open folder")}
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						onSelect={() => beginEdit("project", project.id, project.name)}
+						className="gap-2 text-[12px]"
+					>
+						<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
+					</DropdownMenuItem>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem
+						variant="destructive"
+						onSelect={() => onDeleteProject(project)}
+						className="gap-2 text-[12px]"
+					>
+						<Trash2 className="size-3.5" /> {t("project.delete", "Delete project")}
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+	);
+}
+
+function SessionRow({
+	agent,
+	isActive,
+	isRunning,
+	phase,
+	isCompleted,
+	editingSessionId,
+	editRef,
+	editValue,
+	setEditValue,
+	commitEdit,
+	handleEditKeyDown,
+	beginEdit,
+	selectSession,
+	collapsedSubSessions,
+	toggleSubSessions,
+	childrenList,
+	copySessionId,
+	exportSession,
+	onDestroy,
+}: {
+	agent: AgentInfo;
+	isActive: boolean;
+	isRunning: boolean;
+	phase: string;
+	isCompleted: boolean;
+	editingSessionId: string | null;
+	editRef: React.RefObject<HTMLInputElement | null>;
+	editValue: string;
+	setEditValue: (v: string) => void;
+	commitEdit: () => void;
+	handleEditKeyDown: (e: React.KeyboardEvent) => void;
+	beginEdit: (kind: "project" | "session", id: string, value: string) => void;
+	selectSession: (agent: AgentInfo) => void;
+	collapsedSubSessions: Set<string>;
+	toggleSubSessions: (parentId: string, e: React.MouseEvent) => void;
+	childrenList: AgentInfo[];
+	copySessionId: (id: string) => Promise<void>;
+	exportSession: (id: string) => Promise<void>;
+	onDestroy: (id: string) => void;
+}) {
+	const { t } = useTranslation();
+	const runningAgents = useAtomValue(runningAgentsAtom);
+	const sessionPhases = useAtomValue(sessionPhasesAtom);
+	const hasChildren = childrenList.length > 0;
+	return (
+		<div className="session-tree-group" data-has-children={hasChildren || undefined}>
+			<div
+				data-agent-id={agent.id}
+				data-agent-status={phase}
+				data-running={isRunning || undefined}
+				data-completed={isCompleted ? "" : undefined}
+				data-active={isActive || undefined}
+				className="session-ledger-row group/session flex h-[38px] items-center gap-2 rounded-md border border-transparent px-2"
+			>
+				<button
+					type="button"
+					className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
+					onClick={() => selectSession(agent)}
+					onDoubleClick={() => beginEdit("session", agent.id, agent.name)}
+				>
+					<span className="status-mark" data-status={phase} />
+					<span className="min-w-0 flex-1">
+						{editingSessionId === agent.id ? (
+							<input
+								ref={editRef}
+								aria-label="编辑会话名称"
+								value={editValue}
+								onChange={(event) => setEditValue(event.target.value)}
+								onBlur={commitEdit}
+								onKeyDown={handleEditKeyDown}
+								onClick={(event) => event.stopPropagation()}
+								className="w-full border-b border-foreground/40 bg-transparent text-[11px] font-medium outline-none"
+							/>
+						) : (
+							<span className="block truncate text-[11px] font-medium">
+								{agent.name}
+								{hasChildren && <span className="ml-1 text-[9px] text-sky-500">({childrenList.length})</span>}
+							</span>
+						)}
+						<span className="block truncate font-mono text-[8.5px] leading-tight text-muted-foreground/50">
+							{isRunning
+								? t(`session.status.${phase}`, phase)
+								: agent.model ||
+									(agent.sessionFilePath
+										? t("session.messageCount", {
+												count: agent.messageCount,
+												defaultValue: "{{count}} messages",
+											})
+										: t("session.draft", "draft"))}
+						</span>
+					</span>
+					<span className="shrink-0 font-mono text-[9px] text-muted-foreground/45">
+						{fmtRelativeTime(agent.createdAt)}
+					</span>
+				</button>
+				{hasChildren && (
+					<button
+						type="button"
+						className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
+						onClick={(e) => toggleSubSessions(agent.id, e)}
+						title={collapsedSubSessions.has(agent.id) ? "展开子会话" : "折叠子会话"}
+					>
+						{collapsedSubSessions.has(agent.id) ? (
+							<ChevronRight className="size-3" />
+						) : (
+							<ChevronDown className="size-3" />
+						)}
+					</button>
+				)}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button
+							variant="line-ghost"
+							size="icon-xs"
+							className="-mr-1 opacity-0 group-hover/session:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
+							aria-label={t("session.menu", "Session menu")}
+						>
+							<MoreHorizontal className="size-3" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" className="w-44">
+						<DropdownMenuItem
+							onSelect={() => beginEdit("session", agent.id, agent.name)}
+							className="gap-2 text-[12px]"
+						>
+							<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
+						</DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => copySessionId(agent.id)} className="gap-2 text-[12px]">
+							<Copy className="size-3.5" /> {t("sidebar.copyId", "Copy session ID")}
+						</DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => exportSession(agent.id)} className="gap-2 text-[12px]">
+							<Download className="size-3.5" /> {t("sidebar.exportChat", "Export session")}
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							variant="destructive"
+							onSelect={() => onDestroy(agent.id)}
+							className="gap-2 text-[12px]"
+						>
+							<Trash2 className="size-3.5" /> {t("sidebar.delete", "Delete")}
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+			{/* Sub-sessions */}
+			{!collapsedSubSessions.has(agent.id) &&
+				childrenList.map((child: AgentInfo) => {
+					const childPhase = sessionPhases.get(child.id) ?? "idle";
+					const childRunning = runningAgents.has(child.id);
+					return (
+						<div
+							key={child.id}
+							data-agent-id={child.id}
+							data-agent-status={childPhase}
+							data-running={childRunning || undefined}
+							className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[32px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
+						>
+							<button
+								type="button"
+								className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
+								onClick={() => selectSession(child)}
+							>
+								<Bot className="size-3 shrink-0 text-sky-500" />
+								<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
+									{child.name || child.agentConfigName}
+								</span>
+							</button>
+						</div>
+					);
+				})}
+		</div>
+	);
+}
+
 export default function Sidebar({
 	onSelect,
 	onDestroy,
@@ -100,7 +389,7 @@ export default function Sidebar({
 	const activeChatAtBottom = useAtomValue(activeChatAtBottomAtom);
 	const userProfile = useAtomValue(userProfileAtom);
 	const collapsed = useAtomValue(sidebarCollapsedAtom);
-	const homedir = api?.homedir || "";
+	const _homedir = api?.homedir || "";
 	const [openProjectIds, setOpenProjectIds] = useAtom(openProjectIdsAtom);
 	const openProjects = useMemo(() => new Set(openProjectIds), [openProjectIds]);
 	const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -339,96 +628,20 @@ export default function Sidebar({
 								data-active={isActiveProject || undefined}
 								data-running={runningCount > 0 || undefined}
 							>
-								<div className="group/project flex h-10 items-center gap-1 rounded-lg px-1 transition-colors hover:bg-foreground/[0.035]">
-									<CollapsibleTrigger asChild>
-										<button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left">
-											<ChevronRight
-												className={cn(
-													"size-3 shrink-0 text-muted-foreground transition-transform",
-													isOpen && "rotate-90",
-												)}
-											/>
-											<span className="workspace-folder-mark">
-												{project.valid ? (
-													<Folder className="size-3.5" />
-												) : (
-													<AlertTriangle className="size-3.5" />
-												)}
-											</span>
-											<span className="min-w-0 flex-1">
-												{editingProjectId === project.id ? (
-													<input
-														ref={editRef}
-														value={editValue}
-														onChange={(event) => setEditValue(event.target.value)}
-														onBlur={commitEdit}
-														onKeyDown={handleEditKeyDown}
-														onClick={(event) => event.stopPropagation()}
-														className="w-full border-b border-foreground/40 bg-transparent text-[12px] font-semibold outline-none"
-														maxLength={64}
-													/>
-												) : (
-													<span
-														className="block truncate text-[12px] font-semibold"
-														onDoubleClick={(event) => {
-															event.stopPropagation();
-															beginEdit("project", project.id, project.name);
-														}}
-													>
-														{project.name}
-													</span>
-												)}
-												<span className="block truncate font-mono text-[9px] leading-tight text-muted-foreground/55">
-													{shortenPath(project.cwd, homedir)}
-												</span>
-											</span>
-										</button>
-									</CollapsibleTrigger>
-									<Button
-										variant="line-ghost"
-										size="icon-xs"
-										className="opacity-0 group-hover/project:opacity-100 focus-visible:opacity-100"
-										disabled={!project.valid}
-										onClick={() => onCreateClick(project.id)}
-										aria-label={t("sidebar.newSession", "New session")}
-									>
-										<Plus className="size-3" />
-									</Button>
-									<DropdownMenu>
-										<DropdownMenuTrigger asChild>
-											<Button
-												variant="line-ghost"
-												size="icon-xs"
-												className="opacity-0 group-hover/project:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
-												aria-label={t("workspace.projectMenu", "Project menu")}
-											>
-												<MoreHorizontal className="size-3" />
-											</Button>
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" className="w-44">
-											<DropdownMenuItem
-												onSelect={() => onOpenProject(project.id)}
-												className="gap-2 text-[12px]"
-											>
-												<FolderOpen className="size-3.5" /> {t("workspace.openFolder", "Open folder")}
-											</DropdownMenuItem>
-											<DropdownMenuItem
-												onSelect={() => beginEdit("project", project.id, project.name)}
-												className="gap-2 text-[12px]"
-											>
-												<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
-											</DropdownMenuItem>
-											<DropdownMenuSeparator />
-											<DropdownMenuItem
-												variant="destructive"
-												onSelect={() => onDeleteProject(project)}
-												className="gap-2 text-[12px]"
-											>
-												<Trash2 className="size-3.5" /> {t("project.delete", "Delete project")}
-											</DropdownMenuItem>
-										</DropdownMenuContent>
-									</DropdownMenu>
-								</div>
+								<ProjectHeader
+									project={project}
+									isOpen={isOpen}
+									editingProjectId={editingProjectId}
+									editRef={editRef}
+									editValue={editValue}
+									setEditValue={setEditValue}
+									commitEdit={commitEdit}
+									handleEditKeyDown={handleEditKeyDown}
+									beginEdit={beginEdit}
+									onCreateClick={onCreateClick}
+									onOpenProject={onOpenProject}
+									onDeleteProject={onDeleteProject}
+								/>
 
 								<CollapsibleContent className="workspace-group-content">
 									<div className="workspace-session-rail ml-[18px] space-y-0.5 pb-1 pl-2">
@@ -443,151 +656,30 @@ export default function Sidebar({
 											const phase = sessionPhases.get(agent.id) ?? "idle";
 											const isCompleted =
 												recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom);
-											const children = childSessionsByParent.get(agent.id) ?? [];
-											const hasChildren = children.length > 0;
+											const childrenList = childSessionsByParent.get(agent.id) ?? [];
 											return (
-												<div
+												<SessionRow
 													key={agent.id}
-													className="session-tree-group"
-													data-has-children={hasChildren || undefined}
-												>
-													<div
-														key={agent.id}
-														data-agent-id={agent.id}
-														data-agent-status={phase}
-														data-running={isRunning || undefined}
-														data-completed={isCompleted ? "" : undefined}
-														data-active={isActive || undefined}
-														className="session-ledger-row group/session flex h-[38px] items-center gap-2 rounded-md border border-transparent px-2"
-													>
-														<button
-															type="button"
-															className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
-															onClick={() => selectSession(agent)}
-															onDoubleClick={() => beginEdit("session", agent.id, agent.name)}
-														>
-															<span className="status-mark" data-status={phase} />
-															<span className="min-w-0 flex-1">
-																{editingSessionId === agent.id ? (
-																	<input
-																		ref={editRef}
-																		value={editValue}
-																		onChange={(event) => setEditValue(event.target.value)}
-																		onBlur={commitEdit}
-																		onKeyDown={handleEditKeyDown}
-																		onClick={(event) => event.stopPropagation()}
-																		className="w-full border-b border-foreground/40 bg-transparent text-[11px] font-medium outline-none"
-																	/>
-																) : (
-																	<span className="block truncate text-[11px] font-medium">
-																		{agent.name}
-																		{hasChildren && (
-																			<span className="ml-1 text-[9px] text-sky-500">
-																				({children.length})
-																			</span>
-																		)}
-																	</span>
-																)}
-																<span className="block truncate font-mono text-[8.5px] leading-tight text-muted-foreground/50">
-																	{isRunning
-																		? t(`session.status.${phase}`, phase)
-																		: agent.model ||
-																			(agent.sessionFilePath
-																				? t("session.messageCount", {
-																						count: agent.messageCount,
-																						defaultValue: "{{count}} messages",
-																					})
-																				: t("session.draft", "draft"))}
-																</span>
-															</span>
-															<span className="shrink-0 font-mono text-[9px] text-muted-foreground/45">
-																{fmtRelativeTime(agent.createdAt)}
-															</span>
-														</button>
-														{hasChildren && (
-															<button
-																type="button"
-																className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
-																onClick={(e) => toggleSubSessions(agent.id, e)}
-																title={collapsedSubSessions.has(agent.id) ? "展开子会话" : "折叠子会话"}
-															>
-																{collapsedSubSessions.has(agent.id) ? (
-																	<ChevronRight className="size-3" />
-																) : (
-																	<ChevronDown className="size-3" />
-																)}
-															</button>
-														)}
-														<DropdownMenu>
-															<DropdownMenuTrigger asChild>
-																<Button
-																	variant="line-ghost"
-																	size="icon-xs"
-																	className="-mr-1 opacity-0 group-hover/session:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
-																	aria-label={t("session.menu", "Session menu")}
-																>
-																	<MoreHorizontal className="size-3" />
-																</Button>
-															</DropdownMenuTrigger>
-															<DropdownMenuContent align="end" className="w-44">
-																<DropdownMenuItem
-																	onSelect={() => beginEdit("session", agent.id, agent.name)}
-																	className="gap-2 text-[12px]"
-																>
-																	<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
-																</DropdownMenuItem>
-																<DropdownMenuItem
-																	onSelect={() => copySessionId(agent.id)}
-																	className="gap-2 text-[12px]"
-																>
-																	<Copy className="size-3.5" />{" "}
-																	{t("sidebar.copyId", "Copy session ID")}
-																</DropdownMenuItem>
-																<DropdownMenuItem
-																	onSelect={() => exportSession(agent.id)}
-																	className="gap-2 text-[12px]"
-																>
-																	<Download className="size-3.5" />{" "}
-																	{t("sidebar.exportChat", "Export session")}
-																</DropdownMenuItem>
-																<DropdownMenuSeparator />
-																<DropdownMenuItem
-																	variant="destructive"
-																	onSelect={() => onDestroy(agent.id)}
-																	className="gap-2 text-[12px]"
-																>
-																	<Trash2 className="size-3.5" /> {t("sidebar.delete", "Delete")}
-																</DropdownMenuItem>
-															</DropdownMenuContent>
-														</DropdownMenu>
-													</div>
-													{/* Stage 4：子会话缩进嵌套 */}
-													{!collapsedSubSessions.has(agent.id) &&
-														children.map((child: AgentInfo, childIndex) => {
-															const childPhase = sessionPhases.get(child.id) ?? "idle";
-															const childRunning = runningAgents.has(child.id);
-															return (
-																<div
-																	key={child.id}
-																	data-agent-id={child.id}
-																	data-agent-status={childPhase}
-																	data-running={childRunning || undefined}
-																	className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[32px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
-																>
-																	<button
-																		type="button"
-																		className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
-																		onClick={() => selectSession(child)}
-																	>
-																		<Bot className="size-3 shrink-0 text-sky-500" />
-																		<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
-																			{child.name || child.agentConfigName}
-																		</span>
-																	</button>
-																</div>
-															);
-														})}
-												</div>
+													agent={agent}
+													isActive={isActive}
+													isRunning={isRunning}
+													phase={phase}
+													isCompleted={isCompleted}
+													editingSessionId={editingSessionId}
+													editRef={editRef}
+													editValue={editValue}
+													setEditValue={setEditValue}
+													commitEdit={commitEdit}
+													handleEditKeyDown={handleEditKeyDown}
+													beginEdit={beginEdit}
+													selectSession={selectSession}
+													collapsedSubSessions={collapsedSubSessions}
+													toggleSubSessions={toggleSubSessions}
+													childrenList={childrenList}
+													copySessionId={copySessionId}
+													exportSession={exportSession}
+													onDestroy={onDestroy}
+												/>
 											);
 										})}
 

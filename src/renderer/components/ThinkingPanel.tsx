@@ -40,10 +40,10 @@ export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: T
 		if (!isStreaming) return null;
 		return (
 			<div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-muted-foreground cursor-default">
-					<ChevronRight className="size-3 shrink-0" />
-					<Brain className="size-3.5 shrink-0 text-blue-400" />
-					<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
-					<span className="inline-block w-2 h-4 bg-blue-400 animate-pulse rounded-xs" />
+				<ChevronRight className="size-3 shrink-0" />
+				<Brain className="size-3.5 shrink-0 text-blue-400" />
+				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
+				<span className="inline-block w-2 h-4 bg-blue-400 animate-pulse rounded-xs" />
 			</div>
 		);
 	}
@@ -51,6 +51,7 @@ export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: T
 	return (
 		<div>
 			<button
+				type="button"
 				className="flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
 				onClick={() => {
 					userManuallyToggled.current = true;

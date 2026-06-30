@@ -14,8 +14,7 @@
 // `overflow: hidden`. The Portal bypasses the chain entirely.
 // ============================================================
 
-import type React from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface SimplePopoverProps {
@@ -52,12 +51,12 @@ export default function SimplePopover({
 }: SimplePopoverProps) {
 	const [open, setOpen] = useState(false);
 	const [position, setPosition] = useState<PopoverPosition | null>(null);
-	const triggerRef = useRef<HTMLDivElement>(null);
+	const triggerRef = useRef<HTMLElement | null>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
-		onOpenChange?.(open);
-	}, [open, onOpenChange]);
+	// Keep callbacks in refs so effects don't re-subscribe
+	const onOpenChangeRef = useRef(onOpenChange);
+	onOpenChangeRef.current = onOpenChange;
 
 	const computePosition = useCallback((): PopoverPosition | null => {
 		const triggerEl = triggerRef.current;
@@ -110,6 +109,10 @@ export default function SimplePopover({
 		return { top, left, placement, maxHeight };
 	}, [align, preferredHeight]);
 
+	// Keep latest computePosition in a ref so effects don't re-subscribe
+	const computePositionRef = useRef(computePosition);
+	computePositionRef.current = computePosition;
+
 	// Re-compute on open, resize, and any scroll (capture: true to
 	// catch scrolling inside the message list, the panel itself, etc.).
 	useLayoutEffect(() => {
@@ -117,7 +120,7 @@ export default function SimplePopover({
 			setPosition(null);
 			return;
 		}
-		const update = () => setPosition(computePosition());
+		const update = () => setPosition(computePositionRef.current());
 		update();
 		window.addEventListener("resize", update);
 		window.addEventListener("scroll", update, true);
@@ -125,7 +128,7 @@ export default function SimplePopover({
 			window.removeEventListener("resize", update);
 			window.removeEventListener("scroll", update, true);
 		};
-	}, [open, computePosition]);
+	}, [open]);
 
 	// Watch the panel's intrinsic size and re-compute position when it
 	// changes. Critical for popovers whose children are async-loaded
@@ -140,7 +143,7 @@ export default function SimplePopover({
 		let raf = 0;
 		const update = () => {
 			cancelAnimationFrame(raf);
-			raf = requestAnimationFrame(() => setPosition(computePosition()));
+			raf = requestAnimationFrame(() => setPosition(computePositionRef.current()));
 		};
 		const ro = new ResizeObserver(update);
 		ro.observe(panel);
@@ -148,7 +151,7 @@ export default function SimplePopover({
 			ro.disconnect();
 			cancelAnimationFrame(raf);
 		};
-	}, [open, computePosition]);
+	}, [open]);
 
 	// Close on click outside — works for portaled content because we
 	// still hold the panel ref and check it directly.
@@ -159,6 +162,7 @@ export default function SimplePopover({
 			if (triggerRef.current?.contains(target)) return;
 			if (panelRef.current?.contains(target)) return;
 			setOpen(false);
+			onOpenChangeRef.current?.(false);
 		};
 		// Defer attaching the listener so the click that opened the
 		// popover doesn't immediately close it.
@@ -175,20 +179,57 @@ export default function SimplePopover({
 	useEffect(() => {
 		if (!open) return;
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "Escape") setOpen(false);
+			if (e.key === "Escape") {
+				setOpen(false);
+				onOpenChangeRef.current?.(false);
+			}
 		};
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [open]);
 
-	const toggle = useCallback(() => setOpen((v) => !v), []);
-	const close = useCallback(() => setOpen(false), []);
+	const toggle = useCallback(
+		() =>
+			setOpen((v) => {
+				const next = !v;
+				onOpenChangeRef.current?.(next);
+				return next;
+			}),
+		[],
+	);
+	const close = useCallback(() => {
+		setOpen(false);
+		onOpenChangeRef.current?.(false);
+	}, []);
+
+	const triggerEl = React.isValidElement(trigger)
+		? React.cloneElement(trigger as React.ReactElement<any>, {
+				ref: (node: HTMLElement | null) => {
+					triggerRef.current = node;
+					const origRef = (trigger as any).ref;
+					if (typeof origRef === "function") {
+						origRef(node);
+					}
+				},
+				onClick: (e: React.MouseEvent) => {
+					toggle();
+					(trigger as React.ReactElement<any>).props.onClick?.(e);
+				},
+				onKeyDown: (e: React.KeyboardEvent) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						toggle();
+					}
+					(trigger as React.ReactElement<any>).props.onKeyDown?.(e);
+				},
+				"data-state": open ? "open" : "closed",
+				className: `group/selector ${(trigger as React.ReactElement<any>).props.className ?? ""}`.trim(),
+			})
+		: trigger;
 
 	return (
 		<div className="inline-flex">
-			<div ref={triggerRef} className="group/selector" onClick={toggle} data-state={open ? "open" : "closed"}>
-				{trigger}
-			</div>
+			{triggerEl}
 			{open &&
 				typeof document !== "undefined" &&
 				createPortal(

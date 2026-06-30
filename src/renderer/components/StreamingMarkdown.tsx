@@ -62,12 +62,13 @@ function escapeGlobAsterisks(text: string): string {
 
 import { Check, Copy } from "lucide-react";
 import type React from "react";
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, lazy, memo, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useThrottle } from "../hooks/useThrottle";
 import { getCachedHighlighter } from "../lib/highlighter";
-import MermaidBlock from "./MermaidBlock";
+
+const MermaidBlock = lazy(() => import("./MermaidBlock"));
 
 /** Context so deeply-nested ShikiCodeBlock knows whether the parent is streaming. */
 const StreamingContext = createContext(false);
@@ -202,7 +203,11 @@ function CodeRenderer({ node, inline: isInline, className: cls, children, ...pro
 	if (!isInline && match) {
 		const lang = match[1];
 		if (lang === "mermaid") {
-			return <MermaidBlock>{children}</MermaidBlock>;
+			return (
+				<Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Loading diagram…</div>}>
+					<MermaidBlock>{children}</MermaidBlock>
+				</Suspense>
+			);
 		}
 		return <ShikiCodeBlock language={lang}>{children}</ShikiCodeBlock>;
 	}

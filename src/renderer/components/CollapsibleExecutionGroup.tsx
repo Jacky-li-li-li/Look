@@ -21,7 +21,6 @@ import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
-import { scheduleCollapse } from "../lib/batchCollapse";
 import type { LookStyle } from "../lib/look-theme";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
@@ -234,7 +233,10 @@ function renderBlock(
 	if (block.type === "thinking") {
 		return (
 			<ThinkingPanel
-				key={`group-thinking-${index}-${(block as ThinkingContent).thinking?.slice(0, 16) ?? ""}`}
+				key={
+					(block as ThinkingContent).thinkingSignature ??
+					`group-thinking-${(block as ThinkingContent).thinking?.slice(0, 32) ?? index}`
+				}
 				thinking={block.thinking}
 				isStreaming={isStreaming}
 				autoCollapse={true}
@@ -246,7 +248,7 @@ function renderBlock(
 	const isError = status === "error";
 	return (
 		<ToolCallCard
-			key={`group-tool-${index}-${block.id}`}
+			key={block.id}
 			toolCall={{
 				callId: block.id,
 				toolName: block.name,
@@ -335,15 +337,9 @@ function BadgeTrigger({ summary, kind, themeStyle, isOpen, onClick, onKeyDown }:
 		>
 			{chevron}
 			<Icon className="size-3.5 shrink-0 text-muted-foreground" />
-			<span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-				{summary}
-			</span>
+			<span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{summary}</span>
 		</button>
 	);
 }
-
-// Schedule a collapse — currently unused but kept so future tweaks can
-// reuse the same debounced batcher that ToolCallCard uses.
-export const _internal = { scheduleCollapse };
 
 export default CollapsibleExecutionGroup;

@@ -25,6 +25,11 @@ const api = (window as any).look;
  *  session's model) so Radix Select always has a controlled value. */
 const USE_SESSION_MODEL = "__session__";
 
+function persistSettings(partial: Record<string, any>) {
+	if (!api) return;
+	api.setGeneralSettings(partial).catch(() => {});
+}
+
 function SettingRow({
 	label,
 	desc,
@@ -83,11 +88,6 @@ export default function GeneralTab() {
 			})
 			.catch(() => {});
 	}, []);
-
-	const persistSettings = (partial: Record<string, any>) => {
-		if (!api) return;
-		api.setGeneralSettings(partial).catch(() => {});
-	};
 
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto gap-3 p-4">

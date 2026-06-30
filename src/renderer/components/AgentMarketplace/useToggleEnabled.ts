@@ -28,9 +28,7 @@ export function useToggleEnabled({ getAllNames, setEnabled, onChange }: UseToggl
 		(next: string[] | null | ((prev: string[] | null) => string[] | null)) => {
 			setEnabledNamesState((prev) => {
 				const resolved =
-					typeof next === "function"
-						? (next as (p: string[] | null) => string[] | null)(prev)
-						: next;
+					typeof next === "function" ? (next as (p: string[] | null) => string[] | null)(prev) : next;
 				onChange?.(resolved);
 				return resolved;
 			});
@@ -50,9 +48,7 @@ export function useToggleEnabled({ getAllNames, setEnabled, onChange }: UseToggl
 		async (name: string, enabled: boolean) => {
 			setEnabledNames((prev) => {
 				const current = prev ?? getAllNames();
-				return enabled
-					? [...new Set([...current, name])]
-					: current.filter((n) => n !== name);
+				return enabled ? [...new Set([...current, name])] : current.filter((n) => n !== name);
 			});
 			try {
 				const result = await setEnabled(name, enabled);

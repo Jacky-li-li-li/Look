@@ -34,18 +34,18 @@ export default function SubAgentPanel() {
 	const [selected, setSelected] = useState<AgentDefinitionInfo | null>(null);
 	const [, setEnabledAgentDefs] = useAtom(enabledAgentDefinitionsAtom);
 
-	const { isEnabled, toggle, setEnabledNames: loadEnabled } = useToggleEnabled({
+	const {
+		isEnabled,
+		toggle,
+		setEnabledNames: loadEnabled,
+	} = useToggleEnabled({
 		getAllNames: useCallback(() => agents.map((a) => a.name), [agents]),
 		setEnabled: useCallback(
-			async (name: string, enabled: boolean) =>
-				window.look.setAgentDefinitionEnabled(name, enabled),
+			async (name: string, enabled: boolean) => window.look.setAgentDefinitionEnabled(name, enabled),
 			[],
 		),
 		// 同步启用集合到全局 atom,供输入框 # 弹窗等跨组件读取
-		onChange: useCallback(
-			(names: string[] | null) => setEnabledAgentDefs(names),
-			[setEnabledAgentDefs],
-		),
+		onChange: useCallback((names: string[] | null) => setEnabledAgentDefs(names), [setEnabledAgentDefs]),
 	});
 
 	// 加载 Agent 列表

@@ -17,12 +17,12 @@ export type AgentScope = "user" | "project" | "both";
 
 /** Agent 创建方式（追踪 Agent 是如何产生的） */
 export type AgentCreationMethod =
-	| "editor"    // AgentEditor UI 手动创建
-	| "skill"     // look-agent-builder Skill 创建
-	| "install"   // 从内置目录安装（marketplace → user dir）
-	| "drag"      // 文件拖放/手动放入 agents 目录
-	| "seed"      // 由 syncLookDefaultAgents 种子写入
-	| "unknown";  // 无法判断的遗留文件
+	| "editor" // AgentEditor UI 手动创建
+	| "skill" // look-agent-builder Skill 创建
+	| "install" // 从内置目录安装（marketplace → user dir）
+	| "drag" // 文件拖放/手动放入 agents 目录
+	| "seed" // 由 syncLookDefaultAgents 种子写入
+	| "unknown"; // 无法判断的遗留文件
 
 /**
  * Agent 定义（与 SDK frontmatter 兼容 + Look 扩展字段）。

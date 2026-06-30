@@ -64,6 +64,36 @@ preloadHighlighter();
 
 const api = (window as any).look;
 
+function EmptySessionState({
+	activeProject,
+	handleCreateClick,
+}: {
+	activeProject: { id: string; name: string; valid: boolean } | null;
+	handleCreateClick: (projectId: string) => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<div className="flex flex-1 items-center justify-center p-10 text-center">
+			<div className="flex max-w-sm flex-col items-center gap-3">
+				<div className="flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
+					<FolderOpen className="size-5 text-muted-foreground" />
+				</div>
+				<p className="text-sm font-medium">
+					{activeProject?.name ?? t("workspace.noSessionSelected", "No session selected")}
+				</p>
+				<p className="text-xs text-muted-foreground">
+					{t("workspace.emptyProjectHint", "Create a session inside a workspace to begin.")}
+				</p>
+				{activeProject?.valid && (
+					<Button variant="line" size="sm" onClick={() => handleCreateClick(activeProject.id)}>
+						{t("sidebar.newSession", "New session")}
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export default function App() {
 	const { t } = useTranslation();
 
@@ -81,7 +111,7 @@ export default function App() {
 	const activeProject = useAtomValue(activeProjectAtom);
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
-	const [showAgentSquare, setShowAgentSquare] = useAtom(showAgentSquareAtom);
+	const [showAgentSquare, _setShowAgentSquare] = useAtom(showAgentSquareAtom);
 
 	// SDK-native persisted/live state for the active pi session.
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
@@ -163,16 +193,10 @@ export default function App() {
 		const result = await api.activateSession(agentId);
 		if (result?.success) {
 			appStore.set(activeAgentIdAtom, agentId);
-			// Open the session as a sheet in the top tab bar if it is not
-			// already open. Append (not prepend) so the existing tab order is
-			// preserved — already-open tabs do not visually jump. The user
-			// can still reorder via drag (handleReorderSessionSheets).
 			appStore.set(openedSessionIdsAtom, (previous) => {
 				if (previous.includes(agentId)) return previous;
 				return [...previous, agentId];
 			});
-			// Track activation order (most recent first) for close-fallback neighbor
-			// selection.
 			appStore.set(recentlyActiveSessionIdsAtom, (previous) => {
 				const filtered = previous.filter((id) => id !== agentId);
 				return [agentId, ...filtered];
@@ -184,14 +208,7 @@ export default function App() {
 		const currentIds = appStore.get(openedSessionIdsAtom);
 		const nextIds = currentIds.filter((id) => id !== agentId);
 		appStore.set(openedSessionIdsAtom, nextIds);
-
-		// Drop from activation history as well so a closed tab never re-appears
-		// as a fallback target.
 		appStore.set(recentlyActiveSessionIdsAtom, (previous) => previous.filter((id) => id !== agentId));
-
-		// If we closed the active session, fall back to the most recently
-		// activated sibling. This is independent of tab order so it keeps
-		// working when the user has manually reordered tabs.
 		if (appStore.get(activeAgentIdAtom) === agentId) {
 			const activationOrder = appStore.get(recentlyActiveSessionIdsAtom);
 			const fallbackId = activationOrder.find((id) => nextIds.includes(id)) ?? nextIds[0] ?? null;
@@ -244,13 +261,10 @@ export default function App() {
 		const result = await api.createAgent({ projectId });
 		if (result?.success && result.agentId) {
 			appStore.set(activeAgentIdAtom, result.agentId);
-			// Open the freshly created session as a sheet so it appears in
-			// the top tab bar. Append so existing tab order is preserved.
 			appStore.set(openedSessionIdsAtom, (previous) => {
 				if (previous.includes(result.agentId)) return previous;
 				return [...previous, result.agentId];
 			});
-			// Seed activation history so close-fallback has a sensible default.
 			appStore.set(recentlyActiveSessionIdsAtom, (previous) => [
 				result.agentId,
 				...previous.filter((id) => id !== result.agentId),
@@ -295,7 +309,6 @@ export default function App() {
 
 		async function restoreSession() {
 			if (!configured) {
-				// No Supabase config — skip login entirely, operate as before
 				setIsLoggedIn(true);
 				setAuthLoading(false);
 				return;
@@ -306,7 +319,6 @@ export default function App() {
 			} = await supabase.auth.getSession();
 
 			if (session?.user) {
-				// Restore from cloud
 				const { data: cloudProfile } = await supabase
 					.from("user_profiles")
 					.select("user_name, avatar")
@@ -321,7 +333,6 @@ export default function App() {
 						avatar: cloudProfile.avatar || "",
 					});
 				} else {
-					// Fallback to local
 					try {
 						const r = await api.getUserProfile();
 						if (r?.success && r.profile?.userId === session.user.id) {
@@ -345,7 +356,6 @@ export default function App() {
 				}
 				setIsLoggedIn(true);
 			} else {
-				// No session — try local profile as fallback
 				try {
 					const r = await api.getUserProfile();
 					if (r?.success && r.profile?.userId) {
@@ -379,9 +389,7 @@ export default function App() {
 		return () => clearTimeout(timer);
 	}, [activeAgentId, activeProjectId, openProjectIds, openedSessionIds]);
 
-	// Boot-time theme sync: read themeStyle/themeTone from
-	// ui-settings.json and apply to <html> class before any
-	// component renders. Prevents flash of wrong theme on launch.
+	// Boot-time theme sync
 	useEffect(() => {
 		if (!api) {
 			writeLookThemeToDom(DEFAULT_THEME);
@@ -397,8 +405,6 @@ export default function App() {
 			});
 	}, []);
 
-	// The main process mirrors this list directly from pi's
-	// AgentSession.getAvailableThinkingLevels(). Do not infer model families here.
 	const thinkingLevels = useMemo(() => {
 		const levels =
 			activeAgent?.availableThinkingLevels && activeAgent.availableThinkingLevels.length > 0
@@ -470,8 +476,8 @@ export default function App() {
 						{!api ? null : projects.length === 0 ? (
 							<WelcomeScreen onOpenProject={handleOpenProject} />
 						) : showAgentSquare ? (
-						<AgentSquare />
-					) : (
+							<AgentSquare />
+						) : (
 							<>
 								<SessionSheetBar
 									agentIds={openedSessionIds}
@@ -503,28 +509,7 @@ export default function App() {
 										onAbort={handleAbortAgent}
 									/>
 								) : (
-									<div className="flex flex-1 items-center justify-center p-10 text-center">
-										<div className="flex max-w-sm flex-col items-center gap-3">
-											<div className="flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
-												<FolderOpen className="size-5 text-muted-foreground" />
-											</div>
-											<p className="text-sm font-medium">
-												{activeProject?.name ?? t("workspace.noSessionSelected", "No session selected")}
-											</p>
-											<p className="text-xs text-muted-foreground">
-												{t("workspace.emptyProjectHint", "Create a session inside a workspace to begin.")}
-											</p>
-											{activeProject?.valid && (
-												<Button
-													variant="line"
-													size="sm"
-													onClick={() => handleCreateClick(activeProject.id)}
-												>
-													{t("sidebar.newSession", "New session")}
-												</Button>
-											)}
-										</div>
-									</div>
+									<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
 								)}
 							</>
 						)}

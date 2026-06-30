@@ -18,6 +18,290 @@ import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const api = (window as any).look;
 
+// ── Sub-components ──
+
+function LoginForm({
+	email,
+	setEmail,
+	password,
+	setPassword,
+	submitting,
+	error,
+	rememberMe,
+	setRememberMe,
+	handleLogin,
+	onSwitchToForgot,
+	onSwitchToRegister,
+}: {
+	email: string;
+	setEmail: (v: string) => void;
+	password: string;
+	setPassword: (v: string) => void;
+	submitting: boolean;
+	error: string | null;
+	rememberMe: boolean;
+	setRememberMe: (v: boolean) => void;
+	handleLogin: (e: React.FormEvent) => Promise<void>;
+	onSwitchToForgot: () => void;
+	onSwitchToRegister: () => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<form onSubmit={handleLogin} className="flex flex-col gap-4">
+			<div className="relative">
+				<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					type="email"
+					placeholder={t("auth.emailPlaceholder")}
+					value={email}
+					onChange={(e) => setEmail(e.target.value)}
+					className="h-11 pl-10 text-[13px]"
+					autoFocus
+					disabled={submitting}
+				/>
+			</div>
+			<div className="relative">
+				<Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					type="password"
+					placeholder={t("auth.passwordPlaceholder")}
+					value={password}
+					onChange={(e) => setPassword(e.target.value)}
+					className="h-11 pl-10 text-[13px]"
+					disabled={submitting}
+				/>
+			</div>
+			{error && (
+				<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+					{error}
+				</div>
+			)}
+			<div className="flex items-center justify-between">
+				<label
+					htmlFor="rememberMe"
+					className="flex cursor-pointer items-center gap-2 text-[12px] text-muted-foreground"
+				>
+					<Switch
+						id="rememberMe"
+						size="sm"
+						checked={rememberMe}
+						onCheckedChange={setRememberMe}
+						disabled={submitting}
+					/>
+					{t("auth.rememberMe", "Remember me")}
+				</label>
+			</div>
+			<Button
+				type="submit"
+				disabled={submitting}
+				className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+			>
+				{submitting ? (
+					<Loader2 className="size-4 animate-spin" />
+				) : (
+					<>
+						{t("auth.loginBtn")}
+						<ArrowRight className="ml-2 size-4" />
+					</>
+				)}
+			</Button>
+			<div className="flex justify-between text-[12px]">
+				<button
+					type="button"
+					onClick={onSwitchToForgot}
+					className="text-muted-foreground underline-offset-2 hover:underline"
+				>
+					{t("auth.forgotPassword")}
+				</button>
+				<button
+					type="button"
+					onClick={onSwitchToRegister}
+					className="text-muted-foreground underline-offset-2 hover:underline"
+				>
+					{t("auth.switchToRegister")}
+				</button>
+			</div>
+		</form>
+	);
+}
+
+function RegisterForm({
+	email,
+	setEmail,
+	password,
+	setPassword,
+	submitting,
+	error,
+	handleRegister,
+	onSwitchToLogin,
+}: {
+	email: string;
+	setEmail: (v: string) => void;
+	password: string;
+	setPassword: (v: string) => void;
+	submitting: boolean;
+	error: string | null;
+	handleRegister: (e: React.FormEvent) => Promise<void>;
+	onSwitchToLogin: () => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<form onSubmit={handleRegister} className="flex flex-col gap-4">
+			<div className="relative">
+				<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					type="email"
+					placeholder={t("auth.emailPlaceholder")}
+					value={email}
+					onChange={(e) => setEmail(e.target.value)}
+					className="h-11 pl-10 text-[13px]"
+					autoFocus
+					disabled={submitting}
+				/>
+			</div>
+			<div className="relative">
+				<Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					type="password"
+					placeholder={t("auth.setYourPassword")}
+					value={password}
+					onChange={(e) => setPassword(e.target.value)}
+					className="h-11 pl-10 text-[13px]"
+					disabled={submitting}
+				/>
+			</div>
+			{error && (
+				<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+					{error}
+				</div>
+			)}
+			<Button
+				type="submit"
+				disabled={submitting}
+				className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+			>
+				{submitting ? (
+					<Loader2 className="size-4 animate-spin" />
+				) : (
+					<>
+						{t("auth.registerBtn")}
+						<ArrowRight className="ml-2 size-4" />
+					</>
+				)}
+			</Button>
+			<div className="text-center">
+				<button
+					type="button"
+					onClick={onSwitchToLogin}
+					className="text-[12px] text-muted-foreground underline-offset-2 hover:underline"
+				>
+					{t("auth.switchToLogin")}
+				</button>
+			</div>
+		</form>
+	);
+}
+
+function RegisterSent({ email, onBackToLogin }: { email: string; onBackToLogin: () => void }) {
+	const { t } = useTranslation();
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="rounded-lg border border-hairline bg-muted/30 px-4 py-6 text-center">
+				<p className="text-[13px] font-medium text-foreground">{t("auth.checkEmailTitle")}</p>
+				<p className="mt-2 text-[12px] text-muted-foreground">
+					{t("auth.checkEmailDesc", "We sent a confirmation link to")}{" "}
+					<span className="font-medium text-foreground">{email}</span>
+				</p>
+			</div>
+			<Button variant="outline" className="h-10 w-full text-[12px]" onClick={onBackToLogin}>
+				{t("auth.backToLogin")}
+			</Button>
+		</div>
+	);
+}
+
+function ForgotForm({
+	email,
+	setEmail,
+	submitting,
+	error,
+	handleForgot,
+	onBackToLogin,
+}: {
+	email: string;
+	setEmail: (v: string) => void;
+	submitting: boolean;
+	error: string | null;
+	handleForgot: (e: React.FormEvent) => Promise<void>;
+	onBackToLogin: () => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<form onSubmit={handleForgot} className="flex flex-col gap-4">
+			<div className="relative">
+				<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					type="email"
+					placeholder={t("auth.emailPlaceholder")}
+					value={email}
+					onChange={(e) => setEmail(e.target.value)}
+					className="h-11 pl-10 text-[13px]"
+					autoFocus
+					disabled={submitting}
+				/>
+			</div>
+			{error && (
+				<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+					{error}
+				</div>
+			)}
+			<Button
+				type="submit"
+				disabled={submitting}
+				className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
+			>
+				{submitting ? (
+					<Loader2 className="size-4 animate-spin" />
+				) : (
+					<>
+						{t("auth.sendResetLink")}
+						<ArrowRight className="ml-2 size-4" />
+					</>
+				)}
+			</Button>
+			<div className="text-center">
+				<button
+					type="button"
+					onClick={onBackToLogin}
+					className="text-[12px] text-muted-foreground underline-offset-2 hover:underline"
+				>
+					{t("auth.backToLogin")}
+				</button>
+			</div>
+		</form>
+	);
+}
+
+function ForgotSent({ email, onBackToLogin }: { email: string; onBackToLogin: () => void }) {
+	const { t } = useTranslation();
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="rounded-lg border border-hairline bg-muted/30 px-4 py-6 text-center">
+				<p className="text-[13px] font-medium text-foreground">{t("auth.resetEmailSent")}</p>
+				<p className="mt-2 text-[12px] text-muted-foreground">
+					{t("auth.checkEmailDesc", "We sent a reset link to")}{" "}
+					<span className="font-medium text-foreground">{email}</span>
+				</p>
+			</div>
+			<Button variant="outline" className="h-10 w-full text-[12px]" onClick={onBackToLogin}>
+				{t("auth.backToLogin")}
+			</Button>
+		</div>
+	);
+}
+
+// ── Main component ──
+
 export default function LoginScreen() {
 	const { t } = useTranslation();
 	const [, setIsLoggedIn] = useAtom(isLoggedInAtom);
@@ -165,244 +449,76 @@ export default function LoginScreen() {
 					</p>
 				</div>
 
-				{/* ── Login ── */}
 				{mode === "login" && (
-					<form onSubmit={handleLogin} className="flex flex-col gap-4">
-						<div className="relative">
-							<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								type="email"
-								placeholder={t("auth.emailPlaceholder")}
-								value={email}
-								onChange={(e) => setEmail(e.target.value)}
-								className="h-11 pl-10 text-[13px]"
-								autoFocus
-								disabled={submitting}
-							/>
-						</div>
-						<div className="relative">
-							<Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								type="password"
-								placeholder={t("auth.passwordPlaceholder")}
-								value={password}
-								onChange={(e) => setPassword(e.target.value)}
-								className="h-11 pl-10 text-[13px]"
-								disabled={submitting}
-							/>
-						</div>
-						{error && (
-							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
-								{error}
-							</div>
-						)}
-						<div className="flex items-center justify-between">
-							<label
-								htmlFor="rememberMe"
-								className="flex cursor-pointer items-center gap-2 text-[12px] text-muted-foreground"
-							>
-								<Switch
-									id="rememberMe"
-									size="sm"
-									checked={rememberMe}
-									onCheckedChange={setRememberMe}
-									disabled={submitting}
-								/>
-								{t("auth.rememberMe", "Remember me")}
-							</label>
-						</div>
-						<Button
-							type="submit"
-							disabled={submitting}
-							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
-						>
-							{submitting ? (
-								<Loader2 className="size-4 animate-spin" />
-							) : (
-								<>
-									{t("auth.loginBtn")}
-									<ArrowRight className="ml-2 size-4" />
-								</>
-							)}
-						</Button>
-						<div className="flex justify-between text-[12px]">
-							<button
-								type="button"
-								onClick={() => {
-									setMode("forgot");
-									reset();
-								}}
-								className="text-muted-foreground underline-offset-2 hover:underline"
-							>
-								{t("auth.forgotPassword")}
-							</button>
-							<button
-								type="button"
-								onClick={() => {
-									setMode("register");
-									reset();
-								}}
-								className="text-muted-foreground underline-offset-2 hover:underline"
-							>
-								{t("auth.switchToRegister")}
-							</button>
-						</div>
-					</form>
+					<LoginForm
+						email={email}
+						setEmail={setEmail}
+						password={password}
+						setPassword={setPassword}
+						submitting={submitting}
+						error={error}
+						rememberMe={rememberMe}
+						setRememberMe={setRememberMe}
+						handleLogin={handleLogin}
+						onSwitchToForgot={() => {
+							setMode("forgot");
+							reset();
+						}}
+						onSwitchToRegister={() => {
+							setMode("register");
+							reset();
+						}}
+					/>
 				)}
 
-				{/* ── Register ── */}
 				{mode === "register" && !sent && (
-					<form onSubmit={handleRegister} className="flex flex-col gap-4">
-						<div className="relative">
-							<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								type="email"
-								placeholder={t("auth.emailPlaceholder")}
-								value={email}
-								onChange={(e) => setEmail(e.target.value)}
-								className="h-11 pl-10 text-[13px]"
-								autoFocus
-								disabled={submitting}
-							/>
-						</div>
-						<div className="relative">
-							<Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								type="password"
-								placeholder={t("auth.setYourPassword")}
-								value={password}
-								onChange={(e) => setPassword(e.target.value)}
-								className="h-11 pl-10 text-[13px]"
-								disabled={submitting}
-							/>
-						</div>
-						{error && (
-							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
-								{error}
-							</div>
-						)}
-						<Button
-							type="submit"
-							disabled={submitting}
-							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
-						>
-							{submitting ? (
-								<Loader2 className="size-4 animate-spin" />
-							) : (
-								<>
-									{t("auth.registerBtn")}
-									<ArrowRight className="ml-2 size-4" />
-								</>
-							)}
-						</Button>
-						<div className="text-center">
-							<button
-								type="button"
-								onClick={() => {
-									setMode("login");
-									reset();
-								}}
-								className="text-[12px] text-muted-foreground underline-offset-2 hover:underline"
-							>
-								{t("auth.switchToLogin")}
-							</button>
-						</div>
-					</form>
+					<RegisterForm
+						email={email}
+						setEmail={setEmail}
+						password={password}
+						setPassword={setPassword}
+						submitting={submitting}
+						error={error}
+						handleRegister={handleRegister}
+						onSwitchToLogin={() => {
+							setMode("login");
+							reset();
+						}}
+					/>
 				)}
 
-				{/* ── Register success ── */}
 				{mode === "register" && sent && (
-					<div className="flex flex-col gap-4">
-						<div className="rounded-lg border border-hairline bg-muted/30 px-4 py-6 text-center">
-							<p className="text-[13px] font-medium text-foreground">{t("auth.checkEmailTitle")}</p>
-							<p className="mt-2 text-[12px] text-muted-foreground">
-								{t("auth.checkEmailDesc", "We sent a confirmation link to")}{" "}
-								<span className="font-medium text-foreground">{email}</span>
-							</p>
-						</div>
-						<Button
-							variant="outline"
-							className="h-10 w-full text-[12px]"
-							onClick={() => {
-								setMode("login");
-								reset();
-							}}
-						>
-							{t("auth.backToLogin")}
-						</Button>
-					</div>
+					<RegisterSent
+						email={email}
+						onBackToLogin={() => {
+							setMode("login");
+							reset();
+						}}
+					/>
 				)}
 
-				{/* ── Forgot password ── */}
 				{mode === "forgot" && !sent && (
-					<form onSubmit={handleForgot} className="flex flex-col gap-4">
-						<div className="relative">
-							<Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								type="email"
-								placeholder={t("auth.emailPlaceholder")}
-								value={email}
-								onChange={(e) => setEmail(e.target.value)}
-								className="h-11 pl-10 text-[13px]"
-								autoFocus
-								disabled={submitting}
-							/>
-						</div>
-						{error && (
-							<div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
-								{error}
-							</div>
-						)}
-						<Button
-							type="submit"
-							disabled={submitting}
-							className={cn("h-11 w-full text-[13px] font-medium", submitting && "opacity-70")}
-						>
-							{submitting ? (
-								<Loader2 className="size-4 animate-spin" />
-							) : (
-								<>
-									{t("auth.sendResetLink")}
-									<ArrowRight className="ml-2 size-4" />
-								</>
-							)}
-						</Button>
-						<div className="text-center">
-							<button
-								type="button"
-								onClick={() => {
-									setMode("login");
-									reset();
-								}}
-								className="text-[12px] text-muted-foreground underline-offset-2 hover:underline"
-							>
-								{t("auth.backToLogin")}
-							</button>
-						</div>
-					</form>
+					<ForgotForm
+						email={email}
+						setEmail={setEmail}
+						submitting={submitting}
+						error={error}
+						handleForgot={handleForgot}
+						onBackToLogin={() => {
+							setMode("login");
+							reset();
+						}}
+					/>
 				)}
 
-				{/* ── Forgot sent ── */}
 				{mode === "forgot" && sent && (
-					<div className="flex flex-col gap-4">
-						<div className="rounded-lg border border-hairline bg-muted/30 px-4 py-6 text-center">
-							<p className="text-[13px] font-medium text-foreground">{t("auth.resetEmailSent")}</p>
-							<p className="mt-2 text-[12px] text-muted-foreground">
-								{t("auth.checkEmailDesc", "We sent a reset link to")}{" "}
-								<span className="font-medium text-foreground">{email}</span>
-							</p>
-						</div>
-						<Button
-							variant="outline"
-							className="h-10 w-full text-[12px]"
-							onClick={() => {
-								setMode("login");
-								reset();
-							}}
-						>
-							{t("auth.backToLogin")}
-						</Button>
-					</div>
+					<ForgotSent
+						email={email}
+						onBackToLogin={() => {
+							setMode("login");
+							reset();
+						}}
+					/>
 				)}
 			</div>
 		</div>

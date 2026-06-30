@@ -12,7 +12,7 @@ import { usePanZoom } from "../hooks/usePanZoom";
 
 // Initialize once at module level
 let mermaidReady = false;
-export function initMermaid() {
+function initMermaid() {
 	if (mermaidReady) return;
 	mermaid.initialize({
 		startOnLoad: false,

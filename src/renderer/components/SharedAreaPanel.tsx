@@ -36,6 +36,87 @@ interface SharedAreaPanelProps {
 
 const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
 
+interface FileSystemEntryLike {
+	name: string;
+	isFile: boolean;
+	isDirectory: boolean;
+	fullPath?: string;
+	file(success: (file: File) => void, error?: (err: Error) => void): void;
+	createReader(): { readEntries(success: (entries: FileSystemEntryLike[]) => void): void };
+}
+
+function readEntryAsFile(entry: FileSystemEntryLike): Promise<File> {
+	return new Promise((resolve, reject) => {
+		try {
+			entry.file(resolve, reject);
+		} catch (error) {
+			reject(error instanceof Error ? error : new Error("readEntryAsFile failed"));
+		}
+	});
+}
+
+function readDirectoryEntries(reader: {
+	readEntries(success: (entries: FileSystemEntryLike[]) => void): void;
+}): Promise<FileSystemEntryLike[]> {
+	return new Promise((resolve, reject) => {
+		try {
+			reader.readEntries(resolve);
+		} catch (error) {
+			reject(error instanceof Error ? error : new Error("readDirectoryEntries failed"));
+		}
+	});
+}
+
+async function fileToBase64(file: File): Promise<string> {
+	const buffer = await file.arrayBuffer();
+	let binary = "";
+	const bytes = new Uint8Array(buffer);
+	const chunk = 0x8000;
+	for (let i = 0; i < bytes.length; i += chunk) {
+		binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+	}
+	return btoa(binary);
+}
+
+async function importEntriesByPath(projectId: string, paths: string[]): Promise<number> {
+	if (paths.length === 0) return 0;
+	await window.look.importToShared(projectId, paths);
+	return paths.length;
+}
+
+async function importEntriesByContent(
+	projectId: string,
+	entries: FileSystemEntryLike[],
+	relativeDir: string,
+): Promise<number> {
+	let count = 0;
+	await Promise.all(
+		entries.map(async (entry) => {
+			if (entry.isFile) {
+				const file = await readEntryAsFile(entry);
+				const base64 = await fileToBase64(file);
+				const targetPath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+				await window.look.writeSharedContent(projectId, targetPath, base64, "base64");
+				count += 1;
+			} else if (entry.isDirectory) {
+				const subDir = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+				await window.look.createSharedDir(projectId, subDir);
+				const reader = entry.createReader();
+				let done = false;
+				const allChildren: FileSystemEntryLike[] = [];
+				// createReader 一次最多返回 100 条,需要循环到空数组
+				while (!done) {
+					const children = await readDirectoryEntries(reader);
+					if (children.length > 0) allChildren.push(...children);
+					else done = true;
+				}
+				count += await importEntriesByContent(projectId, allChildren, subDir);
+			}
+		}),
+	);
+	return count;
+}
+
 export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: SharedAreaPanelProps) {
 	const [selectedPath, setSelectedPath] = useAtom(selectedSharedPathAtomFamily(projectId));
 	const [creating, setCreating] = useState<"file" | "dir" | null>(null);
@@ -152,85 +233,6 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 	//            失败时用 createReader().readEntries() 递归读内容上传
 	// ============================================================
 
-	interface FileSystemEntryLike {
-		name: string;
-		isFile: boolean;
-		isDirectory: boolean;
-		fullPath?: string;
-		file(success: (file: File) => void, error?: (err: Error) => void): void;
-		createReader(): { readEntries(success: (entries: FileSystemEntryLike[]) => void): void };
-	}
-
-	function readEntryAsFile(entry: FileSystemEntryLike): Promise<File> {
-		return new Promise((resolve, reject) => {
-			try {
-				entry.file(resolve, reject);
-			} catch (error) {
-				reject(error instanceof Error ? error : new Error("readEntryAsFile failed"));
-			}
-		});
-	}
-
-	function readDirectoryEntries(reader: {
-		readEntries(success: (entries: FileSystemEntryLike[]) => void): void;
-	}): Promise<FileSystemEntryLike[]> {
-		return new Promise((resolve, reject) => {
-			try {
-				reader.readEntries(resolve);
-			} catch (error) {
-				reject(error instanceof Error ? error : new Error("readDirectoryEntries failed"));
-			}
-		});
-	}
-
-	async function fileToBase64(file: File): Promise<string> {
-		const buffer = await file.arrayBuffer();
-		let binary = "";
-		const bytes = new Uint8Array(buffer);
-		const chunk = 0x8000;
-		for (let i = 0; i < bytes.length; i += chunk) {
-			binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
-		}
-		return btoa(binary);
-	}
-
-	async function importEntriesByPath(projectId: string, paths: string[]): Promise<number> {
-		if (paths.length === 0) return 0;
-		await window.look.importToShared(projectId, paths);
-		return paths.length;
-	}
-
-	async function importEntriesByContent(
-		projectId: string,
-		entries: FileSystemEntryLike[],
-		relativeDir: string,
-	): Promise<number> {
-		let count = 0;
-		for (const entry of entries) {
-			if (entry.isFile) {
-				const file = await readEntryAsFile(entry);
-				const base64 = await fileToBase64(file);
-				const targetPath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-				await window.look.writeSharedContent(projectId, targetPath, base64, "base64");
-				count += 1;
-			} else if (entry.isDirectory) {
-				const subDir = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-				await window.look.createSharedDir(projectId, subDir);
-				const reader = entry.createReader();
-				let done = false;
-				const allChildren: FileSystemEntryLike[] = [];
-				// createReader 一次最多返回 100 条,需要循环到空数组
-				while (!done) {
-					const children = await readDirectoryEntries(reader);
-					if (children.length > 0) allChildren.push(...children);
-					else done = true;
-				}
-				count += await importEntriesByContent(projectId, allChildren, subDir);
-			}
-		}
-		return count;
-	}
-
 	const handleDrop = async (e: React.DragEvent): Promise<void> => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -286,75 +288,48 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
-				<Button variant="ghost" size="icon-xs" onClick={handleRefresh} aria-label="刷新">
-					<RefreshCw className="size-3.5" />
-				</Button>
-				<Button variant="ghost" size="icon-xs" onClick={() => setCreating("file")} aria-label="新建文件">
-					<Plus className="size-3.5" />
-				</Button>
-				<Button variant="ghost" size="icon-xs" onClick={() => setCreating("dir")} aria-label="新建文件夹">
-					<FolderOpen className="size-3.5" />
-				</Button>
-				<Button variant="ghost" size="icon-xs" onClick={handleImport} aria-label="导入文件或文件夹">
-					<Import className="size-3.5" />
-				</Button>
-			</div>
+			<SharedAreaToolbar
+				onRefresh={handleRefresh}
+				onCreateFile={() => setCreating("file")}
+				onCreateDir={() => setCreating("dir")}
+				onImport={handleImport}
+			/>
 
-			<div
+			<section
 				className={`min-h-0 flex-1 ${isDragOver ? "bg-accent/30" : ""}`}
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
-				role="region"
 				aria-label="共享区文件列表，可拖入文件导入"
 			>
 				{creating ? (
-					<div className="flex items-center gap-2 px-2 py-1">
-						{creating === "file" ? (
-							<File className="size-4 text-muted-foreground" />
-						) : (
-							<Folder className="size-4 text-muted-foreground" />
-						)}
-						<Input
-							ref={inputRef}
-							autoFocus
-							value={newName}
-							onChange={(e) => setNewName(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") {
-									e.preventDefault();
+					<FileCreationInput
+						inputRef={inputRef}
+						creating={creating}
+						newName={newName}
+						onNewNameChange={setNewName}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault();
+								handleCreate();
+							}
+							if (e.key === "Escape") {
+								e.preventDefault();
+								handleCancelCreate();
+							}
+						}}
+						onBlur={() => {
+							requestAnimationFrame(() => {
+								if (document.activeElement !== inputRef.current) {
 									handleCreate();
 								}
-								if (e.key === "Escape") {
-									e.preventDefault();
-									handleCancelCreate();
-								}
-							}}
-							onBlur={() => {
-								requestAnimationFrame(() => {
-									if (document.activeElement !== inputRef.current) {
-										handleCreate();
-									}
-								});
-							}}
-							placeholder={creating === "file" ? "文件名" : "文件夹名"}
-							className="h-6 text-xs"
-						/>
-					</div>
+							});
+						}}
+					/>
 				) : isLoadingAndEmpty ? (
 					<div className="px-3 py-8 text-center text-xs text-muted-foreground">加载中…</div>
 				) : isEmpty ? (
-					<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
-						<UploadCloud className="size-5 text-muted-foreground" />
-						<p className="text-xs font-medium">共享区为空</p>
-						<p className="max-w-[200px] text-[10px] text-muted-foreground">
-							创建文件、点击导入，或将文件拖入此处
-						</p>
-						<Button variant="line" size="sm" onClick={handleImport}>
-							导入文件
-						</Button>
-					</div>
+					<EmptySharedState onImport={handleImport} />
 				) : (
 					<Virtuoso
 						data={files}
@@ -374,7 +349,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 						style={{ height: "100%" }}
 					/>
 				)}
-			</div>
+			</section>
 
 			<Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
 				<DialogContent>
@@ -396,6 +371,84 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 	);
 }
 
+function SharedAreaToolbar({
+	onRefresh,
+	onCreateFile,
+	onCreateDir,
+	onImport,
+}: {
+	onRefresh: () => void;
+	onCreateFile: () => void;
+	onCreateDir: () => void;
+	onImport: () => void;
+}) {
+	return (
+		<div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
+			<Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label="刷新">
+				<RefreshCw className="size-3.5" />
+			</Button>
+			<Button variant="ghost" size="icon-xs" onClick={onCreateFile} aria-label="新建文件">
+				<Plus className="size-3.5" />
+			</Button>
+			<Button variant="ghost" size="icon-xs" onClick={onCreateDir} aria-label="新建文件夹">
+				<FolderOpen className="size-3.5" />
+			</Button>
+			<Button variant="ghost" size="icon-xs" onClick={onImport} aria-label="导入文件或文件夹">
+				<Import className="size-3.5" />
+			</Button>
+		</div>
+	);
+}
+
+function FileCreationInput({
+	inputRef,
+	creating,
+	newName,
+	onNewNameChange,
+	onKeyDown,
+	onBlur,
+}: {
+	inputRef: React.RefObject<HTMLInputElement | null>;
+	creating: "file" | "dir";
+	newName: string;
+	onNewNameChange: (value: string) => void;
+	onKeyDown: (e: React.KeyboardEvent) => void;
+	onBlur: () => void;
+}) {
+	return (
+		<div className="flex items-center gap-2 px-2 py-1">
+			{creating === "file" ? (
+				<File className="size-4 text-muted-foreground" />
+			) : (
+				<Folder className="size-4 text-muted-foreground" />
+			)}
+			<Input
+				ref={inputRef}
+				autoFocus
+				value={newName}
+				onChange={(e) => onNewNameChange(e.target.value)}
+				onKeyDown={onKeyDown}
+				onBlur={onBlur}
+				placeholder={creating === "file" ? "文件名" : "文件夹名"}
+				className="h-6 text-xs"
+			/>
+		</div>
+	);
+}
+
+function EmptySharedState({ onImport }: { onImport: () => void }) {
+	return (
+		<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+			<UploadCloud className="size-5 text-muted-foreground" />
+			<p className="text-xs font-medium">共享区为空</p>
+			<p className="max-w-[200px] text-[10px] text-muted-foreground">创建文件、点击导入，或将文件拖入此处</p>
+			<Button variant="line" size="sm" onClick={onImport}>
+				导入文件
+			</Button>
+		</div>
+	);
+}
+
 interface SharedAreaNodeProps {
 	node: FileTreeNode;
 	selected: boolean;
@@ -407,10 +460,8 @@ interface SharedAreaNodeProps {
 function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: SharedAreaNodeProps) {
 	const Icon = node.type === "directory" ? Folder : File;
 	return (
-		<div
-			role="button"
-			tabIndex={0}
-			aria-selected={selected}
+		<button
+			type="button"
 			aria-label={node.type === "directory" ? `文件夹: ${node.name}` : `文件: ${node.name}`}
 			className={`group flex h-7 cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
 				selected ? "bg-accent text-accent-foreground" : "text-foreground hover:bg-muted"
@@ -463,6 +514,6 @@ function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: Shared
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
-		</div>
+		</button>
 	);
 }

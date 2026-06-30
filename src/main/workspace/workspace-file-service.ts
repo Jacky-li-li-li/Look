@@ -240,21 +240,23 @@ export class WorkspaceFileService {
 			throw new Error("Export destination must be within the user home directory");
 		}
 		await fs.promises.mkdir(resolvedDest, { recursive: true });
-		for (const relativePath of relativePaths) {
-			const source = await this.resolveSharedPath(projectId, relativePath);
-			const stat = await this.statSafe(source);
-			if (!stat) continue;
-			const dest = path.join(resolvedDest, path.basename(source));
-			const destExists = await this.statSafe(dest);
-			if (destExists) {
-				throw new Error(`Export target already exists: ${path.basename(source)}`);
-			}
-			if (stat.isDirectory()) {
-				await fs.promises.cp(source, dest, { recursive: true, errorOnExist: true });
-			} else {
-				await fs.promises.cp(source, dest, { errorOnExist: true });
-			}
-		}
+		await Promise.all(
+			relativePaths.map(async (relativePath) => {
+				const source = await this.resolveSharedPath(projectId, relativePath);
+				const stat = await this.statSafe(source);
+				if (!stat) return;
+				const dest = path.join(resolvedDest, path.basename(source));
+				const destExists = await this.statSafe(dest);
+				if (destExists) {
+					throw new Error(`Export target already exists: ${path.basename(source)}`);
+				}
+				if (stat.isDirectory()) {
+					await fs.promises.cp(source, dest, { recursive: true, errorOnExist: true });
+				} else {
+					await fs.promises.cp(source, dest, { errorOnExist: true });
+				}
+			}),
+		);
 	}
 
 	// ── Watcher lifecycle ──
@@ -325,8 +327,6 @@ export class WorkspaceFileService {
 
 	async dispose(): Promise<void> {
 		const keys = Array.from(this.watchers.keys());
-		for (const id of keys) {
-			await this.stopWatching(id);
-		}
+		await Promise.all(keys.map((id) => this.stopWatching(id)));
 	}
 }

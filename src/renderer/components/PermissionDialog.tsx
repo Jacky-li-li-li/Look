@@ -59,27 +59,31 @@ export default function PermissionDialog() {
 		[event, setQueue],
 	);
 
+	// Keep respond in a ref so effects don't re-subscribe when it changes
+	const respondRef = useRef(respond);
+	respondRef.current = respond;
+
 	// Auto-deny on timeout
 	useEffect(() => {
 		if (!event) return;
 		const delay = Math.max(0, event.expiresAt - Date.now());
 		timerRef.current = setTimeout(() => {
-			void respond("deny");
+			void respondRef.current("deny");
 		}, delay);
 		return () => {
 			if (timerRef.current) clearTimeout(timerRef.current);
 		};
-	}, [event, respond]);
+	}, [event]);
 
 	// Escape key to deny
 	useEffect(() => {
 		if (!open) return;
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") respond("deny");
+			if (e.key === "Escape") respondRef.current("deny");
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [open, respond]);
+	}, [open]);
 
 	if (!event) return null;
 

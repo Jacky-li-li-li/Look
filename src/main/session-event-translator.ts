@@ -47,8 +47,7 @@ export function extractUserMessageText(message: AgentMessage): string {
 	if (typeof msg.content === "string") return msg.content as string;
 	if (Array.isArray(msg.content)) {
 		return (msg.content as Array<Record<string, unknown>>)
-			.filter((b) => b.type === "text")
-			.map((b) => (b as { text: string }).text)
+			.flatMap((b) => (b.type === "text" ? [(b as { text: string }).text] : []))
 			.join("\n");
 	}
 	return "";

@@ -30,11 +30,7 @@ const SkillCard = memo(function SkillCard({ skill, enabled, onToggle }: SkillCar
 			<div className="flex w-full items-center gap-2">
 				<Sparkles className="size-5 shrink-0 text-foreground" />
 				<span className="min-w-0 flex-1 truncate text-[13px] font-medium">{skill.name}</span>
-				<Switch
-					checked={enabled}
-					onCheckedChange={onToggle}
-					className="scale-75 shrink-0"
-				/>
+				<Switch checked={enabled} onCheckedChange={onToggle} className="scale-75 shrink-0" />
 			</div>
 
 			{/* Row 2: 描述 */}

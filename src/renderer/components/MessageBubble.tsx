@@ -328,11 +328,11 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 
 	return (
 		<div className="flex flex-col gap-1.5">
-			{blocks.map((block, idx) => {
+			{blocks.map((block) => {
 				if (block.kind === "text") {
 					if (!block.text) return null;
 					return (
-						<div key={`txt-${idx}`} className="message-prose">
+						<div key={`txt-${block.contentIndex}`} className="message-prose">
 							<SkillAwareContent content={block.text} isStreaming={isStreaming && !block.completed} />
 						</div>
 					);
@@ -342,7 +342,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 					// when streaming with empty content.
 					return (
 						<ThinkingPanel
-							key={`think-${idx}`}
+							key={`think-${block.contentIndex}`}
 							thinking={block.thinking}
 							isStreaming={isStreaming && !block.completed}
 							autoCollapse={autoCollapse}
@@ -362,7 +362,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 							: "pending";
 					return (
 						<ToolCallCard
-							key={`tool-${idx}`}
+							key={block.toolCallId ?? `tool-${block.contentIndex}`}
 							toolCall={{
 								callId: block.toolCallId ?? "",
 								toolName: block.toolName ?? "unknown",
@@ -376,7 +376,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 				}
 				if (block.kind === "image") {
 					if (!block.image) return null;
-					return <ImageBlock key={`img-${idx}`} block={block.image} />;
+					return <ImageBlock key={`img-${block.contentIndex}`} block={block.image} />;
 				}
 				return null;
 			})}

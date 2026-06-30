@@ -48,8 +48,8 @@ const AgentCard = memo(function AgentCard({
 	onDelete,
 }: AgentCardProps) {
 	return (
-		<div
-			role="button"
+		<button
+			type="button"
 			tabIndex={0}
 			onClick={() => onSelect(agent)}
 			onKeyDown={(e) => {
@@ -133,7 +133,7 @@ const AgentCard = memo(function AgentCard({
 					</div>
 				)}
 			</div>
-		</div>
+		</button>
 	);
 });
 

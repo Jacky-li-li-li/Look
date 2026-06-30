@@ -131,7 +131,7 @@ export function parseAgentSegments(content: string): AgentSegment[] {
 	for (const match of content.matchAll(HASH_AGENT_RE)) {
 		const matchStart = match.index ?? 0;
 		const fullToken = match[1]!; // "#scout"
-		const name = match[2]!;      // "scout"
+		const name = match[2]!; // "scout"
 		const tokenStart = matchStart + (match[0]!.length - fullToken.length);
 
 		if (tokenStart > cursor) {

@@ -96,6 +96,282 @@ function providerTrack(provider: ProviderInfo, status: TestVerdict): string {
 	return "bg-emerald-500";
 }
 
+function CustomProviderRow({
+	cp,
+	isCustomExpanded,
+	onToggleExpand,
+	onEdit,
+	onRemove,
+}: {
+	cp: CustomProviderInput;
+	isCustomExpanded: boolean;
+	onToggleExpand: () => void;
+	onEdit: () => void;
+	onRemove: () => void;
+}) {
+	const { t } = useTranslation();
+	const hasCustomModels = cp.models.length > 0;
+	return (
+		<div className="group/custom-provider relative overflow-hidden rounded-md border border-hairline bg-background/35 transition-colors hover:bg-muted/40">
+			<div className="absolute left-0 top-0 h-full w-0.5 bg-emerald-500" />
+			<button
+				type="button"
+				className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 pl-4 pr-2.5 w-full text-left bg-transparent border-0"
+				aria-expanded={isCustomExpanded}
+				onClick={() => hasCustomModels && onToggleExpand()}
+			>
+				<div className="min-w-0">
+					<div className="flex min-w-0 flex-wrap items-center gap-1.5">
+						<ChevronRight
+							className={cn(
+								"size-3 shrink-0 text-muted-foreground transition-transform",
+								isCustomExpanded && "rotate-90",
+								!hasCustomModels && "opacity-30",
+							)}
+						/>
+						<span className="min-w-0 truncate font-mono text-[12px] font-medium">{cp.name}</span>
+						<Badge variant="outline" className="h-5 gap-1 px-1.5 font-mono text-[10px]">
+							<Cpu className="size-2.5" />
+							{cp.models.length}
+						</Badge>
+					</div>
+					<div className="mt-0.5 truncate text-[10px] text-muted-foreground">{cp.api}</div>
+				</div>
+				<div
+					className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/custom-provider:opacity-100 group-focus-within/custom-provider:opacity-100"
+					onClick={(e) => e.stopPropagation()}
+				>
+					<Button variant="line" size="xs" className="h-6 text-[10px]" onClick={onEdit}>
+						{t("settings.customProviders.edit")}
+					</Button>
+					<Button
+						variant="line-ghost"
+						size="icon-xs"
+						className="h-6 w-6 text-muted-foreground hover:text-destructive"
+						onClick={onRemove}
+					>
+						<Trash2 className="size-3" />
+					</Button>
+				</div>
+			</button>
+
+			{isCustomExpanded && hasCustomModels && (
+				<ModelList
+					models={cp.models.map((m) => ({
+						id: m.id,
+						name: m.name ?? m.id,
+						reasoning: m.reasoning ?? false,
+						contextWindow: m.contextWindow ?? 0,
+						maxTokens: m.maxTokens ?? 0,
+					}))}
+					t={t}
+				/>
+			)}
+		</div>
+	);
+}
+
+function BuiltInProviderRow({
+	provider,
+	isEditing,
+	isExpanded,
+	testStatus,
+	editing,
+	keyInput,
+	setKeyInput,
+	showKey,
+	setShowKey,
+	saving,
+	loadingKey,
+	forceSave,
+	onToggleExpand,
+	onOpenEditor,
+	onCloseEditor,
+	onSave,
+	onForceSave,
+	onClearClick,
+}: {
+	provider: ProviderInfo;
+	isEditing: boolean;
+	isExpanded: boolean;
+	testStatus: Record<string, TestVerdict>;
+	editing: string | null;
+	keyInput: string;
+	setKeyInput: (v: string) => void;
+	showKey: boolean;
+	setShowKey: (v: boolean) => void;
+	saving: boolean;
+	loadingKey: boolean;
+	forceSave: { provider: string; key: string; reason: string; status: number } | null;
+	onToggleExpand: () => void;
+	onOpenEditor: () => void;
+	onCloseEditor: () => void;
+	onSave: () => Promise<void>;
+	onForceSave: () => void;
+	onClearClick: () => void;
+}) {
+	const { t } = useTranslation();
+	const track = providerTrack(provider, testStatus[provider.id]);
+	const hasModels = !!provider.models?.length;
+	const clearable = canClearProviderKey(provider);
+	const rowForceSave = forceSave?.provider === provider.id ? forceSave : null;
+
+	return (
+		<div
+			className={cn(
+				"relative overflow-hidden rounded-md border border-hairline bg-muted/30 transition-colors",
+				isEditing && "bg-muted/45 ring-1 ring-primary/45",
+			)}
+		>
+			<div className={cn("absolute left-0 top-0 h-full w-0.5", track)} />
+			<button
+				type="button"
+				className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 pl-4 w-full text-left bg-transparent border-0"
+				aria-expanded={isExpanded}
+				onClick={() => hasModels && onToggleExpand()}
+			>
+				<div className="min-w-0">
+					<div className="flex min-w-0 flex-wrap items-center gap-1.5">
+						<ChevronRight
+							className={cn(
+								"size-3 shrink-0 text-muted-foreground transition-transform",
+								isExpanded && "rotate-90",
+								!hasModels && "opacity-30",
+							)}
+						/>
+						<ProviderIcon id={provider.id} className="size-4 shrink-0" />
+						<span className="min-w-0 truncate text-[12px] font-medium">{provider.name}</span>
+						<ProviderModelCount provider={provider} />
+					</div>
+				</div>
+				<div
+					className={cn(
+						"flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+						isEditing && "opacity-100",
+					)}
+					onClick={(e) => e.stopPropagation()}
+				>
+					<Button
+						variant={isEditing ? "line-filled" : "line"}
+						size="xs"
+						className="h-7 text-[10px]"
+						onClick={() => (isEditing ? onCloseEditor() : onOpenEditor())}
+					>
+						<Key data-icon="inline-start" className="size-3" />
+						{isEditing ? t("common.cancel") : provider.hasKey ? t("settings.replaceKey") : t("settings.addKey")}
+					</Button>
+					{clearable && !isEditing && (
+						<Button
+							variant="line-ghost"
+							size="icon-xs"
+							className="h-7 w-7 text-muted-foreground hover:text-destructive"
+							onClick={onClearClick}
+						>
+							<Trash2 className="size-3" />
+						</Button>
+					)}
+				</div>
+			</button>
+
+			{isExpanded && provider.models && provider.models.length > 0 && <ModelList models={provider.models} t={t} />}
+
+			{isEditing && (
+				<div className="border-t border-hairline bg-background/35 px-3 py-3 pl-4">
+					<div className="flex items-start gap-2">
+						<div className="relative min-w-0 flex-1">
+							<Input
+								type={showKey ? "text" : "password"}
+								value={keyInput}
+								onChange={(e) => {
+									setKeyInput(e.target.value);
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") onSave();
+									if (e.key === "Escape") onCloseEditor();
+								}}
+								placeholder={loadingKey ? t("common.loading") : "sk-..."}
+								autoFocus
+								autoComplete="new-password"
+								disabled={loadingKey}
+								className="h-8 pr-9 font-mono text-[12px]"
+							/>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="absolute right-0 top-0 size-8"
+								onClick={() => setShowKey(!showKey)}
+								tabIndex={-1}
+							>
+								{showKey ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+							</Button>
+						</div>
+						<Button
+							variant="line-filled"
+							size="sm"
+							className="h-8 text-[11px]"
+							onClick={onSave}
+							disabled={saving || loadingKey || !keyInput.trim()}
+						>
+							{saving ? (
+								<>
+									<Loader2 data-icon="inline-start" className="size-3 animate-spin" />
+									{t("settings.testingKey")}
+								</>
+							) : (
+								<>
+									<ShieldCheck data-icon="inline-start" className="size-3" />
+									{t("settings.testAndSaveKey")}
+								</>
+							)}
+						</Button>
+						<Button
+							variant="line"
+							size="sm"
+							className="h-8 text-[11px]"
+							onClick={onCloseEditor}
+							disabled={saving}
+						>
+							{t("common.cancel")}
+						</Button>
+					</div>
+					{provider.envVar && (
+						<p className="mt-1.5 text-[10px] text-muted-foreground">
+							{t("settings.envKeyHint")}{" "}
+							<code className="rounded bg-muted px-1 font-mono text-[10px]">export {provider.envVar}=...</code>
+						</p>
+					)}
+					{rowForceSave && (
+						<div className="mt-2 rounded-md border border-rose-500/25 bg-rose-500/[0.04] p-2.5">
+							<div className="flex items-center gap-1.5 text-[11px] font-medium text-rose-700 dark:text-rose-300">
+								<AlertCircle className="size-3.5" />
+								{t("settings.selfTestFailed")}
+								{rowForceSave.status ? ` · HTTP ${rowForceSave.status}` : ""}
+							</div>
+							<p className="mt-1 font-mono text-[10px] text-rose-700/80 dark:text-rose-300/80">
+								{rowForceSave.reason}
+							</p>
+							<div className="mt-2 flex items-center gap-2">
+								<Button variant="line" size="xs" className="h-6 text-[10px]" onClick={onSave} disabled={saving}>
+									{t("settings.retryTest")}
+								</Button>
+								<Button
+									variant="line-filled"
+									size="xs"
+									className="h-6 text-[10px]"
+									onClick={onForceSave}
+									disabled={saving}
+								>
+									{t("settings.saveAnyway")}
+								</Button>
+							</div>
+						</div>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
 export default function ApiKeysTab({ providers, customStats, onProvidersChange }: ApiKeysTabProps) {
 	const { t } = useTranslation();
 	const [editing, setEditing] = useState<string | null>(null);
@@ -345,82 +621,15 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 							<div className="mt-2 grid grid-cols-1 gap-1.5">
 								{customProviders.map((cp) => {
 									const isCustomExpanded = !!expandedCustomProviders[cp.name];
-									const hasCustomModels = cp.models.length > 0;
 									return (
-										<div
+										<CustomProviderRow
 											key={cp.name}
-											className="group/custom-provider relative overflow-hidden rounded-md border border-hairline bg-background/35 transition-colors hover:bg-muted/40"
-										>
-											<div className="absolute left-0 top-0 h-full w-0.5 bg-emerald-500" />
-											<div
-												className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 pl-4 pr-2.5"
-												role="button"
-												tabIndex={0}
-												aria-expanded={isCustomExpanded}
-												onClick={() => hasCustomModels && toggleCustomProviderExpand(cp.name)}
-												onKeyDown={(e) => {
-													if (!hasCustomModels) return;
-													if (e.key === "Enter" || e.key === " ") {
-														e.preventDefault();
-														toggleCustomProviderExpand(cp.name);
-													}
-												}}
-											>
-												<div className="min-w-0">
-													<div className="flex min-w-0 flex-wrap items-center gap-1.5">
-														<ChevronRight
-															className={cn(
-																"size-3 shrink-0 text-muted-foreground transition-transform",
-																isCustomExpanded && "rotate-90",
-																!hasCustomModels && "opacity-30",
-															)}
-														/>
-														<span className="min-w-0 truncate font-mono text-[12px] font-medium">
-															{cp.name}
-														</span>
-														<Badge variant="outline" className="h-5 gap-1 px-1.5 font-mono text-[10px]">
-															<Cpu className="size-2.5" />
-															{cp.models.length}
-														</Badge>
-													</div>
-													<div className="mt-0.5 truncate text-[10px] text-muted-foreground">{cp.api}</div>
-												</div>
-												<div
-													className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/custom-provider:opacity-100 group-focus-within/custom-provider:opacity-100"
-													onClick={(e) => e.stopPropagation()}
-												>
-													<Button
-														variant="line"
-														size="xs"
-														className="h-6 text-[10px]"
-														onClick={() => setCustomView({ type: "form", editing: cp })}
-													>
-														{t("settings.customProviders.edit")}
-													</Button>
-													<Button
-														variant="line-ghost"
-														size="icon-xs"
-														className="h-6 w-6 text-muted-foreground hover:text-destructive"
-														onClick={() => setConfirmRemove(cp.name)}
-													>
-														<Trash2 className="size-3" />
-													</Button>
-												</div>
-											</div>
-
-											{isCustomExpanded && hasCustomModels && (
-												<ModelList
-													models={cp.models.map((m) => ({
-														id: m.id,
-														name: m.name ?? m.id,
-														reasoning: m.reasoning ?? false,
-														contextWindow: m.contextWindow ?? 0,
-														maxTokens: m.maxTokens ?? 0,
-													}))}
-													t={t}
-												/>
-											)}
-										</div>
+											cp={cp}
+											isCustomExpanded={isCustomExpanded}
+											onToggleExpand={() => toggleCustomProviderExpand(cp.name)}
+											onEdit={() => setCustomView({ type: "form", editing: cp })}
+											onRemove={() => setConfirmRemove(cp.name)}
+										/>
 									);
 								})}
 							</div>
@@ -440,190 +649,28 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 					{allProviders.map((p) => {
 						const isEditing = editing === p.id;
 						const isExpanded = !!expandedProviders[p.id];
-						const track = providerTrack(p, testStatus[p.id]);
-						const hasModels = !!p.models?.length;
-						const clearable = canClearProviderKey(p);
-						const rowForceSave = forceSave?.provider === p.id ? forceSave : null;
-
 						return (
-							<div
+							<BuiltInProviderRow
 								key={p.id}
-								className={cn(
-									"relative overflow-hidden rounded-md border border-hairline bg-muted/30 transition-colors",
-									isEditing && "bg-muted/45 ring-1 ring-primary/45",
-								)}
-							>
-								<div className={cn("absolute left-0 top-0 h-full w-0.5", track)} />
-								<div
-									className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 pl-4"
-									role="button"
-									tabIndex={0}
-									aria-expanded={isExpanded}
-									onClick={() => hasModels && toggleProviderExpand(p.id)}
-									onKeyDown={(e) => {
-										if (!hasModels) return;
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											toggleProviderExpand(p.id);
-										}
-									}}
-								>
-									<div className="min-w-0">
-										<div className="flex min-w-0 flex-wrap items-center gap-1.5">
-											<ChevronRight
-												className={cn(
-													"size-3 shrink-0 text-muted-foreground transition-transform",
-													isExpanded && "rotate-90",
-													!hasModels && "opacity-30",
-												)}
-											/>
-											<ProviderIcon id={p.id} className="size-4 shrink-0" />
-											<span className="min-w-0 truncate text-[12px] font-medium">{p.name}</span>
-											<ProviderModelCount provider={p} />
-										</div>
-									</div>
-									<div
-										className={cn(
-											"flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
-											isEditing && "opacity-100",
-										)}
-										onClick={(e) => e.stopPropagation()}
-									>
-										<Button
-											variant={isEditing ? "line-filled" : "line"}
-											size="xs"
-											className="h-7 text-[10px]"
-											onClick={() => (isEditing ? closeEditor() : openEditor(p))}
-										>
-											<Key data-icon="inline-start" className="size-3" />
-											{isEditing
-												? t("common.cancel")
-												: p.hasKey
-													? t("settings.replaceKey")
-													: t("settings.addKey")}
-										</Button>
-										{clearable && !isEditing && (
-											<Button
-												variant="line-ghost"
-												size="icon-xs"
-												className="h-7 w-7 text-muted-foreground hover:text-destructive"
-												onClick={() => setConfirmClear(p)}
-											>
-												<Trash2 className="size-3" />
-											</Button>
-										)}
-									</div>
-								</div>
-
-								{isExpanded && p.models && p.models.length > 0 && <ModelList models={p.models} t={t} />}
-
-								{isEditing && (
-									<div className="border-t border-hairline bg-background/35 px-3 py-3 pl-4">
-										<div className="flex items-start gap-2">
-											<div className="relative min-w-0 flex-1">
-												<Input
-													type={showKey ? "text" : "password"}
-													value={keyInput}
-													onChange={(e) => {
-														setKeyInput(e.target.value);
-														setForceSave(null);
-													}}
-													onKeyDown={(e) => {
-														if (e.key === "Enter") handleSave();
-														if (e.key === "Escape") closeEditor();
-													}}
-													placeholder={loadingKey ? t("common.loading") : "sk-..."}
-													autoFocus
-													autoComplete="new-password"
-													disabled={loadingKey}
-													className="h-8 pr-9 font-mono text-[12px]"
-												/>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="absolute right-0 top-0 size-8"
-													onClick={() => setShowKey(!showKey)}
-													tabIndex={-1}
-												>
-													{showKey ? (
-														<EyeOff data-icon="inline-start" />
-													) : (
-														<Eye data-icon="inline-start" />
-													)}
-												</Button>
-											</div>
-											<Button
-												variant="line-filled"
-												size="sm"
-												className="h-8 text-[11px]"
-												onClick={handleSave}
-												disabled={saving || loadingKey || !keyInput.trim()}
-											>
-												{saving ? (
-													<>
-														<Loader2 data-icon="inline-start" className="size-3 animate-spin" />
-														{t("settings.testingKey")}
-													</>
-												) : (
-													<>
-														<ShieldCheck data-icon="inline-start" className="size-3" />
-														{t("settings.testAndSaveKey")}
-													</>
-												)}
-											</Button>
-											<Button
-												variant="line"
-												size="sm"
-												className="h-8 text-[11px]"
-												onClick={closeEditor}
-												disabled={saving}
-											>
-												{t("common.cancel")}
-											</Button>
-										</div>
-										{p.envVar && (
-											<p className="mt-1.5 text-[10px] text-muted-foreground">
-												{t("settings.envKeyHint")}{" "}
-												<code className="rounded bg-muted px-1 font-mono text-[10px]">
-													export {p.envVar}=...
-												</code>
-											</p>
-										)}
-										{rowForceSave && (
-											<div className="mt-2 rounded-md border border-rose-500/25 bg-rose-500/[0.04] p-2.5">
-												<div className="flex items-center gap-1.5 text-[11px] font-medium text-rose-700 dark:text-rose-300">
-													<AlertCircle className="size-3.5" />
-													{t("settings.selfTestFailed")}
-													{rowForceSave.status ? ` · HTTP ${rowForceSave.status}` : ""}
-												</div>
-												<p className="mt-1 font-mono text-[10px] text-rose-700/80 dark:text-rose-300/80">
-													{rowForceSave.reason}
-												</p>
-												<div className="mt-2 flex items-center gap-2">
-													<Button
-														variant="line"
-														size="xs"
-														className="h-6 text-[10px]"
-														onClick={handleSave}
-														disabled={saving}
-													>
-														{t("settings.retryTest")}
-													</Button>
-													<Button
-														variant="line-filled"
-														size="xs"
-														className="h-6 text-[10px]"
-														onClick={handleForceSave}
-														disabled={saving}
-													>
-														{t("settings.saveAnyway")}
-													</Button>
-												</div>
-											</div>
-										)}
-									</div>
-								)}
-							</div>
+								provider={p}
+								isEditing={isEditing}
+								isExpanded={isExpanded}
+								testStatus={testStatus}
+								editing={editing}
+								keyInput={keyInput}
+								setKeyInput={setKeyInput}
+								showKey={showKey}
+								setShowKey={setShowKey}
+								saving={saving}
+								loadingKey={loadingKey}
+								forceSave={forceSave}
+								onToggleExpand={() => toggleProviderExpand(p.id)}
+								onOpenEditor={() => openEditor(p)}
+								onCloseEditor={closeEditor}
+								onSave={handleSave}
+								onForceSave={handleForceSave}
+								onClearClick={() => setConfirmClear(p)}
+							/>
 						);
 					})}
 				</div>

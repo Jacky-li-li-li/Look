@@ -9,22 +9,23 @@ import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { Send, Square, X } from "lucide-react";
 import type React from "react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { agentDefinitionsAtom } from "../store/agentDefinitionsAtoms";
 import {
 	enabledAgentDefinitionsAtom,
 	enabledSkillsAtom,
 	permissionModeAtomFamily,
 	subagentEnabledAtom,
 } from "../store/atoms";
+import { AgentHashMenu } from "./AgentHashMenu";
 import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ContextRing from "./ContextRing";
+import { handleSlashMenuKey } from "./handleSlashMenuKey";
 import ModelSelector from "./ModelSelector";
 import PermissionModeSelector from "./PermissionModeSelector";
-import { type CommonSkillPath, handleSlashMenuKey, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
-import { AgentHashMenu } from "./AgentHashMenu";
+import { type CommonSkillPath, type SkillEntry, SkillSlashMenu } from "./SkillSlashMenu";
 import SubagentToggle from "./SubagentToggle";
-import { agentDefinitionsAtom } from "../store/agentDefinitionsAtoms";
 import ThinkingSelector from "./ThinkingSelector";
 
 export interface ChatInputHandle {
@@ -44,23 +45,22 @@ interface ChatInputProps {
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
 	onAbort?: () => void;
+	ref?: React.Ref<ChatInputHandle>;
 }
 
-const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-	{
-		agentId,
-		currentModel,
-		currentThinking,
-		availableThinkingLevels,
-		isBusy,
-		onSend,
-		onThinkingChange,
-		onModelChange,
-		onRequestApiKeys,
-		onAbort,
-	},
+const ChatInput = function ChatInput({
+	agentId,
+	currentModel,
+	currentThinking,
+	availableThinkingLevels,
+	isBusy,
+	onSend,
+	onThinkingChange,
+	onModelChange,
+	onRequestApiKeys,
+	onAbort,
 	ref,
-) {
+}: ChatInputProps) {
 	const { t } = useTranslation();
 	const [permissionMode, setPermissionMode] = useAtom(permissionModeAtomFamily(agentId));
 	const [input, setInputState] = useState("");
@@ -152,7 +152,10 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 			try {
 				const result = await window.look.getGeneralSettings();
 				if (cancelled || !result?.success || !result.settings) return;
-				const settings = result.settings as { enabledAgentDefinitions?: string[] | null; enabledSkills?: string[] | null };
+				const settings = result.settings as {
+					enabledAgentDefinitions?: string[] | null;
+					enabledSkills?: string[] | null;
+				};
 				setEnabledAgentDefs(settings.enabledAgentDefinitions ?? null);
 				setEnabledSkills(settings.enabledSkills ?? null);
 			} catch {
@@ -166,19 +169,23 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 	// Slash menu visibility — true when the input looks like `/xxx`
 	// without any whitespace (so mid-sentence `/` doesn't trigger).
 	const slashOpen = useMemo(() => /^\/[^\s]*$/.test(input), [input]);
-	// Reset index whenever the menu re-opens.
-	useEffect(() => {
+	// Reset index whenever the menu re-opens (inline during render)
+	const [prevSlashOpen, setPrevSlashOpen] = useState(false);
+	if (slashOpen !== prevSlashOpen) {
+		setPrevSlashOpen(slashOpen);
 		if (slashOpen) setSlashIndex(0);
-	}, [slashOpen]);
+	}
 	// ---- # Agent 选择菜单 ----
 	const agentDefs = useAtomValue(agentDefinitionsAtom);
 	const subagentOn = useAtomValue(subagentEnabledAtom);
 	const [hashIndex, setHashIndex] = useState(0);
 	// 输入中包含独立的 # 时显示 Agent 选择面板（支持开头或中间触发）
 	const hashOpen = useMemo(() => /(?:^|\s)#[^\s]*$/.test(input), [input]);
-	useEffect(() => {
+	const [prevHashOpen, setPrevHashOpen] = useState(false);
+	if (hashOpen !== prevHashOpen) {
+		setPrevHashOpen(hashOpen);
 		if (hashOpen) setHashIndex(0);
-	}, [hashOpen]);
+	}
 	// 提取最后一个 # 后的搜索关键词
 	const hashSearchTerm = useMemo(() => {
 		const m = input.match(/#([^\s]*)$/);
@@ -262,7 +269,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 		},
 		[filteredSkills, importableDetected, importDetected, setInput],
 	);
-
 
 	useEffect(() => {
 		inputRef.current?.focus();
@@ -421,7 +427,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 							>
 								<img
 									src={`data:${img.mimeType};base64,${img.data}`}
-									alt={`Pasted image ${idx + 1}`}
+									alt={`用户粘贴的图片 ${idx + 1}`}
 									className="h-full w-full object-cover"
 								/>
 							</button>
@@ -454,12 +460,13 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 						{zoomedImageIndex >= 0 ? `Image ${zoomedImageIndex + 1}` : "Image preview"}
 					</DialogTitle>
 					{zoomedImageIndex >= 0 && pendingImages[zoomedImageIndex] && (
-						<img
-							src={`data:${pendingImages[zoomedImageIndex].mimeType};base64,${pendingImages[zoomedImageIndex].data}`}
-							alt={`Image ${zoomedImageIndex + 1}`}
-							className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
-							onClick={(e) => e.stopPropagation()}
-						/>
+						<div onClick={(e) => e.stopPropagation()} role="presentation">
+							<img
+								src={`data:${pendingImages[zoomedImageIndex].mimeType};base64,${pendingImages[zoomedImageIndex].data}`}
+								alt={`放大的图片 ${zoomedImageIndex + 1}`}
+								className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+							/>
+						</div>
 					)}
 				</DialogContent>
 			</Dialog>
@@ -523,6 +530,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 			</div>
 		</div>
 	);
-});
+};
 
 export default ChatInput;

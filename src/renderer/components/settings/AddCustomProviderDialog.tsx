@@ -9,6 +9,7 @@ import { Label } from "@shared/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@shared/components/ui/select";
 import { Switch } from "@shared/components/ui/switch";
 import { cn } from "@shared/lib/utils";
+import type { TFunction } from "i18next";
 import {
 	AlertCircle,
 	ArrowLeft,
@@ -22,7 +23,7 @@ import {
 	Trash2,
 	XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { CustomProviderInput, CustomProviderModelInput, TestCustomProviderResult } from "./types";
@@ -69,218 +70,90 @@ function SectionLabel({ children, className }: { children: React.ReactNode; clas
 	);
 }
 
-export default function AddCustomProviderDialog({ open, onClose, initial, onSaved, mode = "dialog", onBack }: Props) {
-	const { t } = useTranslation();
-	const isEdit = !!initial;
-	const isInline = mode === "inline";
-	const keyCounterRef = useRef(Date.now());
-
-	const [name, setName] = useState(() => initial?.name ?? "");
-	const [baseUrl, setBaseUrl] = useState(() => initial?.baseUrl ?? "");
-	const [apiProtocol, setApiProtocol] = useState<ApiProtocol>(() => normalizeApiProtocol(initial?.api));
-	const [apiKeyVal, setApiKeyVal] = useState(() => initial?.apiKey ?? "");
-	const [showKey, setShowKey] = useState(false);
-	const [headers, setHeaders] = useState<Array<{ id: number; key: string; value: string }>>(() =>
-		initial?.headers ? Object.entries(initial.headers).map(([k, v], i) => ({ id: i + 1, key: k, value: v })) : [],
-	);
-	const [models, setModels] = useState<Array<CustomProviderModelInput & { _key: number }>>(
-		() => initial?.models.map((m, i) => ({ ...m, _key: i + 1 })) ?? [],
-	);
-	const [headersOpen, setHeadersOpen] = useState(false);
-
-	const [supportsDeveloperRole, setSupportsDeveloperRole] = useState(
-		() => initial?.compat?.supportsDeveloperRole !== false,
-	);
-	const [supportsReasoningEffort, setSupportsReasoningEffort] = useState(
-		() => initial?.compat?.supportsReasoningEffort !== false,
-	);
-	const [forceAdaptiveThinking, setForceAdaptiveThinking] = useState(() => !!initial?.compat?.forceAdaptiveThinking);
-	const [supportsEagerToolInputStreaming, setSupportsEagerToolInputStreaming] = useState(
-		() => initial?.compat?.supportsEagerToolInputStreaming !== false,
-	);
-	const [allowEmptySignature, setAllowEmptySignature] = useState(() => !!initial?.compat?.allowEmptySignature);
-
-	const [saving, setSaving] = useState(false);
-	const [testResult, setTestResult] = useState<TestCustomProviderResult | null>(null);
-
-	useEffect(() => {
-		if (!open) return;
-		setSaving(false);
-		setTestResult(null);
-		setHeadersOpen(false);
-	}, [open]);
-
-	const newItemKey = () => {
-		keyCounterRef.current += 1;
-		return keyCounterRef.current;
-	};
-
-	const addModel = () => {
-		setModels((prev) => [
-			...prev,
-			{
-				_key: newItemKey(),
-				id: "",
-				name: "",
-				reasoning: false,
-				input: ["text"],
-				contextWindow: 128000,
-				maxTokens: 16384,
-			},
-		]);
-	};
-	const updateModel = (key: number, patch: Partial<CustomProviderModelInput>) => {
-		setModels((prev) => prev.map((m) => (m._key === key ? { ...m, ...patch } : m)));
-	};
-	const removeModel = (key: number) => {
-		setModels((prev) => prev.filter((m) => m._key !== key));
-	};
-
-	const addHeader = () => setHeaders((prev) => [...prev, { id: newItemKey(), key: "", value: "" }]);
-	const updateHeader = (id: number, field: "key" | "value", val: string) => {
-		setHeaders((prev) => prev.map((h) => (h.id === id ? { ...h, [field]: val } : h)));
-	};
-	const removeHeader = (id: number) => setHeaders((prev) => prev.filter((h) => h.id !== id));
-
-	const buildInput = useCallback((): CustomProviderInput => {
-		const compat: Record<string, unknown> = {};
-		if (apiProtocol === "anthropic-messages") {
-			if (forceAdaptiveThinking) compat.forceAdaptiveThinking = true;
-			if (!supportsEagerToolInputStreaming) compat.supportsEagerToolInputStreaming = false;
-			if (allowEmptySignature) compat.allowEmptySignature = true;
-		}
-		if (apiProtocol === "openai-completions") {
-			if (!supportsDeveloperRole) compat.supportsDeveloperRole = false;
-			if (!supportsReasoningEffort) compat.supportsReasoningEffort = false;
-		}
-		if (apiProtocol === "openai-responses" && !supportsDeveloperRole) {
-			compat.supportsDeveloperRole = false;
-		}
-		const headerObj: Record<string, string> | undefined =
-			headers.length > 0
-				? Object.fromEntries(headers.filter((h) => h.key.trim()).map((h) => [h.key.trim(), h.value]))
-				: undefined;
-		return {
-			name,
-			baseUrl,
-			api: apiProtocol,
-			apiKey: apiKeyVal.trim() || undefined,
-			headers: headerObj,
-			authHeader: !!apiKeyVal,
-			models: models.map(({ _key, ...m }) => ({
-				id: m.id.trim(),
-				name: m.name || undefined,
-				reasoning: m.reasoning ?? false,
-				input: m.input ?? ["text"],
-				contextWindow: m.contextWindow ?? 128000,
-				maxTokens: m.maxTokens ?? 16384,
-			})),
-			compat: Object.keys(compat).length > 0 ? compat : undefined,
-		};
-	}, [
-		name,
-		baseUrl,
-		apiProtocol,
-		apiKeyVal,
-		headers,
-		models,
-		forceAdaptiveThinking,
-		supportsEagerToolInputStreaming,
-		allowEmptySignature,
-		supportsDeveloperRole,
-		supportsReasoningEffort,
-	]);
-
-	const validationErrors: string[] = [];
-	const hasNameError = !/^[a-z0-9][a-z0-9-]{0,40}$/.test(name);
-	const hasBaseUrlError = !/^https?:\/\//.test(baseUrl);
-	const hasApiKeyError = !apiKeyVal.trim();
-	if (hasNameError) validationErrors.push(t("settings.customProviders.dialog.validation.nameFormat"));
-	if (hasBaseUrlError) validationErrors.push(t("settings.customProviders.dialog.validation.baseUrlFormat"));
-	if (hasApiKeyError) validationErrors.push(t("settings.customProviders.dialog.validation.apiKeyRequired"));
-	if (models.length === 0) validationErrors.push(t("settings.customProviders.dialog.validation.modelsRequired"));
-	const modelIds = new Set<string>();
-	for (const m of models) {
-		if (!m.id.trim()) validationErrors.push(t("settings.customProviders.dialog.validation.modelIdEmpty"));
-		else if (modelIds.has(m.id.trim()))
-			validationErrors.push(t("settings.customProviders.dialog.validation.modelIdDuplicate", { id: m.id }));
-		else modelIds.add(m.id.trim());
-	}
-
-	const handleSubmit = async () => {
-		if (validationErrors.length > 0 || !api) return;
-		setSaving(true);
-		setTestResult(null);
-		const input = buildInput();
-
-		let test: TestCustomProviderResult;
-		try {
-			const r = await api.testCustomProvider(input);
-			if (!r?.success) throw new Error(r?.error ?? t("settings.customProviders.toast.selfTestFailed"));
-			test = r.result;
-		} catch (e: any) {
-			toast.error(e?.message ?? t("settings.customProviders.toast.selfTestUnavailable"));
-			setSaving(false);
-			return;
-		}
-		setTestResult(test);
-
-		if (test.overall === "ok") {
-			try {
-				let persistResult: { success?: boolean; error?: string } | undefined;
-				if (isEdit) {
-					persistResult = await api.updateCustomProvider(initial!.name, input);
-				} else {
-					persistResult = await api.addCustomProvider(input);
-				}
-				if (persistResult?.success) {
-					toast.success(t(`settings.customProviders.toast.${isEdit ? "updated" : "added"}`));
-					onSaved();
-					onClose();
-				} else {
-					toast.error(persistResult?.error ?? t("settings.customProviders.toast.saveFailed"));
-				}
-			} catch (e: any) {
-				toast.error(e?.message ?? t("settings.customProviders.toast.saveFailed"));
-			}
-		}
-		setSaving(false);
-	};
-
-	const handleClose = () => {
-		if (saving) return;
-		setTestResult(null);
-		onClose();
-	};
-
-	if (isInline && !open) return null;
-
-	const headerBlock = (
-		<>
-			{isInline && (
-				<button
-					type="button"
-					onClick={onBack}
-					className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-				>
-					<ArrowLeft className="size-3" />
-					{t("settings.customProviders.dialog.backToApiKeys")}
-				</button>
-			)}
-			<div className="shrink-0">
-				<div className="mb-1 text-[15px] font-semibold">
-					{t(isEdit ? "settings.customProviders.dialog.titleEdit" : "settings.customProviders.dialog.titleAdd")}
-				</div>
-				<p className="text-[12px] text-muted-foreground">
-					{isEdit
-						? t("settings.customProviders.dialog.descriptionEdit", { name: initial?.name ?? "" })
-						: t("settings.customProviders.dialog.description")}
-				</p>
-			</div>
-		</>
-	);
-
-	const formBody = (
+function FormBody({
+	apiProtocol,
+	setApiProtocol,
+	name,
+	setName,
+	hasNameError,
+	baseUrl,
+	setBaseUrl,
+	hasBaseUrlError,
+	apiKeyVal,
+	setApiKeyVal,
+	hasApiKeyError,
+	showKey,
+	setShowKey,
+	headers,
+	setHeaders,
+	headersOpen,
+	setHeadersOpen,
+	models,
+	setModels,
+	newItemKey,
+	addModel,
+	updateModel,
+	removeModel,
+	addHeader,
+	updateHeader,
+	removeHeader,
+	supportsDeveloperRole,
+	setSupportsDeveloperRole,
+	supportsReasoningEffort,
+	setSupportsReasoningEffort,
+	forceAdaptiveThinking,
+	setForceAdaptiveThinking,
+	supportsEagerToolInputStreaming,
+	setSupportsEagerToolInputStreaming,
+	allowEmptySignature,
+	setAllowEmptySignature,
+	validationErrors,
+	testResult,
+	isEdit,
+	t,
+}: {
+	apiProtocol: ApiProtocol;
+	setApiProtocol: (v: ApiProtocol) => void;
+	name: string;
+	setName: (v: string) => void;
+	hasNameError: boolean;
+	baseUrl: string;
+	setBaseUrl: (v: string) => void;
+	hasBaseUrlError: boolean;
+	apiKeyVal: string;
+	setApiKeyVal: (v: string) => void;
+	hasApiKeyError: boolean;
+	showKey: boolean;
+	setShowKey: (v: boolean) => void;
+	headers: Array<{ id: number; key: string; value: string }>;
+	setHeaders: React.Dispatch<React.SetStateAction<Array<{ id: number; key: string; value: string }>>>;
+	headersOpen: boolean;
+	setHeadersOpen: (v: boolean) => void;
+	models: Array<CustomProviderModelInput & { _key: number }>;
+	setModels: React.Dispatch<React.SetStateAction<Array<CustomProviderModelInput & { _key: number }>>>;
+	newItemKey: () => number;
+	addModel: () => void;
+	updateModel: (key: number, patch: Partial<CustomProviderModelInput>) => void;
+	removeModel: (key: number) => void;
+	addHeader: () => void;
+	updateHeader: (id: number, field: "key" | "value", val: string) => void;
+	removeHeader: (id: number) => void;
+	supportsDeveloperRole: boolean;
+	setSupportsDeveloperRole: (v: boolean) => void;
+	supportsReasoningEffort: boolean;
+	setSupportsReasoningEffort: (v: boolean) => void;
+	forceAdaptiveThinking: boolean;
+	setForceAdaptiveThinking: (v: boolean) => void;
+	supportsEagerToolInputStreaming: boolean;
+	setSupportsEagerToolInputStreaming: (v: boolean) => void;
+	allowEmptySignature: boolean;
+	setAllowEmptySignature: (v: boolean) => void;
+	validationErrors: string[];
+	testResult: TestCustomProviderResult | null;
+	isEdit: boolean;
+	t: TFunction;
+}) {
+	return (
 		<form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
 			<section>
 				<SectionLabel>{t("settings.customProviders.dialog.connection")}</SectionLabel>
@@ -570,6 +443,268 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 			{testResult && <TestResultsPanel result={testResult} t={t} />}
 		</form>
 	);
+}
+
+export default function AddCustomProviderDialog({ open, onClose, initial, onSaved, mode = "dialog", onBack }: Props) {
+	const { t } = useTranslation();
+	const isEdit = !!initial;
+	const isInline = mode === "inline";
+	const keyCounterRef = useRef<number>(null!);
+	if (keyCounterRef.current === null) keyCounterRef.current = Date.now();
+
+	const [name, setName] = useState(() => initial?.name ?? "");
+	const [baseUrl, setBaseUrl] = useState(() => initial?.baseUrl ?? "");
+	const [apiProtocol, setApiProtocol] = useState<ApiProtocol>(() => normalizeApiProtocol(initial?.api));
+	const [apiKeyVal, setApiKeyVal] = useState(() => initial?.apiKey ?? "");
+	const [showKey, setShowKey] = useState(false);
+	const [headers, setHeaders] = useState<Array<{ id: number; key: string; value: string }>>(() =>
+		initial?.headers ? Object.entries(initial.headers).map(([k, v], i) => ({ id: i + 1, key: k, value: v })) : [],
+	);
+	const [models, setModels] = useState<Array<CustomProviderModelInput & { _key: number }>>(
+		() => initial?.models.map((m, i) => ({ ...m, _key: i + 1 })) ?? [],
+	);
+	const [headersOpen, setHeadersOpen] = useState(false);
+
+	const [supportsDeveloperRole, setSupportsDeveloperRole] = useState(
+		() => initial?.compat?.supportsDeveloperRole !== false,
+	);
+	const [supportsReasoningEffort, setSupportsReasoningEffort] = useState(
+		() => initial?.compat?.supportsReasoningEffort !== false,
+	);
+	const [forceAdaptiveThinking, setForceAdaptiveThinking] = useState(() => !!initial?.compat?.forceAdaptiveThinking);
+	const [supportsEagerToolInputStreaming, setSupportsEagerToolInputStreaming] = useState(
+		() => initial?.compat?.supportsEagerToolInputStreaming !== false,
+	);
+	const [allowEmptySignature, setAllowEmptySignature] = useState(() => !!initial?.compat?.allowEmptySignature);
+
+	const [saving, setSaving] = useState(false);
+	const [testResult, setTestResult] = useState<TestCustomProviderResult | null>(null);
+
+	// Adjust state when dialog opens (inline during render — no useEffect)
+	const prevOpen = useRef(open);
+	if (open !== prevOpen.current) {
+		prevOpen.current = open;
+		if (open) {
+			setSaving(false);
+			setTestResult(null);
+			setHeadersOpen(false);
+		}
+	}
+
+	const newItemKey = () => {
+		keyCounterRef.current += 1;
+		return keyCounterRef.current;
+	};
+
+	const addModel = () => {
+		setModels((prev) => [
+			...prev,
+			{
+				_key: newItemKey(),
+				id: "",
+				name: "",
+				reasoning: false,
+				input: ["text"],
+				contextWindow: 128000,
+				maxTokens: 16384,
+			},
+		]);
+	};
+	const updateModel = (key: number, patch: Partial<CustomProviderModelInput>) => {
+		setModels((prev) => prev.map((m) => (m._key === key ? { ...m, ...patch } : m)));
+	};
+	const removeModel = (key: number) => {
+		setModels((prev) => prev.filter((m) => m._key !== key));
+	};
+
+	const addHeader = () => setHeaders((prev) => [...prev, { id: newItemKey(), key: "", value: "" }]);
+	const updateHeader = (id: number, field: "key" | "value", val: string) => {
+		setHeaders((prev) => prev.map((h) => (h.id === id ? { ...h, [field]: val } : h)));
+	};
+	const removeHeader = (id: number) => setHeaders((prev) => prev.filter((h) => h.id !== id));
+
+	const buildInput = useCallback((): CustomProviderInput => {
+		const compat: Record<string, unknown> = {};
+		if (apiProtocol === "anthropic-messages") {
+			if (forceAdaptiveThinking) compat.forceAdaptiveThinking = true;
+			if (!supportsEagerToolInputStreaming) compat.supportsEagerToolInputStreaming = false;
+			if (allowEmptySignature) compat.allowEmptySignature = true;
+		}
+		if (apiProtocol === "openai-completions") {
+			if (!supportsDeveloperRole) compat.supportsDeveloperRole = false;
+			if (!supportsReasoningEffort) compat.supportsReasoningEffort = false;
+		}
+		if (apiProtocol === "openai-responses" && !supportsDeveloperRole) {
+			compat.supportsDeveloperRole = false;
+		}
+		const headerObj: Record<string, string> | undefined =
+			headers.length > 0
+				? Object.fromEntries(headers.flatMap((h) => (h.key.trim() ? [[h.key.trim(), h.value]] : [])))
+				: undefined;
+		return {
+			name,
+			baseUrl,
+			api: apiProtocol,
+			apiKey: apiKeyVal.trim() || undefined,
+			headers: headerObj,
+			authHeader: !!apiKeyVal,
+			models: models.map(({ _key, ...m }) => ({
+				id: m.id.trim(),
+				name: m.name || undefined,
+				reasoning: m.reasoning ?? false,
+				input: m.input ?? ["text"],
+				contextWindow: m.contextWindow ?? 128000,
+				maxTokens: m.maxTokens ?? 16384,
+			})),
+			compat: Object.keys(compat).length > 0 ? compat : undefined,
+		};
+	}, [
+		name,
+		baseUrl,
+		apiProtocol,
+		apiKeyVal,
+		headers,
+		models,
+		forceAdaptiveThinking,
+		supportsEagerToolInputStreaming,
+		allowEmptySignature,
+		supportsDeveloperRole,
+		supportsReasoningEffort,
+	]);
+
+	const validationErrors: string[] = [];
+	const hasNameError = !/^[a-z0-9][a-z0-9-]{0,40}$/.test(name);
+	const hasBaseUrlError = !/^https?:\/\//.test(baseUrl);
+	const hasApiKeyError = !apiKeyVal.trim();
+	if (hasNameError) validationErrors.push(t("settings.customProviders.dialog.validation.nameFormat"));
+	if (hasBaseUrlError) validationErrors.push(t("settings.customProviders.dialog.validation.baseUrlFormat"));
+	if (hasApiKeyError) validationErrors.push(t("settings.customProviders.dialog.validation.apiKeyRequired"));
+	if (models.length === 0) validationErrors.push(t("settings.customProviders.dialog.validation.modelsRequired"));
+	const modelIds = new Set<string>();
+	for (const m of models) {
+		if (!m.id.trim()) validationErrors.push(t("settings.customProviders.dialog.validation.modelIdEmpty"));
+		else if (modelIds.has(m.id.trim()))
+			validationErrors.push(t("settings.customProviders.dialog.validation.modelIdDuplicate", { id: m.id }));
+		else modelIds.add(m.id.trim());
+	}
+
+	const handleSubmit = async () => {
+		if (validationErrors.length > 0 || !api) return;
+		setSaving(true);
+		setTestResult(null);
+		const input = buildInput();
+
+		let test: TestCustomProviderResult;
+		try {
+			const r = await api.testCustomProvider(input);
+			if (!r?.success) throw new Error(r?.error ?? t("settings.customProviders.toast.selfTestFailed"));
+			test = r.result;
+		} catch (e: any) {
+			toast.error(e?.message ?? t("settings.customProviders.toast.selfTestUnavailable"));
+			setSaving(false);
+			return;
+		}
+		setTestResult(test);
+
+		if (test.overall === "ok") {
+			try {
+				let persistResult: { success?: boolean; error?: string } | undefined;
+				if (isEdit) {
+					persistResult = await api.updateCustomProvider(initial!.name, input);
+				} else {
+					persistResult = await api.addCustomProvider(input);
+				}
+				if (persistResult?.success) {
+					toast.success(t(`settings.customProviders.toast.${isEdit ? "updated" : "added"}`));
+					onSaved();
+					onClose();
+				} else {
+					toast.error(persistResult?.error ?? t("settings.customProviders.toast.saveFailed"));
+				}
+			} catch (e: any) {
+				toast.error(e?.message ?? t("settings.customProviders.toast.saveFailed"));
+			}
+		}
+		setSaving(false);
+	};
+
+	const handleClose = () => {
+		if (saving) return;
+		setTestResult(null);
+		onClose();
+	};
+
+	if (isInline && !open) return null;
+
+	const headerBlock = (
+		<>
+			{isInline && (
+				<button
+					type="button"
+					onClick={onBack}
+					className="mb-3 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+				>
+					<ArrowLeft className="size-3" />
+					{t("settings.customProviders.dialog.backToApiKeys")}
+				</button>
+			)}
+			<div className="shrink-0">
+				<div className="mb-1 text-[15px] font-semibold">
+					{t(isEdit ? "settings.customProviders.dialog.titleEdit" : "settings.customProviders.dialog.titleAdd")}
+				</div>
+				<p className="text-[12px] text-muted-foreground">
+					{isEdit
+						? t("settings.customProviders.dialog.descriptionEdit", { name: initial?.name ?? "" })
+						: t("settings.customProviders.dialog.description")}
+				</p>
+			</div>
+		</>
+	);
+
+	const formBody = (
+		<FormBody
+			apiProtocol={apiProtocol}
+			setApiProtocol={setApiProtocol}
+			name={name}
+			setName={setName}
+			hasNameError={hasNameError}
+			baseUrl={baseUrl}
+			setBaseUrl={setBaseUrl}
+			hasBaseUrlError={hasBaseUrlError}
+			apiKeyVal={apiKeyVal}
+			setApiKeyVal={setApiKeyVal}
+			hasApiKeyError={hasApiKeyError}
+			showKey={showKey}
+			setShowKey={setShowKey}
+			headers={headers}
+			setHeaders={setHeaders}
+			headersOpen={headersOpen}
+			setHeadersOpen={setHeadersOpen}
+			models={models}
+			setModels={setModels}
+			newItemKey={newItemKey}
+			addModel={addModel}
+			updateModel={updateModel}
+			removeModel={removeModel}
+			addHeader={addHeader}
+			updateHeader={updateHeader}
+			removeHeader={removeHeader}
+			supportsDeveloperRole={supportsDeveloperRole}
+			setSupportsDeveloperRole={setSupportsDeveloperRole}
+			supportsReasoningEffort={supportsReasoningEffort}
+			setSupportsReasoningEffort={setSupportsReasoningEffort}
+			forceAdaptiveThinking={forceAdaptiveThinking}
+			setForceAdaptiveThinking={setForceAdaptiveThinking}
+			supportsEagerToolInputStreaming={supportsEagerToolInputStreaming}
+			setSupportsEagerToolInputStreaming={setSupportsEagerToolInputStreaming}
+			allowEmptySignature={allowEmptySignature}
+			setAllowEmptySignature={setAllowEmptySignature}
+			validationErrors={validationErrors}
+			testResult={testResult}
+			isEdit={isEdit}
+			t={t}
+		/>
+	);
 
 	const footer = (
 		<div
@@ -674,13 +809,7 @@ function CompatToggle({
 	);
 }
 
-function TestResultsPanel({
-	result,
-	t,
-}: {
-	result: TestCustomProviderResult;
-	t: (k: string, opts?: Record<string, unknown>) => string;
-}) {
+function TestResultsPanel({ result, t }: { result: TestCustomProviderResult; t: TFunction }) {
 	const ok = result.overall === "ok";
 	return (
 		<div className="space-y-1.5">

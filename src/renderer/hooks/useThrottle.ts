@@ -14,7 +14,8 @@ import { useEffect, useRef, useState } from "react";
  */
 export function useThrottle<T>(value: T, intervalMs: number, isStreaming: boolean): T {
 	const [throttled, setThrottled] = useState(value);
-	const lastUpdate = useRef(Date.now());
+	const lastUpdate = useRef<number>(null!);
+	if (lastUpdate.current === null) lastUpdate.current = Date.now();
 	const pending = useRef<T | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -17,6 +17,18 @@ export default defineConfig({
   build: {
     outDir: "../../dist/renderer",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Isolate heavy syntax-highlighting and diagram libraries so they
+          // don't bloat the main entry chunk. Languages/themes loaded by Shiki
+          // remain in their own dynamic chunks; this groups the core runtime.
+          shiki: ["shiki"],
+          mermaid: ["mermaid"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
   },
   resolve: {
     alias: {

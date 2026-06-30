@@ -33,7 +33,7 @@ const ChatQueueDrawer = memo(function ChatQueueDrawer({ queue }: ChatQueueDrawer
 				<div className="max-h-40 space-y-1 overflow-y-auto">
 					{[...queue.steering, ...queue.followUp].map((text, i) => (
 						<div
-							key={`q-${i}-${text.slice(0, 16)}`}
+							key={`q-${text.slice(0, 32)}`}
 							className="flex items-center gap-2 rounded-md border border-hairline bg-card/40 px-2.5 py-1.5 animate-draw-in"
 							style={{ animationDelay: `${i * 40}ms` }}
 						>

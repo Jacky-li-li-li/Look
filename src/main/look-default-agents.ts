@@ -13,8 +13,16 @@
 //   - 首次迁移：通过 marker 文件（.agent-seed-v1）检测
 // ============================================================
 
-import { type Dirent, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { copyFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	type Dirent,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getBuiltinAgentsDir, getUserAgentsDir } from "./extensions/subagent/agent-discovery.js";
@@ -130,9 +138,7 @@ export function syncLookDefaultAgents(projectDir: string): string | null {
 					// 删除失败则尝试直接覆盖
 				}
 				copyFileSync(sourcePath, targetPath);
-				console.log(
-					`[Look][内置Agent] 已升级: ${entry.name} (v${targetVersion} → v${sourceVersion})`,
-				);
+				console.log(`[Look][内置Agent] 已升级: ${entry.name} (v${targetVersion} → v${sourceVersion})`);
 				upgraded++;
 				continue;
 			}
@@ -144,9 +150,7 @@ export function syncLookDefaultAgents(projectDir: string): string | null {
 	}
 
 	if (synced > 0 || upgraded > 0) {
-		console.log(
-			`[Look][内置Agent] 同步完成: ${synced} 新增, ${upgraded} 升级, ${skipped} 跳过`,
-		);
+		console.log(`[Look][内置Agent] 同步完成: ${synced} 新增, ${upgraded} 升级, ${skipped} 跳过`);
 	}
 
 	// ---- 迁移清理：移除 ~/.look/agents/ 下与内置 Agent 同名的旧格式文件 ----

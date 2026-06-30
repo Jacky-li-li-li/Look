@@ -95,7 +95,7 @@ export function RightPanel() {
 				inert={collapsed || undefined}
 			>
 				<header className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
-					<nav role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
+					<div role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
 						<button
 							type="button"
 							role="tab"
@@ -122,7 +122,7 @@ export function RightPanel() {
 						>
 							共享区
 						</button>
-					</nav>
+					</div>
 					<Button
 						size="icon-sm"
 						variant="ghost"

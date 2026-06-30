@@ -216,7 +216,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const statSuffix = !open ? formatStatSuffix(toolCall, t) : "";
 	const resultTooLong = resultStr.length > RESULT_SUMMARY_LIMIT;
 
-	const statusVariant =
+	const _statusVariant =
 		toolCall.status === "success" ? "outline" : toolCall.status === "error" ? "destructive" : "secondary";
 	const statusBadgeColor =
 		toolCall.status === "success"
@@ -231,6 +231,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 		<div>
 			<div>
 				<button
+					type="button"
 					className={cn(
 						"flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
 						!hasBody && "cursor-default",
@@ -289,7 +290,9 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 							</span>
 						</span>
 					) : (
-						<span className={cn("ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider", statusBadgeColor)}>
+						<span
+							className={cn("ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider", statusBadgeColor)}
+						>
 							{toolCall.status}
 						</span>
 					)}
@@ -304,7 +307,9 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 							<div className="px-3 py-2.5 max-h-72 overflow-auto text-[11px] leading-relaxed text-muted-foreground">
 								<div className="flex flex-col gap-2 text-[10px] leading-relaxed">
 									<section className="flex flex-col gap-1">
-										<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">{t("tool.arguments")}</span>
+										<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">
+											{t("tool.arguments")}
+										</span>
 										<pre className="whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
 											{argsJson || "{}"}
 										</pre>
@@ -331,13 +336,15 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 									)}
 									{resultImages.length > 0 && (
 										<section className="flex flex-col gap-1">
-											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">{t("tool.result")}</span>
+											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">
+												{t("tool.result")}
+											</span>
 											<div className="flex flex-wrap gap-2">
 												{resultImages.map((img, i) => (
 													<img
 														key={`result-img-${i}`}
 														src={`data:${img.mimeType};base64,${img.data}`}
-														alt={`Tool result image ${i + 1}`}
+														alt={`Tool result ${i + 1}`}
 														className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
 													/>
 												))}
@@ -356,10 +363,13 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
 function ToolTypeIcon({ toolName, status }: { toolName: string; status: ToolCallViewModel["status"] }) {
 	const colorClass =
-		status === "success" ? "text-emerald-500"
-		: status === "error" ? "text-red-500"
-		: status === "running" ? "text-amber-500"
-		: "text-muted-foreground";
+		status === "success"
+			? "text-emerald-500"
+			: status === "error"
+				? "text-red-500"
+				: status === "running"
+					? "text-amber-500"
+					: "text-muted-foreground";
 	const spinClass = status === "running" ? "animate-spin" : status === "pending" ? "animate-pulse" : "";
 	return (
 		<span className={cn(colorClass, "inline-flex")}>
@@ -379,7 +389,7 @@ function pickToolIcon(toolName: string, className?: string): React.ReactElement 
 	if (["find", "glob"].includes(name)) return <FileSearch className={cls} />;
 	if (["webfetch", "websearch", "curl", "fetch", "web"].includes(name)) return <Globe className={cls} />;
 	if (["think", "reason", "brain"].includes(name)) return <Brain className={cls} />;
-		if (["agent", "subagent", "delegate_agent", "delegate_agents"].includes(name)) return <Bot className={cls} />;
+	if (["agent", "subagent", "delegate_agent", "delegate_agents"].includes(name)) return <Bot className={cls} />;
 	return <Code2 className={cls} />;
 }
 

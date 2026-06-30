@@ -9,9 +9,8 @@
 // data and state.
 // ============================================================
 
-import { Bot } from "lucide-react";
-import type React from "react";
 import type { AgentDefinitionInfo } from "@shared/types";
+import { Bot } from "lucide-react";
 import { SOURCE_LABELS } from "./AgentMarketplace/AgentCard";
 import { usePickerMenu } from "./usePickerMenu";
 
@@ -84,18 +83,14 @@ function MenuRow({
 			</span>
 			<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 				<span className="flex items-center gap-1.5">
-					<span className="truncate font-mono text-[12px] font-medium">
-						{agent.title || agent.name}
-					</span>
+					<span className="truncate font-mono text-[12px] font-medium">{agent.title || agent.name}</span>
 					{badge ? (
 						<span className="shrink-0 rounded-sm border border-hairline bg-background/40 px-1 py-px text-[9px] uppercase tracking-wide text-muted-foreground">
 							{badge}
 						</span>
 					) : null}
 				</span>
-				<span className="truncate text-[10.5px] text-muted-foreground">
-					{agent.description}
-				</span>
+				<span className="truncate text-[10.5px] text-muted-foreground">{agent.description}</span>
 			</span>
 		</button>
 	);
@@ -113,7 +108,7 @@ export function AgentHashMenu(props: AgentHashMenuProps) {
 	const { clampedIndex, setRowRef } = refs;
 
 	return (
-		<div ref={menuRef} onKeyDown={onKeyDown} className={containerClassName}>
+		<div ref={menuRef} role="listbox" tabIndex={0} onKeyDown={onKeyDown} className={containerClassName}>
 			{/* Header */}
 			<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
 				<Bot className="size-3" />
@@ -140,14 +135,10 @@ export function AgentHashMenu(props: AgentHashMenuProps) {
 					<div className="flex flex-col items-center gap-1 px-3 py-6 text-center">
 						<Bot className="size-5 text-muted-foreground/60" />
 						<div className="text-[11.5px] text-muted-foreground">
-							{searchTerm
-								? `没有匹配 "${searchTerm}" 的 Agent`
-								: "没有可用的 Agent"}
+							{searchTerm ? `没有匹配 "${searchTerm}" 的 Agent` : "没有可用的 Agent"}
 						</div>
 						<div className="text-[10px] text-muted-foreground/70">
-							{searchTerm
-								? "尝试其他关键词"
-								: "在 Agent 广场中启用 SubAgent 后即可使用"}
+							{searchTerm ? "尝试其他关键词" : "在 Agent 广场中启用 SubAgent 后即可使用"}
 						</div>
 					</div>
 				) : (

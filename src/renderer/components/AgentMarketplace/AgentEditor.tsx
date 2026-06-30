@@ -15,7 +15,7 @@ import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { Textarea } from "@shared/components/ui/textarea";
 import type { AgentDefinitionInfo, AgentDefinitionInput } from "@shared/types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface AgentEditorProps {
@@ -42,12 +42,34 @@ function emptyInput(): AgentDefinitionInput {
 
 export default function AgentEditor({ target, onClose, onSaved }: AgentEditorProps) {
 	const isEdit = target !== null && target !== "create";
-	const [input, setInput] = useState<AgentDefinitionInput>(emptyInput());
-	const [toolsText, setToolsText] = useState("");
-	const [tagsText, setTagsText] = useState("");
+	const [input, setInput] = useState<AgentDefinitionInput>(() =>
+		target && target !== "create"
+			? {
+					name: target.name,
+					title: target.title ?? "",
+					description: target.description,
+					tools: target.tools ?? [],
+					model: target.model ?? "",
+					systemPrompt: target.systemPrompt,
+					icon: target.icon ?? "",
+					tags: target.tags ?? [],
+					version: target.version ?? "",
+					author: target.author ?? "",
+				}
+			: emptyInput(),
+	);
+	const [toolsText, setToolsText] = useState(() =>
+		target && target !== "create" ? (target.tools ?? []).join(", ") : "",
+	);
+	const [tagsText, setTagsText] = useState(() =>
+		target && target !== "create" ? (target.tags ?? []).join(", ") : "",
+	);
 	const [saving, setSaving] = useState(false);
 
-	useEffect(() => {
+	// Adjust state when target prop changes (inline during render — no useEffect)
+	const prevTarget = useRef(target);
+	if (target !== prevTarget.current) {
+		prevTarget.current = target;
 		if (!target || target === "create") {
 			setInput(emptyInput());
 			setToolsText("");
@@ -68,7 +90,7 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 			setToolsText((target.tools ?? []).join(", "));
 			setTagsText((target.tags ?? []).join(", "));
 		}
-	}, [target]);
+	}
 
 	const handleSave = useCallback(async () => {
 		const name = input.name.trim();
@@ -81,14 +103,8 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 			const payload: AgentDefinitionInput = {
 				...input,
 				name,
-				tools: toolsText
-					.split(",")
-					.map((t) => t.trim())
-					.filter(Boolean),
-				tags: tagsText
-					.split(",")
-					.map((t) => t.trim())
-					.filter(Boolean),
+				tools: toolsText.split(",").flatMap((t) => t.trim() || []),
+				tags: tagsText.split(",").flatMap((t) => t.trim() || []),
 				title: input.title?.trim() || undefined,
 				model: input.model?.trim() || undefined,
 				icon: input.icon?.trim() || undefined,

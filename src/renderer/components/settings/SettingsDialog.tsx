@@ -14,7 +14,7 @@ import {
 } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { Key, MessageCircle, Palette, UserRound, Zap } from "lucide-react";
-import { memo, useEffect, useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import AboutTab from "./AboutTab";
@@ -45,9 +45,12 @@ const SettingsDialog = memo(function SettingsDialog({
 }: SettingsDialogProps) {
 	const { t, i18n } = useTranslation();
 	const [tab, setTab] = useState<string>(defaultTab);
-	useEffect(() => {
+	// Adjust tab when defaultTab changes (inline during render)
+	const [prevDefaultTab, setPrevDefaultTab] = useState(defaultTab);
+	if (defaultTab !== prevDefaultTab) {
+		setPrevDefaultTab(defaultTab);
 		setTab(defaultTab);
-	}, [defaultTab]);
+	}
 
 	const configured = providers.filter((p) => p.hasKey).length + customStats.configured;
 

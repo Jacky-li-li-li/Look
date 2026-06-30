@@ -22,6 +22,13 @@ export interface PickerMenuRefs {
 	setRowRef: (i: number) => (el: HTMLButtonElement | null) => void;
 }
 
+const containerClassName =
+	"absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-lg border border-hairline bg-card/95 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.18)] backdrop-blur-md";
+
+function pickerMenuOnKeyDown(e: React.KeyboardEvent) {
+	e.stopPropagation();
+}
+
 /**
  * 内联弹出菜单的共享容器 hook。
  *
@@ -31,9 +38,12 @@ export interface PickerMenuRefs {
  * - 选中行自动滚动到视图（scrollIntoView: nearest）
  * - 统一的容器样式（定位、毛玻璃、圆角、阴影）
  */
-export function usePickerMenu(
-	options: UsePickerMenuOptions,
-): { menuRef: React.RefObject<HTMLDivElement | null>; containerClassName: string; onKeyDown: (e: React.KeyboardEvent) => void; refs: PickerMenuRefs } {
+export function usePickerMenu(options: UsePickerMenuOptions): {
+	menuRef: React.RefObject<HTMLDivElement | null>;
+	containerClassName: string;
+	onKeyDown: (e: React.KeyboardEvent) => void;
+	refs: PickerMenuRefs;
+} {
 	const { total, selectedIndex, onClose } = options;
 
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -65,15 +75,10 @@ export function usePickerMenu(
 		[],
 	);
 
-	const containerClassName =
-		"absolute inset-x-0 bottom-full z-30 mb-1.5 overflow-hidden rounded-lg border border-hairline bg-card/95 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.18)] backdrop-blur-md";
-
-	const onKeyDown = (e: React.KeyboardEvent) => e.stopPropagation();
-
 	return {
 		menuRef,
 		containerClassName,
-		onKeyDown,
+		onKeyDown: pickerMenuOnKeyDown,
 		refs: { clampedIndex, setRowRef },
 	};
 }

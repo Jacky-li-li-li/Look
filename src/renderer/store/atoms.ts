@@ -8,6 +8,7 @@ import type {
 	ProjectInfo,
 } from "@shared/types";
 import { atom } from "jotai";
+import { selectAtom } from "jotai/utils";
 import { atomFamily } from "jotai-family";
 import {
 	deriveAgentPhase,
@@ -130,10 +131,11 @@ export const enabledSkillsAtom = atom<string[] | null>(null);
 
 /** 按父会话 ID 获取子会话列表（派生自 agentsAtom） */
 export const subSessionsAtomFamily = atomFamily((parentId: string) =>
-	atom((get) => {
-		const allAgents = get(agentsAtom);
-		return allAgents.filter((a) => a.parentSessionId === parentId);
-	}),
+	selectAtom(
+		agentsAtom,
+		(agents) => agents.filter((a) => a.parentSessionId === parentId),
+		(a, b) => a.length === b.length && a.every((item, i) => item === b[i]),
+	),
 );
 
 // ---- SubAgent 进度卡片（Stage 5） ----

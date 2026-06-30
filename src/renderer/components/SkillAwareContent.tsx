@@ -11,7 +11,7 @@ import { cn } from "@shared/lib/utils";
 import { AgentTag } from "./AgentTag";
 import { SkillTag } from "./SkillTag";
 import StreamingMarkdown from "./StreamingMarkdown";
-import { parseSkillSegments, parseAgentSegments } from "./skillSegments";
+import { parseAgentSegments, parseSkillSegments } from "./skillSegments";
 
 interface SkillAwareContentProps {
 	content: string;
@@ -56,12 +56,7 @@ export function SkillAwareContent({ content, isStreaming }: SkillAwareContentPro
 				const skillSegs = parseSkillSegments(seg.value);
 				if (!skillSegs.some((s) => s.kind === "skill")) {
 					return (
-						<StreamingMarkdown
-							key={`t-${i}`}
-							content={seg.value}
-							isStreaming={isStreaming ?? false}
-							inline
-						/>
+						<StreamingMarkdown key={`t-${i}`} content={seg.value} isStreaming={isStreaming ?? false} inline />
 					);
 				}
 				return skillSegs.map((ss, j) => {

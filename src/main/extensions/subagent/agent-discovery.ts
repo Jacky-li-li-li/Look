@@ -58,26 +58,26 @@ export function parseAgentFile(filePath: string, source: AgentSource): AgentConf
 	if (!name || !description) return null;
 
 	const toolsRaw = typeof frontmatter.tools === "string" ? frontmatter.tools : "";
-	const tools = toolsRaw
-		.split(",")
-		.map((t) => t.trim())
-		.filter(Boolean);
+	const tools = toolsRaw.split(",").flatMap((t) => t.trim() || []);
 	const model = typeof frontmatter.model === "string" ? frontmatter.model.trim() || undefined : undefined;
 	const title = typeof frontmatter.title === "string" ? frontmatter.title.trim() || undefined : undefined;
 	const icon = typeof frontmatter.icon === "string" ? frontmatter.icon.trim() || undefined : undefined;
 	const version = typeof frontmatter.version === "string" ? frontmatter.version.trim() || undefined : undefined;
 	const author = typeof frontmatter.author === "string" ? frontmatter.author.trim() || undefined : undefined;
 	const tagsRaw = typeof frontmatter.tags === "string" ? frontmatter.tags : "";
-	const tags = tagsRaw
-		.split(",")
-		.map((t) => t.trim())
-		.filter(Boolean);
+	const tags = tagsRaw.split(",").flatMap((t) => t.trim() || []);
 	const createdByRaw = typeof frontmatter.createdBy === "string" ? frontmatter.createdBy.trim() : "";
 	const createdBy: AgentCreationMethod | undefined =
-		createdByRaw === "editor" || createdByRaw === "skill" || createdByRaw === "install" ||
-		createdByRaw === "drag" || createdByRaw === "seed" || createdByRaw === "unknown"
+		createdByRaw === "editor" ||
+		createdByRaw === "skill" ||
+		createdByRaw === "install" ||
+		createdByRaw === "drag" ||
+		createdByRaw === "seed" ||
+		createdByRaw === "unknown"
 			? createdByRaw
-			: createdByRaw ? "unknown" : undefined;
+			: createdByRaw
+				? "unknown"
+				: undefined;
 	const createdAt = typeof frontmatter.createdAt === "number" ? frontmatter.createdAt : undefined;
 	const installedAt = typeof frontmatter.installedAt === "number" ? frontmatter.installedAt : undefined;
 

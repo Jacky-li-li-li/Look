@@ -10,6 +10,12 @@ const VIEWBOX_SIZE = 28;
 const CENTER = VIEWBOX_SIZE / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
+const colorMap = {
+	safe: "stroke-emerald-400",
+	warning: "stroke-amber-400",
+	critical: "stroke-red-400",
+} as const;
+
 export default function ContextRing() {
 	const sessionId = useAtomValue(activeAgentIdAtom) ?? "";
 	const sessionState = useAtomValue(sessionStateAtomFamily(sessionId));
@@ -21,11 +27,9 @@ export default function ContextRing() {
 	const [pulsing, setPulsing] = useState(false);
 
 	useEffect(() => {
-		if (percentage < 80 || compacting) {
-			setPulsing(false);
-			return;
-		}
-		setPulsing(true);
+		const shouldPulse = percentage >= 80 && !compacting;
+		setPulsing(shouldPulse);
+		if (!shouldPulse) return;
 		const timer = setTimeout(() => setPulsing(false), 8000);
 		return () => clearTimeout(timer);
 	}, [percentage, compacting]);
@@ -41,11 +45,6 @@ export default function ContextRing() {
 		return "safe";
 	}, [percentage]);
 	const offset = CIRCUMFERENCE - (percentage / 100) * CIRCUMFERENCE;
-	const colorMap = {
-		safe: "stroke-emerald-400",
-		warning: "stroke-amber-400",
-		critical: "stroke-red-400",
-	};
 
 	return (
 		<Tooltip>

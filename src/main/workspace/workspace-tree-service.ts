@@ -78,33 +78,38 @@ export class WorkspaceTreeService {
 			console.error(`[WorkspaceTree] readdir failed for ${target}:`, err);
 			return [];
 		});
-		const nodes: FileTreeNode[] = [];
+		const entriesList: fs.Dirent[] = [];
 		for (const entry of entries) {
 			if (shouldIgnore(entry.name, entry.isDirectory(), showHiddenFiles)) continue;
-			const absolutePath = path.join(target, entry.name);
-			const childRel = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-			const node: FileTreeNode = {
-				name: entry.name,
-				path: childRel,
-				absolutePath,
-				type: entry.isDirectory() ? "directory" : "file",
-				// children 字段存在但空数组 = 目录且未加载(渲染端据此判断 hasChildren)
-				children: entry.isDirectory() ? [] : undefined,
-				extension: entry.isDirectory() ? undefined : path.extname(entry.name).slice(1) || undefined,
-				isSymlink: entry.isSymbolicLink(),
-				isHidden: entry.name.startsWith("."),
-			};
-			if (!entry.isDirectory()) {
-				try {
-					const stat = await fs.promises.lstat(absolutePath);
-					node.size = stat.size;
-					node.modifiedAt = stat.mtimeMs;
-				} catch {
-					// 忽略元数据获取失败
-				}
-			}
-			nodes.push(node);
+			entriesList.push(entry);
 		}
+
+		const nodes = await Promise.all(
+			entriesList.map(async (entry) => {
+				const absolutePath = path.join(target, entry.name);
+				const childRel = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+				const node: FileTreeNode = {
+					name: entry.name,
+					path: childRel,
+					absolutePath,
+					type: entry.isDirectory() ? "directory" : "file",
+					children: entry.isDirectory() ? [] : undefined,
+					extension: entry.isDirectory() ? undefined : path.extname(entry.name).slice(1) || undefined,
+					isSymlink: entry.isSymbolicLink(),
+					isHidden: entry.name.startsWith("."),
+				};
+				if (!entry.isDirectory()) {
+					try {
+						const stat = await fs.promises.lstat(absolutePath);
+						node.size = stat.size;
+						node.modifiedAt = stat.mtimeMs;
+					} catch {
+						// 忽略元数据获取失败
+					}
+				}
+				return node;
+			}),
+		);
 		// 排序:目录优先,然后按 name 字典序;隐藏(. 开头)排到同类末尾
 		nodes.sort((a, b) => {
 			if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
@@ -227,25 +232,29 @@ export class WorkspaceTreeService {
 	async stopAllWatchesForProject(projectId: string): Promise<void> {
 		const keys = this.watchedByProject.get(projectId);
 		if (!keys) return;
-		for (const key of keys) {
-			const watcher = this.watchers.get(key);
-			if (watcher) {
-				await watcher.close();
-				this.watchers.delete(key);
-			}
-		}
+		await Promise.all(
+			Array.from(keys).map(async (key) => {
+				const watcher = this.watchers.get(key);
+				if (watcher) {
+					await watcher.close();
+					this.watchers.delete(key);
+				}
+			}),
+		);
 		this.watchedByProject.delete(projectId);
 	}
 
 	async dispose(): Promise<void> {
 		const keys = Array.from(this.watchers.keys());
-		for (const key of keys) {
-			const w = this.watchers.get(key);
-			if (w) {
-				await w.close();
-				this.watchers.delete(key);
-			}
-		}
+		await Promise.all(
+			keys.map(async (key) => {
+				const w = this.watchers.get(key);
+				if (w) {
+					await w.close();
+					this.watchers.delete(key);
+				}
+			}),
+		);
 		this.watchedByProject.clear();
 	}
 

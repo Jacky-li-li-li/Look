@@ -14,8 +14,6 @@
 // ============================================================
 
 import { ChevronRight, FileCode2, FolderGit2, Sparkles } from "lucide-react";
-import type React from "react";
-import { useEffect, useRef, useState } from "react";
 import { usePickerMenu } from "./usePickerMenu";
 
 /**
@@ -196,7 +194,7 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 	};
 
 	return (
-		<div ref={menuRef} onKeyDown={onKeyDown} className={containerClassName}>
+		<div ref={menuRef} role="listbox" tabIndex={0} onKeyDown={onKeyDown} className={containerClassName}>
 			{/* Header */}
 			<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
 				<Sparkles className="size-3" />
@@ -314,49 +312,5 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 	);
 }
 
-/** Convenience: read the keyboard's selectedIndex from a parent that
- *  wires onKeyDown on the textarea. Returns the new index after
- *  handling ↑ / ↓ / Enter / Esc. */
-export function handleSlashMenuKey(
-	e: React.KeyboardEvent,
-	state: { open: boolean; selectedIndex: number; pickableCount: number },
-	set: (next: { open: boolean; selectedIndex: number }) => void,
-): boolean {
-	if (!state.open || state.pickableCount === 0) return false;
-	if (e.key === "Escape") {
-		e.preventDefault();
-		set({ open: false, selectedIndex: 0 });
-		return true;
-	}
-	if (e.key === "ArrowDown") {
-		e.preventDefault();
-		set({
-			open: true,
-			selectedIndex: (state.selectedIndex + 1) % state.pickableCount,
-		});
-		return true;
-	}
-	if (e.key === "ArrowUp") {
-		e.preventDefault();
-		set({
-			open: true,
-			selectedIndex: (state.selectedIndex - 1 + state.pickableCount) % state.pickableCount,
-		});
-		return true;
-	}
-	if (e.key === "Enter") {
-		// Let parent commit the current selection; we just signal "handled".
-		e.preventDefault();
-		return true;
-	}
-	if (e.key === "Tab") {
-		// Let parent commit the current selection; we just signal "handled".
-		e.preventDefault();
-		return true;
-	}
-	return false;
-}
-
-// `useState` is referenced by handleSlashMenuKey's caller; we re-export
-// it to keep imports tight in ChatPanel.
-export { useState };
+/** @deprecated Import from ./handleSlashMenuKey instead */
+export { handleSlashMenuKey } from "./handleSlashMenuKey";

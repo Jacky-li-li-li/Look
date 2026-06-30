@@ -20,6 +20,7 @@ import {
 import { createStore } from "jotai";
 import { toast } from "sonner";
 import i18n from "../i18n";
+import { agentDefinitionsAtom } from "./agentDefinitionsAtoms";
 import {
 	activeAgentIdAtom,
 	activeProjectIdAtom,
@@ -47,7 +48,6 @@ import {
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
-import { agentDefinitionsAtom } from "./agentDefinitionsAtoms";
 
 /** The global Jotai store — shared by IPC handler and React Provider. */
 export const appStore = createStore();
@@ -176,6 +176,15 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	let agentFlags: Partial<AgentInfo> | undefined;
 	let pendingUserMessage: { text: string } | null | undefined;
 
+	// Build a contentIndex → block index map for incomplete toolcall blocks to avoid findIndex in a loop
+	const pendingToolcallIndex = new Map<number, number>();
+	for (let bi = 0; bi < blocks.length; bi++) {
+		const b = blocks[bi]!;
+		if (b.kind === "toolcall" && !b.completed) {
+			pendingToolcallIndex.set(b.contentIndex, bi);
+		}
+	}
+
 	for (const ev of events) {
 		switch (ev.type) {
 			case "assistant_text_start":
@@ -212,7 +221,11 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				break;
 			case "thinking_delta": {
 				for (let i = 0; i < blocks.length; i++) {
-					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
+					if (
+						blocks[i]!.contentIndex === ev.contentIndex &&
+						blocks[i]!.kind === "thinking" &&
+						!blocks[i]!.completed
+					) {
 						blocks[i] = { ...blocks[i]!, thinking: blocks[i]!.thinking + ev.delta };
 						break;
 					}
@@ -221,7 +234,11 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			}
 			case "thinking_end": {
 				for (let i = 0; i < blocks.length; i++) {
-					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "thinking" && !blocks[i]!.completed) {
+					if (
+						blocks[i]!.contentIndex === ev.contentIndex &&
+						blocks[i]!.kind === "thinking" &&
+						!blocks[i]!.completed
+					) {
 						blocks[i] = { ...blocks[i]!, completed: true };
 						break;
 					}
@@ -232,10 +249,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "toolcall_start": {
 				// Only add if no incomplete toolcall block with this contentIndex exists —
 				// completed blocks from a previous message may share the same contentIndex.
-				const alreadyExists = blocks.some(
-					(b) => b.contentIndex === ev.contentIndex && b.kind === "toolcall" && !b.completed,
-				);
-				if (!alreadyExists) {
+				if (!pendingToolcallIndex.has(ev.contentIndex)) {
 					blocks = [
 						...blocks,
 						{
@@ -248,6 +262,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 							completed: false,
 						},
 					];
+					pendingToolcallIndex.set(ev.contentIndex, blocks.length - 1);
 				}
 				break;
 			}
@@ -256,9 +271,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "toolcall_end": {
 				// Find the incomplete (most recent) matching block — completed blocks
 				// from a previous message in the same turn may share contentIndex.
-				const idx = blocks.findIndex(
-					(b) => b.contentIndex === ev.contentIndex && b.kind === "toolcall" && !b.completed,
-				);
+				const idx = pendingToolcallIndex.get(ev.contentIndex) ?? -1;
 				if (idx >= 0) {
 					const updated = { ...blocks[idx]! };
 					updated.toolCallId = ev.toolCallId;
@@ -266,6 +279,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 					updated.args = ev.args;
 					updated.completed = true;
 					blocks = [...blocks.slice(0, idx), updated, ...blocks.slice(idx + 1)];
+					pendingToolcallIndex.delete(ev.contentIndex);
 				} else {
 					blocks = [
 						...blocks,
@@ -347,10 +361,12 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 
 			case "assistant_message_start":
 				blocks = blocks.filter((b) => b.completed);
+				pendingToolcallIndex.clear();
 				break;
 
 			case "assistant_message_end":
 				blocks = blocks.map((b) => ({ ...b, completed: true }));
+				pendingToolcallIndex.clear();
 				break;
 
 			case "error":

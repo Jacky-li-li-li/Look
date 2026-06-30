@@ -8,7 +8,7 @@ import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { Loader2, MessageCircle, Send, Unlink } from "lucide-react";
 import QRCode from "qrcode";
-import { createElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createElement, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { ImChannelInfo } from "./types";
@@ -53,7 +53,7 @@ function statusBadgeVariant(status: ImChannelInfo["status"]): "default" | "secon
 	}
 }
 
-function parseQrSvg(svg: string): { viewBox?: string; nodes: ReactNode[] } | null {
+function _parseQrSvg(svg: string): { viewBox?: string; nodes: ReactNode[] } | null {
 	try {
 		const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
 		const svgEl = doc.documentElement;
@@ -72,6 +72,177 @@ function parseQrSvg(svg: string): { viewBox?: string; nodes: ReactNode[] } | nul
 		console.error("[ImChannelsTab] Failed to parse QR SVG:", err);
 		return null;
 	}
+}
+
+function FeishuRegistration({
+	registration,
+	qrSvg,
+	onCancel,
+}: {
+	registration: RegistrationState;
+	qrSvg: { viewBox?: string; nodes: ReactNode[] } | null;
+	onCancel: () => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<div className="rounded-lg border border-hairline bg-background/45 p-4">
+			<h4 className="mb-2 text-xs font-medium">{t("settings.feishu")}</h4>
+			{registration.phase === "qr" && (
+				<div className="flex flex-col items-center gap-3">
+					{qrSvg ? (
+						<svg className="size-[200px] rounded-md border border-hairline bg-white p-2" viewBox={qrSvg.viewBox}>
+							{qrSvg.nodes}
+						</svg>
+					) : (
+						<div className="flex size-[200px] items-center justify-center rounded-md border border-hairline bg-muted/30">
+							<Loader2 className="size-6 animate-spin text-muted-foreground" />
+						</div>
+					)}
+					{registration.url && (
+						<a
+							href={registration.url}
+							target="_blank"
+							rel="noreferrer"
+							className="max-w-full truncate text-[11px] text-primary hover:underline"
+						>
+							{registration.url}
+						</a>
+					)}
+					{registration.expireIn != null && (
+						<p className="text-[11px] text-muted-foreground">
+							{registration.expireIn > 0
+								? `${t("settings.scanQrToConnect")} (${registration.expireIn}s)`
+								: t("settings.qrCodeExpired")}
+						</p>
+					)}
+					{!registration.expireIn && (
+						<p className="text-[11px] text-muted-foreground">{t("settings.scanQrToConnect")}</p>
+					)}
+				</div>
+			)}
+			{registration.phase === "polling" && (
+				<div className="flex items-center gap-2 py-6 text-[12px] text-muted-foreground">
+					<Loader2 className="size-4 animate-spin" />
+					{t("settings.waitingForAuth")}
+				</div>
+			)}
+			{registration.phase === "error" && registration.error && (
+				<p className="py-2 text-[12px] text-destructive">{registration.error}</p>
+			)}
+			<Button variant="line" size="sm" className="mt-3 h-7 text-[11px]" onClick={onCancel}>
+				{t("common.cancel")}
+			</Button>
+		</div>
+	);
+}
+
+function ConnectedFeishuChannel({
+	channel,
+	isConnected,
+	testForm,
+	setTestForm,
+	sendingTest,
+	onSendTest,
+	onDisconnect,
+}: {
+	channel: ImChannelInfo;
+	isConnected: boolean;
+	testForm: { receiveIdType: string; receiveId: string; text: string };
+	setTestForm: React.Dispatch<React.SetStateAction<{ receiveIdType: string; receiveId: string; text: string }>>;
+	sendingTest: boolean;
+	onSendTest: (e: React.FormEvent) => Promise<void>;
+	onDisconnect: () => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<div className="rounded-lg border border-hairline bg-background/45 p-4">
+			<div className="flex items-start justify-between gap-3">
+				<div className="min-w-0 flex-1">
+					<div className="flex items-center gap-2">
+						<span className="text-sm font-medium">{channel.name || t("settings.feishu")}</span>
+						<Badge variant={statusBadgeVariant(channel.status)} className="h-4 px-1.5 text-[9px]">
+							{t(`settings.${channel.status === "connected" ? "feishuConnected" : "imConnectionError"}`)}
+						</Badge>
+					</div>
+					<div className="mt-0.5 font-mono text-[10px] text-muted-foreground">{maskAppId(channel.appId)}</div>
+					{channel.error && <p className="mt-1 text-[11px] text-destructive">{channel.error}</p>}
+				</div>
+				<Button variant="line" size="sm" className="h-7 gap-1 text-[11px]" onClick={onDisconnect}>
+					<Unlink className="size-3" />
+					{t("settings.disconnect")}
+				</Button>
+			</div>
+
+			{isConnected && (
+				<form onSubmit={onSendTest} className="mt-4 space-y-3 border-t border-hairline pt-3">
+					<h5 className="text-xs font-medium">{t("settings.sendTestMessage")}</h5>
+					<div className="grid grid-cols-2 gap-3">
+						<div className="space-y-1">
+							<Label className="text-[10px]">{t("settings.receiveIdType")}</Label>
+							<Input
+								size={1}
+								value={testForm.receiveIdType}
+								onChange={(e) => setTestForm((prev) => ({ ...prev, receiveIdType: e.target.value }))}
+								placeholder="open_id"
+								className="h-7 text-[11px]"
+							/>
+						</div>
+						<div className="space-y-1">
+							<Label className="text-[10px]">{t("settings.receiveId")}</Label>
+							<Input
+								size={1}
+								value={testForm.receiveId}
+								onChange={(e) => setTestForm((prev) => ({ ...prev, receiveId: e.target.value }))}
+								placeholder="ou_..."
+								className="h-7 text-[11px]"
+							/>
+						</div>
+					</div>
+					<div className="space-y-1">
+						<Label className="text-[10px]">{t("settings.messageText")}</Label>
+						<Input
+							size={1}
+							value={testForm.text}
+							onChange={(e) => setTestForm((prev) => ({ ...prev, text: e.target.value }))}
+							placeholder={t("chat.placeholder")}
+							className="h-7 text-[11px]"
+						/>
+					</div>
+					<Button
+						type="submit"
+						size="sm"
+						className="h-7 gap-1 text-[11px]"
+						disabled={!testForm.receiveId || !testForm.text || sendingTest}
+					>
+						{sendingTest ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+						{t("settings.sendTestMessage")}
+					</Button>
+				</form>
+			)}
+		</div>
+	);
+}
+
+function RecentMessageCard({ message }: { message: IncomingMessage }) {
+	const { t } = useTranslation();
+	return (
+		<div className="rounded-lg border border-hairline bg-background/45 p-4">
+			<h4 className="mb-2 text-xs font-medium">{t("settings.recentMessage")}</h4>
+			<div className="space-y-1 text-[11px]">
+				<div className="flex gap-2">
+					<span className="text-muted-foreground">chatId:</span>
+					<span className="font-mono">{message.chatId}</span>
+				</div>
+				<div className="flex gap-2">
+					<span className="text-muted-foreground">sender:</span>
+					<span className="font-mono">{message.senderOpenId}</span>
+				</div>
+				<div className="mt-1 rounded bg-muted/45 p-2 font-mono text-[10px]">
+					{JSON.stringify(message.content, null, 2)}
+				</div>
+			</div>
+		</div>
+	);
 }
 
 export default function ImChannelsTab() {
@@ -175,7 +346,7 @@ export default function ImChannelsTab() {
 			color: { dark: "#000000", light: "#ffffff" },
 		})
 			.then((svg) => {
-				if (!cancelled) setQrSvg(svg);
+				if (!cancelled) setQrSvg(_parseQrSvg(svg));
 			})
 			.catch((err) => {
 				console.error("[ImChannelsTab] Failed to generate QR code:", err);
@@ -283,153 +454,22 @@ export default function ImChannelsTab() {
 			</div>
 
 			{isRegistering && (
-				<div className="rounded-lg border border-hairline bg-background/45 p-4">
-					<h4 className="mb-2 text-xs font-medium">{t("settings.feishu")}</h4>
-					{registration.phase === "qr" && (
-						<div className="flex flex-col items-center gap-3">
-							{qrSvg ? (
-								<div
-									className="size-[200px] rounded-md border border-hairline bg-white p-2"
-									dangerouslySetInnerHTML={{ __html: qrSvg }}
-								/>
-							) : (
-								<div className="flex size-[200px] items-center justify-center rounded-md border border-hairline bg-muted/30">
-									<Loader2 className="size-6 animate-spin text-muted-foreground" />
-								</div>
-							)}
-							{registration.url && (
-								<a
-									href={registration.url}
-									target="_blank"
-									rel="noreferrer"
-									className="max-w-full truncate text-[11px] text-primary hover:underline"
-								>
-									{registration.url}
-								</a>
-							)}
-							{registration.expireIn != null && (
-								<p className="text-[11px] text-muted-foreground">
-									{registration.expireIn > 0
-										? `${t("settings.scanQrToConnect")} (${registration.expireIn}s)`
-										: t("settings.qrCodeExpired")}
-								</p>
-							)}
-							{!registration.expireIn && (
-								<p className="text-[11px] text-muted-foreground">{t("settings.scanQrToConnect")}</p>
-							)}
-						</div>
-					)}
-					{registration.phase === "polling" && (
-						<div className="flex items-center gap-2 py-6 text-[12px] text-muted-foreground">
-							<Loader2 className="size-4 animate-spin" />
-							{t("settings.waitingForAuth")}
-						</div>
-					)}
-					{registration.phase === "error" && registration.error && (
-						<p className="py-2 text-[12px] text-destructive">{registration.error}</p>
-					)}
-					<Button variant="line" size="sm" className="mt-3 h-7 text-[11px]" onClick={handleCancelRegistration}>
-						{t("common.cancel")}
-					</Button>
-				</div>
+				<FeishuRegistration registration={registration} qrSvg={qrSvg} onCancel={handleCancelRegistration} />
 			)}
 
 			{feishuChannel && (
-				<div className="rounded-lg border border-hairline bg-background/45 p-4">
-					<div className="flex items-start justify-between gap-3">
-						<div className="min-w-0 flex-1">
-							<div className="flex items-center gap-2">
-								<span className="text-sm font-medium">{feishuChannel.name || t("settings.feishu")}</span>
-								<Badge variant={statusBadgeVariant(feishuChannel.status)} className="h-4 px-1.5 text-[9px]">
-									{t(
-										`settings.${feishuChannel.status === "connected" ? "feishuConnected" : "imConnectionError"}`,
-									)}
-								</Badge>
-							</div>
-							<div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-								{maskAppId(feishuChannel.appId)}
-							</div>
-							{feishuChannel.error && <p className="mt-1 text-[11px] text-destructive">{feishuChannel.error}</p>}
-						</div>
-						<Button
-							variant="line"
-							size="sm"
-							className="h-7 gap-1 text-[11px]"
-							onClick={handleDisconnect}
-							disabled={loading}
-						>
-							<Unlink className="size-3" />
-							{t("settings.disconnect")}
-						</Button>
-					</div>
-
-					{isConnected && (
-						<form onSubmit={handleSendTest} className="mt-4 space-y-3 border-t border-hairline pt-3">
-							<h5 className="text-xs font-medium">{t("settings.sendTestMessage")}</h5>
-							<div className="grid grid-cols-2 gap-3">
-								<div className="space-y-1">
-									<Label className="text-[10px]">{t("settings.receiveIdType")}</Label>
-									<Input
-										size={1}
-										value={testForm.receiveIdType}
-										onChange={(e) => setTestForm((prev) => ({ ...prev, receiveIdType: e.target.value }))}
-										placeholder="open_id"
-										className="h-7 text-[11px]"
-									/>
-								</div>
-								<div className="space-y-1">
-									<Label className="text-[10px]">{t("settings.receiveId")}</Label>
-									<Input
-										size={1}
-										value={testForm.receiveId}
-										onChange={(e) => setTestForm((prev) => ({ ...prev, receiveId: e.target.value }))}
-										placeholder="ou_..."
-										className="h-7 text-[11px]"
-									/>
-								</div>
-							</div>
-							<div className="space-y-1">
-								<Label className="text-[10px]">{t("settings.messageText")}</Label>
-								<Input
-									size={1}
-									value={testForm.text}
-									onChange={(e) => setTestForm((prev) => ({ ...prev, text: e.target.value }))}
-									placeholder={t("chat.placeholder")}
-									className="h-7 text-[11px]"
-								/>
-							</div>
-							<Button
-								type="submit"
-								size="sm"
-								className="h-7 gap-1 text-[11px]"
-								disabled={!testForm.receiveId || !testForm.text || sendingTest}
-							>
-								{sendingTest ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
-								{t("settings.sendTestMessage")}
-							</Button>
-						</form>
-					)}
-				</div>
+				<ConnectedFeishuChannel
+					channel={feishuChannel}
+					isConnected={isConnected}
+					testForm={testForm}
+					setTestForm={setTestForm}
+					sendingTest={sendingTest}
+					onSendTest={handleSendTest}
+					onDisconnect={handleDisconnect}
+				/>
 			)}
 
-			{recentMessage && (
-				<div className="rounded-lg border border-hairline bg-background/45 p-4">
-					<h4 className="mb-2 text-xs font-medium">{t("settings.recentMessage")}</h4>
-					<div className="space-y-1 text-[11px]">
-						<div className="flex gap-2">
-							<span className="text-muted-foreground">chatId:</span>
-							<span className="font-mono">{recentMessage.chatId}</span>
-						</div>
-						<div className="flex gap-2">
-							<span className="text-muted-foreground">sender:</span>
-							<span className="font-mono">{recentMessage.senderOpenId}</span>
-						</div>
-						<div className="mt-1 rounded bg-muted/45 p-2 font-mono text-[10px]">
-							{JSON.stringify(recentMessage.content, null, 2)}
-						</div>
-					</div>
-				</div>
-			)}
+			{recentMessage && <RecentMessageCard message={recentMessage} />}
 		</div>
 	);
 }

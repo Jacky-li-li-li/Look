@@ -80,6 +80,12 @@ function SortableSheet({
 			style={style}
 			{...attributes}
 			{...listeners}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onSelect(sheet.id);
+				}
+			}}
 			data-agent-id={sheet.id}
 			data-agent-status={status}
 			data-running={isRunning || undefined}

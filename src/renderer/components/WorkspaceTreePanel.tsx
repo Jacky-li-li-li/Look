@@ -391,6 +391,7 @@ function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRo
 	return (
 		<div
 			role="treeitem"
+			tabIndex={0}
 			aria-expanded={isDir ? isExpanded : undefined}
 			aria-level={depth + 1}
 			draggable
