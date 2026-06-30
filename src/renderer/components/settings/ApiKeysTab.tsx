@@ -186,11 +186,19 @@ function BuiltInProviderRow({
 			)}
 		>
 			<div className={cn("absolute left-0 top-0 h-full w-0.5", track)} />
-			<button
-				type="button"
+			<div
+				role="button"
+				tabIndex={hasModels ? 0 : -1}
 				className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 pl-4 w-full text-left bg-transparent border-0"
 				aria-expanded={isExpanded}
+				aria-disabled={!hasModels}
 				onClick={() => hasModels && onToggleExpand()}
+				onKeyDown={(e) => {
+					if (hasModels && (e.key === "Enter" || e.key === " ")) {
+						e.preventDefault();
+						onToggleExpand();
+					}
+				}}
 			>
 				<div className="min-w-0">
 					<div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -233,7 +241,7 @@ function BuiltInProviderRow({
 						</Button>
 					)}
 				</div>
-			</button>
+			</div>
 
 			{isExpanded && provider.models && provider.models.length > 0 && <ModelList models={provider.models} t={t} />}
 
