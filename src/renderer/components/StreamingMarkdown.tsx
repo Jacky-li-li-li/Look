@@ -312,46 +312,71 @@ const COMPONENTS_BLOCK = {
 } as const;
 
 const COMPONENTS_INLINE = { ...COMPONENTS_BLOCK, p: InlineP } as const;
-const StreamingMarkdown = memo(function StreamingMarkdown({
-	content,
-	isStreaming = false,
-	className,
-	inline = false,
-}: StreamingMarkdownProps) {
-	const throttledContent = useThrottle(content, 16, isStreaming);
+const StreamingMarkdown = memo(
+	function StreamingMarkdown({ content, isStreaming = false, className, inline = false }: StreamingMarkdownProps) {
+		const throttledContent = useThrottle(content, 16, isStreaming);
 
-	// Pick the pre-built component map — zero allocation per instance.
-	const components = inline ? COMPONENTS_INLINE : COMPONENTS_BLOCK;
+		// Pick the pre-built component map — zero allocation per instance.
+		const components = inline ? COMPONENTS_INLINE : COMPONENTS_BLOCK;
 
-	// No rehypePlugins needed — Shiki handles syntax highlighting directly in ShikiCodeBlock.
+		// No rehypePlugins needed — Shiki handles syntax highlighting directly in ShikiCodeBlock.
 
-	if (!throttledContent) {
-		return isStreaming ? <span className="inline-block w-2 h-4 bg-primary animate-pulse rounded-xs ml-0.5" /> : null;
-	}
+		// Memoize the expensive string transforms — only re-run when throttledContent actually changes.
+		const displayContent = useMemo(
+			() => (throttledContent ? escapeGlobAsterisks(autoCloseCodeFences(throttledContent)) : ""),
+			[throttledContent],
+		);
 
-	const displayContent = escapeGlobAsterisks(autoCloseCodeFences(throttledContent));
+		if (!throttledContent) {
+			return isStreaming ? (
+				<span className="inline-block w-2 h-4 bg-primary animate-pulse rounded-xs ml-0.5" />
+			) : null;
+		}
 
-	const markdown = (
-		<StreamingContext.Provider value={isStreaming}>
-			<ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
-				{displayContent}
-			</ReactMarkdown>
-		</StreamingContext.Provider>
-	);
-	if (inline) {
-		return <span className={cn("contents", className)}>{markdown}</span>;
-	}
+		const markdown = (
+			<StreamingContext.Provider value={isStreaming}>
+				<ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+					{displayContent}
+				</ReactMarkdown>
+			</StreamingContext.Provider>
+		);
+		if (inline) {
+			// Render as a `display: contents` DIV, not a span. The markdown body can
+			// contain block-level elements (`<ul>`, `<table>`, `<h1>`, `<blockquote>`,
+			// …) which are illegal inside `<span>` — browsers silently re-parent them,
+			// breaking the flex-wrap layout in `SkillAwareContent`. A `display: contents`
+			// div still acts like the children are direct children of the flex parent.
+			return <div className={cn("contents", className)}>{markdown}</div>;
+		}
 
-	return (
-		<div
-			className={cn(
-				"prose-sm dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-td:text-foreground prose-th:text-foreground prose-blockquote:text-foreground prose-code:text-foreground",
-				className,
-			)}
-		>
-			{markdown}
-		</div>
-	);
-});
+		return (
+			<div
+				className={cn(
+					"prose-sm dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-td:text-foreground prose-th:text-foreground prose-blockquote:text-foreground prose-code:text-foreground",
+					className,
+				)}
+			>
+				{markdown}
+			</div>
+		);
+	},
+	(prev, next) => {
+		// When streaming, ignore content changes — useThrottle handles the actual
+		// rendering cadence internally. Without this, the memo is defeated on every
+		// token because `content` is a new string reference each delta.
+		if (next.isStreaming) {
+			return (
+				prev.isStreaming === next.isStreaming && prev.className === next.className && prev.inline === next.inline
+			);
+		}
+		// When not streaming, compare all props including content.
+		return (
+			prev.content === next.content &&
+			prev.isStreaming === next.isStreaming &&
+			prev.className === next.className &&
+			prev.inline === next.inline
+		);
+	},
+);
 
 export default StreamingMarkdown;

@@ -414,5 +414,13 @@ function safeJson(value: unknown): string {
 export default React.memo(ToolCallCard, (prev, next) => {
 	const a = prev.toolCall;
 	const b = next.toolCall;
-	return a.callId === b.callId && a.status === b.status && a.isError === b.isError && a.result === b.result;
+	return (
+		a.callId === b.callId &&
+		a.status === b.status &&
+		a.isError === b.isError &&
+		a.result === b.result &&
+		// Include args so live ToolCallCards can render formatToolSummary
+		// output before the SDK sends the full parsed args.
+		JSON.stringify(a.args) === JSON.stringify(b.args)
+	);
 });

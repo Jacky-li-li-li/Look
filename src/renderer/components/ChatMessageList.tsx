@@ -5,6 +5,10 @@ import { cn } from "@shared/lib/utils";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Check, ChevronDown, Copy, GitBranch, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+/** Stable empty object reference — avoids defeating React.memo on every itemContent call. */
+const EMPTY_TOOL_EXECUTIONS: Record<string, import("@shared/types").LookUiToolExecState> = {};
+
 import { useTranslation } from "react-i18next";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { toast } from "sonner";
@@ -100,6 +104,10 @@ const ChatMessageList = memo(function ChatMessageList({
 	const [pendingConfirm, setPendingConfirm] = useState<BranchConfirmRequest | null>(null);
 	const [pendingBranchEntryId, setPendingBranchEntryId] = useState<string | null>(null);
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
+	// Stable ref so itemContent callback doesn't depend on timeline
+	// and avoids Virtuoso re-rendering all visible items on every streaming delta.
+	const timelineRef = useRef(timeline);
+	timelineRef.current = timeline;
 	const [isAtBottom, setIsAtBottom] = useState(true);
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	useEffect(() => setAtBottomAtom(isAtBottom), [isAtBottom, setAtBottomAtom]);
@@ -139,10 +147,15 @@ const ChatMessageList = memo(function ChatMessageList({
 	// after the first content growth during streaming it's consumed and never
 	// re-created. Manually keep scrolled to bottom while streaming by detecting
 	// content growth via uiBlocks total text length.
+	//
+	// IMPORTANT: skip when the user has scrolled away from the bottom — Virtuoso's
+	// `followOutput="auto"` already handles that case (returns false). Without
+	// this guard, our manual `scrollToBottom` keeps firing on every delta and
+	// yanks the user's viewport back down, breaking upward scroll smoothness.
 	const prevStreamLenRef = useRef(0);
 	const prevBlockCountRef = useRef(0);
 	useEffect(() => {
-		if (!isBusy) {
+		if (!isBusy || !isAtBottom) {
 			prevStreamLenRef.current = 0;
 			prevBlockCountRef.current = 0;
 			return;
@@ -168,7 +181,7 @@ const ChatMessageList = memo(function ChatMessageList({
 			prevStreamLenRef.current = totalLen;
 			scrollToBottom();
 		}
-	}, [sessionState.uiBlocks, isBusy, scrollToBottom]);
+	}, [sessionState.uiBlocks, isBusy, isAtBottom, scrollToBottom]);
 
 	const [flashEntryId, setFlashEntryId] = useState<string | null>(null);
 	const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -271,7 +284,7 @@ const ChatMessageList = memo(function ChatMessageList({
 
 	const itemContent = useCallback(
 		(index: number) => {
-			const item = timeline[index];
+			const item = timelineRef.current[index];
 			if (!item) return null;
 			if (item.entry) {
 				return (
@@ -312,7 +325,7 @@ const ChatMessageList = memo(function ChatMessageList({
 							agentName={agentName}
 							isStreaming={false}
 							autoCollapse={autoCollapse}
-							toolExecutions={{}}
+							toolExecutions={EMPTY_TOOL_EXECUTIONS}
 							toolResultMap={item.toolResultMap}
 							isActiveLeaf={Boolean(entryId && entryId === leafId)}
 							flash={flashEntryId === item.id}
@@ -384,7 +397,6 @@ const ChatMessageList = memo(function ChatMessageList({
 			isBusy,
 			leafId,
 			navigatingEntry,
-			timeline,
 			handleBranchFromHere,
 			handleCopyMessage,
 			handleForkToNewChat,

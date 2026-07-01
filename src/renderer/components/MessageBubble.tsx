@@ -10,7 +10,7 @@ import type {
 import { cn } from "@shared/lib/utils";
 import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { hashKey } from "../lib/stableKey";
 import { userProfileAtom } from "../store/authAtoms";
@@ -57,6 +57,55 @@ function ImageBlock({ block }: { block: ImageContent }) {
 			className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
 		/>
 	);
+}
+
+/**
+ * Parse a JSON string that may be incomplete (the SDK streams tool-call
+ * arguments in pieces). Returns whatever object it can extract — keys for
+ * already-completed fields are present, the in-progress last field is
+ * dropped if it can't be parsed. Used to give live tool cards a useful
+ * `formatToolSummary` before the SDK sends the parsed final args.
+ */
+function safelyParsePartialJson(raw: string): Record<string, unknown> | undefined {
+	const trimmed = raw.trim();
+	if (!trimmed) return undefined;
+	// Try the whole string first (it's complete).
+	try {
+		const v = JSON.parse(trimmed);
+		return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+	} catch {
+		// Fall through.
+	}
+	// Trim back to the last completed `"key": value,` so the trailing partial
+	// field is dropped. We scan for unescaped quotes to find a safe prefix.
+	let lastSafe = -1;
+	let inString = false;
+	let escaped = false;
+	for (let i = 0; i < trimmed.length; i++) {
+		const ch = trimmed[i];
+		if (escaped) {
+			escaped = false;
+			continue;
+		}
+		if (ch === "\\") {
+			escaped = true;
+			continue;
+		}
+		if (ch === '"') {
+			inString = !inString;
+		}
+		if (!inString && (ch === "," || ch === "}")) {
+			lastSafe = i;
+		}
+	}
+	if (lastSafe < 0) return undefined;
+	const prefix = `${trimmed.slice(0, lastSafe)}}`;
+	try {
+		const v = JSON.parse(prefix);
+		return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 function MessageHeader({
@@ -117,12 +166,55 @@ function ContentBlocks({
 		}
 	}
 
+	// Pre-compute a stable ToolCallViewModel per toolCall block. Without this memo
+	// the inline `{ ... }` literal at the ToolCallCard call site creates a new
+	// object reference every render, defeating ToolCallCard's memo comparator and
+	// forcing the card subtree to re-render on every streaming delta.
+	const toolCallViews = useMemo(() => {
+		const map = new Map<
+			string,
+			{
+				callId: string;
+				toolName: string;
+				args: Record<string, unknown>;
+				status: "pending" | "running" | "success" | "error";
+				result: unknown;
+				isError: boolean | undefined;
+			}
+		>();
+		for (const block of blocks) {
+			if (block.type !== "toolCall") continue;
+			const execution = toolExecutions[block.id];
+			const persistedResult = toolResultMap?.[block.id];
+			const status = execution
+				? execution.phase === "running"
+					? "running"
+					: execution.isError
+						? "error"
+						: "success"
+				: persistedResult
+					? persistedResult.isError
+						? "error"
+						: "success"
+					: "pending";
+			const result = execution ? (execution.result ?? execution.partialResult) : persistedResult?.content;
+			map.set(block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`, {
+				callId: block.id,
+				toolName: block.name,
+				args: block.arguments,
+				status,
+				result,
+				isError: execution?.isError ?? persistedResult?.isError,
+			});
+		}
+		return map;
+	}, [blocks, toolExecutions, toolResultMap]);
+
 	return (
 		<div className="flex flex-col gap-1.5">
 			{segments.map((seg, segIdx) => {
 				if (seg.kind === "single") {
 					const block = seg.block;
-					const index = seg.index;
 					if (block.type === "text") {
 						if (!block.text) return null;
 						return (
@@ -143,37 +235,29 @@ function ContentBlocks({
 						);
 					}
 					if (block.type === "image") return <ImageBlock key={`image-${hashKey(block.data)}`} block={block} />;
+					if (block.type === "toolCall") {
+						const viewKey = block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`;
+						const toolCallView = toolCallViews.get(viewKey);
 
-					const execution = toolExecutions[block.id];
-					const persistedResult = toolResultMap?.[block.id];
-
-					const status = execution
-						? execution.phase === "running"
-							? "running"
-							: execution.isError
-								? "error"
-								: "success"
-						: persistedResult
-							? persistedResult.isError
-								? "error"
-								: "success"
-							: "pending";
-
-					const result = execution ? (execution.result ?? execution.partialResult) : persistedResult?.content;
-
-					return (
-						<ToolCallCard
-							key={block.id || `tool-${index}`}
-							toolCall={{
-								callId: block.id,
-								toolName: block.name,
-								args: block.arguments,
-								status,
-								result,
-								isError: execution?.isError ?? persistedResult?.isError,
-							}}
-						/>
-					);
+						return (
+							<ToolCallCard
+								key={viewKey}
+								toolCall={
+									toolCallView ?? {
+										callId: block.id,
+										toolName: block.name,
+										args: block.arguments,
+										status: "pending",
+										result: undefined,
+										isError: undefined,
+									}
+								}
+							/>
+						);
+					}
+					// Unknown block type — should not reach here.
+					console.warn(`[ContentBlocks] Unknown block type: ${(block as any).type}`);
+					return null;
 				}
 
 				return (
@@ -229,6 +313,8 @@ const MessageBubble = memo(function MessageBubble({
 				? "bash"
 				: (agentName ?? t("chat.agent"));
 
+	const derivedBlocks = useMemo(() => messageBlocks(message), [message]);
+
 	return (
 		<div
 			className={cn("flex gap-3", isUser && "flex-row-reverse self-end")}
@@ -249,7 +335,7 @@ const MessageBubble = memo(function MessageBubble({
 					)}
 				>
 					<ContentBlocks
-						blocks={messageBlocks(message)}
+						blocks={derivedBlocks}
 						isStreaming={isStreaming}
 						autoCollapse={autoCollapse}
 						toolExecutions={toolExecutions}
@@ -333,7 +419,10 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 				if (block.kind === "text") {
 					if (!block.text) return null;
 					return (
-						<div key={`txt-${block.uid ?? i}`} className="message-prose">
+						<div
+							key={block.uid != null ? `txt-${block.uid}` : `txt-${block.contentIndex ?? i}`}
+							className="message-prose"
+						>
 							<SkillAwareContent content={block.text} isStreaming={isStreaming && !block.completed} />
 						</div>
 					);
@@ -343,7 +432,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 					// when streaming with empty content.
 					return (
 						<ThinkingPanel
-							key={`think-${block.uid ?? i}`}
+							key={block.uid != null ? `think-${block.uid}` : `think-${block.contentIndex ?? i}`}
 							thinking={block.thinking}
 							isStreaming={isStreaming && !block.completed}
 							autoCollapse={autoCollapse}
@@ -358,18 +447,29 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 							: exec.isError
 								? "error"
 								: "success"
-						: block.completed
-							? "success"
-							: "pending";
+						: /* When exec hasn't arrived yet, default to "running" even
+						   if block.completed — toolcall_end may arrive before
+						   tool_exec_start. ToolCallCard inline state reset
+						   handles the eventual transition correctly. */
+							"running";
+					// While streaming, prefer the final parsed args; fall back to the
+					// accumulated raw JSON (the SDK streams arguments as partial
+					// strings before the parsed object arrives). Without this the
+					// tool header shows `…` for the entire delta phase.
+					const displayArgs =
+						block.args ?? (block.argsRaw ? safelyParsePartialJson(block.argsRaw) : undefined) ?? {};
 					return (
 						<ToolCallCard
-							key={block.toolCallId ?? `tool-${block.uid ?? i}`}
+							key={
+								block.toolCallId ??
+								(block.uid != null ? `tool-${block.uid}` : `tool-${block.contentIndex ?? i}`)
+							}
 							toolCall={{
 								callId: block.toolCallId ?? "",
 								toolName: block.toolName ?? "unknown",
-								args: block.args ?? {},
+								args: displayArgs,
 								status: s,
-								result: exec?.result,
+								result: exec?.result ?? exec?.partialResult,
 								isError: exec?.isError,
 							}}
 						/>
@@ -377,7 +477,12 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 				}
 				if (block.kind === "image") {
 					if (!block.image) return null;
-					return <ImageBlock key={`img-${block.uid ?? i}`} block={block.image} />;
+					return (
+						<ImageBlock
+							key={block.uid != null ? `img-${block.uid}` : `img-${block.contentIndex ?? i}`}
+							block={block.image}
+						/>
+					);
 				}
 				return null;
 			})}

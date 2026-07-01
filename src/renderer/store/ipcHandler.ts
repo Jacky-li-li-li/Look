@@ -123,12 +123,14 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 		},
 		messageDurations,
 		// Snapshots are the source of truth for persisted history. Clear any
-		// live streaming state on agent_end to avoid stale blocks.
-		uiBlocks: isAgentEnd ? [] : previous.uiBlocks,
-		uiTools: isAgentEnd ? {} : previous.uiTools,
-		uiPhase: isAgentEnd ? "idle" : previous.uiPhase,
-		uiSteering: isAgentEnd ? [] : previous.uiSteering,
-		uiFollowUp: isAgentEnd ? [] : previous.uiFollowUp,
+		// live streaming state when the agent has ended OR the previous phase
+		// was active (covers retry/fork scenarios where reason isn't agent_end
+		// but old streaming blocks must still be discarded).
+		uiBlocks: isAgentEnd || previous.uiPhase !== "idle" ? [] : previous.uiBlocks,
+		uiTools: isAgentEnd || previous.uiPhase !== "idle" ? {} : previous.uiTools,
+		uiPhase: isAgentEnd || previous.uiPhase !== "idle" ? "idle" : previous.uiPhase,
+		uiSteering: isAgentEnd || previous.uiPhase !== "idle" ? [] : previous.uiSteering,
+		uiFollowUp: isAgentEnd || previous.uiPhase !== "idle" ? [] : previous.uiFollowUp,
 		// Always clear the pending user message after a snapshot — the snapshot
 		// entries are now the source of truth for message history.
 		pendingUserMessage: null,
@@ -192,7 +194,14 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "assistant_text_start":
 				blocks = [
 					...blocks,
-					{ contentIndex: ev.contentIndex, kind: "text", text: "", thinking: "", completed: false, uid: _nextBlockUid++ },
+					{
+						contentIndex: ev.contentIndex,
+						kind: "text",
+						text: "",
+						thinking: "",
+						completed: false,
+						uid: _nextBlockUid++,
+					},
 				];
 				break;
 			case "assistant_text_delta": {
@@ -218,7 +227,14 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "thinking_start":
 				blocks = [
 					...blocks,
-					{ contentIndex: ev.contentIndex, kind: "thinking", text: "", thinking: "", completed: false, uid: _nextBlockUid++ },
+					{
+						contentIndex: ev.contentIndex,
+						kind: "thinking",
+						text: "",
+						thinking: "",
+						completed: false,
+						uid: _nextBlockUid++,
+					},
 				];
 				break;
 			case "thinking_delta": {
@@ -269,20 +285,39 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				}
 				break;
 			}
-			case "toolcall_arg_delta":
+			case "toolcall_arg_delta": {
+				// Accumulate raw JSON args into the matching incomplete toolcall block
+				// so live ToolCallCards can render `formatToolSummary` output before
+				// the SDK sends the parsed `toolcall_end` payload. Stops accumulating
+				// once the block completes — the final args win.
+				const idx = pendingToolcallIndex.get(ev.contentIndex);
+				if (idx != null && idx >= 0) {
+					const existing = blocks[idx]!;
+					blocks[idx] = {
+						...existing,
+						argsRaw: (existing.argsRaw ?? "") + ev.delta,
+					};
+				}
 				break;
+			}
 			case "toolcall_end": {
-				// Find the incomplete (most recent) matching block — completed blocks
-				// from a previous message in the same turn may share contentIndex.
-				const idx = pendingToolcallIndex.get(ev.contentIndex) ?? -1;
+				// Prefer in-place update of an incomplete matching block. Fall back to
+				// updating the most recent completed block with the same contentIndex
+				// (the SDK may emit toolcall_end without a prior toolcall_start in some
+				// batch orderings — see assistant_message_start clearing pendingToolcallIndex
+				// while keeping previously-completed blocks). Only push a new block when
+				// nothing matches, otherwise we'd render duplicate ToolCallCards.
+				const idx =
+					blocks.findIndex((b) => b.kind === "toolcall" && b.contentIndex === ev.contentIndex && !b.completed) ??
+					blocks.findIndex((b) => b.kind === "toolcall" && b.contentIndex === ev.contentIndex);
 				if (idx >= 0) {
 					const updated = { ...blocks[idx]! };
 					updated.toolCallId = ev.toolCallId;
 					updated.toolName = ev.toolName;
 					updated.args = ev.args;
+					updated.argsRaw = undefined;
 					updated.completed = true;
 					blocks = [...blocks.slice(0, idx), updated, ...blocks.slice(idx + 1)];
-					pendingToolcallIndex.delete(ev.contentIndex);
 				} else {
 					blocks = [
 						...blocks,
@@ -299,6 +334,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 						},
 					];
 				}
+				pendingToolcallIndex.delete(ev.contentIndex);
 				break;
 			}
 
