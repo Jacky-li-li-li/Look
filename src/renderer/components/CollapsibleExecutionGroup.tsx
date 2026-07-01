@@ -224,12 +224,10 @@ function renderBlock(
 	isStreaming: boolean,
 ): React.ReactNode {
 	if (block.type === "thinking") {
+		const sig = (block as ThinkingContent).thinkingSignature;
 		return (
 			<ThinkingPanel
-				key={
-					(block as ThinkingContent).thinkingSignature ??
-					`group-thinking-${hashKey((block as ThinkingContent).thinking ?? "")}`
-				}
+				key={sig != null ? `${sig}-${index}` : `group-thinking-${hashKey((block as ThinkingContent).thinking ?? "")}-${index}`}
 				thinking={block.thinking}
 				isStreaming={isStreaming}
 				autoCollapse={true}
@@ -241,7 +239,7 @@ function renderBlock(
 	const isError = status === "error";
 	return (
 		<ToolCallCard
-			key={block.id}
+			key={block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`}
 			toolCall={{
 				callId: block.id,
 				toolName: block.name,
