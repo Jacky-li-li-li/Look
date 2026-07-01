@@ -17,7 +17,7 @@ interface LookAPI {
 	onEvent(callback: (event: any) => void): () => void;
 	sendMessage(agentId: string, message: string, images?: ImageContent[]): Promise<any>;
 	activateSession(sessionId: string): Promise<any>;
-	createAgent(name?: string | { name?: string; projectId?: string }): Promise<any>;
+	createAgent(name?: string | { name?: string; projectId?: string; imProvider?: "feishu" }): Promise<any>;
 	destroyAgent(agentId: string): Promise<any>;
 	getModels(): Promise<any>;
 	getProviders(): Promise<any>;

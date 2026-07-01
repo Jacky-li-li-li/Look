@@ -9,6 +9,48 @@ import { getLookDir } from "../shared/look-storage.js";
 
 export type ImProvider = "feishu";
 
+// ============================================================
+// ChatBinding — 飞书 chatId → Agent sessionId 绑定
+// ============================================================
+export interface ChatBinding {
+	chatId: string;
+	sessionId: string;
+	projectId: string;
+	createdAt: number;
+}
+
+const BINDINGS_FILE = path.join(getLookDir(), "im-bindings.json");
+
+export function getBindingsFilePath(): string {
+	return BINDINGS_FILE;
+}
+
+export function loadBindings(): ChatBinding[] {
+	if (!fs.existsSync(BINDINGS_FILE)) {
+		return [];
+	}
+	try {
+		const raw = fs.readFileSync(BINDINGS_FILE, "utf8");
+		const parsed = JSON.parse(raw);
+		if (!Array.isArray(parsed)) {
+			console.warn("[IMStorage] im-bindings.json is not an array, resetting");
+			return [];
+		}
+		return parsed as ChatBinding[];
+	} catch (err) {
+		console.warn("[IMStorage] Failed to load bindings:", err);
+		return [];
+	}
+}
+
+export function saveBindings(bindings: ChatBinding[]): void {
+	const dir = path.dirname(BINDINGS_FILE);
+	fs.mkdirSync(dir, { recursive: true });
+	const tempPath = `${BINDINGS_FILE}.tmp`;
+	fs.writeFileSync(tempPath, JSON.stringify(bindings, null, 2));
+	fs.renameSync(tempPath, BINDINGS_FILE);
+}
+
 export interface ImChannelConfig {
 	provider: ImProvider;
 	appId: string;

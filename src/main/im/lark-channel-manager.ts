@@ -1,7 +1,9 @@
 // ============================================================
 // Feishu / Lark IM channel manager (main process)
+// v2: 使用飞书官方 createLarkChannel() API
 // ============================================================
 
+import type { NormalizedMessage } from "@larksuiteoapi/node-sdk";
 import * as lark from "@larksuiteoapi/node-sdk";
 import crypto from "crypto";
 import type { BrowserWindow } from "electron";
@@ -38,9 +40,12 @@ type ImMessageReceivedEvent = {
 	provider: ImProvider;
 	messageId: string;
 	chatId: string;
-	senderOpenId: string;
-	content: unknown;
+	senderId: string;
+	senderName?: string;
+	content: string;
+	rawContentType: string;
 	createTime: number;
+	raw?: unknown;
 };
 
 type ImRendererEvent = ImRegistrationUpdateEvent | ImChannelStatusEvent | ImMessageReceivedEvent;
@@ -87,7 +92,7 @@ const FEISHU_TENANT_SCOPES = [
 interface FeishuCredentials {
 	appId: string;
 	appSecret: string;
-		name?: string;
+	name?: string;
 	tenantBrand?: "feishu" | "lark";
 }
 
@@ -100,7 +105,6 @@ export interface LarkChannelListItem {
 	enabled: boolean;
 }
 
-
 export interface SendTestMessageInput {
 	receiveIdType: string;
 	receiveId: string;
@@ -110,19 +114,29 @@ export interface SendTestMessageInput {
 export interface ManualConnectInput {
 	appId: string;
 	appSecret: string;
-		name?: string;
+	name?: string;
 }
+
+/** 外部（LarkBridgeService）可注册的消息回调签名 */
+export type NormalizedMessageHandler = (msg: NormalizedMessage) => void | Promise<void>;
+export type ChannelLifecycleHandler = () => void | Promise<void>;
 
 export class LarkChannelManager {
 	private mainWindow: BrowserWindow;
 	private channels: ImChannelConfig[] = [];
+	// --- v2: 使用 createLarkChannel() 替代 WSClient + EventDispatcher ---
+	private channel?: lark.LarkChannel;
 	private client?: lark.Client;
-	private wsClient?: lark.WSClient;
-	private eventDispatcher?: lark.EventDispatcher;
 	private status: "disconnected" | "connecting" | "connected" | "error" = "disconnected";
 	private currentAppId?: string;
 	private lastError?: string;
 	private registrations = new Map<string, AbortController>();
+	/** v2: 外部消息处理器（LarkBridgeService 注册） */
+	private externalMessageHandler?: NormalizedMessageHandler;
+	/** v2: 取消 channel.on('message') 订阅 */
+	private unsubscribeMessage?: () => void;
+	onConnectionReady?: ChannelLifecycleHandler;
+	onConnectionClosed?: ChannelLifecycleHandler;
 
 	constructor(mainWindow: BrowserWindow) {
 		this.mainWindow = mainWindow;
@@ -130,6 +144,27 @@ export class LarkChannelManager {
 
 	setMainWindow(win: BrowserWindow): void {
 		this.mainWindow = win;
+	}
+
+	// ============================================================
+	// v2: 注册外部消息处理器（给 LarkBridgeService 使用）
+	// ============================================================
+	onMessage(handler?: NormalizedMessageHandler): void {
+		this.externalMessageHandler = handler;
+	}
+
+	private notifyLifecycle(handler: ChannelLifecycleHandler | undefined, label: string): void {
+		if (!handler) return;
+		try {
+			const result = handler();
+			if (result && typeof result.catch === "function") {
+				result.catch((err) => {
+					console.warn(`[LarkChannelManager] ${label} lifecycle handler failed:`, err);
+				});
+			}
+		} catch (err) {
+			console.warn(`[LarkChannelManager] ${label} lifecycle handler failed:`, err);
+		}
 	}
 
 	private sendRendererEvent(payload: ImRendererEvent): void {
@@ -289,66 +324,106 @@ export class LarkChannelManager {
 		saveChannels(this.channels);
 	}
 
+	// ============================================================
+	// v2: connect() 使用 createLarkChannel()
+	// ============================================================
 	async connect(credentials: FeishuCredentials): Promise<void> {
 		const { appId, appSecret, tenantBrand } = credentials;
 
-		// Prevent duplicate/leaked WebSocket clients if connect is called while
-		// already connected or connecting.
-		if (this.wsClient) {
+		// 防止重复连接
+		if (this.channel) {
 			this.closeConnection();
 		}
 
 		this.currentAppId = appId;
 		this.setStatus("connecting", appId);
 
+		const domain = tenantBrand === "lark" ? lark.Domain.Lark : lark.Domain.Feishu;
+
+		// v2: 使用 createLarkChannel() 替代 WSClient + EventDispatcher
+		this.channel = lark.createLarkChannel({
+			appId,
+			appSecret,
+			domain,
+			transport: "websocket",
+			policy: {
+				dmMode: "open", // 私聊自动回复
+				requireMention: false, // 不强制 @ 触发
+			},
+			safety: {
+				chatQueue: { enabled: true }, // 内置 per-chat 串行
+			},
+			loggerLevel: lark.LoggerLevel.info,
+			source: "look",
+		});
+
+		// v2: 通过 rawClient 获取原始 Client（用于 testConnection / sendTestMessage 等）
+		this.client = this.channel.rawClient;
+
+		// v2: 注册消息回调 → 归一化 NormalizedMessage（含重连/重连成功事件）
+		this.unsubscribeMessage = this.channel.on({
+			message: async (msg) => {
+				console.log(
+					"[LarkChannelManager] Message received:",
+					msg.messageId,
+					"chat:",
+					msg.chatId,
+					"content:",
+					msg.content?.slice(0, 80),
+				);
+				await this.handleMessage(msg);
+			},
+			error: (err) => {
+				console.warn("[LarkChannelManager] Channel error:", err.message);
+				this.setStatus("error", appId, err);
+			},
+			reconnecting: () => {
+				console.log("[LarkChannelManager] Reconnecting...");
+				this.setStatus("connecting", appId);
+			},
+			reconnected: () => {
+				console.log("[LarkChannelManager] Reconnected, botIdentity:", this.channel?.botIdentity?.openId);
+				this.setStatus("connected", appId);
+				this.notifyLifecycle(this.onConnectionReady, "connection-ready");
+			},
+		});
+
+		// v2: connect() 内部处理 WebSocket 握手 + 自动重连 + 心跳
 		try {
-			const domain = tenantBrand === "lark" ? lark.Domain.Lark : lark.Domain.Feishu;
-			this.client = new lark.Client({
-				appId,
-				appSecret,
-				appType: lark.AppType.SelfBuild,
-				domain,
-			});
-
-			this.eventDispatcher = new lark.EventDispatcher({}).register({
-				"im.message.receive_v1": async (data) => {
-					this.handleMessage(data);
-				},
-			});
-
-			this.wsClient = new lark.WSClient({
-				appId,
-				appSecret,
-				domain,
-				loggerLevel: lark.LoggerLevel.info,
-				// Disable SDK auto-reconnect; lifecycle is managed explicitly so
-				// manual disconnect does not turn into a zombie reconnect loop.
-				autoReconnect: false,
-				onReady: () => {
-					this.setStatus("connected", appId);
-				},
-				onError: (err) => {
-					this.setStatus("error", appId, err);
-				},
-			});
-
-			await this.wsClient.start({ eventDispatcher: this.eventDispatcher });
+			await this.channel.connect();
+			console.log("[LarkChannelManager] Connected OK, botIdentity:", this.channel.botIdentity?.openId);
 			this.setStatus("connected", appId);
+			this.notifyLifecycle(this.onConnectionReady, "connection-ready");
 		} catch (err) {
+			// 清理残留状态：channel 对象已创建但连接失败，
+			// 避免桥接用断开的 channel 初始化
+			console.error(
+				"[LarkChannelManager] Connect failed, cleaning up:",
+				err instanceof Error ? err.message : String(err),
+			);
+			this.unsubscribeMessage?.();
+			this.unsubscribeMessage = undefined;
+			this.channel = undefined;
+			this.client = undefined;
 			this.setStatus("error", appId, err);
 			throw err;
 		}
 	}
 
 	private closeConnection(): void {
+		const hadChannel = Boolean(this.channel);
 		try {
-			this.wsClient?.close({ force: true });
+			this.unsubscribeMessage?.();
+			this.unsubscribeMessage = undefined;
+			this.channel?.disconnect().catch(() => {});
 		} catch {
 			// best-effort
 		}
+		this.channel = undefined;
 		this.client = undefined;
-		this.wsClient = undefined;
-		this.eventDispatcher = undefined;
+		if (hadChannel) {
+			this.notifyLifecycle(this.onConnectionClosed, "connection-closed");
+		}
 		const previousAppId = this.currentAppId;
 		this.currentAppId = undefined;
 		if (previousAppId) {
@@ -399,6 +474,17 @@ export class LarkChannelManager {
 		saveChannels(this.channels);
 	}
 
+	// ============================================================
+	// v2: 暴露 LarkChannel 实例（供 LarkBridgeService 使用）
+	// ============================================================
+	getLarkChannel(): lark.LarkChannel | undefined {
+		return this.channel;
+	}
+
+	getRawClient(): lark.Client | undefined {
+		return this.client;
+	}
+
 	getChannels(): LarkChannelListItem[] {
 		return this.channels.map((c) => ({
 			provider: c.provider,
@@ -409,6 +495,7 @@ export class LarkChannelManager {
 			enabled: c.enabled,
 		}));
 	}
+
 	async sendTestMessage(input: SendTestMessageInput): Promise<{ success: boolean; error?: string }> {
 		if (!this.client) {
 			return { success: false, error: "Feishu client is not connected" };
@@ -430,8 +517,6 @@ export class LarkChannelManager {
 			return { success: false, error: message };
 		}
 	}
-
-
 
 	async testConnection(appId: string): Promise<{ success: boolean; message: string }> {
 		const channels = loadChannels();
@@ -459,7 +544,11 @@ export class LarkChannelManager {
 		}
 	}
 
-	async testConnectionDirect(appId: string, appSecret: string, tenantBrand?: "feishu" | "lark"): Promise<{ success: boolean; message: string }> {
+	async testConnectionDirect(
+		appId: string,
+		appSecret: string,
+		tenantBrand?: "feishu" | "lark",
+	): Promise<{ success: boolean; message: string }> {
 		try {
 			const client = new lark.Client({
 				appId,
@@ -490,35 +579,38 @@ export class LarkChannelManager {
 		saveChannels(this.channels);
 	}
 
-
-	handleMessage(data: {
-		sender?: {
-			sender_id?: { open_id?: string };
-		};
-		message?: {
-			message_id?: string;
-			chat_id?: string;
-			content?: string;
-			create_time?: string;
-		};
-	}): void {
-		const message = data.message;
-		if (!message) return;
-		let content: unknown;
-		try {
-			content = message.content ? JSON.parse(message.content) : {};
-		} catch {
-			content = message.content ?? {};
+	// ============================================================
+	// v2: handleMessage 接收 NormalizedMessage
+	// ============================================================
+	async handleMessage(msg: NormalizedMessage): Promise<void> {
+		// v2: 转发 normalized 消息给外部处理器（LarkBridgeService）
+		if (this.externalMessageHandler) {
+			try {
+				await this.externalMessageHandler(msg);
+			} catch (err) {
+				console.warn("[LarkChannelManager] External message handler error:", err);
+			}
 		}
+
+		// 同时广播给渲染层（保持向后兼容）
 		this.sendRendererEvent({
 			type: "im:message-received",
 			provider: "feishu",
-			messageId: message.message_id ?? "",
-			chatId: message.chat_id ?? "",
-			senderOpenId: data.sender?.sender_id?.open_id ?? "",
-			content,
-			createTime: message.create_time ? Number.parseInt(message.create_time, 10) : Date.now(),
+			messageId: msg.messageId,
+			chatId: msg.chatId,
+			senderId: msg.senderId,
+			senderName: msg.senderName,
+			content: msg.content,
+			rawContentType: msg.rawContentType,
+			createTime: msg.createTime,
+			raw: msg.raw,
 		});
+	}
+
+	/** 判断消息是否来自 Bot 自身 */
+	isSelfMessage(msg: NormalizedMessage): boolean {
+		const botOpenId = this.channel?.botIdentity?.openId;
+		return botOpenId ? msg.senderId === botOpenId : false;
 	}
 
 	async dispose(): Promise<void> {
@@ -526,7 +618,7 @@ export class LarkChannelManager {
 			controller.abort();
 			this.registrations.delete(id);
 		}
-		// Close the WebSocket without deleting saved channels so the Feishu
+		// Close the channel without deleting saved channels so the Feishu
 		// integration survives an app restart.
 		this.closeConnection();
 	}

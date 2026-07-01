@@ -31,6 +31,8 @@ export interface ProjectInfo {
 export type ThinkingLevel = ModelThinkingLevel;
 export type { AgentMessage, ImageContent, SessionEntry };
 
+export type ImSessionProvider = "feishu";
+
 /** Permission mode — controls how tool calls are authorized */
 export type PermissionMode = "always" | "ask" | "plan";
 
@@ -96,6 +98,8 @@ export interface PlanApprovalResponse {
 export interface AgentInfo {
 	id: string;
 	name: string;
+	/** IM channel that created or owns this session, when applicable. */
+	imProvider?: ImSessionProvider;
 	model: string;
 	thinkingLevel: ThinkingLevel;
 	/** Whether the current model advertises reasoning support. */
@@ -460,9 +464,19 @@ export type MainToRendererEvent =
 			provider: string;
 			messageId: string;
 			chatId: string;
-			senderOpenId: string;
-			content: unknown;
+			senderId: string;
+			senderName?: string;
+			content: string;
+			rawContentType: string;
 			createTime: number;
+			raw?: unknown;
+	  }
+	// ---- IM Bridge 状态事件 ----
+	| {
+			type: "im:bridge-status";
+			bindings: number;
+			runningSessions: string[];
+			status: "running" | "stopped";
 	  };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
@@ -651,6 +665,10 @@ export type RendererToMainEvent =
 	| { type: "im:test-connection"; appId: string }
 	| { type: "im:test-connection-direct"; appId: string; appSecret: string; name?: string }
 	| { type: "im:update-channel"; appId: string; name?: string }
+	// ---- IM Bridge ----
+	| { type: "im:get-bindings" }
+	| { type: "im:remove-binding"; chatId: string }
+	| { type: "im:get-bridge-status" };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

@@ -38,6 +38,7 @@ export function registerIpcHandlers(
 	runtimeManager: SessionRuntimeManager,
 	mainWindow: BrowserWindow,
 	larkChannelManager?: import("./im/lark-channel-manager.js").LarkChannelManager,
+	larkBridgeService?: import("./im/lark-bridge-service.js").LarkBridgeService,
 ): void {
 	// Clean up previous registrations to support macOS activate re-creation
 	ipcMain.removeHandler("look:invoke");
@@ -87,6 +88,7 @@ export function registerIpcHandlers(
 				workspaceFileService,
 				workspaceTreeService,
 				larkChannelManager,
+				larkBridgeService,
 			);
 		} catch (err: any) {
 			return {
@@ -114,6 +116,7 @@ async function handleRendererInvoke(
 	workspaceFileService: WorkspaceFileService,
 	workspaceTreeService: WorkspaceTreeService,
 	larkChannelManager: import("./im/lark-channel-manager.js").LarkChannelManager | undefined,
+	larkBridgeService: import("./im/lark-bridge-service.js").LarkBridgeService | undefined,
 ): Promise<any> {
 	switch (data.type) {
 		// === Agent messaging ===
@@ -880,8 +883,6 @@ async function handleRendererInvoke(
 			return await larkChannelManager.sendTestMessage({ receiveIdType, receiveId, text });
 		}
 
-
-
 		case "im:test-connection": {
 			const appId = guardString(data.appId, "appId");
 			if (!larkChannelManager) {
@@ -889,7 +890,6 @@ async function handleRendererInvoke(
 			}
 			return await larkChannelManager.testConnection(appId);
 		}
-
 
 		case "im:test-connection-direct": {
 			const appId = guardString(data.appId, "appId");
@@ -909,6 +909,30 @@ async function handleRendererInvoke(
 			}
 			await larkChannelManager.updateChannel(appId, { name: data.name });
 			return { success: true };
+		}
+
+		// ---- IM Bridge: 绑定管理 / 桥接状态 ----
+		case "im:get-bindings": {
+			if (!larkBridgeService) {
+				return { success: false, error: "LarkBridgeService is not available" };
+			}
+			return { success: true, bindings: larkBridgeService.getBindings() };
+		}
+
+		case "im:remove-binding": {
+			const chatId = guardString(data.chatId, "chatId");
+			if (!larkBridgeService) {
+				return { success: false, error: "LarkBridgeService is not available" };
+			}
+			larkBridgeService.removeBinding(chatId);
+			return { success: true };
+		}
+
+		case "im:get-bridge-status": {
+			if (!larkBridgeService) {
+				return { success: false, error: "LarkBridgeService is not available" };
+			}
+			return { success: true, ...larkBridgeService.getStatus() };
 		}
 		default:
 			return { success: false, error: `Unknown event: ${(data as any).type}` };

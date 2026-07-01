@@ -49,6 +49,7 @@ import type {
 	SubagentResult,
 	SubagentUsage,
 } from "./extensions/subagent/types.js";
+import { loadBindings } from "./im/im-storage.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
 import { AutoTitleService } from "./services/auto-title.js";
 import {
@@ -76,6 +77,7 @@ import {
 	type AgentDefinitionInput,
 	type AgentInfo,
 	type ForkedSessionResult,
+	type ImSessionProvider,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
 	type MainToRendererEvent,
@@ -206,6 +208,8 @@ export class SessionRuntimeManager {
 	 *  - retrying: the last turn ended but requested a retry (still "running" visually)
 	 *  All renderer-facing reports use this canonical state instead of the raw getter. */
 	private readonly streamingStates = new Map<string, "idle" | "streaming" | "retrying">();
+	/** Runtime-local IM source for newly created sessions; persisted sessions fall back to im-bindings.json. */
+	private readonly imProvidersBySession = new Map<string, ImSessionProvider>();
 	/** Turn start timestamp keyed by pi session id; used to compute and persist per-message runtimes. */
 	private readonly turnStartedAtBySession = new Map<string, number>();
 	/** AI 标题生成并发锁/已生成标记已移入 AutoTitleService。
@@ -669,6 +673,7 @@ export class SessionRuntimeManager {
 		return {
 			id: session.id,
 			name: (session.name || session.firstMessage || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH),
+			imProvider: this.getImProvider(session.id),
 			model: model ? `${model.provider}/${model.id}` : "",
 			thinkingLevel: (piSession?.thinkingLevel as ThinkingLevel | undefined) ?? "off",
 			modelSupportsThinking: piSession?.supportsThinking() ?? false,
@@ -691,6 +696,7 @@ export class SessionRuntimeManager {
 		return {
 			id: sessionId,
 			name: (session.sessionManager.getSessionName() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH),
+			imProvider: this.getImProvider(sessionId),
 			model: model ? `${model.provider}/${model.id}` : "",
 			thinkingLevel: session.thinkingLevel as ThinkingLevel,
 			modelSupportsThinking: session.supportsThinking(),
@@ -704,6 +710,13 @@ export class SessionRuntimeManager {
 			projectId: managed.projectId,
 			...this.subagentFields(sessionId),
 		};
+	}
+
+	private getImProvider(sessionId: string): ImSessionProvider | undefined {
+		const runtimeProvider = this.imProvidersBySession.get(sessionId);
+		if (runtimeProvider) return runtimeProvider;
+		const binding = loadBindings().find((item) => item.sessionId === sessionId);
+		return binding ? "feishu" : undefined;
 	}
 
 	/** 返回子会话标识字段；非子会话返回空对象（展开后无影响）。 */
@@ -1017,7 +1030,9 @@ export class SessionRuntimeManager {
 		this.emitSessionState(sessionId);
 	}
 
-	async createAgent(opts?: { name?: string; projectId?: string } | string): Promise<string> {
+	async createAgent(
+		opts?: { name?: string; projectId?: string; imProvider?: ImSessionProvider } | string,
+	): Promise<string> {
 		const input = typeof opts === "string" ? { name: opts } : (opts ?? {});
 		const projectId = input.projectId ?? this.activeProjectId;
 		if (!projectId) throw new Error("No active project");
@@ -1060,6 +1075,7 @@ export class SessionRuntimeManager {
 		}
 		// 标记为"刚创建、还是默认名"，AI 标题生成只覆盖此集合。
 		this.createdAtDefaultName.add(session.sessionId);
+		if (input.imProvider) this.imProvidersBySession.set(session.sessionId, input.imProvider);
 		this.activeProjectId = projectId;
 		this.activeSessionId = session.sessionId;
 		await this.refreshProjectSessions(projectId);

@@ -5,6 +5,7 @@
 import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import { LarkBridgeService } from "./im/lark-bridge-service.js";
 import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { promptForProjectTrust, registerIpcHandlers } from "./ipc-handlers.js";
 import { syncLookDefaultAgents } from "./look-default-agents.js";
@@ -23,6 +24,7 @@ let runtimeManager: SessionRuntimeManager | null = null;
 let workspaceFileService: WorkspaceFileService | null = null;
 let workspaceTreeService: WorkspaceTreeService | null = null;
 let larkChannelManager: LarkChannelManager | null = null;
+let larkBridgeService: LarkBridgeService | null = null;
 
 const isDev = !app.isPackaged;
 
@@ -38,6 +40,22 @@ if (process.env.SANDBOX_GPU_WORKAROUND === "1") {
 	app.commandLine.appendSwitch("no-sandbox");
 	app.commandLine.appendSwitch("disable-gpu-sandbox");
 	app.commandLine.appendSwitch("in-process-gpu");
+}
+
+function bootstrapLarkBridge(): void {
+	if (!runtimeManager || !larkChannelManager || !larkBridgeService || !larkChannelManager.getLarkChannel()) {
+		return;
+	}
+	try {
+		larkBridgeService.init(runtimeManager, larkChannelManager);
+		console.log("[Look] LarkBridgeService initialized");
+	} catch (err) {
+		console.warn("[Look] Failed to initialize LarkBridgeService:", err);
+	}
+}
+
+function detachLarkBridge(): void {
+	larkBridgeService?.detachChannel();
 }
 
 // ============================================================
@@ -232,10 +250,14 @@ async function initSessionRuntime(): Promise<void> {
 
 	if (mainWindow) {
 		larkChannelManager = new LarkChannelManager(mainWindow);
-		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager);
+		larkBridgeService = new LarkBridgeService();
+		larkChannelManager.onConnectionReady = bootstrapLarkBridge;
+		larkChannelManager.onConnectionClosed = detachLarkBridge;
+		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager, larkBridgeService);
 		await larkChannelManager.initialize().catch((err) => {
 			console.warn("[Look] Failed to initialize Feishu channel manager:", err);
 		});
+		bootstrapLarkBridge();
 
 		// Push initial project/session summaries. Message history is loaded
 		// on activation as a raw SDK SessionEntry snapshot.
@@ -303,7 +325,12 @@ app.whenReady().then(async () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
 			if (mainWindow && runtimeManager) {
-				registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager ?? undefined);
+				registerIpcHandlers(
+					runtimeManager,
+					mainWindow,
+					larkChannelManager ?? undefined,
+					larkBridgeService ?? undefined,
+				);
 				larkChannelManager?.setMainWindow(mainWindow);
 				const allProjects = runtimeManager.listProjects();
 				const activeProject = runtimeManager.getActiveProject();
@@ -338,6 +365,13 @@ app.on("window-all-closed", () => {
 // orphaned child processes behind. `dispose()` first tears down the
 // shared-area watchers (H-1) and then disposes all agent runtimes.
 app.on("before-quit", async () => {
+	if (larkBridgeService) {
+		try {
+			larkBridgeService.dispose();
+		} catch {
+			// best-effort cleanup
+		}
+	}
 	if (larkChannelManager) {
 		try {
 			await larkChannelManager.dispose();

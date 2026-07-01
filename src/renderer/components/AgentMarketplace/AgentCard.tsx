@@ -42,14 +42,17 @@ const AgentCard = memo(function AgentCard({
 	onDelete,
 }: AgentCardProps) {
 	return (
-		<button
-			type="button"
+		<div
 			tabIndex={0}
 			onClick={() => onSelect(agent)}
 			onKeyDown={(e) => {
-				if (e.key === "Enter") onSelect(agent);
+				if (e.target !== e.currentTarget) return;
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onSelect(agent);
+				}
 			}}
-			className={`group flex w-full flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
+			className={`group flex w-full cursor-pointer flex-col items-start gap-2 rounded-lg border p-3 text-left outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 ${
 				selected
 					? "border-accent bg-accent/10"
 					: "border-hairline bg-card/40 hover:border-hairline hover:bg-accent/5"
@@ -127,7 +130,7 @@ const AgentCard = memo(function AgentCard({
 					</div>
 				)}
 			</div>
-		</button>
+		</div>
 	);
 });
 

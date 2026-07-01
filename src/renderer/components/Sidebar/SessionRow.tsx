@@ -43,6 +43,7 @@ export default function SessionRow({
 	const runningAgents = useAtomValue(runningAgentsAtom);
 	const sessionPhases = useAtomValue(sessionPhasesAtom);
 	const hasChildren = childrenList.length > 0;
+	const feishuLabel = t("settings.feishu", "Feishu");
 	return (
 		<div className="session-tree-group" data-has-children={hasChildren || undefined}>
 			<div
@@ -73,9 +74,14 @@ export default function SessionRow({
 								className="w-full border-b border-foreground/40 bg-transparent text-[11px] font-medium outline-none"
 							/>
 						) : (
-							<span className="block truncate text-[11px] font-medium">
-								{agent.name}
-								{hasChildren && <span className="ml-1 text-[9px] text-sky-500">({childrenList.length})</span>}
+							<span className="flex min-w-0 items-center gap-1 text-[11px] font-medium">
+								{agent.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
+								<span className="min-w-0 truncate">
+									{agent.name}
+									{hasChildren && (
+										<span className="ml-1 text-[9px] text-sky-500">({childrenList.length})</span>
+									)}
+								</span>
 							</span>
 						)}
 						<span className="block truncate font-mono text-[8.5px] leading-tight text-muted-foreground/50">
@@ -162,6 +168,7 @@ export default function SessionRow({
 								onClick={() => selectSession(child)}
 							>
 								<Bot className="size-3 shrink-0 text-sky-500" />
+								{child.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
 								<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
 									{child.name || child.agentConfigName}
 								</span>
@@ -170,5 +177,16 @@ export default function SessionRow({
 					);
 				})}
 		</div>
+	);
+}
+
+function FeishuIcon({ label }: { label: string }) {
+	return (
+		<svg viewBox="0 0 16 16" className="size-3 shrink-0" role="img" aria-label={label} focusable="false">
+			<path d="M7.1 1.2h1.8a1.8 1.8 0 0 1 1.8 1.8v2.8H8.9A3.6 3.6 0 0 1 5.3 2.2a1 1 0 0 1 1-1h.8Z" fill="#3370FF" />
+			<path d="M10.2 5.3h2.6a1.8 1.8 0 0 1 1.8 1.8v1.8a1 1 0 0 1-1 1A3.6 3.6 0 0 1 10 6.3v-1Z" fill="#00B96B" />
+			<path d="M5.3 10.2h1.8a3.6 3.6 0 0 1 3.6 3.6 1 1 0 0 1-1 1H7.9a1.8 1.8 0 0 1-1.8-1.8v-2.8Z" fill="#FFB020" />
+			<path d="M1.4 7.1a1.8 1.8 0 0 1 1.8-1.8h2.6v1A3.6 3.6 0 0 1 2.2 9.9a1 1 0 0 1-1-1V7.1Z" fill="#F54A45" />
+		</svg>
 	);
 }
