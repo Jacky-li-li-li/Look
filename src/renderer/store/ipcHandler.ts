@@ -172,8 +172,8 @@ export function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 
 // ── UI event pipeline ──
 // 直接同步写入 Jotai，不缓冲。流式输出的逐字丝滑感优先于批处理性能收益。
-// StreamingMarkdown 已通过 useThrottle(30ms) 限制 Markdown 解析频率，
-// 无需在 IPC 层再做缓冲。
+// StreamingMarkdown 通过 marked.js + 块拆分实现 O(1) 增量渲染，
+// 流式尾部每 token 即时更新，无需在 IPC 层再做缓冲。
 
 function enqueueUiEvent(sessionId: string, events: LookUiEvent[]): void {
 	applyUiEventBatch(sessionId, events);

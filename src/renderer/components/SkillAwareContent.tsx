@@ -33,11 +33,7 @@ export function SkillAwareContent({ content, isStreaming }: SkillAwareContentPro
 	const hasSkill = /\/skill:[^\s]+|<skill|<skill-invoke/i.test(clean);
 
 	if (!hasAgent && !hasSkill) {
-		return (
-			<div className={isStreaming ? "after:ml-0.5 after:animate-pulse after:content-['▊']" : undefined}>
-				<StreamingMarkdown content={clean} isStreaming={isStreaming ?? false} />
-			</div>
-		);
+		return <StreamingMarkdown content={clean} isStreaming={isStreaming ?? false} />;
 	}
 
 	// 混合渲染：agent chip + skill chip + 文本行内排列
@@ -45,7 +41,6 @@ export function SkillAwareContent({ content, isStreaming }: SkillAwareContentPro
 		<div
 			className={cn(
 				"flex flex-wrap items-baseline gap-x-1 gap-y-0.5",
-				isStreaming && "after:ml-0.5 after:animate-pulse after:content-['▊']",
 			)}
 		>
 			{agentSegments.map((seg, i) => {

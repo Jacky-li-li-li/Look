@@ -1914,6 +1914,44 @@ body {
   }
 
   /* ============================================================
+     Streaming Cursor — smooth blink for streaming markdown tail
+     ============================================================ */
+
+  @keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .streaming-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.2em;
+    background: currentColor;
+    animation: blink-cursor 1s step-end infinite;
+    vertical-align: text-bottom;
+    margin-left: 1px;
+  }
+
+  /* Isolate streaming tail from completed blocks to prevent layout thrash */
+  .streaming-tail {
+    contain: layout style;
+  }
+
+  /* Inline markdown mode (used inside SkillAwareContent flex layouts) */
+  .streaming-markdown-inline p,
+  .streaming-markdown-inline pre,
+  .streaming-markdown-inline ul,
+  .streaming-markdown-inline ol,
+  .streaming-markdown-inline blockquote {
+    display: inline;
+    margin: 0;
+  }
+
+  /* Completed markdown blocks — stable, never re-rendered */
+  .markdown-block {
+    contain: layout style;
+  }
+
+  /* ============================================================
      Liquid Row — session list item
      ============================================================ */
 

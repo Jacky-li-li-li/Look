@@ -2,8 +2,8 @@
 // PromptStore — 管理多个自定义 System Prompt 变体
 //
 // 数据存储于 ~/.look/prompts.json。
-// 全局激活 prompt → ~/.look/SYSTEM.md（pi SDK ResourceLoader 自动加载）
-// 项目激活 prompt → ~/.look/projects/<projectId>/SYSTEM.md（before_agent_start 注入）
+// 全局激活 prompt → ~/.look/SYSTEM.md（pi SDK discoverSystemPromptFile 自动发现）
+// 项目激活 prompt → ~/.look/projects/<projectId>/SYSTEM.md（createRuntimeFactory 显式传入 systemPrompt）
 // ============================================================
 
 import fs from "fs";

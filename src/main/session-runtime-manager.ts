@@ -63,6 +63,7 @@ import {
 	getLookDir,
 	getModelsPath,
 	getProjectSharedDir,
+	getProjectSystemPromptPath,
 	getProjectsIndexPath,
 	getUiSettingsPath,
 	getWorkspaceSubsessionsDir,
@@ -788,6 +789,18 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 				const appendPrompts = [sharedPrompt, ...(factoryOptions?.appendSystemPrompt ?? [])].filter(
 					(p): p is string => typeof p === "string" && p.length > 0,
 				);
+
+				// 项目级提示词：如果项目 SYSTEM.md 存在，显式传入 .look 路径
+				// SDK resolvePromptInput 会读取文件内容作为 customPrompt
+				let systemPromptSource: string | undefined;
+				if (projectId) {
+					const projectPromptPath = getProjectSystemPromptPath(projectId);
+					if (existsSync(projectPromptPath)) {
+						systemPromptSource = projectPromptPath;
+					}
+				}
+				// 未传入时 SDK 自动发现 ~/.look/SYSTEM.md（全局提示词）
+
 				const services = await createAgentSessionServices({
 					cwd,
 					agentDir: getLookDir(),
@@ -797,6 +810,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 					resourceLoaderOptions: {
 						extensionFactories: this.buildExtensionFactories(cwd, sessionManager.getSessionId()),
 						appendSystemPrompt: appendPrompts.length > 0 ? appendPrompts : undefined,
+						systemPrompt: systemPromptSource,
 					},
 					resourceLoaderReloadOptions: {
 						resolveProjectTrust: async () => resolveLatestProjectTrust(),
