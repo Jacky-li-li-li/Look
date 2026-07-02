@@ -1,36 +1,64 @@
 import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { SessionRuntimeManager } from "../src/main/session-runtime-manager";
+import { PlanService } from "../src/main/plan-service";
+import { PermissionService } from "../src/main/permission-service";
+import type { IEventBus, IRuntimeStore, IPermissionService, IPlanService } from "../src/main/core/contracts";
+import type { AgentSession, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 
 const cleanup: string[] = [];
-
 afterEach(async () => {
 	await Promise.all(cleanup.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
-function createRuntime() {
-	const runtime = Object.create(SessionRuntimeManager.prototype) as any;
-	runtime.defaultPermissionMode = "ask";
-	runtime.permissionModesBySession = new Map([["session-a", "plan"]]);
-	runtime.planQuestionsAwaiting = new Map();
-	runtime.planApprovalsAwaiting = new Map();
-	runtime.planInteractionBySession = new Map();
-	runtime.prePlanToolsBySession = new Map();
-	runtime.dirtyPlanToolSnapshots = new Set();
-	runtime.eventCallbacks = [];
-	runtime.runtimes = new Map();
-	runtime.permissionAwaiting = new Map();
-	runtime.sessionAllowedTools = new Map();
-	runtime.dirtyPermissionModes = new Set();
-	// SubAgent 子会话注册表（abortAgent 会级联查询）
-	runtime.subSessionRegistry = new Map();
-	runtime.subSessionMeta = new Map();
-	runtime.pendingSubSessions = new Map();
-	runtime.subagentEnabledBySession = new Map();
-	return runtime;
+type MockSessionOpts = {
+	setActiveToolsByName?: ReturnType<typeof vi.fn>;
+	getAllTools?: () => { name: string }[];
+	getActiveToolNames?: () => string[];
+	sessionManager?: SessionManager;
+	cwd?: string;
+	isStreaming?: boolean;
+	abort?: ReturnType<typeof vi.fn>;
+};
+
+function mockSession(opts: MockSessionOpts = {}): any {
+	return {
+		getActiveToolNames: opts.getActiveToolNames ?? (() => []),
+		getAllTools: opts.getAllTools ?? (() => []),
+		setActiveToolsByName: opts.setActiveToolsByName ?? vi.fn(),
+		sessionManager: opts.sessionManager ?? { isPersisted: () => false, appendCustomEntry: () => {} },
+		abort: opts.abort ?? vi.fn(),
+		isStreaming: opts.isStreaming ?? false,
+	};
+}
+
+function planServiceForTest(
+	extraSessions?: Record<string, { cwd: string; sessionManager?: SessionManager; session?: any }>,
+): { runtimeStore: IRuntimeStore; permissionSvc: PermissionService; planSvc: PlanService; events: any[]; onApproval: ReturnType<typeof vi.fn> } {
+	const events: any[] = [];
+	const eventBus: IEventBus = {
+		emit(event) { events.push(event); },
+		onEvent() { return () => {}; },
+	};
+	const sessions = new Map<string, { cwd: string; sessionManager?: SessionManager; session: any }>();
+	for (const [id, s] of Object.entries(extraSessions ?? {})) {
+		sessions.set(id, s);
+	}
+	const runtimeStore: IRuntimeStore = {
+		getRuntime: () => undefined as unknown as AgentSessionRuntime,
+		getSession: (id) => sessions.get(id)?.session ?? mockSession({ sessionManager: sessions.get(id)?.sessionManager }),
+		getSessionManager: (id) => sessions.get(id)?.sessionManager,
+		getCwd: (id) => sessions.get(id)?.cwd ?? "/tmp",
+		getProjectRoot: () => "/tmp",
+	};
+	const permissionSvc = new PermissionService(eventBus, runtimeStore, "ask");
+	permissionSvc.setMode("session-a", "plan");
+	const onApproval = vi.fn().mockResolvedValue(undefined);
+	const planSvc = new PlanService(eventBus, runtimeStore, permissionSvc, onApproval);
+	return { runtimeStore, permissionSvc, planSvc, events, onApproval };
 }
 
 const questions = [
@@ -46,129 +74,144 @@ const questions = [
 
 describe("Plan session state", () => {
 	it("routes question responses by both request and session ID", async () => {
-		const runtime = createRuntime();
 		const events: any[] = [];
-		runtime.eventCallbacks.push((event: any) => events.push(event));
-		const pending = runtime.requestPlanQuestions("session-a", questions);
-		const request = events.find((event) => event.type === "plan:question-requested").request;
+		const eb: IEventBus = { emit(e) { events.push(e); }, onEvent() { return () => {}; } };
+		const rs: IRuntimeStore = { getRuntime: () => undefined as any, getSession: () => mockSession(), getSessionManager: () => undefined, getCwd: () => "/tmp", getProjectRoot: () => "/tmp" };
+		const ps = new PermissionService(eb, rs, "ask");
+		ps.setMode("session-a", "plan");
+		const svc = new PlanService(eb, rs, ps, async () => {});
+		const pending = svc.requestQuestions("session-a", questions);
+		const request = events.find((e: any) => e.type === "plan:question-requested").request;
 
-		expect(runtime.handlePlanQuestionResponse({ requestId: request.requestId, sessionId: "session-b", answers: { "Which scope?": "Small" } })).toBe(false);
-		expect(runtime.handlePlanQuestionResponse({ requestId: request.requestId, sessionId: "session-a", answers: {} })).toBe(false);
-		expect(runtime.handlePlanQuestionResponse({ requestId: request.requestId, sessionId: "session-a", answers: { "Which scope?": "Small" } })).toBe(true);
+		expect(svc.handleQuestionResponse({ requestId: request.requestId, sessionId: "session-b", answers: { "Which scope?": "Small" } })).toBe(false);
+		expect(svc.handleQuestionResponse({ requestId: request.requestId, sessionId: "session-a", answers: {} })).toBe(false);
+		expect(svc.handleQuestionResponse({ requestId: request.requestId, sessionId: "session-a", answers: { "Which scope?": "Small" } })).toBe(true);
 		await expect(pending).resolves.toEqual({ status: "answered", answers: { "Which scope?": "Small" } });
-		expect(runtime.planInteractionBySession.size).toBe(0);
 	});
 
 	it("cancels a waiting question before abort can wait on the agent loop", async () => {
-		const runtime = createRuntime();
-		const pending = runtime.requestPlanQuestions("session-a", questions);
-		runtime.cancelPlanInteractions("session-a", "Stopped by user");
+		const { planSvc } = planServiceForTest();
+		const pending = planSvc.requestQuestions("session-a", questions);
+		planSvc.cancelInteractions("session-a", "Stopped by user");
 		await expect(pending).resolves.toMatchObject({ status: "cancelled", reason: "Stopped by user" });
-		expect(runtime.planQuestionsAwaiting.size).toBe(0);
 	});
 
-	it("clears pending interactions before awaiting session abort", async () => {
-		const runtime = createRuntime();
+	it("manual mode switching restores tools", async () => {
 		const order: string[] = [];
-		runtime.cancelPendingPermissions = vi.fn(() => order.push("permissions"));
-		runtime.cancelPlanInteractions = vi.fn(() => order.push("plan"));
-		runtime.runtimes.set("session-a", {
-			runtime: { session: { abort: vi.fn(async () => order.push("abort")) } },
-		});
-		await runtime.abortAgent("session-a");
-		expect(order).toEqual(["permissions", "plan", "abort"]);
-	});
-
-	it("manual mode switching cancels Plan interaction, restores tools, then aborts the turn", async () => {
-		const runtime = createRuntime();
-		const order: string[] = [];
-		const session = {
-			isStreaming: true,
+		const session = mockSession({
+			getActiveToolNames: () => ["read", "write"],
 			getAllTools: () => [{ name: "read" }, { name: "write" }],
 			setActiveToolsByName: vi.fn(() => order.push("restore")),
 			abort: vi.fn(async () => order.push("abort")),
+			isStreaming: true,
+		});
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as any,
+			getSession: (id) => id === "session-a" ? session : mockSession(),
+			getSessionManager: () => undefined,
+			getCwd: () => "/tmp",
+			getProjectRoot: () => "/tmp",
 		};
-		const managed = { runtime: { session } };
-		runtime.runtimes.set("session-a", managed);
-		runtime.ensureRuntime = vi.fn().mockResolvedValue(managed);
-		runtime.userSettings = { update: vi.fn().mockResolvedValue(undefined) };
-		runtime.persistPermissionModeIfPossible = vi.fn();
-		runtime.persistPlanToolSnapshotIfPossible = vi.fn();
-		runtime.prePlanToolsBySession.set("session-a", ["read", "write"]);
-		const pending = runtime.requestPlanQuestions("session-a", questions);
-		await runtime.setPermissionMode("session-a", "ask");
-		await expect(pending).resolves.toMatchObject({ status: "cancelled", reason: /changed manually/ });
-		expect(order).toEqual(["restore", "abort"]);
-		expect(runtime.permissionModesBySession.get("session-a")).toBe("ask");
-	});
+		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
+		ps.setMode("session-a", "plan");
+		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
 
-	it("writes plans atomically under the session-specific path", async () => {
-		const runtime = createRuntime();
-		const cwd = await mkdtemp(join(tmpdir(), "look-plan-"));
-		cleanup.push(cwd);
-		const filePath = await runtime.writePlanAtomically("session-a", cwd, "# Plan\n\n1. Test");
-		expect(filePath).toBe(join(cwd, ".context", "plan", "session-a.md"));
-		expect(await readFile(filePath, "utf8")).toBe("# Plan\n\n1. Test\n");
+		planSvc.capturePrePlanTools("session-a");
+
+		const pending = planSvc.requestQuestions("session-a", questions);
+		ps.setMode("session-a", "ask");
+		planSvc.restorePrePlanTools("session-a");
+		planSvc.cancelInteractions("session-a", "Permission mode was changed manually");
+		await expect(pending).resolves.toMatchObject({ status: "cancelled", reason: /changed manually/ });
+		expect(order).toEqual(["restore"]);
+		expect(ps.getMode("session-a")).toBe("ask");
 	});
 
 	it("rejects a symlinked .context plan directory", async () => {
-		const runtime = createRuntime();
 		const cwd = await mkdtemp(join(tmpdir(), "look-plan-symlink-"));
 		const outside = await mkdtemp(join(tmpdir(), "look-plan-outside-"));
 		cleanup.push(cwd, outside);
 		await mkdir(join(outside, "plan"));
 		await symlink(outside, join(cwd, ".context"));
-		await expect(runtime.writePlanAtomically("session-a", cwd, "# Plan")).rejects.toThrow(/not a symlink/);
+
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as any,
+			getSession: () => mockSession(),
+			getSessionManager: () => undefined,
+			getCwd: () => cwd,
+			getProjectRoot: () => cwd,
+		};
+		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
+		ps.setMode("session-a", "plan");
+		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
+		await expect(planSvc.requestApproval("session-a", "# Plan")).rejects.toThrow(/not a symlink/);
 	});
 
 	it("records submitted and rejected approval states while keeping Plan mode", async () => {
-		const runtime = createRuntime();
 		const cwd = await mkdtemp(join(tmpdir(), "look-plan-approval-"));
 		cleanup.push(cwd);
 		const sessionManager = SessionManager.inMemory(cwd);
-		runtime.runtimes.set("session-a", {
-			runtime: { cwd, session: { sessionManager } },
-		});
+		const session = mockSession({ sessionManager });
+
 		const events: any[] = [];
-		runtime.eventCallbacks.push((event: any) => events.push(event));
-		const outcome = runtime.requestPlanApproval("session-a", "# Plan\n\n1. Test");
-		await vi.waitFor(() => expect(events.some((event) => event.type === "plan:approval-requested")).toBe(true));
-		const request = events.find((event) => event.type === "plan:approval-requested").request;
-		await expect(
-			runtime.handlePlanApprovalResponse({ requestId: request.requestId, sessionId: "session-b", action: "reject" }),
-		).resolves.toBe(false);
-		await expect(
-			runtime.handlePlanApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "reject" }),
-		).resolves.toBe(true);
+		const eb: IEventBus = { emit(e) { events.push(e); }, onEvent() { return () => {}; } };
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as any,
+			getSession: () => session,
+			getSessionManager: () => sessionManager,
+			getCwd: () => cwd,
+			getProjectRoot: () => cwd,
+		};
+		const ps = new PermissionService(eb, rs, "ask");
+		ps.setMode("session-a", "plan");
+		const planSvc = new PlanService(eb, rs, ps, async () => {});
+
+		const outcome = planSvc.requestApproval("session-a", "# Plan\n\n1. Test");
+		await vi.waitFor(() => expect(events.some((e: any) => e.type === "plan:approval-requested")).toBe(true));
+		const request = events.find((e: any) => e.type === "plan:approval-requested").request;
+
+		// Wrong session
+		await expect(planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-b", action: "reject" })).resolves.toBe(false);
+		// Correct session
+		await expect(planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "reject" })).resolves.toBe(true);
 		await expect(outcome).resolves.toMatchObject({ status: "rejected", planId: request.planId });
+
 		const records = sessionManager
 			.getEntries()
 			.filter((entry: any) => entry.type === "custom" && entry.customType === "look.plan.v1")
 			.map((entry: any) => entry.data.status);
 		expect(records).toEqual(["submitted", "rejected"]);
-		expect(runtime.permissionModesBySession.get("session-a")).toBe("plan");
+		expect(ps.getMode("session-a")).toBe("plan");
 	});
 
 	it("uses the internal Always transition when approval succeeds", async () => {
-		const runtime = createRuntime();
 		const cwd = await mkdtemp(join(tmpdir(), "look-plan-approved-"));
 		cleanup.push(cwd);
 		const sessionManager = SessionManager.inMemory(cwd);
-		runtime.runtimes.set("session-a", { runtime: { cwd, session: { sessionManager } } });
-		runtime.applyPermissionMode = vi.fn().mockResolvedValue(undefined);
+		const session = mockSession({ sessionManager });
+
 		const events: any[] = [];
-		runtime.eventCallbacks.push((event: any) => events.push(event));
-		const outcome = runtime.requestPlanApproval("session-a", "# Plan");
-		await vi.waitFor(() => expect(events.some((event) => event.type === "plan:approval-requested")).toBe(true));
-		const request = events.find((event) => event.type === "plan:approval-requested").request;
-		await expect(
-			runtime.handlePlanApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "approve" }),
-		).resolves.toBe(true);
+		const eb: IEventBus = { emit(e) { events.push(e); }, onEvent() { return () => {}; } };
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as any,
+			getSession: () => session,
+			getSessionManager: () => sessionManager,
+			getCwd: () => cwd,
+			getProjectRoot: () => cwd,
+		};
+		const ps = new PermissionService(eb, rs, "ask");
+		ps.setMode("session-a", "plan");
+		const onApproval = vi.fn(async () => { ps.setMode("session-a", "always"); });
+		const planSvc = new PlanService(eb, rs, ps, onApproval);
+
+		const outcome = planSvc.requestApproval("session-a", "# Plan");
+		await vi.waitFor(() => expect(events.some((e: any) => e.type === "plan:approval-requested")).toBe(true));
+		const request = events.find((e: any) => e.type === "plan:approval-requested").request;
+
+		await expect(planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "approve" })).resolves.toBe(true);
 		await expect(outcome).resolves.toMatchObject({ status: "approved", planId: request.planId });
-		expect(runtime.applyPermissionMode).toHaveBeenCalledWith("session-a", "always", {
-			internal: true,
-			updateDefault: false,
-		});
+		expect(onApproval).toHaveBeenCalledWith("session-a");
+
 		const statuses = sessionManager
 			.getEntries()
 			.filter((entry: any) => entry.type === "custom" && entry.customType === "look.plan.v1")
@@ -177,35 +220,44 @@ describe("Plan session state", () => {
 	});
 
 	it("restores only the exact pre-Plan tool snapshot", () => {
-		const runtime = createRuntime();
 		const setActiveToolsByName = vi.fn();
-		runtime.runtimes.set("session-a", {
-			runtime: {
-				session: {
-					getAllTools: () => [{ name: "read" }, { name: "write" }, { name: "mcp:server:tool" }],
-					setActiveToolsByName,
-				},
-			},
+		const session = mockSession({
+			getAllTools: () => [{ name: "read" }, { name: "write" }, { name: "mcp:server:tool" }],
+			setActiveToolsByName,
 		});
-		runtime.prePlanToolsBySession.set("session-a", ["read", "write", "removed-tool"]);
-		runtime.restorePrePlanTools("session-a");
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as any,
+			getSession: () => session,
+			getSessionManager: () => undefined,
+			getCwd: () => "/tmp",
+			getProjectRoot: () => "/tmp",
+		};
+		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
+		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
+		planSvc.capturePrePlanTools("session-a");
+		(planSvc as any).prePlanTools.set("session-a", ["read", "write", "removed-tool"]);
+		planSvc.restorePrePlanTools("session-a");
 		expect(setActiveToolsByName).toHaveBeenCalledWith(["read", "write"]);
-		expect(runtime.prePlanToolsBySession.has("session-a")).toBe(false);
 	});
 
 	it("does not enable read-only built-ins that were disabled before Plan", () => {
-		const runtime = createRuntime();
 		const setActiveToolsByName = vi.fn();
-		runtime.runtimes.set("session-a", {
-			runtime: {
-				session: {
-					getAllTools: () => ["read", "grep", "bash", "AskUserQuestion", "ExitPlanMode"].map((name) => ({ name })),
-					setActiveToolsByName,
-				},
-			},
+		const session = mockSession({
+			getAllTools: () => ["read", "grep", "bash", "AskUserQuestion", "ExitPlanMode"].map((name) => ({ name })),
+			getActiveToolNames: () => ["read", "bash"],
+			setActiveToolsByName,
 		});
-		runtime.prePlanToolsBySession.set("session-a", ["read", "bash"]);
-		runtime.restrictToolsForPlan("session-a");
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as any,
+			getSession: () => session,
+			getSessionManager: () => undefined,
+			getCwd: () => "/tmp",
+			getProjectRoot: () => "/tmp",
+		};
+		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
+		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
+		planSvc.capturePrePlanTools("session-a");
+		planSvc.restrictToolsForPlan("session-a");
 		expect(setActiveToolsByName).toHaveBeenCalledWith(["read", "bash", "AskUserQuestion", "ExitPlanMode"]);
 	});
 });

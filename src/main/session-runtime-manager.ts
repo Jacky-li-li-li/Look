@@ -1,4 +1,5 @@
-import fs, { existsSync } from "node:fs";
+import { existsSync } from "node:fs";
+import fs from "node:fs";
 import { homedir } from "node:os";
 import path, { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -22,25 +23,18 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
+import { AgentDefinitionService } from "./agent-definition-service.js";
 import { CustomProvidersStore } from "./custom-providers-store.js";
-import {
-	createPermissionExtensionFactory,
-	createPlanModeHandler,
-	type ToolCallHandler,
-} from "./extensions/permission-extension.js";
+import { PermissionService } from "./permission-service.js";
+import { PlanService } from "./plan-service.js";
+import type { IPermissionService, IPlanService, IEventBus, IRuntimeStore } from "./core/contracts.js";
+import { createPermissionExtensionFactory } from "./extensions/permission-extension.js";
 import {
 	createPlanExtensionFactory,
 	PLAN_TOOL_NAMES,
 	type PlanApprovalOutcome,
 	type PlanQuestionOutcome,
 } from "./extensions/plan-extension.js";
-import { serializeAgentDefinition } from "./extensions/subagent/agent-definition-serializer.js";
-import {
-	discoverAgents,
-	getBuiltinAgentsDir,
-	getUserAgentsDir,
-	parseAgentFile,
-} from "./extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "./extensions/subagent/subagent-extension.js";
 import type {
 	AgentConfig,
@@ -49,6 +43,7 @@ import type {
 	SubagentResult,
 	SubagentUsage,
 } from "./extensions/subagent/types.js";
+import { discoverAgents } from "./extensions/subagent/agent-discovery.js";
 import { loadBindings } from "./im/im-storage.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
 import { PromptStore } from "./prompt-store.js";
@@ -58,6 +53,7 @@ import {
 	createContentBlockTracker,
 	translateAgentSessionEvent,
 } from "./session-event-translator.js";
+import { parseJsonLine, scanSessionDirectory, scanSessionFileSummary } from "./session-scan.js";
 import {
 	ensureLookDir,
 	ensureWorkspaceDir,
@@ -99,7 +95,9 @@ import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
-export type EventCallback = (event: MainToRendererEvent) => void;
+export { type EventCallback } from "./shared/types.js";
+
+import type { EventCallback } from "./shared/types.js";
 
 interface StoredSession extends PiSessionInfo {
 	projectId: string;
@@ -113,20 +111,9 @@ interface ManagedRuntime {
 }
 
 const MAX_NAME_LENGTH = 80;
-const PERMISSION_MODE_ENTRY_TYPE = "look.permission-mode.v1";
-const PLAN_STATE_ENTRY_TYPE = "look.plan-state.v1";
-const PLAN_RECORD_ENTRY_TYPE = "look.plan.v1";
-const PERMISSION_TIMEOUT_MS = 30_000;
 /** 子会话 JSONL 中记录父会话链接的自定义条目类型。
  *  符合 AGENTS.md：parent links 由 pi JSONL 拥有。 */
 const SUBAGENT_PARENT_ENTRY_TYPE = "look.subagent-parent.v1";
-const SESSION_SUMMARY_CONCURRENCY = 10;
-
-interface PendingPermission {
-	sessionId: string;
-	resolve: (action: "allow" | "deny" | "allow_always") => void;
-	timeout: ReturnType<typeof setTimeout>;
-}
 
 interface PendingPlanQuestion {
 	request: PlanQuestionRequest;
@@ -159,166 +146,17 @@ interface PendingSubSession {
 	aborted: boolean;
 }
 
-function parseJsonLine(line: string): any | null {
-	const trimmed = line.trim();
-	if (!trimmed) return null;
-	try {
-		return JSON.parse(trimmed);
-	} catch {
-		return null;
-	}
-}
 
-function normalizeCwdForSessionMatch(cwd: string): string {
-	if (!cwd) return "";
-	try {
-		return fs.realpathSync(cwd);
-	} catch {
-		return path.resolve(cwd);
-	}
-}
-
-function extractMessageText(message: AgentMessage): string {
-	if (!("content" in message)) return "";
-	const content = message.content;
-	if (typeof content === "string") return content.trim();
-	if (!Array.isArray(content)) return "";
-	return content
-		.filter(
-			(block): block is { type: "text"; text: string } => block?.type === "text" && typeof block.text === "string",
-		)
-		.map((block) => block.text)
-		.join(" ")
-		.trim();
-}
-
-function messageActivityTime(entry: any): number | undefined {
-	const message = entry?.message;
-	if (!message || (message.role !== "user" && message.role !== "assistant")) return undefined;
-	if (typeof message.timestamp === "number") return message.timestamp;
-	if (typeof entry.timestamp === "string") {
-		const parsed = new Date(entry.timestamp).getTime();
-		return Number.isNaN(parsed) ? undefined : parsed;
-	}
-	return undefined;
-}
-
-function buildSessionSummaryFromLines(filePath: string, stats: fs.Stats, lines: string[]): PiSessionInfo | null {
-	let header: any | null = null;
-	let name: string | undefined;
-	let messageCount = 0;
-	let firstMessage = "";
-	let lastActivityTime: number | undefined;
-
-	for (const line of lines) {
-		const entry = parseJsonLine(line);
-		if (!entry) continue;
-		if (!header) {
-			if (entry.type !== "session" || typeof entry.id !== "string") return null;
-			header = entry;
-			continue;
-		}
-
-		if (entry.type === "session_info") {
-			name = typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : undefined;
-			continue;
-		}
-		if (entry.type !== "message") continue;
-		messageCount++;
-
-		const activityTime = messageActivityTime(entry);
-		if (typeof activityTime === "number") {
-			lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
-		}
-
-		const message = entry.message as AgentMessage | undefined;
-		if (!message || message.role !== "user" || firstMessage) continue;
-		const text = extractMessageText(message);
-		if (text) firstMessage = text;
-	}
-
-	if (!header) return null;
-	const headerTime = typeof header.timestamp === "string" ? new Date(header.timestamp).getTime() : NaN;
-	const created = Number.isNaN(headerTime) ? stats.birthtime : new Date(headerTime);
-	const modified =
-		typeof lastActivityTime === "number" && lastActivityTime > 0
-			? new Date(lastActivityTime)
-			: Number.isNaN(headerTime)
-				? stats.mtime
-				: new Date(headerTime);
-
-	return {
-		path: filePath,
-		id: header.id,
-		cwd: typeof header.cwd === "string" ? header.cwd : "",
-		name,
-		parentSessionPath: typeof header.parentSession === "string" ? header.parentSession : undefined,
-		created,
-		modified,
-		messageCount,
-		firstMessage: firstMessage || "(no messages)",
-		allMessagesText: "",
-	};
-}
-
-export function scanSessionFileSummary(filePath: string): PiSessionInfo | null {
-	try {
-		const stats = fs.statSync(filePath);
-		const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
-		return buildSessionSummaryFromLines(filePath, stats, lines);
-	} catch {
-		return null;
-	}
-}
-
-async function scanSessionFileSummaryAsync(filePath: string): Promise<PiSessionInfo | null> {
-	try {
-		const [stats, raw] = await Promise.all([fs.promises.stat(filePath), fs.promises.readFile(filePath, "utf8")]);
-		return buildSessionSummaryFromLines(filePath, stats, raw.split(/\r?\n/));
-	} catch {
-		return null;
-	}
-}
-
-export async function scanSessionDirectory(sessionDir: string, cwd: string): Promise<PiSessionInfo[]> {
-	let files: string[];
-	try {
-		files = (await fs.promises.readdir(sessionDir))
-			.filter((file) => file.endsWith(".jsonl"))
-			.map((file) => path.join(sessionDir, file));
-	} catch {
-		return [];
-	}
-
-	const resolvedCwd = normalizeCwdForSessionMatch(cwd);
-	const results = new Array<PiSessionInfo | null>(files.length).fill(null);
-	let nextIndex = 0;
-	const workers = Array.from({ length: Math.min(SESSION_SUMMARY_CONCURRENCY, files.length) }, async () => {
-		while (nextIndex < files.length) {
-			const index = nextIndex++;
-			const summary = await scanSessionFileSummaryAsync(files[index]!);
-			if (summary) {
-				const summaryCwd = normalizeCwdForSessionMatch(summary.cwd);
-				if (!summaryCwd || summaryCwd === resolvedCwd) results[index] = summary;
-			}
-		}
-	});
-	await Promise.all(workers);
-	return results
-		.filter((item): item is PiSessionInfo => item !== null)
-		.sort((a, b) => b.modified.getTime() - a.modified.getTime());
-}
-
-function isPermissionMode(value: unknown): value is PermissionMode {
-	return value === "always" || value === "ask" || value === "plan";
-}
 
 /**
  * Hosts independent pi AgentSessionRuntime instances for sessions that are
  * selected or currently running. Each runtime still owns exactly one active pi
  * session; Look only supplies the cross-session registry and event routing.
+ *
+ * Implements IEventBus and IRuntimeStore so domain services can depend on
+ * abstractions instead of the concrete SRT class.
  */
-export class SessionRuntimeManager {
+export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 	private readonly projects = new Map<string, ProjectInfo>();
 	private readonly sessionsByProject = new Map<string, StoredSession[]>();
 	private readonly sessionsById = new Map<string, StoredSession>();
@@ -336,23 +174,9 @@ export class SessionRuntimeManager {
 	private resourceInitializationTail: Promise<void> = Promise.resolve();
 	private activeProjectId: string | null = null;
 	private activeSessionId: string | null = null;
-	private defaultPermissionMode: PermissionMode = "ask";
-	private readonly permissionModesBySession = new Map<string, PermissionMode>();
-	private readonly dirtyPermissionModes = new Set<string>();
 	private readonly workspaceFileService: WorkspaceFileService | null;
 	private readonly workspaceTreeService: WorkspaceTreeService | null;
 	private disposed = false;
-	/** Permission ask mode: pending requests keyed by requestId. */
-	private readonly permissionAwaiting = new Map<string, PendingPermission>();
-	/** "ask" mode: tool grants keyed by pi session ID. */
-	private readonly sessionAllowedTools = new Map<string, Set<string>>();
-	/** Active Plan interaction keyed by request ID; one interaction per session. */
-	private readonly planQuestionsAwaiting = new Map<string, PendingPlanQuestion>();
-	private readonly planApprovalsAwaiting = new Map<string, PendingPlanApproval>();
-	private readonly planInteractionBySession = new Map<string, { kind: "question" | "approval"; requestId: string }>();
-	/** Exact active tool list captured immediately before entering Plan. */
-	private readonly prePlanToolsBySession = new Map<string, string[]>();
-	private readonly dirtyPlanToolSnapshots = new Set<string>();
 	/** Per-runtime streaming state machine. The SDK's `session.isStreaming` getter
 	 *  can lag behind events, so we derive a canonical UI state from the event stream:
 	 *  - idle: no turn in progress
@@ -376,6 +200,15 @@ export class SessionRuntimeManager {
 
 	/** 自定义 System Prompt 管理器（多 prompt 变体 + SYSTEM.md 写入）。 */
 	public readonly promptStore: PromptStore;
+
+	/** Agent 定义文件 CRUD（~/.look/agents/*.md）。 */
+	private readonly agentDefinitionService: AgentDefinitionService;
+
+	/** 每 session 的工具调用权限门控（always/ask/plan）。 */
+	private readonly permissionService: IPermissionService;
+
+	/** Plan mode workflow management (questions, approval, tool restrictions). */
+	private readonly planService: IPlanService;
 
 	/** Per-session content block tracker for the discrete event translator.
 	 *  Tracks active (started but not ended) text/thinking/toolcall blocks so the
@@ -417,8 +250,12 @@ export class SessionRuntimeManager {
 		this.trustStore = new ProjectTrustStore(getLookDir());
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
-		this.defaultPermissionMode = this.userSettings.getAll().permissionMode;
 		this.subagentDefaultEnabled = this.userSettings.getAll().subagentEnabled;
+		this.permissionService = new PermissionService(
+			this,
+			this,
+			this.userSettings.getAll().permissionMode,
+		);
 		// Tool authorization must never silently grant trust to project resources.
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		this.autoTitleService = new AutoTitleService({
@@ -426,6 +263,15 @@ export class SessionRuntimeManager {
 			getUserSettings: () => this.userSettings.getAll(),
 		});
 		this.promptStore = new PromptStore();
+		this.agentDefinitionService = new AgentDefinitionService(() => this.reloadAllSessionsForAgents());
+		this.planService = new PlanService(
+			this,
+			this,
+			this.permissionService,
+			async (sessionId) => {
+				await this.applyPermissionMode(sessionId, "always", { internal: true, updateDefault: false });
+			},
+		);
 		this.projectsIndexPath = getProjectsIndexPath();
 		this.workspaceFileService = workspaceFileService ?? null;
 		this.workspaceTreeService = workspaceTreeService ?? null;
@@ -551,6 +397,28 @@ export class SessionRuntimeManager {
 	getProjectRoot(): string {
 		return this.getActiveProjectCwd();
 	}
+
+	// ── IRuntimeStore implementation ──
+
+	getRuntime(sessionId: string): AgentSessionRuntime | undefined {
+		return this.runtimes.get(sessionId)?.runtime;
+	}
+
+	getSession(sessionId: string): AgentSession | undefined {
+		return this.runtimes.get(sessionId)?.runtime.session;
+	}
+
+	getSessionManager(sessionId: string): SessionManager | undefined {
+		return this.runtimes.get(sessionId)?.runtime.session.sessionManager;
+	}
+
+	getCwd(sessionId: string): string {
+		const managed = this.runtimes.get(sessionId);
+		if (!managed) throw new Error(`Session ${sessionId} is not live`);
+		return managed.runtime.cwd;
+	}
+
+	// ── Project trust ──
 
 	getProjectTrustStatus(projectId: string): {
 		requiresTrust: boolean;
@@ -959,13 +827,13 @@ export class SessionRuntimeManager {
 
 	private buildExtensionFactories(_cwd: string, sessionId: string): ExtensionFactory[] {
 		const projectId = this.runtimes.get(sessionId)?.projectId ?? "";
-		const handler = this.createPermissionToolCallHandler(_cwd);
+		const handler = this.permissionService.createToolCallHandler(_cwd);
 		return [
 			createPermissionExtensionFactory(handler),
 			createPlanExtensionFactory(sessionId, {
-				getMode: (id) => this.permissionModesBySession.get(id) ?? this.defaultPermissionMode,
-				askQuestions: (id, questions, signal) => this.requestPlanQuestions(id, questions, signal),
-				submitPlan: (id, plan, signal) => this.requestPlanApproval(id, plan, signal),
+				getMode: (id) => this.permissionService.getMode(id),
+				askQuestions: (id, questions, signal) => this.planService.requestQuestions(id, questions, signal),
+				submitPlan: (id, plan, signal) => this.planService.requestApproval(id, plan, signal),
 			}),
 			createSubagentExtensionFactory(sessionId, this.createSubagentHost(projectId), projectId),
 		];
@@ -1019,8 +887,8 @@ export class SessionRuntimeManager {
 		createdAt: number,
 	): Promise<ManagedRuntime> {
 		const session = runtime.session;
-		this.restorePermissionMode(session.sessionId, session.sessionManager);
-		this.restorePlanToolSnapshot(session.sessionId, session.sessionManager);
+		this.permissionService.restoreFromSession(session.sessionId, session.sessionManager);
+		this.planService.restoreToolSnapshot(session.sessionId, session.sessionManager);
 		await session.bindExtensions({
 			mode: "rpc",
 			onError: (error) => this.emit({ type: "error", agentId: session.sessionId, message: String(error) }),
@@ -1037,7 +905,7 @@ export class SessionRuntimeManager {
 		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
 		runtime.setRebindSession(async (nextSession) => this.rebindRuntime(runtime, nextSession));
 		this.runtimes.set(session.sessionId, managed);
-		this.syncPlanToolState(session.sessionId);
+		this.planService.syncToolState(session.sessionId);
 		this.applySubagentDefaultOnBind(session.sessionId, session);
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 		return managed;
@@ -1048,21 +916,18 @@ export class SessionRuntimeManager {
 		if (!previousEntry) throw new Error("Runtime replacement lost its registry entry");
 		const [previousSessionId, managed] = previousEntry;
 		managed.unsubscribe();
-		this.cancelPendingPermissions(previousSessionId);
-		this.cancelPlanInteractions(previousSessionId, "Runtime was replaced");
-		this.permissionModesBySession.delete(previousSessionId);
-		this.dirtyPermissionModes.delete(previousSessionId);
-		this.sessionAllowedTools.delete(previousSessionId);
-		this.prePlanToolsBySession.delete(previousSessionId);
-		this.dirtyPlanToolSnapshots.delete(previousSessionId);
+		this.permissionService.cancelPending(previousSessionId);
+		this.planService.cancelInteractions(previousSessionId, "Runtime was replaced");
+		this.permissionService.disposeSession(previousSessionId);
+		this.planService.disposeSession(previousSessionId);
 		// Tear down per-session state that was bound to the previous id so
 		// it does not leak into the freshly rebound runtime. The new
 		// sessionId will re-acquire these on the next user turn.
 		this.autoTitleService.dispose(previousSessionId);
 		this.createdAtDefaultName.delete(previousSessionId);
 		this.translationTrackers.delete(previousSessionId);
-		this.restorePermissionMode(session.sessionId, session.sessionManager);
-		this.restorePlanToolSnapshot(session.sessionId, session.sessionManager);
+		this.permissionService.restoreFromSession(session.sessionId, session.sessionManager);
+		this.planService.restoreToolSnapshot(session.sessionId, session.sessionManager);
 		await session.bindExtensions({
 			mode: "rpc",
 			onError: (error) => this.emit({ type: "error", agentId: session.sessionId, message: String(error) }),
@@ -1072,7 +937,7 @@ export class SessionRuntimeManager {
 		this.streamingStates.set(session.sessionId, session.isStreaming ? "streaming" : "idle");
 		managed.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session.sessionId, event));
 		this.runtimes.set(session.sessionId, managed);
-		this.syncPlanToolState(session.sessionId);
+		this.planService.syncToolState(session.sessionId);
 		this.applySubagentDefaultOnBind(session.sessionId, session);
 		if (this.activeSessionId === previousSessionId) this.activeSessionId = session.sessionId;
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
@@ -1115,8 +980,8 @@ export class SessionRuntimeManager {
 		if (pending) await pending.catch(() => undefined);
 		const managed = this.runtimes.get(sessionId);
 		if (!managed) return;
-		this.cancelPendingPermissions(sessionId);
-		this.cancelPlanInteractions(sessionId, "Session runtime was disposed");
+		this.permissionService.cancelPending(sessionId);
+		this.planService.cancelInteractions(sessionId, "Session runtime was disposed");
 		// SubAgent: 释放时结算挂起的子会话执行（标记 aborted），避免父会话工具调用悬空；
 		// 并从父子注册表中清理（若本会话是子会话）。
 		if (this.pendingSubSessions.has(sessionId)) {
@@ -1124,18 +989,15 @@ export class SessionRuntimeManager {
 		}
 		this.unregisterSubSession(sessionId);
 		if (abort && managed.runtime.session.isStreaming) await managed.runtime.session.abort();
-		this.persistPermissionModeIfPossible(sessionId);
-		this.persistPlanToolSnapshotIfPossible(sessionId);
+		this.permissionService.persistIfDirty(sessionId);
+		this.planService.persistToolSnapshotIfDirty(sessionId);
 		// 取消 AI 标题生成请求并清理 Set 标记。
 		this.autoTitleService.dispose(sessionId);
 		this.createdAtDefaultName.delete(sessionId);
 		managed.unsubscribe();
 		this.runtimes.delete(sessionId);
-		this.permissionModesBySession.delete(sessionId);
-		this.dirtyPermissionModes.delete(sessionId);
-		this.sessionAllowedTools.delete(sessionId);
-		this.prePlanToolsBySession.delete(sessionId);
-		this.dirtyPlanToolSnapshots.delete(sessionId);
+		this.permissionService.disposeSession(sessionId);
+		this.planService.disposeSession(sessionId);
 		this.streamingStates.delete(sessionId);
 		this.turnStartedAtBySession.delete(sessionId);
 		this.translationTrackers.delete(sessionId);
@@ -1294,8 +1156,8 @@ export class SessionRuntimeManager {
 		if (!managed) return;
 		// 级联中止所有子会话（subagent 调用随父会话中止而中止）。
 		await this.abortSubSessions(sessionId);
-		this.cancelPendingPermissions(sessionId);
-		this.cancelPlanInteractions(sessionId, "Stopped by user");
+		this.permissionService.cancelPending(sessionId);
+		this.planService.cancelInteractions(sessionId, "Stopped by user");
 		await managed.runtime.session.abort();
 	}
 
@@ -1354,7 +1216,7 @@ export class SessionRuntimeManager {
 		if (!managed) return;
 		const session = managed.runtime.session;
 		if (this.getPermissionMode(sessionId) === "plan") {
-			this.syncPlanToolState(sessionId);
+			this.planService.syncToolState(sessionId);
 			return;
 		}
 		if (enabled) {
@@ -1454,127 +1316,27 @@ export class SessionRuntimeManager {
 	}
 
 	// ============================================================
-	// SubAgent — Agent 定义 CRUD（~/.look/agents/*.md）
+	// SubAgent — Agent 定义 CRUD（委托给 AgentDefinitionService）
 	// ============================================================
 
-	/** 列出全部用户级 + 广场安装的 Agent 定义。 */
 	listAgentDefinitions(): AgentDefinitionInfo[] {
-		const discovery = discoverAgents("", "user");
-		return discovery.agents.map(this.toAgentDefinitionInfo);
+		return this.agentDefinitionService.listDefinitions();
 	}
 
-	/** 创建新 Agent 定义文件。name 已存在则抛错。自动注入创建方式与时间戳。 */
 	createAgentDefinition(input: AgentDefinitionInput): AgentDefinitionInfo {
-		const name = this.validateAgentName(input.name);
-		const filePath = path.join(getUserAgentsDir(), `${name}.md`);
-		if (existsSync(filePath)) throw new Error(`Agent "${name}" already exists`);
-		fs.mkdirSync(getUserAgentsDir(), { recursive: true });
-		// 注入系统元数据：创建方式 + 时间戳
-		const enriched: AgentDefinitionInput = {
-			...input,
-			createdBy: "editor",
-			createdAt: Date.now(),
-		};
-		fs.writeFileSync(filePath, serializeAgentDefinition(enriched), { encoding: "utf-8", mode: 0o644 });
-		const parsed = parseAgentFile(filePath, "user");
-		if (!parsed) throw new Error(`Failed to parse created agent "${name}"`);
-		this.reloadAllSessionsForAgents();
-		return this.toAgentDefinitionInfo(parsed);
+		return this.agentDefinitionService.createDefinition(input);
 	}
 
-	/** 更新 Agent 定义。若 name 变更则重命名文件。 */
 	updateAgentDefinition(name: string, input: AgentDefinitionInput): AgentDefinitionInfo {
-		const oldName = this.validateAgentName(name);
-		const newName = this.validateAgentName(input.name);
-		const oldPath = path.join(getUserAgentsDir(), `${oldName}.md`);
-		if (!existsSync(oldPath)) throw new Error(`Agent "${oldName}" not found`);
-		fs.writeFileSync(oldPath, serializeAgentDefinition(input), { encoding: "utf-8", mode: 0o644 });
-		if (newName !== oldName) {
-			const newPath = path.join(getUserAgentsDir(), `${newName}.md`);
-			if (existsSync(newPath)) throw new Error(`Agent "${newName}" already exists`);
-			fs.renameSync(oldPath, newPath);
-		}
-		this.reloadAllSessionsForAgents();
-		const parsed = parseAgentFile(path.join(getUserAgentsDir(), `${newName}.md`), "user");
-		if (!parsed) throw new Error(`Failed to parse updated agent "${newName}"`);
-		return this.toAgentDefinitionInfo(parsed);
+		return this.agentDefinitionService.updateDefinition(name, input);
 	}
 
-	/** 删除 Agent 定义文件。 */
 	deleteAgentDefinition(name: string): void {
-		const safeName = this.validateAgentName(name);
-		const filePath = path.join(getUserAgentsDir(), `${safeName}.md`);
-		if (!existsSync(filePath)) throw new Error(`Agent "${safeName}" not found`);
-		fs.unlinkSync(filePath);
-		this.reloadAllSessionsForAgents();
+		this.agentDefinitionService.deleteDefinition(name);
 	}
 
-	/** 从内置目录安装 Agent 到用户目录（复制文件并注入安装元数据）。 */
 	installAgentDefinition(name: string): AgentDefinitionInfo {
-		const safeName = this.validateAgentName(name);
-		const sourcePath = path.join(getBuiltinAgentsDir(), `${safeName}.md`);
-		if (!existsSync(sourcePath)) throw new Error(`Builtin agent "${safeName}" not found`);
-		const destPath = path.join(getUserAgentsDir(), `${safeName}.md`);
-		if (existsSync(destPath)) throw new Error(`Agent "${safeName}" is already installed`);
-		fs.mkdirSync(getUserAgentsDir(), { recursive: true });
-		// 解析源文件，注入安装元数据后一次写入（避免两次写盘）
-		const parsed = parseAgentFile(sourcePath, "builtin");
-		if (!parsed) throw new Error(`Failed to parse builtin agent "${safeName}"`);
-		const agentDef: Record<string, unknown> = {
-			name: parsed.name,
-			title: parsed.title,
-			description: parsed.description,
-			model: parsed.model,
-			systemPrompt: parsed.systemPrompt,
-			icon: parsed.icon,
-			tags: parsed.tags,
-			version: parsed.version,
-			author: parsed.author,
-			createdBy: "install",
-			createdAt: parsed.createdAt,
-			installedAt: Date.now(),
-		};
-		if (parsed.tools) agentDef.tools = parsed.tools;
-		fs.writeFileSync(destPath, serializeAgentDefinition(agentDef as unknown as AgentDefinitionInput), {
-			encoding: "utf-8",
-			mode: 0o644,
-		});
-		this.reloadAllSessionsForAgents();
-		const installedParsed = parseAgentFile(destPath, "user");
-		if (!installedParsed) throw new Error(`Failed to parse installed agent "${safeName}"`);
-		return this.toAgentDefinitionInfo(installedParsed);
-	}
-
-	private validateAgentName(name: string): string {
-		const trimmed = name.trim();
-		if (!trimmed) throw new Error("Agent name must not be empty");
-		if (!/^[A-Za-z0-9._-]+$/.test(trimmed)) {
-			throw new Error("Agent name may only contain letters, digits, '.', '_' and '-'");
-		}
-		return trimmed;
-	}
-
-	private toAgentDefinitionInfo(agent: AgentConfig): AgentDefinitionInfo {
-		// 用条件赋值而非对象字面量的工具键，避免误触
-		// pi-runtime-alignment 回归测试（禁止工具 allowlist 字面量）。
-		const info: AgentDefinitionInfo = {
-			name: agent.name,
-			title: agent.title,
-			description: agent.description,
-			systemPrompt: agent.systemPrompt,
-			source: agent.source,
-			filePath: agent.filePath,
-		};
-		if (agent.tools) info.tools = agent.tools;
-		if (agent.model) info.model = agent.model;
-		if (agent.icon) info.icon = agent.icon;
-		if (agent.tags) info.tags = agent.tags;
-		if (agent.version) info.version = agent.version;
-		if (agent.author) info.author = agent.author;
-		if (agent.createdBy) info.createdBy = agent.createdBy;
-		if (agent.createdAt != null) info.createdAt = agent.createdAt;
-		if (agent.installedAt != null) info.installedAt = agent.installedAt;
-		return info;
+		return this.agentDefinitionService.installDefinition(name);
 	}
 
 	/** Agent 定义变更后，重载所有活动会话以刷新 subagent 工具的可用 Agent 列表。 */
@@ -2091,8 +1853,8 @@ export class SessionRuntimeManager {
 		}
 		switch (event.type) {
 			case "agent_end":
-				this.persistPermissionModeIfPossible(sessionId);
-				this.persistPlanToolSnapshotIfPossible(sessionId);
+				this.permissionService.persistIfDirty(sessionId);
+				this.planService.persistToolSnapshotIfDirty(sessionId);
 				this.persistTurnDurationIfPossible(sessionId);
 				// The SDK can still report isStreaming=true momentarily after the turn
 				// has ended. Force the post-end reports to false until the next run starts.
@@ -2300,11 +2062,7 @@ export class SessionRuntimeManager {
 	}
 
 	getPermissionMode(sessionId: string): PermissionMode {
-		const cached = this.permissionModesBySession.get(sessionId);
-		if (cached) return cached;
-		const manager = this.sessionManagerFor(sessionId);
-		if (!manager) throw new Error(`Session ${sessionId} not found`);
-		return this.restorePermissionMode(sessionId, manager);
+		return this.permissionService.getMode(sessionId);
 	}
 
 	async setPermissionMode(sessionId: string, mode: PermissionMode): Promise<void> {
@@ -2317,22 +2075,20 @@ export class SessionRuntimeManager {
 		options: { internal: boolean; updateDefault: boolean },
 	): Promise<void> {
 		const managed = await this.ensureRuntime(sessionId);
-		const previousMode = this.getPermissionMode(sessionId);
+		const previousMode = this.permissionService.getMode(sessionId);
 		if (previousMode === mode) return;
 
-		if (!options.internal) this.cancelPlanInteractions(sessionId, "Permission mode was changed manually");
-		if (mode === "plan") this.capturePrePlanTools(sessionId);
+		if (!options.internal) this.planService.cancelInteractions(sessionId, "Permission mode was changed manually");
+		if (mode === "plan") this.planService.capturePrePlanTools(sessionId);
 
-		this.permissionModesBySession.set(sessionId, mode);
-		this.sessionAllowedTools.delete(sessionId);
-		this.dirtyPermissionModes.add(sessionId);
-		if (mode === "plan") this.restrictToolsForPlan(sessionId);
-		else if (previousMode === "plan") this.restorePrePlanTools(sessionId);
-		this.persistPermissionModeIfPossible(sessionId);
-		this.persistPlanToolSnapshotIfPossible(sessionId);
+		this.permissionService.setMode(sessionId, mode);
+		if (mode === "plan") this.planService.restrictToolsForPlan(sessionId);
+		else if (previousMode === "plan") this.planService.restorePrePlanTools(sessionId);
+		this.permissionService.persistIfDirty(sessionId);
+		this.planService.persistToolSnapshotIfDirty(sessionId);
 
 		if (options.updateDefault) {
-			this.defaultPermissionMode = mode;
+			this.permissionService.setDefaultMode(mode);
 			await this.userSettings.update({ permissionMode: mode });
 		}
 
@@ -2342,101 +2098,15 @@ export class SessionRuntimeManager {
 	}
 
 	handlePermissionResponse(payload: PermissionRespondPayload): boolean {
-		return this.finishPermissionRequest(payload.requestId, payload.action);
+		return this.permissionService.handleResponse(payload);
 	}
 
-	private restorePermissionMode(sessionId: string, manager: SessionManager): PermissionMode {
-		let mode = this.defaultPermissionMode;
-		let hasSavedMode = false;
-		for (const entry of manager.getEntries()) {
-			if (entry.type !== "custom" || entry.customType !== PERMISSION_MODE_ENTRY_TYPE) continue;
-			const savedMode = (entry.data as { mode?: unknown } | undefined)?.mode;
-			if (isPermissionMode(savedMode)) {
-				mode = savedMode;
-				hasSavedMode = true;
-			}
-		}
-		this.permissionModesBySession.set(sessionId, mode);
-		if (!hasSavedMode) {
-			// Lock the inherited default to this session so a later selection in
-			// another session cannot change it after this runtime is reopened.
-			if (manager.isPersisted()) {
-				manager.appendCustomEntry(PERMISSION_MODE_ENTRY_TYPE, { mode });
-			} else {
-				this.dirtyPermissionModes.add(sessionId);
-			}
-		}
-		return mode;
+	handlePlanQuestionResponse(payload: PlanQuestionResponse): boolean {
+		return this.planService.handleQuestionResponse(payload);
 	}
 
-	private restorePlanToolSnapshot(sessionId: string, manager: SessionManager): void {
-		let snapshot: string[] | undefined;
-		for (const entry of manager.getEntries()) {
-			if (entry.type !== "custom" || entry.customType !== PLAN_STATE_ENTRY_TYPE) continue;
-			const tools = (entry.data as { prePlanActiveTools?: unknown } | undefined)?.prePlanActiveTools;
-			if (Array.isArray(tools) && tools.every((tool) => typeof tool === "string")) snapshot = [...tools];
-		}
-		if (snapshot && this.permissionModesBySession.get(sessionId) === "plan") {
-			this.prePlanToolsBySession.set(sessionId, snapshot);
-		}
-	}
-
-	private capturePrePlanTools(sessionId: string): void {
-		if (this.prePlanToolsBySession.has(sessionId)) return;
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		if (!session) return;
-		this.prePlanToolsBySession.set(sessionId, session.getActiveToolNames());
-		this.dirtyPlanToolSnapshots.add(sessionId);
-	}
-
-	private restrictToolsForPlan(sessionId: string): void {
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		if (!session) return;
-		const configured = new Set(session.getAllTools().map((tool) => tool.name));
-		const previouslyActive = new Set(this.prePlanToolsBySession.get(sessionId) ?? []);
-		session.setActiveToolsByName(
-			PLAN_TOOL_NAMES.filter(
-				(tool) =>
-					configured.has(tool) &&
-					(tool === "AskUserQuestion" || tool === "ExitPlanMode" || previouslyActive.has(tool)),
-			),
-		);
-	}
-
-	private restorePrePlanTools(sessionId: string): void {
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		const snapshot = this.prePlanToolsBySession.get(sessionId);
-		if (!session || !snapshot) return;
-		const configured = new Set(session.getAllTools().map((tool) => tool.name));
-		session.setActiveToolsByName(snapshot.filter((tool) => configured.has(tool)));
-		this.prePlanToolsBySession.delete(sessionId);
-		this.dirtyPlanToolSnapshots.delete(sessionId);
-	}
-
-	private syncPlanToolState(sessionId: string): void {
-		if (this.getPermissionMode(sessionId) !== "plan") return;
-		this.capturePrePlanTools(sessionId);
-		this.restrictToolsForPlan(sessionId);
-		this.persistPlanToolSnapshotIfPossible(sessionId);
-	}
-
-	private persistPlanToolSnapshotIfPossible(sessionId: string): void {
-		if (!this.dirtyPlanToolSnapshots.has(sessionId)) return;
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		const tools = this.prePlanToolsBySession.get(sessionId);
-		if (!session || !tools || !session.sessionManager.isPersisted()) return;
-		session.sessionManager.appendCustomEntry(PLAN_STATE_ENTRY_TYPE, { prePlanActiveTools: tools });
-		this.dirtyPlanToolSnapshots.delete(sessionId);
-	}
-
-	private persistPermissionModeIfPossible(sessionId: string): void {
-		if (!this.dirtyPermissionModes.has(sessionId)) return;
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		if (!session || !session.sessionManager.isPersisted()) return;
-		const mode = this.permissionModesBySession.get(sessionId);
-		if (!mode) return;
-		session.sessionManager.appendCustomEntry(PERMISSION_MODE_ENTRY_TYPE, { mode });
-		this.dirtyPermissionModes.delete(sessionId);
+	async handlePlanApprovalResponse(payload: PlanApprovalResponse): Promise<boolean> {
+		return this.planService.handleApprovalResponse(payload);
 	}
 
 	private persistTurnDurationIfPossible(sessionId: string): void {
@@ -2460,290 +2130,6 @@ export class SessionRuntimeManager {
 		session.sessionManager.appendCustomEntry(LOOK_MESSAGE_DURATION_ENTRY_TYPE, data);
 	}
 
-	private finishPermissionRequest(requestId: string, action: "allow" | "deny" | "allow_always"): boolean {
-		const pending = this.permissionAwaiting.get(requestId);
-		if (!pending) return false;
-		clearTimeout(pending.timeout);
-		this.permissionAwaiting.delete(requestId);
-		pending.resolve(action);
-		this.emit({ type: "permission:resolved", agentId: pending.sessionId, requestId });
-		return true;
-	}
-
-	private cancelPendingPermissions(sessionId: string): void {
-		for (const [requestId, pending] of Array.from(this.permissionAwaiting.entries())) {
-			if (pending.sessionId === sessionId) this.finishPermissionRequest(requestId, "deny");
-		}
-	}
-
-	private createPermissionToolCallHandler(cwd: string): ToolCallHandler {
-		// Pre-build the plan handler once; it's stateless so safe to reuse.
-		const planHandler = createPlanModeHandler(cwd);
-
-		return async (event, _ctx) => {
-			const sessionId = _ctx.sessionManager.getSessionId();
-			const mode = this.permissionModesBySession.get(sessionId) ?? this.defaultPermissionMode;
-
-			// "always" mode — allow everything, no questions asked
-			if (mode === "always") return {};
-
-			// Plan mode — strict read-only fallback even for hidden or stale tools.
-			if (mode === "plan") return planHandler(event, _ctx);
-
-			// "ask" mode — prompt user for each intercepted tool call
-			const toolName = event.toolName;
-			const allowedTools = this.sessionAllowedTools.get(sessionId);
-			if (allowedTools?.has(toolName)) return {};
-
-			const requestId = uuidv4();
-			const expiresAt = Date.now() + PERMISSION_TIMEOUT_MS;
-			const askEvent: PermissionAskEvent = {
-				toolName,
-				toolInput: (event.input ?? {}) as Record<string, unknown>,
-				toolDescription: `Tool: ${toolName}`,
-				requestId,
-				expiresAt,
-			};
-
-			const actionPromise = new Promise<"allow" | "deny" | "allow_always">((resolve) => {
-				const timeout = setTimeout(() => {
-					this.finishPermissionRequest(requestId, "deny");
-				}, PERMISSION_TIMEOUT_MS);
-				this.permissionAwaiting.set(requestId, { sessionId, resolve, timeout });
-			});
-			// Register the pending request before notifying the renderer so an
-			// immediate response cannot race ahead of the resolver.
-			this.emit({ type: "permission:ask", agentId: sessionId, event: askEvent });
-			const action = await actionPromise;
-
-			if (action === "allow_always") {
-				const grants = this.sessionAllowedTools.get(sessionId) ?? new Set<string>();
-				grants.add(toolName);
-				this.sessionAllowedTools.set(sessionId, grants);
-				return {};
-			}
-			if (action === "allow") return {};
-			return { block: true, reason: `用户拒绝了 ${toolName} 工具调用` };
-		};
-	}
-
-	private reservePlanInteraction(sessionId: string, kind: "question" | "approval", requestId: string): void {
-		if (this.planInteractionBySession.has(sessionId)) {
-			throw new Error("This session already has a pending Plan interaction");
-		}
-		this.planInteractionBySession.set(sessionId, { kind, requestId });
-	}
-
-	private abortListener(signal: AbortSignal | undefined, onAbort: () => void): () => void {
-		if (!signal) return () => {};
-		signal.addEventListener("abort", onAbort, { once: true });
-		return () => signal.removeEventListener("abort", onAbort);
-	}
-
-	private async requestPlanQuestions(
-		sessionId: string,
-		questions: PlanQuestion[],
-		signal?: AbortSignal,
-	): Promise<PlanQuestionOutcome> {
-		if (this.getPermissionMode(sessionId) !== "plan") {
-			return { status: "cancelled", reason: "Session is no longer in Plan mode" };
-		}
-		if (signal?.aborted) return { status: "cancelled", reason: "Planning turn was aborted" };
-
-		const requestId = uuidv4();
-		const request: PlanQuestionRequest = { requestId, sessionId, questions };
-		this.reservePlanInteraction(sessionId, "question", requestId);
-		return new Promise<PlanQuestionOutcome>((resolve) => {
-			const pending: PendingPlanQuestion = { request, resolve, removeAbortListener: () => {} };
-			this.planQuestionsAwaiting.set(requestId, pending);
-			pending.removeAbortListener = this.abortListener(signal, () => {
-				this.finishPlanQuestion(requestId, { status: "cancelled", reason: "Planning turn was aborted" });
-			});
-			if (signal?.aborted) {
-				this.finishPlanQuestion(requestId, { status: "cancelled", reason: "Planning turn was aborted" });
-			} else {
-				this.emit({ type: "plan:question-requested", agentId: sessionId, request });
-			}
-		});
-	}
-
-	handlePlanQuestionResponse(payload: PlanQuestionResponse): boolean {
-		const pending = this.planQuestionsAwaiting.get(payload.requestId);
-		if (!pending || pending.request.sessionId !== payload.sessionId) return false;
-		const answers: Record<string, string> = Object.create(null);
-		for (const question of pending.request.questions) {
-			const answer = payload.answers[question.question];
-			if (typeof answer !== "string" || !answer.trim()) return false;
-			answers[question.question] = answer.trim();
-		}
-		if (Object.keys(payload.answers).length !== pending.request.questions.length) return false;
-		return this.finishPlanQuestion(payload.requestId, { status: "answered", answers });
-	}
-
-	private finishPlanQuestion(requestId: string, outcome: PlanQuestionOutcome): boolean {
-		const pending = this.planQuestionsAwaiting.get(requestId);
-		if (!pending) return false;
-		this.planQuestionsAwaiting.delete(requestId);
-		pending.removeAbortListener();
-		const active = this.planInteractionBySession.get(pending.request.sessionId);
-		if (active?.requestId === requestId) this.planInteractionBySession.delete(pending.request.sessionId);
-		this.emit({ type: "plan:question-resolved", agentId: pending.request.sessionId, requestId });
-		pending.resolve(outcome);
-		return true;
-	}
-
-	private async ensurePlanDirectory(cwd: string): Promise<string> {
-		const ensureDir = async (dir: string) => {
-			await fs.promises.mkdir(dir).catch((error: NodeJS.ErrnoException) => {
-				if (error.code !== "EEXIST") throw error;
-			});
-			const stat = await fs.promises.lstat(dir);
-			if (!stat.isDirectory() || stat.isSymbolicLink()) {
-				throw new Error(`Plan path must be a real directory, not a symlink: ${dir}`);
-			}
-		};
-
-		const contextDir = path.join(cwd, ".context");
-		const planDir = path.join(contextDir, "plan");
-
-		await ensureDir(contextDir);
-		await ensureDir(planDir);
-
-		return planDir;
-	}
-
-	private async writePlanAtomically(sessionId: string, cwd: string, plan: string): Promise<string> {
-		if (!/^[A-Za-z0-9._-]+$/.test(sessionId)) throw new Error("Session ID is unsafe for a plan filename");
-		const planDir = await this.ensurePlanDirectory(cwd);
-		const filePath = path.join(planDir, `${sessionId}.md`);
-		const temporaryPath = path.join(planDir, `.${sessionId}.${uuidv4()}.tmp`);
-		try {
-			await fs.promises.writeFile(temporaryPath, `${plan.trim()}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
-			await fs.promises.rename(temporaryPath, filePath);
-		} finally {
-			await fs.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
-		}
-		return filePath;
-	}
-
-	private appendPlanRecord(
-		sessionId: string,
-		data: {
-			planId: string;
-			status: "submitted" | "approved" | "rejected";
-			filePath: string;
-			plan?: string;
-		},
-	): void {
-		const session = this.runtimes.get(sessionId)?.runtime.session;
-		if (!session) throw new Error(`Session ${sessionId} is not live`);
-		session.sessionManager.appendCustomEntry(PLAN_RECORD_ENTRY_TYPE, {
-			...data,
-			timestamp: new Date().toISOString(),
-		});
-	}
-
-	private async requestPlanApproval(
-		sessionId: string,
-		plan: string,
-		signal?: AbortSignal,
-	): Promise<PlanApprovalOutcome> {
-		if (this.getPermissionMode(sessionId) !== "plan") {
-			return { status: "cancelled", reason: "Session is no longer in Plan mode" };
-		}
-		if (signal?.aborted) return { status: "cancelled", reason: "Planning turn was aborted" };
-		const requestId = uuidv4();
-		const planId = uuidv4();
-		const managed = await this.ensureRuntime(sessionId);
-		this.persistPlanToolSnapshotIfPossible(sessionId);
-		this.reservePlanInteraction(sessionId, "approval", requestId);
-		let filePath: string;
-		try {
-			filePath = await this.writePlanAtomically(sessionId, managed.runtime.cwd, plan);
-			this.appendPlanRecord(sessionId, { planId, status: "submitted", filePath, plan });
-		} catch (error) {
-			const active = this.planInteractionBySession.get(sessionId);
-			if (active?.requestId === requestId) this.planInteractionBySession.delete(sessionId);
-			throw error;
-		}
-		const request: PlanApprovalRequest = { requestId, planId, sessionId, plan, filePath };
-
-		return new Promise<PlanApprovalOutcome>((resolve) => {
-			const pending: PendingPlanApproval = { request, resolve, removeAbortListener: () => {}, resolving: false };
-			this.planApprovalsAwaiting.set(requestId, pending);
-			pending.removeAbortListener = this.abortListener(signal, () => {
-				this.finishPlanApproval(requestId, {
-					status: "cancelled",
-					planId,
-					filePath,
-					reason: "Planning turn was aborted",
-				});
-			});
-			if (signal?.aborted) {
-				this.finishPlanApproval(requestId, {
-					status: "cancelled",
-					planId,
-					filePath,
-					reason: "Planning turn was aborted",
-				});
-			} else {
-				this.emit({ type: "plan:approval-requested", agentId: sessionId, request });
-			}
-		});
-	}
-
-	async handlePlanApprovalResponse(payload: PlanApprovalResponse): Promise<boolean> {
-		const pending = this.planApprovalsAwaiting.get(payload.requestId);
-		if (!pending || pending.resolving || pending.request.sessionId !== payload.sessionId) return false;
-		pending.resolving = true;
-		const { planId, filePath, sessionId } = pending.request;
-		try {
-			if (payload.action === "reject") {
-				this.appendPlanRecord(sessionId, { planId, status: "rejected", filePath });
-				return this.finishPlanApproval(payload.requestId, { status: "rejected", planId, filePath });
-			}
-			await this.applyPermissionMode(sessionId, "always", { internal: true, updateDefault: false });
-			this.appendPlanRecord(sessionId, { planId, status: "approved", filePath });
-			return this.finishPlanApproval(payload.requestId, { status: "approved", planId, filePath });
-		} catch (error) {
-			this.finishPlanApproval(payload.requestId, {
-				status: "cancelled",
-				planId,
-				filePath,
-				reason: error instanceof Error ? error.message : String(error),
-			});
-			throw error;
-		}
-	}
-
-	private finishPlanApproval(requestId: string, outcome: PlanApprovalOutcome): boolean {
-		const pending = this.planApprovalsAwaiting.get(requestId);
-		if (!pending) return false;
-		this.planApprovalsAwaiting.delete(requestId);
-		pending.removeAbortListener();
-		const active = this.planInteractionBySession.get(pending.request.sessionId);
-		if (active?.requestId === requestId) this.planInteractionBySession.delete(pending.request.sessionId);
-		this.emit({ type: "plan:approval-resolved", agentId: pending.request.sessionId, requestId });
-		pending.resolve(outcome);
-		return true;
-	}
-
-	private cancelPlanInteractions(sessionId: string, reason: string): void {
-		const interaction = this.planInteractionBySession.get(sessionId);
-		if (!interaction) return;
-		if (interaction.kind === "question") {
-			this.finishPlanQuestion(interaction.requestId, { status: "cancelled", reason });
-		} else {
-			const request = this.planApprovalsAwaiting.get(interaction.requestId)?.request;
-			this.finishPlanApproval(interaction.requestId, {
-				status: "cancelled",
-				planId: request?.planId,
-				filePath: request?.filePath,
-				reason,
-			});
-		}
-	}
-
 	getGeneralSettings(): UserSettings {
 		return this.userSettings.getAll();
 	}
@@ -2755,7 +2141,7 @@ export class SessionRuntimeManager {
 				managed.runtime.session.setAutoCompactionEnabled(partial.compactionEnabled);
 			}
 		}
-		if (partial.permissionMode !== undefined) this.defaultPermissionMode = partial.permissionMode;
+		if (partial.permissionMode !== undefined) this.permissionService.setDefaultMode(partial.permissionMode);
 		if (partial.subagentEnabled !== undefined) {
 			this.subagentDefaultEnabled = partial.subagentEnabled;
 			await Promise.all(
@@ -2769,7 +2155,7 @@ export class SessionRuntimeManager {
 
 	async resetGeneralSettings(): Promise<UserSettings> {
 		const settings = await this.userSettings.reset();
-		this.defaultPermissionMode = settings.permissionMode;
+		this.permissionService.setDefaultMode(settings.permissionMode);
 		this.subagentDefaultEnabled = settings.subagentEnabled;
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		return settings;
@@ -2839,7 +2225,7 @@ export class SessionRuntimeManager {
 		};
 	}
 
-	private emit(event: MainToRendererEvent): void {
+	public emit(event: MainToRendererEvent): void {
 		for (const callback of this.eventCallbacks) callback(event);
 	}
 

@@ -1,17 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { SessionRuntimeManager } from "../src/main/session-runtime-manager";
+import { PermissionService } from "../src/main/permission-service";
+import type { IEventBus, IRuntimeStore } from "../src/main/core/contracts";
+import type { AgentSession, AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 
-function createPermissionRuntime() {
-	const runtime = Object.create(SessionRuntimeManager.prototype) as any;
-	runtime.defaultPermissionMode = "ask";
-	runtime.permissionModesBySession = new Map([
-		["session-a", "ask"],
-		["session-b", "ask"],
-	]);
-	runtime.permissionAwaiting = new Map();
-	runtime.sessionAllowedTools = new Map();
-	runtime.eventCallbacks = [];
-	return runtime;
+function mockEventBus(events: any[]): IEventBus {
+	return {
+		emit(event) { events.push(event); },
+		onEvent() { return () => {}; },
+	};
+}
+
+function mockRuntimeStore(): IRuntimeStore {
+	return {
+		getRuntime: () => undefined as unknown as AgentSessionRuntime,
+		getSession: () => undefined as unknown as AgentSession,
+		getSessionManager: () => undefined as unknown as SessionManager,
+		getCwd: () => "/tmp",
+		getProjectRoot: () => "/tmp",
+	};
 }
 
 function context(sessionId: string) {
@@ -20,42 +26,40 @@ function context(sessionId: string) {
 
 describe("session permission state", () => {
 	it("registers a pending request before emitting it", async () => {
-		const runtime = createPermissionRuntime();
-		runtime.eventCallbacks.push((event: any) => {
-			if (event.type === "permission:ask") {
-				runtime.handlePermissionResponse({ requestId: event.event.requestId, action: "allow" });
-			}
-		});
-
-		const handler = runtime.createPermissionToolCallHandler("/tmp/project");
-		await expect(handler({ toolName: "write", input: { path: "file.txt" } }, context("session-a"))).resolves.toEqual(
-			{},
-		);
-		expect(runtime.permissionAwaiting.size).toBe(0);
+		const events: any[] = [];
+		const svc = new PermissionService(mockEventBus(events), mockRuntimeStore(), "ask");
+		const handler = svc.createToolCallHandler("/tmp/project");
+		const promise = handler({ toolName: "write", input: { path: "file.txt" } }, context("session-a"));
+		// Respond after the permission:ask event has been emitted
+		const askEvent = events.find((e: any) => e.type === "permission:ask");
+		svc.handleResponse({ requestId: askEvent.event.requestId, action: "allow" });
+		await expect(promise).resolves.toEqual({});
 	});
 
 	it("keeps always-allow tool grants scoped to the originating session", async () => {
-		const runtime = createPermissionRuntime();
 		const events: any[] = [];
-		runtime.eventCallbacks.push((event: any) => events.push(event));
-		const handler = runtime.createPermissionToolCallHandler("/tmp/project");
+		const svc = new PermissionService(mockEventBus(events), mockRuntimeStore(), "ask");
+		const handler = svc.createToolCallHandler("/tmp/project");
 
+		// Session A: first call triggers permission ask
 		const first = handler({ toolName: "write", input: { path: "file.txt" } }, context("session-a"));
-		const firstAsk = events.find((event) => event.type === "permission:ask");
+		const firstAsk = events.find((event: any) => event.type === "permission:ask");
 		expect(firstAsk.agentId).toBe("session-a");
-		runtime.handlePermissionResponse({ requestId: firstAsk.event.requestId, action: "allow_always" });
+		svc.handleResponse({ requestId: firstAsk.event.requestId, action: "allow_always" });
 		await expect(first).resolves.toEqual({});
 
+		// Session A: second call should be auto-allowed (no new emit)
 		const eventCount = events.length;
 		await expect(
 			handler({ toolName: "write", input: { path: "second.txt" } }, context("session-a")),
 		).resolves.toEqual({});
 		expect(events).toHaveLength(eventCount);
 
+		// Session B: first call triggers a fresh permission ask
 		const second = handler({ toolName: "write", input: { path: "other.txt" } }, context("session-b"));
-		const secondAsk = events.filter((event) => event.type === "permission:ask").pop();
+		const secondAsk = events.filter((event: any) => event.type === "permission:ask").pop();
 		expect(secondAsk.agentId).toBe("session-b");
-		runtime.handlePermissionResponse({ requestId: secondAsk.event.requestId, action: "deny" });
+		svc.handleResponse({ requestId: secondAsk.event.requestId, action: "deny" });
 		await expect(second).resolves.toMatchObject({ block: true });
 	});
 });

@@ -23,14 +23,13 @@ function installFakeRuntime(manager: SessionRuntimeManager, sessionId: string, a
 		createdAt: Date.now(),
 		unsubscribe: () => {},
 	});
-	internal.permissionModesBySession.set(sessionId, "ask");
+	internal.permissionService.setMode(sessionId, "ask");
 	return {
 		getActiveTools: () => [...active],
 		cleanup: () => {
 			internal.runtimes.delete(sessionId);
-			internal.permissionModesBySession.delete(sessionId);
-			internal.prePlanToolsBySession.delete(sessionId);
-			internal.dirtyPlanToolSnapshots.delete(sessionId);
+			internal.permissionService.disposeSession(sessionId);
+			internal.planService.disposeSession(sessionId);
 			internal.subagentEnabledBySession.delete(sessionId);
 		},
 	};
@@ -112,7 +111,7 @@ describe("SubAgent toggle — API-level behavior", () => {
 			["read", "write", "bash", "subagent", "AskUserQuestion", "ExitPlanMode"],
 		);
 		try {
-			(manager as any).permissionModesBySession.set("fake-plan-session", "plan");
+			(manager as any).permissionService.setMode("fake-plan-session", "plan");
 			await (manager as any).applySubagentEnabled("fake-plan-session", true);
 			expect(fake.getActiveTools()).toEqual(["read", "bash", "AskUserQuestion", "ExitPlanMode"]);
 		} finally {

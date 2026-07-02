@@ -714,3 +714,6 @@ export interface LookMessageDurationEntryData {
 	entryId: string;
 	durationMs: number;
 }
+
+/** Event listener callback. */
+export type EventCallback = (event: MainToRendererEvent) => void;

@@ -1,8 +1,12 @@
 // ============================================================
-// useAuthSession — Supabase 会话恢复 + 登录态管理
+// useAuthSession — 登录态管理 + 用户资料加载
 //
-// 优化：本地模式立即放行；Supabase 模式先放行 UI（authLoading 初始
-// false），后台异步恢复会话。避免 2-3s 网络阻塞卡住整个启动画面。
+// 优化策略：
+//   1. 挂载时立即通过 IPC 拉取本地 profile（~/.look/user-profile.json）
+//      磁盘同步读取，仅受 IPC 往返影响（<1ms），头像秒显。
+//   2. 如果 Supabase 已配置，后台异步校验会话 + 拉取云端资料，
+//      到达后覆盖本地值。
+//   3. 如果 Supabase 未配置（本地模式），步骤 1 即完成加载。
 // ============================================================
 
 import { useAtom } from "jotai";
@@ -19,22 +23,34 @@ export function useAuthSession() {
 
 	useEffect(() => {
 		if (!api) return;
+
+		/**
+		 * 立即加载本地 profile——IPC 到主进程读写 ~/.look/user-profile.json，
+		 * 同步 I/O，头像秒显。
+		 */
+		api.getUserProfile()
+			.then((r: any) => {
+				if (r?.success && r.profile?.userId) {
+					setUserProfile(r.profile);
+				}
+			})
+			.catch(() => {});
+
 		const configured = isSupabaseConfigured();
 
 		async function restoreSession() {
 			if (!configured) {
-				// 本地模式：乐观假设成立，无需更改
+				// 本地模式：步骤 1 已拉取本地 profile，无需额外操作
 				return;
 			}
 
-			// Supabase 模式：后台异步恢复，isLoggedIn 默认为 true（乐观）。
-			// 仅在校验失败时翻转为 false → LoginScreen。
+			// Supabase 模式：后台校验会话，仅在校验失败时切到 LoginScreen。
 			const {
 				data: { session },
 			} = await supabase.auth.getSession();
 
 			if (session?.user) {
-				// 已登录 → 拉取云端资料
+				// 从云端拉取最新资料，覆盖本地缓存
 				const { data: cloudProfile } = await supabase
 					.from("user_profiles")
 					.select("user_name, avatar")
@@ -49,17 +65,11 @@ export function useAuthSession() {
 						avatar: cloudProfile.avatar || "",
 					});
 				} else {
+					// 云端无记录 → 回退到本地 profile（已在步骤 1 加载）
 					try {
 						const r = await api.getUserProfile();
 						if (r?.success && r.profile?.userId === session.user.id) {
 							setUserProfile(r.profile);
-						} else {
-							setUserProfile({
-								userId: session.user.id,
-								email: session.user.email ?? "",
-								userName: session.user.email ?? "",
-								avatar: "",
-							});
 						}
 					} catch {
 						setUserProfile({
@@ -72,7 +82,7 @@ export function useAuthSession() {
 				}
 				// isLoggedIn 已经是 true（乐观），无需再设
 			} else {
-				// 无会话 → 检查本地 profile，有的话也算已登录
+				// 无 Supabase 会话 → 检查本地 profile
 				try {
 					const r = await api.getUserProfile();
 					if (r?.success && r.profile?.userId) {
@@ -80,7 +90,6 @@ export function useAuthSession() {
 						return; // isLoggedIn 保持 true
 					}
 				} catch {}
-				// 校验失败 → 翻转为未登录
 				setIsLoggedIn(false);
 			}
 		}
@@ -88,8 +97,5 @@ export function useAuthSession() {
 		restoreSession();
 	}, [setIsLoggedIn, setUserProfile]);
 
-	// Supabase 模式下不阻塞 UI——先渲染界面，后台异步恢复。
-	// 结果到达后若未登录再切到 LoginScreen。
-	// authLoadingAtom 默认 false，仅在此处回退兼容旧逻辑。
 	return { isLoggedIn, authLoading };
 }
