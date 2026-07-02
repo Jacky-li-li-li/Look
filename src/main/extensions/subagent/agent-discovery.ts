@@ -1,16 +1,17 @@
 // ============================================================
 // SubAgent Extension — Agent 发现
 //
-// 扫描 Agent 定义文件（YAML frontmatter + Markdown body），
-// 与 pi SDK 示例的 discoverAgents 逻辑对齐，但发现路径改为
-// Look 的 ~/.look/agents（用户级）和 .pi/agents（项目级）。
-// 复用 SDK 的 parseFrontmatter 工具保证 frontmatter 解析一致。
+// 扫描 Agent 定义文件（YAML frontmatter + Markdown body）。
+// 发现路径：
+//   - 用户级：~/.look/agents/
+//   - 内置：  ~/.look/agents/marketplace/
+//   - 项目级：~/.look/projects/<projectId>/agents/
 // ============================================================
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import { getLookDir } from "../../shared/look-storage.js";
+import { getLookDir, getProjectAgentsDir } from "../../shared/look-storage.js";
 import type { AgentConfig, AgentCreationMethod, AgentDiscoveryResult, AgentScope, AgentSource } from "./types.js";
 
 /** 用户级 Agent 目录：~/.look/agents */
@@ -31,16 +32,9 @@ function isDirectory(p: string): boolean {
 	}
 }
 
-/** 从 cwd 向上遍历，找到最近的 .pi/agents 目录 */
-export function findNearestProjectAgentsDir(cwd: string): string | null {
-	let currentDir = cwd;
-	while (true) {
-		const candidate = path.join(currentDir, ".pi", "agents");
-		if (isDirectory(candidate)) return candidate;
-		const parentDir = path.dirname(currentDir);
-		if (parentDir === currentDir) return null;
-		currentDir = parentDir;
-	}
+/** 获取项目级 Agent 目录（~/.look/projects/<projectId>/agents） */
+export function findProjectAgentsDir(projectId: string): string {
+	return getProjectAgentsDir(projectId);
 }
 
 /** 解析单个 Agent 定义文件 */
@@ -133,18 +127,21 @@ export function listBuiltinAgents(): AgentConfig[] {
  *
  * scope:
  *   - "user"     → 仅 ~/.look/agents（顶层，不含 marketplace 子目录）
- *   - "project"  → 仅 .pi/agents
+ *   - "project"  → 仅 ~/.look/projects/<projectId>/agents
  *   - "both"     → user + project（项目级覆盖同名用户级）
  *
  * builtin Agent 始终并入用户级结果（作为最底层的 fallback）。
  */
-export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
+export function discoverAgents(projectId: string, scope: AgentScope): AgentDiscoveryResult {
 	const userDir = getUserAgentsDir();
-	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
+	const projectAgentsDir = getProjectAgentsDir(projectId);
 
 	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
 	const builtinAgents = scope === "project" ? [] : listBuiltinAgents();
-	const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+	const projectAgents =
+		scope === "user" || !isDirectory(projectAgentsDir)
+			? []
+			: loadAgentsFromDir(projectAgentsDir, "project");
 
 	// 同名优先级：project > user > builtin
 	const agentMap = new Map<string, AgentConfig>();

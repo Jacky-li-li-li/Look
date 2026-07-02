@@ -23,9 +23,9 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { getBuiltinAgentsDir, getUserAgentsDir } from "./extensions/subagent/agent-discovery.js";
+import { getLookDir } from "./shared/look-storage.js";
 
 // ---- 版本管理 ----
 
@@ -157,7 +157,7 @@ export function syncLookDefaultAgents(projectDir: string): string | null {
 	// 早期版本将内置 Agent 直接写入 ~/.look/agents/，这些文件缺少 version / createdBy
 	// 字段，会在 discoverAgents 中因 user > builtin 优先级覆盖 marketplace 中的内置版本，
 	// 导致「内置」Tab 无内容。此迁移在首次启动时自动清理旧格式文件，后续不会重复执行。
-	const markerPath = join(homedir(), ".look", "agents", ".agent-seed-v1");
+	const markerPath = join(getLookDir(), "agents", ".agent-seed-v1");
 	if (!existsSync(markerPath)) {
 		const userDir = getUserAgentsDir();
 		let cleaned = 0;

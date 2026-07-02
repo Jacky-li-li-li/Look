@@ -119,7 +119,29 @@ Renderer-side: `SkillSlashMenu` (slash-command popover), `SkillTag` (inline skil
 
 - **`types.ts`** — discriminated union `MainToRendererEvent`, agent config types, IPC channel names
 - **`message-convert.ts`** — converts pi SDK message types to renderer-friendly format
-- **`look-storage.ts`** — Look-specific storage paths (`~/.look/`)
+- **`look-storage.ts`** — Look-specific storage paths (all under `~/.look/`)
+
+### Storage Layout (`~/.look/`)
+
+All Look-managed user data lives under `~/.look/`. No project files are written to `<cwd>/.pi/`.
+
+| Path | Purpose |
+|------|---------|
+| `~/.look/SYSTEM.md` | Global system prompt |
+| `~/.look/auth.json` | pi AuthStorage |
+| `~/.look/models.json` | pi ModelRegistry |
+| `~/.look/settings.json` | pi global settings |
+| `~/.look/ui-settings.json` | Look UI preferences |
+| `~/.look/prompts.json` | Multi-prompt variants |
+| `~/.look/agents/` | User-level Agent definitions |
+| `~/.look/agents/marketplace/` | Built-in Agent definitions |
+| `~/.look/builtin-skills/` | Built-in Skills |
+| `~/.look/projects/<id>/SYSTEM.md` | Per-project system prompt |
+| `~/.look/projects/<id>/settings.json` | Per-project settings |
+| `~/.look/projects/<id>/agents/` | Per-project Agent definitions |
+| `~/.look/shared/<id>/` | Per-project shared area |
+| `~/.look/workspaces/<name>/sessions/` | pi SessionManager JSONL files |
+| `~/.look/workspaces/<name>/subsessions/` | SubAgent child sessions |
 
 ### Renderer (`src/renderer/`)
 

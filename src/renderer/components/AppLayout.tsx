@@ -5,9 +5,11 @@
 import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
 import type { ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { ThemeProvider } from "next-themes";
 import { memo } from "react";
 import { DEFAULT_THEME } from "../lib/look-theme";
+import { appReadyPhaseAtom } from "../store/atoms";
 import type { RendererSessionPhase } from "../store/sessionTypes";
 import AgentSquare from "./AgentMarketplace/AgentSquare";
 import ChatPanel from "./ChatPanel";
@@ -115,6 +117,7 @@ function AppLayout({
 	handleExpandRightPanel,
 	onProvidersChange,
 }: AppLayoutProps) {
+	const appReadyPhase = useAtomValue(appReadyPhaseAtom);
 	return (
 		<ThemeProvider
 			attribute="data-theme"
@@ -143,7 +146,7 @@ function AppLayout({
 					<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
 
 					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
-						{projects.length === 0 ? (
+						{appReadyPhase < 1 ? null : projects.length === 0 ? (
 							<WelcomeScreen onOpenProject={handleOpenProject} />
 						) : showAgentSquare ? (
 							<AgentSquare />
@@ -179,9 +182,9 @@ function AppLayout({
 										onAbort={handleAbortAgent}
 						onDequeueAll={handleDequeueAll}
 									/>
-								) : (
+								) : appReadyPhase >= 2 && agents.length === 0 ? (
 									<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
-								)}
+								) : null}
 							</>
 						)}
 					</main>

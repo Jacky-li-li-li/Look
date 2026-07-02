@@ -284,6 +284,7 @@ export interface LookUiStreamBlock {
 	toolCallId?: string;
 	toolName?: string;
 	args?: Record<string, unknown>;
+	argsRaw?: string;
 	/** Image content block (when kind === "image"). */
 	image?: ImageContent;
 	completed: boolean;

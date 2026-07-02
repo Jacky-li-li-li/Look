@@ -2,22 +2,36 @@
 // Look Storage — ~/.look/ path management
 //
 // pi SDK handles session persistence natively (SessionManager.create/open).
-// Look stores project bookmarks and UI preferences; pi owns session state.
+// Look stores project bookmarks, UI preferences, and per-project user data.
 //
 // Structure:
 //   ~/.look/
-//   ├── projects.json     → Project index: [{ id, name, cwd }]
-//   ├── auth.json         → pi AuthStorage
-//   ├── models.json       → pi ModelRegistry
-//   ├── settings.json     → pi SettingsManager
-//   ├── ui-settings.json  → Look UI preferences
-//   ├── user-profile.json → User profile
+//   ├── SYSTEM.md           → 全局 system prompt
+//   ├── auth.json           → pi AuthStorage
+//   ├── models.json         → pi ModelRegistry
+//   ├── settings.json       → pi SettingsManager (global)
+//   ├── ui-settings.json    → Look UI preferences
+//   ├── user-profile.json   → User profile
+//   ├── prompts.json        → 多 prompt 变体管理
+//   ├── custom-providers.json
+//   ├── projects.json       → Project index: [{ id, name, cwd }]
+//   ├── im-bindings.json    → IM 绑定
+//   ├── im-channels.json    → IM 通道
+//   ├── im-profiles.json    → IM 配置
+//   ├── agents/             → 用户级 Agent 定义
+//   │   └── marketplace/  → 内置 Agent
+//   ├── builtin-skills/     → 内置 Skills
+//   ├── projects/
+//   │   └── <project-id>/   → 按项目隔离的用户级数据
+//   │       ├── SYSTEM.md   → 项目级 system prompt
+//   │       ├── settings.json → 项目级 settings
+//   │       └── agents/     → 项目级 Agent 定义
+//   ├── shared/
+//   │   └── <project-id>/   → 项目共享区
 //   └── workspaces/
-//       ├── pi/           → project "pi" (derived from cwd basename)
-//       │   └── sessions/ → pi SessionManager .jsonl files
-//       ├── my-app/
-//       │   └── sessions/
-//       └── ...
+//       └── <project-name>/ → 项目工作区
+//           ├── sessions/   → pi SessionManager .jsonl
+//           └── subsessions/ → SubAgent 子会话
 // ============================================================
 
 import fs from "fs";
@@ -55,6 +69,35 @@ export function getCustomProvidersPath(): string {
 /** Application settings (owned by the SDK's SettingsManager) */
 export function getSettingsPath(): string {
 	return path.join(LOOK_DIR, "settings.json");
+}
+
+// ── Per-project user-level paths ──
+
+/** Project-level user data directory (~/.look/projects/<projectId>). */
+export function getProjectDir(projectId: string): string {
+	return path.join(LOOK_DIR, "projects", projectId);
+}
+
+/** Project-level system prompt (~/.look/projects/<projectId>/SYSTEM.md). */
+export function getProjectSystemPromptPath(projectId: string): string {
+	return path.join(getProjectDir(projectId), "SYSTEM.md");
+}
+
+/** Project-level settings (~/.look/projects/<projectId>/settings.json). */
+export function getProjectSettingsPath(projectId: string): string {
+	return path.join(getProjectDir(projectId), "settings.json");
+}
+
+/** Project-level Agent 定义目录 (~/.look/projects/<projectId>/agents). */
+export function getProjectAgentsDir(projectId: string): string {
+	return path.join(getProjectDir(projectId), "agents");
+}
+
+/** Ensure the per-project user data directory exists. */
+export function ensureProjectDir(projectId: string): string {
+	const dir = getProjectDir(projectId);
+	fs.mkdirSync(dir, { recursive: true });
+	return dir;
 }
 
 /** Look-only UI preferences (language, auto-collapse, etc.) */
@@ -158,6 +201,8 @@ export function ensureProjectSharedDir(projectId: string): string {
 // ── Initialization ──
 
 export function ensureLookDir(): void {
+	const projectsDir = path.join(LOOK_DIR, "projects");
+	fs.mkdirSync(projectsDir, { recursive: true });
 	fs.mkdirSync(getWorkspacesDir(), { recursive: true });
 	fs.mkdirSync(getSessionsDir(), { recursive: true });
 	fs.mkdirSync(getSharedAreasDir(), { recursive: true });

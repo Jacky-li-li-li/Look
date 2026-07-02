@@ -13,7 +13,7 @@ import {
 	recentlyActiveSessionIdsAtom,
 	userPreferredModelAtom,
 } from "../store/atoms";
-import { appStore } from "../store/ipcHandler";
+import { appStore, markSessionSnapshotLoading } from "../store/ipcHandler";
 
 const api = (window as any).look;
 
@@ -36,9 +36,12 @@ export function useAgentActions() {
 
 	const handleSelectAgent = useCallback(async (agentId: string) => {
 		if (!api) return;
-		const result = await api.activateSession(agentId);
-		if (result?.success) {
-			appStore.set(activeAgentIdAtom, agentId);
+		const previousActiveId = appStore.get(activeAgentIdAtom);
+		appStore.set(activeAgentIdAtom, agentId);
+		markSessionSnapshotLoading(agentId, true);
+		try {
+			const result = await api.activateSession(agentId);
+			if (!result?.success) throw new Error(result?.error ?? "Failed to activate session");
 			appStore.set(openedSessionIdsAtom, (previous) => {
 				if (previous.includes(agentId)) return previous;
 				return [...previous, agentId];
@@ -47,6 +50,12 @@ export function useAgentActions() {
 				const filtered = previous.filter((id) => id !== agentId);
 				return [agentId, ...filtered];
 			});
+		} catch (error: any) {
+			markSessionSnapshotLoading(agentId, false);
+			if (appStore.get(activeAgentIdAtom) === agentId) {
+				appStore.set(activeAgentIdAtom, previousActiveId);
+			}
+			toast.error(error?.message ?? "Failed to activate session");
 		}
 	}, []);
 
@@ -59,13 +68,21 @@ export function useAgentActions() {
 			const activationOrder = appStore.get(recentlyActiveSessionIdsAtom);
 			const fallbackId = activationOrder.find((id) => nextIds.includes(id)) ?? nextIds[0] ?? null;
 			if (fallbackId && api) {
-				api.activateSession(fallbackId).then((result: any) => {
-					if (result?.success) {
-						appStore.set(activeAgentIdAtom, fallbackId);
-					} else {
-						appStore.set(activeAgentIdAtom, null);
-					}
-				});
+				appStore.set(activeAgentIdAtom, fallbackId);
+				markSessionSnapshotLoading(fallbackId, true);
+				api.activateSession(fallbackId)
+					.then((result: any) => {
+						if (result?.success) {
+							appStore.set(activeAgentIdAtom, fallbackId);
+						} else {
+							markSessionSnapshotLoading(fallbackId, false);
+							appStore.set(activeAgentIdAtom, null);
+						}
+					})
+					.catch(() => {
+						markSessionSnapshotLoading(fallbackId, false);
+						if (appStore.get(activeAgentIdAtom) === fallbackId) appStore.set(activeAgentIdAtom, null);
+					});
 			} else {
 				appStore.set(activeAgentIdAtom, null);
 			}
@@ -99,7 +116,9 @@ export function useAgentActions() {
 			if (result?.success && result.messages?.length > 0) {
 				// 将取回的消息合并，后续可通过 inputRef 注入编辑器
 				const text = result.messages.join("\n\n");
-				toast.info(result.messages.length > 1 ? `${result.messages.length} messages retrieved` : "Message retrieved");
+				toast.info(
+					result.messages.length > 1 ? `${result.messages.length} messages retrieved` : "Message retrieved",
+				);
 				return text;
 			}
 		} catch (err: any) {

@@ -15,12 +15,12 @@
 
 import type { Dirent } from "node:fs";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { getLookDir } from "./shared/look-storage.js";
 
 /** Look 内置 Skill 的目标目录 */
 export function getBuiltinSkillsDir(): string {
-	return join(homedir(), ".look", "builtin-skills");
+	return join(getLookDir(), "builtin-skills");
 }
 
 // ---- 版本管理 ----

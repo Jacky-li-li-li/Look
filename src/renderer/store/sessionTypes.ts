@@ -11,6 +11,10 @@ import type {
 export interface RendererSessionState {
 	entries: SessionEntry[];
 	leafId: string | null;
+	/** Whether a persisted session snapshot has arrived for this session. */
+	snapshotLoaded: boolean;
+	/** True while the main process is opening the runtime and sending the first snapshot. */
+	loadingSnapshot: boolean;
 	/** Non-streaming runtime metadata (model, thinkingLevel, stats, contextUsage). */
 	runtime: SessionRuntimeSnapshot | null;
 	/** Per-entry finalized turn durations. Keyed by SessionEntry.id for persisted assistant messages. */
@@ -36,6 +40,8 @@ export interface RendererSessionState {
 export const emptyRendererSessionState = (): RendererSessionState => ({
 	entries: [],
 	leafId: null,
+	snapshotLoaded: false,
+	loadingSnapshot: false,
 	runtime: null,
 	messageDurations: {},
 	uiBlocks: [],

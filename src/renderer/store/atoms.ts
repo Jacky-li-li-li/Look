@@ -35,6 +35,21 @@ export const recentlyCompletedAtom = atom<string[]>([]);
 
 export const projectsAtom = atom<ProjectInfo[]>([]);
 
+/** 
+ * App 就绪状态：4 个阶段。
+ * - 0 = 未初始化
+ * - 1 = 项目列表已加载
+ * - 2 = Agent 列表已加载 + active session 已选择
+ * - 3 = session runtime 已激活（首个 session:snapshot 到达）
+ * 
+ * 只有 phase >= 2 且 agents 为空时才显示 EmptySessionState。
+ * phase < 2 时内容区空白占位，避免闪烁。
+ */
+export const appReadyPhaseAtom = atom(0);
+
+/** @deprecated 由 appReadyPhaseAtom 替代 */
+export const initialDataLoadedAtom = atom((get) => get(appReadyPhaseAtom) >= 1);
+
 export const activeProjectIdAtom = atom<string | null>(null);
 
 /** Expanded project groups in the compact workspace ledger. */

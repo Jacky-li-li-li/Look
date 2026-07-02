@@ -25,6 +25,7 @@ import {
 	activeAgentIdAtom,
 	activeProjectIdAtom,
 	agentsAtom,
+	appReadyPhaseAtom,
 	autoCollapseAtom,
 	emptyPlanQuestionDraft,
 	forkingEntryAtomFamily,
@@ -54,6 +55,15 @@ export const appStore = createStore();
 
 /** i18n t-function — use the i18next instance directly outside React. */
 const t = i18n.t.bind(i18n);
+
+export function markSessionSnapshotLoading(sessionId: string, loading: boolean): void {
+	const atom = sessionStateAtomFamily(sessionId);
+	const previous = appStore.get(atom);
+	appStore.set(atom, {
+		...previous,
+		loadingSnapshot: loading && !previous.snapshotLoaded,
+	});
+}
 
 /**
  * 合并 shared:updated 事件,200ms debounce 一次 listSharedFiles。
@@ -86,7 +96,7 @@ function scheduleSharedRefresh(projectId: string, filesAtom: ReturnType<typeof s
 	);
 }
 
-function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
+export function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	const previous = appStore.get(sessionStateAtomFamily(snapshot.sessionId));
 	const isAgentEnd = snapshot.reason === "agent_end";
 
@@ -116,6 +126,8 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 		...previous,
 		entries: snapshot.entries,
 		leafId,
+		snapshotLoaded: true,
+		loadingSnapshot: false,
 		runtime: {
 			...snapshot.runtime,
 			steering: [...snapshot.runtime.steering],
@@ -538,6 +550,7 @@ export function initIpcHandlers(api: any): () => void {
 
 			case "session:snapshot":
 				applySnapshot(event);
+				if (appStore.get(appReadyPhaseAtom) < 3) appStore.set(appReadyPhaseAtom, 3);
 				break;
 
 			case "session:ui-event":
@@ -548,6 +561,7 @@ export function initIpcHandlers(api: any): () => void {
 			case "project:list": {
 				const previousIds = new Set(appStore.get(projectsAtom).map((project) => project.id));
 				appStore.set(projectsAtom, event.projects);
+				if (appStore.get(appReadyPhaseAtom) < 1) appStore.set(appReadyPhaseAtom, 1);
 				const projectIds = new Set(event.projects.map((project) => project.id));
 				appStore.set(
 					openProjectIdsAtom,
@@ -748,7 +762,18 @@ function _autoSelectAgent(): void {
 		sessionId = agents[0].id;
 	}
 	appStore.set(activeAgentIdAtom, sessionId);
-	void window.look.activateSession(sessionId);
+	markSessionSnapshotLoading(sessionId, true);
+	void window.look
+		.activateSession(sessionId)
+		.then((result: any) => {
+			if (result?.success) return;
+			markSessionSnapshotLoading(sessionId, false);
+			if (appStore.get(activeAgentIdAtom) === sessionId) appStore.set(activeAgentIdAtom, null);
+		})
+		.catch(() => {
+			markSessionSnapshotLoading(sessionId, false);
+			if (appStore.get(activeAgentIdAtom) === sessionId) appStore.set(activeAgentIdAtom, null);
+		});
 }
 
 /** Initialize data previously loaded in App.tsx's useEffect hooks. */
@@ -789,6 +814,7 @@ export async function initAppData(api: any): Promise<void> {
 	if (r?.success) {
 		if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
 	}
+	if (appStore.get(appReadyPhaseAtom) < 2) appStore.set(appReadyPhaseAtom, 2);
 
 	// 5. 预加载 Agent 定义列表（# 选择面板 + Agent 广场需要）
 	const agentDefsResult = await api.listAgentDefinitions().catch(() => null);

@@ -236,10 +236,13 @@ async function initSessionRuntime(): Promise<void> {
 	workspaceTreeService = new WorkspaceTreeService();
 	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
 
-	// Load project bookmarks and restore the selected session runtime. Other
-	// sessions remain persisted until selected or prompted.
+	// 1) 加载项目书签和会话列表（快：纯文件读取，无 SDK 初始化）。
 	await runtimeManager.loadProjects();
 	await runtimeManager.restoreWorkspace();
+
+	// 2) 尽快把初始数据推给 renderer，让 UI 立即渲染。
+	//    session runtime 初始化 (activateSession) 仍会在后台运行，
+	//    结果通过 agent:list / session:snapshot 事件异步送达。
 	const restoredProject = runtimeManager.getActiveProject();
 	if (mainWindow && restoredProject) {
 		await promptForProjectTrust(runtimeManager, restoredProject.id, mainWindow);

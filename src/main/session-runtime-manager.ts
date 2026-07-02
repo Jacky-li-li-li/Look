@@ -120,6 +120,7 @@ const PERMISSION_TIMEOUT_MS = 30_000;
 /** 子会话 JSONL 中记录父会话链接的自定义条目类型。
  *  符合 AGENTS.md：parent links 由 pi JSONL 拥有。 */
 const SUBAGENT_PARENT_ENTRY_TYPE = "look.subagent-parent.v1";
+const SESSION_SUMMARY_CONCURRENCY = 10;
 
 interface PendingPermission {
 	sessionId: string;
@@ -156,6 +157,156 @@ interface PendingSubSession {
 	errorMessage?: string;
 	removeAbortListener: () => void;
 	aborted: boolean;
+}
+
+function parseJsonLine(line: string): any | null {
+	const trimmed = line.trim();
+	if (!trimmed) return null;
+	try {
+		return JSON.parse(trimmed);
+	} catch {
+		return null;
+	}
+}
+
+function normalizeCwdForSessionMatch(cwd: string): string {
+	if (!cwd) return "";
+	try {
+		return fs.realpathSync(cwd);
+	} catch {
+		return path.resolve(cwd);
+	}
+}
+
+function extractMessageText(message: AgentMessage): string {
+	if (!("content" in message)) return "";
+	const content = message.content;
+	if (typeof content === "string") return content.trim();
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter(
+			(block): block is { type: "text"; text: string } => block?.type === "text" && typeof block.text === "string",
+		)
+		.map((block) => block.text)
+		.join(" ")
+		.trim();
+}
+
+function messageActivityTime(entry: any): number | undefined {
+	const message = entry?.message;
+	if (!message || (message.role !== "user" && message.role !== "assistant")) return undefined;
+	if (typeof message.timestamp === "number") return message.timestamp;
+	if (typeof entry.timestamp === "string") {
+		const parsed = new Date(entry.timestamp).getTime();
+		return Number.isNaN(parsed) ? undefined : parsed;
+	}
+	return undefined;
+}
+
+function buildSessionSummaryFromLines(filePath: string, stats: fs.Stats, lines: string[]): PiSessionInfo | null {
+	let header: any | null = null;
+	let name: string | undefined;
+	let messageCount = 0;
+	let firstMessage = "";
+	let lastActivityTime: number | undefined;
+
+	for (const line of lines) {
+		const entry = parseJsonLine(line);
+		if (!entry) continue;
+		if (!header) {
+			if (entry.type !== "session" || typeof entry.id !== "string") return null;
+			header = entry;
+			continue;
+		}
+
+		if (entry.type === "session_info") {
+			name = typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : undefined;
+			continue;
+		}
+		if (entry.type !== "message") continue;
+		messageCount++;
+
+		const activityTime = messageActivityTime(entry);
+		if (typeof activityTime === "number") {
+			lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
+		}
+
+		const message = entry.message as AgentMessage | undefined;
+		if (!message || message.role !== "user" || firstMessage) continue;
+		const text = extractMessageText(message);
+		if (text) firstMessage = text;
+	}
+
+	if (!header) return null;
+	const headerTime = typeof header.timestamp === "string" ? new Date(header.timestamp).getTime() : NaN;
+	const created = Number.isNaN(headerTime) ? stats.birthtime : new Date(headerTime);
+	const modified =
+		typeof lastActivityTime === "number" && lastActivityTime > 0
+			? new Date(lastActivityTime)
+			: Number.isNaN(headerTime)
+				? stats.mtime
+				: new Date(headerTime);
+
+	return {
+		path: filePath,
+		id: header.id,
+		cwd: typeof header.cwd === "string" ? header.cwd : "",
+		name,
+		parentSessionPath: typeof header.parentSession === "string" ? header.parentSession : undefined,
+		created,
+		modified,
+		messageCount,
+		firstMessage: firstMessage || "(no messages)",
+		allMessagesText: "",
+	};
+}
+
+export function scanSessionFileSummary(filePath: string): PiSessionInfo | null {
+	try {
+		const stats = fs.statSync(filePath);
+		const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+		return buildSessionSummaryFromLines(filePath, stats, lines);
+	} catch {
+		return null;
+	}
+}
+
+async function scanSessionFileSummaryAsync(filePath: string): Promise<PiSessionInfo | null> {
+	try {
+		const [stats, raw] = await Promise.all([fs.promises.stat(filePath), fs.promises.readFile(filePath, "utf8")]);
+		return buildSessionSummaryFromLines(filePath, stats, raw.split(/\r?\n/));
+	} catch {
+		return null;
+	}
+}
+
+export async function scanSessionDirectory(sessionDir: string, cwd: string): Promise<PiSessionInfo[]> {
+	let files: string[];
+	try {
+		files = (await fs.promises.readdir(sessionDir))
+			.filter((file) => file.endsWith(".jsonl"))
+			.map((file) => path.join(sessionDir, file));
+	} catch {
+		return [];
+	}
+
+	const resolvedCwd = normalizeCwdForSessionMatch(cwd);
+	const results = new Array<PiSessionInfo | null>(files.length).fill(null);
+	let nextIndex = 0;
+	const workers = Array.from({ length: Math.min(SESSION_SUMMARY_CONCURRENCY, files.length) }, async () => {
+		while (nextIndex < files.length) {
+			const index = nextIndex++;
+			const summary = await scanSessionFileSummaryAsync(files[index]!);
+			if (summary) {
+				const summaryCwd = normalizeCwdForSessionMatch(summary.cwd);
+				if (!summaryCwd || summaryCwd === resolvedCwd) results[index] = summary;
+			}
+		}
+	});
+	await Promise.all(workers);
+	return results
+		.filter((item): item is PiSessionInfo => item !== null)
+		.sort((a, b) => b.modified.getTime() - a.modified.getTime());
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode {
@@ -363,9 +514,12 @@ export class SessionRuntimeManager {
 		if (!project) return total;
 
 		this.activeProjectId = project.id;
+		// 立即确定 preferred session ID（不 init runtime），让 renderer 在首帧就
+		// 高亮对应 tab 避免 EmptySessionState 闪烁。runtime 由 _autoSelectAgent
+		// 或用户点击异步激活。
 		const sessions = this.sessionsByProject.get(project.id) ?? [];
 		const preferred = sessions.find((s) => s.id === settings.lastActiveSessionId) ?? sessions[0];
-		if (preferred) await this.activateSession(preferred.id);
+		if (preferred) this.activeSessionId = preferred.id;
 		return total;
 	}
 
@@ -565,12 +719,13 @@ export class SessionRuntimeManager {
 	private async refreshProjectSessions(projectId: string): Promise<StoredSession[]> {
 		const project = this.projects.get(projectId);
 		if (!project?.valid) return [];
-		const sessions = (await SessionManager.list(project.cwd, ensureWorkspaceDir(project.name))).map((session) => ({
+		const sessions = (await scanSessionDirectory(ensureWorkspaceDir(project.name), project.cwd)).map((session) => ({
 			...session,
 			projectId,
 		}));
 
-		// Stage 4：同时扫描 subsessions/ 目录恢复子会话（跨应用重启持久化）
+		// Stage 4：扫描 subsessions/ 目录恢复子会话，使用轻量行读取避免 SessionManager.open
+		// 解析整个大文件（每个子会话可能有大量消息）。
 		const subsessionsDir = getWorkspaceSubsessionsDir(project.name);
 		if (existsSync(subsessionsDir)) {
 			let subsessionFiles: string[];
@@ -582,42 +737,12 @@ export class SessionRuntimeManager {
 			for (const file of subsessionFiles) {
 				try {
 					const filePath = path.join(subsessionsDir, file);
-					const sm = SessionManager.open(filePath);
-					const sessionId = sm.getSessionId();
-					const name = sm.getSessionName() ?? "";
-					// 提取父子关系 + Agent 名
-					let parentSessionId: string | undefined;
-					let agentName: string | undefined;
-					let firstMessage: string | undefined;
-					let messageCount = 0;
-					let created = Date.now();
-					for (const entry of sm.getEntries()) {
-						if (entry.type === "custom" && entry.customType === SUBAGENT_PARENT_ENTRY_TYPE) {
-							const data = entry.data as { parentSessionId?: string; agentName?: string } | undefined;
-							if (data?.parentSessionId) parentSessionId = data.parentSessionId;
-							if (data?.agentName) agentName = data.agentName;
-						}
-						if (entry.type === "message") {
-							messageCount++;
-							if (!firstMessage) {
-								const msg = entry.message as
-									| { content?: string | Array<{ type: string; text: string }> }
-									| undefined;
-								const content = msg?.content;
-								if (typeof content === "string") firstMessage = content;
-								else if (Array.isArray(content) && content[0]?.type === "text") {
-									firstMessage = (content[0] as { text: string }).text;
-								}
-							}
-							// 取最早的消息时间戳
-							const timestamp = (entry.message as { timestamp?: number })?.timestamp;
-							if (timestamp && timestamp < created) created = timestamp;
-						}
-					}
-					// 填充内存注册表（供 sessionInfo → subagentFields 消费）
+					// 轻量扫描：只读 session header + custom 条目，不全量解析消息
+					const meta = this.scanSubsessionMeta(filePath);
+					if (!meta) continue;
+					const { sessionId, parentSessionId, agentName, firstMessage, messageCount, created } = meta;
 					if (parentSessionId) {
 						this.subSessionMeta.set(sessionId, { parentSessionId, agentName: agentName ?? "" });
-						// 恢复父子关系集合（后续 listSubSessions 需要）
 						let childSet = this.subSessionRegistry.get(parentSessionId);
 						if (!childSet) {
 							childSet = new Set();
@@ -627,7 +752,7 @@ export class SessionRuntimeManager {
 					}
 					const stored: StoredSession = {
 						id: sessionId,
-						name: name || firstMessage || "",
+						name: meta.displayName || firstMessage || "",
 						firstMessage: firstMessage || "",
 						messageCount,
 						created: new Date(created),
@@ -832,11 +957,9 @@ export class SessionRuntimeManager {
 		}
 	}
 
-	private buildExtensionFactories(cwd: string, sessionId: string): ExtensionFactory[] {
-		// Always register the permission extension — it checks
-		// this._permissionMode at runtime so mode switches are
-		// instantaneous and never require a runtime rebuild.
-		const handler = this.createPermissionToolCallHandler(cwd);
+	private buildExtensionFactories(_cwd: string, sessionId: string): ExtensionFactory[] {
+		const projectId = this.runtimes.get(sessionId)?.projectId ?? "";
+		const handler = this.createPermissionToolCallHandler(_cwd);
 		return [
 			createPermissionExtensionFactory(handler),
 			createPlanExtensionFactory(sessionId, {
@@ -844,15 +967,15 @@ export class SessionRuntimeManager {
 				askQuestions: (id, questions, signal) => this.requestPlanQuestions(id, questions, signal),
 				submitPlan: (id, plan, signal) => this.requestPlanApproval(id, plan, signal),
 			}),
-			createSubagentExtensionFactory(sessionId, this.createSubagentHost(), cwd),
+			createSubagentExtensionFactory(sessionId, this.createSubagentHost(projectId), projectId),
 		];
 	}
 
 	/** 构造 SubagentHost 实现（绑定到本 manager）。 */
-	private createSubagentHost(): SubagentHost {
+	private createSubagentHost(projectId: string): SubagentHost {
 		return {
-			discoverAgents: (cwd, scope) => {
-				const result = discoverAgents(cwd, scope);
+			discoverAgents: (_projectId, scope) => {
+				const result = discoverAgents(projectId, scope);
 				const settings = this.userSettings.getAll();
 				const enabledList = settings.enabledAgentDefinitions;
 				if (enabledList !== null) {
@@ -1124,13 +1247,13 @@ export class SessionRuntimeManager {
 	}
 
 	async sendMessage(sessionId: string, text: string, images?: ImageContent[]): Promise<void> {
-		const session = (await this.ensureRuntime(sessionId)).runtime.session;
+		const managed = await this.ensureRuntime(sessionId);
+		const session = managed.runtime.session;
 
 		// 解析 #agentName 模式：检测用户是否通过 # 指定了 SubAgent
 		const agentTokens = text.match(/(?:^|\s)#(\w[\w.-]*)/g);
 		if (agentTokens && agentTokens.length > 0) {
-			const cwd = session.sessionManager.getCwd();
-			const discovery = discoverAgents(cwd, "both");
+			const discovery = discoverAgents(managed.projectId, "both");
 			const agentNames = agentTokens.map((t) => t.replace(/^\s*#/, ""));
 			const foundAgents = agentNames.flatMap((name) => {
 				const found = discovery.agents.find((a) => a.name === name);
@@ -1261,6 +1384,65 @@ export class SessionRuntimeManager {
 		session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
 	}
 
+	/**
+	 * 轻量扫描子会话 JSONL 元数据——只读 session header + custom/message 条目行，
+	 * 不全量解析消息内容。比 SessionManager.open() + getEntries() 快 5-10x。
+	 */
+	private scanSubsessionMeta(filePath: string): {
+		sessionId: string;
+		displayName?: string;
+		parentSessionId?: string;
+		agentName?: string;
+		firstMessage?: string;
+		messageCount: number;
+		created: number;
+	} | null {
+		try {
+			const raw = fs.readFileSync(filePath, "utf-8");
+			const lines = raw.split("\n");
+			let sessionId = "";
+			let displayName: string | undefined;
+			let parentSessionId: string | undefined;
+			let agentName: string | undefined;
+			let firstMessage: string | undefined;
+			let messageCount = 0;
+			let created = Date.now();
+			for (const line of lines) {
+				if (!line.trim()) continue;
+				try {
+					const entry = JSON.parse(line) as Record<string, unknown>;
+					if (entry.type === "session") {
+						sessionId = String(entry.id ?? "");
+						if (entry.timestamp) created = new Date(String(entry.timestamp)).getTime();
+					} else if (entry.type === "session_info") {
+						displayName = String(entry.name ?? "") || undefined;
+					} else if (entry.type === "custom" && entry.customType === SUBAGENT_PARENT_ENTRY_TYPE) {
+						const data = entry.data as { parentSessionId?: string; agentName?: string } | undefined;
+						if (data?.parentSessionId) parentSessionId = data.parentSessionId;
+						if (data?.agentName) agentName = data.agentName;
+					} else if (entry.type === "message") {
+						messageCount++;
+						if (!firstMessage) {
+							const msg = entry.message as { content?: unknown; timestamp?: number } | undefined;
+							const content = msg?.content;
+							if (typeof content === "string") firstMessage = content;
+							else if (Array.isArray(content) && (content[0] as { type?: string })?.type === "text") {
+								firstMessage = (content[0] as { text: string }).text;
+							}
+							if (msg?.timestamp && msg.timestamp < created) created = msg.timestamp;
+						}
+					}
+				} catch {
+					/* skip malformed lines */
+				}
+			}
+			if (!sessionId) return null;
+			return { sessionId, displayName, parentSessionId, agentName, firstMessage, messageCount, created };
+		} catch {
+			return null;
+		}
+	}
+
 	/** 列出某父会话下的全部子会话 ID。 */
 	listSubSessions(parentSessionId: string): string[] {
 		return Array.from(this.subSessionRegistry.get(parentSessionId) ?? []);
@@ -1277,7 +1459,7 @@ export class SessionRuntimeManager {
 
 	/** 列出全部用户级 + 广场安装的 Agent 定义。 */
 	listAgentDefinitions(): AgentDefinitionInfo[] {
-		const discovery = discoverAgents("", "both");
+		const discovery = discoverAgents("", "user");
 		return discovery.agents.map(this.toAgentDefinitionInfo);
 	}
 

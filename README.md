@@ -52,10 +52,14 @@ src/
 │   ├── index.ts          # 入口
 │   ├── ipc-handlers.ts   # IPC 通信处理
 │   ├── session-runtime-manager.ts  # 单一 pi 会话运行时
-│   ├── preload.js        # 预加载脚本
+│   ├── extensions/       # pi 扩展工厂
+│   │   ├── permission-extension.ts
+│   │   ├── plan-extension.ts
+│   │   └── subagent/     # SubAgent 扩展
+│   ├── im/               # 飞书 IM 桥接
+│   ├── workspace/        # 工作区文件/树服务
 │   ├── shared/           # 共享类型/工具/UI 组件
-│   ├── mcp/              # pi MCP Extension
-│   └── assets/           # 静态资源
+│   └── preload.js        # 预加载脚本
 └── renderer/             # React 渲染进程
     ├── App.tsx           # 主应用
     ├── components/       # UI 组件
@@ -65,6 +69,8 @@ src/
     ├── locales/          # 国际化文案
     └── lib/              # 工具库
 ```
+
+所有用户数据统一存储在 `~/.look/` 下，不写入项目目录的 `.pi/` 文件夹。
 
 ## 命令
 

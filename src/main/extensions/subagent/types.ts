@@ -67,7 +67,7 @@ export interface AgentConfig {
 /** Agent 发现结果 */
 export interface AgentDiscoveryResult {
 	agents: AgentConfig[];
-	/** 最近的 .pi/agents 目录（若存在） */
+	/** 项目级 Agent 目录路径（~/.look/projects/<projectId>/agents） */
 	projectAgentsDir: string | null;
 }
 
@@ -146,7 +146,7 @@ export interface SubagentChainItem {
  */
 export interface SubagentHost {
 	/** 发现可用 Agent */
-	discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult;
+	discoverAgents(projectId: string, scope: AgentScope): AgentDiscoveryResult;
 	/**
 	 * 创建并运行一个子会话，返回其最终结果。
 	 * 子会话作为完整 Look 会话注册到 SessionRuntimeManager，

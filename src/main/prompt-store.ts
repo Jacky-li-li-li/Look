@@ -1,17 +1,14 @@
 // ============================================================
 // PromptStore — 管理多个自定义 System Prompt 变体
 //
-// 数据存储于 ~/.look/prompts.json，激活的 prompt 内容写入
-// ~/.look/SYSTEM.md 供 pi SDK 的 DefaultResourceLoader 加载。
-// 项目级 prompt 独立管理，每个项目有自己的 prompt 列表。
+// 数据存储于 ~/.look/prompts.json。
+// 全局激活 prompt → ~/.look/SYSTEM.md（pi SDK ResourceLoader 自动加载）
+// 项目激活 prompt → ~/.look/projects/<projectId>/SYSTEM.md（before_agent_start 注入）
 // ============================================================
 
 import fs from "fs";
 import path from "path";
-import { getPromptsPath, getSystemPromptPath } from "./shared/look-storage.js";
-
-/** pi SDK 硬编码的项目配置目录名（resource-loader.js `discoverSystemPromptFile` 使用） */
-const PI_CONFIG_DIR = ".pi";
+import { getProjectSystemPromptPath, getPromptsPath, getSystemPromptPath } from "./shared/look-storage.js";
 
 /** 表示"跟随全局"的哨兵值 */
 const FOLLOW_GLOBAL = "__follow_global__";
@@ -295,27 +292,25 @@ export class PromptStore {
 	// ============================================================
 
 	/** @deprecated 新代码应使用项目专属 prompt */
-	setProjectPrompt(projectId: string, promptId: string | null, projectCwd: string): void {
+	setProjectPrompt(projectId: string, promptId: string | null, _projectCwd?: string): void {
 		if (promptId) {
 			const proj = this.getOrCreateProjectData(projectId);
-			// 从全局列表找
 			const prompt = this.data.prompts.find((p) => p.id === promptId);
 			if (prompt) {
-				// 添加到项目专属列表
 				const exists = proj.prompts.find((p) => p.id === promptId);
 				if (!exists) {
 					proj.prompts.push({ ...prompt, isBuiltin: false });
 				}
 				proj.activePromptId = promptId;
 				this.save();
-				this.writeProjectSystemFile(projectCwd, prompt.content);
+				this.writeProjectSystemFileForProject(projectId);
 			}
 		} else {
 			const proj = this.data.projectOverrides[projectId];
 			if (proj) {
 				proj.activePromptId = FOLLOW_GLOBAL;
 				this.save();
-				this.deleteProjectSystemFile(projectCwd);
+				this.deleteProjectSystemFileForProject(projectId);
 			}
 		}
 	}
@@ -334,92 +329,79 @@ export class PromptStore {
 	// ============================================================
 
 	/**
-	 * 写入指定项目的 .pi/SYSTEM.md（根据当前激活的项目 prompt）。
+	 * 写入项目 SYSTEM.md（~/.look/projects/<projectId>/SYSTEM.md）。
 	 * 如果项目激活的是 FOLLOW_GLOBAL，则删除项目 SYSTEM.md。
 	 */
 	private writeProjectSystemFileForProject(projectId: string): void {
 		const proj = this.data.projectOverrides[projectId];
 		if (!proj) return;
+		const filePath = getProjectSystemPromptPath(projectId);
 		if (proj.activePromptId === FOLLOW_GLOBAL) {
-			// 需要 cwd 来删除，但此处没有 cwd 信息
-			// 由调用方（IPC handler）传入 cwd 处理
+			this.deleteProjectSystemFileForProject(projectId);
 			return;
 		}
 		const prompt = proj.prompts.find((p) => p.id === proj.activePromptId);
 		if (!prompt) return;
-		// 同样需要 cwd
+		try {
+			fs.mkdirSync(path.dirname(filePath), { recursive: true });
+			fs.writeFileSync(filePath, prompt.content, "utf-8");
+		} catch (err) {
+			console.error(`[Look] Failed to write project SYSTEM.md for ${projectId}:`, err);
+		}
 	}
 
 	private deleteProjectSystemFileForProject(projectId: string): void {
-		// 需要 cwd，由 IPC handler 处理
+		try {
+			const filePath = getProjectSystemPromptPath(projectId);
+			if (fs.existsSync(filePath)) {
+				fs.unlinkSync(filePath);
+			}
+		} catch (err) {
+			console.error(`[Look] Failed to delete project SYSTEM.md for ${projectId}:`, err);
+		}
 	}
 
 	/**
-	 * 当全局 prompt 内容更新时，同步所有使用该 prompt 的项目级 .pi/SYSTEM.md。
+	 * 当全局 prompt 内容更新时，同步所有使用该 prompt 的项目级 SYSTEM.md。
 	 */
 	private syncProjectFilesForPrompt(promptId: string): void {
 		const prompt = this.data.prompts.find((p) => p.id === promptId);
 		if (!prompt) return;
-		// 遍历所有项目，找到引用了这个 prompt 的
-		for (const [_projectId, proj] of Object.entries(this.data.projectOverrides)) {
+		for (const [projectId, proj] of Object.entries(this.data.projectOverrides)) {
 			if (proj.activePromptId === promptId) {
-				// 在项目 prompt 列表中查找
 				const pp = proj.prompts.find((p) => p.id === promptId);
 				if (pp) {
 					pp.content = prompt.content;
 				}
+				this.writeProjectSystemFileForProject(projectId);
 			}
 		}
 		this.save();
 	}
 
 	/**
-	 * 同步指定项目的 .pi/SYSTEM.md —— 由 IPC handler 调用（因为有 cwd）。
+	 * 同步指定项目的 SYSTEM.md —— 由 IPC handler 调用（不再需要 cwd）。
 	 */
-	syncProjectSystemFile(projectId: string, projectCwd: string): void {
+	syncProjectSystemFile(projectId: string, _projectCwd?: string): void {
 		const proj = this.data.projectOverrides[projectId];
 		if (!proj || proj.activePromptId === FOLLOW_GLOBAL) {
-			this.deleteProjectSystemFile(projectCwd);
+			this.deleteProjectSystemFileForProject(projectId);
 			return;
 		}
 		const prompt = proj.prompts.find((p) => p.id === proj.activePromptId);
 		if (prompt) {
-			this.writeProjectSystemFile(projectCwd, prompt.content);
+			this.writeProjectSystemFileForProject(projectId);
 		}
 	}
 
-	private writeProjectSystemFile(projectCwd: string, content: string): void {
-		try {
-			const dir = path.join(projectCwd, PI_CONFIG_DIR);
-			const filePath = path.join(dir, "SYSTEM.md");
-			fs.mkdirSync(dir, { recursive: true });
-			fs.writeFileSync(filePath, content);
-		} catch (err) {
-			console.error(`[Look] Failed to write project SYSTEM.md for ${projectCwd}:`, err);
-		}
-	}
-
-	private deleteProjectSystemFile(projectCwd: string): void {
-		try {
-			const filePath = path.join(projectCwd, PI_CONFIG_DIR, "SYSTEM.md");
-			if (fs.existsSync(filePath)) {
-				fs.unlinkSync(filePath);
-			}
-		} catch (err) {
-			console.error(`[Look] Failed to delete project SYSTEM.md for ${projectCwd}:`, err);
-		}
-	}
-
-	// @deprecated — 保留向后兼容
-	syncProjectOverridesForPrompt(promptId: string, projectCwds: Record<string, string>): void {
+	/** @deprecated — 兼容旧调用签名 */
+	syncProjectOverridesForPrompt(promptId: string, _projectCwds?: Record<string, string>): void {
 		const prompt = this.data.prompts.find((p) => p.id === promptId);
 		if (!prompt) return;
-		for (const [projectId, proj] of Object.entries(this.data.projectOverrides)) {
+		for (const projectId of Object.keys(this.data.projectOverrides)) {
+			const proj = this.data.projectOverrides[projectId];
 			if (proj.activePromptId === promptId) {
-				const cwd = projectCwds[projectId];
-				if (cwd) {
-					this.writeProjectSystemFile(cwd, prompt.content);
-				}
+				this.writeProjectSystemFileForProject(projectId);
 			}
 		}
 	}

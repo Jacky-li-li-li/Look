@@ -3,7 +3,7 @@ import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
 import { useAtomValue, useSetAtom } from "jotai";
-import { Check, ChevronDown, Copy, GitBranch, MessageSquare, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /** Stable empty object reference — avoids defeating React.memo on every itemContent call. */
@@ -405,14 +405,22 @@ const ChatMessageList = memo(function ChatMessageList({
 	);
 
 	if (timeline.length === 0) {
+		const loadingSnapshot =
+			sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
 		return (
 			<>
 				<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
 					<div className="relative">
 						<PixelAgentAvatar status={phase} size="lg" />
-						<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
+						{loadingSnapshot ? (
+							<Loader2 className="absolute -right-2 -bottom-2 size-5 animate-spin rounded-md border border-hairline bg-background p-1 text-foreground" />
+						) : (
+							<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
+						)}
 					</div>
-					<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>
+					<h3 className="text-[13px] font-semibold text-foreground">
+						{loadingSnapshot ? t("common.loading") : t("chat.empty")}
+					</h3>
 				</div>
 				<BranchConfirmDialog request={pendingConfirm} onResolve={handleConfirmResolve} />
 			</>

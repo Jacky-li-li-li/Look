@@ -73,12 +73,12 @@ function summarizeSingle(result: SubagentResult): string {
  *
  * @param sessionId 父会话 pi session ID
  * @param host      SubagentHost（SessionRuntimeManager 实现）
- * @param cwd       父会话工作目录（用于发现项目级 Agent + 写入工具描述）
+ * @param projectId 项目 ID（用于发现项目级 Agent + 写入工具描述）
  */
-export function createSubagentExtensionFactory(sessionId: string, host: SubagentHost, cwd: string): ExtensionFactory {
+export function createSubagentExtensionFactory(sessionId: string, host: SubagentHost, projectId: string): ExtensionFactory {
 	// 在 bind 时发现一次 Agent，把列表写入工具描述，让 LLM 可见可用 Agent。
 	// （Stage 3 的 Agent 编辑会触发 session reload → 重新 bind → 列表刷新。）
-	const discovery = discoverAgents(cwd, "both");
+	const discovery = discoverAgents(projectId, "both");
 	const agentListText = formatAgentList(discovery.agents);
 
 	return (api) => {
@@ -89,7 +89,7 @@ export function createSubagentExtensionFactory(sessionId: string, host: Subagent
 				"Delegate tasks to specialized subagents with isolated context windows.",
 				"Each subagent runs as a full Look session (visible nested under this session in the sidebar) and returns its final output.",
 				"Modes: single ({agent, task}), parallel ({tasks:[{agent,task}]}), chain ({chain:[{agent,task}]} with {previous} placeholder).",
-				'agentScope: "both" (default, user + project), "user" (~/.look/agents), or "project" (.pi/agents).',
+				'agentScope: "both" (default, user + project), "user" (~/.look/agents), or "project" (~/.look/projects/<id>/agents).',
 				`Available agents: ${agentListText}.`,
 				"Use this for complex, parallelizable, or specialized work that benefits from isolated context.",
 			].join(" "),
@@ -108,7 +108,7 @@ export function createSubagentExtensionFactory(sessionId: string, host: Subagent
 				}
 
 				const agentScope = params.agentScope ?? "both";
-				const runtimeDiscovery = discoverAgents(cwd, agentScope);
+				const runtimeDiscovery = discoverAgents(projectId, agentScope);
 				const agents = runtimeDiscovery.agents;
 
 				const hasChain = (params.chain?.length ?? 0) > 0;

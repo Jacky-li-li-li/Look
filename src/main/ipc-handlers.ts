@@ -395,11 +395,7 @@ async function handleRendererInvoke(
 			if (!prompt) return { success: false, error: "Prompt not found" };
 			// 同步使用该 prompt 的所有项目级 SYSTEM.md
 			if (patch.content) {
-				const projectCwds: Record<string, string> = {};
-				for (const p of runtimeManager.listProjects()) {
-					if (p.valid) projectCwds[p.id] = p.cwd;
-				}
-				runtimeManager.promptStore.syncProjectOverridesForPrompt(id, projectCwds);
+				runtimeManager.promptStore.syncProjectOverridesForPrompt(id);
 			}
 			return { success: true, prompt };
 		}
@@ -430,8 +426,7 @@ async function handleRendererInvoke(
 			const name = guardString(data.name, "name");
 			const content = guardString(data.content, "content");
 			const prompt = runtimeManager.promptStore.createProjectPrompt(projectId, name, content);
-			const project = runtimeManager.getProjectInfo(projectId);
-			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			runtimeManager.promptStore.syncProjectSystemFile(projectId);
 			return { success: true, prompt };
 		}
 
@@ -443,8 +438,7 @@ async function handleRendererInvoke(
 			if ("content" in data) patch.content = guardString(data.content, "content");
 			const prompt = runtimeManager.promptStore.updateProjectPrompt(projectId, id, patch);
 			if (!prompt) return { success: false, error: "Prompt not found" };
-			const project = runtimeManager.getProjectInfo(projectId);
-			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			runtimeManager.promptStore.syncProjectSystemFile(projectId);
 			return { success: true, prompt };
 		}
 
@@ -453,8 +447,7 @@ async function handleRendererInvoke(
 			const id = guardString(data.id, "id");
 			const deleted = runtimeManager.promptStore.deleteProjectPrompt(projectId, id);
 			if (!deleted) return { success: false, error: "Cannot delete this prompt" };
-			const project = runtimeManager.getProjectInfo(projectId);
-			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			runtimeManager.promptStore.syncProjectSystemFile(projectId);
 			return { success: true };
 		}
 
@@ -463,8 +456,7 @@ async function handleRendererInvoke(
 			const id = guardString(data.id, "id");
 			const ok = runtimeManager.promptStore.setProjectActive(projectId, id);
 			if (!ok) return { success: false, error: "Prompt not found" };
-			const project = runtimeManager.getProjectInfo(projectId);
-			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			runtimeManager.promptStore.syncProjectSystemFile(projectId);
 			return { success: true };
 		}
 
@@ -1063,7 +1055,7 @@ export async function promptForProjectTrust(
 		type: "warning",
 		title: "Trust project folder?",
 		message: "Trust project folder?",
-		detail: `${project.cwd}\n\nThis allows pi to load .pi settings and resources, install missing project packages, and execute project extensions.`,
+		detail: `${project.cwd}\n\nThis allows Look to load project settings and resources, install missing packages, and execute project extensions.`,
 		buttons: ["Trust", "Do Not Trust"],
 		defaultId: 1,
 		cancelId: 1,
