@@ -76,6 +76,7 @@ import {
 	type AgentInfo,
 	type ForkedSessionResult,
 	type ImSessionProvider,
+	type LookUiEvent,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
 	type MainToRendererEvent,
@@ -215,6 +216,24 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 	 *  Tracks active (started but not ended) text/thinking/toolcall blocks so the
 	 *  translator can emit synthetic end events when the assistant stream finishes. */
 	private readonly translationTrackers = new Map<string, ContentBlockTracker>();
+
+	/** Time-window (ms) for batching session:ui-event emissions.
+	 *  8ms gives ~120fps headroom while still coalescing per-token bursts. */
+	private static readonly UI_EVENT_BATCH_MS = 8;
+
+	/** Short probe window for the very first event after idle.
+	 *  If no second event arrives within 1ms, flush immediately to avoid
+	 *  artificially delaying sparse streams. */
+	private static readonly UI_EVENT_FIRST_MS = 1;
+
+	/** Per-session buffers of pending UI events before flush. */
+	private readonly uiEventBuffers = new Map<string, LookUiEvent[]>();
+
+	/** Per-session 8ms batch timers. */
+	private readonly uiEventFlushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+	/** Per-session 1ms first-event probe timers. */
+	private readonly uiEventFirstTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	// ---- SubAgent 子会话注册表 ----
 	/** 父会话 ID → 子会话 ID 集合 */
@@ -940,6 +959,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 		this.autoTitleService.dispose(previousSessionId);
 		this.createdAtDefaultName.delete(previousSessionId);
 		this.translationTrackers.delete(previousSessionId);
+		this.flushUiEventBuffer(previousSessionId);
 		this.permissionService.restoreFromSession(session.sessionId, session.sessionManager);
 		this.planService.restoreToolSnapshot(session.sessionId, session.sessionManager);
 		await session.bindExtensions({
@@ -1015,6 +1035,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 		this.streamingStates.delete(sessionId);
 		this.turnStartedAtBySession.delete(sessionId);
 		this.translationTrackers.delete(sessionId);
+		this.clearUiEventBuffer(sessionId);
 		await managed.runtime.dispose();
 	}
 
@@ -1862,8 +1883,21 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 			this.translationTrackers.set(sessionId, tracker);
 		}
 		const uiEvents = translateAgentSessionEvent(event, tracker);
+
+		// Terminal events flush immediately so UI never lags a frame on
+		// end-of-turn, error, or compaction completion.
+		const isTerminal =
+			event.type === "agent_end" ||
+			event.type === "compaction_end" ||
+			(event.type === "auto_retry_end" && !event.success);
+
 		if (uiEvents.length > 0) {
-			this.emit({ type: "session:ui-event", sessionId, events: uiEvents });
+			if (isTerminal) {
+				this.flushUiEventBuffer(sessionId);
+				this.emit({ type: "session:ui-event", sessionId, events: uiEvents });
+			} else {
+				this.bufferUiEvents(sessionId, uiEvents);
+			}
 		}
 		switch (event.type) {
 			case "agent_end":
@@ -1920,6 +1954,84 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 				this.emitSessionUpdated(sessionId);
 				break;
 		}
+	}
+
+	/** Buffer non-terminal UI events per session for time-window batching. */
+	private bufferUiEvents(sessionId: string, events: LookUiEvent[]): void {
+		const existing = this.uiEventBuffers.get(sessionId);
+		if (existing) {
+			existing.push(...events);
+			// A second event arrived during the 1ms first-event probe:
+			// switch to the normal 8ms batch window.
+			if (this.uiEventFirstTimers.has(sessionId)) {
+				this.promoteUiEventFlush(sessionId);
+			}
+		} else {
+			this.uiEventBuffers.set(sessionId, [...events]);
+		}
+		this.scheduleUiEventFlush(sessionId);
+	}
+
+	/** Schedule a batched flush. After an idle gap, the first event is probed
+	 *  for 1ms; if more events arrive we switch to the 8ms batch window. */
+	private scheduleUiEventFlush(sessionId: string): void {
+		if (this.uiEventFlushTimers.has(sessionId) || this.uiEventFirstTimers.has(sessionId)) return;
+		const firstTimer = setTimeout(() => {
+			this.uiEventFirstTimers.delete(sessionId);
+			this.flushUiEventBuffer(sessionId);
+		}, SessionRuntimeManager.UI_EVENT_FIRST_MS);
+		this.uiEventFirstTimers.set(sessionId, firstTimer);
+	}
+
+	/** Promote from the 1ms first-event probe to the 8ms batch timer. */
+	private promoteUiEventFlush(sessionId: string): void {
+		const firstTimer = this.uiEventFirstTimers.get(sessionId);
+		if (firstTimer) {
+			clearTimeout(firstTimer);
+			this.uiEventFirstTimers.delete(sessionId);
+		}
+		if (this.uiEventFlushTimers.has(sessionId)) return;
+		const timer = setTimeout(() => {
+			this.uiEventFlushTimers.delete(sessionId);
+			this.flushUiEventBuffer(sessionId);
+		}, SessionRuntimeManager.UI_EVENT_BATCH_MS);
+		this.uiEventFlushTimers.set(sessionId, timer);
+	}
+
+	/** Discard buffered UI events for a session without emitting (destroy cleanup). */
+	private clearUiEventBuffer(sessionId: string): void {
+		const flushTimer = this.uiEventFlushTimers.get(sessionId);
+		if (flushTimer) {
+			clearTimeout(flushTimer);
+			this.uiEventFlushTimers.delete(sessionId);
+		}
+		const firstTimer = this.uiEventFirstTimers.get(sessionId);
+		if (firstTimer) {
+			clearTimeout(firstTimer);
+			this.uiEventFirstTimers.delete(sessionId);
+		}
+		this.uiEventBuffers.delete(sessionId);
+	}
+
+	/** Drain the buffered UI events for a session and emit them as one batch. */
+	private flushUiEventBuffer(sessionId: string): void {
+		const flushTimer = this.uiEventFlushTimers.get(sessionId);
+		if (flushTimer) {
+			clearTimeout(flushTimer);
+			this.uiEventFlushTimers.delete(sessionId);
+		}
+		const firstTimer = this.uiEventFirstTimers.get(sessionId);
+		if (firstTimer) {
+			clearTimeout(firstTimer);
+			this.uiEventFirstTimers.delete(sessionId);
+		}
+		const events = this.uiEventBuffers.get(sessionId);
+		if (!events || events.length === 0) return;
+		this.uiEventBuffers.delete(sessionId);
+		if (typeof performance !== "undefined") {
+			performance.mark(`look:ui-events:emit:${sessionId.slice(0, 6)}`);
+		}
+		this.emit({ type: "session:ui-event", sessionId, events });
 	}
 
 	private async refreshAfterTurn(sessionId: string): Promise<void> {

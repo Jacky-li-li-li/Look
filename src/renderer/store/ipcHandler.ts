@@ -171,17 +171,110 @@ export function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 }
 
 // ── UI event pipeline ──
-// 直接同步写入 Jotai，不缓冲。流式输出的逐字丝滑感优先于批处理性能收益。
-// StreamingMarkdown 通过 marked.js + 块拆分实现 O(1) 增量渲染，
-// 流式尾部每 token 即时更新，无需在 IPC 层再做缓冲。
+// rAF 帧级合并：将 per-token IPC 事件缓冲一帧后一次性写入 Jotai，
+// 把数据模型更新频率从 token 速率降到 ≤ 帧率（60fps），消除 per-token
+// 重渲染风暴。视觉平滑完全交给 StreamingTail 的 rAF 打字机。
+//
+// 关键事件（run_status 非 streaming/working、assistant_message_end、
+// retry_status end、error）立即 flush 以保证收尾/报错不延迟一帧。
 
-function enqueueUiEvent(sessionId: string, events: LookUiEvent[]): void {
+/** Per-session pending event queue — one frame's worth of events. */
+const pendingQueues = new Map<string, LookUiEvent[]>();
+
+/** Sessions that already have a rAF (or fallback timeout) flush scheduled. */
+const scheduledSessions = new Set<string>();
+
+/** Max-latency fallback timers for background tabs (rAF doesn't fire when hidden). */
+const fallbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const MAX_FLUSH_LATENCY_MS = 16;
+
+function isTerminalEvent(e: LookUiEvent): boolean {
+	if (e.type === "error" || e.type === "assistant_message_end") return true;
+	if (e.type === "run_status" && e.status !== "streaming" && e.status !== "working") return true;
+	if (e.type === "retry_status" && (e as any).status === "end") return true;
+	return false;
+}
+
+function cancelFallback(sessionId: string): void {
+	const timer = fallbackTimers.get(sessionId);
+	if (timer) {
+		clearTimeout(timer);
+		fallbackTimers.delete(sessionId);
+	}
+}
+
+function flushSession(sessionId: string): void {
+	scheduledSessions.delete(sessionId);
+	cancelFallback(sessionId);
+	const events = pendingQueues.get(sessionId);
+	if (!events || events.length === 0) return;
+	pendingQueues.delete(sessionId);
 	applyUiEventBatch(sessionId, events);
 }
 
-/** 测试辅助：同步 flush，与 enqueueUiEvent 行为一致（无缓冲）。 */
+function scheduleFlush(sessionId: string): void {
+	if (scheduledSessions.has(sessionId)) return;
+	scheduledSessions.add(sessionId);
+
+	// In Node.js test environments, requestAnimationFrame is unavailable.
+	// Events accumulate in pendingQueues and flushAllUiEvents() drains them
+	// synchronously — tests call it after every dispatch.
+	if (typeof requestAnimationFrame !== "function") return;
+
+	// rAF for foreground rendering; setTimeout fallback for hidden windows.
+	const rafId = requestAnimationFrame(() => {
+		cancelFallback(sessionId);
+		flushSession(sessionId);
+	});
+
+	const timer = setTimeout(() => {
+		if (scheduledSessions.has(sessionId)) {
+			cancelAnimationFrame(rafId);
+			flushSession(sessionId);
+		}
+	}, MAX_FLUSH_LATENCY_MS);
+	fallbackTimers.set(sessionId, timer);
+}
+
+function enqueueUiEvent(sessionId: string, events: LookUiEvent[]): void {
+	if (events.length === 0) return;
+
+	// Terminal events → flush immediately so end-of-turn / errors don't lag a frame.
+	// Drain any queued events first to preserve ordering.
+	if (events.some(isTerminalEvent)) {
+		const pending = pendingQueues.get(sessionId);
+		if (pending && pending.length > 0) {
+			pendingQueues.delete(sessionId);
+			scheduledSessions.delete(sessionId);
+			cancelFallback(sessionId);
+			applyUiEventBatch(sessionId, pending);
+		}
+		applyUiEventBatch(sessionId, events);
+		return;
+	}
+
+	const existing = pendingQueues.get(sessionId);
+	if (existing) {
+		existing.push(...events);
+	} else {
+		pendingQueues.set(sessionId, [...events]);
+	}
+	scheduleFlush(sessionId);
+}
+
+/** 测试辅助：同步 drain 所有待处理队列，供测试在 dispatch 后立即断言。 */
 export function flushAllUiEvents(): void {
-	// 无缓冲，无需 flush
+	const dirtyIds = [...pendingQueues.keys()];
+	for (const id of dirtyIds) {
+		scheduledSessions.delete(id);
+		cancelFallback(id);
+		const events = pendingQueues.get(id);
+		pendingQueues.delete(id);
+		if (events && events.length > 0) {
+			applyUiEventBatch(id, events);
+		}
+	}
 }
 
 /**
@@ -195,11 +288,43 @@ let _nextBlockUid = 0;
 function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	if (events.length === 0) return;
 
+	if (typeof performance !== "undefined") {
+		performance.mark(`look:ui-events:receive:${sessionId.slice(0, 6)}`);
+	}
+
 	const atom = sessionStateAtomFamily(sessionId);
 	const prev = appStore.get(atom);
 
-	let blocks: LookUiStreamBlock[] = [...prev.uiBlocks];
-	let toolExecs: Record<string, LookUiToolExecState> = { ...prev.uiTools };
+	// Deferred copy: only clone the array when we actually mutate a block.
+	// This keeps the uiBlocks reference stable for turns where only tool exec
+	// state changes, reducing React re-renders in the streaming subtree.
+	let blocks: LookUiStreamBlock[] = prev.uiBlocks;
+	let blocksChanged = false;
+	const mutateBlock = (index: number, next: LookUiStreamBlock): void => {
+		if (!blocksChanged) {
+			blocks = [...blocks];
+			blocksChanged = true;
+		}
+		blocks[index] = next;
+	};
+	const appendBlock = (next: LookUiStreamBlock): void => {
+		if (!blocksChanged) {
+			blocks = [...blocks];
+			blocksChanged = true;
+		}
+		blocks.push(next);
+	};
+
+	let toolExecs: Record<string, LookUiToolExecState> = prev.uiTools;
+	let toolExecsChanged = false;
+	const setToolExec = (id: string, next: LookUiToolExecState): void => {
+		if (!toolExecsChanged) {
+			toolExecs = { ...toolExecs };
+			toolExecsChanged = true;
+		}
+		toolExecs[id] = next;
+	};
+
 	let phase: LookUiPhase | undefined;
 	let steering: string[] | undefined;
 	let followUp: string[] | undefined;
@@ -224,17 +349,14 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	for (const ev of events) {
 		switch (ev.type) {
 			case "assistant_text_start":
-				blocks = [
-					...blocks,
-					{
-						contentIndex: ev.contentIndex,
-						kind: "text",
-						text: "",
-						thinking: "",
-						completed: false,
-						uid: _nextBlockUid++,
-					},
-				];
+				appendBlock({
+					contentIndex: ev.contentIndex,
+					kind: "text",
+					text: "",
+					thinking: "",
+					completed: false,
+					uid: _nextBlockUid++,
+				});
 				break;
 			case "assistant_text_delta": {
 				textDeltas.set(ev.contentIndex, (textDeltas.get(ev.contentIndex) ?? "") + ev.delta);
@@ -243,7 +365,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "assistant_text_end": {
 				for (let i = 0; i < blocks.length; i++) {
 					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "text" && !blocks[i]!.completed) {
-						blocks[i] = { ...blocks[i]!, completed: true };
+						mutateBlock(i, { ...blocks[i]!, completed: true });
 						break;
 					}
 				}
@@ -251,17 +373,14 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			}
 
 			case "thinking_start":
-				blocks = [
-					...blocks,
-					{
-						contentIndex: ev.contentIndex,
-						kind: "thinking",
-						text: "",
-						thinking: "",
-						completed: false,
-						uid: _nextBlockUid++,
-					},
-				];
+				appendBlock({
+					contentIndex: ev.contentIndex,
+					kind: "thinking",
+					text: "",
+					thinking: "",
+					completed: false,
+					uid: _nextBlockUid++,
+				});
 				break;
 			case "thinking_delta": {
 				thinkingDeltas.set(ev.contentIndex, (thinkingDeltas.get(ev.contentIndex) ?? "") + ev.delta);
@@ -274,7 +393,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 						blocks[i]!.kind === "thinking" &&
 						!blocks[i]!.completed
 					) {
-						blocks[i] = { ...blocks[i]!, completed: true };
+						mutateBlock(i, { ...blocks[i]!, completed: true });
 						break;
 					}
 				}
@@ -285,19 +404,16 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				// Only add if no incomplete toolcall block with this contentIndex exists —
 				// completed blocks from a previous message may share the same contentIndex.
 				if (!pendingToolcallIndex.has(ev.contentIndex)) {
-					blocks = [
-						...blocks,
-						{
-							contentIndex: ev.contentIndex,
-							kind: "toolcall",
-							text: "",
-							thinking: "",
-							toolCallId: ev.toolCallId,
-							toolName: ev.toolName,
-							completed: false,
-							uid: _nextBlockUid++,
-						},
-					];
+					appendBlock({
+						contentIndex: ev.contentIndex,
+						kind: "toolcall",
+						text: "",
+						thinking: "",
+						toolCallId: ev.toolCallId,
+						toolName: ev.toolName,
+						completed: false,
+						uid: _nextBlockUid++,
+					});
 					pendingToolcallIndex.set(ev.contentIndex, blocks.length - 1);
 				}
 				break;
@@ -323,52 +439,45 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 					updated.args = ev.args;
 					updated.argsRaw = undefined;
 					updated.completed = true;
-					blocks = [...blocks.slice(0, idx), updated, ...blocks.slice(idx + 1)];
+					mutateBlock(idx, updated);
 				} else {
-					blocks = [
-						...blocks,
-						{
-							contentIndex: ev.contentIndex,
-							kind: "toolcall",
-							text: "",
-							thinking: "",
-							toolCallId: ev.toolCallId,
-							toolName: ev.toolName,
-							args: ev.args,
-							completed: true,
-							uid: _nextBlockUid++,
-						},
-					];
+					appendBlock({
+						contentIndex: ev.contentIndex,
+						kind: "toolcall",
+						text: "",
+						thinking: "",
+						toolCallId: ev.toolCallId,
+						toolName: ev.toolName,
+						args: ev.args,
+						completed: true,
+						uid: _nextBlockUid++,
+					});
 				}
 				pendingToolcallIndex.delete(ev.contentIndex);
 				break;
 			}
 
 			case "tool_exec_start":
-				toolExecs = {
-					...toolExecs,
-					[ev.toolCallId]: { toolCallId: ev.toolCallId, toolName: ev.toolName, args: ev.args, phase: "running" },
-				};
+				setToolExec(ev.toolCallId, {
+					toolCallId: ev.toolCallId,
+					toolName: ev.toolName,
+					args: ev.args,
+					phase: "running",
+				});
 				break;
 			case "tool_exec_update":
 				if (toolExecs[ev.toolCallId]) {
-					toolExecs = {
-						...toolExecs,
-						[ev.toolCallId]: { ...toolExecs[ev.toolCallId], partialResult: ev.partialResult },
-					};
+					setToolExec(ev.toolCallId, { ...toolExecs[ev.toolCallId], partialResult: ev.partialResult });
 				}
 				break;
 			case "tool_exec_end":
 				if (toolExecs[ev.toolCallId]) {
-					toolExecs = {
-						...toolExecs,
-						[ev.toolCallId]: {
-							...toolExecs[ev.toolCallId],
-							phase: "completed",
-							result: ev.result,
-							isError: ev.isError,
-						},
-					};
+					setToolExec(ev.toolCallId, {
+						...toolExecs[ev.toolCallId],
+						phase: "completed",
+						result: ev.result,
+						isError: ev.isError,
+					});
 				}
 				break;
 
@@ -376,7 +485,9 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				phase = ev.status;
 				if (ev.status === "streaming") {
 					blocks = [];
+					blocksChanged = true;
 					toolExecs = {};
+					toolExecsChanged = true;
 				}
 				agentFlags = {
 					...agentFlags,
@@ -405,15 +516,25 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				}
 				break;
 
-			case "assistant_message_start":
-				blocks = blocks.filter((b) => b.completed);
+			case "assistant_message_start": {
+				const filtered = blocks.filter((b) => b.completed);
+				if (filtered.length !== blocks.length) {
+					blocks = filtered;
+					blocksChanged = true;
+				}
 				pendingToolcallIndex.clear();
 				break;
+			}
 
-			case "assistant_message_end":
-				blocks = blocks.map((b) => ({ ...b, completed: true }));
+			case "assistant_message_end": {
+				const mapped = blocks.map((b) => (b.completed ? b : { ...b, completed: true }));
+				if (mapped.some((b, i) => b !== blocks[i])) {
+					blocks = mapped;
+					blocksChanged = true;
+				}
 				pendingToolcallIndex.clear();
 				break;
+			}
 
 			case "error":
 				toast.error(ev.message);
@@ -445,7 +566,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 		for (let i = 0; i < blocks.length; i++) {
 			const b = blocks[i]!;
 			if (b.kind === "text" && !b.completed && textDeltas.has(b.contentIndex)) {
-				blocks[i] = { ...b, text: b.text + (textDeltas.get(b.contentIndex) ?? "") };
+				mutateBlock(i, { ...b, text: b.text + (textDeltas.get(b.contentIndex) ?? "") });
 			}
 		}
 	}
@@ -453,7 +574,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 		for (let i = 0; i < blocks.length; i++) {
 			const b = blocks[i]!;
 			if (b.kind === "thinking" && !b.completed && thinkingDeltas.has(b.contentIndex)) {
-				blocks[i] = { ...b, thinking: b.thinking + (thinkingDeltas.get(b.contentIndex) ?? "") };
+				mutateBlock(i, { ...b, thinking: b.thinking + (thinkingDeltas.get(b.contentIndex) ?? "") });
 			}
 		}
 	}
@@ -462,7 +583,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			const idx = pendingToolcallIndex.get(contentIndex);
 			if (idx != null && idx >= 0) {
 				const existing = blocks[idx]!;
-				blocks[idx] = { ...existing, argsRaw: (existing.argsRaw ?? "") + delta };
+				mutateBlock(idx, { ...existing, argsRaw: (existing.argsRaw ?? "") + delta });
 			}
 		}
 	}
@@ -472,7 +593,9 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	// persisted entries from the next snapshot become the source of truth.
 	if (nextPhase === "idle") {
 		blocks = [];
+		blocksChanged = true;
 		toolExecs = {};
+		toolExecsChanged = true;
 	}
 
 	appStore.set(atom, {
@@ -490,6 +613,10 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			agentsAtom,
 			appStore.get(agentsAtom).map((agent) => (agent.id === sessionId ? { ...agent, ...agentFlags } : agent)),
 		);
+	}
+
+	if (typeof performance !== "undefined") {
+		performance.mark(`look:ui-events:applied:${sessionId.slice(0, 6)}`);
 	}
 }
 

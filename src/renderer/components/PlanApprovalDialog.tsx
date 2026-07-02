@@ -12,7 +12,7 @@ import { Check, FileText, ShieldCheck, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { agentsAtom, permissionModeAtomFamily, planApprovalRequestAtomFamily } from "../store/atoms";
-import StreamingMarkdown from "./StreamingMarkdown";
+import LookMarkdown from "./LookMarkdown";
 
 export default function PlanApprovalDialog({ sessionId }: { sessionId: string | null }) {
 	const agents = useAtomValue(agentsAtom);
@@ -66,7 +66,7 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 					</div>
 				</DialogHeader>
 				<div className="max-h-[68vh] overflow-y-auto px-6 py-5">
-					<StreamingMarkdown content={request.plan} />
+					<LookMarkdown content={request.plan} docs />
 				</div>
 				<DialogFooter className="mx-0 mb-0 flex-row justify-end rounded-none px-5 py-3">
 					<Button variant="line" size="sm" disabled={responding} onClick={() => void respond("reject")}>

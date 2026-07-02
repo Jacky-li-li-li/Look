@@ -119,8 +119,12 @@ export function renderSkillSegments(
 
 export type AgentSegment = { kind: "text"; value: string } | { kind: "agent"; name: string };
 
-/** 匹配行首或空白后的 #agentName，# 后必须紧跟非空白、非 # 字符 */
-const HASH_AGENT_RE = /(?:^|\s)(#([^\s#]+))/g;
+/**
+ * 匹配行首或空白后的 #agentName。
+ * # 后必须紧跟名称且中间无空格，名称以小写字母开头，可含小/大写字母、数字、下划线、连字符。
+ * 该规则把 Markdown 标题（# Title / #Title）和常见 hex 颜色码（#FF0000）排除在外。
+ */
+const HASH_AGENT_RE = /(?:^|\s)(#([a-z][a-zA-Z0-9_-]*))/g;
 
 export function parseAgentSegments(content: string): AgentSegment[] {
 	if (!content) return [];

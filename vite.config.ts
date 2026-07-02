@@ -18,6 +18,13 @@ export default defineConfig({
     outDir: "../../dist/renderer",
     emptyOutDir: true,
     rollupOptions: {
+      onwarn(warning, warn) {
+        // markstream-react ships @__PURE__ annotations Rollup cannot interpret.
+        if (warning.code === "INVALID_ANNOTATION" && warning.id?.includes("markstream-react")) {
+          return;
+        }
+        warn(warning);
+      },
       output: {
         manualChunks: {
           // Isolate heavy syntax-highlighting and diagram libraries so they

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "markstream-react/index.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/inter";
 @plugin "@tailwindcss/typography";
@@ -1582,6 +1583,53 @@ body {
   }
 
   /* ============================================================
+     markstream-react theme overrides
+     ============================================================ */
+
+  .markstream-react {
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.72;
+    color: var(--foreground);
+  }
+
+  .markstream-react p,
+  .markstream-react li,
+  .markstream-react td,
+  .markstream-react th {
+    color: var(--foreground);
+  }
+
+  .markstream-react a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .markstream-react pre {
+    background: transparent;
+  }
+
+  .markstream-react code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .markstream-react img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .markstream-react hr {
+    border-color: var(--hairline);
+  }
+
+  .markstream-react blockquote {
+    border-left: 2px solid var(--hairline);
+    color: var(--muted-foreground);
+  }
+
+  /* ============================================================
      Inset Drawer — Thinking & Tool panels embedded in bubbles
      ============================================================ */
 
@@ -1917,39 +1965,6 @@ body {
      Streaming Cursor — smooth blink for streaming markdown tail
      ============================================================ */
 
-  @keyframes blink-cursor {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
-  .streaming-cursor {
-    display: inline-block;
-    width: 2px;
-    height: 1.2em;
-    background: currentColor;
-    animation: blink-cursor 1s step-end infinite;
-    vertical-align: text-bottom;
-    margin-left: 1px;
-  }
-
-  /* Isolate streaming tail from completed blocks to prevent layout thrash */
-  .streaming-tail {
-    contain: layout style;
-  }
-
-  /* Inline markdown mode (used inside SkillAwareContent flex layouts) */
-  .streaming-markdown-inline p,
-  .streaming-markdown-inline pre,
-  .streaming-markdown-inline ul,
-  .streaming-markdown-inline ol,
-  .streaming-markdown-inline blockquote {
-    display: inline;
-    margin: 0;
-  }
-
-  /* Completed markdown blocks — stable, never re-rendered */
-  .markdown-block {
-    contain: layout style;
-  }
 
   /* ============================================================
      Liquid Row — session list item

@@ -12,7 +12,6 @@ import { useAgentActions } from "./hooks/useAgentActions";
 import { useAppEffects } from "./hooks/useAppEffects";
 import { useAuthSession } from "./hooks/useAuthSession";
 import { useProjectActions } from "./hooks/useProjectActions";
-import { preloadHighlighter } from "./lib/highlighter";
 import { isSupabaseConfigured } from "./lib/supabase";
 import {
 	activeAgentAtom,
@@ -33,8 +32,6 @@ import {
 } from "./store/atoms";
 import { appStore } from "./store/ipcHandler";
 import { deriveSessionPhase } from "./store/sessionTypes";
-
-preloadHighlighter();
 
 const api = (window as any).look;
 

@@ -92,6 +92,12 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 		expect(SRC).toMatch(/atBottomStateChange/);
 	});
 
+	it("passes timeline data into Virtuoso so live item updates are explicit", () => {
+		expect(SRC).toMatch(/data=\{timeline\}/);
+		expect(SRC).toMatch(/computeItemKey/);
+		expect(SRC).not.toMatch(/timelineRef/);
+	});
+
 	it("uses scrollToIndex for navigate-to-entry", () => {
 		expect(SRC).toMatch(/scrollToIndex/);
 	});

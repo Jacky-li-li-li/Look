@@ -77,24 +77,29 @@ const ChatMessageList = memo(function ChatMessageList({
 	onSend,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
-	const timeline = useMemo<TimelineItem[]>(
+	// Split timeline derivation so persisted history is only rebuilt when entries
+	// change; the live streaming item is rebuilt only when ui state changes.
+	const persistedTimeline = useMemo<TimelineItem[]>(
+		() => buildTimeline(sessionState.entries, sessionState.messageDurations, [], {}, "idle", null),
+		[sessionState.entries, sessionState.messageDurations],
+	);
+	const liveTimeline = useMemo<TimelineItem[]>(
 		() =>
-			buildTimeline(
-				sessionState.entries,
-				sessionState.messageDurations,
-				sessionState.uiBlocks,
-				sessionState.uiTools,
-				sessionState.uiPhase,
-				sessionState.pendingUserMessage,
-			),
-		[
-			sessionState.entries,
-			sessionState.messageDurations,
-			sessionState.uiBlocks,
-			sessionState.uiTools,
-			sessionState.uiPhase,
-			sessionState.pendingUserMessage,
-		],
+			sessionState.uiPhase === "idle" && !sessionState.pendingUserMessage
+				? []
+				: buildTimeline(
+						[],
+						{},
+						sessionState.uiBlocks,
+						sessionState.uiTools,
+						sessionState.uiPhase,
+						sessionState.pendingUserMessage,
+					),
+		[sessionState.uiBlocks, sessionState.uiTools, sessionState.uiPhase, sessionState.pendingUserMessage],
+	);
+	const timeline = useMemo<TimelineItem[]>(
+		() => [...persistedTimeline, ...liveTimeline],
+		[persistedTimeline, liveTimeline],
 	);
 
 	const { leafId } = sessionState;
@@ -104,10 +109,6 @@ const ChatMessageList = memo(function ChatMessageList({
 	const [pendingConfirm, setPendingConfirm] = useState<BranchConfirmRequest | null>(null);
 	const [pendingBranchEntryId, setPendingBranchEntryId] = useState<string | null>(null);
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
-	// Stable ref so itemContent callback doesn't depend on timeline
-	// and avoids Virtuoso re-rendering all visible items on every streaming delta.
-	const timelineRef = useRef(timeline);
-	timelineRef.current = timeline;
 	const [isAtBottom, setIsAtBottom] = useState(true);
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	useEffect(() => setAtBottomAtom(isAtBottom), [isAtBottom, setAtBottomAtom]);
@@ -143,38 +144,17 @@ const ChatMessageList = memo(function ChatMessageList({
 		scrollToBottom();
 	}, [agentId, scrollToBottom]);
 
-	// Virtuoso's built-in SIZE_INCREASED handler is a one-shot subscription —
-	// after the first content growth during streaming it's consumed and never
-	// re-created. Manually keep scrolled to bottom while streaming by detecting
-	// content growth via uiBlocks total text length.
-	//
-	// IMPORTANT: skip when the user has scrolled away from the bottom — Virtuoso's
-	// `followOutput="auto"` already handles that case (returns false). Without
-	// this guard, our manual `scrollToBottom` keeps firing on every delta and
-	// yanks the user's viewport back down, breaking upward scroll smoothness.
+	// Keep the bottom anchored while the live item grows. Virtuoso follows new
+	// items well, but a streaming assistant grows the same last item for most of
+	// the turn, so we explicitly scroll only while the user is already at bottom.
 	const prevStreamLenRef = useRef(0);
-	const prevBlockCountRef = useRef(0);
 	useEffect(() => {
 		if (!isBusy || !isAtBottom) {
 			prevStreamLenRef.current = 0;
-			prevBlockCountRef.current = 0;
 			return;
 		}
-		// Fast path: block count unchanged means only deltas — compare
-		// reference identity of the first block's text to detect growth.
-		const blockCount = sessionState.uiBlocks.length;
-		if (blockCount === prevBlockCountRef.current) {
-			const block = sessionState.uiBlocks[0];
-			const blockLen = (block?.text?.length ?? 0) + (block?.thinking?.length ?? 0);
-			if (blockLen !== prevStreamLenRef.current) {
-				prevStreamLenRef.current = blockLen;
-				scrollToBottom();
-			}
-			return;
-		}
-		prevBlockCountRef.current = blockCount;
 		const totalLen = sessionState.uiBlocks.reduce(
-			(sum, b) => sum + (b.text?.length ?? 0) + (b.thinking?.length ?? 0),
+			(sum, block) => sum + (block.text?.length ?? 0) + (block.thinking?.length ?? 0),
 			0,
 		);
 		if (totalLen !== prevStreamLenRef.current) {
@@ -282,9 +262,11 @@ const ChatMessageList = memo(function ChatMessageList({
 		[t],
 	);
 
+	const computeItemKey = useCallback((index: number, item: TimelineItem) => item?.id ?? index, []);
+	const followOutput = useCallback((atBottom: boolean) => (atBottom ? "auto" : false), []);
+
 	const itemContent = useCallback(
-		(index: number) => {
-			const item = timelineRef.current[index];
+		(index: number, item: TimelineItem) => {
 			if (!item) return null;
 			if (item.entry) {
 				return (
@@ -299,7 +281,7 @@ const ChatMessageList = memo(function ChatMessageList({
 						<StreamingMessageBubble
 							agentName={agentName}
 							blocks={item.uiBlocks}
-							toolExecutions={item.uiTools ?? {}}
+							toolExecutions={item.uiTools ?? EMPTY_TOOL_EXECUTIONS}
 							isStreaming={isBusy}
 							autoCollapse={autoCollapse}
 						/>
@@ -434,8 +416,9 @@ const ChatMessageList = memo(function ChatMessageList({
 					key={agentId}
 					ref={virtuosoRef}
 					style={{ height: "100%" }}
-					totalCount={timeline.length}
-					followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
+					data={timeline}
+					computeItemKey={computeItemKey}
+					followOutput={followOutput}
 					atBottomStateChange={handleAtBottomChange}
 					itemContent={itemContent}
 				/>

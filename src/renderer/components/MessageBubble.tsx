@@ -385,6 +385,79 @@ export function SessionEntryBubble({ entry }: { entry: Exclude<SessionEntry, { t
 // Streaming blocks rendering — discrete-event path
 // ============================================================
 
+interface StreamingBlockViewProps {
+	block: LookUiStreamBlock;
+	toolExecution?: LookUiToolExecState;
+	isStreaming: boolean;
+	autoCollapse: boolean;
+}
+
+/**
+ * Per-block memo component — keyed by stable block.uid.
+ * When the parent re-renders with a new blocks array (one per frame after rAF
+ * batching), only blocks whose props actually changed will reconcile.
+ * Completed/frozen blocks skip entirely.
+ */
+const StreamingBlockView = memo(function StreamingBlockView({
+	block,
+	toolExecution,
+	isStreaming,
+	autoCollapse,
+}: StreamingBlockViewProps) {
+	if (block.kind === "text") {
+		if (!block.text) return null;
+		return (
+			<div className="message-prose">
+				<SkillAwareContent content={block.text} isStreaming={isStreaming && !block.completed} />
+			</div>
+		);
+	}
+	if (block.kind === "thinking") {
+		return (
+			<ThinkingPanel
+				thinking={block.thinking}
+				isStreaming={isStreaming && !block.completed}
+				autoCollapse={autoCollapse}
+			/>
+		);
+	}
+	if (block.kind === "toolcall") {
+		const s = toolExecution
+			? toolExecution.phase === "running"
+				? "running"
+				: toolExecution.isError
+					? "error"
+					: "success"
+			: /* When exec hasn't arrived yet, default to "running" even
+			   if block.completed — toolcall_end may arrive before
+			   tool_exec_start. ToolCallCard inline state reset
+			   handles the eventual transition correctly. */
+				"running";
+		// While streaming, prefer the final parsed args; fall back to the
+		// accumulated raw JSON (the SDK streams arguments as partial
+		// strings before the parsed object arrives). Without this the
+		// tool header shows `…` for the entire delta phase.
+		const displayArgs = block.args ?? (block.argsRaw ? safelyParsePartialJson(block.argsRaw) : undefined) ?? {};
+		return (
+			<ToolCallCard
+				toolCall={{
+					callId: block.toolCallId ?? "",
+					toolName: block.toolName ?? "unknown",
+					args: displayArgs,
+					status: s,
+					result: toolExecution?.result ?? toolExecution?.partialResult,
+					isError: toolExecution?.isError,
+				}}
+			/>
+		);
+	}
+	if (block.kind === "image") {
+		if (!block.image) return null;
+		return <ImageBlock block={block.image} />;
+	}
+	return null;
+});
+
 interface StreamingBlocksBubbleProps {
 	blocks: LookUiStreamBlock[];
 	toolExecutions: Record<string, LookUiToolExecState>;
@@ -415,76 +488,19 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 
 	return (
 		<div className="flex flex-col gap-1.5">
-			{blocks.map((block, i) => {
-				if (block.kind === "text") {
-					if (!block.text) return null;
-					return (
-						<div
-							key={block.uid != null ? `txt-${block.uid}` : `txt-${block.contentIndex ?? i}`}
-							className="message-prose"
-						>
-							<SkillAwareContent content={block.text} isStreaming={isStreaming && !block.completed} />
-						</div>
-					);
-				}
-				if (block.kind === "thinking") {
-					// Let ThinkingPanel decide — it shows a loading indicator
-					// when streaming with empty content.
-					return (
-						<ThinkingPanel
-							key={block.uid != null ? `think-${block.uid}` : `think-${block.contentIndex ?? i}`}
-							thinking={block.thinking}
-							isStreaming={isStreaming && !block.completed}
-							autoCollapse={autoCollapse}
-						/>
-					);
-				}
-				if (block.kind === "toolcall") {
-					const exec = block.toolCallId ? toolExecutions[block.toolCallId] : undefined;
-					const s = exec
-						? exec.phase === "running"
-							? "running"
-							: exec.isError
-								? "error"
-								: "success"
-						: /* When exec hasn't arrived yet, default to "running" even
-						   if block.completed — toolcall_end may arrive before
-						   tool_exec_start. ToolCallCard inline state reset
-						   handles the eventual transition correctly. */
-							"running";
-					// While streaming, prefer the final parsed args; fall back to the
-					// accumulated raw JSON (the SDK streams arguments as partial
-					// strings before the parsed object arrives). Without this the
-					// tool header shows `…` for the entire delta phase.
-					const displayArgs =
-						block.args ?? (block.argsRaw ? safelyParsePartialJson(block.argsRaw) : undefined) ?? {};
-					return (
-						<ToolCallCard
-							key={
-								block.toolCallId ??
-								(block.uid != null ? `tool-${block.uid}` : `tool-${block.contentIndex ?? i}`)
-							}
-							toolCall={{
-								callId: block.toolCallId ?? "",
-								toolName: block.toolName ?? "unknown",
-								args: displayArgs,
-								status: s,
-								result: exec?.result ?? exec?.partialResult,
-								isError: exec?.isError,
-							}}
-						/>
-					);
-				}
-				if (block.kind === "image") {
-					if (!block.image) return null;
-					return (
-						<ImageBlock
-							key={block.uid != null ? `img-${block.uid}` : `img-${block.contentIndex ?? i}`}
-							block={block.image}
-						/>
-					);
-				}
-				return null;
+			{blocks.map((block) => {
+				const key = block.uid != null ? `sb-${block.uid}` : `sb-${block.contentIndex ?? block.kind}`;
+				return (
+					<StreamingBlockView
+						key={key}
+						block={block}
+						toolExecution={
+							block.kind === "toolcall" && block.toolCallId ? toolExecutions[block.toolCallId] : undefined
+						}
+						isStreaming={isStreaming}
+						autoCollapse={autoCollapse}
+					/>
+				);
 			})}
 		</div>
 	);
