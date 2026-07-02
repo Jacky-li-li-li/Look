@@ -19,7 +19,7 @@ describe("pi runtime architecture regressions", () => {
 
 	it("2. gates project resources with pi Project Trust", () => {
 		expect(runtime).toContain("ProjectTrustStore");
-		expect(runtime).toContain("hasProjectTrustInputs");
+		expect(runtime).toContain("hasTrustRequiringProjectResources");
 		expect(runtime).toContain("resolveProjectTrust: async () => resolveLatestProjectTrust()");
 		expect(runtime).not.toContain("resolveProjectTrust: async () => trusted");
 		expect(ipc).toContain("dialog.showMessageBox");

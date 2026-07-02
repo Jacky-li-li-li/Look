@@ -91,6 +91,22 @@ export function useAgentActions() {
 		}
 	}, []);
 
+	const handleDequeueAll = useCallback(async () => {
+		const id = appStore.get(activeAgentIdAtom);
+		if (!id || !api) return;
+		try {
+			const result = await api.dequeueMessages(id);
+			if (result?.success && result.messages?.length > 0) {
+				// 将取回的消息合并，后续可通过 inputRef 注入编辑器
+				const text = result.messages.join("\n\n");
+				toast.info(result.messages.length > 1 ? `${result.messages.length} messages retrieved` : "Message retrieved");
+				return text;
+			}
+		} catch (err: any) {
+			toast.error(err?.message ?? "Failed to retrieve messages");
+		}
+	}, []);
+
 	const handleThinkingChange = useCallback(async (level: string) => {
 		const id = appStore.get(activeAgentIdAtom);
 		if (!id || !api) return;
@@ -125,6 +141,7 @@ export function useAgentActions() {
 		handleReorderSessionSheets,
 		handleDestroyAgent,
 		handleAbortAgent,
+		handleDequeueAll,
 		handleThinkingChange,
 		handleModelChanged,
 		handleCreateClick,

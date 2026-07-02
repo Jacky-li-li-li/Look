@@ -22,14 +22,19 @@ describe("cleanTitle", () => {
 	});
 
 	it("strips surrounding quotes (incl. CJK variants)", () => {
-		expect(cleanTitle('"你好"')).toBe("你好");
-		expect(cleanTitle("「你好」")).toBe("你好");
-		expect(cleanTitle("『Hello』")).toBe("Hello");
+		// "你好" is a greeting echo → rejected by greeting guard
+		expect(cleanTitle('"你好"')).toBeNull();
+		// 「你好」 strips → "你好" → greeting echo → rejected
+		expect(cleanTitle("「你好」")).toBeNull();
+		// 『Hello』 strips CJK quotes → "Hello" → caught by greeting echo guard
+		expect(cleanTitle("『Hello』")).toBeNull();
 	});
 
 	it("strips trailing punctuation", () => {
-		expect(cleanTitle("你好。")).toBe("你好");
-		expect(cleanTitle("Hello!")).toBe("Hello");
+		// "你好。" strips → "你好" → greeting echo → rejected
+		expect(cleanTitle("你好。")).toBeNull();
+		// "Hello!" strips → "Hello" → caught by greeting echo guard
+		expect(cleanTitle("Hello!")).toBeNull();
 		expect(cleanTitle("Wow,")).toBe("Wow");
 	});
 
@@ -101,5 +106,35 @@ describe("cleanTitle", () => {
 		expect(cleanTitle('"会话标题生成"')).toBeNull();
 		// "Title: …" with trailing punctuation
 		expect(cleanTitle("Title: foo.")).toBeNull();
+	});
+
+	// ── Self-introduction echo guards ──
+	it("rejects self-introduction echoes (model answered instead of titling)", () => {
+		expect(cleanTitle("我是DeepSeek，由深度求索公司开发")).toBeNull();
+		expect(cleanTitle("我是一个AI助手")).toBeNull();
+		expect(cleanTitle("我是Claude")).toBeNull();
+		expect(cleanTitle("我叫DeepSeek")).toBeNull();
+		expect(cleanTitle("I am a helpful assistant")).toBeNull();
+		expect(cleanTitle("I'm Claude")).toBeNull();
+		expect(cleanTitle("My name is Claude")).toBeNull();
+	});
+
+	// ── Greeting echo guards ──
+	it("rejects greeting echoes (model answered instead of titling)", () => {
+		expect(cleanTitle("你好！")).toBeNull();
+		expect(cleanTitle("您好")).toBeNull();
+		expect(cleanTitle("Hello")).toBeNull();
+		expect(cleanTitle("Hey")).toBeNull();
+		expect(cleanTitle("嗨，很高兴见到你")).toBeNull();
+	});
+
+	// ── New few-shot examples from the updated system prompt ──
+	it("passes through new system-prompt example outputs", () => {
+		expect(cleanTitle("AI助手介绍")).toBe("AI助手介绍");
+		expect(cleanTitle("问候交流")).toBe("问候交流");
+		expect(cleanTitle("Greeting")).toBe("Greeting");
+		// "Capabilities overview" is 21 chars → truncated to 15
+		expect(cleanTitle("Capabilities overview")).toBe("Capabilities ov");
+		expect(cleanTitle("功能咨询")).toBe("功能咨询");
 	});
 });

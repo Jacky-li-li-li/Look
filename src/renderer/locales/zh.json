@@ -5,6 +5,7 @@
     "save": "保存",
     "delete": "删除",
     "close": "关闭",
+    "view": "查看",
     "loading": "加载中...",
     "confirm": "确认",
     "reset": "重置"
@@ -302,7 +303,28 @@
           "supportsReasoningEffortTip": "若服务器不理解 reasoning_effort（本地模型），请关闭。"
         }
       }
-    }
+    },
+    "chatPrompt": "对话提示",
+    "chatPromptDesc": "自定义发送给 AI 的系统提示词，切换不同风格的助手行为。",
+    "addPrompt": "添加提示词",
+    "editPrompt": "编辑提示词",
+    "promptName": "名称",
+    "promptContent": "内容",
+    "activePrompt": "使用中",
+    "noPromptContent": "提示词内容不能为空",
+    "noPromptName": "提示词名称不能为空",
+    "deletePromptConfirm": "确定要删除此提示词吗？",
+    "activatePrompt": "设为当前使用",
+    "globalPrompt": "全局提示词",
+    "globalPromptDesc": "应用于所有未单独配置的项目。",
+    "projectPrompt": "项目提示词",
+    "projectPromptDesc": "每个项目可以独立管理自己的提示词，优先于全局设置。",
+    "followGlobal": "跟随全局",
+    "selectProject": "选择项目",
+    "selectProjectHint": "请先选择要配置的项目。",
+    "noProjectPrompts": "暂无项目专属提示词",
+    "noPrompts": "暂无提示词",
+    "noProjects": "暂无已打开的项目"
   },
   "agent": {
     "model": "模型",
@@ -322,6 +344,8 @@
     "queued": "队列",
     "queuedSteering": "引导",
     "queuedFollowUp": "跟进",
+    "queuedCount": "条排队",
+    "queuedDequeue": "取回编辑",
     "empty": "暂无消息，开始对话吧。",
     "thinkingLevel": "思考",
     "thinkingUnsupported": "当前模型不支持思考",
@@ -352,6 +376,11 @@
     "copyMessage": "复制",
     "copied": "已复制",
     "copyFailed": "复制失败：{{message}}"
+  },
+  "context": {
+    "compressing": "压缩中…",
+    "stopFirst": "请先停止 Agent 再压缩",
+    "clickToCompress": "点击压缩上下文"
   },
   "tool": {
     "arguments": "参数",

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { agentsAtom, removeAgentAtoms, sessionStateAtomFamily } from "../src/renderer/store/atoms";
-import { appStore, initIpcHandlers } from "../src/renderer/store/ipcHandler";
+import { appStore, flushAllUiEvents, initIpcHandlers } from "../src/renderer/store/ipcHandler";
 import { deriveSessionPhase } from "../src/renderer/store/sessionTypes";
 import type { LookUiEvent } from "../src/main/shared/types";
 
@@ -20,6 +20,12 @@ afterEach(() => {
 });
 
 describe("UI event canonical store (session:ui-event)", () => {
+	/** 帧批处理版：receive 后立即 flush 以便同步断言 */
+	function flushReceive(receive: (event: any) => void, event: any) {
+		receive(event);
+		flushAllUiEvents();
+	}
+
 	it("tracks run_status transitions in uiPhase", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
@@ -29,12 +35,12 @@ describe("UI event canonical store (session:ui-event)", () => {
 			},
 		});
 
-		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
 		const during = appStore.get(sessionStateAtomFamily(sessionId));
 		expect(during.uiPhase).toBe("streaming");
 		expect(during.uiBlocks).toEqual([]);
 
-		receive(uiEvent({ type: "run_status", status: "idle", timestamp: 2 }));
+		flushReceive(receive, uiEvent({ type: "run_status", status: "idle", timestamp: 2 }));
 		const after = appStore.get(sessionStateAtomFamily(sessionId));
 		expect(after.uiPhase).toBe("idle");
 	});
@@ -48,11 +54,11 @@ describe("UI event canonical store (session:ui-event)", () => {
 			},
 		});
 
-		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
-		receive(uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
-		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "Hello", timestamp: 3 }));
-		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: " World", timestamp: 4 }));
-		receive(uiEvent({ type: "assistant_text_end", contentIndex: 0, text: "Hello World", timestamp: 5 }));
+		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "Hello", timestamp: 3 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: " World", timestamp: 4 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_end", contentIndex: 0, text: "Hello World", timestamp: 5 }));
 
 		const state = appStore.get(sessionStateAtomFamily(sessionId));
 		const block = state.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "text");
@@ -70,9 +76,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 			},
 		});
 
-		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
-		receive(uiEvent({ type: "thinking_start", contentIndex: 0, timestamp: 2 }));
-		receive(uiEvent({ type: "thinking_delta", contentIndex: 0, delta: "Let me think...", timestamp: 3 }));
+		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "thinking_start", contentIndex: 0, timestamp: 2 }));
+		flushReceive(receive, uiEvent({ type: "thinking_delta", contentIndex: 0, delta: "Let me think...", timestamp: 3 }));
 
 		const mid = appStore.get(sessionStateAtomFamily(sessionId));
 		const midBlock = mid.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
@@ -80,7 +86,7 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(midBlock!.thinking).toBe("Let me think...");
 		expect(midBlock!.completed).toBe(false);
 
-		receive(uiEvent({ type: "thinking_end", contentIndex: 0, thinking: "Let me think...", timestamp: 4 }));
+		flushReceive(receive, uiEvent({ type: "thinking_end", contentIndex: 0, thinking: "Let me think...", timestamp: 4 }));
 		const end = appStore.get(sessionStateAtomFamily(sessionId));
 		const endBlock = end.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
 		expect(endBlock!.completed).toBe(true);
@@ -95,9 +101,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 			},
 		});
 
-		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
-		receive(uiEvent({ type: "toolcall_start", contentIndex: 0, timestamp: 2 }));
-		receive(
+		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "toolcall_start", contentIndex: 0, timestamp: 2 }));
+		flushReceive(receive,
 			uiEvent({
 				type: "toolcall_end",
 				contentIndex: 0,
@@ -126,8 +132,8 @@ describe("UI event canonical store (session:ui-event)", () => {
 		});
 
 		// Tool execution events are emitted while the assistant phase is active.
-		receive(uiEvent({ type: "run_status", status: "working", timestamp: 0 }));
-		receive(
+		flushReceive(receive, uiEvent({ type: "run_status", status: "working", timestamp: 0 }));
+		flushReceive(receive,
 			uiEvent({
 				type: "tool_exec_start",
 				toolCallId: "te-1",
@@ -141,7 +147,7 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(state.uiTools["te-1"]).toBeDefined();
 		expect(state.uiTools["te-1"].phase).toBe("running");
 
-		receive(
+		flushReceive(receive,
 			uiEvent({
 				type: "tool_exec_end",
 				toolCallId: "te-1",
@@ -166,10 +172,10 @@ describe("UI event canonical store (session:ui-event)", () => {
 			},
 		});
 
-		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
-		receive(uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
-		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "old", timestamp: 3 }));
-		receive(uiEvent({ type: "run_status", status: "idle", timestamp: 4 }));
+		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "old", timestamp: 3 }));
+		flushReceive(receive, uiEvent({ type: "run_status", status: "idle", timestamp: 4 }));
 
 		// Completed turns are cleared from transient UI state; the persisted
 		// message will arrive with the next snapshot.
@@ -177,9 +183,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(afterFirst.uiBlocks.length).toBe(0);
 		expect(afterFirst.uiPhase).toBe("idle");
 
-		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 5 }));
-		receive(uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 6 }));
-		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "new", timestamp: 7 }));
+		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 5 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 6 }));
+		flushReceive(receive, uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "new", timestamp: 7 }));
 
 		const afterSecond = appStore.get(sessionStateAtomFamily(sessionId));
 		expect(afterSecond.uiBlocks.length).toBe(1);
@@ -196,7 +202,7 @@ describe("UI event canonical store (session:ui-event)", () => {
 			},
 		});
 
-		receive(uiEvent({ type: "queue_update", steering: ["s1"], followUp: ["f1"], timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "queue_update", steering: ["s1"], followUp: ["f1"], timestamp: 1 }));
 		const state = appStore.get(sessionStateAtomFamily(sessionId));
 		expect(state.uiSteering).toEqual(["s1"]);
 		expect(state.uiFollowUp).toEqual(["f1"]);
@@ -211,10 +217,10 @@ describe("UI event canonical store (session:ui-event)", () => {
 			},
 		});
 
-		receive(uiEvent({ type: "compacting", active: true, timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "compacting", active: true, timestamp: 1 }));
 		expect(appStore.get(sessionStateAtomFamily(sessionId)).uiPhase).toBe("compacting");
 
-		receive(
+		flushReceive(receive,
 			uiEvent({
 				type: "retry_status",
 				status: "start",
@@ -227,7 +233,7 @@ describe("UI event canonical store (session:ui-event)", () => {
 		);
 		expect(appStore.get(sessionStateAtomFamily(sessionId)).uiPhase).toBe("retrying");
 
-		receive(uiEvent({ type: "retry_status", status: "end", attempt: 1, success: true, timestamp: 3 }));
+		flushReceive(receive, uiEvent({ type: "retry_status", status: "end", attempt: 1, success: true, timestamp: 3 }));
 	});
 });
 

@@ -39,6 +39,7 @@ interface ChatPanelProps {
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
 	onAbort?: () => void;
+	onDequeueAll?: () => void;
 }
 
 export { ScrollToBottomButton } from "./ChatMessageList";
@@ -58,6 +59,7 @@ const ChatPanel = memo(function ChatPanel({
 	onModelChange,
 	onRequestApiKeys,
 	onAbort,
+	onDequeueAll,
 }: ChatPanelProps) {
 	const inputRef = useRef<ChatInputHandle>(null);
 
@@ -144,7 +146,11 @@ const ChatPanel = memo(function ChatPanel({
 					)}
 				</div>
 			)}
-			<ChatQueueDrawer queue={queue} />
+			<ChatQueueDrawer
+				steerMessages={queue.steering}
+				followUpMessages={queue.followUp}
+				onDequeueAll={() => onDequeueAll?.()}
+			/>
 			<ChatInput
 				ref={inputRef}
 				agentId={agentId}

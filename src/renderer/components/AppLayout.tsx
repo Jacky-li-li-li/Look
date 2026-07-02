@@ -6,6 +6,7 @@ import { Separator } from "@shared/components/ui/separator";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
 import type { ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { ThemeProvider } from "next-themes";
+import { memo } from "react";
 import { DEFAULT_THEME } from "../lib/look-theme";
 import type { RendererSessionPhase } from "../store/sessionTypes";
 import AgentSquare from "./AgentMarketplace/AgentSquare";
@@ -50,6 +51,7 @@ interface AppLayoutProps {
 	handleReorderSessionSheets: (nextIds: string[]) => void;
 	handleDestroyAgent: (agentId: string) => void;
 	handleAbortAgent: () => void;
+	handleDequeueAll: () => void;
 	handleThinkingChange: (level: string) => void;
 	handleModelChanged: (model: string) => void;
 	handleCreateClick: (projectId: string) => void;
@@ -68,7 +70,7 @@ interface AppLayoutProps {
 	onProvidersChange: (data: any) => void;
 }
 
-export default function AppLayout({
+function AppLayout({
 	sidebarCollapsed,
 	rightPanelCollapsed,
 	agents,
@@ -95,6 +97,7 @@ export default function AppLayout({
 	handleReorderSessionSheets,
 	handleDestroyAgent,
 	handleAbortAgent,
+	handleDequeueAll,
 	handleThinkingChange,
 	handleModelChanged,
 	handleCreateClick,
@@ -174,6 +177,7 @@ export default function AppLayout({
 										onModelChange={handleModelChanged}
 										onRequestApiKeys={handleRequestApiKeys}
 										onAbort={handleAbortAgent}
+						onDequeueAll={handleDequeueAll}
 									/>
 								) : (
 									<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
@@ -222,3 +226,9 @@ export default function AppLayout({
 		</ThemeProvider>
 	);
 }
+
+// memo 包裹：App.tsx 订阅了大量 atom（如 showSettingsAtom）,任何 atom
+// 变化都会让 App 重新执行。用 memo 让 props 没变化的常见状态更新（如
+// showAgentSquare / settingsTab 等被切换时）跳过整棵子树重渲染。
+// 关键依赖上游的父组件已经稳定所有回调与对象引用(useMemo/useCallback)。
+export default memo(AppLayout);

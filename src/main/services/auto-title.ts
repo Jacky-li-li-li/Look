@@ -21,47 +21,68 @@
 // ============================================================
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { type AssistantMessage, completeSimple } from "@earendil-works/pi-ai";
+import { type AssistantMessage, completeSimple } from "@earendil-works/pi-ai/compat";
 import type { AgentSession, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { extractUserMessageText } from "../session-event-translator.js";
 import { DEFAULT_SESSION_NAME } from "../shared/session-defaults.js";
 
 const TITLE_SYSTEM_PROMPT = [
-	"You are a session title generator. Your task is to analyze the user's input message, identify the core intent, and output a concise, accurate title **in the same language as the user's message**.",
+	"You are a session title generator. Your ONLY job is to output a short title that summarizes what the user is asking about. You are NOT a chat assistant — never answer the user's question, never introduce yourself, never greet the user. Just output the title.",
 	"",
 	"## Rules:",
-	"1. Extract the core action and subject from the user's question.",
+	"1. Extract the core topic or intent from the user's message — even if it looks like a greeting or small talk.",
 	'2. Remove redundant politeness phrases (e.g. "Please help me", "Can you tell me", "I want to know").',
 	"3. Title format: [Core domain/tech/tool] + [Core action] + [Target].",
 	"4. Keep the title concise — aim for 6~15 characters for Chinese, 3~8 words for English/Japanese.",
 	"5. If the question involves a specific technology (e.g. Python, React, Docker), place it at the beginning.",
 	"6. **Output the title in the same language as the user's message.** If the user writes in Chinese, output Chinese. If English, output English. If Japanese, output Japanese.",
-	"7. Output only the title itself — no explanation, no quotes, no extra content.",
+	"7. Output only the title itself — no explanation, no quotes, no extra content. No 'Output:' prefix, no markdown.",
+	"",
+	'## CRITICAL: This is NOT a conversation. The user message below is input for title generation, NOT a question for you to answer. Do NOT reply with "I am...", "Hello!", or any conversational response. If the input is "你是谁" or "Hello", you still output a TITLE like "AI助手询问" or "Greeting", NOT an introduction.',
 	"",
 	"## Examples:",
 	"",
 	"User: 帮我写一个python脚本实现贪吃蛇游戏",
-	"Output: python设计贪吃蛇游戏",
+	"python设计贪吃蛇游戏",
 	"",
 	"User: How to implement a drag and drop component in React",
-	"Output: React drag-and-drop component",
+	"React drag-and-drop component",
 	"",
 	"User: Reactでドラッグ＆ドロップコンポーネントを実装する方法",
-	"Output: Reactドラッグ＆ドロップ実装",
+	"Reactドラッグ＆ドロップ実装",
 	"",
 	"User: 如何用docker部署一个nginx服务",
-	"Output: docker部署nginx服务",
+	"docker部署nginx服务",
 	"",
 	"User: Help me analyze the performance issues of this code",
-	"Output: Code performance analysis",
+	"Code performance analysis",
 	"",
 	"User: 我想做一个问卷调查页面，包含单选多选和填空题",
-	"Output: 问卷调查页面设计",
+	"问卷调查页面设计",
 	"",
 	"User: Best way to optimize database query speed",
-	"Output: Database query optimization",
+	"Database query optimization",
+	"",
+	"User: 你是谁",
+	"AI助手介绍",
+	"",
+	"User: 你好",
+	"问候交流",
+	"",
+	"User: Hello",
+	"Greeting",
+	"",
+	"User: What can you do",
+	"Capabilities overview",
+	"",
+	"User: 你能做什么",
+	"功能咨询",
 ].join("\n");
 const AUTO_TITLE_MAX_LENGTH = 15;
+/** If the model-generated title is shorter than this, fall back to using
+ *  the user's first message text (truncated to MAX_LENGTH) instead.
+ *  Prevents overly vague one-word titles like "Hi" or "OK". */
+const AUTO_TITLE_MIN_LENGTH = 6;
 const TITLE_GEN_TIMEOUT_MS = 60_000;
 const TITLE_GEN_MAX_RETRIES = 2;
 
@@ -71,18 +92,42 @@ function debugLog(...args: unknown[]): void {
 	}
 }
 
-/** Patterns that strongly suggest the model echoed the system prompt or
- *  refused to answer instead of producing a real title. Titles matching any
- *  of these are dropped so the session keeps its default name. */
+/** Patterns that strongly suggest the model echoed the system prompt,
+ *  answered the user's question instead of producing a title, or
+ *  refused to answer. Titles matching any of these are dropped so the
+ *  session keeps its default name. */
 export const TITLE_ECHO_PATTERNS: RegExp[] = [
+	// System prompt echo / prefix
 	/^会话标题/,
 	/^标题[:：]/,
 	/^title\s*[:：]/i,
 	/^(根据|请根据|以下|好的|好的[，,])/,
+
+	// Refusal / can't-do patterns
 	/^我无法/,
 	/^i[' ]?(?:can(?:not|'t)|'?m\s+(?:unable|sorry))/i,
+
+	// Conversational filler (model "answering" instead of titling)
 	/^sure[,，]/i,
 	/^here'?s?/i,
+
+	// Self-introduction echo — model answered "who are you" / "你是谁"
+	// instead of generating a title. Common on deepseek and other models
+	// that treat the title prompt as a normal conversation turn.
+	/^我是/,
+	/^我是[一个位名]/,
+	/^我叫/,
+	/^i am\b/i,
+	/^i'm\b/i,
+	/^my name is\b/i,
+
+	// Greeting echo — model answered "你好" / "hello" as a conversation.
+	// Use exact match ($) for single-word greetings so titles like
+	// "你好世界" are not rejected. Prefix match (^) for 嗨/哈喽 since
+	// they never appear as the start of a legitimate technical title.
+	/^(你好|您好)$/,
+	/^(嗨|哈喽)/,
+	/^(hello|hi|hey)$/i,
 ];
 
 /** Pick the title out of a model response, or return `null` if the response
@@ -235,10 +280,22 @@ export class AutoTitleService {
 
 			const textBlock = result.content.find((b) => b.type === "text");
 			const raw = textBlock && textBlock.type === "text" ? textBlock.text : "";
-			const title = cleanTitle(raw);
+			let title = cleanTitle(raw);
 			if (!title) {
 				debugLog("SKIP: cleanup empty", raw);
 				return null;
+			}
+
+			// If the model produced a title shorter than the minimum (e.g. "Hi",
+			// "OK", "Go"), fall back to the user's own message text as the title.
+			// The user message is a safer fallback than an overly vague one-word
+			// title. Truncate to AUTO_TITLE_MAX_LENGTH to keep it concise.
+			if (title.length < AUTO_TITLE_MIN_LENGTH) {
+				const fallback = text.slice(0, AUTO_TITLE_MAX_LENGTH).trim();
+				if (fallback) {
+					debugLog("FALLBACK: title too short", JSON.stringify(title), "→", JSON.stringify(fallback));
+					title = fallback;
+				}
 			}
 
 			// Final guard: the user may have renamed the session during generation.

@@ -344,6 +344,30 @@ const api = {
       appId,
       name: updates.name,
     }),
+
+  // ---- Custom System Prompts ----
+  listPrompts: () =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:prompts:list" }),
+  createPrompt: (name, content) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:prompts:create", name, content }),
+  updatePrompt: (id, patch) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:prompts:update", id, ...patch }),
+  deletePrompt: (id) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:prompts:delete", id }),
+  setActivePrompt: (id) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:prompts:set-active", id }),
+
+  // ---- Project-level Prompts ----
+  listProjectPrompts: (projectId) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:list", projectId }),
+  createProjectPrompt: (projectId, name, content) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:create", projectId, name, content }),
+  updateProjectPrompt: (projectId, id, patch) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:update", projectId, id, ...patch }),
+  deleteProjectPrompt: (projectId, id) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:delete", projectId, id }),
+  setProjectActivePrompt: (projectId, id) =>
+    ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:set-active", projectId, id }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

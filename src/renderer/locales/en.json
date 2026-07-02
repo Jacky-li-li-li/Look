@@ -5,6 +5,7 @@
     "save": "Save",
     "delete": "Delete",
     "close": "Close",
+    "view": "View",
     "loading": "Loading...",
     "confirm": "Confirm",
     "reset": "Reset"
@@ -302,7 +303,28 @@
           "supportsReasoningEffortTip": "Disable if your server does not understand reasoning_effort (local models)."
         }
       }
-    }
+    },
+    "chatPrompt": "Chat Prompt",
+    "chatPromptDesc": "Customize the system prompt sent to AI, switch between different assistant styles.",
+    "addPrompt": "Add Prompt",
+    "editPrompt": "Edit Prompt",
+    "promptName": "Name",
+    "promptContent": "Content",
+    "activePrompt": "Active",
+    "noPromptContent": "Prompt content cannot be empty",
+    "noPromptName": "Prompt name cannot be empty",
+    "deletePromptConfirm": "Are you sure you want to delete this prompt?",
+    "activatePrompt": "Set as active",
+    "globalPrompt": "Global Prompt",
+    "globalPromptDesc": "Applied to all projects without individual configuration.",
+    "projectPrompt": "Project Prompt",
+    "projectPromptDesc": "Each project can manage its own prompts independently, taking priority over global settings.",
+    "followGlobal": "Follow global",
+    "selectProject": "Select project",
+    "selectProjectHint": "Please select a project to configure.",
+    "noProjectPrompts": "No project-specific prompts",
+    "noPrompts": "No prompts",
+    "noProjects": "No projects opened yet"
   },
   "agent": {
     "model": "Model",
@@ -322,6 +344,8 @@
     "queued": "Queued",
     "queuedSteering": "Steering",
     "queuedFollowUp": "Follow-up",
+    "queuedCount": "queued",
+    "queuedDequeue": "Retrieve all",
     "empty": "No messages yet. Start a conversation.",
     "thinkingLevel": "Thinking",
     "thinkingUnsupported": "Current model does not support reasoning",
@@ -352,6 +376,11 @@
     "copyMessage": "Copy",
     "copied": "Copied",
     "copyFailed": "Copy failed: {{message}}"
+  },
+  "context": {
+    "compressing": "Compressing…",
+    "stopFirst": "Stop the agent first to compress",
+    "clickToCompress": "Click to compress"
   },
   "tool": {
     "arguments": "Arguments",

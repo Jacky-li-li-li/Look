@@ -3,7 +3,7 @@
 // Bridges Electron IPC between renderer and the pi session runtime registry.
 // ============================================================
 
-import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai";
+import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { type BrowserWindow, dialog, ipcMain } from "electron";
 import { type CustomProviderInput, toProviderConfig } from "./custom-providers-store.js";
@@ -372,6 +372,100 @@ async function handleRendererInvoke(
 
 		case "settings:general:reset": {
 			return { success: true, settings: await runtimeManager.resetGeneralSettings() };
+		}
+
+		// === Custom System Prompts ===
+		case "settings:prompts:list": {
+			return { success: true, ...runtimeManager.promptStore.list() };
+		}
+
+		case "settings:prompts:create": {
+			const name = guardString(data.name, "name");
+			const content = guardString(data.content, "content");
+			const prompt = runtimeManager.promptStore.create(name, content);
+			return { success: true, prompt };
+		}
+
+		case "settings:prompts:update": {
+			const id = guardString(data.id, "id");
+			const patch: { name?: string; content?: string } = {};
+			if ("name" in data) patch.name = guardString(data.name, "name");
+			if ("content" in data) patch.content = guardString(data.content, "content");
+			const prompt = runtimeManager.promptStore.update(id, patch);
+			if (!prompt) return { success: false, error: "Prompt not found" };
+			// 同步使用该 prompt 的所有项目级 SYSTEM.md
+			if (patch.content) {
+				const projectCwds: Record<string, string> = {};
+				for (const p of runtimeManager.listProjects()) {
+					if (p.valid) projectCwds[p.id] = p.cwd;
+				}
+				runtimeManager.promptStore.syncProjectOverridesForPrompt(id, projectCwds);
+			}
+			return { success: true, prompt };
+		}
+
+		case "settings:prompts:delete": {
+			const id = guardString(data.id, "id");
+			const deleted = runtimeManager.promptStore.delete(id);
+			if (!deleted) return { success: false, error: "Cannot delete this prompt" };
+			return { success: true };
+		}
+
+		case "settings:prompts:set-active": {
+			const id = guardString(data.id, "id");
+			const ok = runtimeManager.promptStore.setActive(id);
+			if (!ok) return { success: false, error: "Prompt not found" };
+			return { success: true };
+		}
+
+		// === Project-level Prompts ===
+
+		case "settings:project-prompts:list": {
+			const projectId = guardString(data.projectId, "projectId");
+			return { success: true, ...runtimeManager.promptStore.listProjectPrompts(projectId) };
+		}
+
+		case "settings:project-prompts:create": {
+			const projectId = guardString(data.projectId, "projectId");
+			const name = guardString(data.name, "name");
+			const content = guardString(data.content, "content");
+			const prompt = runtimeManager.promptStore.createProjectPrompt(projectId, name, content);
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			return { success: true, prompt };
+		}
+
+		case "settings:project-prompts:update": {
+			const projectId = guardString(data.projectId, "projectId");
+			const id = guardString(data.id, "id");
+			const patch: { name?: string; content?: string } = {};
+			if ("name" in data) patch.name = guardString(data.name, "name");
+			if ("content" in data) patch.content = guardString(data.content, "content");
+			const prompt = runtimeManager.promptStore.updateProjectPrompt(projectId, id, patch);
+			if (!prompt) return { success: false, error: "Prompt not found" };
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			return { success: true, prompt };
+		}
+
+		case "settings:project-prompts:delete": {
+			const projectId = guardString(data.projectId, "projectId");
+			const id = guardString(data.id, "id");
+			const deleted = runtimeManager.promptStore.deleteProjectPrompt(projectId, id);
+			if (!deleted) return { success: false, error: "Cannot delete this prompt" };
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			return { success: true };
+		}
+
+		case "settings:project-prompts:set-active": {
+			const projectId = guardString(data.projectId, "projectId");
+			const id = guardString(data.id, "id");
+			const ok = runtimeManager.promptStore.setProjectActive(projectId, id);
+			if (!ok) return { success: false, error: "Prompt not found" };
+			const project = runtimeManager.getProjectInfo(projectId);
+			if (project) runtimeManager.promptStore.syncProjectSystemFile(projectId, project.cwd);
+			return { success: true };
 		}
 
 		// === Context compression ===

@@ -122,6 +122,8 @@ export interface AgentInfo {
 	isSubagentSession?: boolean;
 	/** 触发本子会话的 Agent 定义名（如 "scout"）。 */
 	agentConfigName?: string;
+	/** 当前上下文使用量（实时更新，用于 ContextRing）。 */
+	contextUsage?: import("@earendil-works/pi-coding-agent").ContextUsage;
 }
 
 export interface SessionRuntimeSnapshot {
@@ -668,7 +670,19 @@ export type RendererToMainEvent =
 	// ---- IM Bridge ----
 	| { type: "im:get-bindings" }
 	| { type: "im:remove-binding"; chatId: string }
-	| { type: "im:get-bridge-status" };
+	| { type: "im:get-bridge-status" }
+	// ---- Custom System Prompts ----
+	| { type: "settings:prompts:list" }
+	| { type: "settings:prompts:create"; name: string; content: string }
+	| { type: "settings:prompts:update"; id: string; name?: string; content?: string }
+	| { type: "settings:prompts:delete"; id: string }
+	| { type: "settings:prompts:set-active"; id: string }
+	// ---- Project-level Prompts ----
+	| { type: "settings:project-prompts:list"; projectId: string }
+	| { type: "settings:project-prompts:create"; projectId: string; name: string; content: string }
+	| { type: "settings:project-prompts:update"; projectId: string; id: string; name?: string; content?: string }
+	| { type: "settings:project-prompts:delete"; projectId: string; id: string }
+	| { type: "settings:project-prompts:set-active"; projectId: string; id: string };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

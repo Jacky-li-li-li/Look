@@ -13,7 +13,7 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import { Key, MessageCircle, Palette, UserRound, Zap } from "lucide-react";
+import { FileText, Key, MessageCircle, Palette, UserRound, Zap } from "lucide-react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import ApiKeysTab from "./ApiKeysTab";
 import GeneralTab from "./GeneralTab";
 import ImChannelsTab from "./ImChannelsTab";
 import ProfileTab from "./ProfileTab";
+import PromptTab from "./PromptTab";
 import type { CustomProviderStats, ProviderInfo } from "./types";
 
 const api = (window as any).look;
@@ -82,6 +83,13 @@ const SettingsDialog = memo(function SettingsDialog({
 							{t("settings.general")}
 						</TabsTrigger>
 						<TabsTrigger
+							value="prompt"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
+						>
+							<FileText className="size-3.5" />
+							{t("settings.chatPrompt")}
+						</TabsTrigger>
+						<TabsTrigger
 							value="profile"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
@@ -115,6 +123,10 @@ const SettingsDialog = memo(function SettingsDialog({
 							{t("settings.about")}
 						</TabsTrigger>
 					</TabsList>
+
+					<TabsContent value="prompt" className="flex-1 min-h-0 data-[state=inactive]:hidden">
+						<PromptTab />
+					</TabsContent>
 
 					<TabsContent value="profile" className="flex-1 min-h-0 data-[state=inactive]:hidden">
 						<ProfileTab />

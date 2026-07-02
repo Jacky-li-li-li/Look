@@ -1,49 +1,96 @@
 // ============================================================
-// ChatQueueDrawer — Queue preview drawer (Ink Wash)
-// Slides up when the SDK's queue is non-empty. Pure display.
+// ChatQueueDrawer — 排队消息指示器
+//
+// 位于聊天区和输入框之间，显示等待顺序交付的 steer / followUp 消息。
+// steer = 引导修正（工作中 Enter），followUp = 追加任务（Shift+Enter）。
+// 视觉隐喻："热介入 / 冷排队" — steer 用左侧暖色条，followUp 用冷灰条。
 // ============================================================
 
+import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
+import { RotateCcw } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
-interface ChatQueueDrawerProps {
-	queue: { steering: string[]; followUp: string[] };
+interface QueueEntry {
+	text: string;
+	kind: "steer" | "followUp";
+	index: number;
 }
 
-const ChatQueueDrawer = memo(function ChatQueueDrawer({ queue }: ChatQueueDrawerProps) {
+interface ChatQueueDrawerProps {
+	steerMessages: readonly string[];
+	followUpMessages: readonly string[];
+	onDequeueAll: () => void;
+}
+
+const ChatQueueDrawer = memo(function ChatQueueDrawer({
+	steerMessages,
+	followUpMessages,
+	onDequeueAll,
+}: ChatQueueDrawerProps) {
 	const { t } = useTranslation();
+	const total = steerMessages.length + followUpMessages.length;
+
+	if (total === 0) return null;
+
+	// 构建有序列表：steer 在前，followUp 在后，各自保持原始序号
+	const entries: QueueEntry[] = [
+		...steerMessages.map((text, i) => ({ text, kind: "steer" as const, index: i })),
+		...followUpMessages.map((text, i) => ({ text, kind: "followUp" as const, index: i })),
+	];
 
 	return (
-		<div
-			className={cn(
-				"shrink-0 overflow-hidden transition-all duration-200 ease-out",
-				queue.steering.length + queue.followUp.length > 0 ? "max-h-56 opacity-100" : "max-h-0 opacity-0",
-			)}
-		>
-			<div className="w-full px-5 py-2">
-				<div className="mb-1.5 flex items-center gap-2">
-					<span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-						{t("chat.queued")}
-					</span>
-					<span className="text-[10px] tabular-nums text-muted-foreground/40">
-						{queue.steering.length + queue.followUp.length}
-					</span>
-				</div>
-				<div className="max-h-40 space-y-1 overflow-y-auto">
-					{[...queue.steering, ...queue.followUp].map((text, i) => (
-						<div
-							key={`q-${text.slice(0, 32)}`}
-							className="flex items-center gap-2 rounded-md border border-hairline bg-card/40 px-2.5 py-1.5 animate-draw-in"
-							style={{ animationDelay: `${i * 40}ms` }}
+		<div className="shrink-0 mx-5 rounded-lg border border-hairline bg-card/30 backdrop-blur-sm">
+			{/* 消息行 */}
+			<div className="divide-y divide-hairline/50">
+				{entries.map((entry, i) => (
+					<div
+						key={`${entry.kind}-${entry.index}`}
+						className={cn(
+							"group flex items-center gap-2.5 px-4 py-2 transition-colors hover:bg-card/40",
+							entry.kind === "steer"
+								? "border-l-2 border-l-primary/40"
+								: "border-l-2 border-l-muted-foreground/25",
+						)}
+					>
+						{/* 序号 */}
+						<span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/40 min-w-[1.25em] text-right">
+							{i + 1}
+						</span>
+						{/* 类型标签 */}
+						<span
+							className={cn(
+								"shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium leading-none",
+								entry.kind === "steer"
+									? "bg-primary/10 text-primary/70"
+									: "bg-muted text-muted-foreground/60",
+							)}
 						>
-							<span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold tabular-nums text-muted-foreground">
-								{i + 1}
-							</span>
-							<span className="min-w-0 truncate text-[12px] leading-relaxed text-foreground/70">{text}</span>
-						</div>
-					))}
-				</div>
+							{entry.kind === "steer" ? t("chat.queuedSteering") : t("chat.queuedFollowUp")}
+						</span>
+						{/* 消息文本 */}
+						<span className="min-w-0 truncate text-[12px] leading-relaxed text-foreground/70">
+							{entry.text}
+						</span>
+					</div>
+				))}
+			</div>
+
+			{/* 底部操作栏 */}
+			<div className="flex items-center justify-between px-4 py-1.5">
+				<span className="text-[10px] tabular-nums text-muted-foreground/50">
+					{total} {t("chat.queuedCount")}
+				</span>
+				<Button
+					variant="ghost"
+					size="sm"
+					onClick={onDequeueAll}
+					className="h-auto gap-1 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+				>
+					<RotateCcw className="size-2.5" />
+					{t("chat.queuedDequeue")}
+				</Button>
 			</div>
 		</div>
 	);

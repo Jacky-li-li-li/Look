@@ -14,7 +14,7 @@ import {
 	completeSimple,
 	type Model,
 	type ProviderResponse,
-} from "@earendil-works/pi-ai";
+} from "@earendil-works/pi-ai/compat";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { getModelsPath } from "./shared/look-storage.js";
 

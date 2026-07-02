@@ -6,19 +6,7 @@ import { Badge } from "@shared/components/ui/badge";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
-import {
-	KeyRound,
-	Loader2,
-	QrCode,
-	Send,
-	X,
-	ToggleLeft,
-	ToggleRight,
-	Eye,
-	EyeOff,
-	Check,
-	Save,
-} from "lucide-react";
+import { Check, Eye, EyeOff, KeyRound, Loader2, QrCode, Save, Send, ToggleLeft, ToggleRight, X } from "lucide-react";
 import QRCode from "qrcode";
 import { createElement, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -114,7 +102,10 @@ function QrRegisterPanel({
 				{registration.phase === "qr" && (
 					<>
 						{qrSvg ? (
-							<svg className="size-[200px] rounded-md border border-hairline bg-white p-2" viewBox={qrSvg.viewBox}>
+							<svg
+								className="size-[200px] rounded-md border border-hairline bg-white p-2"
+								viewBox={qrSvg.viewBox}
+							>
 								{qrSvg.nodes}
 							</svg>
 						) : (
@@ -247,7 +238,11 @@ function ManualConnectForm({
 						onClick={onTest}
 						disabled={!appId.trim() || !appSecret.trim() || testing || connecting}
 					>
-						{testing ? <Loader2 className="size-3 animate-spin" /> : testPassed ? <Check className="size-3" /> : null}
+						{testing ? (
+							<Loader2 className="size-3 animate-spin" />
+						) : testPassed ? (
+							<Check className="size-3" />
+						) : null}
 						{t("settings.testConnection")}
 					</Button>
 					<Button
@@ -298,7 +293,12 @@ function ChannelCard({
 			tabIndex={0}
 			className="cursor-pointer rounded-lg border border-hairline bg-background/45 p-4 transition-colors hover:bg-accent/10"
 			onClick={onClick}
-			onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					onClick();
+				}
+			}}
 		>
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0 flex-1">
@@ -375,11 +375,7 @@ function ChannelDetailPanel({
 		<div className="rounded-lg border border-hairline bg-background/45 p-4">
 			<div className="mb-3 flex items-center justify-between">
 				<h4 className="text-xs font-medium">{channel.name || t("settings.feishu")}</h4>
-				<button
-					type="button"
-					onClick={onClose}
-					className="rounded p-1 text-muted-foreground hover:bg-muted/40"
-				>
+				<button type="button" onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-muted/40">
 					<X className="size-4" />
 				</button>
 			</div>
@@ -527,7 +523,7 @@ export default function ImChannelsTab() {
 	const qrUrlRef = useRef<string | undefined>(undefined);
 
 	const selectedChannel = selectedChannelId
-		? channels.find((ch) => `${ch.provider}-${ch.appId}` === selectedChannelId) ?? null
+		? (channels.find((ch) => `${ch.provider}-${ch.appId}` === selectedChannelId) ?? null)
 		: null;
 
 	const loadChannels = useCallback(async () => {
@@ -630,7 +626,7 @@ export default function ImChannelsTab() {
 		return () => {
 			cancelled = true;
 		};
-	}, [registration?.url, setQrSvg]);
+	}, [registration?.url]);
 
 	// QR countdown timer
 	useEffect(() => {
@@ -820,21 +816,11 @@ export default function ImChannelsTab() {
 					<p className="text-[11px] text-muted-foreground">{t("settings.imChannelsDescription")}</p>
 				</div>
 				<div className="flex items-center gap-2">
-					<Button
-						size="sm"
-						className="h-7 gap-1.5 text-[11px]"
-						onClick={handleQrConnect}
-						disabled={loading}
-					>
+					<Button size="sm" className="h-7 gap-1.5 text-[11px]" onClick={handleQrConnect} disabled={loading}>
 						{loading ? <Loader2 className="size-3.5 animate-spin" /> : <QrCode className="size-3.5" />}
 						{t("settings.scanCreateFeishu")}
 					</Button>
-					<Button
-						size="sm"
-						className="h-7 gap-1.5 text-[11px]"
-						onClick={openManualPanel}
-						disabled={loading}
-					>
+					<Button size="sm" className="h-7 gap-1.5 text-[11px]" onClick={openManualPanel} disabled={loading}>
 						<KeyRound className="size-3.5" />
 						{t("settings.manualConnectFeishu")}
 					</Button>

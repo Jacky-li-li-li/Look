@@ -13,7 +13,7 @@ import {
 	createAgentSessionRuntime,
 	createAgentSessionServices,
 	type ExtensionFactory,
-	hasProjectTrustInputs,
+	hasTrustRequiringProjectResources,
 	ModelRegistry,
 	type SessionInfo as PiSessionInfo,
 	ProjectTrustStore,
@@ -51,6 +51,7 @@ import type {
 } from "./extensions/subagent/types.js";
 import { loadBindings } from "./im/im-storage.js";
 import { migrateLegacySettings } from "./migrate-settings.js";
+import { PromptStore } from "./prompt-store.js";
 import { AutoTitleService } from "./services/auto-title.js";
 import {
 	type ContentBlockTracker,
@@ -222,6 +223,9 @@ export class SessionRuntimeManager {
 	 *  SessionRuntimeManager 只负责传上下文和触发。 */
 	private readonly autoTitleService: AutoTitleService;
 
+	/** 自定义 System Prompt 管理器（多 prompt 变体 + SYSTEM.md 写入）。 */
+	public readonly promptStore: PromptStore;
+
 	/** Per-session content block tracker for the discrete event translator.
 	 *  Tracks active (started but not ended) text/thinking/toolcall blocks so the
 	 *  translator can emit synthetic end events when the assistant stream finishes. */
@@ -270,6 +274,7 @@ export class SessionRuntimeManager {
 			modelRegistry: this.modelRegistry,
 			getUserSettings: () => this.userSettings.getAll(),
 		});
+		this.promptStore = new PromptStore();
 		this.projectsIndexPath = getProjectsIndexPath();
 		this.workspaceFileService = workspaceFileService ?? null;
 		this.workspaceTreeService = workspaceTreeService ?? null;
@@ -399,7 +404,7 @@ export class SessionRuntimeManager {
 		shouldAsk: boolean;
 	} {
 		const project = this.projects.get(projectId);
-		if (!project?.valid || !hasProjectTrustInputs(project.cwd)) {
+		if (!project?.valid || !hasTrustRequiringProjectResources(project.cwd)) {
 			return { requiresTrust: false, decision: true, shouldAsk: false };
 		}
 		const decision = this.trustStore.get(project.cwd);
@@ -685,6 +690,7 @@ export class SessionRuntimeManager {
 			createdAt: session.created.getTime(),
 			sessionFilePath: session.path,
 			projectId: session.projectId,
+			contextUsage: piSession?.getContextUsage(),
 			...this.subagentFields(session.id),
 		};
 	}
@@ -708,6 +714,7 @@ export class SessionRuntimeManager {
 			createdAt: managed.createdAt,
 			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
 			projectId: managed.projectId,
+			contextUsage: session.getContextUsage(),
 			...this.subagentFields(sessionId),
 		};
 	}
@@ -860,7 +867,7 @@ export class SessionRuntimeManager {
 	}
 
 	private resolveProjectTrust(cwd: string): boolean {
-		if (!hasProjectTrustInputs(cwd)) return true;
+		if (!hasTrustRequiringProjectResources(cwd)) return true;
 		const saved = this.trustStore.get(cwd);
 		if (saved !== null) return saved;
 		return this.globalSettingsManager.getDefaultProjectTrust() === "always";
@@ -1940,11 +1947,15 @@ export class SessionRuntimeManager {
 			case "thinking_level_changed":
 			case "session_info_changed":
 			case "compaction_start":
+			case "tool_execution_end":
+				this.emitSessionUpdated(sessionId);
+				break;
 			case "compaction_end":
+				this.emitSessionState(sessionId, "agent_end");
+				this.emitSessionUpdated(sessionId);
+				break;
 			case "auto_retry_start":
 			case "auto_retry_end":
-				// If the retry failed (not just ended successfully before a new agent_start),
-				// reset streaming state so the UI doesn't get stuck in "retrying" forever.
 				if (event.type === "auto_retry_end" && !event.success) {
 					this.streamingStates.set(sessionId, "idle");
 				}

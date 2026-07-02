@@ -314,7 +314,7 @@ const COMPONENTS_BLOCK = {
 const COMPONENTS_INLINE = { ...COMPONENTS_BLOCK, p: InlineP } as const;
 const StreamingMarkdown = memo(
 	function StreamingMarkdown({ content, isStreaming = false, className, inline = false }: StreamingMarkdownProps) {
-		const throttledContent = useThrottle(content, 16, isStreaming);
+		const throttledContent = useThrottle(content, 30, isStreaming);
 
 		// Pick the pre-built component map — zero allocation per instance.
 		const components = inline ? COMPONENTS_INLINE : COMPONENTS_BLOCK;

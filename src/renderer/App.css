@@ -26,6 +26,15 @@
 	font-size: inherit;
 }
 
+/* 流式期间未高亮的 <pre><code> fallback — 与高亮版本保持一致的布局参数，
+   避免 Shiki 激活时产生布局跳动 */
+.shiki-code-output pre {
+	padding: 0.75rem;
+	font-size: 12px;
+	line-height: 1.625;
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
 /* Tailwind v4's auto source detection only scans files under the Vite root
  * (src/renderer). The shadcn/ui primitives live in src/main/shared, so we
  * explicitly opt them in here — otherwise `fixed`, `top-1/2`, `translate-x-1/2`,

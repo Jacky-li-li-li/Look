@@ -158,6 +158,20 @@ function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	);
 }
 
+// ── UI event pipeline ──
+// 直接同步写入 Jotai，不缓冲。流式输出的逐字丝滑感优先于批处理性能收益。
+// StreamingMarkdown 已通过 useThrottle(30ms) 限制 Markdown 解析频率，
+// 无需在 IPC 层再做缓冲。
+
+function enqueueUiEvent(sessionId: string, events: LookUiEvent[]): void {
+	applyUiEventBatch(sessionId, events);
+}
+
+/** 测试辅助：同步 flush，与 enqueueUiEvent 行为一致（无缓冲）。 */
+export function flushAllUiEvents(): void {
+	// 无缓冲，无需 flush
+}
+
 /**
  * Apply a batch of discrete LookUiEvent items to the per-session UI state.
  *
@@ -179,6 +193,12 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	let followUp: string[] | undefined;
 	let agentFlags: Partial<AgentInfo> | undefined;
 	let pendingUserMessage: { text: string } | null | undefined;
+
+	// 帧内累积 buffer：将同一帧内同一 block 的多个 delta 合并为一个 string append
+	// 避免每次 delta 都 { ...blocks[i] } 生成新对象
+	const textDeltas = new Map<number, string>();
+	const thinkingDeltas = new Map<number, string>();
+	const toolcallArgDeltas = new Map<number, string>();
 
 	// Build a contentIndex → block index map for incomplete toolcall blocks to avoid findIndex in a loop
 	const pendingToolcallIndex = new Map<number, number>();
@@ -205,13 +225,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				];
 				break;
 			case "assistant_text_delta": {
-				// Mutate in-place on the mutable copy to avoid per-delta array rebuilds.
-				for (let i = 0; i < blocks.length; i++) {
-					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "text" && !blocks[i]!.completed) {
-						blocks[i] = { ...blocks[i]!, text: blocks[i]!.text + ev.delta };
-						break;
-					}
-				}
+				textDeltas.set(ev.contentIndex, (textDeltas.get(ev.contentIndex) ?? "") + ev.delta);
 				break;
 			}
 			case "assistant_text_end": {
@@ -238,16 +252,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				];
 				break;
 			case "thinking_delta": {
-				for (let i = 0; i < blocks.length; i++) {
-					if (
-						blocks[i]!.contentIndex === ev.contentIndex &&
-						blocks[i]!.kind === "thinking" &&
-						!blocks[i]!.completed
-					) {
-						blocks[i] = { ...blocks[i]!, thinking: blocks[i]!.thinking + ev.delta };
-						break;
-					}
-				}
+				thinkingDeltas.set(ev.contentIndex, (thinkingDeltas.get(ev.contentIndex) ?? "") + ev.delta);
 				break;
 			}
 			case "thinking_end": {
@@ -286,18 +291,7 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				break;
 			}
 			case "toolcall_arg_delta": {
-				// Accumulate raw JSON args into the matching incomplete toolcall block
-				// so live ToolCallCards can render `formatToolSummary` output before
-				// the SDK sends the parsed `toolcall_end` payload. Stops accumulating
-				// once the block completes — the final args win.
-				const idx = pendingToolcallIndex.get(ev.contentIndex);
-				if (idx != null && idx >= 0) {
-					const existing = blocks[idx]!;
-					blocks[idx] = {
-						...existing,
-						argsRaw: (existing.argsRaw ?? "") + ev.delta,
-					};
-				}
+				toolcallArgDeltas.set(ev.contentIndex, (toolcallArgDeltas.get(ev.contentIndex) ?? "") + ev.delta);
 				break;
 			}
 			case "toolcall_end": {
@@ -433,6 +427,34 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 		}
 	}
 
+	// 帧末 flush：将累积的多个 delta 一次性写入 blocks，
+	// 每帧只创建一次新对象（而不是逐 delta 创建）
+	if (textDeltas.size > 0) {
+		for (let i = 0; i < blocks.length; i++) {
+			const b = blocks[i]!;
+			if (b.kind === "text" && !b.completed && textDeltas.has(b.contentIndex)) {
+				blocks[i] = { ...b, text: b.text + (textDeltas.get(b.contentIndex) ?? "") };
+			}
+		}
+	}
+	if (thinkingDeltas.size > 0) {
+		for (let i = 0; i < blocks.length; i++) {
+			const b = blocks[i]!;
+			if (b.kind === "thinking" && !b.completed && thinkingDeltas.has(b.contentIndex)) {
+				blocks[i] = { ...b, thinking: b.thinking + (thinkingDeltas.get(b.contentIndex) ?? "") };
+			}
+		}
+	}
+	if (toolcallArgDeltas.size > 0) {
+		for (const [contentIndex, delta] of toolcallArgDeltas) {
+			const idx = pendingToolcallIndex.get(contentIndex);
+			if (idx != null && idx >= 0) {
+				const existing = blocks[idx]!;
+				blocks[idx] = { ...existing, argsRaw: (existing.argsRaw ?? "") + delta };
+			}
+		}
+	}
+
 	const nextPhase = phase ?? prev.uiPhase;
 	// Once the turn is no longer active, discard transient streaming state. The
 	// persisted entries from the next snapshot become the source of truth.
@@ -519,7 +541,7 @@ export function initIpcHandlers(api: any): () => void {
 				break;
 
 			case "session:ui-event":
-				applyUiEventBatch(event.sessionId, event.events);
+				enqueueUiEvent(event.sessionId, event.events);
 				break;
 
 			// ---- Project events ----

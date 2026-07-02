@@ -13,12 +13,13 @@ import {
 import type { AgentInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { Bot, ChevronDown, ChevronRight, Copy, Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { runningAgentsAtom, sessionPhasesAtom } from "../../store/atoms";
 import type { SessionRowProps } from "./types";
 import { fmtRelativeTime } from "./utils";
 
-export default function SessionRow({
+function SessionRowImpl({
 	agent,
 	isActive,
 	isRunning,
@@ -179,6 +180,13 @@ export default function SessionRow({
 		</div>
 	);
 }
+
+// memo 包裹: 关闭 SettingsDialog 后 App.tsx 仍会订阅 showSettingsAtom,
+// 整树重渲染会让所有 SessionRow 重新执行 render。用 memo 把不变化的行挡掉,
+// 是减少 ~13 次无意义 render 及其子树(react-icons、Radix DropdownMenu)的最直接手段。
+// 配合 ProjectTree 中稳定的 useCallback(callbacks),命中浅比较。
+const SessionRow = memo(SessionRowImpl);
+export default SessionRow;
 
 function FeishuIcon({ label }: { label: string }) {
 	return (

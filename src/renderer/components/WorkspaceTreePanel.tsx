@@ -24,7 +24,7 @@ import {
 import type { FileTreeNode } from "@shared/types";
 import { useAtom } from "jotai";
 import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
 import {
@@ -131,6 +131,11 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 
 	const flatRows = useMemo(() => flattenTree(rootChildren, expanded, loaded), [rootChildren, expanded, loaded]);
 
+	// 关键:用 ref 模式稳定 toggleRow 引用,避免 itemContent 里每次渲染
+	// 创建新闭包导致 WorkspaceTreeNodeRow 的 onToggle props 变化。
+	const handleToggleRef = useRef<(row: FlatRow) => Promise<void>>(() => Promise.resolve());
+	const toggleRow = useCallback((row: FlatRow) => handleToggleRef.current(row), []);
+
 	const handleToggleShowHidden = useCallback(() => {
 		setShowHiddenFiles((prev) => !prev);
 	}, [setShowHiddenFiles]);
@@ -204,6 +209,9 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 			operationGenRef,
 		],
 	);
+
+	// 让稳定引用的 toggleRow 始终指向最新的 handleToggle 实现。
+	handleToggleRef.current = handleToggle;
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: watchedPathsRef is a stable mutable ref, not a reactive dependency
 	const handleRefresh = useCallback(async () => {
@@ -290,10 +298,10 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 						data={flatRows}
 						totalCount={flatRows.length}
 						itemContent={(_, row) => (
-							<WorkspaceTreeNodeRow
+							<WorkspaceTreeNodeRowMemo
 								row={row}
 								isExpanded={expanded.has(row.node.path)}
-								onToggle={() => handleToggle(row)}
+								onToggle={toggleRow}
 							/>
 						)}
 						style={{ height: "100%" }}
@@ -381,12 +389,17 @@ function useBootstrapRoot(
 interface WorkspaceTreeNodeRowProps {
 	row: FlatRow;
 	isExpanded: boolean;
-	onToggle: () => void;
+	// onToggle 接收 row 参数,由父组件用稳定引用 + ref 模式实现
+	onToggle: (row: FlatRow) => void;
 }
 
-function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRowProps) {
+function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNodeRowProps) {
 	const { node, depth } = row;
 	const isDir = node.type === "directory";
+
+	const handleClickToggle = () => {
+		onToggle(row);
+	};
 
 	const handleCopyPath = () => {
 		void navigator.clipboard.writeText(node.absolutePath);
@@ -403,6 +416,10 @@ function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRo
 		// 实际实现需要 activeAgentId,在父组件传入或通过 atom 读取
 		void navigator.clipboard.writeText(`@${node.path}`);
 		toast.info("已复制 @ 引用,粘贴到聊天框发送给 agent");
+	};
+
+	const handleRevealInFinder = () => {
+		window.look.revealInFinder(node.absolutePath);
 	};
 
 	const handleDragStart = (e: React.DragEvent) => {
@@ -422,13 +439,13 @@ function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRo
 			style={{ paddingLeft: depth * INDENT_PX + 8 }}
 			className="group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
 			onDoubleClick={() => {
-				if (isDir) onToggle();
+				if (isDir) handleClickToggle();
 			}}
 		>
 			{isDir ? (
 				<button
 					type="button"
-					onClick={onToggle}
+					onClick={handleClickToggle}
 					className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-foreground/10"
 					aria-label={isExpanded ? "折叠" : "展开"}
 				>
@@ -455,11 +472,14 @@ function WorkspaceTreeNodeRow({ row, isExpanded, onToggle }: WorkspaceTreeNodeRo
 					{!isDir && <DropdownMenuItem onClick={handleOpenInAgent}>在 agent 中打开</DropdownMenuItem>}
 					<DropdownMenuItem onClick={handleCopyPath}>复制绝对路径</DropdownMenuItem>
 					<DropdownMenuItem onClick={handleCopyAsReference}>复制 @ 引用</DropdownMenuItem>
-					<DropdownMenuItem onClick={() => window.look.revealInFinder(node.absolutePath)}>
-						在 Finder 中打开
-					</DropdownMenuItem>
+					<DropdownMenuItem onClick={handleRevealInFinder}>在 Finder 中打开</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 		</div>
 	);
 }
+
+// 用 memo 包裹,onToggle 在父组件已稳定;扁平行 row 仅在路径展开状态变化时
+// 才会改变 isExpanded。这能避免 Dialog 关闭引发 App 根重渲染时,无意义地
+// 重新执行 WorkspaceTreeNodeRow(原本 24 次)。
+const WorkspaceTreeNodeRowMemo = memo(WorkspaceTreeNodeRowImpl);

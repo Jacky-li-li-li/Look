@@ -67,6 +67,16 @@ export function getUserProfilePath(): string {
 	return path.join(LOOK_DIR, "user-profile.json");
 }
 
+/** Custom system prompts (SYSTEM.md variants) */
+export function getPromptsPath(): string {
+	return path.join(LOOK_DIR, "prompts.json");
+}
+
+/** The active system prompt file (loaded by pi SDK as customPrompt) */
+export function getSystemPromptPath(): string {
+	return path.join(LOOK_DIR, "SYSTEM.md");
+}
+
 // ── Workspace-per-project session storage ──
 
 /** Root directory for project-workspace session storage. */

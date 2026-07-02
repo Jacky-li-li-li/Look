@@ -5,6 +5,7 @@
 		"save": "保存",
 		"delete": "削除",
 		"close": "閉じる",
+		"view": "表示",
 		"loading": "読み込み中...",
 		"confirm": "確認",
 		"reset": "リセット"
@@ -302,7 +303,28 @@
 					"supportsReasoningEffortTip": "サーバーが reasoning_effort を理解しない場合は無効化します（ローカルモデル）。"
 				}
 			}
-		}
+		},
+		"chatPrompt": "チャットプロンプト",
+		"chatPromptDesc": "AIに送信するシステムプロンプトをカスタマイズし、異なるアシスタントスタイルを切り替えます。",
+		"addPrompt": "プロンプトを追加",
+		"editPrompt": "プロンプトを編集",
+		"promptName": "名前",
+		"promptContent": "内容",
+		"activePrompt": "使用中",
+		"noPromptContent": "プロンプトの内容を入力してください",
+		"noPromptName": "プロンプト名を入力してください",
+		"deletePromptConfirm": "このプロンプトを削除してもよろしいですか？",
+		"activatePrompt": "現在使用中に設定",
+		"globalPrompt": "グローバルプロンプト",
+		"globalPromptDesc": "個別設定のないすべてのプロジェクトに適用されます。",
+		"projectPrompt": "プロジェクトプロンプト",
+		"projectPromptDesc": "各プロジェクトは独自のプロンプトを管理でき、グローバル設定より優先されます。",
+		"followGlobal": "グローバルに従う",
+			"selectProject": "プロジェクトを選択",
+			"selectProjectHint": "設定するプロジェクトを選択してください。",
+			"noProjectPrompts": "プロジェクト固有のプロンプトはありません",
+			"noPrompts": "プロンプトはありません",
+			"noProjects": "開いているプロジェクトはありません"
 	},
 	"agent": {
 		"model": "モデル",
@@ -322,6 +344,8 @@
 		"queued": "キュー",
 		"queuedSteering": "ステアリング",
 		"queuedFollowUp": "フォローアップ",
+		"queuedCount": "件キュー",
+		"queuedDequeue": "編集に戻す",
 		"empty": "まだメッセージがありません。会話を始めましょう。",
 		"thinkingLevel": "思考",
 		"thinkingUnsupported": "現在のモデルは推論をサポートしていません",
@@ -352,6 +376,11 @@
 		"copyMessage": "コピー",
 		"copied": "コピーしました",
 		"copyFailed": "コピーに失敗しました：{{message}}"
+	},
+	"context": {
+		"compressing": "圧縮中…",
+		"stopFirst": "先にエージェントを停止してください",
+		"clickToCompress": "クリックで圧縮"
 	},
 	"tool": {
 		"arguments": "引数",
