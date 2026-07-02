@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AssistantMessageEvent } from "@earendil-works/pi-ai";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { LookMessageSubEvent, LookUiEvent } from "./shared/types.js";
+import type { LookUiEvent } from "./shared/types.js";
 
 /** Tracks active (started-but-not-ended) content blocks during streaming.
  *  Used by translateAgentSessionEvent to emit synthetic end events when
@@ -43,14 +44,10 @@ export function finishActiveBlocks(tracker: ContentBlockTracker, events: LookUiE
 
 /** Extract plain-text content from a user AgentMessage. */
 export function extractUserMessageText(message: AgentMessage): string {
-	const msg = message as unknown as Record<string, unknown>;
-	if (typeof msg.content === "string") return msg.content as string;
-	if (Array.isArray(msg.content)) {
-		return (msg.content as Array<Record<string, unknown>>)
-			.flatMap((b) => (b.type === "text" ? [(b as { text: string }).text] : []))
-			.join("\n");
-	}
-	return "";
+	if (message.role !== "user") return "";
+	const content = message.content;
+	if (typeof content === "string") return content;
+	return content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
 }
 
 /**
@@ -86,9 +83,9 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 
 		// ── Message lifecycle ──
 		case "message_start": {
-			const msg = event.message as unknown as Record<string, unknown>;
+			const msg = event.message;
 			if (msg.role === "user") {
-				const text = extractUserMessageText(event.message);
+				const text = extractUserMessageText(msg);
 				events.push({ type: "user_message", text, timestamp: now });
 			} else if (msg.role === "assistant") {
 				events.push({ type: "assistant_message_start", timestamp: now });
@@ -98,15 +95,16 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 
 		case "message_end": {
 			finishActiveBlocks(tracker, events, now);
-			const msg = event.message as unknown as Record<string, unknown>;
-			const completed = !("stopReason" in msg) || (msg as { stopReason: string }).stopReason !== "aborted";
+			const msg = event.message;
+			// Only assistant messages carry stopReason; user/toolResult are always complete.
+			const completed = msg.role !== "assistant" || msg.stopReason !== "aborted";
 			events.push({ type: "assistant_message_end", completed, timestamp: now });
 			break;
 		}
 
 		// ── ★ Core: fine-grained assistantMessageEvent deltas ★ ──
 		case "message_update": {
-			const sub = (event as unknown as { assistantMessageEvent?: LookMessageSubEvent }).assistantMessageEvent;
+			const sub: AssistantMessageEvent | undefined = event.assistantMessageEvent;
 			if (!sub) break;
 
 			switch (sub.type) {
@@ -155,14 +153,14 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 					break;
 
 				case "toolcall_start": {
-					const tcBlock = sub.partial?.content?.[sub.contentIndex];
-					if (!tcBlock?.id) break; // insufficient data — toolcall_end will carry the full metadata
+					const block = sub.partial.content[sub.contentIndex];
+					if (!block || block.type !== "toolCall") break;
 					tracker.activeToolCallIndices.add(sub.contentIndex);
 					events.push({
 						type: "toolcall_start",
 						contentIndex: sub.contentIndex,
-						toolCallId: tcBlock.id,
-						toolName: tcBlock.name ?? "unknown",
+						toolCallId: block.id,
+						toolName: block.name,
 						timestamp: now,
 					});
 					break;

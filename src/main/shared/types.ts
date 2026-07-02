@@ -161,31 +161,6 @@ export interface SessionSnapshotEnvelope {
 //   3. 所有事件自包含，无需合并或重建 SDK 对象。
 // ============================================================
 
-/** Minimal sub-event proxy used by the translator to narrow discriminator unions.
- *  Avoids a direct @earendil-works/pi-ai import in session-runtime-manager.ts. */
-export type LookMessageSubEvent =
-	| { type: "text_start"; contentIndex: number }
-	| { type: "text_delta"; contentIndex: number; delta: string }
-	| { type: "text_end"; contentIndex: number; content: string }
-	| { type: "thinking_start"; contentIndex: number }
-	| { type: "thinking_delta"; contentIndex: number; delta: string }
-	| { type: "thinking_end"; contentIndex: number; content: string }
-	| {
-			type: "toolcall_start";
-			contentIndex: number;
-			/** SDK partial assistant message snapshot — used to extract the
-			 *  toolCallId and toolName before the full toolcall_end arrives. */
-			partial: { content?: Array<{ id?: string; name?: string }> };
-	  }
-	| { type: "toolcall_delta"; contentIndex: number; delta: string }
-	| {
-			type: "toolcall_end";
-			contentIndex: number;
-			toolCall: { id: string; name: string; arguments: Record<string, unknown> };
-	  }
-	| { type: "done" }
-	| { type: "error"; error: { errorMessage?: string } };
-
 /** 渲染进程会话阶段 — 由 LookUiEvent 推导 */
 export type LookUiPhase = "idle" | "streaming" | "working" | "retrying" | "compacting";
 

@@ -46,6 +46,12 @@ interface ReplyAccumulator {
 	logs: string[];
 	done: boolean;
 	error?: string;
+	/** 当前使用的模型标识（如 anthropic/claude-opus-4-5） */
+	model?: string;
+	/** 累计输入 token */
+	inputTokens?: number;
+	/** 累计输出 token */
+	outputTokens?: number;
 	controller?: BridgeCardController;
 	updateTimer?: ReturnType<typeof setTimeout>;
 	updateInFlight?: Promise<void>;
@@ -592,6 +598,14 @@ export class LarkBridgeService {
 					"accumulated text length:",
 					acc.text.length,
 				);
+				// 捕获模型和 token 统计
+				if (event.runtime.model) {
+					acc.model = `${event.runtime.model.provider}/${event.runtime.model.id}`;
+				}
+				if (event.runtime.stats) {
+					acc.inputTokens = event.runtime.stats.tokens.input;
+					acc.outputTokens = event.runtime.stats.tokens.output;
+				}
 				acc.status = acc.error ? "error" : "done";
 				acc.done = true;
 				acc.resolveDone();
@@ -842,17 +856,14 @@ export class LarkBridgeService {
 	}
 
 	private buildStreamCard(acc: ReplyAccumulator): object {
-		const elements: object[] = [
-			this.markdown(
-				`**状态**：${this.statusText(acc.status)}${acc.error ? `\n\n**错误**：${this.escapeMarkdown(acc.error)}` : ""}`,
-			),
-		];
-		if (acc.userText) {
-			elements.push(
-				this.collapsiblePanel("用户消息", false, [
-					this.markdown(this.truncateMarkdown(acc.userText, BLOCK_TEXT_LIMIT)),
-				]),
-			);
+		const elements: object[] = [];
+		if (acc.error) {
+			elements.push(this.markdown(`❌ ${this.escapeMarkdown(acc.error)}`));
+		}
+
+		// 无内容时显示占位提示，避免飞书校验空 body 返回 400
+		if (!acc.error && acc.textBlocks.size === 0 && acc.thinkingBlocks.size === 0 && acc.toolPanels.size === 0) {
+			elements.push(this.markdown("⏳ 正在思考..."));
 		}
 
 		for (const block of Array.from(acc.thinkingBlocks.values()).sort((a, b) => a.contentIndex - b.contentIndex)) {
@@ -875,6 +886,20 @@ export class LarkBridgeService {
 
 		if (!acc.text && acc.done && !acc.error) {
 			elements.push(this.markdown("（Agent 未返回文本回复）"));
+		}
+
+		// 附加信息：模型 + token 统计
+		const footerLines: string[] = [];
+		if (acc.model) {
+			footerLines.push(`模型：${this.escapeMarkdown(acc.model)}`);
+		}
+		if (acc.inputTokens !== undefined || acc.outputTokens !== undefined) {
+			const input = acc.inputTokens !== undefined ? `${this.formatTokenCount(acc.inputTokens)} 输入` : "";
+			const output = acc.outputTokens !== undefined ? `${this.formatTokenCount(acc.outputTokens)} 输出` : "";
+			footerLines.push(`Token：${[input, output].filter(Boolean).join(" / ")}`);
+		}
+		if (footerLines.length > 0) {
+			elements.push(this.note(footerLines.join("  ·  ")));
 		}
 
 		if (acc.logs.length > 0) {
@@ -900,7 +925,7 @@ export class LarkBridgeService {
 				width_mode: "fill",
 			},
 			header: {
-				title: { tag: "plain_text", content: "🤖 Look Agent" },
+				title: { tag: "plain_text", content: `🤖 Look Agent  ·  ${this.statusBadge(acc.status)}` },
 				template: acc.status === "error" ? ("red" as const) : acc.done ? ("green" as const) : ("wathet" as const),
 			},
 			body: {
@@ -960,21 +985,34 @@ export class LarkBridgeService {
 		};
 	}
 
-	private statusText(status: ReplyAccumulator["status"]): string {
+	private statusBadge(status: ReplyAccumulator["status"]): string {
 		switch (status) {
 			case "thinking":
-				return "正在思考";
+				return "● 思考中";
 			case "streaming":
-				return "正在输出";
+				return "● 输出中";
 			case "working":
-				return "正在执行工具";
+				return "● 执行工具";
 			case "retrying":
-				return "自动重试中";
+				return "● 重试中";
 			case "done":
-				return "已完成";
+				return "✓ 已完成";
 			case "error":
-				return "出错";
+				return "✗ 出错";
 		}
+	}
+
+	private formatTokenCount(n: number): string {
+		if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+		if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+		return String(n);
+	}
+
+	private note(content: string): object {
+		return {
+			tag: "markdown",
+			content: `---\n${content}`,
+		};
 	}
 
 	private safeJson(value: unknown): string {
