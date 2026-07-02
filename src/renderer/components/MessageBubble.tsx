@@ -211,7 +211,7 @@ function ContentBlocks({
 	}, [blocks, toolExecutions, toolResultMap]);
 
 	return (
-		<div className="flex flex-col gap-1.5">
+		<div className="flex flex-col">
 			{segments.map((seg, segIdx) => {
 				if (seg.kind === "single") {
 					const block = seg.block;
@@ -487,7 +487,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 	}
 
 	return (
-		<div className="flex flex-col gap-1.5">
+		<div className="flex flex-col">
 			{blocks.map((block) => {
 				const key = block.uid != null ? `sb-${block.uid}` : `sb-${block.contentIndex ?? block.kind}`;
 				return (

@@ -170,7 +170,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	}
 
 	return (
-		<div className="flex flex-col gap-1.5">
+		<div className="flex flex-col">
 			{showTrigger && (
 				<BadgeTrigger
 					summary={summary}
@@ -182,7 +182,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 				/>
 			)}
 			{isOpen && (
-				<div className="flex flex-col gap-1.5">
+				<div className="flex flex-col">
 					{interleaved.map((node, i) =>
 						node.kind === "text" ? (
 							<div
@@ -227,7 +227,11 @@ function renderBlock(
 		const sig = (block as ThinkingContent).thinkingSignature;
 		return (
 			<ThinkingPanel
-				key={sig != null ? `${sig}-${index}` : `group-thinking-${hashKey((block as ThinkingContent).thinking ?? "")}-${index}`}
+				key={
+					sig != null
+						? `${sig}-${index}`
+						: `group-thinking-${hashKey((block as ThinkingContent).thinking ?? "")}-${index}`
+				}
 				thinking={block.thinking}
 				isStreaming={isStreaming}
 				autoCollapse={true}

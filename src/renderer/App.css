@@ -1621,12 +1621,43 @@ body {
   }
 
   .markstream-react hr {
-    border-color: var(--hairline);
+    display: none;
   }
 
   .markstream-react blockquote {
     border-left: 2px solid var(--hairline);
     color: var(--muted-foreground);
+    margin: 0.5em 0;
+    padding-left: 0.75em;
+  }
+
+  /* Tighten default block spacing so message modules don't feel separated
+   * by large empty bands. markstream's defaults use ~1.25em paragraph
+   * margins and browser-default heading margins. */
+  .markstream-react .paragraph-node {
+    margin: 0.375em 0;
+  }
+
+  .markstream-react .heading-node {
+    margin: 0.625em 0 0.25em;
+  }
+
+  .markstream-react .heading-node:first-child {
+    margin-top: 0;
+  }
+
+  .markstream-react ul,
+  .markstream-react ol {
+    margin: 0.375em 0;
+    padding-left: 1.25em;
+  }
+
+  .markstream-react pre {
+    margin: 0.5em 0;
+  }
+
+  .markstream-react hr {
+    margin: 0.75em 0;
   }
 
   /* ============================================================

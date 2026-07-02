@@ -113,9 +113,38 @@ const ChatMessageList = memo(function ChatMessageList({
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	useEffect(() => setAtBottomAtom(isAtBottom), [isAtBottom, setAtBottomAtom]);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
+
+	// Track whether the user has intentionally scrolled away from the bottom.
+	// We use a ref (not state) so the streaming scroll effect can read it
+	// without being re-scheduled. A short debounce distinguishes user scrolls
+	// (bottom stays away) from growth-induced transient atBottom=false events
+	// that are corrected by our programmatic scroll within a frame.
+	const userScrolledAwayRef = useRef(false);
+	const scrollAwayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (scrollAwayTimerRef.current) {
+				clearTimeout(scrollAwayTimerRef.current);
+			}
+		},
+		[],
+	);
+
 	const handleAtBottomChange = useCallback(
 		(atBottom: boolean) => {
 			setIsAtBottom(atBottom);
+			if (atBottom) {
+				if (scrollAwayTimerRef.current) {
+					clearTimeout(scrollAwayTimerRef.current);
+					scrollAwayTimerRef.current = null;
+				}
+				userScrolledAwayRef.current = false;
+			} else if (!scrollAwayTimerRef.current) {
+				scrollAwayTimerRef.current = setTimeout(() => {
+					userScrolledAwayRef.current = true;
+					scrollAwayTimerRef.current = null;
+				}, 100);
+			}
 			if (atBottom && activeAgentId) {
 				appStore.set(
 					recentlyCompletedAtom,
@@ -141,15 +170,23 @@ const ChatMessageList = memo(function ChatMessageList({
 	useEffect(() => {
 		void agentId;
 		initialScroll.current = false;
+		userScrolledAwayRef.current = false;
 		scrollToBottom();
 	}, [agentId, scrollToBottom]);
 
+	// Re-enable auto-follow whenever a new assistant stream starts.
+	useEffect(() => {
+		if (isBusy) {
+			userScrolledAwayRef.current = false;
+		}
+	}, [isBusy]);
+
 	// Keep the bottom anchored while the live item grows. Virtuoso follows new
 	// items well, but a streaming assistant grows the same last item for most of
-	// the turn, so we explicitly scroll only while the user is already at bottom.
+	// the turn, so we explicitly scroll unless the user has scrolled away.
 	const prevStreamLenRef = useRef(0);
 	useEffect(() => {
-		if (!isBusy || !isAtBottom) {
+		if (!isBusy || userScrolledAwayRef.current) {
 			prevStreamLenRef.current = 0;
 			return;
 		}
@@ -161,7 +198,7 @@ const ChatMessageList = memo(function ChatMessageList({
 			prevStreamLenRef.current = totalLen;
 			scrollToBottom();
 		}
-	}, [sessionState.uiBlocks, isBusy, isAtBottom, scrollToBottom]);
+	}, [sessionState.uiBlocks, isBusy, scrollToBottom]);
 
 	const [flashEntryId, setFlashEntryId] = useState<string | null>(null);
 	const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -270,14 +307,14 @@ const ChatMessageList = memo(function ChatMessageList({
 			if (!item) return null;
 			if (item.entry) {
 				return (
-					<div className="px-5 py-2">
+					<div className="px-5 py-1.5">
 						<SessionEntryBubble entry={item.entry} />
 					</div>
 				);
 			}
 			if (item.isLive && item.uiBlocks) {
 				return (
-					<div className="px-5 py-2">
+					<div className="px-5 py-1.5">
 						<StreamingMessageBubble
 							agentName={agentName}
 							blocks={item.uiBlocks}
@@ -293,7 +330,7 @@ const ChatMessageList = memo(function ChatMessageList({
 			const showActions = Boolean(entryId && (item.message.role === "assistant" || item.message.role === "user"));
 			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
 			return (
-				<div className="px-5 py-2">
+				<div className="px-5 py-1.5">
 					<div
 						data-message-id={item.id}
 						className={cn(
@@ -422,7 +459,13 @@ const ChatMessageList = memo(function ChatMessageList({
 					atBottomStateChange={handleAtBottomChange}
 					itemContent={itemContent}
 				/>
-				<ScrollToBottomButton isAtBottom={isAtBottom} virtuosoRef={virtuosoRef} />
+				<ScrollToBottomButton
+					isAtBottom={isAtBottom}
+					virtuosoRef={virtuosoRef}
+					onRestoreAutoFollow={() => {
+						userScrolledAwayRef.current = false;
+					}}
+				/>
 			</div>
 			<BranchConfirmDialog request={pendingConfirm} onResolve={handleConfirmResolve} />
 		</>
@@ -432,9 +475,10 @@ const ChatMessageList = memo(function ChatMessageList({
 interface ScrollToBottomButtonProps {
 	isAtBottom: boolean;
 	virtuosoRef: React.RefObject<VirtuosoHandle | null>;
+	onRestoreAutoFollow?: () => void;
 }
 
-export function ScrollToBottomButton({ isAtBottom, virtuosoRef }: ScrollToBottomButtonProps) {
+export function ScrollToBottomButton({ isAtBottom, virtuosoRef, onRestoreAutoFollow }: ScrollToBottomButtonProps) {
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const runningAgents = useAtomValue(runningAgentsAtom);
 	const isAgentRunning = activeAgentId ? runningAgents.has(activeAgentId) : false;
@@ -442,11 +486,12 @@ export function ScrollToBottomButton({ isAtBottom, virtuosoRef }: ScrollToBottom
 	return (
 		<button
 			type="button"
-			onClick={() =>
+			onClick={() => {
+				onRestoreAutoFollow?.();
 				requestAnimationFrame(() =>
 					virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" }),
-				)
-			}
+				);
+			}}
 			aria-label="Scroll to bottom"
 			className={cn(
 				"absolute right-4 bottom-4 z-10 flex size-8 items-center justify-center rounded-full bg-card shadow-md",

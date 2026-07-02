@@ -67,6 +67,18 @@ describe("ScrollToBottomButton", () => {
 		expect(btn).not.toBeNull();
 		expect(btn?.getAttribute("aria-label")).toBe("Scroll to bottom");
 	});
+
+	it("restores auto-follow when clicked", () => {
+		const restore = vi.fn();
+		const scrollToIndex = vi.fn();
+		const ref = { current: { scrollToIndex } as unknown as VirtuosoHandle };
+		const { container } = render(
+			wrap(<ScrollToBottomButton isAtBottom={false} virtuosoRef={ref} onRestoreAutoFollow={restore} />),
+		);
+		const btn = container.querySelector("button");
+		btn?.click();
+		expect(restore).toHaveBeenCalled();
+	});
 });
 
 // ============================================================
@@ -96,6 +108,15 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 		expect(SRC).toMatch(/data=\{timeline\}/);
 		expect(SRC).toMatch(/computeItemKey/);
 		expect(SRC).not.toMatch(/timelineRef/);
+	});
+
+	it("distinguishes user scroll from growth-induced atBottom=false when streaming", () => {
+		expect(SRC).toMatch(/userScrolledAwayRef/);
+		expect(SRC).toMatch(/scrollAwayTimerRef/);
+		// The streaming scroll guard must not use the current atBottom state,
+		// because atBottom can briefly flip false as the live row grows before
+		// the programmatic scroll catches up.
+		expect(SRC).toMatch(/if\s*\(\s*!isBusy\s*\|\|\s*userScrolledAwayRef\.current\s*\)/);
 	});
 
 	it("uses scrollToIndex for navigate-to-entry", () => {
