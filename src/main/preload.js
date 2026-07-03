@@ -293,6 +293,9 @@ const api = {
   resetUserProfile: () =>
     ipcRenderer.invoke("look:invoke", { type: "user-profile:reset" }),
 
+  // ---- Usage heatmap ----
+  getUsage: () => ipcRenderer.invoke("look:invoke", { type: "usage:get" }),
+
   // ---- IM Channels ----
   getImChannels: () =>
     ipcRenderer.invoke("look:invoke", { type: "im:get-channels" }),

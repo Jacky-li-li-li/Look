@@ -436,7 +436,15 @@
     "logout": "Sign Out",
     "userNamePlaceholder": "Your display name",
     "userNameSaved": "Username updated",
-    "avatarSaved": "Avatar updated"
+    "avatarSaved": "Avatar updated",
+    "activity": "Activity",
+    "contributions": "{{count}} contributions in {{year}}",
+    "turns": "{{count}} turns",
+    "less": "Less",
+    "more": "More",
+    "mon": "Mon",
+    "wed": "Wed",
+    "fri": "Fri"
   },
   "toast": {
     "modelUnavailable": "Model unavailable: {{primary}}. Switched to {{resolved}}.",

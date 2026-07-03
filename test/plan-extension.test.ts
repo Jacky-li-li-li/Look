@@ -99,13 +99,24 @@ describe("Plan extension", () => {
 		expect(result).toMatchObject({ details: { approved: true }, terminate: true });
 	});
 
-	it("refuses both Plan tools outside Plan mode", async () => {
+	it("allows AskUserQuestion outside Plan mode, but refuses ExitPlanMode", async () => {
 		const { tools, host } = setup("ask");
+		host.askQuestions.mockResolvedValue({ status: "answered", answers: { "Q": "A" } });
 		const ask = tools.find((tool) => tool.name === "AskUserQuestion");
 		const exit = tools.find((tool) => tool.name === "ExitPlanMode");
-		await expect(ask.execute("call", { questions: [] })).resolves.toMatchObject({ details: { error: expect.any(String) } });
+		// AskUserQuestion should work in any mode
+		await expect(
+			ask.execute("call", {
+				questions: [{
+					question: "Q",
+					header: "H",
+					options: [{ label: "A", description: "Answer" }, { label: "B", description: "Other" }],
+				}],
+			}),
+		).resolves.toMatchObject({ details: { answers: { "Q": "A" } } });
+		expect(host.askQuestions).toHaveBeenCalled();
+		// ExitPlanMode should still be restricted to Plan mode
 		await expect(exit.execute("call", { plan: "# Plan" })).resolves.toMatchObject({ details: { error: expect.any(String) } });
-		expect(host.askQuestions).not.toHaveBeenCalled();
 		expect(host.submitPlan).not.toHaveBeenCalled();
 	});
 });

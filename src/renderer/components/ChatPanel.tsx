@@ -42,8 +42,6 @@ interface ChatPanelProps {
 	onDequeueAll?: () => void;
 }
 
-export { ScrollToBottomButton } from "./ChatMessageList";
-
 const ChatPanel = memo(function ChatPanel({
 	agentId,
 	agentName,

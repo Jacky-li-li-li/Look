@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 
 import { I18nextProvider } from "react-i18next";
-import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CollapsibleExecutionGroup from "../src/renderer/components/CollapsibleExecutionGroup";
 import i18n from "../src/renderer/i18n";
 import type { LookUiToolExecState } from "../src/main/shared/types";
 
 afterEach(() => {
 	cleanup();
+	vi.useRealTimers();
 });
 
 beforeEach(async () => {
@@ -148,6 +149,7 @@ describe("CollapsibleExecutionGroup", () => {
 	});
 
 	it("toggles badge into underlying cards when clicked, then collapses again on second click", () => {
+		vi.useFakeTimers();
 		const blocks = [
 			makeToolCall("t1", "bash", { command: "ls" }),
 			makeToolCall("t2", "read", { path: "/a" }),
@@ -175,6 +177,10 @@ describe("CollapsibleExecutionGroup", () => {
 		text = container.textContent ?? "";
 		expect(text).toMatch(/Executed 3 tools/i);
 		expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
+		act(() => {
+			vi.advanceTimersByTime(220);
+		});
+		text = container.textContent ?? "";
 		// No standalone "Collapse" text below the badge
 		expect(container.querySelectorAll("button").length).toBe(1);
 	});
@@ -261,5 +267,35 @@ describe("CollapsibleExecutionGroup", () => {
 		// Collapsed badge state: only summary visible, inline text is hidden
 		expect(text).toMatch(/Executed 3 tools/i);
 		expect(text).not.toContain("看核心执行部分：");
+	});
+
+	it("keeps an active streaming group expanded, then auto-collapses after the batched delay", () => {
+		vi.useFakeTimers();
+		const blocks = [makeToolCall("t1", "bash", { command: "ls" })];
+		const toolExecutions = { t1: completedExec("t1") };
+		const { getByText, rerender } = renderGroup({ blocks, toolExecutions, isStreaming: true });
+		const badgeBtn = getByText(/Executed 1 tool/i).closest("button")!;
+
+		expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
+		expect(document.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("true");
+
+		rerender(
+			<I18nextProvider i18n={i18n}>
+				<CollapsibleExecutionGroup
+					blocks={blocks}
+					inlineTexts={[]}
+					toolExecutions={toolExecutions}
+					toolResultMap={{}}
+					isStreaming={false}
+				/>
+			</I18nextProvider>,
+		);
+
+		expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
+		act(() => {
+			vi.advanceTimersByTime(300);
+		});
+		expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
+		expect(document.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("false");
 	});
 });

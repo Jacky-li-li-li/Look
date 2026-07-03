@@ -1,0 +1,130 @@
+/**
+ * 滚动位置记忆 — 切换会话时保存并恢复滚动位置
+ *
+ * 配合 Conversation（StickToBottom）使用：
+ * - scroll 事件持续保存 distanceFromBottom 到模块级 Map
+ * - 切换会话时 ready=false → Conversation 的 resize 切为 "instant"（消除动画）
+ * - ready=true 时：有保存位置 → stopScroll() + 恢复 scrollTop；
+ *   有 Branch 导航目标 → 滚动到指定消息；
+ *   无保存 → scrollToBottom("instant")
+ *
+ * 放在 Conversation（StickToBottom）内部使用。
+ */
+
+import { useAtomValue } from "jotai";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useStickToBottomContext } from "use-stick-to-bottom";
+import { navigatingEntryAtomFamily } from "../store/atoms";
+
+/** 模块级缓存：会话 ID → 距底部像素距离 */
+const scrollPositionCache = new Map<string, number>();
+
+const DEBUG = true;
+
+/**
+ * ScrollPositionManager — 放在 Conversation（StickToBottom）内部
+ *
+ * @param id     会话/Agent ID，用作缓存 key
+ * @param ready  防闪烁 ready 状态，为 true 时才恢复位置
+ */
+export function useScrollPositionManager(
+  id: string,
+  ready: boolean,
+): void {
+  const { scrollRef, stopScroll, scrollToBottom } = useStickToBottomContext();
+  const restoredRef = useRef(false);
+  const prevIdRef = useRef(id);
+
+  // Branch 导航目标（如果有，优先级高于保存的位置）
+  const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(id));
+
+  // 持续保存滚动位置（距底部距离）
+  // 仅在恢复完成后才注册监听，防止恢复前的自动滚动污染缓存
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !restoredRef.current) return;
+
+    const savePosition = (): void => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      scrollPositionCache.set(id, distanceFromBottom);
+    };
+
+    el.addEventListener("scroll", savePosition, { passive: true });
+    return () => el.removeEventListener("scroll", savePosition);
+  }, [scrollRef, id, ready]);
+
+  // id 变化时重置恢复标记
+  useEffect(() => {
+    if (id !== prevIdRef.current) {
+      prevIdRef.current = id;
+      restoredRef.current = false;
+    }
+  }, [id]);
+
+  /** 滚动到指定消息（Branch 导航用） */
+  const scrollToMessage = useCallback(
+    (entryId: string, behavior: "instant" | "smooth" = "instant") => {
+      const container = scrollRef.current;
+      if (!container) return;
+
+      stopScroll();
+      const target = container.querySelector(`[data-message-id="${entryId}"]`);
+      if (target) {
+        (target as HTMLElement).scrollIntoView({ block: "center", behavior });
+      }
+    },
+    [scrollRef, stopScroll],
+  );
+
+  // ready 后恢复位置
+  // 关键：用 rAF 把 scrollToBottom 延迟到下一帧，
+  // 确保 StickToBottom 内部的 ResizeObserver 已经处理完本轮布局
+  useLayoutEffect(() => {
+    if (!ready || restoredRef.current) return;
+    restoredRef.current = true;
+
+    const el = scrollRef.current;
+    if (!el) {
+      DEBUG && console.log("[ScrollPos] ready but no scrollRef, id=", id);
+      return;
+    }
+
+    // Branch 导航优先
+    if (navigatingEntry) {
+      DEBUG && console.log("[ScrollPos] branch nav to", navigatingEntry);
+      scrollToMessage(navigatingEntry, "instant");
+      return;
+    }
+
+    const savedDistance = scrollPositionCache.get(id);
+    DEBUG && console.log("[ScrollPos] ready, id=", id, "savedDistance=", savedDistance, "scrollHeight=", el.scrollHeight, "clientHeight=", el.clientHeight, "scrollTop=", el.scrollTop);
+
+    if (savedDistance != null && savedDistance > 5) {
+      stopScroll();
+      const targetScrollTop = el.scrollHeight - el.clientHeight - savedDistance;
+      el.scrollTop = Math.max(0, targetScrollTop);
+      requestAnimationFrame(() => {
+        const t = el.scrollHeight - el.clientHeight - savedDistance;
+        el.scrollTop = Math.max(0, t);
+      });
+    } else {
+      // 用 rAF 包裹，给 StickToBottom 的 ResizeObserver 时间完成
+      // 然后用双 rAF 做巩固
+      requestAnimationFrame(() => {
+        DEBUG && console.log("[ScrollPos] scrollToBottom(instant), scrollHeight=", el.scrollHeight, "clientHeight=", el.clientHeight);
+        scrollToBottom("instant");
+        // 巩固：再等一帧确认位置正确
+        requestAnimationFrame(() => {
+          const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+          DEBUG && console.log("[ScrollPos] after scrollToBottom, distanceFromBottom=", dist, "scrollTop=", el.scrollTop);
+          if (dist > 5) {
+            DEBUG && console.log("[ScrollPos] correcting, re-scrollToBottom");
+            scrollToBottom("instant");
+          }
+        });
+      });
+    }
+  }, [ready, id, navigatingEntry, scrollRef, stopScroll, scrollToBottom, scrollToMessage]);
+}
+
+export { scrollPositionCache };

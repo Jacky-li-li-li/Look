@@ -93,6 +93,7 @@ import {
 	type SessionSnapshotEnvelope,
 	type ThinkingLevel,
 } from "./shared/types.js";
+import { formatLocalDate, incrementTurn } from "./usage-service.js";
 import { type UserSettings, UserSettingsStore } from "./user-settings.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
@@ -1923,6 +1924,10 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore {
 				// 子会话 assistant 消息：累计用量并推送进度
 				if (event.message.role === "assistant") {
 					this.trackSubSessionMessageEnd(sessionId, event.message);
+					// 完成一轮有效对话：stopReason 不是 aborted 时计入当日用量。
+					if (event.message.stopReason !== "aborted") {
+						incrementTurn(formatLocalDate(Date.now()));
+					}
 				}
 				// 首条 user 消息的 message_end 时并行触发 AI 标题生成。
 				// 必须在 message_end 而不是 agent_start 触发，因为 agent_start 时

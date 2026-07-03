@@ -7,8 +7,9 @@
 //
 // State machine:
 //   - isStreaming && anyRunning       → expanded (live cards)
-//   - allCompleted && !manuallyOpened → collapsed-badge
-//   - manuallyOpened                  → expanded (user inspection)
+//   - active group / running tool      → expanded (live cards)
+//   - completed active group           → delayed collapse to badge
+//   - manual open                      → expanded (user inspection)
 //
 // Reuses ToolCallCard + ThinkingPanel + scheduleCollapse()
 // rather than re-implementing their per-card collapse logic.
@@ -21,6 +22,7 @@ import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
+import { scheduleCollapse } from "../lib/batchCollapse";
 import type { LookStyle } from "../lib/look-theme";
 import { hashKey } from "../lib/stableKey";
 import SkillAwareContent from "./SkillAwareContent";
@@ -110,8 +112,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	const { t } = useTranslation();
 	const { style: themeStyle } = useLookTheme();
 
-	const [manuallyOpened, setManuallyOpened] = React.useState(false);
-
 	const { kind, thinkingCount, toolCount } = React.useMemo(() => classify(blocks), [blocks]);
 
 	const anyRunning = React.useMemo(
@@ -119,28 +119,65 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 		[blocks, toolExecutions, toolResultMap],
 	);
 
-	const allCompleted = !anyRunning;
+	const liveOpen = isStreaming || anyRunning;
+	const [{ manualOpen, autoOpen }, setGroupState] = React.useState<{
+		manualOpen: boolean | null;
+		autoOpen: boolean;
+	}>(() => ({ manualOpen: null, autoOpen: liveOpen }));
+	const prevLiveOpenRef = React.useRef(liveOpen);
+	const cancelCollapseRef = React.useRef<(() => void) | null>(null);
 
-	// If a new block arrived mid-stream and is still running, force-expand
-	// even if the user previously opened the badge and then re-collapsed.
 	React.useEffect(() => {
-		if (anyRunning) setManuallyOpened(false);
-	}, [anyRunning]);
+		const wasLiveOpen = prevLiveOpenRef.current;
+		prevLiveOpenRef.current = liveOpen;
 
-	const expanded = isStreaming || manuallyOpened || !allCompleted;
+		cancelCollapseRef.current?.();
+		cancelCollapseRef.current = null;
+
+		if (liveOpen) {
+			setGroupState((state) =>
+				state.manualOpen === null && state.autoOpen ? state : { manualOpen: null, autoOpen: true },
+			);
+			return;
+		}
+
+		if (wasLiveOpen) {
+			cancelCollapseRef.current = scheduleCollapse(() => {
+				setGroupState((state) => (state.manualOpen === null ? { ...state, autoOpen: false } : state));
+				cancelCollapseRef.current = null;
+			});
+			return () => cancelCollapseRef.current?.();
+		}
+
+		setGroupState((state) => (state.manualOpen === null && state.autoOpen ? { ...state, autoOpen: false } : state));
+	}, [liveOpen]);
+
+	React.useEffect(() => () => cancelCollapseRef.current?.(), []);
+
+	const expanded = manualOpen ?? autoOpen;
+	const bodyPresent = useDelayedPresence(expanded, 220);
 
 	const handleBadgeClick = React.useCallback(() => {
+		if (liveOpen) return;
+		cancelCollapseRef.current?.();
+		cancelCollapseRef.current = null;
 		// Toggle: clicking the badge when collapsed opens it; clicking when
 		// already manually open collapses back to the badge.
-		setManuallyOpened((prev) => !prev);
-	}, []);
+		setGroupState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? state.autoOpen) }));
+	}, [liveOpen]);
 
-	const handleBadgeKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {
-		if (e.key === "Enter" || e.key === " ") {
-			e.preventDefault();
-			setManuallyOpened((prev) => !prev);
-		}
-	}, []);
+	const handleBadgeKeyDown = React.useCallback(
+		(e: React.KeyboardEvent<HTMLButtonElement>) => {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				if (liveOpen) return;
+				cancelCollapseRef.current?.();
+				cancelCollapseRef.current = null;
+				setGroupState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? state.autoOpen) }));
+			}
+		},
+		[liveOpen],
+	);
 
 	if (blocks.length === 0) return null;
 
@@ -148,9 +185,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	// included, so 1-tool / 1-thinking turns also use the badge form.
 	const summary = pickSummary(kind, thinkingCount, toolCount, t);
 	const isOpen = expanded;
-	// While streaming is in flight the badge trigger is hidden — the live
-	// card list is the source of truth and the badge would just add noise.
-	const showTrigger = !isStreaming;
 
 	// Optional inlineTexts: when provided (e.g. caller wants a note shown
 	// alongside the cards), interleave them between blocks. When empty
@@ -170,36 +204,59 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	}
 
 	return (
-		<div className="flex flex-col">
-			{showTrigger && (
-				<BadgeTrigger
-					summary={summary}
-					kind={kind}
-					themeStyle={themeStyle}
-					isOpen={isOpen}
-					onClick={handleBadgeClick}
-					onKeyDown={handleBadgeKeyDown}
-				/>
-			)}
-			{isOpen && (
-				<div className="flex flex-col">
-					{interleaved.map((node, i) =>
-						node.kind === "text" ? (
-							<div
-								key={`note-${hashKey(node.text)}`}
-								className="message-prose text-[10px] text-muted-foreground"
-							>
-								<SkillAwareContent content={node.text} isStreaming={isStreaming} />
-							</div>
-						) : (
-							renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)
-						),
-					)}
+		<div className="flex flex-col" data-execution-group="" data-open={isOpen}>
+			<BadgeTrigger
+				summary={summary}
+				kind={kind}
+				themeStyle={themeStyle}
+				isOpen={isOpen}
+				disabled={liveOpen}
+				onClick={handleBadgeClick}
+				onKeyDown={handleBadgeKeyDown}
+			/>
+			{bodyPresent && (
+				<div
+					data-execution-group-body=""
+					data-open={isOpen}
+					aria-hidden={!isOpen}
+					className="grid transition-all duration-200 ease-out"
+					style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", opacity: isOpen ? 1 : 0 }}
+				>
+					<div className="overflow-hidden">
+						<div className="flex flex-col">
+							{interleaved.map((node, i) =>
+								node.kind === "text" ? (
+									<div
+										key={`note-${hashKey(node.text)}`}
+										className="message-prose text-[10px] text-muted-foreground"
+									>
+										<SkillAwareContent content={node.text} isStreaming={isStreaming} />
+									</div>
+								) : (
+									renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)
+								),
+							)}
+						</div>
+					</div>
 				</div>
 			)}
 		</div>
 	);
 });
+
+function useDelayedPresence(open: boolean, delayMs: number): boolean {
+	const [present, setPresent] = React.useState(open);
+	React.useEffect(() => {
+		if (open) {
+			setPresent(true);
+			return;
+		}
+		if (!present) return;
+		const timer = setTimeout(() => setPresent(false), delayMs);
+		return () => clearTimeout(timer);
+	}, [open, delayMs, present]);
+	return open || present;
+}
 
 function pickSummary(
 	kind: GroupKind,
@@ -261,11 +318,12 @@ interface BadgeTriggerProps {
 	kind: GroupKind;
 	themeStyle: LookStyle;
 	isOpen: boolean;
+	disabled?: boolean;
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
 
-function BadgeTrigger({ summary, kind, themeStyle, isOpen, onClick, onKeyDown }: BadgeTriggerProps) {
+function BadgeTrigger({ summary, kind, themeStyle, isOpen, disabled, onClick, onKeyDown }: BadgeTriggerProps) {
 	const Icon = kind === "thinking" ? Brain : Wrench;
 	// Chevron rotates 90° when expanded so the same row visually signals "click to collapse".
 	const chevron = (
@@ -279,8 +337,10 @@ function BadgeTrigger({ summary, kind, themeStyle, isOpen, onClick, onKeyDown }:
 				onClick={onClick}
 				onKeyDown={onKeyDown}
 				aria-expanded={isOpen}
+				aria-disabled={disabled || undefined}
 				className={cn(
 					"group inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-opacity",
+					disabled && "cursor-default",
 					isOpen
 						? "bg-background text-foreground ring-1 ring-foreground"
 						: "bg-foreground text-background hover:opacity-80",
@@ -301,8 +361,10 @@ function BadgeTrigger({ summary, kind, themeStyle, isOpen, onClick, onKeyDown }:
 				onClick={onClick}
 				onKeyDown={onKeyDown}
 				aria-expanded={isOpen}
+				aria-disabled={disabled || undefined}
 				className={cn(
 					"inline-flex items-center gap-1.5 border-2 border-foreground px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] transition-colors",
+					disabled && "cursor-default",
 					isOpen
 						? "bg-foreground text-background"
 						: "bg-background text-foreground hover:bg-foreground hover:text-background",
@@ -324,9 +386,11 @@ function BadgeTrigger({ summary, kind, themeStyle, isOpen, onClick, onKeyDown }:
 			onClick={onClick}
 			onKeyDown={onKeyDown}
 			aria-expanded={isOpen}
+			aria-disabled={disabled || undefined}
 			className={cn(
 				"flex w-full items-center gap-2 pr-2.5 py-1 text-left outline-none cursor-pointer",
 				"font-mono text-[10px] hover:text-foreground transition-colors",
+				disabled && "cursor-default hover:text-muted-foreground",
 				isOpen ? "text-foreground" : "text-muted-foreground",
 			)}
 		>

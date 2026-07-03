@@ -119,6 +119,18 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 		expect(SRC).toMatch(/if\s*\(\s*!isBusy\s*\|\|\s*userScrolledAwayRef\.current\s*\)/);
 	});
 
+	it("keeps bottom anchoring when tool output grows", () => {
+		expect(SRC).toMatch(/streamingUiFootprint/);
+		expect(SRC).toMatch(/sessionState\.uiTools/);
+		expect(SRC).toMatch(/valueFootprint\(tool\.partialResult\)/);
+	});
+
+	it("coalesces programmatic bottom scrolls into one rAF", () => {
+		expect(SRC).toMatch(/scrollFrameRef/);
+		expect(SRC).toMatch(/if\s*\(\s*scrollFrameRef\.current\s*!=\s*null\s*\)\s*return/);
+		expect(SRC).toMatch(/cancelAnimationFrame\(scrollFrameRef\.current\)/);
+	});
+
 	it("uses scrollToIndex for navigate-to-entry", () => {
 		expect(SRC).toMatch(/scrollToIndex/);
 	});

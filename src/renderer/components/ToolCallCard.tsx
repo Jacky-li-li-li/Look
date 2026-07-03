@@ -175,43 +175,48 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { style: themeStyle } = useLookTheme();
 	// Auto open when running, auto close on completion after a short delay.
 	// manualOpen = null means "follow derived state"; true/false override it.
-	const [{ manualOpen, collapseAfter }, setPanelState] = React.useState<{
+	const [{ manualOpen, autoOpen }, setPanelState] = React.useState<{
 		manualOpen: boolean | null;
-		collapseAfter: number | null;
-	}>({ manualOpen: null, collapseAfter: null });
-	const prevStatusRef = React.useRef<string | undefined>(undefined);
+		autoOpen: boolean;
+	}>(() => ({ manualOpen: null, autoOpen: toolCall.status === "running" }));
+	const prevStatusRef = React.useRef(toolCall.status);
 	const cancelCollapseRef = React.useRef<(() => void) | null>(null);
 
-	const isRunning = toolCall.status === "running";
-	const open = manualOpen ?? (isRunning || (collapseAfter != null && Date.now() < collapseAfter));
-
-	// Reset panel state when the tool starts running. Doing this inline
-	// during render avoids the extra stale frame of an effect-based sync.
-	if (toolCall.status !== prevStatusRef.current) {
-		const curr = toolCall.status;
-		prevStatusRef.current = curr;
-		if (curr === "running") {
-			cancelCollapseRef.current?.();
-			cancelCollapseRef.current = null;
-			setPanelState({ manualOpen: null, collapseAfter: null });
-		}
-	}
+	const open = manualOpen ?? autoOpen;
 
 	// Schedule delayed collapse once when the tool completes.
 	React.useEffect(() => {
-		if (
-			(toolCall.status === "success" || toolCall.status === "error") &&
-			manualOpen === null &&
-			collapseAfter === null
-		) {
-			cancelCollapseRef.current?.();
+		const previousStatus = prevStatusRef.current;
+		const currentStatus = toolCall.status;
+		prevStatusRef.current = currentStatus;
+
+		cancelCollapseRef.current?.();
+		cancelCollapseRef.current = null;
+
+		if (currentStatus === "running") {
+			setPanelState((state) =>
+				state.manualOpen === null && state.autoOpen ? state : { manualOpen: null, autoOpen: true },
+			);
+			return;
+		}
+
+		if ((currentStatus === "success" || currentStatus === "error") && previousStatus === "running") {
+			setPanelState((state) =>
+				state.manualOpen === null && state.autoOpen ? state : { manualOpen: null, autoOpen: true },
+			);
 			cancelCollapseRef.current = scheduleCollapse(() => {
-				setPanelState((state) => ({ ...state, collapseAfter: Date.now() }));
+				setPanelState((state) => (state.manualOpen === null ? { ...state, autoOpen: false } : state));
 				cancelCollapseRef.current = null;
 			});
+			return () => cancelCollapseRef.current?.();
 		}
-		return () => cancelCollapseRef.current?.();
-	}, [toolCall.status, manualOpen, collapseAfter]);
+
+		if (currentStatus === "pending") {
+			setPanelState((state) =>
+				state.manualOpen === null && !state.autoOpen ? state : { manualOpen: null, autoOpen: false },
+			);
+		}
+	}, [toolCall.status]);
 
 	// Clean up pending collapse on unmount.
 	React.useEffect(() => () => cancelCollapseRef.current?.(), []);
@@ -239,10 +244,11 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					: "text-muted-foreground";
 
 	return (
-		<div>
+		<div data-tool-panel="" data-open={open}>
 			<div>
 				<button
 					type="button"
+					aria-expanded={open}
 					className={cn(
 						"flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
 						!hasBody && "cursor-default",
@@ -250,7 +256,9 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					disabled={!hasBody}
 					onClick={() => {
 						if (hasBody) {
-							setPanelState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? open) }));
+							cancelCollapseRef.current?.();
+							cancelCollapseRef.current = null;
+							setPanelState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? state.autoOpen) }));
 						}
 					}}
 				>
@@ -310,6 +318,8 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
 				{hasBody && (
 					<div
+						data-tool-panel-body=""
+						data-open={open}
 						className="grid transition-all duration-200 ease-out"
 						style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}
 					>

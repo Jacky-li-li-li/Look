@@ -225,11 +225,12 @@ function ContentBlocks({
 					}
 					if (block.type === "thinking") {
 						if (!block.thinking) return null;
+						const isActiveThinking = isStreaming && seg.index === blocks.length - 1;
 						return (
 							<ThinkingPanel
 								key={`thinking-${hashKey(block.thinking)}`}
 								thinking={block.thinking}
-								isStreaming={isStreaming}
+								isStreaming={isActiveThinking}
 								autoCollapse={autoCollapse}
 							/>
 						);
@@ -260,13 +261,15 @@ function ContentBlocks({
 					return null;
 				}
 
+				const groupEndIndex = seg.startIndex + seg.blocks.length;
+				const isActiveGroup = isStreaming && groupEndIndex === blocks.length;
 				return (
 					<CollapsibleExecutionGroup
 						key={`group-${seg.startIndex}-${segIdx}`}
 						blocks={seg.blocks}
 						toolExecutions={toolExecutions}
 						toolResultMap={toolResultMap}
-						isStreaming={isStreaming}
+						isStreaming={isActiveGroup}
 					/>
 				);
 			})}

@@ -86,7 +86,6 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 			parameters: askUserQuestionSchema,
 			executionMode: "sequential",
 			async execute(_toolCallId, params, signal) {
-				if (host.getMode(sessionId) !== "plan") return toolError("AskUserQuestion is only available in Plan mode.");
 				const questions = params.questions.map((question) => ({
 					question: question.question.trim(),
 					header: question.header.trim(),

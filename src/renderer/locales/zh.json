@@ -436,7 +436,15 @@
     "logout": "退出登录",
     "userNamePlaceholder": "你的显示名称",
     "userNameSaved": "用户名已更新",
-    "avatarSaved": "头像已更新"
+    "avatarSaved": "头像已更新",
+    "activity": "使用活跃度",
+    "contributions": "{{year}} 年共 {{count}} 次对话",
+    "turns": "{{count}} 次对话",
+    "less": "少",
+    "more": "多",
+    "mon": "一",
+    "wed": "三",
+    "fri": "五"
   },
   "toast": {
     "modelUnavailable": "模型不可用: {{primary}}。已切换到 {{resolved}}。",

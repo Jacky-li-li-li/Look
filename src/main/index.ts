@@ -13,6 +13,7 @@ import { syncLookDefaultSkills } from "./look-default-skills.js";
 import { SessionRuntimeManager } from "./session-runtime-manager.js";
 import { loadShellEnv } from "./shell-env-loader.js";
 import { checkForUpdates, initUpdater } from "./updater.js";
+import { initializeUsageService } from "./usage-service.js";
 import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
@@ -239,6 +240,11 @@ async function initSessionRuntime(): Promise<void> {
 	// 1) 加载项目书签和会话列表（快：纯文件读取，无 SDK 初始化）。
 	await runtimeManager.loadProjects();
 	await runtimeManager.restoreWorkspace();
+
+	// 初始化用量统计服务：一次性从历史会话中回算每日轮数。
+	initializeUsageService(runtimeManager.listProjects()).catch((error) => {
+		console.error("[Look] Failed to initialize usage service:", error);
+	});
 
 	// 2) 尽快把初始数据推给 renderer，让 UI 立即渲染。
 	//    session runtime 初始化 (activateSession) 仍会在后台运行，

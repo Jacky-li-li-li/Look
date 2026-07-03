@@ -1,14 +1,26 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LookMarkdown from "../src/renderer/components/LookMarkdown";
+
+beforeEach(() => {
+	vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+		return setTimeout(() => callback(performance.now()), 16) as unknown as number;
+	});
+	vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>));
+});
 
 afterEach(() => {
 	cleanup();
+	vi.unstubAllGlobals();
 });
 
 describe("LookMarkdown", () => {
+	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/LookMarkdown.tsx"), "utf8");
+
 	it("renders basic markdown", async () => {
 		const content = `# Hello
 
@@ -38,8 +50,14 @@ This is **bold**.`;
 
 	it("renders streaming content without error", async () => {
 		const { container, rerender } = render(<LookMarkdown content="Hello" isStreaming />);
-		await waitFor(() => expect(container.textContent).toContain("Hello"));
+		await waitFor(() => expect(container.textContent).toContain("Hello"), { timeout: 3000 });
 		rerender(<LookMarkdown content="Hello world" isStreaming />);
-		await waitFor(() => expect(container.textContent).toContain("Hello world"));
+		await waitFor(() => expect(container.textContent).toContain("Hello world"), { timeout: 3000 });
+	});
+
+	it("uses native smooth streaming instead of disabling it", () => {
+		expect(SRC).toMatch(/smoothStreaming=\{isStreaming\}/);
+		expect(SRC).toMatch(/STREAMING_MARKDOWN_SMOOTH_OPTIONS/);
+		expect(SRC).not.toMatch(/smoothStreaming=\{false\}/);
 	});
 });

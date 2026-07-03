@@ -29,6 +29,7 @@ import type {
 	ThinkingLevel,
 } from "./shared/types.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "./updater.js";
+import { getUsage } from "./usage-service.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "./user-profile-service.js";
 import type { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import { SHARED_MAX_CONTENT_BYTES } from "./workspace/workspace-file-service.js";
@@ -678,6 +679,12 @@ async function handleRendererInvoke(
 		case "user-profile:reset": {
 			const profile = resetUserProfile();
 			return { success: true, profile };
+		}
+
+		// === Usage heatmap ===
+		case "usage:get": {
+			const usage = await getUsage(runtimeManager.listProjects());
+			return { success: true, usage };
 		}
 
 		// === Shared area ===

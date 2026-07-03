@@ -436,7 +436,15 @@
 		"logout": "ログアウト",
 		"userNamePlaceholder": "表示名",
 		"userNameSaved": "ユーザー名を更新しました",
-		"avatarSaved": "アバターを更新しました"
+		"avatarSaved": "アバターを更新しました",
+		"activity": "アクティビティ",
+		"contributions": "{{year}}年の contribution {{count}}件",
+		"turns": "{{count}} ターン",
+		"less": "少ない",
+		"more": "多い",
+		"mon": "月",
+		"wed": "水",
+		"fri": "金"
 	},
 	"toast": {
 		"modelUnavailable": "モデルが利用できません: {{primary}}。{{resolved}} に切り替えました。",

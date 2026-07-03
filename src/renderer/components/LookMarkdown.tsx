@@ -112,6 +112,18 @@ const CODE_LANGS = [
 	"text",
 ];
 
+const STREAMING_MARKDOWN_SMOOTH_OPTIONS = {
+	minCharsPerSecond: 600,
+	maxCharsPerSecond: 8000,
+	targetLatencyMs: 90,
+	catchUpLatencyMs: 35,
+	catchUpThreshold: 160,
+	maxCommitFps: 60,
+	startDelayMs: 0,
+	maxCharsPerCommit: 160,
+	flushOnFinish: true,
+};
+
 const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, docs = false }: LookMarkdownProps) {
 	const { resolvedTheme } = useTheme();
 	const prepared = useMemo(() => {
@@ -127,8 +139,8 @@ const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, 
 			content={prepared}
 			final={!isStreaming}
 			fade={isStreaming ? false : !docs}
-			smoothStreaming={false}
-			maxLiveNodes={isStreaming ? 0 : undefined}
+			smoothStreaming={isStreaming}
+			smoothStreamingOptions={STREAMING_MARKDOWN_SMOOTH_OPTIONS}
 			batchRendering={isStreaming}
 			isDark={resolvedTheme === "dark"}
 			streamingComponents={streamingComponents}

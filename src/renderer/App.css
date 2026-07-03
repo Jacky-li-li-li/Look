@@ -1577,6 +1577,12 @@ body {
     /* Flat, card-less assistant container. */
   }
 
+  /* In light mode, soften assistant body text so it doesn't read as
+     heavy as the near-black foreground token. */
+  .tone-light .whisper-bubble--assistant .markstream-react {
+    color: color-mix(in oklch, var(--foreground), var(--background) 24%);
+  }
+
   .message-prose {
     line-height: 1.72;
     word-break: break-word;
@@ -1613,6 +1619,13 @@ body {
   .markstream-react code {
     font-family: var(--font-mono);
     font-size: 12px;
+  }
+
+  /* Inline code currently pulls --secondary via a Tailwind arbitrary value,
+     which can be too heavy (dark/opaque) depending on the theme. Use a
+     muted, semi-transparent fill instead so it stays subtle in both modes. */
+  .whisper-bubble--assistant .markstream-react .inline-code {
+    background: oklch(from var(--muted) l c h / 0.45) !important;
   }
 
   .markstream-react img {
@@ -1740,6 +1753,25 @@ body {
     margin-left: 6px;
     padding-left: 12px;
     border-left: 1px solid var(--ink-2);
+  }
+
+  [data-tool-panel],
+  [data-execution-group] {
+    overflow-anchor: none;
+    contain: layout paint;
+  }
+
+  [data-tool-panel-body],
+  [data-execution-group-body] {
+    overflow-anchor: none;
+    will-change: grid-template-rows, opacity;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-tool-panel-body],
+    [data-execution-group-body] {
+      transition-duration: 1ms !important;
+    }
   }
 
   /* ============================================================

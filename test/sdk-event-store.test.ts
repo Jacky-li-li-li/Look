@@ -10,6 +10,10 @@ function uiEvent(event: LookUiEvent): { type: "session:ui-event"; sessionId: str
 	return { type: "session:ui-event", sessionId, events: [event] };
 }
 
+function uiEvents(events: LookUiEvent[]): { type: "session:ui-event"; sessionId: string; events: LookUiEvent[] } {
+	return { type: "session:ui-event", sessionId, events };
+}
+
 let dispose: (() => void) | undefined;
 
 afterEach(() => {
@@ -67,6 +71,31 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(block!.completed).toBe(true);
 	});
 
+	it("preserves text deltas that arrive in the same batch as text_end", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		receive(
+			uiEvents([
+				{ type: "run_status", status: "streaming", timestamp: 1 },
+				{ type: "assistant_text_start", contentIndex: 0, timestamp: 2 },
+				{ type: "assistant_text_delta", contentIndex: 0, delta: "Hello", timestamp: 3 },
+				{ type: "assistant_text_delta", contentIndex: 0, delta: " World", timestamp: 4 },
+				{ type: "assistant_text_end", contentIndex: 0, text: "", timestamp: 5 },
+			]),
+		);
+		flushAllUiEvents();
+
+		const state = appStore.get(sessionStateAtomFamily(sessionId));
+		const block = state.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "text");
+		expect(block).toMatchObject({ text: "Hello World", completed: true });
+	});
+
 	it("accumulates thinking deltas and marks completed", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
@@ -90,6 +119,31 @@ describe("UI event canonical store (session:ui-event)", () => {
 		const end = appStore.get(sessionStateAtomFamily(sessionId));
 		const endBlock = end.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
 		expect(endBlock!.completed).toBe(true);
+	});
+
+	it("preserves thinking deltas that arrive in the same batch as thinking_end", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		receive(
+			uiEvents([
+				{ type: "run_status", status: "streaming", timestamp: 1 },
+				{ type: "thinking_start", contentIndex: 0, timestamp: 2 },
+				{ type: "thinking_delta", contentIndex: 0, delta: "Plan", timestamp: 3 },
+				{ type: "thinking_delta", contentIndex: 0, delta: " first", timestamp: 4 },
+				{ type: "thinking_end", contentIndex: 0, thinking: "", timestamp: 5 },
+			]),
+		);
+		flushAllUiEvents();
+
+		const state = appStore.get(sessionStateAtomFamily(sessionId));
+		const block = state.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
+		expect(block).toMatchObject({ thinking: "Plan first", completed: true });
 	});
 
 	it("tracks tool_call lifecycle in uiBlocks", () => {
@@ -120,6 +174,52 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(tc!.toolCallId).toBe("tc-1");
 		expect(tc!.toolName).toBe("read");
 		expect(tc!.completed).toBe(true);
+	});
+
+	it("updates an existing completed tool_call instead of appending a duplicate", () => {
+		let receive!: (event: any) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: any) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
+		flushReceive(receive, uiEvent({ type: "toolcall_start", contentIndex: 0, timestamp: 2 }));
+		flushReceive(
+			receive,
+			uiEvent({
+				type: "toolcall_end",
+				contentIndex: 0,
+				toolCallId: "tc-1",
+				toolName: "read",
+				args: { path: "first.ts" },
+				timestamp: 3,
+			}),
+		);
+
+		flushReceive(
+			receive,
+			uiEvent({
+				type: "toolcall_end",
+				contentIndex: 0,
+				toolCallId: "tc-1",
+				toolName: "read",
+				args: { path: "final.ts" },
+				timestamp: 4,
+			}),
+		);
+
+		const state = appStore.get(sessionStateAtomFamily(sessionId));
+		const toolCalls = state.uiBlocks.filter((b) => b.contentIndex === 0 && b.kind === "toolcall");
+		expect(toolCalls).toHaveLength(1);
+		expect(toolCalls[0]).toMatchObject({
+			toolCallId: "tc-1",
+			toolName: "read",
+			args: { path: "final.ts" },
+			completed: true,
+		});
 	});
 
 	it("tracks tool execution states in uiTools", () => {

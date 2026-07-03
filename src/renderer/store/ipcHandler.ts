@@ -365,7 +365,10 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 			case "assistant_text_end": {
 				for (let i = 0; i < blocks.length; i++) {
 					if (blocks[i]!.contentIndex === ev.contentIndex && blocks[i]!.kind === "text" && !blocks[i]!.completed) {
-						mutateBlock(i, { ...blocks[i]!, completed: true });
+						const pendingDelta = textDeltas.get(ev.contentIndex) ?? "";
+						textDeltas.delete(ev.contentIndex);
+						const text = ev.text || blocks[i]!.text + pendingDelta;
+						mutateBlock(i, { ...blocks[i]!, text, completed: true });
 						break;
 					}
 				}
@@ -393,7 +396,10 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 						blocks[i]!.kind === "thinking" &&
 						!blocks[i]!.completed
 					) {
-						mutateBlock(i, { ...blocks[i]!, completed: true });
+						const pendingDelta = thinkingDeltas.get(ev.contentIndex) ?? "";
+						thinkingDeltas.delete(ev.contentIndex);
+						const thinking = ev.thinking || blocks[i]!.thinking + pendingDelta;
+						mutateBlock(i, { ...blocks[i]!, thinking, completed: true });
 						break;
 					}
 				}
@@ -429,9 +435,13 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 				// batch orderings — see assistant_message_start clearing pendingToolcallIndex
 				// while keeping previously-completed blocks). Only push a new block when
 				// nothing matches, otherwise we'd render duplicate ToolCallCards.
+				const incompleteIdx = blocks.findIndex(
+					(b) => b.kind === "toolcall" && b.contentIndex === ev.contentIndex && !b.completed,
+				);
 				const idx =
-					blocks.findIndex((b) => b.kind === "toolcall" && b.contentIndex === ev.contentIndex && !b.completed) ??
-					blocks.findIndex((b) => b.kind === "toolcall" && b.contentIndex === ev.contentIndex);
+					incompleteIdx >= 0
+						? incompleteIdx
+						: blocks.findIndex((b) => b.kind === "toolcall" && b.contentIndex === ev.contentIndex);
 				if (idx >= 0) {
 					const updated = { ...blocks[idx]! };
 					updated.toolCallId = ev.toolCallId;

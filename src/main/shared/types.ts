@@ -593,6 +593,8 @@ export type RendererToMainEvent =
 			patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>;
 	  }
 	| { type: "user-profile:reset" }
+	// ---- Usage heatmap (renderer → main) ----
+	| { type: "usage:get" }
 	// ---- Shared area (renderer → main) ----
 	| { type: "shared:list"; projectId: string }
 	| { type: "shared:watch"; projectId: string }
@@ -677,6 +679,15 @@ export interface ProviderInfo {
 	name: string;
 	hasCredentials: boolean;
 	models: string[];
+}
+
+// ============================================================
+// Usage heatmap persistence
+// ============================================================
+
+export interface UsageData {
+	usage: Record<string, number>;
+	years: number[];
 }
 
 // ============================================================

@@ -1,17 +1,9 @@
 import { Button } from "@shared/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@shared/components/ui/dialog";
 import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
 import { useAtom } from "jotai";
-import { Check, CircleHelp, ListChecks } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, CircleHelp, ListChecks, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../store/atoms";
 
@@ -19,8 +11,32 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 	const [request, setRequest] = useAtom(planQuestionRequestAtomFamily(sessionId ?? ""));
 	const [storedDraft, setDraft] = useAtom(planQuestionDraftAtomFamily(sessionId ?? ""));
 	const [responding, setResponding] = useState(false);
+	const [visible, setVisible] = useState(false);
+	const panelRef = useRef<HTMLDivElement>(null);
 	const draft = storedDraft.requestId === request?.requestId ? storedDraft : emptyPlanQuestionDraft();
 	const { selections, otherEnabled, otherValues } = draft;
+
+	// Animate in when request appears
+	useEffect(() => {
+		if (request && request.sessionId === sessionId) {
+			const timer = requestAnimationFrame(() => setVisible(true));
+			return () => cancelAnimationFrame(timer);
+		}
+		setVisible(false);
+	}, [request, sessionId]);
+
+	// Close on Escape
+	useEffect(() => {
+		if (!request || !visible) return;
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				dismiss();
+			}
+		};
+		document.addEventListener("keydown", onKey);
+		return () => document.removeEventListener("keydown", onKey);
+	}, [request, visible]);
 
 	const complete = useMemo(() => {
 		if (!request) return false;
@@ -32,6 +48,11 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 	}, [request, selections, otherEnabled, otherValues]);
 
 	if (!request || request.sessionId !== sessionId) return null;
+
+	const dismiss = () => {
+		setRequest(null);
+		setDraft(emptyPlanQuestionDraft());
+	};
 
 	const chooseOption = (questionText: string, label: string, multiSelect: boolean) => {
 		setDraft((previous) => {
@@ -93,39 +114,63 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 	};
 
 	return (
-		<Dialog open>
-			<DialogContent
-				className="max-w-2xl gap-0 p-0"
-				showCloseButton={false}
-				onEscapeKeyDown={(event) => event.preventDefault()}
-				onPointerDownOutside={(event) => event.preventDefault()}
-				onInteractOutside={(event) => event.preventDefault()}
+		<>
+			{/* Backdrop */}
+			<div
+				className={cn(
+					"fixed inset-0 z-40 bg-black/5 transition-opacity duration-200",
+					visible ? "opacity-100" : "opacity-0 pointer-events-none",
+				)}
+				onClick={dismiss}
+			/>
+
+			{/* Options Panel */}
+			<div
+				ref={panelRef}
+				className={cn(
+					"fixed top-0 right-0 z-50 flex h-full w-[420px] max-w-[90vw] flex-col",
+					"bg-popover border-l border-hairline shadow-2xl",
+					"transition-transform duration-300 ease-out",
+					visible ? "translate-x-0" : "translate-x-full",
+				)}
 			>
-				<DialogHeader className="border-b px-5 py-4">
-					<div className="flex items-center gap-2">
-						<CircleHelp className="size-4 text-sky-500" />
-						<DialogTitle className="text-sm">规划问题</DialogTitle>
+				{/* Panel Header */}
+				<div className="flex shrink-0 items-center justify-between border-b px-5 py-4">
+					<div className="flex items-center gap-2.5">
+						<div className="flex size-7 items-center justify-center rounded-lg bg-sky-500/10">
+							<CircleHelp className="size-4 text-sky-500" />
+						</div>
+						<div>
+							<p className="text-[13px] font-medium leading-tight">Agent 提问</p>
+							<p className="text-[10px] text-muted-foreground">
+								{request.questions.length} 个问题 · 请选择后提交
+							</p>
+						</div>
 					</div>
-					<DialogDescription className="text-xs">请完成全部问题，Agent 将根据答案继续规划。</DialogDescription>
-				</DialogHeader>
-				<div className="max-h-[65vh] space-y-5 overflow-y-auto px-5 py-4">
+					<Button variant="ghost" size="icon-sm" onClick={dismiss}>
+						<X className="size-4" />
+					</Button>
+				</div>
+
+				{/* Panel Body */}
+				<div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
 					{request.questions.map((question, index) => {
 						const selected = selections[question.question] ?? [];
 						const isMulti = question.multiSelect === true;
 						return (
 							<section key={question.question} className="space-y-2.5">
-								<div className="flex items-start gap-2">
-									<span className="mt-0.5 rounded bg-sky-500/10 px-1.5 py-0.5 font-mono text-[10px] text-sky-600 dark:text-sky-400">
+								<div className="flex items-start gap-2.5">
+									<span className="mt-0.5 shrink-0 rounded-md bg-sky-500/10 px-2 py-1 font-mono text-[10px] font-medium text-sky-600 dark:text-sky-400">
 										{question.header}
 									</span>
 									<div>
 										<p className="text-[13px] font-medium leading-snug">{question.question}</p>
-										<p className="mt-0.5 text-[10px] text-muted-foreground">
-											{isMulti ? "可多选" : "单选"} · 问题 {index + 1}/{request.questions.length}
+										<p className="mt-1 text-[10px] text-muted-foreground">
+											{isMulti ? "多选" : "单选"} · {index + 1} / {request.questions.length}
 										</p>
 									</div>
 								</div>
-								<div className="grid gap-2 sm:grid-cols-2">
+								<div className="space-y-1.5">
 									{question.options.map((option) => {
 										const active = selected.includes(option.label);
 										return (
@@ -134,19 +179,23 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 												type="button"
 												onClick={() => chooseOption(question.question, option.label, isMulti)}
 												className={cn(
-													"flex min-h-16 items-start gap-2 rounded-lg border p-3 text-left transition-colors",
-													active ? "border-sky-500/60 bg-sky-500/8" : "border-hairline hover:bg-accent",
+													"flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-all",
+													active
+														? "border-sky-500/60 bg-sky-500/6 shadow-sm"
+														: "border-hairline hover:border-border hover:bg-accent/50",
 												)}
 											>
 												<span
 													className={cn(
-														"mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border",
-														active && "border-sky-500 bg-sky-500 text-white",
+														"mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+														active
+															? "border-sky-500 bg-sky-500 text-white"
+															: "border-muted-foreground/30",
 													)}
 												>
-													{active && <Check className="size-3" />}
+													{active && <Check className="size-3" strokeWidth={3} />}
 												</span>
-												<span>
+												<span className="min-w-0">
 													<span className="block text-xs font-medium">{option.label}</span>
 													<span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">
 														{option.description}
@@ -162,6 +211,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 										variant={otherEnabled[question.question] ? "line-filled" : "line"}
 										size="sm"
 										onClick={() => chooseOther(question.question, isMulti)}
+										className="h-7 text-[11px]"
 									>
 										Other
 									</Button>
@@ -182,8 +232,8 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 													};
 												});
 											}}
-											placeholder="输入自定义答案"
-											className="h-8 text-xs"
+											placeholder="输入自定义答案..."
+											className="h-7 flex-1 text-xs"
 										/>
 									)}
 								</div>
@@ -191,16 +241,18 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 						);
 					})}
 				</div>
-				<DialogFooter className="mx-0 mb-0 flex-row items-center justify-between rounded-none px-5 py-3">
-					<span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+
+				{/* Panel Footer */}
+				<div className="flex shrink-0 items-center justify-between border-t px-5 py-3">
+					<span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
 						<ListChecks className="size-3" />
-						必须完成全部问题
+						{complete ? "可以提交" : "请完成全部问题"}
 					</span>
 					<Button disabled={!complete || responding} onClick={() => void submit()} size="sm">
 						提交答案
 					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+				</div>
+			</div>
+		</>
 	);
 }
