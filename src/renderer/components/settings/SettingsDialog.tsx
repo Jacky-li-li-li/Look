@@ -13,14 +13,16 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
-import { FileText, Key, MessageCircle, Palette, UserRound, Zap } from "lucide-react";
+import { FileText, Key, MessageCircle, Palette, Server, UserRound, Zap } from "lucide-react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import type { SettingsTab } from "../../store/atoms";
 import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
 import GeneralTab from "./GeneralTab";
 import ImChannelsTab from "./ImChannelsTab";
+import McpServersTab from "./McpServersTab";
 import ProfileTab from "./ProfileTab";
 import PromptTab from "./PromptTab";
 import type { CustomProviderStats, ProviderInfo } from "./types";
@@ -33,7 +35,7 @@ interface SettingsDialogProps {
 	customStats: CustomProviderStats;
 	onProvidersChange: (data: { providers: ProviderInfo[]; customStats: CustomProviderStats }) => void;
 	onClose: () => void;
-	defaultTab?: "general" | "api-keys" | "im-channels" | "about" | "profile";
+	defaultTab?: SettingsTab;
 }
 
 const SettingsDialog = memo(function SettingsDialog({
@@ -122,6 +124,13 @@ const SettingsDialog = memo(function SettingsDialog({
 							<Zap className="size-3.5" />
 							{t("settings.about")}
 						</TabsTrigger>
+						<TabsTrigger
+							value="mcp"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
+						>
+							<Server className="size-3.5" />
+							MCP
+						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="prompt" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
@@ -146,6 +155,10 @@ const SettingsDialog = memo(function SettingsDialog({
 
 					<TabsContent value="about" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
 						<AboutTab providers={providers} customStats={customStats} />
+					</TabsContent>
+
+					<TabsContent value="mcp" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
+						<McpServersTab />
 					</TabsContent>
 				</Tabs>
 

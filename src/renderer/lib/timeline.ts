@@ -122,7 +122,15 @@ export function buildTimeline(
 	}
 
 	// Attach any trailing tool results to the final persisted assistant. If no
-	// assistant exists, they will be orphaned; this preserves existing behavior.
+	// assistant exists, they will be orphaned; this preserves existing behavior
+	// for normal streams (toolResult always follows assistant immediately) but
+	// may lose results after tree navigation reorders entries.
+	if (pendingToolResults.length > 0 && !currentAssistant) {
+		console.warn(
+			"[Look][Timeline] Orphaned tool results (no preceding assistant):",
+			pendingToolResults.map((tr) => tr.toolCallId),
+		);
+	}
 	flushToolResults();
 
 	// Show the pending user message so the user sees their own message

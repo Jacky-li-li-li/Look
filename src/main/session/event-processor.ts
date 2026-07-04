@@ -9,11 +9,11 @@
 //      sub-session finalize, state updates) to the host via ISessionEventHost
 // ============================================================
 
-import type { AgentSessionEvent, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentSessionEvent, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import type { IEventBus, ISessionScope, ISessionScopeRegistry } from "../core/contracts.js";
-import { createContentBlockTracker, translateAgentSessionEvent } from "./event-translator.js";
 import type { LookUiEvent } from "../shared/types.js";
+import { createContentBlockTracker, translateAgentSessionEvent } from "./event-translator.js";
 import { UIEventBatcher } from "./ui-event-batcher.js";
 
 /**
@@ -46,7 +46,14 @@ export class SessionEventProcessor {
 	/** Main entry point. Called from the SDK's session.subscribe callback. */
 	handle(sessionId: string, event: AgentSessionEvent): void {
 		const scope = this.scopeRegistry.get(sessionId);
-		if (!scope) return;
+		if (!scope) {
+			// scope 可能在 disposeRuntime 中被释放，但 SDK 仍有残余事件到达。
+			// 此时安全忽略：运行时已销毁，persist/title/finalize 等副作用无需执行。
+			if (process.env.NODE_ENV === "development") {
+				console.warn(`[Look][EventProcessor] scope not found for ${sessionId.slice(0, 6)}, dropping ${event.type}`);
+			}
+			return;
+		}
 
 		// 1. Translate SDK event → LookUiEvent set
 		const uiEvents = translateAgentSessionEvent(event, scope.translationTracker);

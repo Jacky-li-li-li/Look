@@ -5,11 +5,11 @@
 import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import { syncLookDefaultSkills } from "./agents/default-skills.js";
+import { syncLookDefaultAgents } from "./agents/defaults.js";
 import { LarkBridgeService } from "./im/lark-bridge-service.js";
 import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { promptForProjectTrust, registerIpcHandlers } from "./ipc/handlers.js";
-import { syncLookDefaultAgents } from "./agents/defaults.js";
-import { syncLookDefaultSkills } from "./agents/default-skills.js";
 import { SessionRuntimeManager } from "./session/runtime-manager.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { checkForUpdates, initUpdater } from "./system/updater.js";
@@ -26,6 +26,18 @@ let workspaceFileService: WorkspaceFileService | null = null;
 let workspaceTreeService: WorkspaceTreeService | null = null;
 let larkChannelManager: LarkChannelManager | null = null;
 let larkBridgeService: LarkBridgeService | null = null;
+
+/** 安全向渲染进程推送事件，避免 TOCTOU 窗口销毁竞态导致主进程崩溃。 */
+function safeSendEvent(event: { type: string; [k: string]: unknown }): void {
+	if (!mainWindow) return;
+	try {
+		if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+			mainWindow.webContents.send("look:event", event);
+		}
+	} catch {
+		/* window destroyed between check and send */
+	}
+}
 
 const isDev = !app.isPackaged;
 
@@ -120,21 +132,29 @@ function setupProcessBoundary() {
 			return; // Normal in GUI apps — pipe closed, no terminal
 		}
 		safeWrite("fatal", "Uncaught exception:", err.message, err.stack ?? "");
-		if (mainWindow && !mainWindow.isDestroyed()) {
-			mainWindow.webContents.send("look:event", {
-				type: "error",
-				message: `Process error: ${err.message}`,
-			});
+		try {
+			if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+				safeSendEvent({
+					type: "error",
+					message: `Process error: ${err.message}`,
+				});
+			}
+		} catch {
+			/* window destroyed between check and send */
 		}
 	});
 
 	process.on("unhandledRejection", (reason: any) => {
 		safeWrite("fatal", "Unhandled rejection:", reason?.message ?? reason);
-		if (mainWindow && !mainWindow.isDestroyed()) {
-			mainWindow.webContents.send("look:event", {
-				type: "error",
-				message: `Unhandled rejection: ${reason?.message ?? String(reason)}`,
-			});
+		try {
+			if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+				safeSendEvent({
+					type: "error",
+					message: `Unhandled rejection: ${reason?.message ?? String(reason)}`,
+				});
+			}
+		} catch {
+			/* window destroyed between check and send */
 		}
 	});
 }
@@ -250,9 +270,6 @@ async function initSessionRuntime(): Promise<void> {
 	//    session runtime 初始化 (activateSession) 仍会在后台运行，
 	//    结果通过 agent:list / session:snapshot 事件异步送达。
 	const restoredProject = runtimeManager.getActiveProject();
-	if (mainWindow && restoredProject) {
-		await promptForProjectTrust(runtimeManager, restoredProject.id, mainWindow);
-	}
 
 	// The app requires the user to select a project folder first
 	// before any agent can be created. Builtin agents are synced below.
@@ -263,6 +280,11 @@ async function initSessionRuntime(): Promise<void> {
 		larkChannelManager.onConnectionReady = bootstrapLarkBridge;
 		larkChannelManager.onConnectionClosed = detachLarkBridge;
 		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager, larkBridgeService);
+
+		if (restoredProject) {
+			await promptForProjectTrust(runtimeManager, restoredProject.id, mainWindow);
+		}
+
 		await larkChannelManager.initialize().catch((err) => {
 			console.warn("[Look] Failed to initialize Feishu channel manager:", err);
 		});
@@ -272,7 +294,7 @@ async function initSessionRuntime(): Promise<void> {
 		// on activation as a raw SDK SessionEntry snapshot.
 		const allProjects = runtimeManager.listProjects();
 		const activeProject = runtimeManager.getActiveProject();
-		mainWindow.webContents.send("look:event", {
+		safeSendEvent({
 			type: "project:list" as const,
 			projects: allProjects,
 			activeProjectId: activeProject?.id ?? null,
@@ -281,7 +303,7 @@ async function initSessionRuntime(): Promise<void> {
 		for (const project of allProjects) {
 			const agents = runtimeManager.listAgentsInProject(project.id);
 			if (agents.length > 0) {
-				mainWindow.webContents.send("look:event", {
+				safeSendEvent({
 					type: "agent:list" as const,
 					projectId: project.id,
 					agents,
@@ -343,7 +365,7 @@ app.whenReady().then(async () => {
 				larkChannelManager?.setMainWindow(mainWindow);
 				const allProjects = runtimeManager.listProjects();
 				const activeProject = runtimeManager.getActiveProject();
-				mainWindow.webContents.send("look:event", {
+				safeSendEvent({
 					type: "project:list" as const,
 					projects: allProjects,
 					activeProjectId: activeProject?.id ?? null,
@@ -351,7 +373,7 @@ app.whenReady().then(async () => {
 				for (const project of allProjects) {
 					const agents = runtimeManager.listAgentsInProject(project.id);
 					if (agents.length > 0) {
-						mainWindow.webContents.send("look:event", {
+						safeSendEvent({
 							type: "agent:list" as const,
 							projectId: project.id,
 							agents,

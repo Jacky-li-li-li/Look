@@ -16,10 +16,8 @@
 
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
-import {
-	createPlanModeHandler,
-} from "../extensions/permission-extension.js";
 import type { IEventBus, IPermissionService, IRuntimeStore } from "../core/contracts.js";
+import { createPlanModeHandler } from "../extensions/permission-extension.js";
 import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload, ToolCallHandler } from "../shared/types.js";
 
 // ── Constants ──
@@ -121,17 +119,16 @@ export class PermissionService implements IPermissionService {
 
 	createToolCallHandler(cwd: string): ToolCallHandler {
 		const planHandler = createPlanModeHandler(cwd);
-		const self = this;
 
 		return async (event, _ctx) => {
 			const sessionId = _ctx.sessionManager.getSessionId();
-			const mode = self.getMode(sessionId);
+			const mode = this.getMode(sessionId);
 
 			if (mode === "always") return {};
 			if (mode === "plan") return planHandler(event, _ctx);
 
 			const toolName = event.toolName;
-			const allowedTools = self.allowedTools.get(sessionId);
+			const allowedTools = this.allowedTools.get(sessionId);
 			if (allowedTools?.has(toolName)) return {};
 
 			const requestId = uuidv4();
@@ -146,17 +143,17 @@ export class PermissionService implements IPermissionService {
 
 			const actionPromise = new Promise<PermissionAction>((resolve) => {
 				const timeout = setTimeout(() => {
-					self.finishRequest(requestId, "deny");
+					this.finishRequest(requestId, "deny");
 				}, PERMISSION_TIMEOUT_MS);
-				self.awaiting.set(requestId, { sessionId, resolve, timeout });
+				this.awaiting.set(requestId, { sessionId, resolve, timeout });
 			});
-			self.eventBus.emit({ type: "permission:ask", agentId: sessionId, event: askEvent });
+			this.eventBus.emit({ type: "permission:ask", agentId: sessionId, event: askEvent });
 			const action = await actionPromise;
 
 			if (action === "allow_always") {
-				const grants = self.allowedTools.get(sessionId) ?? new Set<string>();
+				const grants = this.allowedTools.get(sessionId) ?? new Set<string>();
 				grants.add(toolName);
-				self.allowedTools.set(sessionId, grants);
+				this.allowedTools.set(sessionId, grants);
 				return {};
 			}
 			if (action === "allow") return {};

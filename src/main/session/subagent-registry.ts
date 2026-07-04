@@ -9,12 +9,7 @@
 // emission — those remain in SRT.
 // ============================================================
 
-import type {
-	AgentConfig,
-	SubagentProgress,
-	SubagentResult,
-	SubagentUsage,
-} from "../extensions/subagent/types.js";
+import type { AgentConfig, SubagentProgress, SubagentResult, SubagentUsage } from "../extensions/subagent/types.js";
 
 // ── Internal types ──
 

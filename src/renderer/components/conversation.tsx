@@ -18,62 +18,51 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export function Conversation({ className, ...props }: ConversationProps): ReactElement {
-  return (
-    <StickToBottom
-      className={cn("relative flex-1 overflow-hidden", className)}
-      initial="instant"
-      resize="smooth"
-      role="log"
-      {...props}
-    />
-  );
+	return (
+		<StickToBottom
+			className={cn("relative flex-1 overflow-hidden", className)}
+			initial="instant"
+			resize="smooth"
+			role="log"
+			{...props}
+		/>
+	);
 }
 
 // ===== ConversationContent 内容区域 =====
 
 export type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>;
 
-export function ConversationContent({
-  className,
-  ...props
-}: ConversationContentProps): ReactElement {
-  return (
-    <StickToBottom.Content
-      className={cn("flex flex-col gap-1 py-1.5", className)}
-      {...props}
-    />
-  );
+export function ConversationContent({ className, ...props }: ConversationContentProps): ReactElement {
+	return <StickToBottom.Content className={cn("flex flex-col gap-1 py-1.5", className)} {...props} />;
 }
 
 // ===== ConversationScrollButton 回到底部按钮 =====
 
 export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
 
-export function ConversationScrollButton({
-  className,
-  ...props
-}: ConversationScrollButtonProps): ReactElement | null {
-  const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+export function ConversationScrollButton({ className, ...props }: ConversationScrollButtonProps): ReactElement | null {
+	const { isAtBottom, scrollToBottom } = useStickToBottomContext();
 
-  const handleScrollToBottom = useCallback(() => {
-    scrollToBottom();
-  }, [scrollToBottom]);
+	const handleScrollToBottom = useCallback(() => {
+		scrollToBottom();
+	}, [scrollToBottom]);
 
-  if (isAtBottom) return null;
+	if (isAtBottom) return null;
 
-  return (
-    <Button
-      className={cn(
-        "absolute bottom-4 right-4 z-10 size-8 rounded-full bg-card p-0 shadow-md hover:bg-accent/80",
-        className,
-      )}
-      onClick={handleScrollToBottom}
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      {...props}
-    >
-      <ArrowDown className="size-4 text-muted-foreground" />
-    </Button>
-  );
+	return (
+		<Button
+			className={cn(
+				"absolute bottom-4 right-4 z-10 size-8 rounded-full bg-card p-0 shadow-md hover:bg-accent/80",
+				className,
+			)}
+			onClick={handleScrollToBottom}
+			type="button"
+			variant="ghost"
+			size="icon-xs"
+			{...props}
+		>
+			<ArrowDown className="size-4 text-muted-foreground" />
+		</Button>
+	);
 }

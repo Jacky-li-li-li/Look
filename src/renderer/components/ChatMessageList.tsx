@@ -6,8 +6,9 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { Check, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useStickToBottomContext } from "use-stick-to-bottom";
 import { toast } from "sonner";
+import { useStickToBottomContext } from "use-stick-to-bottom";
+import { useScrollPositionManager } from "../hooks/useScrollPositionMemory";
 import { buildTimeline, type TimelineItem } from "../lib/timeline";
 import {
 	activeAgentIdAtom,
@@ -19,7 +20,6 @@ import {
 } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
-import { useScrollPositionManager } from "../hooks/useScrollPositionMemory";
 import { BranchConfirmDialog, type BranchConfirmRequest, type BranchConfirmResult } from "./BranchConfirmDialog";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton } from "./conversation";
@@ -119,11 +119,15 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	}, [isAtBottom, setAtBottomAtom, activeAgentId]);
 
 	// === Streaming auto-follow ===
+	// 使用 ref 追踪 isAtBottom 最新值，避免 stale closure：
+	// isBusy 变化时闭包中的 isAtBottom 可能是上一帧的值。
+	const isAtBottomRef = useRef(isAtBottom);
+	isAtBottomRef.current = isAtBottom;
 	useEffect(() => {
-		if (isBusy && isAtBottom) {
+		if (isBusy && isAtBottomRef.current) {
 			scrollToBottom();
 		}
-	}, [isBusy]);
+	}, [isBusy, scrollToBottom]);
 
 	// === Branch / fork state ===
 	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
@@ -269,7 +273,9 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						<StreamingMessageBubble
 							agentName={agentName}
 							blocks={item.uiBlocks}
-							toolExecutions={item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)}
+							toolExecutions={
+								item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)
+							}
 							isStreaming={isBusy}
 							autoCollapse={autoCollapse}
 						/>
@@ -280,7 +286,9 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			if (!item.message) return null;
 
 			const itemEntryId = item.entryId;
-			const showActions = Boolean(itemEntryId && (item.message.role === "assistant" || item.message.role === "user"));
+			const showActions = Boolean(
+				itemEntryId && (item.message.role === "assistant" || item.message.role === "user"),
+			);
 			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
 
 			return (
@@ -377,8 +385,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		],
 	);
 
-	const isLoading =
-		sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
+	const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
 	const showLoading = isLoading && timeline.length === 0;
 
 	const isAgentRunning = activeAgentId ? runningAgents.has(activeAgentId) : false;
@@ -462,8 +469,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 
 		// 必须等快照加载完毕或 runtime 已创建，否则 sessionState 可能处于中间状态
 		// （loadingSnapshot 已完成但 snapshot entries 尚未应用）
-		const isLoading =
-			sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
+		const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
 		if (isLoading) return;
 
 		// 关键修复：空消息判断必须确认 snapshot 已加载或 runtime 已就绪，
@@ -486,7 +492,14 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 		return () => {
 			cancelled = true;
 		};
-	}, [ready, sessionState.loadingSnapshot, sessionState.snapshotLoaded, sessionState.runtime, timeline.length, isBusy]);
+	}, [
+		ready,
+		sessionState.loadingSnapshot,
+		sessionState.snapshotLoaded,
+		sessionState.runtime,
+		timeline.length,
+		isBusy,
+	]);
 
 	// === Transitioning ===
 	const wasStreamingRef = useRef(isBusy);
@@ -507,16 +520,12 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 
 	const transitioning = !isBusy && transitioningCooldown;
 
-
 	return (
 		<Conversation
 			key={agentId}
 			resize={ready && !transitioning ? "smooth" : "instant"}
 			initial="instant"
-			className={cn(
-				ready ? "opacity-100 transition-opacity duration-200" : "opacity-0",
-				"min-h-0 flex-1",
-			)}
+			className={cn(ready ? "opacity-100 transition-opacity duration-200" : "opacity-0", "min-h-0 flex-1")}
 		>
 			<ChatMessagesInner
 				agentId={props.agentId}

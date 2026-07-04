@@ -58,7 +58,6 @@ const ChatPanel = memo(function ChatPanel({
 		onAbort?.();
 	}, [onAbort]);
 
-
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<ChatMessageList

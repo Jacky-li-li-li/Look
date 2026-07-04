@@ -62,17 +62,13 @@ const ChatQueueDrawer = memo(function ChatQueueDrawer({
 						<span
 							className={cn(
 								"shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium leading-none",
-								entry.kind === "steer"
-									? "bg-primary/10 text-primary/70"
-									: "bg-muted text-muted-foreground/60",
+								entry.kind === "steer" ? "bg-primary/10 text-primary/70" : "bg-muted text-muted-foreground/60",
 							)}
 						>
 							{entry.kind === "steer" ? t("chat.queuedSteering") : t("chat.queuedFollowUp")}
 						</span>
 						{/* 消息文本 */}
-						<span className="min-w-0 truncate text-[12px] leading-relaxed text-foreground/70">
-							{entry.text}
-						</span>
+						<span className="min-w-0 truncate text-[12px] leading-relaxed text-foreground/70">{entry.text}</span>
 					</div>
 				))}
 			</div>

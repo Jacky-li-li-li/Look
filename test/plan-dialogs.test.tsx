@@ -146,7 +146,7 @@ describe("Plan dialogs", () => {
 		renderWithStore(<ActivePlanQuestionDialog />);
 		fireEvent.click(screen.getByRole("button", { name: /Small/ }));
 		fireEvent.click(screen.getByRole("button", { name: "Other" }));
-		fireEvent.change(screen.getByPlaceholderText("输入自定义答案"), { target: { value: "Custom" } });
+		fireEvent.change(screen.getByPlaceholderText("输入自定义答案..."), { target: { value: "Custom" } });
 		fireEvent.click(screen.getByRole("button", { name: "提交答案" }));
 		await waitFor(() =>
 			expect(respondPlanQuestion).toHaveBeenCalledWith(

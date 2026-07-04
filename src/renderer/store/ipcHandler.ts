@@ -30,6 +30,7 @@ import {
 	emptyPlanQuestionDraft,
 	forkingEntryAtomFamily,
 	loadedWorkspaceChildrenAtomFamily,
+	mcpStatusVersionAtom,
 	navigatingEntryAtomFamily,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
@@ -876,6 +877,11 @@ export function initIpcHandlers(api: any): () => void {
 				break;
 			}
 
+			case "mcp:status-changed": {
+				appStore.set(mcpStatusVersionAtom, (prev) => prev + 1);
+				break;
+			}
+
 			case "error": {
 				toast.error(
 					event.agentId
@@ -893,6 +899,26 @@ export function initIpcHandlers(api: any): () => void {
 // ---- App data initialization ----
 
 let _lastActiveSessionId: string | null = null;
+const STARTUP_INVOKE_DELAYS_MS = [0, 100, 250, 500, 1000, 2000, 4000];
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function invokeStartup(fn: () => Promise<any>): Promise<any | null> {
+	let lastResult: any | null = null;
+	for (const delay of STARTUP_INVOKE_DELAYS_MS) {
+		if (delay > 0) await sleep(delay);
+		try {
+			const result = await fn();
+			lastResult = result;
+			if (!(result as any)?.error) return result;
+		} catch {
+			lastResult = null;
+		}
+	}
+	return lastResult;
+}
 
 /** Try the persisted session first, then the newest available session. */
 function _autoSelectAgent(): void {
@@ -923,7 +949,7 @@ function _autoSelectAgent(): void {
 /** Initialize data previously loaded in App.tsx's useEffect hooks. */
 export async function initAppData(api: any): Promise<void> {
 	// 1. Fetch provider settings once at boot (fire-and-forget).
-	api.getSettings()
+	invokeStartup(() => api.getSettings())
 		.then((r: any) => {
 			if (r?.success) {
 				appStore.set(providerSettingsAtom, {
@@ -935,7 +961,7 @@ export async function initAppData(api: any): Promise<void> {
 		.catch(() => {});
 
 	// 2. Load persisted selection before sessions so auto-selection cannot race it.
-	const settingsResult = await api.getGeneralSettings().catch(() => null);
+	const settingsResult = await invokeStartup(() => api.getGeneralSettings());
 	if (settingsResult?.success && settingsResult.settings) {
 		const settings = settingsResult.settings;
 		if (settings.language) await i18n.changeLanguage(settings.language);
@@ -947,21 +973,22 @@ export async function initAppData(api: any): Promise<void> {
 	}
 
 	// 3. Pull initial project list.
-	const projectResult = await api.listProjects().catch(() => null);
+	const projectResult = await invokeStartup(() => api.listProjects());
 	if (projectResult?.success && Array.isArray(projectResult.projects)) {
 		appStore.set(projectsAtom, projectResult.projects);
+		if (appStore.get(appReadyPhaseAtom) < 1) appStore.set(appReadyPhaseAtom, 1);
 		if (projectResult.activeProjectId) appStore.set(activeProjectIdAtom, projectResult.activeProjectId);
 	}
 
 	// 4. Pull session summaries. Raw SDK history is loaded on activation.
-	const r = await api.getAgents().catch(() => null);
+	const r = await invokeStartup(() => api.getAgents());
 	if (r?.success) {
 		if (Array.isArray(r.agents)) appStore.set(agentsAtom, r.agents);
 	}
 	if (appStore.get(appReadyPhaseAtom) < 2) appStore.set(appReadyPhaseAtom, 2);
 
 	// 5. 预加载 Agent 定义列表（# 选择面板 + Agent 广场需要）
-	const agentDefsResult = await api.listAgentDefinitions().catch(() => null);
+	const agentDefsResult = await invokeStartup(() => api.listAgentDefinitions());
 	if (agentDefsResult?.success && Array.isArray(agentDefsResult.agents)) {
 		appStore.set(agentDefinitionsAtom, agentDefsResult.agents);
 	}

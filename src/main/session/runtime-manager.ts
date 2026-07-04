@@ -1,5 +1,4 @@
-import { existsSync } from "node:fs";
-import fs from "node:fs";
+import fs, { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path, { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -22,51 +21,32 @@ import {
 	type SessionStartEvent,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { v4 as uuidv4 } from "uuid";
 import { AgentDefinitionService } from "../agents/definition-service.js";
-import { CustomProvidersStore } from "../settings/custom-providers.js";
-import { PermissionService } from "../permissions/service.js";
-import { PlanService } from "../permissions/plan.js";
-import type { IPermissionService, IPlanService, IEventBus, IRuntimeStore, ISessionScope } from "../core/contracts.js";
+import type { IEventBus, IPermissionService, IPlanService, IRuntimeStore, ISessionScope } from "../core/contracts.js";
+import { createMcpExtensionFactory } from "../extensions/mcp-extension.js";
 import { createPermissionExtensionFactory } from "../extensions/permission-extension.js";
-import {
-	createPlanExtensionFactory,
-	PLAN_TOOL_NAMES,
-} from "../extensions/plan-extension.js";
-import { createSubagentExtensionFactory } from "../extensions/subagent/subagent-extension.js";
-import type {
-	AgentConfig,
-	SubagentHost,
-	SubagentProgress,
-	SubagentResult,
-	SubagentUsage,
-} from "../extensions/subagent/types.js";
+import { createPlanExtensionFactory } from "../extensions/plan-extension.js";
 import { discoverAgents } from "../extensions/subagent/agent-discovery.js";
+import { createSubagentExtensionFactory } from "../extensions/subagent/subagent-extension.js";
+import type { AgentConfig, SubagentHost, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
 import { loadBindings } from "../im/im-storage.js";
-import { migrateLegacySettings } from "../settings/migrate.js";
+import { MCPManager } from "../mcp/manager.js";
 import { ModelProviderService } from "../models/model-provider-service.js";
+import { PlanService } from "../permissions/plan.js";
+import { PermissionService } from "../permissions/service.js";
 import { ProjectService } from "../projects/project-service.js";
-import { SessionScopeRegistry } from "../session/scope-registry.js";
-import { SubAgentRegistry } from "../session/subagent-registry.js";
-import type { PendingSubSession } from "../session/subagent-registry.js";
-import { UIEventBatcher } from "../session/ui-event-batcher.js";
-import { SessionEventProcessor } from "../session/event-processor.js";
-import type { ISessionEventHost } from "../session/event-processor.js";
-import { PromptStore } from "../settings/prompt-store.js";
 import { AutoTitleService } from "../services/auto-title.js";
 import { persistTurnDuration } from "../services/turn-metrics.js";
-import {
-	type ContentBlockTracker,
-	createContentBlockTracker,
-	translateAgentSessionEvent,
-} from "./event-translator.js";
-import {
-	discoverSkillsFromPaths,
-	isBuiltinSkillPath,
-	detectCommonSkillPaths,
-} from "../skills/skill-discovery-service.js";
-import { parseTodoFile } from "./todo-parser.js";
-import { parseJsonLine, scanSessionDirectory, scanSessionFileSummary } from "./scan.js";
+import type { ISessionEventHost } from "../session/event-processor.js";
+import { SessionEventProcessor } from "../session/event-processor.js";
+import { SessionScopeRegistry } from "../session/scope-registry.js";
+import type { PendingSubSession } from "../session/subagent-registry.js";
+import { SubAgentRegistry } from "../session/subagent-registry.js";
+import { UIEventBatcher } from "../session/ui-event-batcher.js";
+import { CustomProvidersStore } from "../settings/custom-providers.js";
+import { migrateLegacySettings } from "../settings/migrate.js";
+import { PromptStore } from "../settings/prompt-store.js";
+import { type UserSettings, UserSettingsStore } from "../settings/store.js";
 import {
 	ensureLookDir,
 	ensureWorkspaceDir,
@@ -77,41 +57,45 @@ import {
 	getModelsPath,
 	getProjectSharedDir,
 	getProjectSystemPromptPath,
-	getProjectsIndexPath,
 	getUiSettingsPath,
+	getWorkspaceDir,
 	getWorkspaceSubsessionsDir,
 	resetLegacySessionsOnce,
 } from "../shared/look-storage.js";
 import { DEFAULT_SESSION_NAME } from "../shared/session-defaults.js";
-import {
-	type AgentDefinitionInfo,
-	type AgentDefinitionInput,
-	type AgentInfo,
-	type ForkedSessionResult,
-	type ImSessionProvider,
-	type LookUiEvent,
-	type MainToRendererEvent,
-	type NavigateTreeResult,
-	type PermissionAskEvent,
-	type PermissionMode,
-	type PermissionRespondPayload,
-	type PlanApprovalOutcome,
-	type PlanApprovalRequest,
-	type PlanApprovalResponse,
-	type PlanQuestion,
-	type PlanQuestionOutcome,
-	type PlanQuestionRequest,
-	type PlanQuestionResponse,
-	type ProjectInfo,
-	type SessionSnapshotEnvelope,
-	type ThinkingLevel,
+import type {
+	AgentDefinitionInfo,
+	AgentDefinitionInput,
+	AgentInfo,
+	ForkedSessionResult,
+	ImSessionProvider,
+	LookUiEvent,
+	MainToRendererEvent,
+	NavigateTreeResult,
+	PermissionMode,
+	PermissionRespondPayload,
+	PlanApprovalOutcome,
+	PlanApprovalRequest,
+	PlanApprovalResponse,
+	PlanQuestionOutcome,
+	PlanQuestionRequest,
+	PlanQuestionResponse,
+	ProjectInfo,
+	SessionSnapshotEnvelope,
+	ThinkingLevel,
 } from "../shared/types.js";
+import {
+	detectCommonSkillPaths,
+	discoverSkillsFromPaths,
+	isBuiltinSkillPath,
+} from "../skills/skill-discovery-service.js";
 import { formatLocalDate, incrementTurn } from "../system/usage.js";
-import { type UserSettings, UserSettingsStore } from "../settings/store.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
+import { scanSessionDirectory } from "./scan.js";
+import { parseTodoFile } from "./todo-parser.js";
 
-export { type EventCallback } from "../shared/types.js";
+export type { EventCallback } from "../shared/types.js";
 
 import type { EventCallback } from "../shared/types.js";
 
@@ -149,8 +133,6 @@ interface PendingPlanApproval {
 }
 
 // PendingSubSession 类型已移至 subagent-registry.ts
-
-
 
 /**
  * Hosts independent pi AgentSessionRuntime instances for sessions that are
@@ -198,6 +180,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 	/** 自定义 System Prompt 管理器（多 prompt 变体 + SYSTEM.md 写入）。 */
 	public readonly promptStore: PromptStore;
 
+	/** MCP 服务器管理器 — 连接外部 MCP 服务器并桥接工具。 */
+	public readonly mcpManager: MCPManager;
+
 	/** Agent 定义文件 CRUD（~/.look/agents/*.md）。 */
 	private readonly agentDefinitionService: AgentDefinitionService;
 
@@ -206,15 +191,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 
 	/** Plan mode workflow management (questions, approval, tool restrictions). */
 	private readonly planService: IPlanService;
-
-	/** Per-session content block tracker for the discrete event translator.
-	 * 已迁移至 SessionScope.translationTracker。 */
-
-	/** Time-window (ms) for batching session:ui-event emissions. */
-	private static readonly UI_EVENT_BATCH_MS = 8;
-
-	/** Short probe window for the very first event after idle. */
-	private static readonly UI_EVENT_FIRST_MS = 1;
 
 	// ---- SubAgent 子会话注册表 ----
 	// 数据已迁移至 SubAgentRegistry（src/main/session/subagent-registry.ts）
@@ -255,11 +231,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		this.projectService = new ProjectService(this.trustStore, this.globalSettingsManager);
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
 		this.subagentDefaultEnabled = this.userSettings.getAll().subagentEnabled;
-		this.permissionService = new PermissionService(
-			this,
-			this,
-			this.userSettings.getAll().permissionMode,
-		);
+		this.permissionService = new PermissionService(this, this, this.userSettings.getAll().permissionMode);
 		// Tool authorization must never silently grant trust to project resources.
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		this.autoTitleService = new AutoTitleService({
@@ -268,15 +240,12 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		});
 		this.promptStore = new PromptStore();
 		this.agentDefinitionService = new AgentDefinitionService(() => this.reloadAllSessionsForAgents());
-		this.planService = new PlanService(
-			this,
-			this,
-			this.permissionService,
-			async (sessionId) => {
-				await this.applyPermissionMode(sessionId, "always", { internal: true, updateDefault: false });
-			},
-		);
+		this.planService = new PlanService(this, this, this.permissionService, async (sessionId) => {
+			await this.applyPermissionMode(sessionId, "always", { internal: true, updateDefault: false });
+		});
 		// projectsIndexPath is managed by ProjectService internally
+		this.mcpManager = new MCPManager();
+		this.mcpManager.setOnChange(() => this.emit({ type: "mcp:status-changed" }));
 		this.eventProcessor = new SessionEventProcessor(this, this.scopeRegistry, this);
 		this.uiBatcher = new UIEventBatcher(this);
 		this.workspaceFileService = workspaceFileService ?? null;
@@ -330,6 +299,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 			}
 		}
 		await this.disposeAllRuntimes();
+		await this.mcpManager.stopAll();
 	}
 
 	async loadProjects(): Promise<ProjectInfo[]> {
@@ -356,6 +326,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		const sessions = this.sessionsByProject.get(project.id) ?? [];
 		const preferred = sessions.find((s) => s.id === settings.lastActiveSessionId) ?? sessions[0];
 		if (preferred) this.activeSessionId = preferred.id;
+		this.emitProjectList();
 		return total;
 	}
 
@@ -480,7 +451,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 			if (managed.projectId === projectId) runtimeIds.push(sessionId);
 		}
 		const sharedDir = getProjectSharedDir(projectId);
-		const subsessionsDir = project ? getWorkspaceSubsessionsDir(project.name) : null;
+		const workspaceDir = project ? getWorkspaceDir(project.name) : null;
 		await Promise.all(runtimeIds.map((sessionId) => this.disposeRuntime(sessionId, true)));
 		// 先停 watcher,再删目录,避免 chokidar 监听已删 inode 持续报错
 		if (this.workspaceFileService) {
@@ -506,7 +477,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		}
 		this.sessionsByProject.delete(projectId);
 		this.projectService.removeProject(projectId);
-		// 删除项目时清理共享区 + 子会话目录
+		// 删除项目时清理共享区 + 整个 workspace 目录（含 sessions / subsessions / schedule-sessions）。
+		// 之前只清 subsessions 留下了孤儿 session 数据，正是导致 ~/.look/workspaces/<name>/
+		// 越攒越多的根因；这里改成一次性 rmSync 整个 workspace 目录，保证删除是完整的。
 		if (existsSync(sharedDir)) {
 			try {
 				fs.rmSync(sharedDir, { recursive: true, force: true });
@@ -516,12 +489,15 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 				}
 			}
 		}
-		if (subsessionsDir && existsSync(subsessionsDir)) {
+		if (workspaceDir && existsSync(workspaceDir)) {
 			try {
-				fs.rmSync(subsessionsDir, { recursive: true, force: true });
+				fs.rmSync(workspaceDir, { recursive: true, force: true });
+				if (project) {
+					console.log(`[Look] Removed workspace for deleted project "${project.name}" (${projectId})`);
+				}
 			} catch (error: any) {
 				if (error?.code !== "ENOENT") {
-					console.error(`Failed to remove subsessions dir for project ${projectId}:`, error);
+					console.error(`Failed to remove workspace for project ${projectId}:`, error);
 				}
 			}
 		}
@@ -800,6 +776,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 				submitPlan: (id, plan, signal) => this.planService.requestApproval(id, plan, signal),
 			}),
 			createSubagentExtensionFactory(sessionId, this.createSubagentHost(projectId), projectId),
+			createMcpExtensionFactory(sessionId, this.mcpManager, _cwd),
 		];
 	}
 
@@ -1368,7 +1345,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 			subDepth++;
 			ancestor = parent;
 			if (subDepth >= MAX_SUBAGENT_DEPTH) {
-				throw new Error(`Subagent nesting limit of ${MAX_SUBAGENT_DEPTH} exceeded. Cannot create nested sub-session under ${parentSessionId}.`);
+				throw new Error(
+					`Subagent nesting limit of ${MAX_SUBAGENT_DEPTH} exceeded. Cannot create nested sub-session under ${parentSessionId}.`,
+				);
 			}
 		}
 		const projectId = parentManaged.projectId;
@@ -1789,7 +1768,8 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		if (!managed) return;
 		const currentName = managed.runtime.session.sessionManager.getSessionName();
 		const titleScope = this.scopeRegistry.get(sessionId);
-		const isDefaultName = (titleScope?.isDefaultName ?? false) && (!currentName || currentName === DEFAULT_SESSION_NAME);
+		const isDefaultName =
+			(titleScope?.isDefaultName ?? false) && (!currentName || currentName === DEFAULT_SESSION_NAME);
 		await this.autoTitleService.generateForFirstUserMessage(
 			managed.runtime.session,
 			userMsg,
@@ -1845,14 +1825,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 	private bufferUiEvents(sessionId: string, events: LookUiEvent[]): void {
 		const scope = this.scopeRegistry.get(sessionId);
 		if (scope) this.uiBatcher.bufferUiEvents(scope, events);
-	}
-
-	private scheduleUiEventFlush(_scope: ISessionScope): void {
-		// handled internally by UIEventBatcher
-	}
-
-	private promoteUiEventFlush(_scope: ISessionScope): void {
-		// handled internally by UIEventBatcher
 	}
 
 	private clearUiEventBuffer(scope: ISessionScope): void {

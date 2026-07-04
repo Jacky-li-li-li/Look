@@ -1,6 +1,14 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
-import type { AgentSession, ContextUsage, ExtensionContext, SessionEntry, SessionStats, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+import type {
+	AgentSession,
+	ContextUsage,
+	ExtensionContext,
+	SessionEntry,
+	SessionStats,
+	ToolCallEvent,
+	ToolCallEventResult,
+} from "@earendil-works/pi-coding-agent";
 
 // Shared transport types. Message/session payloads remain SDK-native.
 
@@ -480,7 +488,9 @@ export type MainToRendererEvent =
 			type: "todo:update";
 			sessionId: string;
 			items: TodoItem[];
-	  };
+	  }
+	// ---- MCP server status changed ----
+	| { type: "mcp:status-changed" };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
 export interface CustomProviderModelInput {
@@ -559,9 +569,12 @@ export type RendererToMainEvent =
 				lastActiveSessionId: string;
 				lastActiveProjectId: string;
 				openProjectIds: string[];
+				openedSessionIds: string[];
 				themeStyle: "ink-wash" | "swiss" | "bauhaus";
 				themeTone: "light" | "dark";
 				subagentEnabled: boolean;
+				enabledAgentDefinitions: string[] | null;
+				enabledSkills: string[] | null;
 			}>;
 	  }
 	| { type: "settings:general:reset" }
@@ -685,7 +698,15 @@ export type RendererToMainEvent =
 	| { type: "settings:project-prompts:create"; projectId: string; name: string; content: string }
 	| { type: "settings:project-prompts:update"; projectId: string; id: string; name?: string; content?: string }
 	| { type: "settings:project-prompts:delete"; projectId: string; id: string }
-	| { type: "settings:project-prompts:set-active"; projectId: string; id: string };
+	| { type: "settings:project-prompts:set-active"; projectId: string; id: string }
+	// ---- MCP server management ----
+	| { type: "mcp:list-servers" }
+	| { type: "mcp:add-server"; config: Record<string, unknown> }
+	| { type: "mcp:remove-server"; name: string }
+	| { type: "mcp:test-server"; name: string }
+	| { type: "mcp:list-tools"; name: string }
+	| { type: "mcp:toggle-server"; name: string; enabled: boolean }
+	| { type: "mcp:update-server"; name: string; config: Record<string, unknown> };
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {
@@ -731,9 +752,9 @@ export interface LookMessageDurationEntryData {
 // ============================================================
 
 export interface TodoItem {
-  text: string;   // 任务文本（去掉 "- [ ]" 前缀）
-  done: boolean;  // 是否完成
-  line: number;   // TODO.md 原始行号
+	text: string; // 任务文本（去掉 "- [ ]" 前缀）
+	done: boolean; // 是否完成
+	line: number; // TODO.md 原始行号
 }
 
 /** Event listener callback. */

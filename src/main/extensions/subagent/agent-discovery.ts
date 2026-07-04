@@ -139,9 +139,7 @@ export function discoverAgents(projectId: string, scope: AgentScope): AgentDisco
 	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
 	const builtinAgents = scope === "project" ? [] : listBuiltinAgents();
 	const projectAgents =
-		scope === "user" || !isDirectory(projectAgentsDir)
-			? []
-			: loadAgentsFromDir(projectAgentsDir, "project");
+		scope === "user" || !isDirectory(projectAgentsDir) ? [] : loadAgentsFromDir(projectAgentsDir, "project");
 
 	// 同名优先级：project > user > builtin
 	const agentMap = new Map<string, AgentConfig>();

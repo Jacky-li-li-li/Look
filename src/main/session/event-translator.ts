@@ -47,7 +47,10 @@ export function extractUserMessageText(message: AgentMessage): string {
 	if (message.role !== "user") return "";
 	const content = message.content;
 	if (typeof content === "string") return content;
-	return content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+	return content
+		.filter((b) => b.type === "text")
+		.map((b) => b.text)
+		.join("\n");
 }
 
 /**

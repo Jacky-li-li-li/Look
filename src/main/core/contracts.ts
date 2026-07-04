@@ -13,6 +13,7 @@
 // ============================================================
 
 import type { AgentSession, AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ContentBlockTracker } from "../session/event-translator.js";
 import type {
 	EventCallback,
 	LookUiEvent,
@@ -26,7 +27,6 @@ import type {
 	PlanQuestionResponse,
 	ToolCallHandler,
 } from "../shared/types.js";
-import type { ContentBlockTracker } from "../session/event-translator.js";
 
 // ── Infrastructure ──
 
@@ -95,23 +95,13 @@ export interface IPlanService {
 	restrictToolsForPlan(sessionId: string): void;
 	restorePrePlanTools(sessionId: string): void;
 
-	requestQuestions(
-		sessionId: string,
-		questions: PlanQuestion[],
-		signal?: AbortSignal,
-	): Promise<PlanQuestionOutcome>;
+	requestQuestions(sessionId: string, questions: PlanQuestion[], signal?: AbortSignal): Promise<PlanQuestionOutcome>;
 
 	handleQuestionResponse(payload: PlanQuestionResponse): boolean;
 
-	requestApproval(
-		sessionId: string,
-		plan: string,
-		signal?: AbortSignal,
-	): Promise<PlanApprovalOutcome>;
+	requestApproval(sessionId: string, plan: string, signal?: AbortSignal): Promise<PlanApprovalOutcome>;
 
-	handleApprovalResponse(
-		payload: PlanApprovalResponse,
-	): Promise<boolean>;
+	handleApprovalResponse(payload: PlanApprovalResponse): Promise<boolean>;
 
 	cancelInteractions(sessionId: string, reason: string): void;
 }

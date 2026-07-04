@@ -3,7 +3,7 @@ import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
 import { useAtom } from "jotai";
 import { Check, CircleHelp, ListChecks, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../store/atoms";
 
@@ -15,6 +15,11 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 	const panelRef = useRef<HTMLDivElement>(null);
 	const draft = storedDraft.requestId === request?.requestId ? storedDraft : emptyPlanQuestionDraft();
 	const { selections, otherEnabled, otherValues } = draft;
+
+	const dismiss = useCallback(() => {
+		setRequest(null);
+		setDraft(emptyPlanQuestionDraft());
+	}, [setRequest, setDraft]);
 
 	// Animate in when request appears
 	useEffect(() => {
@@ -36,7 +41,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
-	}, [request, visible]);
+	}, [request, visible, dismiss]);
 
 	const complete = useMemo(() => {
 		if (!request) return false;
@@ -48,11 +53,6 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 	}, [request, selections, otherEnabled, otherValues]);
 
 	if (!request || request.sessionId !== sessionId) return null;
-
-	const dismiss = () => {
-		setRequest(null);
-		setDraft(emptyPlanQuestionDraft());
-	};
 
 	const chooseOption = (questionText: string, label: string, multiSelect: boolean) => {
 		setDraft((previous) => {

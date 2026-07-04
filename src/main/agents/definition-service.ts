@@ -13,13 +13,13 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { serializeAgentDefinition } from "../extensions/subagent/agent-definition-serializer.js";
 import {
 	discoverAgents,
 	getBuiltinAgentsDir,
 	getUserAgentsDir,
 	parseAgentFile,
 } from "../extensions/subagent/agent-discovery.js";
-import { serializeAgentDefinition } from "../extensions/subagent/agent-definition-serializer.js";
 import type { AgentConfig } from "../extensions/subagent/types.js";
 import type { AgentDefinitionInfo, AgentDefinitionInput } from "../shared/types.js";
 

@@ -128,7 +128,6 @@ const SAFE_LS_FILES_OPTIONS = new Set([
 
 // ---- Handler Types ----
 
-
 export interface PlanBashValidation {
 	allowed: boolean;
 	reason?: string;

@@ -6,21 +6,8 @@
 import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { type BrowserWindow, dialog, ipcMain } from "electron";
-import { type CustomProviderInput, toProviderConfig } from "../settings/custom-providers.js";
-import {
-	guardAgentId,
-	guardBoolean,
-	guardEnum,
-	guardNullableString,
-	guardObject,
-	guardOptionalBoolean,
-	guardOptionalString,
-	guardPath,
-	guardProvider,
-	guardString,
-	guardStringArray,
-} from "./guards.js";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
+import { type CustomProviderInput, toProviderConfig } from "../settings/custom-providers.js";
 import type {
 	AgentDefinitionInput,
 	MainToRendererEvent,
@@ -34,6 +21,19 @@ import { getUserProfile, resetUserProfile, updateUserProfile } from "../system/u
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import { SHARED_MAX_CONTENT_BYTES } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
+import {
+	guardAgentId,
+	guardBoolean,
+	guardEnum,
+	guardNullableString,
+	guardObject,
+	guardOptionalBoolean,
+	guardOptionalString,
+	guardPath,
+	guardProvider,
+	guardString,
+	guardStringArray,
+} from "./guards.js";
 
 export function registerIpcHandlers(
 	runtimeManager: SessionRuntimeManager,
@@ -127,6 +127,7 @@ interface InvokeContext {
 	workspaceTreeService: WorkspaceTreeService;
 	larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager;
 	larkBridgeService?: import("../im/lark-bridge-service.js").LarkBridgeService;
+	mcpManager: import("../mcp/manager.js").MCPManager;
 }
 
 const invokeRouteMap: InvokeRouteMap = {
@@ -249,7 +250,7 @@ const invokeRouteMap: InvokeRouteMap = {
 				},
 			};
 		}
-		
+
 		const results = await Promise.all(
 			input.models.map(async (m) => {
 				const start = Date.now();
@@ -905,6 +906,50 @@ const invokeRouteMap: InvokeRouteMap = {
 		}
 		return { success: true, ...ctx.larkBridgeService.getStatus() };
 	},
+	// ---- MCP server management ----
+	"mcp:list-servers": async (_data, ctx) => {
+		await ctx.mcpManager.loadConfig();
+		return { success: true, servers: ctx.mcpManager.getStatusList() };
+	},
+	"mcp:add-server": async (data, ctx) => {
+		try {
+			await ctx.mcpManager.addServer(data.config as any);
+			return { success: true };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	},
+	"mcp:remove-server": async (data, ctx) => {
+		try {
+			await ctx.mcpManager.removeServer(guardString(data.name, "name"));
+			return { success: true };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	},
+	"mcp:test-server": async (data, ctx) => {
+		return ctx.mcpManager.testServer(guardString(data.name, "name"));
+	},
+	"mcp:list-tools": async (data, ctx) => {
+		const tools = ctx.mcpManager.getToolsForServer(guardString(data.name, "name"));
+		return { success: true, tools };
+	},
+	"mcp:toggle-server": async (data, ctx) => {
+		try {
+			await ctx.mcpManager.toggleServer(guardString(data.name, "name"), guardBoolean(data.enabled, "enabled"));
+			return { success: true };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	},
+	"mcp:update-server": async (data, ctx) => {
+		try {
+			await ctx.mcpManager.updateServer(guardString(data.name, "name"), data.config as any);
+			return { success: true };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	},
 };
 
 async function handleRendererInvoke(
@@ -916,7 +961,15 @@ async function handleRendererInvoke(
 	larkChannelManager: import("../im/lark-channel-manager.js").LarkChannelManager | undefined,
 	larkBridgeService: import("../im/lark-bridge-service.js").LarkBridgeService | undefined,
 ): Promise<any> {
-	const ctx: InvokeContext = { runtimeManager, mainWindow, workspaceFileService, workspaceTreeService, larkChannelManager, larkBridgeService };
+	const ctx: InvokeContext = {
+		runtimeManager,
+		mainWindow,
+		workspaceFileService,
+		workspaceTreeService,
+		larkChannelManager,
+		larkBridgeService,
+		mcpManager: runtimeManager.mcpManager,
+	};
 	const handler = invokeRouteMap[data.type];
 	if (handler) {
 		try {

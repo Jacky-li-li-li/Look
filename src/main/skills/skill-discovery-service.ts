@@ -5,8 +5,14 @@
 // and depend only on the filesystem.
 // ============================================================
 
-import { existsSync } from "node:fs";
-import fs from "node:fs";
+// ============================================================
+// Skill discovery — pure helper functions for scanning skill paths
+//
+// Extracted from SessionRuntimeManager. These functions are stateless
+// and depend only on the filesystem.
+// ============================================================
+
+import fs, { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 

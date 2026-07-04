@@ -13,9 +13,17 @@ import fs from "node:fs";
 import path from "node:path";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
-import { PLAN_TOOL_NAMES } from "../extensions/plan-extension.js";
 import type { IEventBus, IPermissionService, IPlanService, IRuntimeStore } from "../core/contracts.js";
-import type { PlanApprovalOutcome, PlanApprovalRequest, PlanApprovalResponse, PlanQuestion, PlanQuestionOutcome, PlanQuestionRequest, PlanQuestionResponse } from "../shared/types.js";
+import { PLAN_TOOL_NAMES } from "../extensions/plan-extension.js";
+import type {
+	PlanApprovalOutcome,
+	PlanApprovalRequest,
+	PlanApprovalResponse,
+	PlanQuestion,
+	PlanQuestionOutcome,
+	PlanQuestionRequest,
+	PlanQuestionResponse,
+} from "../shared/types.js";
 
 // ── Constants ──
 
@@ -170,11 +178,7 @@ export class PlanService implements IPlanService {
 
 	// ── Plan approval ──
 
-	async requestApproval(
-		sessionId: string,
-		plan: string,
-		signal?: AbortSignal,
-	): Promise<PlanApprovalOutcome> {
+	async requestApproval(sessionId: string, plan: string, signal?: AbortSignal): Promise<PlanApprovalOutcome> {
 		if (this.permissions.getMode(sessionId) !== "plan") {
 			return { status: "cancelled", reason: "Session is no longer in Plan mode" };
 		}
@@ -190,7 +194,10 @@ export class PlanService implements IPlanService {
 			const sm = this.runtimeStore.getSessionManager(sessionId);
 			if (sm) {
 				sm.appendCustomEntry(PLAN_RECORD_ENTRY_TYPE, {
-					planId, status: "submitted" as const, filePath, plan,
+					planId,
+					status: "submitted" as const,
+					filePath,
+					plan,
 					timestamp: new Date().toISOString(),
 				});
 			}
@@ -205,10 +212,20 @@ export class PlanService implements IPlanService {
 			const pending: PendingPlanApproval = { request, resolve, removeAbortListener: () => {}, resolving: false };
 			this.approvalsAwaiting.set(requestId, pending);
 			pending.removeAbortListener = this.onAbort(signal, () => {
-				this.finishApproval(requestId, { status: "cancelled", planId, filePath, reason: "Planning turn was aborted" });
+				this.finishApproval(requestId, {
+					status: "cancelled",
+					planId,
+					filePath,
+					reason: "Planning turn was aborted",
+				});
 			});
 			if (signal?.aborted) {
-				this.finishApproval(requestId, { status: "cancelled", planId, filePath, reason: "Planning turn was aborted" });
+				this.finishApproval(requestId, {
+					status: "cancelled",
+					planId,
+					filePath,
+					reason: "Planning turn was aborted",
+				});
 			} else {
 				this.eventBus.emit({ type: "plan:approval-requested", agentId: sessionId, request });
 			}
@@ -225,7 +242,9 @@ export class PlanService implements IPlanService {
 			if (payload.action === "reject") {
 				if (sm) {
 					sm.appendCustomEntry(PLAN_RECORD_ENTRY_TYPE, {
-						planId, status: "rejected" as const, filePath,
+						planId,
+						status: "rejected" as const,
+						filePath,
 						timestamp: new Date().toISOString(),
 					});
 				}
@@ -234,14 +253,18 @@ export class PlanService implements IPlanService {
 			await this.onApproval(sessionId);
 			if (sm) {
 				sm.appendCustomEntry(PLAN_RECORD_ENTRY_TYPE, {
-					planId, status: "approved" as const, filePath,
+					planId,
+					status: "approved" as const,
+					filePath,
 					timestamp: new Date().toISOString(),
 				});
 			}
 			return this.finishApproval(payload.requestId, { status: "approved", planId, filePath });
 		} catch (error) {
 			this.finishApproval(payload.requestId, {
-				status: "cancelled", planId, filePath,
+				status: "cancelled",
+				planId,
+				filePath,
 				reason: error instanceof Error ? error.message : String(error),
 			});
 			throw error;
@@ -258,7 +281,10 @@ export class PlanService implements IPlanService {
 		} else {
 			const request = this.approvalsAwaiting.get(interaction.requestId)?.request;
 			this.finishApproval(interaction.requestId, {
-				status: "cancelled", planId: request?.planId, filePath: request?.filePath, reason,
+				status: "cancelled",
+				planId: request?.planId,
+				filePath: request?.filePath,
+				reason,
 			});
 		}
 	}

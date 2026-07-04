@@ -9,7 +9,7 @@ import { useAtomValue } from "jotai";
 import { ThemeProvider } from "next-themes";
 import { memo } from "react";
 import { DEFAULT_THEME } from "../lib/look-theme";
-import { appReadyPhaseAtom } from "../store/atoms";
+import { appReadyPhaseAtom, type SettingsTab } from "../store/atoms";
 import type { RendererSessionPhase } from "../store/sessionTypes";
 import AgentSquare from "./AgentMarketplace/AgentSquare";
 import ChatPanel from "./ChatPanel";
@@ -45,7 +45,7 @@ interface AppLayoutProps {
 	setNewProjectCwd: (v: string | null) => void;
 	pendingDelete: any;
 	showSettings: boolean;
-	settingsTab?: "general" | "api-keys" | "im-channels" | "about" | "profile";
+	settingsTab?: SettingsTab;
 	providerSettings: any;
 	handleSendMessage: (text: string, images?: ImageContent[]) => Promise<boolean>;
 	handleSelectAgent: (agentId: string) => void;
@@ -180,7 +180,7 @@ function AppLayout({
 										onModelChange={handleModelChanged}
 										onRequestApiKeys={handleRequestApiKeys}
 										onAbort={handleAbortAgent}
-						onDequeueAll={handleDequeueAll}
+										onDequeueAll={handleDequeueAll}
 									/>
 								) : appReadyPhase >= 2 && agents.length === 0 ? (
 									<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />

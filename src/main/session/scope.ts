@@ -9,9 +9,9 @@
 // ============================================================
 
 import type { ISessionScope } from "../core/contracts.js";
+import type { LookUiEvent } from "../shared/types.js";
 import type { ContentBlockTracker } from "./event-translator.js";
 import { createContentBlockTracker } from "./event-translator.js";
-import type { LookUiEvent } from "../shared/types.js";
 
 export class SessionScope implements ISessionScope {
 	public readonly sessionId: string;

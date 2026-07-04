@@ -371,6 +371,22 @@ const api = {
     ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:delete", projectId, id }),
   setProjectActivePrompt: (projectId, id) =>
     ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:set-active", projectId, id }),
+
+	// MCP server management
+	listMcpServers: () =>
+		ipcRenderer.invoke("look:invoke", { type: "mcp:list-servers" }),
+	listMcpTools: (name) =>
+		ipcRenderer.invoke("look:invoke", { type: "mcp:list-tools", name }),
+	addMcpServer: (config) =>
+		ipcRenderer.invoke("look:invoke", { type: "mcp:add-server", config }),
+	removeMcpServer: (name) =>
+		ipcRenderer.invoke("look:invoke", { type: "mcp:remove-server", name }),
+	testMcpServer: (name) =>
+		ipcRenderer.invoke("look:invoke", { type: "mcp:test-server", name }),
+	toggleMcpServer: (name, enabled) =>
+		ipcRenderer.invoke("look:invoke", { type: "mcp:toggle-server", name, enabled }),
+	updateMcpServer: (name, config) =>
+		ipcRenderer.invoke("look:invoke", { type: "mcp:update-server", name, config }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

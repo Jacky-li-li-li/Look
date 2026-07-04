@@ -30,13 +30,16 @@ if (import.meta.env.DEV) {
 		}
 
 		// 按组件名聚合
-		const byName = new Map<string, {
-			total: number;
-			slow: number; // >=16ms
-			unnecessary: number;
-			times: number[];
-			phases: Set<number>;
-		}>();
+		const byName = new Map<
+			string,
+			{
+				total: number;
+				slow: number; // >=16ms
+				unnecessary: number;
+				times: number[];
+				phases: Set<number>;
+			}
+		>();
 
 		for (const s of samples) {
 			let entry = byName.get(s.name);
@@ -68,13 +71,13 @@ if (import.meta.env.DEV) {
 			const avg = e.times.reduce((a, b) => a + b, 0) / e.times.length;
 			const max = Math.max(...e.times);
 			return {
-				"组件": name,
-				"总渲染": e.total,
+				组件: name,
+				总渲染: e.total,
 				"慢渲染(≥16ms)": e.slow,
-				"无意义渲染": e.unnecessary,
-				"平均耗时": `${avg.toFixed(1)}ms`,
-				"最大耗时": `${max.toFixed(1)}ms`,
-				"阶段": phaseLabel(Array.from(e.phases).reduce((a, b) => a | b, 0)),
+				无意义渲染: e.unnecessary,
+				平均耗时: `${avg.toFixed(1)}ms`,
+				最大耗时: `${max.toFixed(1)}ms`,
+				阶段: phaseLabel(Array.from(e.phases).reduce((a, b) => a | b, 0)),
 			};
 		});
 

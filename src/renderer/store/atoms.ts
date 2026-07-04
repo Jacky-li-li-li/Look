@@ -36,13 +36,13 @@ export const recentlyCompletedAtom = atom<string[]>([]);
 
 export const projectsAtom = atom<ProjectInfo[]>([]);
 
-/** 
+/**
  * App 就绪状态：4 个阶段。
  * - 0 = 未初始化
  * - 1 = 项目列表已加载
  * - 2 = Agent 列表已加载 + active session 已选择
  * - 3 = session runtime 已激活（首个 session:snapshot 到达）
- * 
+ *
  * 只有 phase >= 2 且 agents 为空时才显示 EmptySessionState。
  * phase < 2 时内容区空白占位，避免闪烁。
  */
@@ -129,6 +129,8 @@ export const userPreferredModelAtom = atom<string | null>(null);
 /** SubAgent 功能总开关。关闭后所有会话的 subagent 工具对 LLM 不可见（Stage 2）。 */
 export const subagentEnabledAtom = atom(true);
 
+/** MCP status version */
+export const mcpStatusVersionAtom = atom(0);
 /**
  * 已启用的 Agent 定义名称列表（来自主进程 general settings）。
  * `null` 表示"全部启用"（首次安装 / 未显式禁用任何时的默认状态）。
@@ -216,7 +218,8 @@ export const activeChatAtBottomAtom = atom(true);
 // ---- UI state ----
 
 export const showSettingsAtom = atom(false);
-export const settingsTabAtom = atom<"general" | "api-keys" | "about" | "profile">("general");
+export type SettingsTab = "general" | "prompt" | "api-keys" | "im-channels" | "about" | "profile" | "mcp";
+export const settingsTabAtom = atom<SettingsTab>("general");
 export const sidebarCollapsedAtom = atom(false);
 
 /** Agent 广场是否占据主区域（替代聊天面板） */

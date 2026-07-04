@@ -13,10 +13,10 @@
 // ============================================================
 
 import fs from "node:fs";
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AgentConfig, SubagentProgress, SubagentResult, SubagentUsage } from "../extensions/subagent/types.js";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { IEventBus, IRuntimeStore } from "../core/contracts.js";
+import type { AgentConfig, SubagentProgress, SubagentResult, SubagentUsage } from "../extensions/subagent/types.js";
 import type { AgentInfo, MainToRendererEvent } from "../shared/types.js";
 
 // ── Constants ──
@@ -80,7 +80,11 @@ export class SubAgentService {
 	// ── Session info display ──
 
 	/** 返回子会话标识字段；非子会话返回空对象（展开后无影响）。 */
-	subagentFields(sessionId: string): { parentSessionId?: string; isSubagentSession?: boolean; agentConfigName?: string } {
+	subagentFields(sessionId: string): {
+		parentSessionId?: string;
+		isSubagentSession?: boolean;
+		agentConfigName?: string;
+	} {
 		const meta = this.subSessionMeta.get(sessionId);
 		if (!meta) return {};
 		return {
