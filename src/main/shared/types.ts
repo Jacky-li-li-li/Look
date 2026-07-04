@@ -455,6 +455,12 @@ export type MainToRendererEvent =
 			bindings: number;
 			runningSessions: string[];
 			status: "running" | "stopped";
+	  }
+	// ---- TODO.md 任务进度 ----
+	| {
+			type: "todo:update";
+			sessionId: string;
+			items: TodoItem[];
 	  };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
@@ -699,6 +705,16 @@ export const LOOK_MESSAGE_DURATION_ENTRY_TYPE = "look.message-duration.v1";
 export interface LookMessageDurationEntryData {
 	entryId: string;
 	durationMs: number;
+}
+
+// ============================================================
+// TODO.md 实时可视化
+// ============================================================
+
+export interface TodoItem {
+  text: string;   // 任务文本（去掉 "- [ ]" 前缀）
+  done: boolean;  // 是否完成
+  line: number;   // TODO.md 原始行号
 }
 
 /** Event listener callback. */

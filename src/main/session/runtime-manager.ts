@@ -67,6 +67,7 @@ import {
 	isBuiltinSkillPath,
 	detectCommonSkillPaths,
 } from "../skills/skill-discovery-service.js";
+import { parseTodoFile } from "./todo-parser.js";
 import { parseJsonLine, scanSessionDirectory, scanSessionFileSummary } from "./scan.js";
 import {
 	ensureLookDir,
@@ -1891,6 +1892,15 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 			});
 		}
 		this.emitSessionUpdated(sessionId);
+	}
+
+	/** ISessionEventHost — 每次 tool_execution_end 时检查并推送 TODO.md 进度 */
+	emitTodoUpdate(sessionId: string): void {
+		const managed = this.runtimes.get(sessionId);
+		if (!managed) return;
+		const items = parseTodoFile(managed.runtime.cwd);
+		// 始终发送事件：items 为 null/空数组时清空渲染端状态
+		this.emit({ type: "todo:update", sessionId, items: items ?? [] });
 	}
 
 	// ISessionEventHost — public for interface compatibility

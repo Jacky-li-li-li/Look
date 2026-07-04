@@ -46,6 +46,7 @@ import {
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
 	sharedFilesAtomFamily,
+	todoItemsAtomFamily,
 	updateStatusAtom,
 	userPreferredModelAtom,
 } from "./atoms";
@@ -866,6 +867,12 @@ export function initIpcHandlers(api: any): () => void {
 				if (current?.requestId === event.requestId) {
 					appStore.set(planApprovalRequestAtomFamily(event.agentId), null);
 				}
+				break;
+			}
+
+			// ---- TODO.md 任务进度 ----
+			case "todo:update": {
+				appStore.set(todoItemsAtomFamily(event.sessionId), event.items);
 				break;
 			}
 

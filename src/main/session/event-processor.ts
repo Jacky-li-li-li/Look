@@ -28,6 +28,8 @@ export interface ISessionEventHost {
 	onSubSessionAgentEnd(sessionId: string): void;
 	emitSessionUpdated(sessionId: string): void;
 	emitSessionState(sessionId: string, reason: string): void;
+	/** 每次 tool_execution_end 时检查 TODO.md 是否需要更新 */
+	emitTodoUpdate(sessionId: string): void;
 }
 
 export class SessionEventProcessor {
@@ -85,6 +87,7 @@ export class SessionEventProcessor {
 			case "compaction_start":
 			case "tool_execution_end":
 				this.host.emitSessionUpdated(sessionId);
+				this.host.emitTodoUpdate(sessionId);
 				break;
 			case "compaction_end":
 				this.host.emitSessionState(sessionId, "agent_end");

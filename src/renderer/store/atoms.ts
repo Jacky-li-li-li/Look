@@ -6,6 +6,7 @@ import type {
 	PlanApprovalRequest,
 	PlanQuestionRequest,
 	ProjectInfo,
+	TodoItem,
 } from "@shared/types";
 import { atom } from "jotai";
 import { selectAtom } from "jotai/utils";
@@ -171,6 +172,11 @@ export interface SubagentProgressEntry {
 /** 按父会话 ID 追踪的子会话进度列表 */
 export const subagentProgressAtomFamily = atomFamily((_parentSessionId: string) => atom<SubagentProgressEntry[]>([]));
 
+// ---- TODO.md 任务进度 ----
+
+/** 按 sessionId 追踪的 TODO.md 任务列表 */
+export const todoItemsAtomFamily = atomFamily((_sessionId: string) => atom<TodoItem[]>([]));
+
 // ---- Permission management ----
 
 export const permissionModeAtomFamily = atomFamily((_agentId: string) => atom<PermissionMode>("ask"));
@@ -326,6 +332,7 @@ export function removeAgentAtoms(agentId: string): void {
 	planQuestionRequestAtomFamily.remove(agentId);
 	planQuestionDraftAtomFamily.remove(agentId);
 	planApprovalRequestAtomFamily.remove(agentId);
+	todoItemsAtomFamily.remove(agentId);
 }
 
 /**
