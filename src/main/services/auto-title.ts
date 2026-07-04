@@ -23,7 +23,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { type AssistantMessage, completeSimple } from "@earendil-works/pi-ai/compat";
 import type { AgentSession, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { extractUserMessageText } from "../session-event-translator.js";
+import { extractUserMessageText } from "../session/event-translator.js";
 import { DEFAULT_SESSION_NAME } from "../shared/session-defaults.js";
 
 const TITLE_SYSTEM_PROMPT = [

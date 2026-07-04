@@ -6,7 +6,7 @@
 // ============================================================
 
 import { describe, expect, it } from "vitest";
-import { SessionRuntimeManager } from "../src/main/session-runtime-manager";
+import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
 
 const RUN = process.env.LOOK_E2E_LLM === "1";
 const TIMEOUT = 180_000;

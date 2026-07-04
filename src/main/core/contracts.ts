@@ -20,6 +20,7 @@ import type {
 import type { ToolCallHandler } from "../extensions/permission-extension.js";
 import type {
 	EventCallback,
+	LookUiEvent,
 	MainToRendererEvent,
 	PermissionMode,
 	PermissionRespondPayload,
@@ -27,6 +28,7 @@ import type {
 	PlanQuestion,
 	PlanQuestionResponse,
 } from "../shared/types.js";
+import type { ContentBlockTracker } from "../session/event-translator.js";
 
 // ── Infrastructure ──
 
@@ -114,4 +116,46 @@ export interface IPlanService {
 	): Promise<boolean>;
 
 	cancelInteractions(sessionId: string, reason: string): void;
+}
+
+// ── Session Scope (per-session mutable state aggregator) ──
+
+/**
+ * Aggregates per-session mutable state that multiple domain services
+ * need to read/write. Owned by ISessionScopeRegistry and disposed
+ * together with the runtime.
+ */
+export interface ISessionScope {
+	readonly sessionId: string;
+	readonly projectId: string;
+
+	/** Canonical streaming state derived from SDK events. */
+	streamingState: "idle" | "streaming" | "retrying";
+
+	/** Buffered UI events awaiting batch flush. */
+	uiEventBuffer: LookUiEvent[];
+
+	/** Timers for the two-stage UI event batching (1ms probe + 8ms batch). */
+	uiEventFlushTimer: ReturnType<typeof setTimeout> | null;
+	uiEventFirstTimer: ReturnType<typeof setTimeout> | null;
+
+	/** Per-session content block tracker for discrete event translation. */
+	translationTracker: ContentBlockTracker;
+
+	/** Whether the session name is still the auto-generated default. */
+	isDefaultName: boolean;
+
+	/** Turn start timestamp for computing per-message runtimes. */
+	turnStartedAt: number | null;
+
+	/** IM provider for this session (e.g. "feishu"). */
+	imProvider?: string;
+}
+
+/** Registry that creates / retrieves / releases SessionScope instances. */
+export interface ISessionScopeRegistry {
+	acquire(sessionId: string, projectId: string): ISessionScope;
+	release(sessionId: string): void;
+	get(sessionId: string): ISessionScope | undefined;
+	has(sessionId: string): boolean;
 }

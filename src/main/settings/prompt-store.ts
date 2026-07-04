@@ -8,7 +8,7 @@
 
 import fs from "fs";
 import path from "path";
-import { getProjectSystemPromptPath, getPromptsPath, getSystemPromptPath } from "./shared/look-storage.js";
+import { getProjectSystemPromptPath, getPromptsPath, getSystemPromptPath } from "../shared/look-storage.js";
 
 /** 表示"跟随全局"的哨兵值 */
 const FOLLOW_GLOBAL = "__follow_global__";

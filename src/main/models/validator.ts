@@ -16,7 +16,7 @@ import {
 	type ProviderResponse,
 } from "@earendil-works/pi-ai/compat";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { getModelsPath } from "./shared/look-storage.js";
+import { getModelsPath } from "../shared/look-storage.js";
 
 export type TestResult =
 	| { ok: true; status: number; skipped?: false }

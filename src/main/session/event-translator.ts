@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessageEvent } from "@earendil-works/pi-ai";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { LookUiEvent } from "./shared/types.js";
+import type { LookUiEvent } from "../shared/types.js";
 
 /** Tracks active (started-but-not-ended) content blocks during streaming.
  *  Used by translateAgentSessionEvent to emit synthetic end events when

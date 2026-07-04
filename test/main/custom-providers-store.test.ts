@@ -10,7 +10,7 @@ import { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import {
   CustomProvidersStore,
   type CustomProviderInput,
-} from "../../src/main/custom-providers-store.js";
+} from "../../src/main/settings/custom-providers.js";
 
 // ── Helpers ──
 

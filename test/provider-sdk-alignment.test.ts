@@ -16,7 +16,7 @@ vi.mock("@earendil-works/pi-ai/compat", async (importOriginal) => {
 });
 
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { testApiKey, testConfiguredProvider } from "../src/main/provider-validator";
+import { testApiKey, testConfiguredProvider } from "../src/main/models/validator.js";
 
 function writeModelsConfig(config: unknown): string {
 	const dir = mkdtempSync(join(tmpdir(), "look-provider-sdk-"));
@@ -155,8 +155,8 @@ describe("pi SDK provider alignment", () => {
 });
 
 describe("provider source regressions", () => {
-	const runtimeManagerSource = readFileSync(resolve(__dirname, "../src/main/session-runtime-manager.ts"), "utf8");
-	const validatorSource = readFileSync(resolve(__dirname, "../src/main/provider-validator.ts"), "utf8");
+	const runtimeManagerSource = readFileSync(resolve(__dirname, "../src/main/session/runtime-manager.ts"), "utf8");
+	const validatorSource = readFileSync(resolve(__dirname, "../src/main/models/validator.ts"), "utf8");
 	const modelSelectorSource = readFileSync(resolve(__dirname, "../src/renderer/components/ModelSelector.tsx"), "utf8");
 
 	it("does not hand-roll provider HTTP routing in main", () => {

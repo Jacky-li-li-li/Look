@@ -11,7 +11,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { SessionRuntimeManager } from "../src/main/session-runtime-manager";
+import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
 import { getWorkspaceSubsessionsDir } from "../src/main/shared/look-storage";
 
 const RUN = process.env.LOOK_E2E_LLM === "1";

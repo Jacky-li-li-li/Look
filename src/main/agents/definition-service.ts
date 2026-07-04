@@ -18,10 +18,10 @@ import {
 	getBuiltinAgentsDir,
 	getUserAgentsDir,
 	parseAgentFile,
-} from "./extensions/subagent/agent-discovery.js";
-import { serializeAgentDefinition } from "./extensions/subagent/agent-definition-serializer.js";
-import type { AgentConfig } from "./extensions/subagent/types.js";
-import type { AgentDefinitionInfo, AgentDefinitionInput } from "./shared/types.js";
+} from "../extensions/subagent/agent-discovery.js";
+import { serializeAgentDefinition } from "../extensions/subagent/agent-definition-serializer.js";
+import type { AgentConfig } from "../extensions/subagent/types.js";
+import type { AgentDefinitionInfo, AgentDefinitionInput } from "../shared/types.js";
 
 /**
  * Callback invoked after every agent definition mutation so the caller can

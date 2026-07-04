@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as lookStorage from "../../src/main/shared/look-storage";
-import { getUsage, incrementTurn, initializeUsageService, resetUsageServiceForTesting } from "../../src/main/usage-service";
+import { getUsage, incrementTurn, initializeUsageService, resetUsageServiceForTesting } from "../../src/main/system/usage.js";
 
 const cleanup: string[] = [];
 

@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 
+class ResizeObserverMock {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
+vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
 import { cleanup, render, screen } from "@testing-library/react";
 import { Provider } from "jotai";
 import { createRef } from "react";
 import { I18nextProvider } from "react-i18next";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatMessageList from "../src/renderer/components/ChatMessageList";
 import i18n from "../src/renderer/i18n";
 import { sessionStateAtomFamily } from "../src/renderer/store/atoms";
@@ -83,5 +91,54 @@ describe("session snapshot loading state", () => {
 		expect(state.snapshotLoaded).toBe(true);
 		expect(state.loadingSnapshot).toBe(false);
 		expect(state.entries).toHaveLength(1);
+	});
+
+	it("renders persisted messages after a non-empty snapshot has loaded", () => {
+		const userEntry: SessionEntry = {
+			id: "entry-u1",
+			parentId: null,
+			type: "message",
+			timestamp: new Date().toISOString(),
+			message: { role: "user", content: "hello agent", timestamp: Date.now() } as UserMessage,
+		};
+		const assistantEntry: SessionEntry = {
+			id: "entry-a1",
+			parentId: "entry-u1",
+			type: "message",
+			timestamp: new Date().toISOString(),
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "hi, how can I help?" }],
+				api: "openai-responses",
+				provider: "openai",
+				model: "gpt-4o",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "stop",
+				timestamp: Date.now(),
+			} as AssistantMessage,
+		};
+		const state = {
+			...emptyRendererSessionState(),
+			snapshotLoaded: true,
+			loadingSnapshot: false,
+			entries: [userEntry, assistantEntry],
+			leafId: "entry-a1",
+		};
+		const { container } = renderList(state);
+
+		expect(screen.queryByText("Loading...")).toBeNull();
+		expect(screen.queryByText("No messages yet. Start a conversation.")).toBeNull();
+		expect(screen.getByText("hello agent")).toBeTruthy();
+		expect(screen.getByText("hi, how can I help?")).toBeTruthy();
+		// 消息气泡容器应当可见（opacity-0 会移除元素的可视渲染）
+		const bubbles = container.querySelectorAll(".whisper-bubble");
+		expect(bubbles.length).toBeGreaterThanOrEqual(2);
 	});
 });

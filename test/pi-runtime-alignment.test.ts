@@ -4,12 +4,14 @@ import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
-const runtime = read("src/main/session-runtime-manager.ts");
-const ipc = read("src/main/ipc-handlers.ts");
+const runtime = read("src/main/session/runtime-manager.ts");
+const ipc = read("src/main/ipc/handlers.ts");
 const preload = read("src/main/preload.js");
 const index = read("src/main/index.ts");
 const types = read("src/main/shared/types.ts");
 const tsconfig = read("tsconfig.main.json");
+const eventProcessor = read("src/main/session/event-processor.ts");
+const uiBatcher = read("src/main/session/ui-event-batcher.ts");
 
 describe("pi runtime architecture regressions", () => {
 	it("1. does not pass a tools allowlist that filters extension tools", () => {
@@ -34,8 +36,9 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("4. transports SDK events and SessionManager entries without a message mirror", () => {
-		expect(runtime).toContain('type: "session:ui-event"');
-		expect(runtime).toContain("events: uiEvents");
+		// UI event emission is now in SessionEventProcessor (batched via UIEventBatcher)
+		expect(uiBatcher).toContain('type: "session:ui-event"');
+		expect(eventProcessor).toContain("events: uiEvents");
 		expect(runtime).toContain("entries: session.sessionManager.getBranch()");
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');

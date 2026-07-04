@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SessionRuntimeManager } from "../src/main/session-runtime-manager";
+import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
 import {
 	getProjectSharedDir,
 	getWorkspaceSubsessionsDir,
@@ -43,11 +43,7 @@ describe("SubAgent deletion cleanup", () => {
 					allMessagesText: "",
 				},
 			]);
-			(manager as any).subSessionRegistry.set("parent-session", new Set(["child-session"]));
-			(manager as any).subSessionMeta.set("child-session", {
-				parentSessionId: "parent-session",
-				agentName: "child",
-			});
+			(manager as any).subAgentRegistry.register("parent-session", "child-session", "child");
 
 			await (manager as any).destroySubSessions("parent-session");
 
@@ -62,30 +58,24 @@ describe("SubAgent deletion cleanup", () => {
 
 	it("deletes a project's subsessions directory when the project is removed", async () => {
 		const root = await mkdtemp(join(tmpdir(), "look-project-delete-"));
-		const projectId = `test-${Date.now()}`;
 		const projectName = `subsessions-delete-${Date.now()}`;
 		const sessionsDir = join(root, "sessions");
 		const sessionPath = join(sessionsDir, "session.jsonl");
-		const sharedDir = getProjectSharedDir(projectId);
-		const subsessionsDir = getWorkspaceSubsessionsDir(projectName);
-		cleanup.push(root, sharedDir, join(subsessionsDir, ".."));
+		cleanup.push(root);
 		await mkdir(sessionsDir, { recursive: true });
-		await mkdir(sharedDir, { recursive: true });
-		await mkdir(subsessionsDir, { recursive: true });
 		await writeFile(sessionPath, "", "utf8");
-		await writeFile(join(subsessionsDir, "child.jsonl"), "", "utf8");
 
 		const manager = new SessionRuntimeManager();
 		try {
-			(manager as any).projectsIndexPath = join(root, "projects.json");
-			(manager as any).projects.set(projectId, {
-				id: projectId,
-				name: projectName,
-				cwd: root,
-				createdAt: Date.now(),
-				valid: true,
-			});
-			(manager as any).sessionsByProject.set(projectId, [
+			const created = (manager as any).projectService.createProjectRecord(root, projectName);
+			const createdId = created.id;
+			const sharedDir = getProjectSharedDir(createdId);
+			const actualSubsessionsDir = getWorkspaceSubsessionsDir(created.name);
+			cleanup.push(sharedDir, join(actualSubsessionsDir, ".."));
+			await mkdir(sharedDir, { recursive: true });
+			await mkdir(actualSubsessionsDir, { recursive: true });
+			await writeFile(join(actualSubsessionsDir, "child.jsonl"), "", "utf8");
+			(manager as any).sessionsByProject.set(createdId, [
 				{
 					id: "parent-session",
 					name: "parent",
@@ -95,17 +85,17 @@ describe("SubAgent deletion cleanup", () => {
 					modified: new Date(),
 					path: sessionPath,
 					cwd: root,
-					projectId,
+					projectId: createdId,
 					allMessagesText: "",
 				},
 			]);
 
-			await manager.executeDeleteProject(projectId);
+			await manager.executeDeleteProject(createdId);
 
 			expect(existsSync(sessionPath)).toBe(false);
 			expect(existsSync(sharedDir)).toBe(false);
-			expect(existsSync(subsessionsDir)).toBe(false);
-			expect((manager as any).projects.has(projectId)).toBe(false);
+			expect(existsSync(actualSubsessionsDir)).toBe(false);
+			expect((manager as any).projectService.has(createdId)).toBe(false);
 			expect(sanitiseWorkspaceName(projectName)).toBe(projectName);
 		} finally {
 			await manager.dispose();

@@ -4,7 +4,7 @@
 // ============================================================
 
 import fs from "fs";
-import { getUserProfilePath } from "./shared/look-storage.js";
+import { getUserProfilePath } from "../shared/look-storage.js";
 
 export interface UserProfile {
 	userId: string;

@@ -8,8 +8,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { getLookDir, getWorkspaceSessionsDir, getWorkspaceSubsessionsDir } from "./shared/look-storage.js";
-import type { ProjectInfo } from "./shared/types.js";
+import { getLookDir, getWorkspaceSessionsDir, getWorkspaceSubsessionsDir } from "../shared/look-storage.js";
+import type { ProjectInfo } from "../shared/types.js";
 
 function getUsageFilePath(): string {
 	return path.join(getLookDir(), "usage.json");

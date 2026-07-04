@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PermissionService } from "../src/main/permission-service";
+import { PermissionService } from "../src/main/permissions/service.js";
 import type { IEventBus, IRuntimeStore } from "../src/main/core/contracts";
 import type { AgentSession, AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 

@@ -24,8 +24,8 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { getBuiltinAgentsDir, getUserAgentsDir } from "./extensions/subagent/agent-discovery.js";
-import { getLookDir } from "./shared/look-storage.js";
+import { getBuiltinAgentsDir, getUserAgentsDir } from "../extensions/subagent/agent-discovery.js";
+import { getLookDir } from "../shared/look-storage.js";
 
 // ---- 版本管理 ----
 

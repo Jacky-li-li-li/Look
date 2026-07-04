@@ -452,7 +452,6 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 
 	useEffect(() => {
 		if (agentId !== prevAgentIdRef.current) {
-			console.log("[ChatMessageList] agentId changed:", prevAgentIdRef.current, "->", agentId);
 			prevAgentIdRef.current = agentId;
 			setReady(false);
 		}
@@ -465,34 +464,23 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 		// （loadingSnapshot 已完成但 snapshot entries 尚未应用）
 		const isLoading =
 			sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
-		if (isLoading) {
-			console.log("[ChatMessageList] still loading, ready=false");
-			return;
-		}
+		if (isLoading) return;
 
 		// 关键修复：空消息判断必须确认 snapshot 已加载或 runtime 已就绪，
 		// 防止在中间状态（runtime 已创建但 entries 还未应用）时过早 setReady(true)
 		const dataReady = sessionState.snapshotLoaded || sessionState.runtime !== null;
 		if (timeline.length === 0 && !isBusy && dataReady) {
-			console.log("[ChatMessageList] empty timeline + dataReady, setReady(true)");
 			setReady(true);
 			return;
 		}
 
 		// 如果数据还没准备好，继续等待
-		if (!dataReady) {
-			console.log("[ChatMessageList] data not ready yet, waiting...");
-			return;
-		}
+		if (!dataReady) return;
 
-		console.log("[ChatMessageList] scheduling double rAF for ready, timelineLen=", timeline.length);
 		let cancelled = false;
 		requestAnimationFrame(() => {
 			requestAnimationFrame(() => {
-				if (!cancelled) {
-					console.log("[ChatMessageList] double rAF done, setReady(true)");
-					setReady(true);
-				}
+				if (!cancelled) setReady(true);
 			});
 		});
 		return () => {
@@ -519,9 +507,6 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 
 	const transitioning = !isBusy && transitioningCooldown;
 
-	useEffect(() => {
-		console.log("[ChatMessageList] ready=", ready, "timelineLen=", timeline.length, "isBusy=", isBusy, "transitioning=", transitioning, "resize=", ready && !transitioning ? "smooth" : "instant");
-	}, [ready, timeline.length, isBusy, transitioning]);
 
 	return (
 		<Conversation

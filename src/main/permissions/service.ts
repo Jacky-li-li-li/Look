@@ -19,9 +19,9 @@ import { v4 as uuidv4 } from "uuid";
 import {
 	createPlanModeHandler,
 	type ToolCallHandler,
-} from "./extensions/permission-extension.js";
-import type { IEventBus, IPermissionService, IRuntimeStore } from "./core/contracts.js";
-import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload } from "./shared/types.js";
+} from "../extensions/permission-extension.js";
+import type { IEventBus, IPermissionService, IRuntimeStore } from "../core/contracts.js";
+import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload } from "../shared/types.js";
 
 // ── Constants ──
 

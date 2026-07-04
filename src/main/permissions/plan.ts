@@ -13,9 +13,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
-import { PLAN_TOOL_NAMES, type PlanApprovalOutcome, type PlanQuestionOutcome } from "./extensions/plan-extension.js";
-import type { IEventBus, IPermissionService, IPlanService, IRuntimeStore } from "./core/contracts.js";
-import type { PlanApprovalRequest, PlanApprovalResponse, PlanQuestion, PlanQuestionRequest, PlanQuestionResponse } from "./shared/types.js";
+import { PLAN_TOOL_NAMES, type PlanApprovalOutcome, type PlanQuestionOutcome } from "../extensions/plan-extension.js";
+import type { IEventBus, IPermissionService, IPlanService, IRuntimeStore } from "../core/contracts.js";
+import type { PlanApprovalRequest, PlanApprovalResponse, PlanQuestion, PlanQuestionRequest, PlanQuestionResponse } from "../shared/types.js";
 
 // ── Constants ──
 

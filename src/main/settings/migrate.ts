@@ -26,7 +26,7 @@
 
 import fs from "fs";
 import path from "path";
-import { getSettingsPath, getUiSettingsPath } from "./shared/look-storage.js";
+import { getSettingsPath, getUiSettingsPath } from "../shared/look-storage.js";
 
 /** Legacy field names that move from settings.json → ui-settings.json. */
 const LEGACY_UI_FIELD_RENAMES: ReadonlyArray<readonly [string, string]> = [

@@ -8,7 +8,7 @@
 
 import type * as lark from "@larksuiteoapi/node-sdk";
 import type { NormalizedMessage } from "@larksuiteoapi/node-sdk";
-import type { SessionRuntimeManager } from "../session-runtime-manager.js";
+import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import type { LookUiEvent, MainToRendererEvent, ProjectInfo } from "../shared/types.js";
 import { type ChatBinding, loadBindings, saveBindings } from "./im-storage.js";
 import type { LarkChannelManager } from "./lark-channel-manager.js";

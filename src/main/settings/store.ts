@@ -24,7 +24,7 @@
 
 import fs from "fs";
 import path from "path";
-import type { PermissionMode } from "./shared/types.js";
+import type { PermissionMode } from "../shared/types.js";
 
 export type UILanguage = "en" | "zh" | "ja";
 export type LookStyle = "ink-wash" | "swiss" | "bauhaus";

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { PlanService } from "../src/main/plan-service";
-import { PermissionService } from "../src/main/permission-service";
+import { PlanService } from "../src/main/permissions/plan.js";
+import { PermissionService } from "../src/main/permissions/service.js";
 import type { IEventBus, IRuntimeStore, IPermissionService, IPlanService } from "../src/main/core/contracts";
 import type { AgentSession, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 
