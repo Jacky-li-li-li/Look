@@ -131,6 +131,20 @@ export const subagentEnabledAtom = atom(true);
 
 /** MCP status version */
 export const mcpStatusVersionAtom = atom(0);
+
+// ---- Usage 数据（Profile Tab 热力图） ----
+
+export interface UsageAtomData {
+	usage: Record<string, number>;
+	modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
+	years: number[];
+}
+
+/** 全局 usage 数据，由 usage:updated 事件驱动更新。 */
+export const usageDataAtom = atom<UsageAtomData | null>(null);
+
+/** usage 数据版本号，每次 usage:updated 时自增，驱动组件重新拉取。 */
+export const usageVersionAtom = atom(0);
 /**
  * 已启用的 Agent 定义名称列表（来自主进程 general settings）。
  * `null` 表示"全部启用"（首次安装 / 未显式禁用任何时的默认状态）。

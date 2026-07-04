@@ -934,6 +934,9 @@ const invokeRouteMap: InvokeRouteMap = {
 		const tools = ctx.mcpManager.getToolsForServer(guardString(data.name, "name"));
 		return { success: true, tools };
 	},
+	"mcp:list-all-tools": async (_data, ctx) => {
+		return { success: true, tools: ctx.mcpManager.getAllTools() };
+	},
 	"mcp:toggle-server": async (data, ctx) => {
 		try {
 			await ctx.mcpManager.toggleServer(guardString(data.name, "name"), guardBoolean(data.enabled, "enabled"));

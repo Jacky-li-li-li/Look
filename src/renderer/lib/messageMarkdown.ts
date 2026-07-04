@@ -8,7 +8,8 @@
 // 3. Replace `/skill:`, `<skill>`, `<skill-invoke>` and `#agent` references
 //    with custom HTML-like tags that MarkdownRender renders as chips.
 
-import { parseAgentSegments, parseSkillSegments } from "../components/skillSegments";
+import { parseAgentSegments, parseMcpToolSegments, parseSkillSegments } from "../components/skillSegments";
+import type { McpToolSegment, SkillSegment } from "../components/skillSegments";
 
 /** Strip the system-injected subagent hint line(s). */
 export function stripSystemHints(content: string): string {
@@ -85,7 +86,6 @@ export function closeAtxHeadings(text: string): string {
 function escapeXml(value: string): string {
 	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-
 function skillTag(name: string): string {
 	return `<skill-tag name="${escapeXml(name)}"></skill-tag>`;
 }
@@ -94,14 +94,25 @@ function agentTag(name: string): string {
 	return `<agent-tag name="${escapeXml(name)}"></agent-tag>`;
 }
 
-function skillSegmentsToString(segments: ReturnType<typeof parseSkillSegments>): string {
+function mcpTag(server: string, toolName: string): string {
+	return `<mcp-tag server="${escapeXml(server)}" tool="${escapeXml(toolName)}"></mcp-tag>`;
+}
+
+function mcpSegmentsToString(segments: McpToolSegment[]): string {
+	return segments.map((seg) => (seg.kind === "mcp" ? mcpTag(seg.server, seg.toolName) : seg.value)).join("");
+}
+
+function skillSegmentsToString(segments: SkillSegment[]): string {
 	return segments.map((seg) => (seg.kind === "skill" ? skillTag(seg.name) : seg.value)).join("");
 }
 
 /**
  * Prepare raw message content for `markstream-react`.
- * The output is valid Markdown with optional `<skill-tag/>` / `<agent-tag/>`
- * placeholders that the renderer maps back to `SkillTag` / `AgentTag`.
+ * The output is valid Markdown with optional `<skill-tag/>` / `<agent-tag/>` / `<mcp-tag/>`
+ * placeholders that the renderer maps back to `SkillTag` / `AgentTag` / `McpTag`.
+ *
+ * Processing order: stripSystemHints → escapeGlobAsterisks →
+ * parseAgentSegments(@) → parseMcpToolSegments(#) → parseSkillSegments
  */
 export function prepareMessageContent(content: string): string {
 	const stripped = stripSystemHints(content);
@@ -114,7 +125,17 @@ export function prepareMessageContent(content: string): string {
 		if (seg.kind === "agent") {
 			parts.push(agentTag(seg.name));
 		} else {
-			parts.push(skillSegmentsToString(parseSkillSegments(seg.value)));
+			// Within agent text segments, parse MCP tools then skills
+			const mcpSegments = parseMcpToolSegments(seg.value);
+			const mcpParts: string[] = [];
+			for (const mcpSeg of mcpSegments) {
+				if (mcpSeg.kind === "mcp") {
+					mcpParts.push(mcpTag(mcpSeg.server, mcpSeg.toolName));
+				} else {
+					mcpParts.push(skillSegmentsToString(parseSkillSegments(mcpSeg.value)));
+				}
+			}
+			parts.push(mcpParts.join(""));
 		}
 	}
 

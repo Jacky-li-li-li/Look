@@ -490,7 +490,9 @@ export type MainToRendererEvent =
 			items: TodoItem[];
 	  }
 	// ---- MCP server status changed ----
-	| { type: "mcp:status-changed" };
+	| { type: "mcp:status-changed" }
+	// ---- Usage data updated (after a turn completes) ----
+	| { type: "usage:updated" };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
 export interface CustomProviderModelInput {
@@ -706,6 +708,7 @@ export type RendererToMainEvent =
 	| { type: "mcp:test-server"; name: string }
 	| { type: "mcp:list-tools"; name: string }
 	| { type: "mcp:toggle-server"; name: string; enabled: boolean }
+	| { type: "mcp:list-all-tools" }
 	| { type: "mcp:update-server"; name: string; config: Record<string, unknown> };
 
 /** Available model info (returned from ModelRegistry) */
@@ -733,6 +736,7 @@ export interface ProviderInfo {
 
 export interface UsageData {
 	usage: Record<string, number>;
+	modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
 	years: number[];
 }
 

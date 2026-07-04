@@ -114,17 +114,17 @@ export function renderSkillSegments(
 
 // ============================================================
 // ============================================================
-// Agent 分段解析（对标 skill 分段，解析 #agentName 模式）
+// Agent 分段解析（对标 skill 分段，解析 @agentName 模式）
 // ============================================================
 
 export type AgentSegment = { kind: "text"; value: string } | { kind: "agent"; name: string };
 
 /**
- * 匹配行首或空白后的 #agentName。
- * # 后必须紧跟名称且中间无空格，名称以小写字母开头，可含小/大写字母、数字、下划线、连字符。
- * 该规则把 Markdown 标题（# Title / #Title）和常见 hex 颜色码（#FF0000）排除在外。
+ * 匹配行首或空白后的 @agentName。
+ * @ 后必须紧跟名称且中间无空格，名称以小写字母开头，可含小/大写字母、数字、下划线、连字符。
+ * 该规则把 email（@email.com）等形式排除在外。
  */
-const HASH_AGENT_RE = /(?:^|\s)(#([a-z][a-zA-Z0-9_-]*))/g;
+const AT_AGENT_RE = /(?:^|\s)(@([a-z][a-zA-Z0-9_-]*))/g;
 
 export function parseAgentSegments(content: string): AgentSegment[] {
 	if (!content) return [];
@@ -132,9 +132,9 @@ export function parseAgentSegments(content: string): AgentSegment[] {
 	const segments: AgentSegment[] = [];
 	let cursor = 0;
 
-	for (const match of content.matchAll(HASH_AGENT_RE)) {
+	for (const match of content.matchAll(AT_AGENT_RE)) {
 		const matchStart = match.index ?? 0;
-		const fullToken = match[1]!; // "#scout"
+		const fullToken = match[1]!; // "@scout"
 		const name = match[2]!; // "scout"
 		const tokenStart = matchStart + (match[0]!.length - fullToken.length);
 
@@ -148,5 +148,35 @@ export function parseAgentSegments(content: string): AgentSegment[] {
 	if (cursor < content.length) {
 		segments.push({ kind: "text", value: content.slice(cursor) });
 	}
+	return segments;
+}
+
+// ============================================================
+// MCP 工具分段解析（对标 agent 分段，解析 #server__toolName 模式）
+// ============================================================
+
+export type McpToolSegment = { kind: "text"; value: string } | { kind: "mcp"; server: string; toolName: string };
+
+/** 匹配 #serverName__toolName 格式。要求 server 以小写开头避免与 Markdown 标题混淆。 */
+const HASH_MCP_RE = /(?:^|\s)(#([a-z][a-zA-Z0-9_-]*__[^\s]+))/g;
+
+export function parseMcpToolSegments(content: string): McpToolSegment[] {
+	if (!content) return [];
+	const segments: McpToolSegment[] = [];
+	let cursor = 0;
+	for (const match of content.matchAll(HASH_MCP_RE)) {
+		const matchStart = match.index ?? 0;
+		const fullMatch = match[0]!;
+		const fullToken = match[1]!; // "#server__tool"
+		const serverAndTool = match[2]!; // "server__tool"
+		const sepIdx = serverAndTool.indexOf("__");
+		const server = serverAndTool.slice(0, sepIdx);
+		const toolName = serverAndTool.slice(sepIdx + 2);
+		const tokenStart = matchStart + (fullMatch.length - fullToken.length);
+		if (tokenStart > cursor) segments.push({ kind: "text", value: content.slice(cursor, tokenStart) });
+		segments.push({ kind: "mcp", server, toolName });
+		cursor = tokenStart + fullToken.length;
+	}
+	if (cursor < content.length) segments.push({ kind: "text", value: content.slice(cursor) });
 	return segments;
 }

@@ -112,6 +112,10 @@ const api = {
   detectCommonSkillPaths: () =>
     ipcRenderer.invoke("look:invoke", { type: "skills:detect-common" }),
 
+  // ---- MCP tools ----
+  listAllMcpTools: () =>
+    ipcRenderer.invoke("look:invoke", { type: "mcp:list-all-tools" }),
+
   // ---- OS native dialogs ----
   // Returns { success, path?, canceled?, error? }. The renderer
   // is sandboxed, so it can't call `dialog.showOpenDialog` itself.

@@ -199,6 +199,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 	/** SubAgent 全局默认开关（新会话继承）。由 user-settings 持久化。 */
 	private subagentDefaultEnabled = true;
 
+	/** usage:updated 事件防抖定时器，合并高频 turn 完成事件。 */
+	private usageUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
 	/** Whether the session should be reported as streaming to the renderer.
 	 *  Falls back to the SDK getter only when no event-derived state exists. */
 	private isStreaming(sessionId: string, sdkValue: boolean): boolean {
@@ -1037,18 +1040,18 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		const managed = await this.ensureRuntime(sessionId);
 		const session = managed.runtime.session;
 
-		// 解析 #agentName 模式：检测用户是否通过 # 指定了 SubAgent
-		const agentTokens = text.match(/(?:^|\s)#(\w[\w.-]*)/g);
+		// 解析 @agentName 模式：检测用户是否通过 @ 指定了 SubAgent
+		const agentTokens = text.match(/(?:^|\s)@(\w[\w.-]*)/g);
 		if (agentTokens && agentTokens.length > 0) {
 			const discovery = discoverAgents(managed.projectId, "both");
-			const agentNames = agentTokens.map((t) => t.replace(/^\s*#/, ""));
+			const agentNames = agentTokens.map((t) => t.replace(/^\s*@/, ""));
 			const foundAgents = agentNames.flatMap((name) => {
 				const found = discovery.agents.find((a) => a.name === name);
 				return found ? [found] : [];
 			});
 
 			if (foundAgents.length > 0) {
-				// 保留原文 #agentName chip，仅追加一行最小指令
+				// 保留原文 @agentName chip，仅追加一行最小指令
 				const names = foundAgents.map((a) => a.name).join(", ");
 				const hint = foundAgents.length === 1 ? `[Use subagent: ${names}]` : `[Use subagents: ${names}]`;
 				text = `${hint}\n\n${text}`;
@@ -1796,7 +1799,15 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		if (message.role === "assistant") {
 			this.trackSubSessionMessageEnd(sessionId, message);
 			if (message.stopReason !== "aborted") {
-				incrementTurn(formatLocalDate(Date.now()));
+				const model = (message as { model?: string }).model;
+				const cost = (message as { usage?: { cost?: { total?: number } } }).usage?.cost?.total;
+				incrementTurn(formatLocalDate(Date.now()), model, cost);
+				// 防抖 300ms，合并同一批次内的多次 turn 完成事件
+				if (this.usageUpdateTimer) clearTimeout(this.usageUpdateTimer);
+				this.usageUpdateTimer = setTimeout(() => {
+					this.usageUpdateTimer = null;
+					this.emit({ type: "usage:updated" });
+				}, 300);
 			}
 		}
 		if (message.role === "user") {

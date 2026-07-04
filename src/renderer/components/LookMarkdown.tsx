@@ -14,6 +14,7 @@ import { memo, useMemo } from "react";
 import { closeAtxHeadings, prepareMessageContent } from "../lib/messageMarkdown";
 import { AgentTag } from "./AgentTag";
 import { SkillTag } from "./SkillTag";
+import { McpTag } from "./McpTag";
 
 // ── Built-in code blocks: lightweight Shiki instead of Monaco ──
 
@@ -70,9 +71,17 @@ function AgentTagNode({ node }: NodeComponentProps<ChipNode>) {
 	return <AgentTag name={name} />;
 }
 
+function McpTagNode({ node }: NodeComponentProps<ChipNode>) {
+	const server = getAttr(node, "server") || "";
+	const tool = getAttr(node, "tool") || "";
+	if (!server || !tool) return null;
+	return <McpTag server={server} toolName={tool} />;
+}
+
 const streamingComponents = defineStreamingComponents({
 	"skill-tag": SkillTagNode,
 	"agent-tag": AgentTagNode,
+	"mcp-tag": McpTagNode,
 });
 
 // ── Component ──

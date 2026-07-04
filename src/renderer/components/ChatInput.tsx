@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useChatInputMenus } from "../hooks/useChatInputMenus";
 import { permissionModeAtomFamily } from "../store/atoms";
 import { AgentHashMenu } from "./AgentHashMenu";
+import { McpHashMenu } from "./McpHashMenu";
 import ChatInputToolbar from "./ChatInputToolbar";
 import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ImagePreviewBar from "./ImagePreviewBar";
@@ -144,12 +145,15 @@ const ChatInput = function ChatInput({
 			if (!/^\/[^\s]*$/.test(prev) && /^\/[^\s]*$/.test(text)) {
 				menus.setSlashIndex(0);
 			}
+			if (!/(?:^|\s)@[^\s]*$/.test(prev) && /(?:^|\s)@[^\s]*$/.test(text)) {
+				menus.setAtIndex(0);
+			}
 			if (!/(?:^|\s)#[^\s]*$/.test(prev) && /(?:^|\s)#[^\s]*$/.test(text)) {
-				menus.setHashIndex(0);
+				menus.setMcpIndex(0);
 			}
 			setInputState(text);
 		},
-		[menus.setSlashIndex, menus.setHashIndex],
+		[menus.setSlashIndex, menus.setAtIndex, menus.setMcpIndex],
 	);
 
 	const handleEditorKeyDown = (e: React.KeyboardEvent) => {
@@ -173,21 +177,36 @@ const ChatInput = function ChatInput({
 
 	return (
 		<div className="relative mx-5 mb-2.5 rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
-			{menus.hashOpen ? (
+			{menus.atOpen ? (
 				<AgentHashMenu
 					agents={menus.filteredAgents}
-					searchTerm={menus.hashSearchTerm}
-					selectedIndex={menus.hashIndex}
-					onSelectedIndexChange={menus.setHashIndex}
+					searchTerm={menus.atSearchTerm}
+					selectedIndex={menus.atIndex}
+					onSelectedIndexChange={menus.setAtIndex}
 					onSelectAgent={(a) => {
-						const replaced = input.replace(/#[^\s]*$/, `#${a.name} `);
+						const replaced = input.replace(/@[^\s]*$/, `@${a.name} `);
 						setInput(replaced);
+					}}
+					onClose={() => {
+						const cleaned = input.replace(/@[^\s]*$/, "").trimEnd();
+						setInput(cleaned);
+					}}
+					subagentEnabled={menus.subagentOn}
+				/>
+			) : null}
+			{menus.mcpOpen ? (
+				<McpHashMenu
+					tools={menus.filteredMcpTools}
+					searchTerm={menus.mcpSearchTerm}
+					selectedIndex={menus.mcpIndex}
+					onSelectedIndexChange={menus.setMcpIndex}
+					onSelectTool={(t) => {
+						setInput(input.replace(/#[^\s]*$/, `#${t.server}__${t.toolName} `));
 					}}
 					onClose={() => {
 						const cleaned = input.replace(/#[^\s]*$/, "").trimEnd();
 						setInput(cleaned);
 					}}
-					subagentEnabled={menus.subagentOn}
 				/>
 			) : null}
 			{menus.slashOpen ? (

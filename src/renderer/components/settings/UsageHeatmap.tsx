@@ -2,8 +2,9 @@
 // UsageHeatmap — GitHub-style yearly contribution graph
 // ============================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import UsageStackedChart from "./UsageStackedChart";
 
 const api = (window as any).look;
 
@@ -13,9 +14,9 @@ const CELL_SIZE = 14;
 const GAP = 3;
 
 const LEVEL_CLASSES = ["bg-muted", "bg-emerald-200", "bg-emerald-300", "bg-emerald-500", "bg-emerald-700"];
-
 interface UsageHeatmapData {
 	usage: Record<string, number>;
+	modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
 	years: number[];
 }
 
@@ -79,31 +80,65 @@ function nonOverlappingLabels(labels: { colIndex: number; label: string }[]): { 
 	}
 	return result;
 }
-
 export default function UsageHeatmap() {
 	const { t, i18n } = useTranslation();
 	const [data, setData] = useState<UsageHeatmapData | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+	const loadRequestId = useRef(0);
 
-	useEffect(() => {
-		async function load() {
-			try {
-				const result = await api.getUsage();
-				if (result?.success && result.usage) {
-					setData(result.usage);
-					const years = result.usage.years ?? [new Date().getFullYear()];
-					setSelectedYear((prev) => (years.includes(prev) ? prev : (years[0] ?? new Date().getFullYear())));
-				}
-			} catch (error) {
-				console.error("Failed to load usage data:", error);
-			} finally {
+	const loadData = useCallback(async () => {
+		const requestId = ++loadRequestId.current;
+		try {
+			const result = await api.getUsage();
+			// 防止并发请求的陈旧响应覆盖最新数据（#C1）
+			if (requestId !== loadRequestId.current) return;
+			if (result?.success && result.usage) {
+				const { usage, modelCost, years } = result.usage as {
+					usage: Record<string, number>;
+					modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
+					years: number[];
+				};
+				const yearsArr = years ?? [new Date().getFullYear()];
+				setData({
+					usage: usage ?? {},
+					modelCost: modelCost ?? {},
+					years: yearsArr,
+				});
+				setSelectedYear((prev) => (yearsArr.includes(prev) ? prev : (yearsArr[0] ?? new Date().getFullYear())));
+				setError(null);
+			} else if (!result?.success) {
+				setError(result?.error ?? t("profile.usageLoadFailed"));
+			}
+		} catch (err) {
+			// 同样需要检查，避免陈旧请求的 error 覆盖
+			if (requestId !== loadRequestId.current) return;
+			console.error("Failed to load usage data:", err);
+			setError(t("profile.usageLoadFailed"));
+		} finally {
+			if (requestId === loadRequestId.current) {
 				setLoading(false);
 			}
 		}
-		load();
-	}, []);
+	}, [t]);
 
+	// Initial load
+	useEffect(() => {
+		loadData();
+	}, [loadData]);
+
+	// Listen for real-time usage updates from main process
+	useEffect(() => {
+		const unsubscribe = api.onEvent?.((event: { type: string }) => {
+			if (event?.type === "usage:updated") {
+				loadData();
+			}
+		});
+		return () => {
+			unsubscribe?.();
+		};
+	}, [loadData]);
 	const days = useMemo(() => getYearGrid(selectedYear), [selectedYear]);
 	const monthLabels = useMemo(
 		() => monthLabelsForDays(days, i18n.language, selectedYear),
@@ -114,13 +149,30 @@ export default function UsageHeatmap() {
 	const total = useMemo(() => {
 		if (!data) return 0;
 		return days.reduce((sum, day) => {
+			// 只统计选中年份内的日期，排除网格中相邻年份的填充日期（#C7）
+			if (day.getFullYear() !== selectedYear) return sum;
 			const key = formatLocalDateKey(day);
 			return sum + (data.usage[key] ?? 0);
 		}, 0);
-	}, [data, days]);
+	}, [data, days, selectedYear]);
 
 	if (loading) {
 		return <div className="text-muted-foreground py-4 text-[11px]">{t("common.loading")}</div>;
+	}
+
+	if (error && !data) {
+		return (
+			<div className="flex flex-col items-start gap-2 py-4">
+				<p className="text-[11px] text-red-500">{error}</p>
+				<button
+					type="button"
+					className="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80"
+					onClick={() => { setError(null); setLoading(true); loadData(); }}
+				>
+					{t("common.retry")}
+				</button>
+			</div>
+		);
 	}
 
 	const years = data?.years ?? [new Date().getFullYear()];
@@ -128,7 +180,7 @@ export default function UsageHeatmap() {
 	const gridHeight = WEEK_DAYS * CELL_SIZE + (WEEK_DAYS - 1) * GAP;
 
 	return (
-		<div className="flex min-w-0 flex-col gap-3">
+		<div className="flex min-w-0 flex-col gap-6">
 			<div className="flex items-center justify-between gap-3">
 				<h3 className="text-[13px] font-medium">
 					{t("profile.contributions", { count: total, year: selectedYear })}
@@ -145,6 +197,7 @@ export default function UsageHeatmap() {
 					))}
 				</select>
 			</div>
+
 
 			<div className="flex min-w-0 gap-2">
 				{/* Day labels */}
@@ -214,6 +267,9 @@ export default function UsageHeatmap() {
 				</div>
 				<span>{t("profile.more")}</span>
 			</div>
+
+
+			<UsageStackedChart modelCost={data?.modelCost ?? {}} selectedYear={selectedYear} />
 		</div>
 	);
 }

@@ -65,6 +65,66 @@ describe("usage service", () => {
 		expect(result.years).toContain(2026);
 	});
 
+	it("backfills per-model cost and ignores aborted assistant messages", async () => {
+		const tempDir = await mkdtemp(path.join(tmpdir(), "look-usage-model-cost-"));
+		cleanup.push(tempDir);
+		vi.spyOn(lookStorage, "getLookDir").mockReturnValue(tempDir);
+
+		const project = makeProject("p1", "Cost Project", path.join(tempDir, "project"));
+		fs.mkdirSync(project.cwd, { recursive: true });
+		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.name);
+		const date = "2026-05-20";
+		const ts = new Date(`${date}T12:00:00`).getTime();
+
+		writeJsonl(path.join(sessionsDir, "session-cost.jsonl"), [
+			{ type: "session", version: 3, id: "session-cost", timestamp: new Date(ts).toISOString(), cwd: project.cwd },
+			{
+				id: "assistant-a",
+				type: "message",
+				message: {
+					role: "assistant",
+					content: "hello",
+					timestamp: ts + 1000,
+					model: "model-a",
+					stopReason: "stop",
+					usage: { cost: { total: 0.12 } },
+				},
+			},
+			{
+				id: "assistant-b",
+				type: "message",
+				message: {
+					role: "assistant",
+					content: "working",
+					timestamp: ts + 2000,
+					model: "model-b",
+					stopReason: "toolUse",
+					usage: { cost: { total: 0.03 } },
+				},
+			},
+			{
+				id: "assistant-aborted",
+				type: "message",
+				message: {
+					role: "assistant",
+					content: "...",
+					timestamp: ts + 3000,
+					model: "model-a",
+					stopReason: "aborted",
+					usage: { cost: { total: 1 } },
+				},
+			},
+		]);
+
+		const result = await getUsage([project]);
+
+		expect(result.usage[date]).toBe(2);
+		expect(result.modelCost[date]).toEqual({
+			"model-a": { turns: 1, cost: 0.12 },
+			"model-b": { turns: 1, cost: 0.03 },
+		});
+	});
+
 	it("excludes aborted assistant messages", async () => {
 		const tempDir = await mkdtemp(path.join(tmpdir(), "look-usage-aborted-"));
 		cleanup.push(tempDir);
@@ -146,5 +206,58 @@ describe("usage service", () => {
 		expect(result.usage[yesterdayKey]).toBe(1);
 		// Live count (2) is higher than backfilled count (1), so it should win.
 		expect(result.usage[todayKey]).toBe(2);
+	});
+
+	it("rebuilds stale unversioned V2 cache from session JSONL", async () => {
+		const tempDir = await mkdtemp(path.join(tmpdir(), "look-usage-stale-v2-"));
+		cleanup.push(tempDir);
+		vi.spyOn(lookStorage, "getLookDir").mockReturnValue(tempDir);
+
+		const project = makeProject("p1", "Stale Project", path.join(tempDir, "project"));
+		fs.mkdirSync(project.cwd, { recursive: true });
+		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.name);
+		const date = "2026-06-10";
+		const ts = new Date(`${date}T09:00:00`).getTime();
+
+		fs.writeFileSync(
+			path.join(tempDir, "usage.json"),
+			JSON.stringify({
+				turns: { [date]: 4 },
+				modelCost: { [date]: { "model-a": { turns: 4, cost: 4 } } },
+			}),
+		);
+		writeJsonl(path.join(sessionsDir, "session-stale.jsonl"), [
+			{ type: "session", version: 3, id: "session-stale", timestamp: new Date(ts).toISOString(), cwd: project.cwd },
+			{
+				id: "assistant-a",
+				type: "message",
+				message: {
+					role: "assistant",
+					content: "hello",
+					timestamp: ts + 1000,
+					model: "model-a",
+					stopReason: "stop",
+					usage: { cost: { total: 0.2 } },
+				},
+			},
+			{
+				id: "assistant-aborted",
+				type: "message",
+				message: {
+					role: "assistant",
+					content: "...",
+					timestamp: ts + 2000,
+					model: "model-a",
+					stopReason: "aborted",
+					usage: { cost: { total: 1 } },
+				},
+			},
+		]);
+
+		const result = await getUsage([project]);
+
+		expect(result.usage[date]).toBe(1);
+		expect(result.modelCost[date]).toEqual({ "model-a": { turns: 1, cost: 0.2 } });
+		expect(JSON.parse(fs.readFileSync(path.join(tempDir, "usage.json"), "utf8")).schemaVersion).toBe(2);
 	});
 });

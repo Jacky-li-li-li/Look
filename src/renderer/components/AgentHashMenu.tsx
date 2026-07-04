@@ -1,7 +1,7 @@
 // ============================================================
-// AgentHashMenu — inline `#agentName` picker for SubAgent selection
+// AgentHashMenu — inline `@agentName` picker for SubAgent selection
 //
-// Mirror of SkillSlashMenu.tsx for the `#` trigger. Renders a list
+// Mirror of SkillSlashMenu.tsx for the `@` trigger. Renders a list
 // of enabled Agent definitions as a floating panel above the input.
 // Keyboard-first (↑↓ Enter Esc) + mouse click.
 //
@@ -165,7 +165,7 @@ export function AgentHashMenu(props: AgentHashMenuProps) {
 
 				{/* Footer */}
 				<div className="border-t border-hairline bg-background/30 px-2.5 py-1 text-[10px] text-muted-foreground">
-					输入 # 选择 SubAgent，多个 Agent 用多个 # 指定
+					输入 @ 选择 SubAgent，多个 Agent 用多个 @ 指定
 				</div>
 			</div>
 		</>

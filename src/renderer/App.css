@@ -1521,6 +1521,41 @@ body {
   }
 
   /* ============================================================
+     MCP Chip — inline #server__toolName for the contentEditable
+     MCP tool chip mirroring agent-chip structure but with emerald
+     (chart-3) color and # prefix icon.
+     ============================================================ */
+  .mcp-chip {
+    display: inline-block;
+    padding: 0 0.45em;
+    margin: 0 0.08em;
+    border-radius: calc(var(--radius) * 0.5);
+    background: color-mix(in oklch, oklch(0.55 0.12 160), transparent 88%);
+    color: oklch(0.45 0.12 160);
+    font-weight: 500;
+    border: 1px solid color-mix(in oklch, oklch(0.55 0.12 160), transparent 70%);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, oklch(0.55 0.12 160), transparent 92%);
+    white-space: nowrap;
+    user-select: text;
+    cursor: default;
+    vertical-align: baseline;
+    line-height: inherit;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  .mcp-chip:hover {
+    background: color-mix(in oklch, oklch(0.55 0.12 160), transparent 82%);
+    border-color: color-mix(in oklch, oklch(0.55 0.12 160), transparent 55%);
+  }
+  .mcp-chip::before {
+    content: "#";
+    display: inline-block;
+    margin-right: 0.3em;
+    font-size: 0.85em;
+    vertical-align: 0.02em;
+    opacity: 0.85;
+  }
+
+  /* ============================================================
      Frosted Glass — Sidebar & Dialogs
      ============================================================ */
 

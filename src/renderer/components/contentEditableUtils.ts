@@ -17,19 +17,20 @@ export function renderToDOM(container: HTMLElement, content: string) {
 }
 
 /**
- * 合并渲染 agent chip 和 skill chip。
- * 扫描 /skill:name 与 #agentName，渲染为带
+ * 合并渲染 agent chip（@）、MCP tool chip（#）和 skill chip（/skill:）。
+ * 扫描 /skill:name、@agentName 与 #serverName__toolName，渲染为带
  * contenteditable="false" 的 chip span + 尾随空格。
  */
 function _renderCombinedSegments(container: HTMLElement, content: string) {
-	// 合并正则：匹配 #agentName 或 /skill:name（需行首或空白前缀）
-	const COMBINED_RE = /(?:^|\s)((?:#([^\s#]+))|(?:\/skill:([^\s]+)))/g;
+	// 合并正则：匹配 @agentName、#server__toolName 或 /skill:name（需行首或空白前缀）
+	const COMBINED_RE = /(?:^|\s)((?:@([^\s@]+))|(?:#([^\s#]+))|(?:\/skill:([^\s]+)))/g;
 
 	let cursor = 0;
 	for (const match of content.matchAll(COMBINED_RE)) {
 		const matchStart = match.index ?? 0;
 		const agentName = match[2];
-		const skillName = match[3];
+		const mcpToolRef = match[3];
+		const skillName = match[4];
 		const fullMatch = match[0]!;
 		// fullToken 是不含前导空白的 token 部分
 		const fullToken = match[1]!;
@@ -45,7 +46,16 @@ function _renderCombinedSegments(container: HTMLElement, content: string) {
 			chip.setAttribute("data-name", agentName);
 			chip.className = "agent-chip";
 			chip.setAttribute("contenteditable", "false");
-			chip.textContent = `#${agentName}`;
+			chip.textContent = `@${agentName}`;
+			container.appendChild(chip);
+			container.appendChild(document.createTextNode(" "));
+		} else if (mcpToolRef) {
+			const chip = document.createElement("span");
+			chip.setAttribute("data-mcp-chip", "");
+			chip.setAttribute("data-name", mcpToolRef);
+			chip.className = "mcp-chip";
+			chip.setAttribute("contenteditable", "false");
+			chip.textContent = `#${mcpToolRef}`;
 			container.appendChild(chip);
 			container.appendChild(document.createTextNode(" "));
 		} else if (skillName) {

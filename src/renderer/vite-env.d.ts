@@ -187,6 +187,12 @@ interface LookAPI {
 	testImConnection(appId: string): Promise<{ success: boolean; message: string }>;
 	testImConnectionDirect(appId: string, appSecret: string): Promise<{ success: boolean; message: string }>;
 	updateImChannel(appId: string, updates: { name?: string }): Promise<{ success: boolean; error?: string }>;
+	// ---- MCP tools ----
+	listAllMcpTools(): Promise<{
+		success: boolean;
+		tools?: Array<{ server: string; tool: { name: string; description?: string } }>;
+		error?: string;
+	}>;
 }
 
 interface SkillEntry {

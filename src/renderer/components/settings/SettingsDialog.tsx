@@ -3,12 +3,10 @@
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
-import { Button } from "@shared/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
-	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from "@shared/components/ui/dialog";
@@ -44,7 +42,7 @@ const SettingsDialog = memo(function SettingsDialog({
 	customStats,
 	onProvidersChange,
 	onClose,
-	defaultTab = "general",
+	defaultTab = "profile",
 }: SettingsDialogProps) {
 	const { t, i18n } = useTranslation();
 	const [tab, setTab] = useState<string>(defaultTab);
@@ -57,15 +55,6 @@ const SettingsDialog = memo(function SettingsDialog({
 
 	const configured = providers.filter((p) => p.hasKey).length + customStats.configured;
 
-	const handleResetDefaults = () => {
-		if (api)
-			api.resetGeneralSettings().then((r: any) => {
-				if (r?.success && r.settings) {
-					i18n.changeLanguage(r.settings.language ?? "en");
-				}
-			});
-		toast.success(t("settings.resetDone"));
-	};
 
 	return (
 		<Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -77,6 +66,13 @@ const SettingsDialog = memo(function SettingsDialog({
 
 				<Tabs value={tab} onValueChange={setTab} orientation="vertical" className="flex min-h-0 flex-1 gap-4">
 					<TabsList className="!h-full !justify-start w-44 shrink-0 flex-col items-stretch rounded-none border-r border-hairline bg-transparent p-0 gap-0">
+						<TabsTrigger
+							value="profile"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
+						>
+							<UserRound className="size-3.5" />
+							{t("profile.title")}
+						</TabsTrigger>
 						<TabsTrigger
 							value="general"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
@@ -90,13 +86,6 @@ const SettingsDialog = memo(function SettingsDialog({
 						>
 							<FileText className="size-3.5" />
 							{t("settings.chatPrompt")}
-						</TabsTrigger>
-						<TabsTrigger
-							value="profile"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
-						>
-							<UserRound className="size-3.5" />
-							{t("profile.title")}
 						</TabsTrigger>
 						<TabsTrigger
 							value="api-keys"
@@ -118,24 +107,20 @@ const SettingsDialog = memo(function SettingsDialog({
 							{t("settings.imChannels")}
 						</TabsTrigger>
 						<TabsTrigger
-							value="about"
-							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
-						>
-							<Zap className="size-3.5" />
-							{t("settings.about")}
-						</TabsTrigger>
-						<TabsTrigger
 							value="mcp"
 							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
 						>
 							<Server className="size-3.5" />
 							MCP
 						</TabsTrigger>
+						<TabsTrigger
+							value="about"
+							className="!h-auto !flex-none w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-colors"
+						>
+							<Zap className="size-3.5" />
+							{t("settings.about")}
+						</TabsTrigger>
 					</TabsList>
-
-					<TabsContent value="prompt" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
-						<PromptTab />
-					</TabsContent>
 
 					<TabsContent value="profile" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
 						<ProfileTab />
@@ -143,6 +128,10 @@ const SettingsDialog = memo(function SettingsDialog({
 
 					<TabsContent value="general" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
 						<GeneralTab />
+					</TabsContent>
+
+					<TabsContent value="prompt" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
+						<PromptTab />
 					</TabsContent>
 
 					<TabsContent value="api-keys" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
@@ -153,23 +142,14 @@ const SettingsDialog = memo(function SettingsDialog({
 						<ImChannelsTab />
 					</TabsContent>
 
-					<TabsContent value="about" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
-						<AboutTab providers={providers} customStats={customStats} />
-					</TabsContent>
-
 					<TabsContent value="mcp" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
 						<McpServersTab />
 					</TabsContent>
-				</Tabs>
 
-				<DialogFooter className="shrink-0 sm:justify-between">
-					<Button variant="line" size="sm" className="h-7 text-[11px]" onClick={handleResetDefaults}>
-						{t("settings.resetDefaults")}
-					</Button>
-					<Button variant="line-filled" size="sm" className="h-7 text-[11px]" onClick={onClose}>
-						{t("common.close")}
-					</Button>
-				</DialogFooter>
+					<TabsContent value="about" className="flex-1 min-w-0 min-h-0 data-[state=inactive]:hidden">
+						<AboutTab providers={providers} customStats={customStats} />
+					</TabsContent>
+				</Tabs>
 			</DialogContent>
 		</Dialog>
 	);

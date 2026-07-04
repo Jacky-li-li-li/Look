@@ -1,16 +1,17 @@
 // ============================================================
-// useChatInputMenus — slash/hash 菜单状态机
+// useChatInputMenus — slash / @ / # 菜单状态机
 //
-// 集中管理技能（/）和 Agent（#）菜单的全部状态、过滤、
-// 提交逻辑和键盘导航。内部自行读取需要的 Jotai atoms。
+// 集中管理技能（/）、Agent（@）和 MCP 工具（#）菜单的全部状态、
+// 过滤、提交逻辑和键盘导航。内部自行读取需要的 Jotai atoms。
 // ============================================================
 
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { handleSlashMenuKey } from "../components/handleSlashMenuKey";
 import type { CommonSkillPath, SkillEntry } from "../components/SkillSlashMenu";
+import type { McpPickerEntry } from "../components/McpHashMenu";
 import { agentDefinitionsAtom } from "../store/agentDefinitionsAtoms";
-import { enabledAgentDefinitionsAtom, enabledSkillsAtom, subagentEnabledAtom } from "../store/atoms";
+import { enabledAgentDefinitionsAtom, enabledSkillsAtom, mcpStatusVersionAtom, subagentEnabledAtom } from "../store/atoms";
 
 interface SkillMenuState {
 	skills: SkillEntry[];
@@ -84,22 +85,24 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 	}, [setEnabledAgentDefs, setEnabledSkills]);
 
 	// ── shared menu index ──
-	const [menuIndex, setMenuIndex] = useState({ slash: 0, hash: 0 });
+	const [menuIndex, setMenuIndex] = useState({ slash: 0, at: 0, mcp: 0 });
 	const slashIndex = menuIndex.slash;
-	const hashIndex = menuIndex.hash;
+	const atIndex = menuIndex.at;
+	const mcpIndex = menuIndex.mcp;
 	const setSlashIndex = useCallback((index: number) => setMenuIndex((prev) => ({ ...prev, slash: index })), []);
-	const setHashIndex = useCallback((index: number) => setMenuIndex((prev) => ({ ...prev, hash: index })), []);
+	const setAtIndex = useCallback((index: number) => setMenuIndex((prev) => ({ ...prev, at: index })), []);
+	const setMcpIndex = useCallback((index: number) => setMenuIndex((prev) => ({ ...prev, mcp: index })), []);
 
 	// ── slash (/) detection ──
 	const slashOpen = useMemo(() => /^\/[^\s]*$/.test(input), [input]);
 
-	// ── hash (#) detection ──
+	// ── @ (Agent) detection ──
 	const agentDefs = useAtomValue(agentDefinitionsAtom);
 	const subagentOn = useAtomValue(subagentEnabledAtom);
-	const hashOpen = useMemo(() => /(?:^|\s)#[^\s]*$/.test(input), [input]);
+	const atOpen = useMemo(() => /(?:^|\s)@[^\s]*$/.test(input), [input]);
 
-	const hashSearchTerm = useMemo(() => {
-		const m = input.match(/#([^\s]*)$/);
+	const atSearchTerm = useMemo(() => {
+		const m = input.match(/@([^\s]*)$/);
 		return m ? m[1] : "";
 	}, [input]);
 
@@ -108,23 +111,80 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 		if (enabledAgentDefs !== null) {
 			list = list.filter((a) => enabledAgentDefs.includes(a.name));
 		}
-		if (!hashSearchTerm) return list;
-		const term = hashSearchTerm.toLowerCase();
+		if (!atSearchTerm) return list;
+		const term = atSearchTerm.toLowerCase();
 		return list.filter(
 			(a) =>
 				a.name.toLowerCase().includes(term) ||
 				(a.title ?? "").toLowerCase().includes(term) ||
 				a.description.toLowerCase().includes(term),
 		);
-	}, [agentDefs, hashSearchTerm, enabledAgentDefs]);
+	}, [agentDefs, atSearchTerm, enabledAgentDefs]);
 
-	const commitHashSelection = useCallback(
+	const commitAtSelection = useCallback(
 		(index: number) => {
 			const a = filteredAgents[index];
 			if (!a) return;
-			setInput(input.replace(/#[^\s]*$/, `#${a.name} `));
+			setInput(input.replace(/@[^\s]*$/, `@${a.name} `));
 		},
 		[filteredAgents, setInput, input],
+	);
+
+	// ── # (MCP tool) detection ──
+	const [mcpTools, setMcpTools] = useState<McpPickerEntry[]>([]);
+	const mcpStatusVersion = useAtomValue(mcpStatusVersionAtom);
+
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const result = await window.look.listAllMcpTools();
+				if (cancelled || !result?.success || !result.tools) return;
+				const tools = result.tools as Array<{
+					server: string;
+					tool: { name: string; description?: string };
+				}>;
+				setMcpTools(
+					tools.map(({ server, tool }) => ({
+						server,
+						toolName: tool.name,
+						description: tool.description ?? "",
+					})),
+				);
+			} catch {
+				// Non-fatal: no MCP servers connected.
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [mcpStatusVersion]);
+
+	const mcpOpen = useMemo(() => /(?:^|\s)#[^\s]*$/.test(input), [input]);
+
+	const mcpSearchTerm = useMemo(() => {
+		const m = input.match(/#([^\s]*)$/);
+		return m ? m[1] : "";
+	}, [input]);
+
+	const filteredMcpTools = useMemo(() => {
+		if (!mcpSearchTerm) return mcpTools;
+		const term = mcpSearchTerm.toLowerCase();
+		return mcpTools.filter(
+			(t) =>
+				t.toolName.toLowerCase().includes(term) ||
+				`${t.server}__${t.toolName}`.toLowerCase().includes(term) ||
+				t.description.toLowerCase().includes(term),
+		);
+	}, [mcpTools, mcpSearchTerm]);
+
+	const commitMcpSelection = useCallback(
+		(index: number) => {
+			const t = filteredMcpTools[index];
+			if (!t) return;
+			setInput(input.replace(/#[^\s]*$/, `#${t.server}__${t.toolName} `));
+		},
+		[filteredMcpTools, setInput, input],
 	);
 
 	// ── skill filtering ──
@@ -190,19 +250,36 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 	// ── keyboard navigation ──
 	const handleMenuKeyDown = useCallback(
 		(e: React.KeyboardEvent): boolean => {
-			// # Agent 选择菜单键盘处理
-			if (hashOpen && filteredAgents.length > 0) {
+			// @ Agent 选择菜单键盘处理
+			if (atOpen && filteredAgents.length > 0) {
 				const handled = handleSlashMenuKey(
 					e,
-					{ open: true, selectedIndex: hashIndex, pickableCount: filteredAgents.length },
+					{ open: true, selectedIndex: atIndex, pickableCount: filteredAgents.length },
 					(next) => {
-						setHashIndex(next.selectedIndex);
+						setAtIndex(next.selectedIndex);
+						if (!next.open) setInput(input.replace(/@[^\s]*$/, "").trimEnd());
+					},
+				);
+				if (handled) {
+					if (e.key === "Enter" || e.key === "Tab") {
+						commitAtSelection(atIndex);
+					}
+					return true;
+				}
+			}
+			// # MCP 工具选择菜单键盘处理
+			if (mcpOpen && filteredMcpTools.length > 0) {
+				const handled = handleSlashMenuKey(
+					e,
+					{ open: true, selectedIndex: mcpIndex, pickableCount: filteredMcpTools.length },
+					(next) => {
+						setMcpIndex(next.selectedIndex);
 						if (!next.open) setInput(input.replace(/#[^\s]*$/, "").trimEnd());
 					},
 				);
 				if (handled) {
 					if (e.key === "Enter" || e.key === "Tab") {
-						commitHashSelection(hashIndex);
+						commitMcpSelection(mcpIndex);
 					}
 					return true;
 				}
@@ -223,10 +300,14 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 			return false;
 		},
 		[
-			hashOpen,
+			atOpen,
 			filteredAgents,
-			hashIndex,
-			commitHashSelection,
+			atIndex,
+			commitAtSelection,
+			mcpOpen,
+			filteredMcpTools,
+			mcpIndex,
+			commitMcpSelection,
 			setInput,
 			input,
 			slashOpen,
@@ -234,14 +315,16 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 			pickableCount,
 			setSlashIndex,
 			commitSlashSelection,
-			setHashIndex,
+			setAtIndex,
+			setMcpIndex,
 		],
 	);
 
 	return {
 		// visibility
 		slashOpen,
-		hashOpen,
+		atOpen,
+		mcpOpen,
 		// skill data
 		skills,
 		importedPaths,
@@ -254,14 +337,21 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 		setSlashIndex,
 		// agent data
 		filteredAgents,
-		hashSearchTerm,
-		hashIndex,
-		setHashIndex,
+		atSearchTerm,
+		atIndex,
+		setAtIndex,
 		subagentOn,
+		// mcp data
+		filteredMcpTools,
+		mcpTools,
+		mcpSearchTerm,
+		mcpIndex,
+		setMcpIndex,
 		// actions
 		importDetected,
 		commitSlashSelection,
-		commitHashSelection,
+		commitAtSelection,
+		commitMcpSelection,
 		handleMenuKeyDown,
 	};
 }
