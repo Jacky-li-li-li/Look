@@ -998,30 +998,14 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		);
 		const session = managed.runtime.session;
 		session.setSessionName((input.name?.trim() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH));
-		// 如果用户未设置偏好模型，且 SDK 分配的模型来自未配 API key 的 provider，
-		// 回退到第一个已配置的可用模型
+		// 如果用户未设置偏好模型，使用 API Keys 已连接模型列表的第一个
 		if (!this.userSettings.getAll().preferredModel) {
-			const currentModel = session.model;
-			const currentAuth = currentModel ? this.modelRegistry.getProviderAuthStatus(currentModel.provider) : null;
-			if (!currentModel || currentAuth?.source === "environment" || !currentAuth?.configured) {
-				const available = this.getAvailableModelsSync();
-				if (available.length > 0) {
-					const first = available[0];
-					const model = this.modelRegistry.find(first.provider, first.id);
-					if (model && this.modelRegistry.hasConfiguredAuth(model)) {
-						try {
-							await session.setModel(model);
-						} catch (err) {
-							// 设置模型失败不阻塞创建 — 记录错误便于排查
-							console.warn(`[session] Failed to set fallback model ${first.provider}/${first.id}:`, err);
-						}
-					} else if (!model) {
-						console.warn(`[session] Fallback model not found: ${first.provider}/${first.id}`);
-					} else {
-						console.warn(
-							`[session] Fallback model ${first.provider}/${first.id} lacks configured auth, skipping`,
-						);
-					}
+			const available = this.getAvailableModelsSync();
+			if (available.length > 0) {
+				const first = available[0];
+				const model = this.modelRegistry.find(first.provider, first.id);
+				if (model && this.modelRegistry.hasConfiguredAuth(model)) {
+					await session.setModel(model);
 				}
 			}
 		}
