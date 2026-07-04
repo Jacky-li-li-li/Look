@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
-import type { AgentSession, ContextUsage, SessionEntry, SessionStats } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ContextUsage, ExtensionContext, SessionEntry, SessionStats, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
 
 // Shared transport types. Message/session payloads remain SDK-native.
 
@@ -53,7 +53,26 @@ export interface PermissionAskQueueItem extends PermissionAskEvent {
 export interface PermissionRespondPayload {
 	requestId: string;
 	action: "allow" | "deny" | "allow_always";
-	editedInput?: Record<string, unknown>;
+}
+
+// ── Types lifted from extensions (core contracts should not import from extensions) ──
+
+/** pi SDK tool_call handler — returned by IPermissionService.createToolCallHandler. */
+export type ToolCallHandler = (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallEventResult>;
+
+/** Outcome of a plan-mode question dialogue. */
+export interface PlanQuestionOutcome {
+	status: "answered" | "cancelled";
+	answers?: Record<string, string>;
+	reason?: string;
+}
+
+/** Outcome of a plan-mode approval step. */
+export interface PlanApprovalOutcome {
+	status: "approved" | "rejected" | "cancelled";
+	planId?: string;
+	filePath?: string;
+	reason?: string;
 }
 
 export interface PlanQuestionOption {

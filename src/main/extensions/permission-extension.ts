@@ -18,6 +18,7 @@ import type {
 	ToolCallEvent,
 	ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
+import type { ToolCallHandler } from "../shared/types.js";
 
 // ---- Constants ----
 
@@ -127,7 +128,6 @@ const SAFE_LS_FILES_OPTIONS = new Set([
 
 // ---- Handler Types ----
 
-export type ToolCallHandler = (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallEventResult>;
 
 export interface PlanBashValidation {
 	allowed: boolean;

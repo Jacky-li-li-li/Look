@@ -48,12 +48,6 @@ const SubagentParams = Type.Object({
 	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
 	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
 	agentScope: Type.Optional(AgentScopeSchema),
-	confirmProjectAgents: Type.Optional(
-		Type.Boolean({
-			description: "Prompt before running project-local agents. Default: true.",
-			default: true,
-		}),
-	),
 });
 
 /** 判断单个结果是否失败 */

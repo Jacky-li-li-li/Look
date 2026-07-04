@@ -32,8 +32,6 @@ import { createPermissionExtensionFactory } from "../extensions/permission-exten
 import {
 	createPlanExtensionFactory,
 	PLAN_TOOL_NAMES,
-	type PlanApprovalOutcome,
-	type PlanQuestionOutcome,
 } from "../extensions/plan-extension.js";
 import { createSubagentExtensionFactory } from "../extensions/subagent/subagent-extension.js";
 import type {
@@ -97,9 +95,11 @@ import {
 	type PermissionAskEvent,
 	type PermissionMode,
 	type PermissionRespondPayload,
+	type PlanApprovalOutcome,
 	type PlanApprovalRequest,
 	type PlanApprovalResponse,
 	type PlanQuestion,
+	type PlanQuestionOutcome,
 	type PlanQuestionRequest,
 	type PlanQuestionResponse,
 	type ProjectInfo,
@@ -127,6 +127,10 @@ interface ManagedRuntime {
 }
 
 const MAX_NAME_LENGTH = 80;
+/** 子会话超时（5 分钟）：若 agent_end 未在此时限内触发，强制结算为 aborted。 */
+const SUBAGENT_TIMEOUT_MS = 5 * 60 * 1000;
+/** 最大子会话递归深度：防止 LLM 无限嵌套调用 subagent 工具。 */
+const MAX_SUBAGENT_DEPTH = 5;
 /** 子会话 JSONL 中记录父会话链接的自定义条目类型。
  *  符合 AGENTS.md：parent links 由 pi JSONL 拥有。 */
 const SUBAGENT_PARENT_ENTRY_TYPE = "look.subagent-parent.v1";
@@ -955,6 +959,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		this.runtimes.delete(sessionId);
 		this.permissionService.disposeSession(sessionId);
 		this.planService.disposeSession(sessionId);
+		if (dispScope) this.clearUiEventBuffer(dispScope);
 		this.scopeRegistry.release(sessionId);
 		await managed.runtime.dispose();
 	}
@@ -1369,6 +1374,19 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 	): Promise<SubagentResult> {
 		const parentManaged = this.runtimes.get(parentSessionId);
 		if (!parentManaged) throw new Error(`Parent session ${parentSessionId} is not live`);
+
+		// 检查子会话递归深度，防止 LLM 无限嵌套调用 subagent 工具
+		let subDepth = 0;
+		let ancestor = parentSessionId;
+		while (true) {
+			const parent = this.subAgentRegistry.getParent(ancestor);
+			if (!parent) break;
+			subDepth++;
+			ancestor = parent;
+			if (subDepth >= MAX_SUBAGENT_DEPTH) {
+				throw new Error(`Subagent nesting limit of ${MAX_SUBAGENT_DEPTH} exceeded. Cannot create nested sub-session under ${parentSessionId}.`);
+			}
+		}
 		const projectId = parentManaged.projectId;
 		const project = this.projectService.getProjectInfo(projectId);
 		if (!project?.valid) throw new Error(`Project not found or invalid for subagent: ${projectId}`);
@@ -1503,8 +1521,15 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 			pending.removeAbortListener = () => signal.removeEventListener("abort", onAbort);
 		}
 
+		const timeout = setTimeout(() => {
+			this.finalizeSubSession(childSessionId, true);
+		}, SUBAGENT_TIMEOUT_MS);
+
 		return new Promise<SubagentResult>((resolve) => {
-			pending.resolve = resolve;
+			pending.resolve = (result: SubagentResult) => {
+				clearTimeout(timeout);
+				resolve(result);
+			};
 		});
 	}
 

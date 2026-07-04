@@ -213,19 +213,17 @@ export class SubAgentService {
 	trackMessageEnd(sessionId: string, message: AgentMessage): void {
 		const pending = this.pendingSubSessions.get(sessionId);
 		if (!pending) return;
+		if (message.role !== "assistant") return;
 		pending.usage.turns += 1;
-		const usage = (message as any).usage;
-		if (usage) {
-			pending.usage.input += usage.input ?? 0;
-			pending.usage.output += usage.output ?? 0;
-			pending.usage.cacheRead += usage.cacheRead ?? 0;
-			pending.usage.cacheWrite += usage.cacheWrite ?? 0;
-			pending.usage.cost += usage.cost?.total ?? 0;
-			pending.usage.contextTokens = usage.totalTokens ?? pending.usage.contextTokens;
-		}
-		if ((message as any).model) pending.model = (message as any).model;
-		if ((message as any).stopReason) pending.stopReason = (message as any).stopReason;
-		if ((message as any).errorMessage) pending.errorMessage = (message as any).errorMessage;
+		pending.usage.input += message.usage.input ?? 0;
+		pending.usage.output += message.usage.output ?? 0;
+		pending.usage.cacheRead += message.usage.cacheRead ?? 0;
+		pending.usage.cacheWrite += message.usage.cacheWrite ?? 0;
+		pending.usage.cost += message.usage.cost?.total ?? 0;
+		pending.usage.contextTokens = message.usage.totalTokens ?? pending.usage.contextTokens;
+		pending.model = message.model;
+		pending.stopReason = message.stopReason;
+		if (message.errorMessage) pending.errorMessage = message.errorMessage;
 
 		const childSession = this.runtimeStore.getSession(sessionId);
 		const partialOutput = childSession ? this.getFinalAssistantText(childSession) : "";

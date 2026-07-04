@@ -18,10 +18,9 @@ import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { v4 as uuidv4 } from "uuid";
 import {
 	createPlanModeHandler,
-	type ToolCallHandler,
 } from "../extensions/permission-extension.js";
 import type { IEventBus, IPermissionService, IRuntimeStore } from "../core/contracts.js";
-import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload } from "../shared/types.js";
+import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload, ToolCallHandler } from "../shared/types.js";
 
 // ── Constants ──
 

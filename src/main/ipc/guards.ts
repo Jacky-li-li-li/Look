@@ -10,9 +10,15 @@ import path from "node:path";
 export const VALID_AGENT_ID = /^[a-zA-Z0-9_-]{6,64}$/;
 export const VALID_PROVIDER = /^[a-zA-Z][a-zA-Z0-9_-]{1,63}$/;
 
+/** Maximum allowed string length to prevent memory exhaustion (100KB). */
+const MAX_STRING_LENGTH = 102400;
+
 export function guardString(x: unknown, label: string): string {
 	if (typeof x !== "string") {
 		throw new Error(`Invalid ${label}: expected string, got ${typeof x}`);
+	}
+	if (x.length > MAX_STRING_LENGTH) {
+		throw new Error(`Invalid ${label}: string exceeds max length ${MAX_STRING_LENGTH}`);
 	}
 	return x;
 }

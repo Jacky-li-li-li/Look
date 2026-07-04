@@ -14,19 +14,17 @@
 
 import type { AgentSession, AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
-	PlanApprovalOutcome,
-	PlanQuestionOutcome,
-} from "../extensions/plan-extension.js";
-import type { ToolCallHandler } from "../extensions/permission-extension.js";
-import type {
 	EventCallback,
 	LookUiEvent,
 	MainToRendererEvent,
 	PermissionMode,
 	PermissionRespondPayload,
+	PlanApprovalOutcome,
 	PlanApprovalResponse,
 	PlanQuestion,
+	PlanQuestionOutcome,
 	PlanQuestionResponse,
+	ToolCallHandler,
 } from "../shared/types.js";
 import type { ContentBlockTracker } from "../session/event-translator.js";
 
