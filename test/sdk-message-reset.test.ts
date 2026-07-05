@@ -24,7 +24,12 @@ describe("SDK-native message reset", () => {
 		}
 		fs.writeFileSync(
 			join(lookDir, "ui-settings.json"),
-			JSON.stringify({ language: "zh", lastActiveSessionId: "old", openedSessionIds: ["old"], lastActiveAgentId: "old" }),
+			JSON.stringify({
+				language: "zh",
+				lastActiveSessionId: "old",
+				openedSessionIds: ["old"],
+				lastActiveAgentId: "old",
+			}),
 		);
 
 		resetLegacySessionsOnce(lookDir);

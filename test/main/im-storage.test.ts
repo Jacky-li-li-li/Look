@@ -29,12 +29,7 @@ vi.mock("../../src/main/shared/look-storage.js", () => ({
 	getLookDir: () => mocks.lookDir,
 }));
 
-import {
-	decryptSecret,
-	encryptSecret,
-	loadChannels,
-	saveChannels,
-} from "../../src/main/im/im-storage.js";
+import { decryptSecret, encryptSecret, loadChannels, saveChannels } from "../../src/main/im/im-storage.js";
 
 describe("im-storage", () => {
 	const channelsPath = join(mocks.lookDir, "im-channels.json");

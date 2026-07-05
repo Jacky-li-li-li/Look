@@ -268,7 +268,11 @@ export const ContentEditableInput = function ContentEditableInput({
 		// so the caret can't land *inside* it; selecting
 		// the surrounding range is the cleanest UX.
 		const target = e.target as HTMLElement;
-		if (target.dataset.skillChip !== undefined || target.dataset.agentChip !== undefined || target.dataset.fileChip !== undefined) {
+		if (
+			target.dataset.skillChip !== undefined ||
+			target.dataset.agentChip !== undefined ||
+			target.dataset.fileChip !== undefined
+		) {
 			const el = editorRef.current;
 			if (!el) return;
 			const range = document.createRange();

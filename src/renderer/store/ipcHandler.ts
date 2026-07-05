@@ -888,13 +888,26 @@ export function initIpcHandlers(api: any): () => void {
 				// 触发 usage 数据刷新：自增版本号，让订阅组件感知变更
 				appStore.set(usageVersionAtom, (prev) => prev + 1);
 				// 异步拉取最新数据并写入全局 atom
-				window.look.getUsage().then((result: { success: boolean; usage?: { usage: Record<string, number>; modelCost: Record<string, Record<string, { turns: number; cost: number }>>; years: number[] }; error?: string }) => {
-					if (result?.success && result.usage) {
-						appStore.set(usageDataAtom, result.usage);
-					}
-				}).catch((err: unknown) => {
-					console.error("[ipcHandler] usage:updated refresh failed:", err);
-				});
+				window.look
+					.getUsage()
+					.then(
+						(result: {
+							success: boolean;
+							usage?: {
+								usage: Record<string, number>;
+								modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
+								years: number[];
+							};
+							error?: string;
+						}) => {
+							if (result?.success && result.usage) {
+								appStore.set(usageDataAtom, result.usage);
+							}
+						},
+					)
+					.catch((err: unknown) => {
+						console.error("[ipcHandler] usage:updated refresh failed:", err);
+					});
 				break;
 			}
 

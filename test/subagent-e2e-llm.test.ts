@@ -76,10 +76,7 @@ describe.skipIf(!RUN)("SubAgent real-LLM E2E", () => {
 				console.log("[E2E] message sent, waiting for turn to complete...");
 
 				// 等待父会话 agent_end（事件驱动），超时兜底
-				await Promise.race([
-					turnEnded,
-					new Promise<void>((resolve) => setTimeout(resolve, TIMEOUT)),
-				]);
+				await Promise.race([turnEnded, new Promise<void>((resolve) => setTimeout(resolve, TIMEOUT))]);
 				// 给最终事件（subagent-completed 可能略晚于父 agent_end）一点余量
 				await new Promise((r) => setTimeout(r, 1500));
 				unsubscribe();
@@ -98,7 +95,10 @@ describe.skipIf(!RUN)("SubAgent real-LLM E2E", () => {
 				expect(newFiles.length, "子会话应持久化到 subsessions/ 目录").toBeGreaterThan(0);
 
 				// 断言 3：父会话感知到 subagent-completed 事件
-				expect(events.some((e) => e.startsWith("completed:")), "应收到 session:subagent-completed 事件").toBe(true);
+				expect(
+					events.some((e) => e.startsWith("completed:")),
+					"应收到 session:subagent-completed 事件",
+				).toBe(true);
 			} finally {
 				// 清理：销毁父会话会级联销毁子会话（destroySubSessions）
 				if (parentId) {

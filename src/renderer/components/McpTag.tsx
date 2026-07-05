@@ -23,7 +23,9 @@ export function McpTag({ server, toolName, className }: McpTagProps) {
 				.join(" ")}
 		>
 			<Wrench data-icon="inline-start" className="size-3" />
-			<span className="truncate">#{server}__{toolName}</span>
+			<span className="truncate">
+				#{server}__{toolName}
+			</span>
 		</Badge>
 	);
 }

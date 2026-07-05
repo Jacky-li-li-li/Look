@@ -6,7 +6,12 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
 
-function installFakeRuntime(manager: SessionRuntimeManager, sessionId: string, activeTools: string[], allTools: string[]) {
+function installFakeRuntime(
+	manager: SessionRuntimeManager,
+	sessionId: string,
+	activeTools: string[],
+	allTools: string[],
+) {
 	let active = [...activeTools];
 	const session = {
 		getActiveToolNames: () => [...active],

@@ -204,11 +204,7 @@ describe("CollapsibleExecutionGroup", () => {
 
 	it("renders Chinese plural for 3 tools", async () => {
 		await i18n.changeLanguage("zh");
-		const blocks = [
-			makeToolCall("t1"),
-			makeToolCall("t2"),
-			makeToolCall("t3"),
-		];
+		const blocks = [makeToolCall("t1"), makeToolCall("t2"), makeToolCall("t3")];
 		const toolExecutions = {
 			t1: completedExec("t1"),
 			t2: completedExec("t2"),
@@ -251,11 +247,7 @@ describe("CollapsibleExecutionGroup", () => {
 	});
 
 	it("does not show inlineTexts when collapsed as badge (badge alone)", () => {
-		const blocks = [
-			makeToolCall("t1"),
-			makeToolCall("t2"),
-			makeToolCall("t3"),
-		];
+		const blocks = [makeToolCall("t1"), makeToolCall("t2"), makeToolCall("t3")];
 		const toolExecutions = {
 			t1: completedExec("t1"),
 			t2: completedExec("t2"),

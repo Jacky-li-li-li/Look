@@ -44,10 +44,7 @@ describe("ConversationScrollButton", () => {
 // ============================================================
 
 describe("ChatMessageList source (scroll container wiring)", () => {
-	const SRC = readFileSync(
-		resolve(__dirname, "../src/renderer/components/ChatMessageList.tsx"),
-		"utf8",
-	);
+	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/ChatMessageList.tsx"), "utf8");
 
 	it("uses Conversation (StickToBottom wrapper) as the scroll container", () => {
 		expect(SRC).toMatch(/<Conversation\b/);

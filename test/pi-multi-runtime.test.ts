@@ -54,7 +54,10 @@ describe("pi multi-runtime host constraints", () => {
 		cleanup.push(root);
 		const cwd = join(root, "project");
 		const sessionDir = join(root, "sessions");
-		await Promise.all([import("node:fs/promises").then(({ mkdir }) => mkdir(cwd)), import("node:fs/promises").then(({ mkdir }) => mkdir(sessionDir))]);
+		await Promise.all([
+			import("node:fs/promises").then(({ mkdir }) => mkdir(cwd)),
+			import("node:fs/promises").then(({ mkdir }) => mkdir(sessionDir)),
+		]);
 
 		const first = SessionManager.create(cwd, sessionDir);
 		const second = SessionManager.create(cwd, sessionDir);
@@ -67,7 +70,14 @@ describe("pi multi-runtime host constraints", () => {
 				api: "test",
 				provider: "test",
 				model: "test",
-				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
 				stopReason: "stop",
 			} as any);
 		}

@@ -3,13 +3,7 @@
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@shared/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@shared/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import { FileText, Key, MessageCircle, Palette, Server, UserRound, Zap } from "lucide-react";
 import { memo, useState } from "react";
@@ -54,7 +48,6 @@ const SettingsDialog = memo(function SettingsDialog({
 	}
 
 	const configured = providers.filter((p) => p.hasKey).length + customStats.configured;
-
 
 	return (
 		<Dialog open={open} onOpenChange={(o) => !o && onClose()}>

@@ -37,11 +37,21 @@ function mockSession(opts: MockSessionOpts = {}): any {
 
 function planServiceForTest(
 	extraSessions?: Record<string, { cwd: string; sessionManager?: SessionManager; session?: any }>,
-): { runtimeStore: IRuntimeStore; permissionSvc: PermissionService; planSvc: PlanService; events: any[]; onApproval: ReturnType<typeof vi.fn> } {
+): {
+	runtimeStore: IRuntimeStore;
+	permissionSvc: PermissionService;
+	planSvc: PlanService;
+	events: any[];
+	onApproval: ReturnType<typeof vi.fn>;
+} {
 	const events: any[] = [];
 	const eventBus: IEventBus = {
-		emit(event) { events.push(event); },
-		onEvent() { return () => {}; },
+		emit(event) {
+			events.push(event);
+		},
+		onEvent() {
+			return () => {};
+		},
 	};
 	const sessions = new Map<string, { cwd: string; sessionManager?: SessionManager; session: any }>();
 	for (const [id, s] of Object.entries(extraSessions ?? {})) {
@@ -49,7 +59,8 @@ function planServiceForTest(
 	}
 	const runtimeStore: IRuntimeStore = {
 		getRuntime: () => undefined as unknown as AgentSessionRuntime,
-		getSession: (id) => sessions.get(id)?.session ?? mockSession({ sessionManager: sessions.get(id)?.sessionManager }),
+		getSession: (id) =>
+			sessions.get(id)?.session ?? mockSession({ sessionManager: sessions.get(id)?.sessionManager }),
 		getSessionManager: (id) => sessions.get(id)?.sessionManager,
 		getCwd: (id) => sessions.get(id)?.cwd ?? "/tmp",
 		getProjectRoot: () => "/tmp",
@@ -75,17 +86,44 @@ const questions = [
 describe("Plan session state", () => {
 	it("routes question responses by both request and session ID", async () => {
 		const events: any[] = [];
-		const eb: IEventBus = { emit(e) { events.push(e); }, onEvent() { return () => {}; } };
-		const rs: IRuntimeStore = { getRuntime: () => undefined as any, getSession: () => mockSession(), getSessionManager: () => undefined, getCwd: () => "/tmp", getProjectRoot: () => "/tmp" };
+		const eb: IEventBus = {
+			emit(e) {
+				events.push(e);
+			},
+			onEvent() {
+				return () => {};
+			},
+		};
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as any,
+			getSession: () => mockSession(),
+			getSessionManager: () => undefined,
+			getCwd: () => "/tmp",
+			getProjectRoot: () => "/tmp",
+		};
 		const ps = new PermissionService(eb, rs, "ask");
 		ps.setMode("session-a", "plan");
 		const svc = new PlanService(eb, rs, ps, async () => {});
 		const pending = svc.requestQuestions("session-a", questions);
 		const request = events.find((e: any) => e.type === "plan:question-requested").request;
 
-		expect(svc.handleQuestionResponse({ requestId: request.requestId, sessionId: "session-b", answers: { "Which scope?": "Small" } })).toBe(false);
-		expect(svc.handleQuestionResponse({ requestId: request.requestId, sessionId: "session-a", answers: {} })).toBe(false);
-		expect(svc.handleQuestionResponse({ requestId: request.requestId, sessionId: "session-a", answers: { "Which scope?": "Small" } })).toBe(true);
+		expect(
+			svc.handleQuestionResponse({
+				requestId: request.requestId,
+				sessionId: "session-b",
+				answers: { "Which scope?": "Small" },
+			}),
+		).toBe(false);
+		expect(svc.handleQuestionResponse({ requestId: request.requestId, sessionId: "session-a", answers: {} })).toBe(
+			false,
+		);
+		expect(
+			svc.handleQuestionResponse({
+				requestId: request.requestId,
+				sessionId: "session-a",
+				answers: { "Which scope?": "Small" },
+			}),
+		).toBe(true);
 		await expect(pending).resolves.toEqual({ status: "answered", answers: { "Which scope?": "Small" } });
 	});
 
@@ -107,14 +145,33 @@ describe("Plan session state", () => {
 		});
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as any,
-			getSession: (id) => id === "session-a" ? session : mockSession(),
+			getSession: (id) => (id === "session-a" ? session : mockSession()),
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
 		};
-		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
+		const ps = new PermissionService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			"ask",
+		);
 		ps.setMode("session-a", "plan");
-		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
+		const planSvc = new PlanService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			ps,
+			async () => {},
+		);
 
 		planSvc.capturePrePlanTools("session-a");
 
@@ -141,9 +198,28 @@ describe("Plan session state", () => {
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
 		};
-		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
+		const ps = new PermissionService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			"ask",
+		);
 		ps.setMode("session-a", "plan");
-		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
+		const planSvc = new PlanService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			ps,
+			async () => {},
+		);
 		await expect(planSvc.requestApproval("session-a", "# Plan")).rejects.toThrow(/not a symlink/);
 	});
 
@@ -154,7 +230,14 @@ describe("Plan session state", () => {
 		const session = mockSession({ sessionManager });
 
 		const events: any[] = [];
-		const eb: IEventBus = { emit(e) { events.push(e); }, onEvent() { return () => {}; } };
+		const eb: IEventBus = {
+			emit(e) {
+				events.push(e);
+			},
+			onEvent() {
+				return () => {};
+			},
+		};
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as any,
 			getSession: () => session,
@@ -171,9 +254,13 @@ describe("Plan session state", () => {
 		const request = events.find((e: any) => e.type === "plan:approval-requested").request;
 
 		// Wrong session
-		await expect(planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-b", action: "reject" })).resolves.toBe(false);
+		await expect(
+			planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-b", action: "reject" }),
+		).resolves.toBe(false);
 		// Correct session
-		await expect(planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "reject" })).resolves.toBe(true);
+		await expect(
+			planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "reject" }),
+		).resolves.toBe(true);
 		await expect(outcome).resolves.toMatchObject({ status: "rejected", planId: request.planId });
 
 		const records = sessionManager
@@ -191,7 +278,14 @@ describe("Plan session state", () => {
 		const session = mockSession({ sessionManager });
 
 		const events: any[] = [];
-		const eb: IEventBus = { emit(e) { events.push(e); }, onEvent() { return () => {}; } };
+		const eb: IEventBus = {
+			emit(e) {
+				events.push(e);
+			},
+			onEvent() {
+				return () => {};
+			},
+		};
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as any,
 			getSession: () => session,
@@ -201,14 +295,18 @@ describe("Plan session state", () => {
 		};
 		const ps = new PermissionService(eb, rs, "ask");
 		ps.setMode("session-a", "plan");
-		const onApproval = vi.fn(async () => { ps.setMode("session-a", "always"); });
+		const onApproval = vi.fn(async () => {
+			ps.setMode("session-a", "always");
+		});
 		const planSvc = new PlanService(eb, rs, ps, onApproval);
 
 		const outcome = planSvc.requestApproval("session-a", "# Plan");
 		await vi.waitFor(() => expect(events.some((e: any) => e.type === "plan:approval-requested")).toBe(true));
 		const request = events.find((e: any) => e.type === "plan:approval-requested").request;
 
-		await expect(planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "approve" })).resolves.toBe(true);
+		await expect(
+			planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "approve" }),
+		).resolves.toBe(true);
 		await expect(outcome).resolves.toMatchObject({ status: "approved", planId: request.planId });
 		expect(onApproval).toHaveBeenCalledWith("session-a");
 
@@ -232,8 +330,27 @@ describe("Plan session state", () => {
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
 		};
-		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
-		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
+		const ps = new PermissionService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			"ask",
+		);
+		const planSvc = new PlanService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			ps,
+			async () => {},
+		);
 		planSvc.capturePrePlanTools("session-a");
 		(planSvc as any).prePlanTools.set("session-a", ["read", "write", "removed-tool"]);
 		planSvc.restorePrePlanTools("session-a");
@@ -254,8 +371,27 @@ describe("Plan session state", () => {
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
 		};
-		const ps = new PermissionService({ emit() {}, onEvent() { return () => {}; } }, rs, "ask");
-		const planSvc = new PlanService({ emit() {}, onEvent() { return () => {}; } }, rs, ps, async () => {});
+		const ps = new PermissionService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			"ask",
+		);
+		const planSvc = new PlanService(
+			{
+				emit() {},
+				onEvent() {
+					return () => {};
+				},
+			},
+			rs,
+			ps,
+			async () => {},
+		);
 		planSvc.capturePrePlanTools("session-a");
 		planSvc.restrictToolsForPlan("session-a");
 		expect(setActiveToolsByName).toHaveBeenCalledWith(["read", "bash", "AskUserQuestion", "ExitPlanMode"]);

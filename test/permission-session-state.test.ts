@@ -5,8 +5,12 @@ import type { AgentSession, AgentSessionRuntime, SessionManager } from "@earendi
 
 function mockEventBus(events: any[]): IEventBus {
 	return {
-		emit(event) { events.push(event); },
-		onEvent() { return () => {}; },
+		emit(event) {
+			events.push(event);
+		},
+		onEvent() {
+			return () => {};
+		},
 	};
 }
 

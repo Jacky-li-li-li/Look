@@ -65,9 +65,7 @@ describe("pi SDK provider alignment", () => {
 		const modelsPath = writeModelsConfig(customProviderConfig());
 		const registry = ModelRegistry.create(AuthStorage.inMemory(), modelsPath);
 
-		expect(registry.getAvailable().map((m) => `${m.provider}/${m.id}`)).toContain(
-			"sdk-test/sdk-test-model",
-		);
+		expect(registry.getAvailable().map((m) => `${m.provider}/${m.id}`)).toContain("sdk-test/sdk-test-model");
 	});
 
 	it("uses the SDK provider display name", () => {

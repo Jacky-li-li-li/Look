@@ -148,5 +148,8 @@ export function prepareMessageContent(content: string): string {
  * 在所有 chip 解析完成后独立运行，避免与正则交叉干扰。
  */
 export function applyFileTags(text: string): string {
-	return text.replace(/(^|\s)(@([^\s]*(?:\.[a-zA-Z0-9]+|\/)[^\s]*))/g, (_match, p1, _full, path) => p1 + fileTag(path));
+	return text.replace(
+		/(^|\s)(@([^\s]*(?:\.[a-zA-Z0-9]+|\/)[^\s]*))/g,
+		(_match, p1, _full, path) => p1 + fileTag(path),
+	);
 }

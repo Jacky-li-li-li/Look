@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as lookStorage from "../../src/main/shared/look-storage";
-import { getUsage, incrementTurn, initializeUsageService, resetUsageServiceForTesting } from "../../src/main/system/usage.js";
+import {
+	getUsage,
+	incrementTurn,
+	initializeUsageService,
+	resetUsageServiceForTesting,
+} from "../../src/main/system/usage.js";
 
 const cleanup: string[] = [];
 
@@ -18,7 +23,11 @@ function writeJsonl(filePath: string, entries: unknown[]): void {
 	fs.writeFileSync(filePath, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
 }
 
-function makeProject(id: string, name: string, cwd: string): { id: string; name: string; cwd: string; createdAt: number; valid: boolean } {
+function makeProject(
+	id: string,
+	name: string,
+	cwd: string,
+): { id: string; name: string; cwd: string; createdAt: number; valid: boolean } {
 	return { id, name, cwd, createdAt: Date.now(), valid: true };
 }
 
@@ -183,7 +192,13 @@ describe("usage service", () => {
 		const yesterdayTs = new Date(`${yesterdayKey}T10:00:00`).getTime();
 
 		writeJsonl(path.join(sessionsDir, "session.jsonl"), [
-			{ type: "session", version: 3, id: "session-a", timestamp: new Date(yesterdayTs).toISOString(), cwd: project.cwd },
+			{
+				type: "session",
+				version: 3,
+				id: "session-a",
+				timestamp: new Date(yesterdayTs).toISOString(),
+				cwd: project.cwd,
+			},
 			{
 				id: "assistant-yesterday",
 				type: "message",

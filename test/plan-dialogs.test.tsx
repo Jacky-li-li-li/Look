@@ -161,7 +161,13 @@ describe("Plan dialogs", () => {
 		renderWithStore(<PlanApprovalDialog sessionId="session-a" />);
 		expect(screen.getByText("Implementation plan")).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: "批准并执行" }));
-		await waitFor(() => expect(respondPlanApproval).toHaveBeenCalledWith({ requestId: "approval-1", sessionId: "session-a", action: "approve" }));
+		await waitFor(() =>
+			expect(respondPlanApproval).toHaveBeenCalledWith({
+				requestId: "approval-1",
+				sessionId: "session-a",
+				action: "approve",
+			}),
+		);
 		expect(appStore.get(permissionModeAtomFamily("session-a"))).toBe("always");
 	});
 });

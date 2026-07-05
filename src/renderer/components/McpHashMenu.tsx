@@ -58,24 +58,23 @@ function MenuRow({
 			ref={rowRef}
 			className={[
 				"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] transition-colors",
-				active
-					? "bg-primary/10 text-foreground"
-					: "text-muted-foreground hover:bg-muted/60",
+				active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted/60",
 			].join(" ")}
 			onClick={onClick}
 			onMouseEnter={onMouseEnter}
 		>
 			<Wrench
-				className={["size-3.5 shrink-0", active ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"].join(" ")}
+				className={[
+					"size-3.5 shrink-0",
+					active ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70",
+				].join(" ")}
 			/>
 			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
 				<span className="font-mono text-[12px]">
 					#{entry.server}__{entry.toolName}
 				</span>
 				{entry.description && (
-					<span className="truncate text-[10px] leading-tight text-muted-foreground/60">
-						{entry.description}
-					</span>
+					<span className="truncate text-[10px] leading-tight text-muted-foreground/60">{entry.description}</span>
 				)}
 			</div>
 			<span className="shrink-0 rounded-sm border border-hairline bg-background/40 px-1.5 py-0.5 text-[9px] uppercase text-muted-foreground">
@@ -118,9 +117,7 @@ export function McpHashMenu(props: McpHashMenuProps) {
 								{searchTerm ? `No tools matching "${searchTerm}"` : "No MCP tools available"}
 							</div>
 							<div className="text-[10px] text-muted-foreground/70">
-								{searchTerm
-									? "Try a different keyword"
-									: "Connect MCP servers in Settings"}
+								{searchTerm ? "Try a different keyword" : "Connect MCP servers in Settings"}
 							</div>
 						</li>
 					) : (

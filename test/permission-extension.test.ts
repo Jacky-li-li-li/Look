@@ -56,8 +56,12 @@ describe("permission extension", () => {
 
 	it("blocks writes in Plan mode while allowing rewritten safe bash", async () => {
 		const handler = createPlanModeHandler("/tmp/project");
-		await expect(handler({ toolName: "write", input: { path: ".context/plan/test.md" } } as any, {} as any)).resolves.toMatchObject({ block: true });
-		await expect(handler({ toolName: "read", input: { path: "foo.txt" } } as any, {} as any)).resolves.toMatchObject({ block: true });
+		await expect(
+			handler({ toolName: "write", input: { path: ".context/plan/test.md" } } as any, {} as any),
+		).resolves.toMatchObject({ block: true });
+		await expect(handler({ toolName: "read", input: { path: "foo.txt" } } as any, {} as any)).resolves.toMatchObject({
+			block: true,
+		});
 		const event = { toolName: "bash", input: { command: "git log --oneline -n5" } } as any;
 		await expect(handler(event, {} as any)).resolves.toEqual({});
 		expect(event.input.command).toContain("--no-pager");

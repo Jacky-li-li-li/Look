@@ -63,7 +63,9 @@ describe("SubAgent extension — runtime dispatch", () => {
 	});
 
 	it("dispatches single mode to one runSubSession call", async () => {
-		const result = await tool.execute("call-1", { agent: "scout", task: "find auth code" }, undefined, undefined, { cwd });
+		const result = await tool.execute("call-1", { agent: "scout", task: "find auth code" }, undefined, undefined, {
+			cwd,
+		});
 		expect(captured.calls).toEqual([{ agent: "scout", task: "find auth code" }]);
 		expect(result.details.mode).toBe("single");
 		expect(result.details.results).toHaveLength(1);

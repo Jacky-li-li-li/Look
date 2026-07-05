@@ -24,8 +24,19 @@ describe("lightweight session summary scan", () => {
 		const secondTs = Date.UTC(2026, 0, 2);
 		writeJsonl(filePath, [
 			{ type: "session", version: 3, id: "session-a", timestamp: new Date(firstTs).toISOString(), cwd: dir },
-			{ id: "info-a", parentId: null, type: "session_info", name: "Original", timestamp: new Date(firstTs).toISOString() },
-			{ id: "user-a", parentId: "info-a", type: "message", message: { role: "user", content: "first prompt", timestamp: firstTs } },
+			{
+				id: "info-a",
+				parentId: null,
+				type: "session_info",
+				name: "Original",
+				timestamp: new Date(firstTs).toISOString(),
+			},
+			{
+				id: "user-a",
+				parentId: "info-a",
+				type: "message",
+				message: { role: "user", content: "first prompt", timestamp: firstTs },
+			},
 			{
 				id: "assistant-a",
 				parentId: "user-a",
@@ -36,7 +47,13 @@ describe("lightweight session summary scan", () => {
 					timestamp: secondTs,
 				},
 			},
-			{ id: "info-b", parentId: "assistant-a", type: "session_info", name: "Renamed", timestamp: new Date(secondTs).toISOString() },
+			{
+				id: "info-b",
+				parentId: "assistant-a",
+				type: "session_info",
+				name: "Renamed",
+				timestamp: new Date(secondTs).toISOString(),
+			},
 		]);
 
 		const summary = scanSessionFileSummary(filePath);
@@ -78,7 +95,12 @@ describe("lightweight session summary scan", () => {
 				timestamp: new Date(Date.UTC(2026, 0, 1)).toISOString(),
 				cwd: linkedProject,
 			},
-			{ id: "user-a", parentId: null, type: "message", message: { role: "user", content: "through link", timestamp: Date.UTC(2026, 0, 1) } },
+			{
+				id: "user-a",
+				parentId: null,
+				type: "message",
+				message: { role: "user", content: "through link", timestamp: Date.UTC(2026, 0, 1) },
+			},
 		]);
 
 		const summaries = await scanSessionDirectory(sessionDir, realProject);
@@ -94,7 +116,12 @@ describe("lightweight session summary scan", () => {
 			const ts = Date.UTC(2026, 0, i + 1);
 			writeJsonl(path.join(sessionDir, `session-${i}.jsonl`), [
 				{ type: "session", version: 3, id: `session-${i}`, timestamp: new Date(ts).toISOString(), cwd: root },
-				{ id: `user-${i}`, parentId: null, type: "message", message: { role: "user", content: `prompt ${i}`, timestamp: ts } },
+				{
+					id: `user-${i}`,
+					parentId: null,
+					type: "message",
+					message: { role: "user", content: `prompt ${i}`, timestamp: ts },
+				},
 			]);
 		}
 

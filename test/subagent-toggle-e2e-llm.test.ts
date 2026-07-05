@@ -22,10 +22,7 @@ function waitForEnd(manager: SessionRuntimeManager, parentId: string, timeout: n
 				onTurnEnd?.();
 			}
 		});
-		Promise.race([
-			turnEnded,
-			new Promise<void>((r) => setTimeout(r, timeout)),
-		]).then(() => {
+		Promise.race([turnEnded, new Promise<void>((r) => setTimeout(r, timeout))]).then(() => {
 			unsubscribe();
 			const children = manager.listSubSessions(parentId);
 			resolve({ children: children.length, errors });
@@ -49,12 +46,10 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 
 			// ── 验证：新会话没有 subagent 工具 ──
 			const diagId = await manager.createAgent({ name: "toggle-diag" });
-			const managed = Array.from(
-				(manager as any).runtimes?.entries() ?? [],
-			).find(([sid]: [string, unknown]) => sid === diagId)?.[1] as any;
-			const hasSubagent = managed
-				? managed.runtime.session.getActiveToolNames().includes("subagent")
-				: "unknown";
+			const managed = Array.from((manager as any).runtimes?.entries() ?? []).find(
+				([sid]: [string, unknown]) => sid === diagId,
+			)?.[1] as any;
+			const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : "unknown";
 			expect(hasSubagent, "toggle OFF 时 subagent 不应在活动工具中").toBe(false);
 			await manager.destroyAgent(diagId).catch(() => {});
 
@@ -85,28 +80,22 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 		TIMEOUT + 30_000,
 	);
 
-	it(
-		"Stage 1 验证回顾：开关打开时 LLM 可以调用 subagent（API 级确认）",
-		async () => {
-			// 仅做 API 级确认，LLM 实际调用已在 Stage 1 E2E 验证。
-			const manager = new SessionRuntimeManager();
-			await manager.loadProjects();
-			const project = manager.listProjects().find((p) => p.valid);
-			expect(project).toBeTruthy();
-			await manager.setActiveProject(project!.id);
-			await manager.setSubagentEnabledGlobal(true);
+	it("Stage 1 验证回顾：开关打开时 LLM 可以调用 subagent（API 级确认）", async () => {
+		// 仅做 API 级确认，LLM 实际调用已在 Stage 1 E2E 验证。
+		const manager = new SessionRuntimeManager();
+		await manager.loadProjects();
+		const project = manager.listProjects().find((p) => p.valid);
+		expect(project).toBeTruthy();
+		await manager.setActiveProject(project!.id);
+		await manager.setSubagentEnabledGlobal(true);
 
-			const id = await manager.createAgent({ name: "toggle-on-api" });
-			const managed = Array.from(
-				(manager as any).runtimes?.entries() ?? [],
-			).find(([sid]: [string, unknown]) => sid === id)?.[1] as any;
-			const hasSubagent = managed
-				? managed.runtime.session.getActiveToolNames().includes("subagent")
-				: false;
-			expect(hasSubagent, "toggle ON 时 subagent 应在活动工具中").toBe(true);
+		const id = await manager.createAgent({ name: "toggle-on-api" });
+		const managed = Array.from((manager as any).runtimes?.entries() ?? []).find(
+			([sid]: [string, unknown]) => sid === id,
+		)?.[1] as any;
+		const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : false;
+		expect(hasSubagent, "toggle ON 时 subagent 应在活动工具中").toBe(true);
 
-			await manager.destroyAgent(id).catch(() => {});
-		},
-		30_000,
-	);
+		await manager.destroyAgent(id).catch(() => {});
+	}, 30_000);
 });

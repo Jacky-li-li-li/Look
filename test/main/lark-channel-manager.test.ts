@@ -166,10 +166,7 @@ function sampleMessage(content = "hello"): NormalizedMessage {
 }
 
 function createRuntimeMock(
-	customSendMessage?: (
-		sessionId: string,
-		emit: (event: MainToRendererEvent) => void,
-	) => void | Promise<void>,
+	customSendMessage?: (sessionId: string, emit: (event: MainToRendererEvent) => void) => void | Promise<void>,
 ) {
 	const callbacks: Array<(event: MainToRendererEvent) => void> = [];
 	const projects = [
@@ -619,9 +616,7 @@ describe("LarkChannelManager", () => {
 		const updatedCards = controller.update.mock.calls.map((call: any[]) => call[0]);
 		const panels = updatedCards.flatMap(findCollapsiblePanels);
 		expect(
-			panels.some(
-				(panel) => panel.header?.title?.content === "工具 · bash · 运行中" && panel.expanded === true,
-			),
+			panels.some((panel) => panel.header?.title?.content === "工具 · bash · 运行中" && panel.expanded === true),
 		).toBe(true);
 		expect(
 			panels.some((panel) => panel.header?.title?.content === "工具 · bash · 完成" && panel.expanded === false),

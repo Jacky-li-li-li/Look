@@ -18,42 +18,42 @@ function gitCommitCount(): string {
 
 const appVersion = `${baseVersion}.${gitCommitCount()}`;
 export default defineConfig({
-  plugins: [tailwindcss(), react()],
-  root: "src/renderer",
-  base: "./",
-  envDir: path.resolve(__dirname),
-  define: {
-    __APP_VERSION__: JSON.stringify(appVersion),
-  },
-  build: {
-    outDir: "../../dist/renderer",
-    emptyOutDir: true,
-    rollupOptions: {
-      onwarn(warning, warn) {
-        // markstream-react ships @__PURE__ annotations Rollup cannot interpret.
-        if (warning.code === "INVALID_ANNOTATION" && warning.id?.includes("markstream-react")) {
-          return;
-        }
-        warn(warning);
-      },
-      output: {
-        manualChunks: {
-          // Isolate heavy syntax-highlighting and diagram libraries so they
-          // don't bloat the main entry chunk. Languages/themes loaded by Shiki
-          // remain in their own dynamic chunks; this groups the core runtime.
-          shiki: ["shiki"],
-          mermaid: ["mermaid"],
-        },
-      },
-    },
-    chunkSizeWarningLimit: 1000,
-  },
-  resolve: {
-    alias: {
-      "@shared": path.resolve(__dirname, "src/main/shared"),
-    },
-  },
-  server: {
-    port: 5174,
-  },
+	plugins: [tailwindcss(), react()],
+	root: "src/renderer",
+	base: "./",
+	envDir: path.resolve(__dirname),
+	define: {
+		__APP_VERSION__: JSON.stringify(appVersion),
+	},
+	build: {
+		outDir: "../../dist/renderer",
+		emptyOutDir: true,
+		rollupOptions: {
+			onwarn(warning, warn) {
+				// markstream-react ships @__PURE__ annotations Rollup cannot interpret.
+				if (warning.code === "INVALID_ANNOTATION" && warning.id?.includes("markstream-react")) {
+					return;
+				}
+				warn(warning);
+			},
+			output: {
+				manualChunks: {
+					// Isolate heavy syntax-highlighting and diagram libraries so they
+					// don't bloat the main entry chunk. Languages/themes loaded by Shiki
+					// remain in their own dynamic chunks; this groups the core runtime.
+					shiki: ["shiki"],
+					mermaid: ["mermaid"],
+				},
+			},
+		},
+		chunkSizeWarningLimit: 1000,
+	},
+	resolve: {
+		alias: {
+			"@shared": path.resolve(__dirname, "src/main/shared"),
+		},
+	},
+	server: {
+		port: 5174,
+	},
 });

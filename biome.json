@@ -1,44 +1,56 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": true,
-      "a11y": "off",
-      "correctness": {
-        "useJsxKeyInIterable": "off",
-        "noUnusedFunctionParameters": "off"
-      },
-      "style": {
-        "noNonNullAssertion": "off",
-        "useConst": "error",
-        "useNodejsImportProtocol": "off",
-        "noParameterAssign": "off",
-        "useImportType": "warn"
-      },
-      "suspicious": {
-        "noExplicitAny": "off",
-        "noControlCharactersInRegex": "off",
-        "noEmptyInterface": "off",
-        "noArrayIndexKey": "off",
-        "noAssignInExpressions": "off"
-      }
-    }
-  },
-  "formatter": {
-    "enabled": true,
-    "formatWithErrors": false,
-    "indentStyle": "tab",
-    "indentWidth": 3,
-    "lineWidth": 120
-  },
-  "files": {
-    "includes": [
-      "src/**/*.ts",
-      "src/**/*.tsx",
-      "!**/node_modules/**",
-      "!**/dist/**",
-      "!**/release/**"
-    ]
-  }
+	"$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"a11y": "off",
+			"correctness": {
+				"useJsxKeyInIterable": "off",
+				"noUnusedFunctionParameters": "off"
+			},
+			"style": {
+				"noNonNullAssertion": "off",
+				"useConst": "error",
+				"useNodejsImportProtocol": "off",
+				"noParameterAssign": "off",
+				"useImportType": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "off",
+				"noControlCharactersInRegex": "off",
+				"noEmptyInterface": "off",
+				"noArrayIndexKey": "off",
+				"noAssignInExpressions": "off"
+			}
+		}
+	},
+	"formatter": {
+		"enabled": true,
+		"formatWithErrors": false,
+		"indentStyle": "tab",
+		"indentWidth": 3,
+		"lineWidth": 120
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
+	"files": {
+		"includes": [
+			"src/**/*.ts",
+			"src/**/*.tsx",
+			"src/**/*.css",
+			"src/**/*.html",
+			"src/**/*.d.ts",
+			"src/main/preload.js",
+			"test/**/*.ts",
+			"test/**/*.tsx",
+			"scripts/**/*.mjs",
+			"vite.config.ts",
+			"vitest.config.ts"
+		],
+		"ignoreUnknown": true
+	}
 }

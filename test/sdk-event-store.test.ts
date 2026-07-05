@@ -62,7 +62,10 @@ describe("UI event canonical store (session:ui-event)", () => {
 		flushReceive(receive, uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
 		flushReceive(receive, uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "Hello", timestamp: 3 }));
 		flushReceive(receive, uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: " World", timestamp: 4 }));
-		flushReceive(receive, uiEvent({ type: "assistant_text_end", contentIndex: 0, text: "Hello World", timestamp: 5 }));
+		flushReceive(
+			receive,
+			uiEvent({ type: "assistant_text_end", contentIndex: 0, text: "Hello World", timestamp: 5 }),
+		);
 
 		const state = appStore.get(sessionStateAtomFamily(sessionId));
 		const block = state.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "text");
@@ -107,7 +110,10 @@ describe("UI event canonical store (session:ui-event)", () => {
 
 		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
 		flushReceive(receive, uiEvent({ type: "thinking_start", contentIndex: 0, timestamp: 2 }));
-		flushReceive(receive, uiEvent({ type: "thinking_delta", contentIndex: 0, delta: "Let me think...", timestamp: 3 }));
+		flushReceive(
+			receive,
+			uiEvent({ type: "thinking_delta", contentIndex: 0, delta: "Let me think...", timestamp: 3 }),
+		);
 
 		const mid = appStore.get(sessionStateAtomFamily(sessionId));
 		const midBlock = mid.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
@@ -115,7 +121,10 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(midBlock!.thinking).toBe("Let me think...");
 		expect(midBlock!.completed).toBe(false);
 
-		flushReceive(receive, uiEvent({ type: "thinking_end", contentIndex: 0, thinking: "Let me think...", timestamp: 4 }));
+		flushReceive(
+			receive,
+			uiEvent({ type: "thinking_end", contentIndex: 0, thinking: "Let me think...", timestamp: 4 }),
+		);
 		const end = appStore.get(sessionStateAtomFamily(sessionId));
 		const endBlock = end.uiBlocks.find((b) => b.contentIndex === 0 && b.kind === "thinking");
 		expect(endBlock!.completed).toBe(true);
@@ -157,7 +166,8 @@ describe("UI event canonical store (session:ui-event)", () => {
 
 		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
 		flushReceive(receive, uiEvent({ type: "toolcall_start", contentIndex: 0, timestamp: 2 }));
-		flushReceive(receive,
+		flushReceive(
+			receive,
 			uiEvent({
 				type: "toolcall_end",
 				contentIndex: 0,
@@ -233,7 +243,8 @@ describe("UI event canonical store (session:ui-event)", () => {
 
 		// Tool execution events are emitted while the assistant phase is active.
 		flushReceive(receive, uiEvent({ type: "run_status", status: "working", timestamp: 0 }));
-		flushReceive(receive,
+		flushReceive(
+			receive,
 			uiEvent({
 				type: "tool_exec_start",
 				toolCallId: "te-1",
@@ -247,7 +258,8 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(state.uiTools["te-1"]).toBeDefined();
 		expect(state.uiTools["te-1"].phase).toBe("running");
 
-		flushReceive(receive,
+		flushReceive(
+			receive,
 			uiEvent({
 				type: "tool_exec_end",
 				toolCallId: "te-1",
@@ -320,7 +332,8 @@ describe("UI event canonical store (session:ui-event)", () => {
 		flushReceive(receive, uiEvent({ type: "compacting", active: true, timestamp: 1 }));
 		expect(appStore.get(sessionStateAtomFamily(sessionId)).uiPhase).toBe("compacting");
 
-		flushReceive(receive,
+		flushReceive(
+			receive,
 			uiEvent({
 				type: "retry_status",
 				status: "start",

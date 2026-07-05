@@ -68,12 +68,7 @@ const textBlock = (index: number, text: string, completed = false): LookUiStream
 	completed,
 });
 
-const toolcallBlock = (
-	index: number,
-	toolCallId: string,
-	toolName: string,
-	completed = false,
-): LookUiStreamBlock => ({
+const toolcallBlock = (index: number, toolCallId: string, toolName: string, completed = false): LookUiStreamBlock => ({
 	contentIndex: index,
 	kind: "toolcall",
 	text: "",
@@ -95,7 +90,10 @@ describe("buildTimeline", () => {
 	it("attaches toolResult messages to the preceding assistant bubble", () => {
 		const entries: SessionEntry[] = [
 			messageEntry("u1", baseUser("read file")),
-			messageEntry("a1", baseAssistant("a1", [{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } }])),
+			messageEntry(
+				"a1",
+				baseAssistant("a1", [{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } }]),
+			),
 			messageEntry("tr1", baseToolResult("tc1", "file content")),
 		];
 
@@ -133,7 +131,10 @@ describe("buildTimeline", () => {
 		const entries: SessionEntry[] = [
 			messageEntry("u1", baseUser("hello")),
 			messageEntry("a1", baseAssistant("a1", [{ type: "thinking", thinking: "step 1" }])),
-			messageEntry("a2", baseAssistant("a2", [{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } }])),
+			messageEntry(
+				"a2",
+				baseAssistant("a2", [{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "x" } }]),
+			),
 			messageEntry("tr1", baseToolResult("tc1", "result")),
 			messageEntry("a3", baseAssistant("a3", [{ type: "text", text: "done" }])),
 		];

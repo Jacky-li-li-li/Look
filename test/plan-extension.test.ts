@@ -10,7 +10,10 @@ function setup(mode: "plan" | "ask" | "always" = "plan") {
 		askQuestions: vi.fn(),
 		submitPlan: vi.fn(),
 	};
-	createPlanExtensionFactory("session-a", host as any)({
+	createPlanExtensionFactory(
+		"session-a",
+		host as any,
+	)({
 		registerTool: (tool: any) => tools.push(tool),
 		on: (name: string, handler: any) => handlers.set(name, handler),
 		sendMessage,
@@ -101,22 +104,29 @@ describe("Plan extension", () => {
 
 	it("allows AskUserQuestion outside Plan mode, but refuses ExitPlanMode", async () => {
 		const { tools, host } = setup("ask");
-		host.askQuestions.mockResolvedValue({ status: "answered", answers: { "Q": "A" } });
+		host.askQuestions.mockResolvedValue({ status: "answered", answers: { Q: "A" } });
 		const ask = tools.find((tool) => tool.name === "AskUserQuestion");
 		const exit = tools.find((tool) => tool.name === "ExitPlanMode");
 		// AskUserQuestion should work in any mode
 		await expect(
 			ask.execute("call", {
-				questions: [{
-					question: "Q",
-					header: "H",
-					options: [{ label: "A", description: "Answer" }, { label: "B", description: "Other" }],
-				}],
+				questions: [
+					{
+						question: "Q",
+						header: "H",
+						options: [
+							{ label: "A", description: "Answer" },
+							{ label: "B", description: "Other" },
+						],
+					},
+				],
 			}),
-		).resolves.toMatchObject({ details: { answers: { "Q": "A" } } });
+		).resolves.toMatchObject({ details: { answers: { Q: "A" } } });
 		expect(host.askQuestions).toHaveBeenCalled();
 		// ExitPlanMode should still be restricted to Plan mode
-		await expect(exit.execute("call", { plan: "# Plan" })).resolves.toMatchObject({ details: { error: expect.any(String) } });
+		await expect(exit.execute("call", { plan: "# Plan" })).resolves.toMatchObject({
+			details: { error: expect.any(String) },
+		});
 		expect(host.submitPlan).not.toHaveBeenCalled();
 	});
 });

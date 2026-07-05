@@ -49,17 +49,13 @@ describe("prepareMessageContent", () => {
 		);
 	});
 
-		it("converts @file references to file-tag", () => {
-			expect(prepareMessageContent("Open @src/app.ts")).toBe(
-				'Open <file-tag path="src/app.ts"></file-tag>',
-			);
-		});
+	it("converts @file references to file-tag", () => {
+		expect(prepareMessageContent("Open @src/app.ts")).toBe('Open <file-tag path="src/app.ts"></file-tag>');
+	});
 
 	it("converts legacy <skill> blocks to skill-tags", () => {
 		const input = 'prefix <skill name="foo" location="/x">body</skill> suffix';
-		expect(prepareMessageContent(input)).toBe(
-			'prefix <skill-tag name="foo"></skill-tag> suffix',
-		);
+		expect(prepareMessageContent(input)).toBe('prefix <skill-tag name="foo"></skill-tag> suffix');
 	});
 
 	it("converts legacy <skill-invoke> blocks to skill-tags", () => {
@@ -80,9 +76,7 @@ describe("prepareMessageContent", () => {
 
 describe("closeAtxHeadings", () => {
 	it("adds a closing sequence to an H1 without one", () => {
-		expect(closeAtxHeadings("# Hello\n\nThis is **bold**.")).toBe(
-			"# Hello #\n\nThis is **bold**.",
-		);
+		expect(closeAtxHeadings("# Hello\n\nThis is **bold**.")).toBe("# Hello #\n\nThis is **bold**.");
 	});
 
 	it("leaves fenced code alone", () => {

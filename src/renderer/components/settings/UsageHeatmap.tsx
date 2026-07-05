@@ -167,7 +167,11 @@ export default function UsageHeatmap() {
 				<button
 					type="button"
 					className="rounded-md bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/80"
-					onClick={() => { setError(null); setLoading(true); loadData(); }}
+					onClick={() => {
+						setError(null);
+						setLoading(true);
+						loadData();
+					}}
 				>
 					{t("common.retry")}
 				</button>
@@ -197,7 +201,6 @@ export default function UsageHeatmap() {
 					))}
 				</select>
 			</div>
-
 
 			<div className="flex min-w-0 gap-2">
 				{/* Day labels */}
@@ -267,7 +270,6 @@ export default function UsageHeatmap() {
 				</div>
 				<span>{t("profile.more")}</span>
 			</div>
-
 
 			<UsageStackedChart modelCost={data?.modelCost ?? {}} selectedYear={selectedYear} />
 		</div>
