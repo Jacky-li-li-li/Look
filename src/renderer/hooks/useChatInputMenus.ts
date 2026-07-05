@@ -1,17 +1,22 @@
 // ============================================================
-// useChatInputMenus — slash / @ / # 菜单状态机
+// useChatInputMenus — /skill / /agent / # 菜单状态机
 //
-// 集中管理技能（/）、Agent（@）和 MCP 工具（#）菜单的全部状态、
+// 集中管理技能（/skill）、Agent（/agent）和 MCP 工具（#）菜单的全部状态、
 // 过滤、提交逻辑和键盘导航。内部自行读取需要的 Jotai atoms。
 // ============================================================
 
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { handleSlashMenuKey } from "../components/handleSlashMenuKey";
-import type { CommonSkillPath, SkillEntry } from "../components/SkillSlashMenu";
 import type { McpPickerEntry } from "../components/McpHashMenu";
+import type { CommonSkillPath, SkillEntry } from "../components/SkillSlashMenu";
 import { agentDefinitionsAtom } from "../store/agentDefinitionsAtoms";
-import { enabledAgentDefinitionsAtom, enabledSkillsAtom, mcpStatusVersionAtom, subagentEnabledAtom } from "../store/atoms";
+import {
+	enabledAgentDefinitionsAtom,
+	enabledSkillsAtom,
+	mcpStatusVersionAtom,
+	subagentEnabledAtom,
+} from "../store/atoms";
 
 interface SkillMenuState {
 	skills: SkillEntry[];
@@ -94,15 +99,15 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 	const setMcpIndex = useCallback((index: number) => setMenuIndex((prev) => ({ ...prev, mcp: index })), []);
 
 	// ── slash (/) detection ──
-	const slashOpen = useMemo(() => /^\/[^\s]*$/.test(input), [input]);
+	const slashOpen = useMemo(() => /^\/(?!agent(?::|$)|subagent(?::|$))[^\s]*$/.test(input), [input]);
 
-	// ── @ (Agent) detection ──
+	// ── /agent (Agent) detection ──
 	const agentDefs = useAtomValue(agentDefinitionsAtom);
 	const subagentOn = useAtomValue(subagentEnabledAtom);
-	const atOpen = useMemo(() => /(?:^|\s)@[^\s]*$/.test(input), [input]);
+	const atOpen = useMemo(() => /(?:^|\s)\/(?:agent|subagent):?[A-Za-z0-9._-]*$/.test(input), [input]);
 
 	const atSearchTerm = useMemo(() => {
-		const m = input.match(/@([^\s]*)$/);
+		const m = input.match(/\/(?:agent|subagent):?([A-Za-z0-9._-]*)$/);
 		return m ? m[1] : "";
 	}, [input]);
 
@@ -125,7 +130,7 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 		(index: number) => {
 			const a = filteredAgents[index];
 			if (!a) return;
-			setInput(input.replace(/@[^\s]*$/, `@${a.name} `));
+			setInput(input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, `/agent:${a.name} `));
 		},
 		[filteredAgents, setInput, input],
 	);
@@ -135,6 +140,7 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 	const mcpStatusVersion = useAtomValue(mcpStatusVersionAtom);
 
 	useEffect(() => {
+		void mcpStatusVersion;
 		let cancelled = false;
 		(async () => {
 			try {
@@ -250,14 +256,14 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 	// ── keyboard navigation ──
 	const handleMenuKeyDown = useCallback(
 		(e: React.KeyboardEvent): boolean => {
-			// @ Agent 选择菜单键盘处理
+			// /agent Agent 选择菜单键盘处理
 			if (atOpen && filteredAgents.length > 0) {
 				const handled = handleSlashMenuKey(
 					e,
 					{ open: true, selectedIndex: atIndex, pickableCount: filteredAgents.length },
 					(next) => {
 						setAtIndex(next.selectedIndex);
-						if (!next.open) setInput(input.replace(/@[^\s]*$/, "").trimEnd());
+						if (!next.open) setInput(input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, "").trimEnd());
 					},
 				);
 				if (handled) {

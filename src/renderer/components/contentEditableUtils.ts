@@ -17,13 +17,14 @@ export function renderToDOM(container: HTMLElement, content: string) {
 }
 
 /**
- * 合并渲染 agent chip（@）、MCP tool chip（#）和 skill chip（/skill:）。
- * 扫描 /skill:name、@agentName 与 #serverName__toolName，渲染为带
+ * 合并渲染 agent chip（/agent:）、MCP tool chip（#）、skill chip（/skill:）和 file chip（@path）。
+ * 扫描 /skill:name、/agent:name、#serverName__toolName 与 @path/to/file，渲染为带
  * contenteditable="false" 的 chip span + 尾随空格。
  */
 function _renderCombinedSegments(container: HTMLElement, content: string) {
-	// 合并正则：匹配 @agentName、#server__toolName 或 /skill:name（需行首或空白前缀）
-	const COMBINED_RE = /(?:^|\s)((?:@([^\s@]+))|(?:#([^\s#]+))|(?:\/skill:([^\s]+)))/g;
+	// 合并正则：匹配 /agent:name、#server__toolName、/skill:name 或 @path 文件引用（需行首或空白前缀）
+	const COMBINED_RE =
+		/(?:^|\s)((?:\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*)(?=$|\s))|(?:#([^\s#]+))|(?:\/skill:([^\s]+))|(?:@([^\s]*(?:\.[a-zA-Z0-9]+|\/)[^\s]*)))/g;
 
 	let cursor = 0;
 	for (const match of content.matchAll(COMBINED_RE)) {
@@ -31,6 +32,7 @@ function _renderCombinedSegments(container: HTMLElement, content: string) {
 		const agentName = match[2];
 		const mcpToolRef = match[3];
 		const skillName = match[4];
+		const filePath = match[5];
 		const fullMatch = match[0]!;
 		// fullToken 是不含前导空白的 token 部分
 		const fullToken = match[1]!;
@@ -46,7 +48,7 @@ function _renderCombinedSegments(container: HTMLElement, content: string) {
 			chip.setAttribute("data-name", agentName);
 			chip.className = "agent-chip";
 			chip.setAttribute("contenteditable", "false");
-			chip.textContent = `@${agentName}`;
+			chip.textContent = `/agent:${agentName}`;
 			container.appendChild(chip);
 			container.appendChild(document.createTextNode(" "));
 		} else if (mcpToolRef) {
@@ -65,6 +67,15 @@ function _renderCombinedSegments(container: HTMLElement, content: string) {
 			chip.className = "skill-chip";
 			chip.setAttribute("contenteditable", "false");
 			chip.textContent = `/skill:${skillName}`;
+			container.appendChild(chip);
+			container.appendChild(document.createTextNode(" "));
+		} else if (filePath) {
+			const chip = document.createElement("span");
+			chip.setAttribute("data-file-chip", "");
+			chip.setAttribute("data-path", filePath);
+			chip.className = "file-chip";
+			chip.setAttribute("contenteditable", "false");
+			chip.textContent = `@${filePath}`;
 			container.appendChild(chip);
 			container.appendChild(document.createTextNode(" "));
 		}

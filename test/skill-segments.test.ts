@@ -3,39 +3,36 @@ import { parseAgentSegments, parseSkillSegments } from "../src/renderer/componen
 
 describe("parseAgentSegments", () => {
   it("parses valid agent references", () => {
-    expect(parseAgentSegments("#planner")).toEqual([
+    expect(parseAgentSegments("/agent:planner")).toEqual([
       { kind: "agent", name: "planner" },
     ]);
-    expect(parseAgentSegments("#scout do this")).toEqual([
+    expect(parseAgentSegments("/agent:scout do this")).toEqual([
       { kind: "agent", name: "scout" },
       { kind: "text", value: " do this" },
     ]);
-    expect(parseAgentSegments("ask #my-agent about it")).toEqual([
+    expect(parseAgentSegments("ask /agent:my-agent about it")).toEqual([
       { kind: "text", value: "ask " },
       { kind: "agent", name: "my-agent" },
       { kind: "text", value: " about it" },
     ]);
   });
 
-  it("does not treat Markdown headings as agent references", () => {
-    expect(parseAgentSegments("# Title")).toEqual([{ kind: "text", value: "# Title" }]);
-    expect(parseAgentSegments("#Title")).toEqual([{ kind: "text", value: "#Title" }]);
-    expect(parseAgentSegments("## Subtitle")).toEqual([{ kind: "text", value: "## Subtitle" }]);
-    expect(parseAgentSegments("Some text\n\n# Section")).toEqual([
-      { kind: "text", value: "Some text\n\n# Section" },
+  it("does not treat file references as agent references", () => {
+    expect(parseAgentSegments("@README.md")).toEqual([{ kind: "text", value: "@README.md" }]);
+    expect(parseAgentSegments("@src/app.ts")).toEqual([{ kind: "text", value: "@src/app.ts" }]);
+    expect(parseAgentSegments("Open @review/file.ts")).toEqual([
+      { kind: "text", value: "Open @review/file.ts" },
     ]);
   });
 
-  it("does not treat numeric or uppercase tokens as agent references", () => {
-    expect(parseAgentSegments("#123")).toEqual([{ kind: "text", value: "#123" }]);
-    expect(parseAgentSegments("color #FF0000")).toEqual([{ kind: "text", value: "color #FF0000" }]);
-    expect(parseAgentSegments("#00aaff is nice")).toEqual([
-      { kind: "text", value: "#00aaff is nice" },
+  it("parses the full agent-name character set", () => {
+    expect(parseAgentSegments("/agent:Review.Agent_2")).toEqual([
+      { kind: "agent", name: "Review.Agent_2" },
     ]);
   });
 
   it("preserves surrounding text around real agent references", () => {
-    expect(parseAgentSegments("before #planner after")).toEqual([
+    expect(parseAgentSegments("before /agent:planner after")).toEqual([
       { kind: "text", value: "before " },
       { kind: "agent", name: "planner" },
       { kind: "text", value: " after" },

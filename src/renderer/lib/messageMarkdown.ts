@@ -5,11 +5,11 @@
 // Before handing assistant/user text to markstream-react we:
 // 1. Strip injected subagent hints.
 // 2. Escape file globs like `*.md` so they are not parsed as emphasis.
-// 3. Replace `/skill:`, `<skill>`, `<skill-invoke>` and `#agent` references
+// 3. Replace `/skill:`, `<skill>`, `<skill-invoke>` and `/agent:` references
 //    with custom HTML-like tags that MarkdownRender renders as chips.
 
+import type { SkillSegment } from "../components/skillSegments";
 import { parseAgentSegments, parseMcpToolSegments, parseSkillSegments } from "../components/skillSegments";
-import type { McpToolSegment, SkillSegment } from "../components/skillSegments";
 
 /** Strip the system-injected subagent hint line(s). */
 export function stripSystemHints(content: string): string {
@@ -98,8 +98,8 @@ function mcpTag(server: string, toolName: string): string {
 	return `<mcp-tag server="${escapeXml(server)}" tool="${escapeXml(toolName)}"></mcp-tag>`;
 }
 
-function mcpSegmentsToString(segments: McpToolSegment[]): string {
-	return segments.map((seg) => (seg.kind === "mcp" ? mcpTag(seg.server, seg.toolName) : seg.value)).join("");
+function fileTag(path: string): string {
+	return `<file-tag path="${escapeXml(path)}"></file-tag>`;
 }
 
 function skillSegmentsToString(segments: SkillSegment[]): string {
@@ -112,7 +112,7 @@ function skillSegmentsToString(segments: SkillSegment[]): string {
  * placeholders that the renderer maps back to `SkillTag` / `AgentTag` / `McpTag`.
  *
  * Processing order: stripSystemHints → escapeGlobAsterisks →
- * parseAgentSegments(@) → parseMcpToolSegments(#) → parseSkillSegments
+ * parseAgentSegments(/agent:) → parseMcpToolSegments(#) → parseSkillSegments
  */
 export function prepareMessageContent(content: string): string {
 	const stripped = stripSystemHints(content);
@@ -139,5 +139,14 @@ export function prepareMessageContent(content: string): string {
 		}
 	}
 
-	return parts.join("");
+	const result = parts.join("");
+	return applyFileTags(result);
+}
+
+/**
+ * 对最终文本做 @path 文件引用替换为 file-tag。
+ * 在所有 chip 解析完成后独立运行，避免与正则交叉干扰。
+ */
+export function applyFileTags(text: string): string {
+	return text.replace(/(^|\s)(@([^\s]*(?:\.[a-zA-Z0-9]+|\/)[^\s]*))/g, (_match, p1, _full, path) => p1 + fileTag(path));
 }

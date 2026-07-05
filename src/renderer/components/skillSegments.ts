@@ -114,17 +114,16 @@ export function renderSkillSegments(
 
 // ============================================================
 // ============================================================
-// Agent 分段解析（对标 skill 分段，解析 @agentName 模式）
+// Agent 分段解析（对标 skill 分段，解析 /agent:name 模式）
 // ============================================================
 
 export type AgentSegment = { kind: "text"; value: string } | { kind: "agent"; name: string };
 
 /**
- * 匹配行首或空白后的 @agentName。
- * @ 后必须紧跟名称且中间无空格，名称以小写字母开头，可含小/大写字母、数字、下划线、连字符。
- * 该规则把 email（@email.com）等形式排除在外。
+ * 匹配行首或空白后的 /agent:name。
+ * /agent 与 /skill 共用 slash command 心智模型，单 @ 保留给 pi 文件引用。
  */
-const AT_AGENT_RE = /(?:^|\s)(@([a-z][a-zA-Z0-9_-]*))/g;
+const AT_AGENT_RE = /(?:^|\s)(\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*))(?=$|\s)/g;
 
 export function parseAgentSegments(content: string): AgentSegment[] {
 	if (!content) return [];
@@ -134,7 +133,7 @@ export function parseAgentSegments(content: string): AgentSegment[] {
 
 	for (const match of content.matchAll(AT_AGENT_RE)) {
 		const matchStart = match.index ?? 0;
-		const fullToken = match[1]!; // "@scout"
+		const fullToken = match[1]!; // "/agent:scout"
 		const name = match[2]!; // "scout"
 		const tokenStart = matchStart + (match[0]!.length - fullToken.length);
 

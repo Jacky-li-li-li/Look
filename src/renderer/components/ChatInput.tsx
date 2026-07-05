@@ -9,12 +9,12 @@ import type React from "react";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatInputMenus } from "../hooks/useChatInputMenus";
-import { permissionModeAtomFamily } from "../store/atoms";
+import { chatInputInsertRequestAtom, permissionModeAtomFamily } from "../store/atoms";
 import { AgentHashMenu } from "./AgentHashMenu";
-import { McpHashMenu } from "./McpHashMenu";
 import ChatInputToolbar from "./ChatInputToolbar";
 import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ImagePreviewBar from "./ImagePreviewBar";
+import { McpHashMenu } from "./McpHashMenu";
 import { SkillSlashMenu } from "./SkillSlashMenu";
 
 export interface ChatInputHandle {
@@ -52,6 +52,7 @@ const ChatInput = function ChatInput({
 }: ChatInputProps) {
 	const { t } = useTranslation();
 	const [permissionMode, setPermissionMode] = useAtom(permissionModeAtomFamily(agentId));
+	const [insertRequest, setInsertRequest] = useAtom(chatInputInsertRequestAtom);
 	const [input, setInputState] = useState("");
 	const inputRef = useRef<ContentEditableInputHandle>(null);
 	// Undo stack — user-driven edits push the previous text; Cmd+Z pops.
@@ -107,6 +108,15 @@ const ChatInput = function ChatInput({
 		inputRef.current?.focus();
 	}, []);
 
+	useEffect(() => {
+		if (!insertRequest || insertRequest.agentId !== agentId) return;
+		const current = inputRef.current?.getText() ?? inputSnapshotRef.current;
+		const separator = current.length > 0 && !/\s$/.test(current) ? " " : "";
+		setInput(`${current}${separator}${insertRequest.text} `);
+		inputRef.current?.focus();
+		setInsertRequest(null);
+	}, [agentId, insertRequest, setInput, setInsertRequest]);
+
 	// ── image paste ──
 	const handleImagesPasted = useCallback((images: ImageContent[]) => {
 		setPendingImages((prev) => [...prev, ...images]);
@@ -145,7 +155,10 @@ const ChatInput = function ChatInput({
 			if (!/^\/[^\s]*$/.test(prev) && /^\/[^\s]*$/.test(text)) {
 				menus.setSlashIndex(0);
 			}
-			if (!/(?:^|\s)@[^\s]*$/.test(prev) && /(?:^|\s)@[^\s]*$/.test(text)) {
+			if (
+				!/(?:^|\s)\/(?:agent|subagent):?[A-Za-z0-9._-]*$/.test(prev) &&
+				/(?:^|\s)\/(?:agent|subagent):?[A-Za-z0-9._-]*$/.test(text)
+			) {
 				menus.setAtIndex(0);
 			}
 			if (!/(?:^|\s)#[^\s]*$/.test(prev) && /(?:^|\s)#[^\s]*$/.test(text)) {
@@ -184,11 +197,11 @@ const ChatInput = function ChatInput({
 					selectedIndex={menus.atIndex}
 					onSelectedIndexChange={menus.setAtIndex}
 					onSelectAgent={(a) => {
-						const replaced = input.replace(/@[^\s]*$/, `@${a.name} `);
+						const replaced = input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, `/agent:${a.name} `);
 						setInput(replaced);
 					}}
 					onClose={() => {
-						const cleaned = input.replace(/@[^\s]*$/, "").trimEnd();
+						const cleaned = input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, "").trimEnd();
 						setInput(cleaned);
 					}}
 					subagentEnabled={menus.subagentOn}

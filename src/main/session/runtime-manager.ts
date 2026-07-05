@@ -1040,18 +1040,20 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeStore, ISession
 		const managed = await this.ensureRuntime(sessionId);
 		const session = managed.runtime.session;
 
-		// 解析 @agentName 模式：检测用户是否通过 @ 指定了 SubAgent
-		const agentTokens = text.match(/(?:^|\s)@(\w[\w.-]*)/g);
-		if (agentTokens && agentTokens.length > 0) {
+		// 解析 /agent:name 模式：/skill 仍归 pi 技能命令，单 @ 保留给 pi 文件引用。
+		const agentTokens = Array.from(
+			text.matchAll(/(?:^|\s)\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*)(?=$|\s)/g),
+		);
+		if (agentTokens.length > 0) {
 			const discovery = discoverAgents(managed.projectId, "both");
-			const agentNames = agentTokens.map((t) => t.replace(/^\s*@/, ""));
+			const agentNames = agentTokens.flatMap((match) => match[1] ?? []);
 			const foundAgents = agentNames.flatMap((name) => {
 				const found = discovery.agents.find((a) => a.name === name);
 				return found ? [found] : [];
 			});
 
 			if (foundAgents.length > 0) {
-				// 保留原文 @agentName chip，仅追加一行最小指令
+				// 保留原文 /agent:name chip，仅追加一行最小指令
 				const names = foundAgents.map((a) => a.name).join(", ");
 				const hint = foundAgents.length === 1 ? `[Use subagent: ${names}]` : `[Use subagents: ${names}]`;
 				text = `${hint}\n\n${text}`;

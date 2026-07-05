@@ -1,5 +1,5 @@
 // ============================================================
-// AgentTag — 消息气泡中 @agentName chip 的 post-send 渲染
+// AgentTag — 消息气泡中 /agent:name chip 的 post-send 渲染
 //
 // 对标 SkillTag.tsx：输入框中 ContentEditableInput 用
 // .agent-chip DOM 元素渲染，消息气泡中则用此 React 组件渲染。
@@ -22,7 +22,7 @@ export function AgentTag({ name, className }: AgentTagProps) {
 				.join(" ")}
 		>
 			<Bot data-icon="inline-start" className="size-3" />
-			<span className="truncate">@{name}</span>
+			<span className="truncate">/agent:{name}</span>
 		</Badge>
 	);
 }

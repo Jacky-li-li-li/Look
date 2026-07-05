@@ -22,12 +22,14 @@ import {
 	DropdownMenuTrigger,
 } from "@shared/components/ui/dropdown-menu";
 import type { FileTreeNode } from "@shared/types";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
 import {
+	activeAgentIdAtom,
+	chatInputInsertRequestAtom,
 	expandedWorkspacePathsAtomFamily,
 	loadedWorkspaceChildrenAtomFamily,
 	showHiddenFilesAtom,
@@ -396,6 +398,8 @@ interface WorkspaceTreeNodeRowProps {
 function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNodeRowProps) {
 	const { node, depth } = row;
 	const isDir = node.type === "directory";
+	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	const setInsertRequest = useSetAtom(chatInputInsertRequestAtom);
 
 	const handleClickToggle = () => {
 		onToggle(row);
@@ -408,14 +412,12 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 
 	const handleCopyAsReference = () => {
 		void navigator.clipboard.writeText(`@${node.path}`);
-		toast.success("已复制 @ 引用");
-	};
-
-	const handleOpenInAgent = () => {
-		// 简化方案:向当前活跃 agent 发送 @filename,让 agent 自己读文件
-		// 实际实现需要 activeAgentId,在父组件传入或通过 atom 读取
-		void navigator.clipboard.writeText(`@${node.path}`);
-		toast.info("已复制 @ 引用,粘贴到聊天框发送给 agent");
+		setInsertRequest({
+			id: Date.now(),
+			agentId: activeAgentId ?? "",
+			text: `@${node.path}`,
+		});
+		toast.success("已复制并插入 @ 引用");
 	};
 
 	const handleRevealInFinder = () => {
@@ -469,9 +471,10 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					{!isDir && <DropdownMenuItem onClick={handleOpenInAgent}>在 agent 中打开</DropdownMenuItem>}
 					<DropdownMenuItem onClick={handleCopyPath}>复制绝对路径</DropdownMenuItem>
-					<DropdownMenuItem onClick={handleCopyAsReference}>复制 @ 引用</DropdownMenuItem>
+					<DropdownMenuItem onClick={handleCopyAsReference} className="font-medium">
+						复制 @ 引用
+					</DropdownMenuItem>
 					<DropdownMenuItem onClick={handleRevealInFinder}>在 Finder 中打开</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>

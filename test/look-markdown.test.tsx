@@ -43,9 +43,9 @@ This is **bold**.`;
 		expect(container.querySelector("[data-icon='inline-start']")).not.toBeNull();
 	});
 
-	it("renders #agentName as an agent chip", async () => {
-		const { container } = render(<LookMarkdown content="Ask #planner" />);
-		await waitFor(() => expect(container.textContent).toContain("#planner"));
+	it("renders /agent:name as an agent chip", async () => {
+		const { container } = render(<LookMarkdown content="Ask /agent:planner" />);
+		await waitFor(() => expect(container.textContent).toContain("/agent:planner"));
 	});
 
 	it("renders streaming content without error", async () => {

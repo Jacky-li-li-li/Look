@@ -1,5 +1,5 @@
 // ============================================================
-// SkillAwareContent — 消息气泡中渲染 /skill:name、@agentName 和 #server__toolName chip
+// SkillAwareContent — 消息气泡中渲染 /skill:name、/agent:name 和 #server__toolName chip
 // ============================================================
 //
 // 现在由 LookMarkdown 统一处理 Markdown + chip：它会在把内容交给

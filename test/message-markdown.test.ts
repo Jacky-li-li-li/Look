@@ -43,11 +43,17 @@ describe("prepareMessageContent", () => {
 		);
 	});
 
-	it("converts #agentName to an agent-tag", () => {
-		expect(prepareMessageContent("Ask #planner for help")).toBe(
+	it("converts /agent:name to an agent-tag", () => {
+		expect(prepareMessageContent("Ask /agent:planner for help")).toBe(
 			'Ask <agent-tag name="planner"></agent-tag> for help',
 		);
 	});
+
+		it("converts @file references to file-tag", () => {
+			expect(prepareMessageContent("Open @src/app.ts")).toBe(
+				'Open <file-tag path="src/app.ts"></file-tag>',
+			);
+		});
 
 	it("converts legacy <skill> blocks to skill-tags", () => {
 		const input = 'prefix <skill name="foo" location="/x">body</skill> suffix';

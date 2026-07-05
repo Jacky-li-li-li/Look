@@ -229,6 +229,15 @@ export const planApprovalRequestAtomFamily = atomFamily((_agentId: string) => at
  */
 export const activeChatAtBottomAtom = atom(true);
 
+export interface ChatInputInsertRequest {
+	id: number;
+	agentId: string;
+	text: string;
+}
+
+/** One-shot request used by side panels to append text to the active chat input. */
+export const chatInputInsertRequestAtom = atom<ChatInputInsertRequest | null>(null);
+
 // ---- UI state ----
 
 export const showSettingsAtom = atom(false);

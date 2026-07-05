@@ -13,6 +13,7 @@ import { useTheme } from "next-themes";
 import { memo, useMemo } from "react";
 import { closeAtxHeadings, prepareMessageContent } from "../lib/messageMarkdown";
 import { AgentTag } from "./AgentTag";
+import { FileTag } from "./FileTag";
 import { SkillTag } from "./SkillTag";
 import { McpTag } from "./McpTag";
 
@@ -78,10 +79,17 @@ function McpTagNode({ node }: NodeComponentProps<ChipNode>) {
 	return <McpTag server={server} toolName={tool} />;
 }
 
+function FileTagNode({ node }: NodeComponentProps<ChipNode>) {
+	const path = getAttr(node, "path") || node.content;
+	if (!path) return null;
+	return <FileTag path={path} />;
+}
+
 const streamingComponents = defineStreamingComponents({
 	"skill-tag": SkillTagNode,
 	"agent-tag": AgentTagNode,
 	"mcp-tag": McpTagNode,
+	"file-tag": FileTagNode,
 });
 
 // ── Component ──
@@ -153,7 +161,7 @@ const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, 
 			batchRendering={isStreaming}
 			isDark={resolvedTheme === "dark"}
 			streamingComponents={streamingComponents}
-			customHtmlTags={["skill-tag", "agent-tag"]}
+			customHtmlTags={["skill-tag", "agent-tag", "file-tag"]}
 			htmlPolicy="safe"
 		/>
 	);
