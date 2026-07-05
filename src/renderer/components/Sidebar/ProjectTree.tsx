@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent } from "@shared/components/ui/collapsib
 import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { ChevronsDownUp, ChevronsUpDown, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, memo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -24,8 +24,11 @@ import {
 import { appStore } from "../../store/ipcHandler";
 import ProjectHeader from "./ProjectHeader";
 import SessionRow from "./SessionRow";
-import type { ProjectTreeProps } from "./types";
+import type { ChildSessionInfo, ProjectTreeProps } from "./types";
 import { SESSION_COLLAPSE_THRESHOLD } from "./utils";
+
+/** 稳定空数组引用，避免每次渲染创建新引用导致 memo 失效 */
+const EMPTY_CHILDREN: ChildSessionInfo[] = [];
 
 const api = (window as any).look;
 
@@ -296,7 +299,7 @@ interface ProjectTreeItemProps {
 	toggleProjectExpansion: (projectId: string) => void;
 }
 
-function ProjectTreeItem({
+const ProjectTreeItem = memo(function ProjectTreeItem({
 	project,
 	sessions,
 	isOpen,
@@ -379,7 +382,15 @@ function ProjectTreeItem({
 						const isRunning = runningAgents.has(agent.id);
 						const phase = sessionPhases.get(agent.id) ?? "idle";
 						const isCompleted = recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom);
-						const childrenList = childSessionsByParent.get(agent.id) ?? [];
+						// 预计算子会话的 phase/running，消除 SessionRow 对全局 atom 的订阅
+						const rawChildren = childSessionsByParent.get(agent.id);
+						const childrenList = rawChildren
+							? rawChildren.map((child) => ({
+									agent: child,
+									childPhase: sessionPhases.get(child.id) ?? 'idle',
+									childRunning: runningAgents.has(child.id),
+								}))
+							: EMPTY_CHILDREN;
 						return (
 							<SessionRow
 								key={agent.id}
@@ -446,4 +457,5 @@ function ProjectTreeItem({
 			</CollapsibleContent>
 		</Collapsible>
 	);
-}
+});
+ProjectTreeItem.displayName = "ProjectTreeItem";

@@ -47,10 +47,18 @@ export interface SessionRowProps {
 	selectSession: (agent: AgentInfo) => void;
 	collapsedSubSessions: Set<string>;
 	toggleSubSessions: (parentId: string, e: React.MouseEvent) => void;
-	childrenList: AgentInfo[];
+	/** 子会话列表，已预计算 phase 和 running 状态，避免 SessionRow 订阅全局 atom */
+	childrenList: ChildSessionInfo[];
 	copySessionId: (id: string) => Promise<void>;
 	exportSession: (id: string) => Promise<void>;
 	onDestroy: (id: string) => void;
+}
+
+/** 预计算子会话状态，消除 SessionRow 对 runningAgentsAtom / sessionPhasesAtom 的订阅 */
+export interface ChildSessionInfo {
+	agent: AgentInfo;
+	childPhase: string;
+	childRunning: boolean;
 }
 
 export interface ProjectTreeProps {

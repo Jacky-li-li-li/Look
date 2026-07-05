@@ -76,7 +76,10 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 
 	// ready 后恢复位置
 	// 关键：用 rAF 把 scrollToBottom 延迟到下一帧，
-	// 确保 StickToBottom 内部的 ResizeObserver 已经处理完本轮布局
+	// 确保 StickToBottom 内部的 ResizeObserver 已经处理完本轮布局。
+	//
+	// 注意：刷新/首次加载时无保存位置 → 不做任何滚动操作，
+	// StickToBottom 默认已在底部，额外的 scrollToBottom 反而造成可见跳动。
 	useLayoutEffect(() => {
 		if (!ready || restoredRef.current) return;
 		restoredRef.current = true;
@@ -110,6 +113,7 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 			);
 
 		if (savedDistance != null && savedDistance > 5) {
+			// 有保存的滚动位置 → 恢复
 			stopScroll();
 			const targetScrollTop = el.scrollHeight - el.clientHeight - savedDistance;
 			el.scrollTop = Math.max(0, targetScrollTop);
@@ -117,35 +121,9 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 				const t = el.scrollHeight - el.clientHeight - savedDistance;
 				el.scrollTop = Math.max(0, t);
 			});
-		} else {
-			// 用 rAF 包裹，给 StickToBottom 的 ResizeObserver 时间完成
-			// 然后用双 rAF 做巩固
-			requestAnimationFrame(() => {
-				DEBUG &&
-					console.log(
-						"[ScrollPos] scrollToBottom(instant), scrollHeight=",
-						el.scrollHeight,
-						"clientHeight=",
-						el.clientHeight,
-					);
-				scrollToBottom("instant");
-				// 巩固：再等一帧确认位置正确
-				requestAnimationFrame(() => {
-					const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-					DEBUG &&
-						console.log(
-							"[ScrollPos] after scrollToBottom, distanceFromBottom=",
-							dist,
-							"scrollTop=",
-							el.scrollTop,
-						);
-					if (dist > 5) {
-						DEBUG && console.log("[ScrollPos] correcting, re-scrollToBottom");
-						scrollToBottom("instant");
-					}
-				});
-			});
 		}
+		// 无保存位置时（刷新/首次加载）不调用 scrollToBottom：
+		// StickToBottom 组件在挂载时默认已在底部，额外的滚动调用反而造成可见跳动
 	}, [ready, id, navigatingEntry, scrollRef, stopScroll, scrollToBottom, scrollToMessage]);
 }
 

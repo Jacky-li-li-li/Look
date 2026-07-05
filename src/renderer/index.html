@@ -5,25 +5,9 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta
 			http-equiv="Content-Security-Policy"
-			content="default-src 'self'; script-src 'self' 'sha256-j11Wet888E8XE+Z+i+JcKln+4O8niotDqrASk5nQgzk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: https:; font-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; media-src 'self' data: blob: file:; frame-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: https:; font-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; media-src 'self' data: blob: file:; frame-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
 		/>
 		<title>Look</title>
-		<!-- Anti-FOUC: 同步恢复持久化主题，首帧前完成 class 设置 -->
-		<script>
-			(function() {
-				try {
-					var t = window.__LOOK_BOOT_THEME__;
-					if (t && t.style && t.tone) {
-						document.documentElement.className = 'theme-' + t.style + ' tone-' + t.tone;
-					}
-				} catch(e) {}
-			})();
-		</script>
-		<!-- Anti-FOUC: 隐藏 body 直到 React 水合并应用主题 -->
-		<style>
-			body { visibility: hidden; }
-			body.look-ready { visibility: visible; }
-		</style>
 	</head>
 	<body>
 		<div id="root"></div>

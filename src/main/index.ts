@@ -193,7 +193,7 @@ function setupCsp(): void {
 
 	const csp = [
 		`default-src 'self'`,
-		`script-src 'self' 'sha256-j11Wet888E8XE+Z+i+JcKln+4O8niotDqrASk5nQgzk='`,
+		`script-src 'self'`,
 		`style-src 'self' 'unsafe-inline'`,
 		`img-src 'self' data: blob: file: https:`,
 		`font-src 'self' data:`,

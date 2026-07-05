@@ -22,11 +22,7 @@ export function useAuthSession() {
 	const [, setUserProfile] = useAtom(userProfileAtom);
 
 	useEffect(() => {
-		if (!api) {
-			setIsLoggedIn(false);
-			setAuthLoading(false);
-			return;
-		}
+		if (!api) return;
 
 		let cancelled = false;
 
@@ -47,11 +43,7 @@ export function useAuthSession() {
 
 		async function restoreSession() {
 			if (!configured) {
-				// 本地模式：步骤 1 已拉取本地 profile，直接登录
-				if (!cancelled) {
-					setIsLoggedIn(true);
-					setAuthLoading(false);
-				}
+				// 本地模式：步骤 1 已拉取本地 profile，无需额外操作
 				return;
 			}
 
@@ -97,25 +89,17 @@ export function useAuthSession() {
 						}
 					}
 				}
-				if (!cancelled) {
-					setIsLoggedIn(true);
-					setAuthLoading(false);
-				}
+				// isLoggedIn 已经是 true（乐观），无需再设
 			} else {
 				// 无 Supabase 会话 → 检查本地 profile
 				try {
 					const r = await api.getUserProfile();
 					if (!cancelled && r?.success && r.profile?.userId) {
 						setUserProfile(r.profile);
-						setIsLoggedIn(true);
-						setAuthLoading(false);
-						return;
+						return; // isLoggedIn 保持 true
 					}
 				} catch {}
-				if (!cancelled) {
-					setIsLoggedIn(false);
-					setAuthLoading(false);
-				}
+				if (!cancelled) setIsLoggedIn(false);
 			}
 		}
 
@@ -124,7 +108,7 @@ export function useAuthSession() {
 		return () => {
 			cancelled = true;
 		};
-	}, [setIsLoggedIn, setUserProfile, setAuthLoading]);
+	}, [setIsLoggedIn, setUserProfile]);
 
 	return { isLoggedIn, authLoading };
 }

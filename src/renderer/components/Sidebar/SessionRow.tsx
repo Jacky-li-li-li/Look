@@ -11,12 +11,10 @@ import {
 	DropdownMenuTrigger,
 } from "@shared/components/ui/dropdown-menu";
 import type { AgentInfo } from "@shared/types";
-import { useAtomValue } from "jotai";
 import { Bot, ChevronDown, ChevronRight, Copy, Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
-import { runningAgentsAtom, sessionPhasesAtom } from "../../store/atoms";
-import type { SessionRowProps } from "./types";
+import type { ChildSessionInfo, SessionRowProps } from "./types";
 import { fmtRelativeTime } from "./utils";
 
 function SessionRowImpl({
@@ -41,8 +39,6 @@ function SessionRowImpl({
 	onDestroy,
 }: SessionRowProps) {
 	const { t } = useTranslation();
-	const runningAgents = useAtomValue(runningAgentsAtom);
-	const sessionPhases = useAtomValue(sessionPhasesAtom);
 	const hasChildren = childrenList.length > 0;
 	const feishuLabel = t("settings.feishu", "Feishu");
 	return (
@@ -150,33 +146,29 @@ function SessionRowImpl({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>
-			{/* Sub-sessions */}
+			{/* Sub-sessions — 使用预计算的 phase/running，无需订阅全局 atom */}
 			{!collapsedSubSessions.has(agent.id) &&
-				childrenList.map((child: AgentInfo) => {
-					const childPhase = sessionPhases.get(child.id) ?? "idle";
-					const childRunning = runningAgents.has(child.id);
-					return (
-						<div
-							key={child.id}
-							data-agent-id={child.id}
-							data-agent-status={childPhase}
-							data-running={childRunning || undefined}
-							className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[32px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
+				childrenList.map((child: ChildSessionInfo) => (
+					<div
+						key={child.agent.id}
+						data-agent-id={child.agent.id}
+						data-agent-status={child.childPhase}
+						data-running={child.childRunning || undefined}
+						className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[32px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
+					>
+						<button
+							type="button"
+							className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
+							onClick={() => selectSession(child.agent)}
 						>
-							<button
-								type="button"
-								className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
-								onClick={() => selectSession(child)}
-							>
-								<Bot className="size-3 shrink-0 text-sky-500" />
-								{child.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
-								<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
-									{child.name || child.agentConfigName}
-								</span>
-							</button>
-						</div>
-					);
-				})}
+							<Bot className="size-3 shrink-0 text-sky-500" />
+							{child.agent.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
+							<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
+								{child.agent.name || child.agent.agentConfigName}
+							</span>
+						</button>
+					</div>
+				))}
 		</div>
 	);
 }
