@@ -3,12 +3,9 @@
 // ============================================================
 
 import { Separator } from "@shared/components/ui/separator";
-import { TooltipProvider } from "@shared/components/ui/tooltip";
 import type { ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { ThemeProvider } from "next-themes";
-import { memo } from "react";
-import { DEFAULT_THEME } from "../lib/look-theme";
+import { memo, useEffect } from "react";
 import { appReadyPhaseAtom, type SettingsTab } from "../store/atoms";
 import type { RendererSessionPhase } from "../store/sessionTypes";
 import AgentSquare from "./AgentMarketplace/AgentSquare";
@@ -118,15 +115,19 @@ function AppLayout({
 	onProvidersChange,
 }: AppLayoutProps) {
 	const appReadyPhase = useAtomValue(appReadyPhaseAtom);
+
+	// 首帧渲染后标记 data-app-ready，CSS 可据此禁用初始加载过渡
+	useEffect(() => {
+		const el = document.documentElement;
+		el.setAttribute("data-app-ready", "false");
+		const raf = requestAnimationFrame(() => {
+			el.setAttribute("data-app-ready", "true");
+		});
+		return () => cancelAnimationFrame(raf);
+	}, []);
+
 	return (
-		<ThemeProvider
-			attribute="data-theme"
-			defaultTheme={DEFAULT_THEME.tone}
-			themes={["light", "dark"]}
-			enableSystem={false}
-			disableTransitionOnChange
-		>
-			<TooltipProvider>
+			<>
 				<div
 					className="app-shell flex h-screen overflow-hidden bg-background p-2"
 					data-sidebar-collapsed={sidebarCollapsed}
@@ -224,9 +225,8 @@ function AppLayout({
 					<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 					<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 				</div>
-			</TooltipProvider>
 			<UpdateNotification />
-		</ThemeProvider>
+		</>
 	);
 }
 

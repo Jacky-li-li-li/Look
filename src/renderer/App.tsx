@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useAtom, useAtomValue } from "jotai";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import AppLayout from "./components/AppLayout";
 import LoginScreen from "./components/LoginScreen";
@@ -82,6 +82,11 @@ export default function App() {
 	const projectActions = useProjectActions();
 	const { thinkingLevels } = useAppEffects();
 
+	// ── Anti-FOUC: 首帧渲染 commit 后立即显示 body（消除白屏/未样式闪烁）──
+	useEffect(() => {
+		document.body.classList.add("look-ready");
+	}, []);
+
 	// ── Layout callbacks ──
 	const handleSettingsClick = useCallback(() => {
 		appStore.set(settingsTabAtom, "general");
@@ -114,7 +119,9 @@ export default function App() {
 		);
 	}
 
-	if (isSupabaseConfigured() && authLoading) {
+	// 尚未确定登录态（isLoggedIn === null）或仍在 auth 检查中 → 显示加载
+	// 三态登录态避免乐观假设导致的 LoginScreen / AppLayout 闪现
+	if (isLoggedIn === null || (isSupabaseConfigured() && authLoading)) {
 		return (
 			<div className="app-shell flex h-screen flex-col items-center justify-center gap-4 p-10 text-center">
 				<PixelAgentAvatar size="lg" active />
@@ -124,7 +131,7 @@ export default function App() {
 		);
 	}
 
-	if (isSupabaseConfigured() && !isLoggedIn) {
+	if (isSupabaseConfigured() && isLoggedIn === false) {
 		return <LoginScreen />;
 	}
 

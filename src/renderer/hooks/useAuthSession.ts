@@ -22,7 +22,13 @@ export function useAuthSession() {
 	const [, setUserProfile] = useAtom(userProfileAtom);
 
 	useEffect(() => {
-		if (!api) return;
+		if (!api) {
+			setIsLoggedIn(false);
+			setAuthLoading(false);
+			return;
+		}
+
+		let cancelled = false;
 
 		/**
 		 * 立即加载本地 profile——IPC 到主进程读写 ~/.look/user-profile.json，
@@ -30,6 +36,7 @@ export function useAuthSession() {
 		 */
 		api.getUserProfile()
 			.then((r: any) => {
+				if (cancelled) return;
 				if (r?.success && r.profile?.userId) {
 					setUserProfile(r.profile);
 				}
@@ -40,7 +47,11 @@ export function useAuthSession() {
 
 		async function restoreSession() {
 			if (!configured) {
-				// 本地模式：步骤 1 已拉取本地 profile，无需额外操作
+				// 本地模式：步骤 1 已拉取本地 profile，直接登录
+				if (!cancelled) {
+					setIsLoggedIn(true);
+					setAuthLoading(false);
+				}
 				return;
 			}
 
@@ -49,6 +60,8 @@ export function useAuthSession() {
 				data: { session },
 			} = await supabase.auth.getSession();
 
+			if (cancelled) return;
+
 			if (session?.user) {
 				// 从云端拉取最新资料，覆盖本地缓存
 				const { data: cloudProfile } = await supabase
@@ -56,6 +69,8 @@ export function useAuthSession() {
 					.select("user_name, avatar")
 					.eq("id", session.user.id)
 					.single();
+
+				if (cancelled) return;
 
 				if (cloudProfile) {
 					setUserProfile({
@@ -68,34 +83,48 @@ export function useAuthSession() {
 					// 云端无记录 → 回退到本地 profile（已在步骤 1 加载）
 					try {
 						const r = await api.getUserProfile();
-						if (r?.success && r.profile?.userId === session.user.id) {
+						if (!cancelled && r?.success && r.profile?.userId === session.user.id) {
 							setUserProfile(r.profile);
 						}
 					} catch {
-						setUserProfile({
-							userId: session.user.id,
-							email: session.user.email ?? "",
-							userName: session.user.email ?? "",
-							avatar: "",
-						});
+						if (!cancelled) {
+							setUserProfile({
+								userId: session.user.id,
+								email: session.user.email ?? "",
+								userName: session.user.email ?? "",
+								avatar: "",
+							});
+						}
 					}
 				}
-				// isLoggedIn 已经是 true（乐观），无需再设
+				if (!cancelled) {
+					setIsLoggedIn(true);
+					setAuthLoading(false);
+				}
 			} else {
 				// 无 Supabase 会话 → 检查本地 profile
 				try {
 					const r = await api.getUserProfile();
-					if (r?.success && r.profile?.userId) {
+					if (!cancelled && r?.success && r.profile?.userId) {
 						setUserProfile(r.profile);
-						return; // isLoggedIn 保持 true
+						setIsLoggedIn(true);
+						setAuthLoading(false);
+						return;
 					}
 				} catch {}
-				setIsLoggedIn(false);
+				if (!cancelled) {
+					setIsLoggedIn(false);
+					setAuthLoading(false);
+				}
 			}
 		}
 
 		restoreSession();
-	}, [setIsLoggedIn, setUserProfile]);
+
+		return () => {
+			cancelled = true;
+		};
+	}, [setIsLoggedIn, setUserProfile, setAuthLoading]);
 
 	return { isLoggedIn, authLoading };
 }

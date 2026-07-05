@@ -46,6 +46,16 @@
 
 @custom-variant dark (&:is(.tone-dark *));
 
+/* ── 初始加载过渡抑制：data-app-ready="false" 期间禁用所有 CSS 过渡/动画，
+   避免 sidebar 展开、面板淡入等初始动画叠加造成"一顿一顿"的视觉体验。 ── */
+[data-app-ready="false"] *,
+[data-app-ready="false"] *::before,
+[data-app-ready="false"] *::after {
+	transition-duration: 0s !important;
+	animation-duration: 0s !important;
+	animation-delay: 0s !important;
+}
+
 /* ============================================================
 	 Look — Multi-style Design System
 	 `<html class="theme-{style} tone-{tone}">` selects tokens.

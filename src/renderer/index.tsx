@@ -1,6 +1,7 @@
 import { Toaster } from "@shared/components/ui/sonner";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
 import { Provider } from "jotai";
+import { ThemeProvider } from "next-themes";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
@@ -8,6 +9,7 @@ import { scan } from "react-scan";
 import App from "./App";
 import "./App.css";
 import i18n from "./i18n";
+import { DEFAULT_THEME } from "./lib/look-theme";
 import { appStore, initAppData, initIpcHandlers } from "./store/ipcHandler";
 
 if (import.meta.env.DEV) {
@@ -143,10 +145,18 @@ root.render(
 	<React.StrictMode>
 		<I18nextProvider i18n={i18n}>
 			<TooltipProvider>
-				<Provider store={appStore}>
-					<App />
-					<Toaster />
-				</Provider>
+				<ThemeProvider
+					attribute="data-theme"
+					defaultTheme={DEFAULT_THEME.tone}
+					themes={["light", "dark"]}
+					enableSystem={false}
+					disableTransitionOnChange
+				>
+					<Provider store={appStore}>
+						<App />
+						<Toaster />
+					</Provider>
+				</ThemeProvider>
 			</TooltipProvider>
 		</I18nextProvider>
 	</React.StrictMode>,
