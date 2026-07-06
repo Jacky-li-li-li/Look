@@ -16,7 +16,7 @@ import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
 import type { TFunction } from "i18next";
 import { AlertCircle, ChevronRight, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "../ProviderIcon";
@@ -25,6 +25,9 @@ import CustomProvidersSection from "./CustomProvidersSection";
 import type { CustomProviderInput, CustomProviderStats, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
 
 const api = window.look;
+
+// 保存触发编辑按钮的引用，用于关闭编辑后恢复焦点
+const editTriggerRef = { current: null as HTMLElement | null };
 
 type ForceSaveState = { provider: string; key: string; reason: string; status: number } | null;
 
@@ -185,7 +188,18 @@ function BuiltInProviderRow({
 				isEditing && "bg-muted/45 ring-1 ring-primary/45",
 			)}
 		>
-			<div className={cn("absolute left-0 top-0 h-full w-0.5", track)} />
+			<div className={cn("absolute left-0 top-0 h-full w-0.5", track)} aria-hidden="true" />
+				<span className="sr-only">
+					{testStatus[provider.id]?.verdict === "ok"
+						? t("settings.statusVerified")
+						: testStatus[provider.id]?.verdict === "error"
+						? t("settings.statusFailed")
+						: testStatus[provider.id]?.verdict === "skipped"
+						? t("settings.statusUntested")
+						: provider.hasKey
+						? t("settings.statusConfigured")
+						: t("settings.statusNeedsKey")}
+				</span>
 			<div
 				role="button"
 				tabIndex={hasModels ? 0 : -1}
@@ -203,6 +217,7 @@ function BuiltInProviderRow({
 				<div className="min-w-0">
 					<div className="flex min-w-0 flex-wrap items-center gap-1.5">
 						<ChevronRight
+							aria-hidden="true"
 							className={cn(
 								"size-3 shrink-0 text-muted-foreground transition-transform",
 								isExpanded && "rotate-90",
@@ -226,24 +241,26 @@ function BuiltInProviderRow({
 						size="xs"
 						className="h-7 text-[10px]"
 						onClick={() => (isEditing ? onCloseEditor() : onOpenEditor())}
+						aria-label={isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")}
 					>
-						<Key data-icon="inline-start" className="size-3" />
-						{isEditing ? t("common.cancel") : provider.hasKey ? t("settings.replaceKey") : t("settings.addKey")}
+						<Key data-icon="inline-start" className="size-3" aria-hidden="true" />
+						{isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")}
 					</Button>
-					{clearable && !isEditing && (
+					{clearable && (
 						<Button
 							variant="line-ghost"
 							size="icon-xs"
-							className="h-7 w-7 text-muted-foreground hover:text-destructive"
+							className={cn("h-7 w-7 text-muted-foreground hover:text-destructive", isEditing && "invisible pointer-events-none")}
 							onClick={onClearClick}
+							aria-label={t("settings.clearKey")}
+							aria-hidden={isEditing}
+							disabled={isEditing}
 						>
-							<Trash2 className="size-3" />
+							<Trash2 className="size-3" aria-hidden="true" />
 						</Button>
 					)}
 				</div>
 			</div>
-
-			{isExpanded && provider.models && provider.models.length > 0 && <ModelList models={provider.models} t={t} />}
 
 			{isEditing && (
 				<div className="border-t border-hairline bg-background/35 px-3 py-3 pl-4">
@@ -270,9 +287,10 @@ function BuiltInProviderRow({
 								size="icon"
 								className="absolute right-0 top-0 size-8"
 								onClick={() => editor.setShowKey(!editor.showKey)}
-								tabIndex={-1}
+								aria-label={editor.showKey ? t("settings.hideKey") : t("settings.showKey")}
+								aria-pressed={editor.showKey}
 							>
-								{editor.showKey ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+								{editor.showKey ? <EyeOff data-icon="inline-start" aria-hidden="true" /> : <Eye data-icon="inline-start" aria-hidden="true" />}
 							</Button>
 						</div>
 						<Button
@@ -294,15 +312,7 @@ function BuiltInProviderRow({
 								</>
 							)}
 						</Button>
-						<Button
-							variant="line"
-							size="sm"
-							className="h-8 text-[11px]"
-							onClick={onCloseEditor}
-							disabled={saving}
-						>
-							{t("common.cancel")}
-						</Button>
+
 					</div>
 					{provider.envVar && (
 						<p className="mt-1.5 text-[10px] text-muted-foreground">
@@ -338,6 +348,8 @@ function BuiltInProviderRow({
 					)}
 				</div>
 			)}
+
+			{isExpanded && provider.models && provider.models.length > 0 && <ModelList models={provider.models} t={t} />}
 		</div>
 	);
 }
@@ -431,9 +443,13 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 		patchKeyEdit("showKey", false);
 		patchUi("loadingKey", false);
 		patchUi("forceSave", null);
+		// 恢复焦点到触发编辑的按钮
+		editTriggerRef.current?.focus();
+		editTriggerRef.current = null;
 	};
 
 	const openEditor = async (provider: ProviderInfo) => {
+		editTriggerRef.current = document.activeElement as HTMLElement | null;
 		patchKeyEdit("editing", provider.id);
 		patchKeyEdit("showKey", false);
 		patchUi("forceSave", null);
@@ -442,12 +458,19 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 			patchKeyEdit("input", "");
 			try {
 				const r = await api.getApiKey(provider.id);
-				if (r?.success && r.key) patchKeyEdit("input", r.key);
+				if (r?.success && r.key) {
+					// 防御竞态：只有当前仍在编辑同一 provider 时才写入
+					setKeyEdit((prev) => {
+						if (prev.editing !== provider.id) return prev;
+						return { ...prev, input: r.key };
+					});
+				}
 			} catch {
-				/* leave empty */
+				/* 获取失败时输入框保持空白，用户可手动输入 */
 			}
 			patchUi("loadingKey", false);
 		} else {
+			// env-var / 非可清除 provider：同步清空，无竞态窗口
 			patchKeyEdit("input", "");
 		}
 	};
