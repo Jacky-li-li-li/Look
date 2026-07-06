@@ -243,6 +243,9 @@ export class LarkBridgeService {
 				case "/stop":
 					await this.cmdStopSession(chatId);
 					break;
+				case "/model":
+					await this.cmdModel(chatId, parts.slice(1));
+					break;
 				case "/help":
 					await this.cmdHelp(chatId);
 					break;
@@ -449,6 +452,43 @@ export class LarkBridgeService {
 			await this.getConnectedChannel()?.send(chatId, { text: "⏹️ 已停止当前 Agent 会话。" });
 		} catch {
 			await this.getConnectedChannel()?.send(chatId, { text: "⚠️ 停止会话时出错（可能已经处于空闲状态）。" });
+		}
+	}
+
+	private async cmdModel(chatId: string, args: string[]): Promise<void> {
+		const channel = this.getConnectedChannel();
+		const binding = this.bindings.get(chatId);
+		if (!binding) {
+			await channel?.send(chatId, { text: "📭 当前没有绑定的 Agent 会话，发送任意消息自动创建。" });
+			return;
+		}
+
+		if (args.length === 0) {
+			// 列出所有可用模型
+			const models = this.runtimeManager.getAvailableModelsSync();
+			if (models.length === 0) {
+				await channel?.send(chatId, { text: "📭 没有可用的模型。" });
+				return;
+			}
+			const current = this.runtimeManager.getAgentInfo(binding.sessionId)?.model || "未知";
+			const lines = models.map((m) => {
+				const key = `${m.provider}/${m.id}`;
+				return `${key === current ? "●" : "○"} ${key} — ${m.name}`;
+			});
+			lines.unshift(`**可用模型**（当前: ${current}）`, "");
+			lines.push("", "切换: `/model <provider/model-id>`");
+			await channel?.send(chatId, { text: lines.join("\n") });
+			return;
+		}
+
+		const modelKey = args[0];
+		try {
+			await this.runtimeManager.setModel(binding.sessionId, modelKey);
+			await channel?.send(chatId, { text: `✅ 已切换模型为: ${modelKey}` });
+		} catch (e) {
+			await channel?.send(chatId, {
+				text: `❌ 切换模型失败: ${e instanceof Error ? e.message : String(e)}`,
+			});
 		}
 	}
 
@@ -1082,6 +1122,8 @@ export class LarkBridgeService {
 						"- `/project <编号|项目ID|项目名>` - 切换对话项目",
 						"- `/new project <绝对路径> [名称]` - 新建项目并切换",
 						"- `/list` - 查看当前绑定的会话信息",
+						"- `/model` - 查看可用模型列表",
+						"- `/model <provider/model-id>` - 切换当前会话模型",
 						"- `/stop` - 停止当前正在运行的 Agent 任务",
 						"- `/help` - 显示此帮助信息",
 						"",
