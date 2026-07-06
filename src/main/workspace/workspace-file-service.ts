@@ -60,8 +60,8 @@ export class WorkspaceFileService {
 	private async statSafe(targetPath: string): Promise<fs.Stats | null> {
 		try {
 			return await fs.promises.lstat(targetPath);
-		} catch (error: any) {
-			if (error?.code === "ENOENT") return null;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return null;
 			throw error;
 		}
 	}

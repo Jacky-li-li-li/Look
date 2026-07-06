@@ -37,7 +37,7 @@ async function loadAutoUpdater(): Promise<AppUpdater | null> {
  * Access mod.default.autoUpdater (the underlying CJS exports) instead.
  * See: https://github.com/electron-userland/electron-builder/issues/8399
  */
-function resolveAutoUpdater(mod: Record<string, any>): AppUpdater | null {
+function resolveAutoUpdater(mod: Record<string, unknown>): AppUpdater | null {
 	return (mod.default?.autoUpdater as AppUpdater) ?? (mod.autoUpdater as AppUpdater) ?? null;
 }
 
@@ -66,7 +66,7 @@ export function initUpdater(mainWindow: BrowserWindow): void {
 			emit(mainWindow, {
 				type: "update:available",
 				version: info.version,
-				releaseDate: (info as any).releaseDate,
+				releaseDate: (info as { releaseDate?: string }).releaseDate,
 			});
 		});
 

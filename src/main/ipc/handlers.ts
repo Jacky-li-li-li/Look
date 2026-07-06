@@ -91,12 +91,12 @@ export function registerIpcHandlers(
 				larkChannelManager,
 				larkBridgeService,
 			);
-		} catch (err: any) {
+		} catch (err) {
 			return {
 				success: false,
-				error: err?.message ?? String(err),
+				error: err instanceof Error ? err.message : String(err),
 				errorCode: (err as NodeJS.ErrnoException)?.code ?? null,
-				errorStack: err?.stack ?? null,
+				errorStack: err instanceof Error ? (err.stack ?? null) : null,
 			};
 		}
 	});
@@ -168,8 +168,8 @@ const invokeRouteMap: InvokeRouteMap = {
 		try {
 			await ctx.runtimeManager.setModel(_agentId, data.model);
 			return { success: true };
-		} catch (e: any) {
-			return { success: false, error: e?.message ?? "Failed to switch model" };
+		} catch (e) {
+			return { success: false, error: e instanceof Error ? e.message : "Failed to switch model" };
 		}
 	},
 	"agent:update-thinking": async (data, ctx) => {
@@ -241,12 +241,12 @@ const invokeRouteMap: InvokeRouteMap = {
 		const memRegistry = ModelRegistry.create(memAuth);
 		try {
 			memRegistry.registerProvider(input.name, toProviderConfig(input));
-		} catch (e: any) {
+		} catch (e) {
 			return {
 				success: true,
 				result: {
 					overall: "fail",
-					results: [{ modelId: "registration", ok: false, error: e?.message ?? String(e) }],
+					results: [{ modelId: "registration", ok: false, error: e instanceof Error ? e.message : String(e) }],
 				},
 			};
 		}
@@ -282,8 +282,8 @@ const invokeRouteMap: InvokeRouteMap = {
 						return { modelId: m.id, ok: false, error: message.errorMessage ?? `HTTP ${status}` };
 					}
 					return { modelId: m.id, ok: true, latencyMs: Date.now() - start };
-				} catch (e: any) {
-					return { modelId: m.id, ok: false, error: e?.message ?? String(e) };
+				} catch (e) {
+					return { modelId: m.id, ok: false, error: e instanceof Error ? e.message : String(e) };
 				}
 			}),
 		);
@@ -551,8 +551,8 @@ const invokeRouteMap: InvokeRouteMap = {
 				label: data.label,
 			});
 			return { success: true, result };
-		} catch (e: any) {
-			return { success: false, error: e?.message ?? "Failed to navigate tree" };
+		} catch (e) {
+			return { success: false, error: e instanceof Error ? e.message : "Failed to navigate tree" };
 		}
 	},
 	"agent:create-fork": async (data, ctx) => {
@@ -564,8 +564,8 @@ const invokeRouteMap: InvokeRouteMap = {
 				name: data.name,
 			});
 			return { success: true, ...result };
-		} catch (e: any) {
-			return { success: false, error: e?.message ?? "Failed to create fork" };
+		} catch (e) {
+			return { success: false, error: e instanceof Error ? e.message : "Failed to create fork" };
 		}
 	},
 	"agent:set-entry-label": async (data, ctx) => {
@@ -753,17 +753,17 @@ const invokeRouteMap: InvokeRouteMap = {
 		return { success: true, enabled: data.enabled };
 	},
 	"agent-definitions:list": async (data, ctx) => {
-		return { success: true, agents: ctx.runtimeManager.listAgentDefinitions() };
+		return { success: true, agents: await ctx.runtimeManager.listAgentDefinitions() };
 	},
 	"agent-definitions:create": async (data, ctx) => {
 		const input = guardAgentDefinitionInput(data.input);
-		const agent = ctx.runtimeManager.createAgentDefinition(input);
+		const agent = await ctx.runtimeManager.createAgentDefinition(input);
 		return { success: true, agent };
 	},
 	"agent-definitions:update": async (data, ctx) => {
 		guardString(data.name, "name");
 		const input = guardAgentDefinitionInput(data.input);
-		const agent = ctx.runtimeManager.updateAgentDefinition(data.name, input);
+		const agent = await ctx.runtimeManager.updateAgentDefinition(data.name, input);
 		return { success: true, agent };
 	},
 	"agent-definitions:delete": async (data, ctx) => {
@@ -773,7 +773,7 @@ const invokeRouteMap: InvokeRouteMap = {
 	},
 	"agent-definitions:install": async (data, ctx) => {
 		guardString(data.name, "name");
-		const agent = ctx.runtimeManager.installAgentDefinition(data.name);
+		const agent = await ctx.runtimeManager.installAgentDefinition(data.name);
 		return { success: true, agent };
 	},
 	"agent-definitions:set-enabled": async (data, ctx) => {
@@ -812,8 +812,8 @@ const invokeRouteMap: InvokeRouteMap = {
 		try {
 			await ctx.larkChannelManager.connectManual({ appId, appSecret, name: data.name });
 			return { success: true };
-		} catch (err: any) {
-			return { success: false, error: err?.message ?? String(err) };
+		} catch (err) {
+			return { success: false, error: err instanceof Error ? err.message : String(err) };
 		}
 	},
 	"im:cancel-registration": async (data, ctx) => {
@@ -848,8 +848,8 @@ const invokeRouteMap: InvokeRouteMap = {
 		try {
 			await ctx.larkChannelManager.reconnect(_provider, _appId);
 			return { success: true };
-		} catch (err: any) {
-			return { success: false, error: err?.message ?? String(err) };
+		} catch (err) {
+			return { success: false, error: err instanceof Error ? err.message : String(err) };
 		}
 	},
 	"im:send-test-message": async (data, ctx) => {
@@ -913,7 +913,7 @@ const invokeRouteMap: InvokeRouteMap = {
 	},
 	"mcp:add-server": async (data, ctx) => {
 		try {
-			await ctx.mcpManager.addServer(data.config as any);
+			await ctx.mcpManager.addServer(data.config as Record<string, unknown>);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -947,7 +947,7 @@ const invokeRouteMap: InvokeRouteMap = {
 	},
 	"mcp:update-server": async (data, ctx) => {
 		try {
-			await ctx.mcpManager.updateServer(guardString(data.name, "name"), data.config as any);
+			await ctx.mcpManager.updateServer(guardString(data.name, "name"), data.config as Record<string, unknown>);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -963,7 +963,7 @@ async function handleRendererInvoke(
 	workspaceTreeService: WorkspaceTreeService,
 	larkChannelManager: import("../im/lark-channel-manager.js").LarkChannelManager | undefined,
 	larkBridgeService: import("../im/lark-bridge-service.js").LarkBridgeService | undefined,
-): Promise<any> {
+): Promise<unknown> {
 	const ctx: InvokeContext = {
 		runtimeManager,
 		mainWindow,
@@ -979,11 +979,13 @@ async function handleRendererInvoke(
 			// `data` is narrowed by `data.type` at runtime to match the handler's expected subtype.
 			// TypeScript cannot prove this statically across the map lookup, so we assert here.
 			// Safety: the route map is keyed by `data.type`, guaranteeing the handler matches the payload.
+			// biome-ignore lint/suspicious/noExplicitAny: TypeScript cannot prove the narrowing across map lookup.
 			return await handler(data as any, ctx);
-		} catch (err: any) {
-			return { success: false, error: err?.message ?? String(err) };
+		} catch (err) {
+			return { success: false, error: err instanceof Error ? err.message : String(err) };
 		}
 	}
+	// biome-ignore lint/suspicious/noExplicitAny: fallback error message needs `.type`.
 	return { success: false, error: `Unknown event: ${(data as any).type}` };
 }
 

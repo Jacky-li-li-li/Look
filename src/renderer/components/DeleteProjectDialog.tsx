@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface DeleteProjectDialogProps {
 	open: boolean;

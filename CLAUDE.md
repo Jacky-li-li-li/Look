@@ -175,4 +175,11 @@ React 19 single-page app. `App.tsx` subscribes to `agent:event` IPC events and m
 - **Model format**: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4-20250514"`)
 - **Thinking levels**: `"off" | "minimal" | "low" | "medium" | "high" | "xhigh"` — matches pi SDK's built-in levels
 - **Skills paths**: use `SettingsManager.getSkillPaths()` and pi ResourceLoader defaults
-- **Linter rules**: a11y is off; `noExplicitAny`, `noNonNullAssertion`, `noUnusedFunctionParameters` are off
+- **Linter rules**: a11y is off; `noNonNullAssertion` and `noUnusedFunctionParameters` are off; `noExplicitAny` is `"warn"` (enforcing zero explicit `any` project-wide)
+
+## TypeScript 规范
+
+- **禁止 `any`**：不允许新增 `: any` 或 `as any`。使用 `unknown`、`Record<string, unknown>` 或精确类型替代。
+- **`noExplicitAny`**：biome 配置为 `"warn"`，新增 `any` 会被即时标记。
+- **例外**：仅在 TypeScript 类型系统确实无法表达时可用 `// biome-ignore lint/suspicious/noExplicitAny:` 抑制并附说明（如 React.cloneElement 泛型、Map lookup 类型收窄）。
+- **IPC 边界**：LookAPI 方法返回 `IpcResult<T>` 而非裸类型，调用方需显式 `as` 窄化。

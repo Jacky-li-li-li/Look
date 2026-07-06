@@ -11,7 +11,7 @@ import { supabase } from "../lib/supabase";
 import { userProfileAtom } from "../store/authAtoms";
 import UserAvatar from "./UserAvatar";
 
-const api = (window as any).look;
+const api = window.look;
 
 export default function ProfileEditor() {
 	const { t } = useTranslation();

@@ -18,7 +18,7 @@ export const SESSION_SUMMARY_CONCURRENCY = 10;
 // ── Internal helpers ──
 
 /** Safe JSON parse of a single JSONL line. Returns null on malformed input. */
-export function parseJsonLine(line: string): any | null {
+export function parseJsonLine(line: string): Record<string, unknown> | null {
 	const trimmed = line.trim();
 	if (!trimmed) return null;
 	try {
@@ -51,7 +51,7 @@ function extractMessageText(message: AgentMessage): string {
 		.trim();
 }
 
-function messageActivityTime(entry: any): number | undefined {
+function messageActivityTime(entry: Record<string, unknown>): number | undefined {
 	const message = entry?.message;
 	if (!message || (message.role !== "user" && message.role !== "assistant")) return undefined;
 	if (typeof message.timestamp === "number") return message.timestamp;
@@ -63,7 +63,7 @@ function messageActivityTime(entry: any): number | undefined {
 }
 
 function buildSessionSummaryFromLines(filePath: string, stats: fs.Stats, lines: string[]): PiSessionInfo | null {
-	let header: any | null = null;
+	let header: Record<string, unknown> | null = null;
 	let name: string | undefined;
 	let messageCount = 0;
 	let firstMessage = "";

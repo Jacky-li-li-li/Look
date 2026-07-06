@@ -5,13 +5,13 @@
 import { Button } from "@shared/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@shared/components/ui/dialog";
 import type { AvailableModel } from "@shared/types";
-import { ArrowRight, Check, ChevronDown } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, Check, ChevronDown, Search } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "./ProviderIcon";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface ModelSelectorProps {
 	agentId: string;
@@ -26,6 +26,8 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	const [models, setModels] = useState<AvailableModel[]>([]);
 	const [switching, setSwitching] = useState(false);
 	const [open, setOpen] = useState(false);
+	const [searchQuery, setSearchQuery] = useState("");
+	const searchInputRef = useRef<HTMLInputElement>(null);
 	const latestPropsRef = useRef({ currentModel, onModelChanged });
 	latestPropsRef.current = { currentModel, onModelChanged };
 
@@ -46,6 +48,18 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 			setModels(m.models);
 		}
 	}, []);
+
+	// Fuzzy-filter models by search query (case-insensitive substring match)
+	const filteredModels = useMemo(() => {
+		if (!searchQuery.trim()) return models;
+		const q = searchQuery.toLowerCase();
+		return models.filter(
+			(m) =>
+				m.name.toLowerCase().includes(q) ||
+				m.provider.toLowerCase().includes(q) ||
+				m.id.toLowerCase().includes(q),
+		);
+	}, [models, searchQuery]);
 
 	// Fetch on mount
 	useEffect(() => {
@@ -82,10 +96,9 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 				} else {
 					toast.error(result?.error ?? t("toast.modelSwitchFailed"));
 				}
-			} catch (err: any) {
-				toast.error(err?.message ?? t("toast.modelSwitchFailed"));
+			} catch (err) {
+				toast.error(err instanceof Error ? err.message : t("toast.modelSwitchFailed"));
 			} finally {
-				setSwitching(false);
 			}
 		},
 		[agentId, t],
@@ -105,11 +118,16 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 			open={open}
 			onOpenChange={(o) => {
 				setOpen(o);
-				if (o) fetchModels();
+				if (o) {
+					fetchModels();
+					setSearchQuery("");
+					// Auto-focus search input after dialog animation
+					setTimeout(() => searchInputRef.current?.focus(), 100);
+				}
 			}}
 		>
 			<DialogTrigger asChild>
-				<Button variant="line" size="sm" className="group/selector h-7 max-w-40 font-mono text-[11px]">
+				<Button variant="line" size="sm" className="group/selector h-7 font-mono text-[11px]" title={label}>
 					<ProviderIcon
 						id={currentModelObj?.provider ?? currentModel?.split("/")[0] ?? ""}
 						className="size-3"
@@ -122,10 +140,23 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 					/>
 				</Button>
 			</DialogTrigger>
-			<DialogContent className="max-w-xl p-0 max-h-[85vh]" showCloseButton>
+			<DialogContent className="max-w-xl p-0 max-h-[85vh] overflow-hidden grid-rows-[auto_auto_1fr]" showCloseButton>
 				<DialogHeader className="px-4 pt-3 pb-0">
 					<DialogTitle className="text-[13px] font-semibold">{t("agent.switchModel")}</DialogTitle>
 				</DialogHeader>
+				<div className="px-4 pb-2">
+					<div className="flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5">
+						<Search className="size-3.5 shrink-0 text-muted-foreground" />
+						<input
+							ref={searchInputRef}
+							type="text"
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							placeholder="Search models..."
+							className="flex-1 bg-transparent text-[12px] outline-hidden placeholder:text-muted-foreground"
+						/>
+					</div>
+				</div>
 				<div className="min-h-0 overflow-y-auto">
 					{models.length === 0 ? (
 						<div className="px-4 py-8">
@@ -141,9 +172,11 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 								<ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover/empty:translate-x-0.5 group-hover/empty:text-foreground" />
 							</button>
 						</div>
+					) : searchQuery.trim() && filteredModels.length === 0 ? (
+						<p className="px-4 py-8 text-center text-[12px] text-muted-foreground">{`No models matching "${searchQuery}"`}</p>
 					) : (
 						<div className="p-2">
-							<ModelList models={models} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
+							<ModelList models={filteredModels} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
 						</div>
 					)}
 				</div>

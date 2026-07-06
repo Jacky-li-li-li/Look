@@ -23,7 +23,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../hooks/useLookTheme";
 import { scheduleCollapse } from "../lib/batchCollapse";
-import { linkifyText } from "../lib/linkify";
+import LookMarkdown from "./LookMarkdown";
 
 export interface ToolCallViewModel {
 	callId: string;
@@ -344,14 +344,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 													</span>
 												)}
 											</span>
-											<div
-												className={cn(
-													"whitespace-pre-wrap break-words font-mono text-[10px]",
-													toolCall.isError ? "text-destructive" : "text-muted-foreground",
-												)}
-											>
-												{linkifyText(resultStr)}
-											</div>
+											<LookMarkdown content={resultStr} />
 										</section>
 									)}
 									{resultImages.length > 0 && (

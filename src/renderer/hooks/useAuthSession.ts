@@ -14,7 +14,7 @@ import { useEffect } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
 
-const api = (window as any).look;
+const api = window.look;
 
 export function useAuthSession() {
 	const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInAtom);

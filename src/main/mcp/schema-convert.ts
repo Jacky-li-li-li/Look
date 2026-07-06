@@ -87,7 +87,7 @@ function convertProperty(schema: McpJsonSchemaProperty): TSchema {
 	}
 
 	if (schema.description) {
-		(result as any).description = schema.description;
+		(result as Record<string, unknown>).description = schema.description;
 	}
 
 	return result;

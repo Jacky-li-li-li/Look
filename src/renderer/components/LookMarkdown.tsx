@@ -161,8 +161,9 @@ const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, 
 			batchRendering={isStreaming}
 			isDark={resolvedTheme === "dark"}
 			streamingComponents={streamingComponents}
-			customHtmlTags={["skill-tag", "agent-tag", "file-tag"]}
+			customHtmlTags={["skill-tag", "agent-tag", "mcp-tag", "file-tag"]}
 			htmlPolicy="safe"
+			deferNodesUntilVisible={isStreaming}
 		/>
 	);
 });

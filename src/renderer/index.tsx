@@ -127,7 +127,7 @@ if (import.meta.env.DEV) {
 	});
 }
 
-const api = (window as any).look;
+const api = window.look;
 
 // IPC event handlers run outside React lifecycle via vanilla Jotai store.
 // This decouples high-frequency SDK events from the component tree.

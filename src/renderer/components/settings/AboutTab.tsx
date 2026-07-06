@@ -10,7 +10,7 @@ import { updateStatusAtom } from "../../store/atoms";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import type { CustomProviderStats, ProviderInfo } from "./types";
 
-const api = (window as any).look;
+const api = window.look;
 
 function UpdateCheckButton() {
 	const { t } = useTranslation();

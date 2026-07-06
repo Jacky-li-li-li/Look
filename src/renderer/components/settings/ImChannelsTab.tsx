@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { ImChannelInfo } from "./types";
 
-const api = (window as any).look;
+const api = window.look;
 
 type RegistrationPhase = "qr" | "polling" | "success" | "error";
 
@@ -531,7 +531,7 @@ export default function ImChannelsTab() {
 		try {
 			const result = await api.getImChannels();
 			if (result?.success && Array.isArray(result.channels)) {
-				setChannels(result.channels);
+				setChannels(result.channels as ImChannelInfo[]);
 			}
 		} catch (_err) {
 			toast.error(t("settings.imConnectionError"));

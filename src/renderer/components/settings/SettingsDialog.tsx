@@ -19,7 +19,7 @@ import ProfileTab from "./ProfileTab";
 import PromptTab from "./PromptTab";
 import type { CustomProviderStats, ProviderInfo } from "./types";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface SettingsDialogProps {
 	open: boolean;

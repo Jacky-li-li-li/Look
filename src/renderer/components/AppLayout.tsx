@@ -3,11 +3,11 @@
 // ============================================================
 
 import { Separator } from "@shared/components/ui/separator";
-import type { ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
+import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { memo, useEffect } from "react";
-import { appReadyPhaseAtom, type SettingsTab } from "../store/atoms";
-import type { RendererSessionPhase } from "../store/sessionTypes";
+import { appReadyPhaseAtom, type ProviderSettingsData, type SettingsTab } from "../store/atoms";
+import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import AgentSquare from "./AgentMarketplace/AgentSquare";
 import ChatPanel from "./ChatPanel";
 import DeleteProjectDialog from "./DeleteProjectDialog";
@@ -26,24 +26,24 @@ import WelcomeScreen from "./WelcomeScreen";
 interface AppLayoutProps {
 	sidebarCollapsed: boolean;
 	rightPanelCollapsed: boolean;
-	agents: any[];
+	agents: AgentInfo[];
 	openedSessionIds: string[];
-	activeAgent: any;
+	activeAgent: AgentInfo | null;
 	activeAgentId: string | null;
-	activeSessionState: any;
+	activeSessionState: RendererSessionState;
 	activeQueue: { steering: string[]; followUp: string[] };
 	activePhase: RendererSessionPhase;
 	autoCollapse: boolean;
 	thinkingLevels: ThinkingLevel[];
 	projects: ProjectInfo[];
-	activeProject: any;
+	activeProject: ProjectInfo | null;
 	showAgentSquare: boolean;
 	newProjectCwd: string | null;
 	setNewProjectCwd: (v: string | null) => void;
-	pendingDelete: any;
+	pendingDelete: { projectId: string; projectName: string; agentCount: number; runningCount: number } | null;
 	showSettings: boolean;
 	settingsTab?: SettingsTab;
-	providerSettings: any;
+	providerSettings: ProviderSettingsData;
 	handleSendMessage: (text: string, images?: ImageContent[]) => Promise<boolean>;
 	handleSelectAgent: (agentId: string) => void;
 	handleCloseSessionSheet: (agentId: string) => void;
@@ -66,7 +66,7 @@ interface AppLayoutProps {
 	handleCloseSettings: () => void;
 	handleExpandSidebar: () => void;
 	handleExpandRightPanel: () => void;
-	onProvidersChange: (data: any) => void;
+	onProvidersChange: (data: ProviderSettingsData) => void;
 }
 
 function AppLayout({

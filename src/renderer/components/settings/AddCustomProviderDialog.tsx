@@ -23,7 +23,7 @@ import {
 } from "./provider-form-state";
 import type { CustomProviderInput, CustomProviderModelInput, TestCustomProviderResult } from "./types";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface Props {
 	open: boolean;
@@ -317,8 +317,8 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 			const r = await api.testCustomProvider(input);
 			if (!r?.success) throw new Error(r?.error ?? t("settings.customProviders.toast.selfTestFailed"));
 			test = r.result;
-		} catch (e: any) {
-			toast.error(e?.message ?? t("settings.customProviders.toast.selfTestUnavailable"));
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : t("settings.customProviders.toast.selfTestUnavailable"));
 			setSaving(false);
 			return;
 		}
@@ -339,8 +339,8 @@ export default function AddCustomProviderDialog({ open, onClose, initial, onSave
 				} else {
 					toast.error(persistResult?.error ?? t("settings.customProviders.toast.saveFailed"));
 				}
-			} catch (e: any) {
-				toast.error(e?.message ?? t("settings.customProviders.toast.saveFailed"));
+			} catch (e) {
+				toast.error(e instanceof Error ? e.message : t("settings.customProviders.toast.saveFailed"));
 			}
 		}
 		setSaving(false);

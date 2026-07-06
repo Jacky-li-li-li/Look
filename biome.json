@@ -17,7 +17,7 @@
 				"useImportType": "warn"
 			},
 			"suspicious": {
-				"noExplicitAny": "off",
+				"noExplicitAny": "warn",
 				"noControlCharactersInRegex": "off",
 				"noEmptyInterface": "off",
 				"noArrayIndexKey": "off",

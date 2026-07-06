@@ -31,10 +31,11 @@ function createMockHost(captured: { calls: Array<{ agent: string; task: string }
 }
 
 /** 捕获工厂注册的工具。 */
-function captureRegisteredTool(host: SubagentHost, cwd: string) {
-	let registered: { name: string; execute: (...args: any[]) => Promise<any> } | null = null;
-	const api = { registerTool: (tool: any) => (registered = tool) };
-	createSubagentExtensionFactory("parent-1", host, cwd)(api as any);
+async function captureRegisteredTool(host: SubagentHost, cwd: string) {
+	let registered: { name: string; execute: (...args: unknown[]) => Promise<unknown> } | null = null;
+	const api = { registerTool: (tool: unknown) => (registered = tool as { name: string; execute: (...args: unknown[]) => Promise<unknown> }) };
+	const factory = await createSubagentExtensionFactory("parent-1", host, cwd);
+	factory(api as Parameters<typeof factory>[0]);
 	if (!registered) throw new Error("subagent tool was not registered");
 	return registered;
 }
@@ -42,20 +43,19 @@ function captureRegisteredTool(host: SubagentHost, cwd: string) {
 describe("SubAgent extension — runtime dispatch", () => {
 	const cwd = process.cwd();
 	const captured = { calls: [] as Array<{ agent: string; task: string }> };
-	let tool: { name: string; execute: (...args: any[]) => Promise<any> };
-
-	beforeEach(() => {
+	let tool: { name: string; execute: (...args: unknown[]) => Promise<unknown> };
+	beforeEach(async () => {
 		captured.calls = [];
 		const host = createMockHost(captured);
-		tool = captureRegisteredTool(host, cwd);
+		tool = await captureRegisteredTool(host, cwd);
 	});
 
 	it("registers a tool named subagent", () => {
 		expect(tool.name).toBe("subagent");
 	});
 
-	it("discovers the built-in agents from ~/.look/agents", () => {
-		const { agents } = discoverAgents(cwd, "both");
+	it("discovers the built-in agents from ~/.look/agents", async () => {
+		const { agents } = await discoverAgents(cwd, "both");
 		const names = agents.map((a) => a.name);
 		for (const name of BUILT_IN_AGENTS) {
 			expect(names).toContain(name);
@@ -158,7 +158,7 @@ describe("SubAgent — definition serialization round-trip", () => {
 		};
 		const filePath = join(tmp, "roundtrip-agent.md");
 		await writeFile(filePath, serializeAgentDefinition(input), "utf-8");
-		const parsed = parseAgentFile(filePath, "user");
+		const parsed = await parseAgentFile(filePath, "user");
 		expect(parsed).not.toBeNull();
 		expect(parsed?.name).toBe("roundtrip-agent");
 		expect(parsed?.title).toBe("Roundtrip");

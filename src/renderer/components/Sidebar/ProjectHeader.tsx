@@ -32,7 +32,7 @@ export default function ProjectHeader({
 	onDeleteProject,
 }: ProjectHeaderProps) {
 	const { t } = useTranslation();
-	const homedir = (window as any).look?.homedir || "";
+	const homedir = window.look?.homedir || "";
 	return (
 		<div className="group/project flex h-10 items-center gap-1 rounded-lg px-1 transition-colors hover:bg-foreground/[0.035]">
 			<CollapsibleTrigger asChild>

@@ -146,7 +146,7 @@ export interface SubagentChainItem {
  */
 export interface SubagentHost {
 	/** 发现可用 Agent */
-	discoverAgents(projectId: string, scope: AgentScope): AgentDiscoveryResult;
+	discoverAgents(projectId: string, scope: AgentScope): Promise<AgentDiscoveryResult>;
 	/**
 	 * 创建并运行一个子会话，返回其最终结果。
 	 * 子会话作为完整 Look 会话注册到 SessionRuntimeManager，

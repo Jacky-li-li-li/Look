@@ -86,7 +86,7 @@ function detachLarkBridge(): void {
 
 function setupProcessBoundary() {
 	// Safe write helper — survives broken pipes
-	const safeWrite = (level: string, ...args: any[]) => {
+	const safeWrite = (level: string, ...args: unknown[]) => {
 		const msg = `[${level}] ${args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")}\n`;
 		try {
 			process.stdout.write(msg);
@@ -104,21 +104,21 @@ function setupProcessBoundary() {
 	const _log = console.log.bind(console);
 	const _warn = console.warn.bind(console);
 	const _error = console.error.bind(console);
-	console.log = (...args: any[]) => {
+	console.log = (...args: unknown[]) => {
 		try {
 			_log(...args);
 		} catch {
 			safeWrite("info", ...args);
 		}
 	};
-	console.warn = (...args: any[]) => {
+	console.warn = (...args: unknown[]) => {
 		try {
 			_warn(...args);
 		} catch {
 			safeWrite("warn", ...args);
 		}
 	};
-	console.error = (...args: any[]) => {
+	console.error = (...args: unknown[]) => {
 		try {
 			_error(...args);
 		} catch {
@@ -144,13 +144,13 @@ function setupProcessBoundary() {
 		}
 	});
 
-	process.on("unhandledRejection", (reason: any) => {
-		safeWrite("fatal", "Unhandled rejection:", reason?.message ?? reason);
+	process.on("unhandledRejection", (reason: unknown) => {
+		safeWrite("fatal", "Unhandled rejection:", reason instanceof Error ? reason.message : String(reason));
 		try {
 			if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
 				safeSendEvent({
 					type: "error",
-					message: `Unhandled rejection: ${reason?.message ?? String(reason)}`,
+					message: `Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`,
 				});
 			}
 		} catch {

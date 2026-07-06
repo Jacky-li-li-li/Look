@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { activeAgentIdAtom, activeProjectIdAtom, pendingDeleteProjectAtom, projectsAtom } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
 
-const api = (window as any).look;
+const api = window.look;
 
 export function useProjectActions() {
 	const { t } = useTranslation();

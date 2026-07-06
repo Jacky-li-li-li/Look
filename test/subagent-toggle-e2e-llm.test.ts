@@ -8,6 +8,11 @@
 import { describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
 
+/** Test-only access to SessionRuntimeManager internals for E2E diagnostics. */
+interface TestManagerInternals {
+	runtimes: Map<string, { runtime: { session: { getActiveToolNames(): string[] } } }>;
+}
+
 const RUN = process.env.LOOK_E2E_LLM === "1";
 const TIMEOUT = 180_000;
 
@@ -46,9 +51,9 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 
 			// ── 验证：新会话没有 subagent 工具 ──
 			const diagId = await manager.createAgent({ name: "toggle-diag" });
-			const managed = Array.from((manager as any).runtimes?.entries() ?? []).find(
+			const managed = Array.from((manager as unknown as TestManagerInternals).runtimes?.entries() ?? []).find(
 				([sid]: [string, unknown]) => sid === diagId,
-			)?.[1] as any;
+			)?.[1];
 			const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : "unknown";
 			expect(hasSubagent, "toggle OFF 时 subagent 不应在活动工具中").toBe(false);
 			await manager.destroyAgent(diagId).catch(() => {});
@@ -90,9 +95,9 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 		await manager.setSubagentEnabledGlobal(true);
 
 		const id = await manager.createAgent({ name: "toggle-on-api" });
-		const managed = Array.from((manager as any).runtimes?.entries() ?? []).find(
+		const managed = Array.from((manager as unknown as TestManagerInternals).runtimes?.entries() ?? []).find(
 			([sid]: [string, unknown]) => sid === id,
-		)?.[1] as any;
+		)?.[1];
 		const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : false;
 		expect(hasSubagent, "toggle ON 时 subagent 应在活动工具中").toBe(true);
 

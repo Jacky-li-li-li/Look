@@ -24,9 +24,9 @@ export function getBuiltinAgentsDir(): string {
 	return path.join(getUserAgentsDir(), "marketplace");
 }
 
-function isDirectory(p: string): boolean {
+async function isDirectory(p: string): Promise<boolean> {
 	try {
-		return fs.statSync(p).isDirectory();
+		return (await fs.promises.stat(p)).isDirectory();
 	} catch {
 		return false;
 	}
@@ -38,10 +38,10 @@ export function findProjectAgentsDir(projectId: string): string {
 }
 
 /** 解析单个 Agent 定义文件 */
-export function parseAgentFile(filePath: string, source: AgentSource): AgentConfig | null {
+export async function parseAgentFile(filePath: string, source: AgentSource): Promise<AgentConfig | null> {
 	let content: string;
 	try {
-		content = fs.readFileSync(filePath, "utf-8");
+		content = await fs.promises.readFile(filePath, "utf-8");
 	} catch {
 		return null;
 	}
@@ -94,13 +94,13 @@ export function parseAgentFile(filePath: string, source: AgentSource): AgentConf
 	};
 }
 
-function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
+async function loadAgentsFromDir(dir: string, source: AgentSource): Promise<AgentConfig[]> {
 	const agents: AgentConfig[] = [];
-	if (!isDirectory(dir)) return agents;
+	if (!(await isDirectory(dir))) return agents;
 
 	let entries: fs.Dirent[];
 	try {
-		entries = fs.readdirSync(dir, { withFileTypes: true });
+		entries = await fs.promises.readdir(dir, { withFileTypes: true });
 	} catch {
 		return agents;
 	}
@@ -111,14 +111,14 @@ function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 		// marketplace 子目录单独处理，不在此处重复扫描（由 listBuiltinAgents 处理）
 		if (entry.isDirectory()) continue;
 		const filePath = path.join(dir, entry.name);
-		const agent = parseAgentFile(filePath, source);
+		const agent = await parseAgentFile(filePath, source);
 		if (agent) agents.push(agent);
 	}
 	return agents;
 }
 
 /** 加载内置 Agent（~/.look/agents/marketplace/*.md，source="builtin"） */
-export function listBuiltinAgents(): AgentConfig[] {
+export async function listBuiltinAgents(): Promise<AgentConfig[]> {
 	return loadAgentsFromDir(getBuiltinAgentsDir(), "builtin");
 }
 
@@ -132,14 +132,16 @@ export function listBuiltinAgents(): AgentConfig[] {
  *
  * builtin Agent 始终并入用户级结果（作为最底层的 fallback）。
  */
-export function discoverAgents(projectId: string, scope: AgentScope): AgentDiscoveryResult {
+export async function discoverAgents(projectId: string, scope: AgentScope): Promise<AgentDiscoveryResult> {
 	const userDir = getUserAgentsDir();
 	const projectAgentsDir = getProjectAgentsDir(projectId);
 
-	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
-	const builtinAgents = scope === "project" ? [] : listBuiltinAgents();
+	const userAgents = scope === "project" ? [] : await loadAgentsFromDir(userDir, "user");
+	const builtinAgents = scope === "project" ? [] : await listBuiltinAgents();
 	const projectAgents =
-		scope === "user" || !isDirectory(projectAgentsDir) ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+		scope === "user" || !(await isDirectory(projectAgentsDir))
+			? []
+			: await loadAgentsFromDir(projectAgentsDir, "project");
 
 	// 同名优先级：project > user > builtin
 	const agentMap = new Map<string, AgentConfig>();

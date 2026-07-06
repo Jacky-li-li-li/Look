@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { updateStatusAtom } from "../store/atoms";
 
-const api = (window as any).look;
+const api = window.look;
 
 export default function UpdateNotification() {
 	const updateStatus = useAtomValue(updateStatusAtom);

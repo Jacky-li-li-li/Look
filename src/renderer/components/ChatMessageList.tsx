@@ -187,9 +187,9 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				if (!result?.success) throw new Error(result?.error ?? "unknown");
 				if (result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
 				toast.success(t("chat.forkCreated"), { duration: 1500 });
-			} catch (error: any) {
+			} catch (error) {
 				toast.dismiss(toastId);
-				toast.error(t("chat.forkFailed", { message: error?.message ?? "unknown" }));
+				toast.error(t("chat.forkFailed", { message: error instanceof Error ? error.message : "unknown" }));
 				appStore.set(forkingEntryAtomFamily(agentId), null);
 			}
 		},
@@ -228,9 +228,9 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				if (flashTimer.current) clearTimeout(flashTimer.current);
 				flashTimer.current = setTimeout(() => setFlashEntryId(null), 900);
 				toast.success(t("chat.branched"), { duration: 1500 });
-			} catch (error: any) {
+			} catch (error) {
 				toast.dismiss(toastId);
-				toast.error(t("chat.navigatingFailed", { message: error?.message ?? "unknown" }));
+				toast.error(t("chat.navigatingFailed", { message: error instanceof Error ? error.message : "unknown" }));
 				appStore.set(navigatingEntryAtomFamily(agentId), null);
 			}
 		},
@@ -247,8 +247,8 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				await navigator.clipboard.writeText(text);
 				setCopiedEntryId(id);
 				setTimeout(() => setCopiedEntryId(null), 1200);
-			} catch (error: any) {
-				toast.error(t("chat.copyFailed", { message: error?.message ?? "unknown" }));
+			} catch (error) {
+				toast.error(t("chat.copyFailed", { message: error instanceof Error ? error.message : "unknown" }));
 			}
 		},
 		[t],

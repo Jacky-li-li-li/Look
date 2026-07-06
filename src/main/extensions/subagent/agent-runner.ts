@@ -3,13 +3,16 @@
 //
 // 三种执行模式（与 SDK 示例对齐）：
 //   - single:  单个子会话
-//   - parallel: Promise.all 全并发（Stage 6 移除数量限制）
+//   - parallel: 并发池限制（默认 5），防止无限制创建子会话导致
+//     API rate limit 和主进程内存峰值。
 //   - chain:   顺序执行，{previous} 占位符替换为上一步输出
 //
 // 与 SDK 示例的关键区别：不通过 child_process.spawn 子进程，
 // 而是通过 SubagentHost.runSubSession 创建完整的 Look 子会话
 // （SessionRuntimeManager 生命周期），子会话侧边栏可见、可持久化。
 // ============================================================
+
+
 
 import type {
 	AgentConfig,
@@ -20,6 +23,8 @@ import type {
 	SubagentTaskItem,
 } from "./types.js";
 
+/** 默认并行子会话上限。每个子会话消耗 ~50-200MB 内存和独立 LLM 连接。 */
+const DEFAULT_MAX_CONCURRENT_SUBAGENTS = 5;
 /** 在已发现列表中按名查找 Agent */
 function resolveAgent(agents: AgentConfig[], name: string): AgentConfig | undefined {
 	return agents.find((a) => a.name === name);
@@ -60,8 +65,11 @@ export async function runSingleAgent(
 }
 
 /**
- * 并发执行多个子会话。使用 Promise.all 全并发，由操作系统资源
- * 自然限制（Stage 6：不再有 MAX_PARALLEL_TASKS / MAX_CONCURRENCY 上限）。
+ * 并发执行多个子会话。使用信号量限制并行数，防止无限制创建
+ * 子会话导致 API rate limit 和主进程内存峰值。
+ *
+ * 并发上限可通过环境变量 LOOK_MAX_CONCURRENT_SUBAGENTS 覆盖，
+ * 默认值为 5。
  */
 export async function runParallelAgents(
 	host: SubagentHost,
@@ -71,11 +79,42 @@ export async function runParallelAgents(
 	signal: AbortSignal | undefined,
 	onUpdate?: (progress: SubagentProgress) => void,
 ): Promise<SubagentResult[]> {
-	return Promise.all(
-		tasks.map((t) =>
-			runSingleAgent(host, parentSessionId, agents, t.agent, t.task, signal, onUpdate, undefined, t.title),
-		),
-	);
+	const maxConcurrent = (() => {
+		const env = Number.parseInt(process.env.LOOK_MAX_CONCURRENT_SUBAGENTS ?? "", 10);
+		return Number.isFinite(env) && env > 0 ? env : DEFAULT_MAX_CONCURRENT_SUBAGENTS;
+	})();
+
+	// 并发池：信号量计数 + 结果收集
+	const results: SubagentResult[] = new Array(tasks.length);
+	let nextIndex = 0;
+
+	async function runNext(): Promise<void> {
+		while (nextIndex < tasks.length) {
+			const i = nextIndex++;
+			const t = tasks[i];
+			try {
+				results[i] = await runSingleAgent(
+					host, parentSessionId, agents, t.agent, t.task, signal, onUpdate, undefined, t.title,
+				);
+			} catch (error) {
+				results[i] = {
+					sessionId: "",
+					agentName: t.agent,
+					agentSource: "user",
+					task: t.task,
+					status: "failed",
+					finalOutput: `Parallel subagent execution failed: ${error instanceof Error ? error.message : String(error)}`,
+					usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+					errorMessage: error instanceof Error ? error.message : String(error),
+				};
+			}
+		}
+	}
+
+	// 启动并发池（maxConcurrent 个 worker）
+	const workers = Array.from({ length: Math.min(maxConcurrent, tasks.length) }, () => runNext());
+	await Promise.all(workers);
+	return results;
 }
 
 /**

@@ -35,15 +35,15 @@ export class AgentDefinitionService {
 	// ── Query ──
 
 	/** List all user-level + marketplace-installed agent definitions. */
-	listDefinitions(): AgentDefinitionInfo[] {
-		const discovery = discoverAgents("", "user");
+	async listDefinitions(): Promise<AgentDefinitionInfo[]> {
+		const discovery = await discoverAgents("", "user");
 		return discovery.agents.map(toAgentDefinitionInfo);
 	}
 
 	// ── Mutations ──
 
 	/** Create a new agent definition file. Throws if the name already exists. */
-	createDefinition(input: AgentDefinitionInput): AgentDefinitionInfo {
+	async createDefinition(input: AgentDefinitionInput): Promise<AgentDefinitionInfo> {
 		const name = validateAgentName(input.name);
 		const filePath = path.join(getUserAgentsDir(), `${name}.md`);
 		if (fs.existsSync(filePath)) throw new Error(`Agent "${name}" already exists`);
@@ -55,7 +55,7 @@ export class AgentDefinitionService {
 			createdAt: Date.now(),
 		};
 		fs.writeFileSync(filePath, serializeAgentDefinition(enriched), { encoding: "utf-8", mode: 0o644 });
-		const parsed = parseAgentFile(filePath, "user");
+		const parsed = await parseAgentFile(filePath, "user");
 		if (!parsed) throw new Error(`Failed to parse created agent "${name}"`);
 		this.onChanged();
 		return toAgentDefinitionInfo(parsed);
@@ -65,7 +65,7 @@ export class AgentDefinitionService {
 	 * Update an agent definition. If the name changes the file is renamed.
 	 * @param name Current file name (without .md extension).
 	 */
-	updateDefinition(name: string, input: AgentDefinitionInput): AgentDefinitionInfo {
+	async updateDefinition(name: string, input: AgentDefinitionInput): Promise<AgentDefinitionInfo> {
 		const oldName = validateAgentName(name);
 		const newName = validateAgentName(input.name);
 		const oldPath = path.join(getUserAgentsDir(), `${oldName}.md`);
@@ -77,7 +77,7 @@ export class AgentDefinitionService {
 			fs.renameSync(oldPath, newPath);
 		}
 		this.onChanged();
-		const parsed = parseAgentFile(path.join(getUserAgentsDir(), `${newName}.md`), "user");
+		const parsed = await parseAgentFile(path.join(getUserAgentsDir(), `${newName}.md`), "user");
 		if (!parsed) throw new Error(`Failed to parse updated agent "${newName}"`);
 		return toAgentDefinitionInfo(parsed);
 	}
@@ -96,7 +96,7 @@ export class AgentDefinitionService {
 	 * directory. Injects installation metadata (createdBy: "install",
 	 * installedAt) so the UI can distinguish manually-installed agents.
 	 */
-	installDefinition(name: string): AgentDefinitionInfo {
+	async installDefinition(name: string): Promise<AgentDefinitionInfo> {
 		const safeName = validateAgentName(name);
 		const sourcePath = path.join(getBuiltinAgentsDir(), `${safeName}.md`);
 		if (!fs.existsSync(sourcePath)) throw new Error(`Builtin agent "${safeName}" not found`);
@@ -104,7 +104,7 @@ export class AgentDefinitionService {
 		if (fs.existsSync(destPath)) throw new Error(`Agent "${safeName}" is already installed`);
 		fs.mkdirSync(getUserAgentsDir(), { recursive: true });
 		// Parse source, inject install metadata, write once (avoid double write)
-		const parsed = parseAgentFile(sourcePath, "builtin");
+		const parsed = await parseAgentFile(sourcePath, "builtin");
 		if (!parsed) throw new Error(`Failed to parse builtin agent "${safeName}"`);
 		const agentDef: Record<string, unknown> = {
 			name: parsed.name,
@@ -126,7 +126,7 @@ export class AgentDefinitionService {
 			mode: 0o644,
 		});
 		this.onChanged();
-		const installedParsed = parseAgentFile(destPath, "user");
+		const installedParsed = await parseAgentFile(destPath, "user");
 		if (!installedParsed) throw new Error(`Failed to parse installed agent "${safeName}"`);
 		return toAgentDefinitionInfo(installedParsed);
 	}

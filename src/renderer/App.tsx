@@ -30,10 +30,11 @@ import {
 	showSettingsAtom,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
+import type { ProviderSettingsData } from "./store/atoms";
 import { appStore } from "./store/ipcHandler";
 import { deriveSessionPhase } from "./store/sessionTypes";
 
-const api = (window as any).look;
+const api = window.look;
 
 export default function App() {
 	const { t } = useTranslation();
@@ -95,7 +96,7 @@ export default function App() {
 	const handleExpandSidebar = useCallback(() => appStore.set(sidebarCollapsedAtom, false), []);
 	const handleExpandRightPanel = useCallback(() => appStore.set(rightPanelCollapsedAtom, false), []);
 	const onProvidersChange = useCallback(
-		(data: { providers: any; customStats: any }) => appStore.set(providerSettingsAtom, data),
+		(data: ProviderSettingsData) => appStore.set(providerSettingsAtom, data),
 		[],
 	);
 

@@ -169,7 +169,7 @@ export class LarkChannelManager {
 
 	private sendRendererEvent(payload: ImRendererEvent): void {
 		if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-			this.mainWindow.webContents.send("look:event", payload as any);
+			this.mainWindow.webContents.send("look:event", payload as unknown);
 		}
 	}
 

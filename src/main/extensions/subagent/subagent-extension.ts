@@ -69,14 +69,14 @@ function summarizeSingle(result: SubagentResult): string {
  * @param host      SubagentHost（SessionRuntimeManager 实现）
  * @param projectId 项目 ID（用于发现项目级 Agent + 写入工具描述）
  */
-export function createSubagentExtensionFactory(
+export async function createSubagentExtensionFactory(
 	sessionId: string,
 	host: SubagentHost,
 	projectId: string,
-): ExtensionFactory {
+): Promise<ExtensionFactory> {
 	// 在 bind 时发现一次 Agent，把列表写入工具描述，让 LLM 可见可用 Agent。
 	// （Stage 3 的 Agent 编辑会触发 session reload → 重新 bind → 列表刷新。）
-	const discovery = discoverAgents(projectId, "both");
+	const discovery = await discoverAgents(projectId, "both");
 	const agentListText = formatAgentList(discovery.agents);
 
 	return (api) => {
@@ -106,7 +106,7 @@ export function createSubagentExtensionFactory(
 				}
 
 				const agentScope = params.agentScope ?? "both";
-				const runtimeDiscovery = discoverAgents(projectId, agentScope);
+				const runtimeDiscovery = await discoverAgents(projectId, agentScope);
 				const agents = runtimeDiscovery.agents;
 
 				const hasChain = (params.chain?.length ?? 0) > 0;

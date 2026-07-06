@@ -203,27 +203,29 @@ export default function SimplePopover({
 	}, []);
 
 	const triggerEl = React.isValidElement(trigger)
-		? React.cloneElement(trigger as React.ReactElement<any>, {
+		? // biome-ignore lint/suspicious/noExplicitAny: React.cloneElement needs permissive type for generic trigger wrappers.
+			React.cloneElement(trigger as React.ReactElement<any>, {
 				ref: (node: HTMLElement | null) => {
 					triggerRef.current = node;
-					const origRef = (trigger as any).ref;
+					const origRef = (trigger as { ref?: React.Ref<unknown> }).ref;
 					if (typeof origRef === "function") {
 						origRef(node);
 					}
 				},
 				onClick: (e: React.MouseEvent) => {
 					toggle();
-					(trigger as React.ReactElement<any>).props.onClick?.(e);
+					(trigger as { props?: { onClick?: (e: React.MouseEvent) => void } }).props?.onClick?.(e);
 				},
 				onKeyDown: (e: React.KeyboardEvent) => {
 					if (e.key === "Enter" || e.key === " ") {
 						e.preventDefault();
 						toggle();
 					}
-					(trigger as React.ReactElement<any>).props.onKeyDown?.(e);
+					(trigger as { props?: { onKeyDown?: (e: React.KeyboardEvent) => void } }).props?.onKeyDown?.(e);
 				},
 				"data-state": open ? "open" : "closed",
-				className: `group/selector ${(trigger as React.ReactElement<any>).props.className ?? ""}`.trim(),
+				className:
+					`group/selector ${(trigger as { props?: { className?: string } }).props?.className ?? ""}`.trim(),
 			})
 		: trigger;
 

@@ -1,6 +1,18 @@
 /// <reference types="vite/client" />
 
-import type { AgentDefinitionInfo, AgentDefinitionInput, AgentInfo, FileTreeNode, ImageContent } from "@shared/types";
+import type {
+	AgentDefinitionInfo,
+	AgentDefinitionInput,
+	AgentInfo,
+	FileTreeNode,
+	ImageContent,
+	ProjectInfo,
+} from "@shared/types";
+import type { ProviderSettingsData } from "./store/atoms";
+
+type IpcResult<T extends Record<string, unknown> = {}> =
+	| ({ success: true } & T)
+	| { success: false; error: string };
 
 /**
  * The Look IPC surface injected by preload.js.
@@ -12,26 +24,30 @@ interface LookAPI {
 	/** User home directory, injected by preload. Used to shorten absolute
 	 *  paths to ~/… in tool-call summaries. Empty string if unavailable. */
 	homedir: string;
-	send(event: any): void;
-	invoke(event: any): Promise<any>;
-	onEvent(callback: (event: any) => void): () => void;
-	sendMessage(agentId: string, message: string, images?: ImageContent[]): Promise<any>;
-	activateSession(sessionId: string): Promise<any>;
-	createAgent(name?: string | { name?: string; projectId?: string; imProvider?: "feishu" }): Promise<any>;
-	destroyAgent(agentId: string): Promise<any>;
-	getModels(): Promise<any>;
-	getProviders(): Promise<any>;
+	send(event: unknown): void;
+	invoke(event: unknown): Promise<unknown>;
+	dequeueMessages(agentId: string): Promise<IpcResult<{ messages: string[] }>>;
+	onEvent(callback: (event: unknown) => void): () => void;
+
+	sendMessage(agentId: string, message: string, images?: ImageContent[]): Promise<IpcResult>;
+	activateSession(sessionId: string): Promise<IpcResult>;
+	createAgent(name?: string | { name?: string; projectId?: string; imProvider?: "feishu" }): Promise<IpcResult<{ agentId: string }>>;
+	destroyAgent(agentId: string): Promise<IpcResult>;
+	getModels(): Promise<IpcResult<{ models: AvailableModel[] }>>;
+	getProviders(): Promise<IpcResult<{ providers: ProviderInfo[] }>>;
 	getAgents(): Promise<{ success: boolean; agents?: AgentInfo[]; error?: string }>;
-	switchModel(agentId: string, model: string): Promise<any>;
-	updateThinking(agentId: string, level: string): Promise<any>;
+	switchModel(agentId: string, model: string): Promise<IpcResult>;
+	updateThinking(agentId: string, level: string): Promise<IpcResult>;
 	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
-	compressSession(agentId: string): Promise<any>;
+	setEntryLabel(agentId: string, entryId: string, label: string | null): Promise<IpcResult>;
+	renameAgent(agentId: string, name: string): Promise<IpcResult>;
+	compressSession(agentId: string): Promise<IpcResult>;
 	navigateTree(
 		agentId: string,
 		entryId: string,
 		options?: { summarize?: boolean; customInstructions?: string; label?: string },
-	): Promise<any>;
-	createFork(agentId: string, entryId: string, options?: { name?: string }): Promise<any>;
+	): Promise<IpcResult<{ result: { editorText?: string; cancelled: boolean; aborted?: boolean } }>>;
+	createFork(agentId: string, entryId: string, options?: { name?: string }): Promise<IpcResult<{ agentId: string; sessionFilePath: string }>>;
 	openDirectoryDialog(
 		title?: string,
 	): Promise<{ success: boolean; path?: string; canceled?: boolean; error?: string }>;
@@ -45,13 +61,15 @@ interface LookAPI {
 	 *  path (e.g. dropped directories in HTML5 dataTransfer). */
 	getPathForFile(file: File): string | null;
 	openProjectFolder(projectId?: string): Promise<{ success: boolean; path?: string; error?: string }>;
-	listProjects(): Promise<any>;
-	createProject(cwd: string, name?: string): Promise<any>;
-	renameProject(projectId: string, name: string): Promise<any>;
-	deleteProject(projectId: string): Promise<any>;
-	confirmDeleteProject(projectId: string, confirmed: boolean): Promise<any>;
-	getSettings(): Promise<any>;
-	setApiKey(provider: string, key: string): Promise<any>;
+	listProjects(): Promise<IpcResult<{ projects: ProjectInfo[] }>>;
+	createProject(cwd: string, name?: string): Promise<IpcResult<{ project: ProjectInfo; isDuplicate: boolean }>>;
+	renameProject(projectId: string, name: string): Promise<IpcResult>;
+	switchProject(projectId: string): Promise<IpcResult>;
+	getActiveProject(): Promise<IpcResult<{ project: ProjectInfo | null }>>;
+	deleteProject(projectId: string): Promise<IpcResult>;
+	confirmDeleteProject(projectId: string, confirmed: boolean): Promise<IpcResult>;
+	getSettings(): Promise<IpcResult<ProviderSettingsData>>;
+	setApiKey(provider: string, key: string): Promise<IpcResult<ProviderSettingsData>>;
 	testApiKey(
 		provider: string,
 		key: string,
@@ -59,6 +77,13 @@ interface LookAPI {
 		success: boolean;
 		result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string };
 	}>;
+	getApiKey(provider: string): Promise<IpcResult<{ key: string | null }>>;
+	testEnvKey(provider: string): Promise<IpcResult<{ result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } }>>;
+	addCustomProvider(input: CustomProviderInput): Promise<IpcResult>;
+	updateCustomProvider(name: string, patch: Partial<CustomProviderInput>): Promise<IpcResult>;
+	removeCustomProvider(name: string): Promise<IpcResult<{ removed: boolean }>>;
+	listCustomProviders(): Promise<IpcResult<{ providers: CustomProviderInput[] }>>;
+	testCustomProvider(input: CustomProviderInput): Promise<IpcResult<{ result: TestCustomProviderResult }>>;
 	getGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
 	setGeneralSettings(
 		settings: Partial<GeneralSettings>,
@@ -119,6 +144,9 @@ interface LookAPI {
 	// ---- Skills：Skill 开关 ----
 	setSkillEnabled(name: string, enabled: boolean): Promise<{ success: boolean; error?: string }>;
 	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
+	getUserProfile(): Promise<IpcResult<{ profile: { userId: string; email: string; userName: string; avatar: string } | null }>>;
+	updateUserProfile(patch: unknown): Promise<IpcResult>;
+	resetUserProfile(): Promise<IpcResult>;
 	// ---- Shared area ----
 	listSharedFiles(projectId: string): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
 	startSharedWatch(projectId: string): Promise<{ success: boolean; error?: string }>;
@@ -193,6 +221,29 @@ interface LookAPI {
 		tools?: Array<{ server: string; tool: { name: string; description?: string } }>;
 		error?: string;
 	}>;
+	// ---- Usage & updates ----
+	getUsage(): Promise<IpcResult<{ usage: unknown }>>;
+	checkForUpdates(): Promise<IpcResult<{ updateAvailable: boolean; version?: string }>>;
+	downloadUpdate(): Promise<IpcResult>;
+	installUpdate(): Promise<IpcResult>;
+	listPrompts(): Promise<IpcResult<{ prompts: unknown[] }>>;
+	createPrompt(name: string, content: string): Promise<IpcResult>;
+	updatePrompt(id: string, patch: unknown): Promise<IpcResult>;
+	deletePrompt(id: string): Promise<IpcResult>;
+	setActivePrompt(id: string): Promise<IpcResult>;
+	listProjectPrompts(projectId: string): Promise<IpcResult<{ prompts: unknown[] }>>;
+	createProjectPrompt(projectId: string, name: string, content: string): Promise<IpcResult>;
+	updateProjectPrompt(projectId: string, id: string, patch: unknown): Promise<IpcResult>;
+	deleteProjectPrompt(projectId: string, id: string): Promise<IpcResult>;
+	setProjectActivePrompt(projectId: string, id: string): Promise<IpcResult>;
+	listMcpServers(): Promise<IpcResult<{ servers: unknown[] }>>;
+	listMcpTools(name: string): Promise<IpcResult<{ tools: unknown[] }>>;
+	addMcpServer(config: unknown): Promise<IpcResult>;
+	removeMcpServer(name: string): Promise<IpcResult>;
+	testMcpServer(name: string): Promise<IpcResult<{ tools: unknown[]; error?: string }>>;
+	toggleMcpServer(name: string, enabled: boolean): Promise<IpcResult>;
+	updateMcpServer(name: string, config: unknown): Promise<IpcResult>;
+	exportChat(agentId: string, format?: string): Promise<IpcResult<{ filePath?: string }>>;
 }
 
 interface SkillEntry {

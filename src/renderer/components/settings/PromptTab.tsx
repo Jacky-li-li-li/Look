@@ -25,7 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface PromptItem {
 	id: string;
@@ -70,11 +70,12 @@ export default function PromptTab() {
 	const loadData = useCallback(async () => {
 		try {
 			const [r, prj] = await Promise.all([api.listPrompts(), api.listProjects()]);
-			if (r?.success) {
+			const promptsResult = r as { success?: boolean; prompts?: PromptItem[]; activePromptId?: string; projectOverrides?: Record<string, { prompts: PromptItem[]; activePromptId: string }> };
+			if (promptsResult.success) {
 				setData({
-					prompts: r.prompts ?? [],
-					activePromptId: r.activePromptId ?? "",
-					projectOverrides: r.projectOverrides ?? {},
+					prompts: promptsResult.prompts ?? [],
+					activePromptId: promptsResult.activePromptId ?? "",
+					projectOverrides: promptsResult.projectOverrides ?? {},
 				});
 			}
 			if (prj?.success && Array.isArray(prj.projects)) {

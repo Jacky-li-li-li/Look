@@ -15,7 +15,7 @@ import {
 } from "../store/atoms";
 import { themeFromSettings, writeLookThemeToDom } from "./useLookTheme";
 
-const api = (window as any).look;
+const api = window.look;
 
 export function useAppEffects() {
 	const activeAgentId = useAtomValue(activeAgentIdAtom);

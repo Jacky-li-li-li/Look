@@ -10,6 +10,14 @@ import {
 	sanitiseWorkspaceName,
 } from "../src/main/shared/look-storage";
 
+/** Test-only access to SessionRuntimeManager internals. */
+interface TestManagerInternals {
+	sessionsByProject: Map<string, Array<Record<string, unknown>>>;
+	subAgentRegistry: { register(parentId: string, childId: string, name: string): void };
+	destroySubSessions(sessionId: string): Promise<void>;
+	projectService: { createProjectRecord(cwd: string, name?: string): { id: string; name: string }; has(id: string): boolean };
+}
+
 const cleanup: string[] = [];
 
 afterEach(async () => {
@@ -29,7 +37,7 @@ describe("SubAgent deletion cleanup", () => {
 			if (event.type === "agent:destroyed") events.push(event.agentId);
 		});
 		try {
-			(manager as any).sessionsByProject.set("project-a", [
+			(manager as unknown as TestManagerInternals).sessionsByProject.set("project-a", [
 				{
 					id: "child-session",
 					name: "child",
@@ -43,9 +51,9 @@ describe("SubAgent deletion cleanup", () => {
 					allMessagesText: "",
 				},
 			]);
-			(manager as any).subAgentRegistry.register("parent-session", "child-session", "child");
+			(manager as unknown as TestManagerInternals).subAgentRegistry.register("parent-session", "child-session", "child");
 
-			await (manager as any).destroySubSessions("parent-session");
+			await (manager as unknown as TestManagerInternals).destroySubSessions("parent-session");
 
 			expect(existsSync(childPath)).toBe(false);
 			expect(manager.listSubSessions("parent-session")).toEqual([]);
@@ -67,7 +75,7 @@ describe("SubAgent deletion cleanup", () => {
 
 		const manager = new SessionRuntimeManager();
 		try {
-			const created = (manager as any).projectService.createProjectRecord(root, projectName);
+			const created = (manager as unknown as TestManagerInternals).projectService.createProjectRecord(root, projectName);
 			const createdId = created.id;
 			const sharedDir = getProjectSharedDir(createdId);
 			const actualSubsessionsDir = getWorkspaceSubsessionsDir(created.name);
@@ -75,7 +83,7 @@ describe("SubAgent deletion cleanup", () => {
 			await mkdir(sharedDir, { recursive: true });
 			await mkdir(actualSubsessionsDir, { recursive: true });
 			await writeFile(join(actualSubsessionsDir, "child.jsonl"), "", "utf8");
-			(manager as any).sessionsByProject.set(createdId, [
+			(manager as unknown as TestManagerInternals).sessionsByProject.set(createdId, [
 				{
 					id: "parent-session",
 					name: "parent",
@@ -95,7 +103,7 @@ describe("SubAgent deletion cleanup", () => {
 			expect(existsSync(sessionPath)).toBe(false);
 			expect(existsSync(sharedDir)).toBe(false);
 			expect(existsSync(actualSubsessionsDir)).toBe(false);
-			expect((manager as any).projectService.has(createdId)).toBe(false);
+			expect((manager as unknown as TestManagerInternals).projectService.has(createdId)).toBe(false);
 			expect(sanitiseWorkspaceName(projectName)).toBe(projectName);
 		} finally {
 			await manager.dispose();

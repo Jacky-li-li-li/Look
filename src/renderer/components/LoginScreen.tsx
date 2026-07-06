@@ -16,7 +16,7 @@ import { supabase } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface LoginState {
 	mode: "login" | "register" | "forgot";

@@ -10,7 +10,7 @@ import { FolderOpen } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface NewProjectDialogProps {
 	open: boolean;
@@ -41,8 +41,8 @@ export default function NewProjectDialog({ open, cwd, onClose, onCreated }: NewP
 			} else {
 				setError(result?.error || "Failed to create project");
 			}
-		} catch (err: any) {
-			setError(err?.message ?? "Unknown error");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Unknown error");
 		} finally {
 			setCreating(false);
 		}

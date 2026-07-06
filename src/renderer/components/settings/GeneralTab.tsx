@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ThemePicker } from "./ThemePicker";
 
-const api = (window as any).look;
+const api = window.look;
 
 /** Sentinel value for the "Title generation model" Select. Models are
  *  serialized as `"provider/model-id"`, so this string can never collide

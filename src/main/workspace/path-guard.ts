@@ -32,8 +32,8 @@ export interface ResolveInsideRootOptions {
 async function safeRealpath(p: string): Promise<string | null> {
 	try {
 		return await fs.promises.realpath(p);
-	} catch (e: any) {
-		if (e?.code === "ENOENT") return null;
+	} catch (e) {
+		if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return null;
 		// EACCES / ELOOP / ENOTDIR:由调用方决定如何处理
 		throw e;
 	}

@@ -54,6 +54,23 @@ export interface IRuntimeStore {
 	getProjectRoot(): string;
 }
 
+// ── SubAgent Runtime ──
+
+/**
+ * Runtime lifecycle operations needed by SubAgentRuntimeService.
+ * Extends IRuntimeStore's read-only queries with mutation capabilities.
+ */
+export interface IRuntimeLifecycle extends IEventBus, IRuntimeStore {
+	/** Dispose a session runtime (unsubscribe, delete from registry, release scope). */
+	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
+	/** Get the stored JSONL file path for a session (may not be live). */
+	getStoredSessionPath(sessionId: string): string | undefined;
+	/** Get the cwd for a session (may not be live). */
+	getSessionCwd(sessionId: string): string;
+	/** Check if a sub-session cleanup timer is pending. */
+	hasCleanupTimer(sessionId: string): boolean;
+}
+
 // ── Permission ──
 
 /** Per-session tool call authorization. */

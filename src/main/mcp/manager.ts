@@ -94,7 +94,7 @@ export class MCPManager {
 		const servers: Record<string, unknown> = {};
 		for (const [, config] of this.configs) {
 			if (config._source !== "user") continue;
-			const { name: _name, _source: _src, _discoveredFrom: _disc, ...rest } = config as any;
+			const { name: _name, _source: _src, _discoveredFrom: _disc, ...rest } = config as Record<string, unknown>;
 			servers[config.name] = rest;
 		}
 

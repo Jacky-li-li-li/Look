@@ -30,7 +30,7 @@ import { SESSION_COLLAPSE_THRESHOLD } from "./utils";
 /** 稳定空数组引用，避免每次渲染创建新引用导致 memo 失效 */
 const EMPTY_CHILDREN: ChildSessionInfo[] = [];
 
-const api = (window as any).look;
+const api = window.look;
 
 export default function ProjectTree({
 	onSelect,

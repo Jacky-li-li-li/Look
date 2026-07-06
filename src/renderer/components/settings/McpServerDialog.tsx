@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const api = (window as any).look;
+const api = window.look;
 
 interface McpServerDialogProps {
 	open: boolean;

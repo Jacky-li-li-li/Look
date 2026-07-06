@@ -15,7 +15,7 @@ import {
 } from "../store/atoms";
 import { appStore, markSessionSnapshotLoading } from "../store/ipcHandler";
 
-const api = (window as any).look;
+const api = window.look;
 
 export function useAgentActions() {
 	const handleSendMessage = useCallback(async (text: string, images?: ImageContent[]): Promise<boolean> => {
@@ -28,8 +28,8 @@ export function useAgentActions() {
 				return false;
 			}
 			return true;
-		} catch (error: any) {
-			toast.error(error?.message ?? "Message was not accepted");
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "Message was not accepted");
 			return false;
 		}
 	}, []);
@@ -50,12 +50,12 @@ export function useAgentActions() {
 				const filtered = previous.filter((id) => id !== agentId);
 				return [agentId, ...filtered];
 			});
-		} catch (error: any) {
+		} catch (error) {
 			markSessionSnapshotLoading(agentId, false);
 			if (appStore.get(activeAgentIdAtom) === agentId) {
 				appStore.set(activeAgentIdAtom, previousActiveId);
 			}
-			toast.error(error?.message ?? "Failed to activate session");
+			toast.error(error instanceof Error ? error.message : "Failed to activate session");
 		}
 	}, []);
 
@@ -103,8 +103,8 @@ export function useAgentActions() {
 		if (!api || !id) return;
 		try {
 			await api.abortAgent(id);
-		} catch (err: any) {
-			toast.error(`Stop failed: ${err?.message ?? "unknown"}`);
+		} catch (err) {
+			toast.error(`Stop failed: ${err instanceof Error ? err.message : "unknown"}`);
 		}
 	}, []);
 
@@ -121,8 +121,8 @@ export function useAgentActions() {
 				);
 				return text;
 			}
-		} catch (err: any) {
-			toast.error(err?.message ?? "Failed to retrieve messages");
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to retrieve messages");
 		}
 	}, []);
 

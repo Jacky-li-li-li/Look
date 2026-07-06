@@ -40,7 +40,7 @@ export default function McpServersTab() {
 
 	const refresh = useCallback(async () => {
 		try {
-			const result = await (window as any).look.listMcpServers();
+			const result = await window.look.listMcpServers();
 			if (result?.success) {
 				const pending = pendingTogglesRef.current;
 				const nextServers = ((result.servers ?? []) as McpServerStatus[]).map((server) => {
@@ -88,7 +88,7 @@ export default function McpServersTab() {
 			setExpandedServers(next);
 			if (!serverTools.has(name)) {
 				try {
-					const result = await (window as any).look.listMcpTools(name);
+					const result = await window.look.listMcpTools(name);
 					if (result?.success) {
 						const tools = (result.tools ?? []) as McpToolInfo[];
 						setServerTools((prev) => {
@@ -123,7 +123,7 @@ export default function McpServersTab() {
 			),
 		);
 		try {
-			const result = await (window as any).look.toggleMcpServer(name, enabled);
+			const result = await window.look.toggleMcpServer(name, enabled);
 			if (result?.success) {
 				await refresh();
 			} else {
@@ -147,7 +147,7 @@ export default function McpServersTab() {
 	};
 
 	const handleTest = async (name: string) => {
-		const result = await (window as any).look.testMcpServer(name);
+		const result = await window.look.testMcpServer(name);
 		if (result?.success) {
 			toast.success(`连接成功，${result.tools?.length ?? 0} 个工具可用`);
 			refresh();
@@ -157,7 +157,7 @@ export default function McpServersTab() {
 	};
 
 	const handleDelete = async (name: string) => {
-		const result = await (window as any).look.removeMcpServer(name);
+		const result = await window.look.removeMcpServer(name);
 		if (result?.success) {
 			refresh();
 		} else {

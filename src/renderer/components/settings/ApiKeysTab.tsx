@@ -24,7 +24,7 @@ import AddCustomProviderDialog from "./AddCustomProviderDialog";
 import CustomProvidersSection from "./CustomProvidersSection";
 import type { CustomProviderInput, CustomProviderStats, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
 
-const api = (window as any).look;
+const api = window.look;
 
 type ForceSaveState = { provider: string; key: string; reason: string; status: number } | null;
 
@@ -418,8 +418,8 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 				return true;
 			}
 			toast.error(result?.error ?? t("settings.selfTestFailed"));
-		} catch (e: any) {
-			toast.error(e?.message ?? t("settings.selfTestFailed"));
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : t("settings.selfTestFailed"));
 		}
 		return false;
 	};
@@ -532,8 +532,8 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 						onProvidersChange({ providers: providersRes.providers, customStats: providersRes.customStats });
 				} catch {}
 			}
-		} catch (e: any) {
-			toast.error(e?.message ?? t("settings.customProviders.toast.removeFailed"));
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : t("settings.customProviders.toast.removeFailed"));
 		}
 		patchCustom("confirmRemove", null);
 	};

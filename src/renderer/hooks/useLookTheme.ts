@@ -19,7 +19,7 @@ import {
 	type LookTone,
 } from "../lib/look-theme";
 
-const api = (window as any).look;
+const api = window.look;
 
 let cachedTheme: LookTheme | null = null;
 
@@ -88,7 +88,7 @@ export function useLookTheme(): UseLookThemeResult {
 	const setTheme = useCallback((style: LookStyle, tone: LookTone) => {
 		writeLookThemeToDom({ style, tone });
 		// Persist via IPC; failures are non-fatal — the DOM update already happened.
-		api?.setGeneralSettings?.({ themeStyle: style, themeTone: tone }).catch(() => {});
+		api?.setGeneralSettings?.({ themeStyle: style, themeTone: tone } as Record<string, unknown>).catch(() => {});
 	}, []);
 
 	return { style: theme.style, tone: theme.tone, setTheme };
