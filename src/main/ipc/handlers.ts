@@ -34,6 +34,7 @@ import {
 	guardString,
 	guardStringArray,
 } from "./guards.js";
+import type { McpServerConfig } from "../mcp/types.js";
 
 export function registerIpcHandlers(
 	runtimeManager: SessionRuntimeManager,
@@ -913,7 +914,7 @@ const invokeRouteMap: InvokeRouteMap = {
 	},
 	"mcp:add-server": async (data, ctx) => {
 		try {
-			await ctx.mcpManager.addServer(data.config as Record<string, unknown>);
+			await ctx.mcpManager.addServer(data.config as unknown as McpServerConfig);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -947,7 +948,7 @@ const invokeRouteMap: InvokeRouteMap = {
 	},
 	"mcp:update-server": async (data, ctx) => {
 		try {
-			await ctx.mcpManager.updateServer(guardString(data.name, "name"), data.config as Record<string, unknown>);
+			await ctx.mcpManager.updateServer(guardString(data.name, "name"), data.config as unknown as McpServerConfig);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };

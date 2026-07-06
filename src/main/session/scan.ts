@@ -51,7 +51,8 @@ function extractMessageText(message: AgentMessage): string {
 		.trim();
 }
 
-function messageActivityTime(entry: Record<string, unknown>): number | undefined {
+// biome-ignore lint/suspicious/noExplicitAny: entry is a JSONL line with dynamic shape.
+function messageActivityTime(entry: Record<string, any>): number | undefined {
 	const message = entry?.message;
 	if (!message || (message.role !== "user" && message.role !== "assistant")) return undefined;
 	if (typeof message.timestamp === "number") return message.timestamp;
@@ -63,7 +64,8 @@ function messageActivityTime(entry: Record<string, unknown>): number | undefined
 }
 
 function buildSessionSummaryFromLines(filePath: string, stats: fs.Stats, lines: string[]): PiSessionInfo | null {
-	let header: Record<string, unknown> | null = null;
+	// biome-ignore lint/suspicious/noExplicitAny: parsed JSONL entry.
+	let header: Record<string, any> | null = null;
 	let name: string | undefined;
 	let messageCount = 0;
 	let firstMessage = "";

@@ -38,7 +38,7 @@ async function loadAutoUpdater(): Promise<AppUpdater | null> {
  * See: https://github.com/electron-userland/electron-builder/issues/8399
  */
 function resolveAutoUpdater(mod: Record<string, unknown>): AppUpdater | null {
-	return (mod.default?.autoUpdater as AppUpdater) ?? (mod.autoUpdater as AppUpdater) ?? null;
+	return ((mod.default as Record<string, unknown>)?.autoUpdater as AppUpdater) ?? (mod.autoUpdater as AppUpdater) ?? null;
 }
 
 export function initUpdater(mainWindow: BrowserWindow): void {

@@ -8,6 +8,7 @@ import {
   type AgentSessionEvent,
   type AgentSessionRuntime,
   AuthStorage,
+  type ContextUsage,
   type CreateAgentSessionRuntimeFactory,
   createAgentSessionFromServices,
   createAgentSessionRuntime,
@@ -2166,7 +2167,7 @@ export class SessionRuntimeManager
     this.contextUsageLastEmit.set(sessionId, now);
     const managed = this.runtimes.get(sessionId);
     if (!managed) return;
-    const contextUsage = managed.runtime.session.getContextUsage();
+    const contextUsage = managed.runtime.session.getContextUsage() as ContextUsage;
     this.emit({
       type: "agent:context-usage",
       agentId: sessionId,

@@ -55,9 +55,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 		const q = searchQuery.toLowerCase();
 		return models.filter(
 			(m) =>
-				m.name.toLowerCase().includes(q) ||
-				m.provider.toLowerCase().includes(q) ||
-				m.id.toLowerCase().includes(q),
+				m.name.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q) || m.id.toLowerCase().includes(q),
 		);
 	}, [models, searchQuery]);
 
@@ -99,6 +97,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 			} catch (err) {
 				toast.error(err instanceof Error ? err.message : t("toast.modelSwitchFailed"));
 			} finally {
+				setSwitching(false);
 			}
 		},
 		[agentId, t],
@@ -133,7 +132,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 						className="size-3"
 						data-icon="inline-start"
 					/>
-					<span className="truncate">{label}</span>
+					<span className="whitespace-nowrap">{label}</span>
 					<ChevronDown
 						data-icon="inline-end"
 						className="size-3 transition-transform duration-150 group-data-[state=open]/selector:rotate-180"
