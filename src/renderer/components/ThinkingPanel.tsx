@@ -19,7 +19,7 @@ interface ThinkingPanelProps {
 	autoCollapse: boolean;
 }
 
-export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: ThinkingPanelProps) {
+const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming, autoCollapse }: ThinkingPanelProps) {
 	// Derive open state from streaming, but allow manual toggle to override.
 	// null means "follow isStreaming"; boolean means user has taken control.
 	const [manualOpen, setManualOpen] = React.useState<boolean | null>(null);
@@ -73,4 +73,6 @@ export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: T
 			</div>
 		</div>
 	);
-}
+});
+
+export default ThinkingPanel;

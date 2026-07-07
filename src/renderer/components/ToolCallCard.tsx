@@ -66,7 +66,9 @@ function extractToolResult(value: unknown): { text: string; images: ImageContent
 		return { text: textParts.join("\n"), images };
 	}
 	try {
-		return { text: JSON.stringify(value, null, 2), images: [] };
+		const json = JSON.stringify(value, null, 2);
+		// 包裹在代码块中，防止 markdown 解析器将 JSON 结构解析为异常 AST
+		return { text: "```json\n" + json + "\n```", images: [] };
 	} catch {
 		const str = String(value);
 		if (str !== "[object Object]") return { text: str, images: [] };
@@ -420,8 +422,6 @@ export default React.memo(ToolCallCard, (prev, next) => {
 		a.status === b.status &&
 		a.isError === b.isError &&
 		a.result === b.result &&
-		// Include args so live ToolCallCards can render formatToolSummary
-		// output before the SDK sends the full parsed args.
-		JSON.stringify(a.args) === JSON.stringify(b.args)
+		a.args === b.args
 	);
 });

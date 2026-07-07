@@ -189,19 +189,22 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	// Optional inlineTexts: when provided (e.g. caller wants a note shown
 	// alongside the cards), interleave them between blocks. When empty
 	// (the default), just render the blocks directly.
-	const interleaved: Array<
-		{ kind: "text"; text: string } | { kind: "block"; block: ThinkingContent | ToolCall; index: number }
-	> = [];
-	const textCount = Math.min(inlineTexts.length, blocks.length);
-	for (let i = 0; i < blocks.length; i++) {
-		if (i < textCount && inlineTexts[i]) {
-			interleaved.push({ kind: "text", text: inlineTexts[i] });
+	const interleaved = React.useMemo(() => {
+		const result: Array<
+			{ kind: "text"; text: string } | { kind: "block"; block: ThinkingContent | ToolCall; index: number }
+		> = [];
+		const textCount = Math.min(inlineTexts.length, blocks.length);
+		for (let i = 0; i < blocks.length; i++) {
+			if (i < textCount && inlineTexts[i]) {
+				result.push({ kind: "text", text: inlineTexts[i] });
+			}
+			result.push({ kind: "block", block: blocks[i], index: i });
 		}
-		interleaved.push({ kind: "block", block: blocks[i], index: i });
-	}
-	for (let i = textCount; i < inlineTexts.length; i++) {
-		if (inlineTexts[i]) interleaved.push({ kind: "text", text: inlineTexts[i] });
-	}
+		for (let i = textCount; i < inlineTexts.length; i++) {
+			if (inlineTexts[i]) result.push({ kind: "text", text: inlineTexts[i] });
+		}
+		return result;
+	}, [blocks, inlineTexts])
 
 	return (
 		<div className="flex flex-col" data-execution-group="" data-open={isOpen}>
