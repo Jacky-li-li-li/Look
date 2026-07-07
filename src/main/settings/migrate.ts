@@ -147,3 +147,4 @@ export function migrateLegacySettings(): MigrationResult {
 	}
 
 	return { migrated: true, keys };
+}
