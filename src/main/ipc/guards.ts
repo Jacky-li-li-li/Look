@@ -77,14 +77,19 @@ export function guardAgentId(id: unknown, label: string): string {
 	return id;
 }
 
-export function guardPath(p: unknown, label: string): string {
+export function guardPath(p: unknown, label: string, baseDir?: string): string {
 	if (typeof p !== "string" || p.length === 0 || p.length > 4096) {
 		throw new Error(`Invalid ${label}: ${JSON.stringify(p)}`);
 	}
 	const resolved = path.resolve(p);
-	// Reject attempts to traverse above the home directory
 	if (resolved.length < 2 || resolved.includes("\0")) {
 		throw new Error(`Path traversal rejected: ${JSON.stringify(p)}`);
+	}
+	if (baseDir) {
+		const rel = path.relative(baseDir, resolved);
+		if (rel.startsWith("..") || path.isAbsolute(rel)) {
+			throw new Error(`Path traversal denied for ${label}: outside allowed directory`);
+		}
 	}
 	return resolved;
 }

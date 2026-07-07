@@ -573,6 +573,18 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 							.get(agentsAtom)
 							.map((agent) => (agent.id === sessionId ? { ...agent, name: ev.value as string } : agent)),
 					);
+					} else if (ev.field === "thinkingLevel") {
+						appStore.set(
+							agentsAtom,
+							appStore
+								.get(agentsAtom)
+								.map((agent) =>
+									agent.id === sessionId
+										? { ...agent, thinkingLevel: ev.value as AgentInfo["thinkingLevel"] }
+										: agent,
+								),
+						);
+
 				}
 				break;
 

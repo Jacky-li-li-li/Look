@@ -40,7 +40,12 @@ export class McpClient {
 
 			this.client = new Client({ name: "look", version: "1.0.0" }, { capabilities: {} });
 
-			await this.client.connect(this.transport);
+			const connectTimeout = this.config.timeout ?? 30_000;
+			await this.withTimeout(
+				this.client.connect(this.transport),
+				connectTimeout,
+				`MCP server "${this.name}" connection timed out after ${connectTimeout}ms`,
+			);
 
 			const result = await this.client.listTools();
 			this.tools = (result.tools ?? []) as McpTool[];
@@ -65,7 +70,7 @@ export class McpClient {
 		return this.tools;
 	}
 
-	async callTool(name: string, args: Record<string, unknown>): Promise<McpCallResult> {
+	async callTool(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<McpCallResult> {
 		if (!this.client || this.state !== "connected") {
 			throw new Error(`MCP server "${this.name}" is not connected`);
 		}
@@ -75,6 +80,7 @@ export class McpClient {
 			this.client.callTool({ name, arguments: args }),
 			timeout,
 			`Tool "${name}" timed out after ${timeout}ms`,
+			signal,
 		);
 
 		return result as McpCallResult;
@@ -83,6 +89,7 @@ export class McpClient {
 	// ── 断开 ──
 
 	async disconnect(): Promise<void> {
+		if (this.state === "disconnected") return;
 		this.state = "disconnected";
 
 		if (this.client) {
@@ -106,12 +113,25 @@ export class McpClient {
 
 	// ── 辅助 ──
 
-	private async withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+	private async withTimeout<T>(promise: Promise<T>, ms: number, message: string, signal?: AbortSignal): Promise<T> {
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		const timeout = new Promise<never>((_, reject) => {
 			timer = setTimeout(() => reject(new Error(message)), ms);
 		});
 		try {
+			if (signal) {
+				if (signal.aborted) throw signal.reason ?? new Error("Aborted");
+				let onAbort: (() => void) | undefined;
+				const abortPromise = new Promise<never>((_, reject) => {
+					onAbort = () => reject(signal.reason ?? new Error("Aborted"));
+					signal.addEventListener("abort", onAbort, { once: true });
+				});
+				try {
+					return await Promise.race([promise, timeout, abortPromise]);
+				} finally {
+					if (onAbort) signal.removeEventListener("abort", onAbort);
+				}
+			}
 			return await Promise.race([promise, timeout]);
 		} finally {
 			if (timer) clearTimeout(timer);

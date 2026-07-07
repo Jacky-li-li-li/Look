@@ -81,12 +81,21 @@ export async function resolveInsideRoot(opts: ResolveInsideRootOptions): Promise
 		return target;
 	}
 
-	// target 不存在(可能正在被创建)。校验 parent 仍在 root 内,防御 symlink 越界。
-	// 如果 parent 也不存在(EACCES / 真实 ENOENT),safeRealpath 返回 null,放过;
-	// 因为这种情况下 parent 与 target 都不在文件系统上,无 symlink 可越界。
-	const realParent = await safeRealpath(path.dirname(target));
-	if (realParent && !isInsideRoot(realParent)) {
-		throw new Error(`Path traversal detected (${rootName}): parent outside ${rootName}`);
+
+	// target 不存在(可能正在被创建)。沿祖先链向上查找第一个存在的目录，
+	// 校验它在 root 内，防御通过中间缺失目录中 symlink 的越界攻击。
+	let ancestor = path.dirname(target);
+	while (true) {
+		const realAncestor = await safeRealpath(ancestor);
+		if (realAncestor) {
+			if (!isInsideRoot(realAncestor)) {
+				throw new Error(`Path traversal detected (${rootName}): ancestor outside ${rootName}`);
+			}
+			break;
+		}
+		const parent = path.dirname(ancestor);
+		if (parent === ancestor) break; // reached filesystem root
+		ancestor = parent;
 	}
 	return target;
 }

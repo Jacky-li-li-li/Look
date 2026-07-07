@@ -906,6 +906,10 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		const prevScope = this.scopeRegistry.get(previousSessionId);
 		if (prevScope) prevScope.isDefaultName = false;
 		this.scopeRegistry.release(previousSessionId);
+		
+		// 为新 sessionId 获取新的 scope，防止 rebind 后事件被静默丢弃。
+		const newScope = this.scopeRegistry.acquire(session.sessionId, managed.projectId);
+		newScope.streamingState = session.isStreaming ? "streaming" : "idle";
 		this.permissionService.restoreFromSession(session.sessionId, session.sessionManager);
 		this.planService.restoreToolSnapshot(session.sessionId, session.sessionManager);
 		await session.bindExtensions({
@@ -980,6 +984,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		if (this.subAgentRegistry.hasPending(sessionId)) {
 			this.finalizeSubSession(sessionId, true);
 		}
+		this.subAgentRegistry.abortPendingForParent(sessionId);
 		this.unregisterSubSession(sessionId);
 		if (abort && managed.runtime.session.isStreaming) await managed.runtime.session.abort();
 		this.permissionService.persistIfDirty(sessionId);
@@ -995,6 +1000,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		this.planService.disposeSession(sessionId);
 		if (dispScope) this.eventProcessor.dispose(sessionId);
 		this.scopeRegistry.release(sessionId);
+		this.subagentEnabledBySession.delete(sessionId);
+		this.contextUsageLastEmit.delete(sessionId);
+		this.forkOperationTails.delete(sessionId);
 		await managed.runtime.dispose();
 	}
 

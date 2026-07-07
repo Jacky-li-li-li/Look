@@ -190,6 +190,8 @@ export class MCPManager {
 		await Promise.allSettled(tasks);
 		this.clients.clear();
 		this.clientStarts.clear();
+		this.circuitStates.clear();
+		this.lastErrors.clear();
 	}
 
 	// ── 工具操作 ──
@@ -217,7 +219,7 @@ export class MCPManager {
 	 * 执行 MCP 工具调用，带熔断保护。
 	 * 30s 窗口内 5 次失败 → 断路 30s。
 	 */
-	async executeTool(server: string, tool: string, params: Record<string, unknown>): Promise<McpCallResult> {
+	async executeTool(server: string, tool: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<McpCallResult> {
 		// 熔断器检查
 		const circuit = this.circuitStates.get(server);
 		if (circuit && circuit.failures >= this.failureThreshold) {
@@ -237,7 +239,7 @@ export class MCPManager {
 		}
 
 		try {
-			const result = await client.callTool(tool, params);
+			const result = await client.callTool(tool, params, signal);
 			// 成功 → 重置熔断器
 			this.circuitStates.delete(server);
 			return result;

@@ -139,7 +139,7 @@ describe("createMcpExtensionFactory", () => {
 		expect(tool).toBeDefined();
 
 		const result = await tool.execute("call-1", { name: "World" }, undefined);
-		expect(mcpManager.executeTool).toHaveBeenCalledWith("test-server", "hello", { name: "World" });
+		expect(mcpManager.executeTool).toHaveBeenCalledWith("test-server", "hello", { name: "World" }, undefined);
 		expect(result.content).toBeDefined();
 		expect(result.content[0].text).toBe("Hello, World!");
 	});

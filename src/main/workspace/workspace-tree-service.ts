@@ -232,7 +232,7 @@ export class WorkspaceTreeService {
 	async stopAllWatchesForProject(projectId: string): Promise<void> {
 		const keys = this.watchedByProject.get(projectId);
 		if (!keys) return;
-		await Promise.all(
+		await Promise.allSettled(
 			Array.from(keys).map(async (key) => {
 				const watcher = this.watchers.get(key);
 				if (watcher) {
@@ -246,7 +246,7 @@ export class WorkspaceTreeService {
 
 	async dispose(): Promise<void> {
 		const keys = Array.from(this.watchers.keys());
-		await Promise.all(
+		await Promise.allSettled(
 			keys.map(async (key) => {
 				const w = this.watchers.get(key);
 				if (w) {

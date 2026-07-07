@@ -55,14 +55,16 @@ export function createMcpExtensionFactory(sessionId: string, mcpManager: MCPMana
 								server,
 								tool.name,
 								params as Record<string, unknown>,
+								signal,
 							);
 
 							return normalizeResult(result, server, tool.name);
 						},
 					});
 					registeredToolNames.add(toolName);
-				} catch {
+				} catch (error) {
 					// 单个工具注册失败不阻塞其他工具
+					console.warn(`[Look][MCP] Failed to register tool "${toolName}":`, error);
 				}
 			}
 		};
@@ -84,7 +86,7 @@ export function createMcpExtensionFactory(sessionId: string, mcpManager: MCPMana
 						name: params.name,
 						type: "stdio",
 						command: params.command,
-						args: params.args.split(/\s+/).filter(Boolean),
+						args: shellSplitArgs(params.args),
 						enabled: true,
 					});
 					await mcpManager.startServer(params.name);
@@ -144,6 +146,60 @@ export function createMcpExtensionFactory(sessionId: string, mcpManager: MCPMana
 }
 
 /** 将 MCP 调用结果转换为 pi SDK 的 AgentToolResult 格式 */
+/** 将命令行字符串按 shell 引号规则分割，支持单引号、双引号和反斜杠转义。 */
+function shellSplitArgs(input: string): string[] {
+	const args: string[] = [];
+	let current = "";
+	let inSingle = false;
+	let inDouble = false;
+	let hasToken = false;
+	for (let i = 0; i < input.length; i++) {
+		const ch = input[i];
+		if (inSingle) {
+			if (ch === "'") {
+				inSingle = false;
+			} else {
+				current += ch;
+				hasToken = true;
+			}
+		} else if (inDouble) {
+			if (ch === '"') {
+				inDouble = false;
+			} else if (ch === "\\" && i + 1 < input.length) {
+				// 双引号内反斜杠转义下一个字符
+				i++;
+				current += input[i];
+				hasToken = true;
+			} else {
+				current += ch;
+				hasToken = true;
+			}
+		} else if (ch === "'") {
+			inSingle = true;
+			hasToken = true;
+		} else if (ch === '"') {
+			inDouble = true;
+			hasToken = true;
+		} else if (ch === "\\" && i + 1 < input.length) {
+			// 非引号内的反斜杠转义下一个字符
+			i++;
+			current += input[i];
+			hasToken = true;
+		} else if (ch === " " || ch === "\t") {
+			if (hasToken) {
+				args.push(current);
+				current = "";
+				hasToken = false;
+			}
+		} else {
+			current += ch;
+			hasToken = true;
+		}
+	}
+	if (hasToken) args.push(current);
+	return args;
+}
+
 function normalizeResult(
 	result: McpCallResult,
 	_server: string,

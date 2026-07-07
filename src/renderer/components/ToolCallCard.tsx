@@ -232,8 +232,6 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const statSuffix = !open ? formatStatSuffix(toolCall, t) : "";
 	const resultTooLong = resultStr.length > RESULT_SUMMARY_LIMIT;
 
-	const _statusVariant =
-		toolCall.status === "success" ? "outline" : toolCall.status === "error" ? "destructive" : "secondary";
 	const statusBadgeColor =
 		toolCall.status === "success"
 			? "text-emerald-500"

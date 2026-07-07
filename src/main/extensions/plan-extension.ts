@@ -114,7 +114,12 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 				if (!plan) return toolError("Plan must not be empty.");
 				if (plan.length > 200_000) return toolError("Plan exceeds the 200,000 character limit.");
 
-				const outcome = await host.submitPlan(sessionId, plan, signal);
+				let outcome: Awaited<ReturnType<typeof host.submitPlan>>;
+				try {
+					outcome = await host.submitPlan(sessionId, plan, signal);
+				} catch (error) {
+					return toolError(`Plan submission failed: ${error instanceof Error ? error.message : String(error)}`);
+				}
 				if (outcome.status === "approved") {
 					api.sendMessage(
 						{

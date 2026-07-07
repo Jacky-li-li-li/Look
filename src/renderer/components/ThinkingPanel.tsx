@@ -64,7 +64,9 @@ export default function ThinkingPanel({ thinking, isStreaming, autoCollapse }: T
 				)}
 			>
 				<div className="overflow-hidden">
-					<div className="px-3 py-2.5 max-h-72 overflow-auto text-[11px] leading-relaxed text-muted-foreground">
+					<div
+						className="px-3 py-2.5 max-h-72 overflow-auto text-[11px] leading-relaxed text-muted-foreground"
+					>
 						<div className="whitespace-pre-wrap break-words leading-relaxed">{thinking}</div>
 					</div>
 				</div>

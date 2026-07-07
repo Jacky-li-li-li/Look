@@ -125,13 +125,10 @@ export function migrateLegacySettings(): MigrationResult {
 		data._migratedAt = new Date().toISOString();
 	}
 
-	try {
-		fs.mkdirSync(path.dirname(filePath), { recursive: true });
-		fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-	} catch (err) {
-		console.error("[Look] Failed to write migrated settings.json:", err);
-		return { migrated: false, keys: [] };
-	}
+
+	// 先写 ui-settings.json（不含 _migrated 标记）。
+	// 如果在此步骤与下一步之间进程崩溃，迁移会在下次启动时安全重跑，
+	// 因为 _migrated 尚未被打上标记。
 	if (Object.keys(uiOut).length > 0) {
 		try {
 			fs.mkdirSync(path.dirname(getUiSettingsPath()), { recursive: true });
@@ -141,5 +138,12 @@ export function migrateLegacySettings(): MigrationResult {
 		}
 	}
 
+	try {
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+	} catch (err) {
+		console.error("[Look] Failed to write migrated settings.json:", err);
+		return { migrated: false, keys: [] };
+	}
+
 	return { migrated: true, keys };
-}
