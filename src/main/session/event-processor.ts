@@ -106,12 +106,18 @@ export class SessionEventProcessor {
 				this.host.emitTodoUpdate(sessionId);
 				break;
 			case "compaction_end":
-				this.host.emitSessionState(sessionId, "agent_end");
+				scope.streamingState = event.willRetry ? "retrying" : "idle";
+				if (event.willRetry) {
+					this.host.emitSessionState(sessionId, "compaction_end");
+				} else {
+					this.host.emitSessionState(sessionId, "agent_end");
+				}
 				break;
 			case "auto_retry_start":
 			case "auto_retry_end":
 				if (event.type === "auto_retry_end" && !event.success) {
 					scope.streamingState = "idle";
+					this.host.onSubSessionAgentEnd(sessionId);
 				}
 				this.host.emitSessionUpdated(sessionId);
 				break;

@@ -170,7 +170,7 @@ export interface SessionRuntimeSnapshot {
 export interface SessionSnapshotEnvelope {
 	type: "session:snapshot";
 	sessionId: string;
-	reason: "initial" | "activate" | "agent_end" | "navigate";
+	reason: "initial" | "activate" | "agent_end" | "navigate" | "compaction_end";
 	leafId: string | null;
 	entries: SessionEntry[];
 	runtime: SessionRuntimeSnapshot;
