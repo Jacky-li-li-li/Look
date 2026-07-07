@@ -261,7 +261,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 			if (item.entry) {
 				return (
-					<div key={item.id} className="px-5 py-1.5">
+					<div key={item.id} className="px-5 pt-1.5 pb-1">
 						<SessionEntryBubble entry={item.entry} />
 					</div>
 				);
@@ -292,12 +292,12 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
 
 			return (
-				<div key={item.id} className="px-5 py-1.5">
+				<div key={item.id} className="px-5 pt-1.5 pb-1">
 					<div
 						data-message-id={item.id}
 						className={cn(
 							"group/message flex flex-col",
-							showActions && "gap-1",
+							showActions && "gap-0",
 							item.isLive && "animate-draw-in",
 						)}
 					>
