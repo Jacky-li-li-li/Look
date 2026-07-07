@@ -10,9 +10,7 @@ import type {
 } from "@shared/types";
 import type { ProviderSettingsData } from "./store/atoms";
 
-type IpcResult<T extends Record<string, unknown> = {}> =
-	| ({ success: true } & T)
-	| { success: false; error: string };
+type IpcResult<T extends Record<string, unknown> = {}> = ({ success: true } & T) | { success: false; error: string };
 
 /**
  * The Look IPC surface injected by preload.js.
@@ -31,7 +29,9 @@ interface LookAPI {
 
 	sendMessage(agentId: string, message: string, images?: ImageContent[]): Promise<IpcResult>;
 	activateSession(sessionId: string): Promise<IpcResult>;
-	createAgent(name?: string | { name?: string; projectId?: string; imProvider?: "feishu" }): Promise<IpcResult<{ agentId: string }>>;
+	createAgent(
+		name?: string | { name?: string; projectId?: string; imProvider?: "feishu" },
+	): Promise<IpcResult<{ agentId: string }>>;
 	destroyAgent(agentId: string): Promise<IpcResult>;
 	getModels(): Promise<IpcResult<{ models: AvailableModel[] }>>;
 	getProviders(): Promise<IpcResult<{ providers: ProviderInfo[] }>>;
@@ -47,7 +47,11 @@ interface LookAPI {
 		entryId: string,
 		options?: { summarize?: boolean; customInstructions?: string; label?: string },
 	): Promise<IpcResult<{ result: { editorText?: string; cancelled: boolean; aborted?: boolean } }>>;
-	createFork(agentId: string, entryId: string, options?: { name?: string }): Promise<IpcResult<{ agentId: string; sessionFilePath: string }>>;
+	createFork(
+		agentId: string,
+		entryId: string,
+		options?: { name?: string },
+	): Promise<IpcResult<{ agentId: string; sessionFilePath: string }>>;
 	openDirectoryDialog(
 		title?: string,
 	): Promise<{ success: boolean; path?: string; canceled?: boolean; error?: string }>;
@@ -78,7 +82,11 @@ interface LookAPI {
 		result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string };
 	}>;
 	getApiKey(provider: string): Promise<IpcResult<{ key: string | null }>>;
-	testEnvKey(provider: string): Promise<IpcResult<{ result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } }>>;
+	testEnvKey(
+		provider: string,
+	): Promise<
+		IpcResult<{ result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } }>
+	>;
 	addCustomProvider(input: CustomProviderInput): Promise<IpcResult>;
 	updateCustomProvider(name: string, patch: Partial<CustomProviderInput>): Promise<IpcResult>;
 	removeCustomProvider(name: string): Promise<IpcResult<{ removed: boolean }>>;
@@ -144,7 +152,9 @@ interface LookAPI {
 	// ---- Skills：Skill 开关 ----
 	setSkillEnabled(name: string, enabled: boolean): Promise<{ success: boolean; error?: string }>;
 	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
-	getUserProfile(): Promise<IpcResult<{ profile: { userId: string; email: string; userName: string; avatar: string } | null }>>;
+	getUserProfile(): Promise<
+		IpcResult<{ profile: { userId: string; email: string; userName: string; avatar: string } | null }>
+	>;
 	updateUserProfile(patch: unknown): Promise<IpcResult>;
 	resetUserProfile(): Promise<IpcResult>;
 	// ---- Shared area ----

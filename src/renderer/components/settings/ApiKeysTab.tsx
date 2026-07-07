@@ -189,17 +189,17 @@ function BuiltInProviderRow({
 			)}
 		>
 			<div className={cn("absolute left-0 top-0 h-full w-0.5", track)} aria-hidden="true" />
-				<span className="sr-only">
-					{testStatus[provider.id]?.verdict === "ok"
-						? t("settings.statusVerified")
-						: testStatus[provider.id]?.verdict === "error"
+			<span className="sr-only">
+				{testStatus[provider.id]?.verdict === "ok"
+					? t("settings.statusVerified")
+					: testStatus[provider.id]?.verdict === "error"
 						? t("settings.statusFailed")
 						: testStatus[provider.id]?.verdict === "skipped"
-						? t("settings.statusUntested")
-						: provider.hasKey
-						? t("settings.statusConfigured")
-						: t("settings.statusNeedsKey")}
-				</span>
+							? t("settings.statusUntested")
+							: provider.hasKey
+								? t("settings.statusConfigured")
+								: t("settings.statusNeedsKey")}
+			</span>
 			<div
 				role="button"
 				tabIndex={hasModels ? 0 : -1}
@@ -241,7 +241,9 @@ function BuiltInProviderRow({
 						size="xs"
 						className="h-7 text-[10px]"
 						onClick={() => (isEditing ? onCloseEditor() : onOpenEditor())}
-						aria-label={isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")}
+						aria-label={
+							isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")
+						}
 					>
 						<Key data-icon="inline-start" className="size-3" aria-hidden="true" />
 						{isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")}
@@ -250,7 +252,10 @@ function BuiltInProviderRow({
 						<Button
 							variant="line-ghost"
 							size="icon-xs"
-							className={cn("h-7 w-7 text-muted-foreground hover:text-destructive", isEditing && "invisible pointer-events-none")}
+							className={cn(
+								"h-7 w-7 text-muted-foreground hover:text-destructive",
+								isEditing && "invisible pointer-events-none",
+							)}
 							onClick={onClearClick}
 							aria-label={t("settings.clearKey")}
 							aria-hidden={isEditing}
@@ -290,7 +295,11 @@ function BuiltInProviderRow({
 								aria-label={editor.showKey ? t("settings.hideKey") : t("settings.showKey")}
 								aria-pressed={editor.showKey}
 							>
-								{editor.showKey ? <EyeOff data-icon="inline-start" aria-hidden="true" /> : <Eye data-icon="inline-start" aria-hidden="true" />}
+								{editor.showKey ? (
+									<EyeOff data-icon="inline-start" aria-hidden="true" />
+								) : (
+									<Eye data-icon="inline-start" aria-hidden="true" />
+								)}
 							</Button>
 						</div>
 						<Button
@@ -312,7 +321,6 @@ function BuiltInProviderRow({
 								</>
 							)}
 						</Button>
-
 					</div>
 					{provider.envVar && (
 						<p className="mt-1.5 text-[10px] text-muted-foreground">

@@ -9,7 +9,7 @@
 // permission / plan 扩展同等的 ExtensionFactory 机制。
 //
 // Look 不使用 SDK 示例的 TUI 渲染（renderCall/renderResult）——
-// 渲染层由 React 的 ToolCallCard / SubagentProgressCard 接管。
+// 渲染层接管。
 // ============================================================
 
 import { StringEnum } from "@earendil-works/pi-ai";

@@ -12,8 +12,6 @@
 // （SessionRuntimeManager 生命周期），子会话侧边栏可见、可持久化。
 // ============================================================
 
-
-
 import type {
 	AgentConfig,
 	SubagentChainItem,
@@ -94,7 +92,15 @@ export async function runParallelAgents(
 			const t = tasks[i];
 			try {
 				results[i] = await runSingleAgent(
-					host, parentSessionId, agents, t.agent, t.task, signal, onUpdate, undefined, t.title,
+					host,
+					parentSessionId,
+					agents,
+					t.agent,
+					t.task,
+					signal,
+					onUpdate,
+					undefined,
+					t.title,
 				);
 			} catch (error) {
 				results[i] = {

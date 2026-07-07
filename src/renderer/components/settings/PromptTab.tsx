@@ -70,7 +70,12 @@ export default function PromptTab() {
 	const loadData = useCallback(async () => {
 		try {
 			const [r, prj] = await Promise.all([api.listPrompts(), api.listProjects()]);
-			const promptsResult = r as { success?: boolean; prompts?: PromptItem[]; activePromptId?: string; projectOverrides?: Record<string, { prompts: PromptItem[]; activePromptId: string }> };
+			const promptsResult = r as {
+				success?: boolean;
+				prompts?: PromptItem[];
+				activePromptId?: string;
+				projectOverrides?: Record<string, { prompts: PromptItem[]; activePromptId: string }>;
+			};
 			if (promptsResult.success) {
 				setData({
 					prompts: promptsResult.prompts ?? [],

@@ -127,104 +127,104 @@ function AppLayout({
 	}, []);
 
 	return (
-			<>
-				<div
-					className="app-shell flex h-screen overflow-hidden bg-background p-2"
-					data-sidebar-collapsed={sidebarCollapsed}
-					data-right-panel-collapsed={rightPanelCollapsed}
-				>
-					<Sidebar
-						onSelect={handleSelectAgent}
-						onDestroy={handleDestroyAgent}
-						onCreateClick={handleCreateClick}
-						onSettingsClick={handleSettingsClick}
-						onCreateProject={handleOpenProject}
-						onDeleteProject={handleDeleteProject}
-						onOpenProject={handleOpenProjectFolderById}
-						onRenameProject={handleRenameProject}
-					/>
+		<>
+			<div
+				className="app-shell flex h-screen overflow-hidden bg-background p-2"
+				data-sidebar-collapsed={sidebarCollapsed}
+				data-right-panel-collapsed={rightPanelCollapsed}
+			>
+				<Sidebar
+					onSelect={handleSelectAgent}
+					onDestroy={handleDestroyAgent}
+					onCreateClick={handleCreateClick}
+					onSettingsClick={handleSettingsClick}
+					onCreateProject={handleOpenProject}
+					onDeleteProject={handleDeleteProject}
+					onOpenProject={handleOpenProjectFolderById}
+					onRenameProject={handleRenameProject}
+				/>
 
-					<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
+				<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
 
-					<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
-						{appReadyPhase < 1 ? null : projects.length === 0 ? (
-							<WelcomeScreen onOpenProject={handleOpenProject} />
-						) : showAgentSquare ? (
-							<AgentSquare />
-						) : (
-							<>
-								<SessionSheetBar
-									agentIds={openedSessionIds}
-									agents={agents}
-									projects={projects}
-									activeAgentId={activeAgentId}
-									sidebarCollapsed={sidebarCollapsed}
-									onSelect={handleSelectAgent}
-									onClose={handleCloseSessionSheet}
-									onReorder={handleReorderSessionSheets}
-									onExpandSidebar={handleExpandSidebar}
-									onExpandRightPanel={handleExpandRightPanel}
+				<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
+					{appReadyPhase < 1 ? null : projects.length === 0 ? (
+						<WelcomeScreen onOpenProject={handleOpenProject} />
+					) : showAgentSquare ? (
+						<AgentSquare />
+					) : (
+						<>
+							<SessionSheetBar
+								agentIds={openedSessionIds}
+								agents={agents}
+								projects={projects}
+								activeAgentId={activeAgentId}
+								sidebarCollapsed={sidebarCollapsed}
+								onSelect={handleSelectAgent}
+								onClose={handleCloseSessionSheet}
+								onReorder={handleReorderSessionSheets}
+								onExpandSidebar={handleExpandSidebar}
+								onExpandRightPanel={handleExpandRightPanel}
+							/>
+							{activeAgent ? (
+								<ChatPanel
+									agentId={activeAgent.id}
+									agentName={activeAgent.name}
+									sessionState={activeSessionState}
+									autoCollapse={autoCollapse}
+									queue={activeQueue}
+									phase={activePhase}
+									currentModel={activeAgent.model}
+									currentThinking={activeAgent.thinkingLevel}
+									availableThinkingLevels={thinkingLevels}
+									onSend={handleSendMessage}
+									onThinkingChange={handleThinkingChange}
+									onModelChange={handleModelChanged}
+									onRequestApiKeys={handleRequestApiKeys}
+									onAbort={handleAbortAgent}
+									onDequeueAll={handleDequeueAll}
 								/>
-								{activeAgent ? (
-									<ChatPanel
-										agentId={activeAgent.id}
-										agentName={activeAgent.name}
-										sessionState={activeSessionState}
-										autoCollapse={autoCollapse}
-										queue={activeQueue}
-										phase={activePhase}
-										currentModel={activeAgent.model}
-										currentThinking={activeAgent.thinkingLevel}
-										availableThinkingLevels={thinkingLevels}
-										onSend={handleSendMessage}
-										onThinkingChange={handleThinkingChange}
-										onModelChange={handleModelChanged}
-										onRequestApiKeys={handleRequestApiKeys}
-										onAbort={handleAbortAgent}
-										onDequeueAll={handleDequeueAll}
-									/>
-								) : appReadyPhase >= 2 && agents.length === 0 ? (
-									<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
-								) : null}
-							</>
-						)}
-					</main>
+							) : appReadyPhase >= 2 && agents.length === 0 ? (
+								<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
+							) : null}
+						</>
+					)}
+				</main>
 
-					<RightPanel />
+				<RightPanel />
 
-					{newProjectCwd && (
-						<NewProjectDialog
-							open={!!newProjectCwd}
-							cwd={newProjectCwd}
-							onClose={() => setNewProjectCwd(null)}
-							onCreated={handleProjectCreated}
-						/>
-					)}
-					{pendingDelete && (
-						<DeleteProjectDialog
-							open={!!pendingDelete}
-							projectId={pendingDelete.projectId}
-							projectName={pendingDelete.projectName}
-							agentCount={pendingDelete.agentCount}
-							runningCount={pendingDelete.runningCount}
-							onClose={handleDeleteProjectCancelled}
-							onDeleted={handleDeleteProjectConfirmed}
-						/>
-					)}
-					{showSettings && (
-						<SettingsDialog
-							open={showSettings}
-							providers={providerSettings.providers}
-							customStats={providerSettings.customStats}
-							onProvidersChange={onProvidersChange}
-							onClose={handleCloseSettings}
-							defaultTab={settingsTab}
-						/>
-					)}
-					<PermissionDialog />
-					<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
-					<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
-				</div>
+				{newProjectCwd && (
+					<NewProjectDialog
+						open={!!newProjectCwd}
+						cwd={newProjectCwd}
+						onClose={() => setNewProjectCwd(null)}
+						onCreated={handleProjectCreated}
+					/>
+				)}
+				{pendingDelete && (
+					<DeleteProjectDialog
+						open={!!pendingDelete}
+						projectId={pendingDelete.projectId}
+						projectName={pendingDelete.projectName}
+						agentCount={pendingDelete.agentCount}
+						runningCount={pendingDelete.runningCount}
+						onClose={handleDeleteProjectCancelled}
+						onDeleted={handleDeleteProjectConfirmed}
+					/>
+				)}
+				{showSettings && (
+					<SettingsDialog
+						open={showSettings}
+						providers={providerSettings.providers}
+						customStats={providerSettings.customStats}
+						onProvidersChange={onProvidersChange}
+						onClose={handleCloseSettings}
+						defaultTab={settingsTab}
+					/>
+				)}
+				<PermissionDialog />
+				<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
+				<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
+			</div>
 			<UpdateNotification />
 		</>
 	);

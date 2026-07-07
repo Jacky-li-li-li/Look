@@ -95,10 +95,7 @@ export default function App() {
 	const handleCloseSettings = useCallback(() => appStore.set(showSettingsAtom, false), []);
 	const handleExpandSidebar = useCallback(() => appStore.set(sidebarCollapsedAtom, false), []);
 	const handleExpandRightPanel = useCallback(() => appStore.set(rightPanelCollapsedAtom, false), []);
-	const onProvidersChange = useCallback(
-		(data: ProviderSettingsData) => appStore.set(providerSettingsAtom, data),
-		[],
-	);
+	const onProvidersChange = useCallback((data: ProviderSettingsData) => appStore.set(providerSettingsAtom, data), []);
 
 	// ── Early return guards ──
 	if (!api) {

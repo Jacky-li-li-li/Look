@@ -170,24 +170,6 @@ export const subSessionsAtomFamily = atomFamily((parentId: string) =>
 	),
 );
 
-// ---- SubAgent 进度卡片（Stage 5） ----
-
-/** 子会话进度项（来自 session:subagent-progress / session:subagent-completed 事件） */
-export interface SubagentProgressEntry {
-	childSessionId: string;
-	agentName: string;
-	status: "running" | "completed" | "failed" | "aborted";
-	partialOutput?: string;
-	finalOutput?: string;
-	model?: string;
-	stopReason?: string;
-	errorMessage?: string;
-	usage?: { input: number; output: number; cost: number; turns: number };
-}
-
-/** 按父会话 ID 追踪的子会话进度列表 */
-export const subagentProgressAtomFamily = atomFamily((_parentSessionId: string) => atom<SubagentProgressEntry[]>([]));
-
 // ---- TODO.md 任务进度 ----
 
 /** 按 sessionId 追踪的 TODO.md 任务列表 */

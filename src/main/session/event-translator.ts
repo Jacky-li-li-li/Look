@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessageEvent } from "@earendil-works/pi-ai";
+import type { AssistantMessageEvent, ImageContent } from "@earendil-works/pi-ai";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { LookUiEvent } from "../shared/types.js";
 
@@ -53,6 +53,32 @@ export function extractUserMessageText(message: AgentMessage): string {
 		.join("\n");
 }
 
+/** Extract image content blocks from a user AgentMessage. */
+export function extractUserMessageImages(message: AgentMessage): ImageContent[] | undefined {
+	if (message.role !== "user") return undefined;
+	const content = message.content;
+	if (typeof content === "string") return undefined;
+	const images = content.filter((b): b is ImageContent => b.type === "image");
+	return images.length > 0 ? images : undefined;
+}
+
+/**
+ * Guard against non-serializable values reaching the structured-clone IPC boundary.
+ * Returns the original value if it round-trips through structuredClone, or a safe
+ * fallback string when serialization fails (e.g. functions, Symbols, DOM nodes). */
+function safeClone<T>(value: T, context?: string): T {
+	try {
+		structuredClone(value);
+		return value;
+	} catch (err) {
+		console.warn(
+			`[Look][EventTranslator] Value failed structuredClone${context ? ` [${context}]` : ""} — replacing with placeholder.`,
+			err instanceof Error ? err.message : String(err),
+		);
+		return "[non-serializable value]" as unknown as T;
+	}
+}
+
 /**
  * Translate a single AgentSessionEvent into zero or more discrete LookUiEvent items.
  *
@@ -89,7 +115,8 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 			const msg = event.message;
 			if (msg.role === "user") {
 				const text = extractUserMessageText(msg);
-				events.push({ type: "user_message", text, timestamp: now });
+				const images = extractUserMessageImages(msg);
+				events.push({ type: "user_message", text, images, timestamp: now });
 			} else if (msg.role === "assistant") {
 				events.push({ type: "assistant_message_start", timestamp: now });
 			}
@@ -156,7 +183,7 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 					break;
 
 				case "toolcall_start": {
-					const block = sub.partial.content[sub.contentIndex];
+					const block = sub.partial?.content?.[sub.contentIndex];
 					if (!block || block.type !== "toolCall") break;
 					tracker.activeToolCallIndices.add(sub.contentIndex);
 					events.push({
@@ -169,6 +196,7 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 					break;
 				}
 				case "toolcall_delta":
+					if (sub.delta == null) break;
 					events.push({
 						type: "toolcall_arg_delta",
 						contentIndex: sub.contentIndex,
@@ -206,7 +234,7 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 				type: "tool_exec_start",
 				toolCallId: event.toolCallId,
 				toolName: event.toolName,
-				args: event.args as Record<string, unknown>,
+				args: safeClone(event.args, "tool_exec_start") as Record<string, unknown>,
 				timestamp: now,
 			});
 			break;
@@ -215,7 +243,7 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 			events.push({
 				type: "tool_exec_update",
 				toolCallId: event.toolCallId,
-				partialResult: event.partialResult,
+				partialResult: safeClone(event.partialResult, "tool_exec_update"),
 				timestamp: now,
 			});
 			break;
@@ -225,7 +253,7 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 				type: "tool_exec_end",
 				toolCallId: event.toolCallId,
 				toolName: event.toolName,
-				result: event.result,
+				result: safeClone(event.result, "tool_exec_end"),
 				isError: event.isError,
 				timestamp: now,
 			});

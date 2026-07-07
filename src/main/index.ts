@@ -5,6 +5,7 @@
 import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import type { MainToRendererEvent } from "./shared/types.js";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
 import { syncLookDefaultAgents } from "./agents/defaults.js";
 import { LarkBridgeService } from "./im/lark-bridge-service.js";
@@ -28,7 +29,7 @@ let larkChannelManager: LarkChannelManager | null = null;
 let larkBridgeService: LarkBridgeService | null = null;
 
 /** 安全向渲染进程推送事件，避免 TOCTOU 窗口销毁竞态导致主进程崩溃。 */
-function safeSendEvent(event: { type: string; [k: string]: unknown }): void {
+function safeSendEvent(event: MainToRendererEvent): void {
 	if (!mainWindow) return;
 	try {
 		if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {

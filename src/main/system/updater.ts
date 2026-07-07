@@ -9,6 +9,7 @@
 
 import type { BrowserWindow } from "electron";
 import type { AppUpdater } from "electron-updater";
+import type { MainToRendererEvent } from "../shared/types.js";
 
 let autoUpdater: AppUpdater | null = null;
 let loadFailed = false;
@@ -38,7 +39,9 @@ async function loadAutoUpdater(): Promise<AppUpdater | null> {
  * See: https://github.com/electron-userland/electron-builder/issues/8399
  */
 function resolveAutoUpdater(mod: Record<string, unknown>): AppUpdater | null {
-	return ((mod.default as Record<string, unknown>)?.autoUpdater as AppUpdater) ?? (mod.autoUpdater as AppUpdater) ?? null;
+	return (
+		((mod.default as Record<string, unknown>)?.autoUpdater as AppUpdater) ?? (mod.autoUpdater as AppUpdater) ?? null
+	);
 }
 
 export function initUpdater(mainWindow: BrowserWindow): void {
@@ -97,7 +100,7 @@ export function initUpdater(mainWindow: BrowserWindow): void {
 	});
 }
 
-function emit(mainWindow: BrowserWindow, event: Record<string, unknown>): void {
+function emit(mainWindow: BrowserWindow, event: MainToRendererEvent): void {
 	if (!mainWindow.isDestroyed()) {
 		mainWindow.webContents.send("look:event", event);
 	}
