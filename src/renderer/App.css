@@ -72,7 +72,7 @@
 	--ink-1: oklch(0.96 0.003 85);
 	--ink-2: oklch(0.89 0.003 85);
 	--ink-3: oklch(0.78 0.002 85);
-	--ink-4: oklch(0.62 0.002 85);
+	--ink-4: oklch(0.52 0.002 85);
 	--ink-5: oklch(0.42 0.002 85);
 	--ink-6: oklch(0.28 0.002 85);
 	--ink-7: oklch(0.16 0.002 85);
@@ -137,6 +137,33 @@
 	--font-mono: ui-monospace, "SF Mono", "JetBrains Mono", monospace;
 	--motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
 	--motion-fast: 160ms;
+
+	/* Message area spacing tokens
+	 * Centralize vertical/horizontal rhythm of the conversation surface so
+	 * adjustments don't scatter across ChatMessageList, MessageBubble,
+	 * conversation.tsx and the prose overrides below. */
+	--message-row-gap: 0.25rem;
+	--message-list-py: 0.375rem;
+	--message-item-py: 0.125rem;
+	--message-item-px: 1.25rem;
+	--message-bubble-gap: 0.75rem;
+	--message-header-gap: 0.125rem;
+	--message-block-gap: 0.125rem;
+	--message-action-overlap: 0.25rem;
+	--message-action-inset: 2.5rem;
+	--message-action-gap: 0.25rem;
+	--message-avatar-offset: 0.125rem;
+
+	/* Prose spacing tokens */
+	--prose-line-height: 1.55;
+	--prose-paragraph-gap: 0.2em;
+	--prose-heading-gap: 0.4em;
+	--prose-heading-gap-bottom: 0.15em;
+	--prose-list-gap: 0.2em;
+	--prose-list-indent: 0.875em;
+	--prose-code-gap: 0.2em;
+	--prose-blockquote-gap: 0.2em;
+	--prose-hr-gap: 0.75em;
 }
 
 /* ── Style: ink-wash, dark ── */
@@ -825,6 +852,9 @@
 	--font-mono: ui-monospace, "SF Mono", monospace;
 	--motion-ease: cubic-bezier(0.25, 1, 0.5, 1);
 	--motion-fast: 150ms;
+
+	/* Editorial keeps a slightly looser line rhythm */
+	--prose-line-height: 1.58;
 }
 
 .theme-editorial.tone-dark {
@@ -878,6 +908,9 @@
 	--font-mono: ui-monospace, "SF Mono", monospace;
 	--motion-ease: cubic-bezier(0.25, 1, 0.5, 1);
 	--motion-fast: 150ms;
+
+	/* Editorial keeps a slightly looser line rhythm */
+	--prose-line-height: 1.58;
 }
 
 /* -- Style: CRT, light/dark --
@@ -1261,9 +1294,6 @@
 .theme-editorial h3 {
 	font-family: var(--font-display);
 }
-.theme-editorial .message-prose {
-	line-height: 1.78;
-}
 .theme-editorial .liquid-row[data-active="true"] {
 	background:
 		linear-gradient(90deg, var(--editorial-red) 0 0.35rem, transparent 0.35rem),
@@ -1451,6 +1481,19 @@ body {
 	--radius-2xl: calc(var(--radius) * 1.8);
 	--radius-3xl: calc(var(--radius) * 2.2);
 	--radius-4xl: calc(var(--radius) * 2.6);
+
+	/* Message area spacing utilities */
+	--spacing-msg-row: var(--message-row-gap);
+	--spacing-msg-list-y: var(--message-list-py);
+	--spacing-msg-item-y: var(--message-item-py);
+	--spacing-msg-item-x: var(--message-item-px);
+	--spacing-msg-bubble: var(--message-bubble-gap);
+	--spacing-msg-header: var(--message-header-gap);
+	--spacing-msg-block: var(--message-block-gap);
+	--spacing-msg-action-overlap: var(--message-action-overlap);
+	--spacing-msg-action-inset: var(--message-action-inset);
+	--spacing-msg-action: var(--message-action-gap);
+	--spacing-msg-avatar: var(--message-avatar-offset);
 }
 
 html {
@@ -1493,11 +1536,11 @@ body {
 	background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-	background: var(--ink-3);
+	background: color-mix(in oklch, var(--foreground), transparent 72%);
 	border-radius: 2.5px;
 }
 ::-webkit-scrollbar-thumb:hover {
-	background: var(--ink-4);
+	background: color-mix(in oklch, var(--foreground), transparent 58%);
 }
 
 /* Dark mode — brighter scrollbar thumb for visibility */
@@ -1687,20 +1730,12 @@ body {
 		 Whisper Bubble — Light message bubbles
 		 ============================================================ */
 
-	.whisper-bubble {
-		/* Flat, card-less message container. */
-	}
-
 	.whisper-bubble--user {
 		color: var(--foreground);
 	}
 
-	.dark .whisper-bubble--user {
+	.tone-dark .whisper-bubble--user {
 		color: var(--foreground);
-	}
-
-	.whisper-bubble--assistant {
-		/* Flat, card-less assistant container. */
 	}
 
 	/* In light mode, soften assistant body text so it doesn't read as
@@ -1710,9 +1745,10 @@ body {
 	}
 
 	.message-prose {
-		line-height: 1.72;
+		line-height: var(--prose-line-height);
 		word-break: break-word;
 	}
+
 
 	/* ============================================================
 		 markstream-react theme overrides
@@ -1721,7 +1757,7 @@ body {
 	.markstream-react {
 		font-family: var(--font-body);
 		font-size: 13px;
-		line-height: 1.72;
+		line-height: var(--prose-line-height);
 		color: var(--foreground);
 	}
 
@@ -1766,7 +1802,7 @@ body {
 	.markstream-react blockquote {
 		border-left: 2px solid var(--hairline);
 		color: var(--muted-foreground);
-		margin: 0.5em 0;
+		margin: var(--prose-blockquote-gap) 0;
 		padding-left: 0.75em;
 	}
 
@@ -1774,11 +1810,11 @@ body {
 	 * by large empty bands. markstream's defaults use ~1.25em paragraph
 	 * margins and browser-default heading margins. */
 	.markstream-react .paragraph-node {
-		margin: 0.375em 0;
+		margin: var(--prose-paragraph-gap) 0;
 	}
 
 	.markstream-react .heading-node {
-		margin: 0.625em 0 0.25em;
+		margin: var(--prose-heading-gap) 0 var(--prose-heading-gap-bottom);
 	}
 
 	.markstream-react .heading-node:first-child {
@@ -1787,16 +1823,16 @@ body {
 
 	.markstream-react ul,
 	.markstream-react ol {
-		margin: 0.375em 0;
-		padding-left: 1.25em;
+		margin: var(--prose-list-gap) 0;
+		padding-left: var(--prose-list-indent);
 	}
 
 	.markstream-react pre {
-		margin: 0.5em 0;
+		margin: var(--prose-code-gap) 0;
 	}
 
 	.markstream-react hr {
-		margin: 0.75em 0;
+		margin: var(--prose-hr-gap) 0;
 	}
 
 	/* ============================================================
@@ -1837,7 +1873,7 @@ body {
 		max-height: 18rem;
 		overflow: auto;
 		font-size: 0.6875rem;
-		line-height: 1.6;
+		line-height: var(--prose-line-height);
 		color: var(--muted-foreground);
 	}
 
@@ -1845,7 +1881,7 @@ body {
 		white-space: pre-wrap;
 		word-break: break-word;
 		font-size: 0.625rem;
-		line-height: 1.55;
+		line-height: var(--prose-line-height);
 	}
 
 	.inset-drawer__label {
@@ -1874,13 +1910,13 @@ body {
 	}
 
 	.execution-process__trigger:hover {
-		color: var(--ink-7);
+		color: var(--foreground);
 	}
 
 	.execution-process__body {
 		margin-left: 6px;
 		padding-left: 12px;
-		border-left: 1px solid var(--ink-2);
+		border-left: 1px solid var(--border);
 	}
 
 	[data-tool-panel],
@@ -1908,9 +1944,9 @@ body {
 
 	.line-btn {
 		position: relative;
-		border: 1px solid var(--ink-3);
+		border: 1px solid var(--border);
 		background: transparent;
-		color: var(--ink-7);
+		color: var(--foreground);
 		font-size: 0.6875rem;
 		font-weight: 500;
 		letter-spacing: 0.01em;
@@ -1922,40 +1958,40 @@ body {
 	}
 
 	.line-btn:hover {
-		border-color: var(--ink-6);
-		background: oklch(0.04 0.002 85 / 0.04);
-		color: var(--ink-8);
-		box-shadow: 0 0 0 1px oklch(0.04 0.002 85 / 0.06);
+		border-color: var(--ring);
+		background: color-mix(in oklch, var(--foreground), transparent 96%);
+		color: var(--foreground);
+		box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground), transparent 94%);
 	}
 
 	.line-btn:active {
-		background: oklch(0.04 0.002 85 / 0.08);
+		background: color-mix(in oklch, var(--foreground), transparent 92%);
 		transform: translateY(1px);
 		transition-duration: 60ms;
 	}
 
 	.line-btn--filled {
-		border-color: var(--ink-8);
-		background: var(--ink-8);
-		color: var(--ink-0);
+		border-color: var(--foreground);
+		background: var(--foreground);
+		color: var(--primary-foreground);
 	}
 
 	.line-btn--filled:hover {
-		border-color: var(--ink-full);
-		background: var(--ink-full);
-		color: var(--ink-0);
+		border-color: var(--foreground);
+		background: var(--foreground);
+		color: var(--primary-foreground);
 	}
 
 	.line-btn--ghost {
 		border-color: transparent;
 		background: transparent;
-		color: var(--ink-5);
+		color: var(--muted-foreground);
 	}
 
 	.line-btn--ghost:hover {
 		border-color: var(--hairline);
-		background: oklch(0.04 0.002 85 / 0.03);
-		color: var(--ink-7);
+		background: color-mix(in oklch, var(--foreground), transparent 97%);
+		color: var(--foreground);
 	}
 
 	/* ============================================================
@@ -1965,7 +2001,7 @@ body {
 	.pixel-agent-avatar {
 		border: 1px solid var(--hairline);
 		border-radius: calc(var(--radius) * 0.8);
-		background: var(--ink-1);
+		background: var(--muted);
 		box-shadow:
 			inset 0 0 0 1px oklch(1 0 0 / 0.4),
 			0 4px 10px oklch(0.04 0.002 85 / 0.06);
@@ -1989,9 +2025,9 @@ body {
 	}
 
 	.pixel-agent-avatar--active {
-		background: var(--ink-8);
-		color: var(--ink-0);
-		border-color: var(--ink-7);
+		background: var(--foreground);
+		color: var(--primary-foreground);
+		border-color: var(--foreground);
 		box-shadow:
 			inset 0 0 0 1px oklch(1 0 0 / 0.2),
 			0 4px 14px oklch(0.04 0.002 85 / 0.14);
@@ -2191,8 +2227,8 @@ body {
 
 	.liquid-row:hover,
 	.liquid-row:focus-visible {
-		background: oklch(0.04 0.002 85 / 0.04);
-		border-color: var(--ink-3);
+		background: color-mix(in oklch, var(--foreground), transparent 96%);
+		border-color: var(--border);
 	}
 
 	.liquid-row[data-active="true"] {
@@ -2226,10 +2262,10 @@ body {
 		 ============================================================ */
 
 	.line-input {
-		border: 1px solid var(--ink-2);
+		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		background: var(--ink-0);
-		color: var(--ink-8);
+		background: var(--background);
+		color: var(--foreground);
 		font-size: 0.8125rem;
 		padding: 0.5rem 0.625rem;
 		transition:
@@ -2238,13 +2274,13 @@ body {
 	}
 
 	.line-input:focus {
-		border-color: var(--ink-6);
-		box-shadow: 0 0 0 2px oklch(0.04 0.002 85 / 0.08);
+		border-color: var(--ring);
+		box-shadow: 0 0 0 2px color-mix(in oklch, var(--foreground), transparent 92%);
 		outline: none;
 	}
 
 	.line-input::placeholder {
-		color: var(--ink-3);
+		color: var(--muted-foreground);
 	}
 
 	/* Radix ScrollArea renders its content as display:table; min-width:100%.
@@ -2283,6 +2319,8 @@ body {
 		min-width: var(--sidebar-width);
 		max-width: var(--sidebar-width);
 		opacity: 1;
+		will-change: width, min-width, max-width, opacity;
+		contain: layout style;
 		transition:
 			width 280ms cubic-bezier(0.22, 1, 0.36, 1),
 			min-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -2559,8 +2597,14 @@ body {
 	background: linear-gradient(180deg, var(--glass-highlight), transparent 38%), var(--glass-bg-strong);
 }
 
+/* 消除消息最后一段的 margin-bottom，避免与操作按钮行间距叠加。
+   markstream-react CSS 为 unlayered，覆盖规则也必须在 unlayered 中。 */
+.message-prose .markstream-react > :last-child {
+	margin-bottom: 0;
+}
+
 /* Dialog overlay — deeper shade in dark mode */
-.dark [data-slot="dialog-overlay"] {
+.tone-dark [data-slot="dialog-overlay"] {
 	background-color: oklch(0 0 0 / 0.5);
 }
 
@@ -2639,29 +2683,15 @@ body {
 	 intensity so it doesn't feel like an error pop. */
 @keyframes bubble-flash {
 	0% {
-		box-shadow: 0 0 0 0 oklch(0.04 0.002 85 / 0);
+		box-shadow: 0 0 0 0 color-mix(in oklch, var(--foreground), transparent 100%);
 	}
 	20% {
-		box-shadow: 0 0 0 2px oklch(0.04 0.002 85 / 0.3);
+		box-shadow: 0 0 0 2px color-mix(in oklch, var(--foreground), transparent 70%);
 	}
 	100% {
-		box-shadow: 0 0 0 0 oklch(0.04 0.002 85 / 0);
-	}
-}
-@keyframes bubble-flash-dark {
-	0% {
-		box-shadow: 0 0 0 0 oklch(0.985 0.002 85 / 0);
-	}
-	20% {
-		box-shadow: 0 0 0 2px oklch(0.985 0.002 85 / 0.3);
-	}
-	100% {
-		box-shadow: 0 0 0 0 oklch(0.985 0.002 85 / 0);
+		box-shadow: 0 0 0 0 color-mix(in oklch, var(--foreground), transparent 100%);
 	}
 }
 .bubble-flash {
 	animation: bubble-flash 900ms ease-out both;
-}
-.dark .bubble-flash {
-	animation: bubble-flash-dark 900ms ease-out both;
 }

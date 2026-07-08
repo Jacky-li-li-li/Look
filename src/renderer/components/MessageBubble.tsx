@@ -120,7 +120,7 @@ function MessageHeader({
 	isUser: boolean;
 }) {
 	return (
-		<div className={cn("mb-0.5 flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
+		<div className={cn("mb-msg-header flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
 			<span className="font-medium uppercase tracking-wider">{sender}</span>
 			{isStreaming && <span className="status-mark" data-status="thinking" />}
 		</div>
@@ -257,7 +257,8 @@ function ContentBlocks({
 						);
 					}
 					// Unknown block type — should not reach here.
-					console.warn(`[ContentBlocks] Unknown block type: ${(block as any).type}`);
+					const unknownBlock = block as { type?: string };
+					console.warn(`[ContentBlocks] Unknown block type: ${unknownBlock.type ?? "undefined"}`);
 					return null;
 				}
 
@@ -320,19 +321,19 @@ const MessageBubble = memo(function MessageBubble({
 
 	return (
 		<div
-			className={cn("flex gap-3", isUser && "flex-row-reverse self-end")}
+			className={cn("flex gap-msg-bubble", isUser && "flex-row-reverse self-end")}
 			style={{ maxWidth: isUser ? "90%" : "98%" }}
 		>
 			{isUser ? (
-				<UserAvatar avatar={userProfile.avatar} size="sm" className="mt-0.5" />
+				<UserAvatar avatar={userProfile.avatar} size="sm" className="mt-msg-avatar" />
 			) : (
-				<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
+				<PixelAgentAvatar size="sm" className="mt-msg-avatar shrink-0" />
 			)}
 			<div className="min-w-0 flex-1">
 				<MessageHeader sender={sender} isStreaming={isStreaming} isActiveLeaf={isActiveLeaf} isUser={isUser} />
 				<div
 					className={cn(
-						"whisper-bubble flex flex-col gap-1.5 text-[13px] leading-relaxed",
+						"whisper-bubble flex flex-col gap-msg-block text-[13px] leading-relaxed",
 						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant w-full",
 						flash && "bubble-flash",
 					)}
@@ -527,8 +528,8 @@ export const StreamingMessageBubble = memo(function StreamingMessageBubble({
 	const { t } = useTranslation();
 
 	return (
-		<div className="flex gap-3" style={{ maxWidth: "98%" }}>
-			<PixelAgentAvatar size="sm" className="mt-0.5 shrink-0" />
+		<div className="flex gap-msg-bubble" style={{ maxWidth: "98%" }}>
+			<PixelAgentAvatar size="sm" className="mt-msg-avatar shrink-0" />
 			<div className="min-w-0 flex-1">
 				<MessageHeader
 					sender={agentName ?? t("chat.agent")}
@@ -536,7 +537,7 @@ export const StreamingMessageBubble = memo(function StreamingMessageBubble({
 					isActiveLeaf={false}
 					isUser={false}
 				/>
-				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-1.5">
+				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-msg-block text-[13px] leading-relaxed">
 					<StreamingBlocksBubble
 						blocks={blocks}
 						toolExecutions={toolExecutions}

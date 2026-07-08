@@ -16,7 +16,7 @@ import {
 	forkingEntryAtomFamily,
 	navigatingEntryAtomFamily,
 	recentlyCompletedAtom,
-	runningAgentsAtom,
+	sessionStateAtomFamily,
 } from "../store/atoms";
 import { appStore } from "../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
@@ -107,7 +107,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	// === Sync isAtBottom to global atom ===
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
-	const runningAgents = useAtomValue(runningAgentsAtom);
+	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? "__none__"));
 	useEffect(() => {
 		setAtBottomAtom(isAtBottom);
 		if (isAtBottom && activeAgentId) {
@@ -239,6 +239,15 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 	// === Copy message ===
 	const [copiedEntryId, setCopiedEntryId] = useState<string | null>(null);
+	const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Clean up copy timer on unmount
+	useEffect(() => {
+		return () => {
+			if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+		};
+	}, []);
+
 	const handleCopyMessage = useCallback(
 		async (id: string, message: AgentMessage) => {
 			const text = messageText(message);
@@ -246,7 +255,8 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			try {
 				await navigator.clipboard.writeText(text);
 				setCopiedEntryId(id);
-				setTimeout(() => setCopiedEntryId(null), 1200);
+				if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+				copyTimerRef.current = setTimeout(() => setCopiedEntryId(null), 1200);
 			} catch (error) {
 				toast.error(t("chat.copyFailed", { message: error instanceof Error ? error.message : "unknown" }));
 			}
@@ -261,7 +271,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 			if (item.entry) {
 				return (
-					<div key={item.id} className="px-5 pt-1.5 pb-1">
+					<div key={item.id} className="px-msg-item-x py-msg-item-y">
 						<SessionEntryBubble entry={item.entry} />
 					</div>
 				);
@@ -269,7 +279,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 			if (item.isLive && item.uiBlocks) {
 				return (
-					<div key="streaming-live" className="px-5 py-1.5">
+					<div key="streaming-live" className="px-msg-item-x py-msg-item-y">
 						<StreamingMessageBubble
 							agentName={agentName}
 							blocks={item.uiBlocks}
@@ -292,12 +302,11 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
 
 			return (
-				<div key={item.id} className="px-5 pt-1.5 pb-1">
+				<div key={item.id} className="px-msg-item-x py-msg-item-y">
 					<div
 						data-message-id={item.id}
 						className={cn(
 							"group/message flex flex-col",
-							showActions && "gap-0",
 							item.isLive && "animate-draw-in",
 						)}
 					>
@@ -314,14 +323,15 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						{showActions && itemEntryId && (
 							<div
 								className={cn(
-									"flex items-center gap-1 opacity-0 transition-opacity group-hover/message:opacity-100",
-									item.message.role === "user" ? "self-end mr-10" : "ml-10",
+									"flex items-center gap-msg-action -mt-msg-action-overlap opacity-0 transition-opacity group-hover/message:opacity-100",
+									item.message.role === "user" ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
 								)}
 							>
 								<Button
 									variant="ghost"
 									size="icon-xs"
 									disabled={actionBusy}
+									aria-label={t("chat.branchFromHere")}
 									onClick={() => handleBranchFromHere(itemEntryId)}
 								>
 									<Undo2 className="size-3.5" />
@@ -331,6 +341,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 										variant="ghost"
 										size="icon-xs"
 										disabled={actionBusy}
+										aria-label={t("chat.forkToNewChat")}
 										onClick={() => handleForkToNewChat(itemEntryId)}
 									>
 										<GitBranch className="size-3.5" />
@@ -339,6 +350,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								<Button
 									variant="ghost"
 									size="icon-xs"
+									aria-label={t("chat.copy")}
 									onClick={() => handleCopyMessage(item.id, item.message!)}
 								>
 									{copiedEntryId === item.id ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -347,7 +359,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 									<>
 										{"model" in item.message && (
 											<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
-												{(item.message as any).model}
+												{(item.message as { model: string }).model}
 											</span>
 										)}
 										{item.message.usage.totalTokens > 0 && (
@@ -388,7 +400,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
 	const showLoading = isLoading && timeline.length === 0;
 
-	const isAgentRunning = activeAgentId ? runningAgents.has(activeAgentId) : false;
+	const isAgentRunning = activeAgentId ? activeSessionState.uiPhase !== "idle" : false;
 
 	return (
 		<>

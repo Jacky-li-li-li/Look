@@ -34,7 +34,14 @@ export function Conversation({ className, ...props }: ConversationProps): ReactE
 export type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>;
 
 export function ConversationContent({ className, ...props }: ConversationContentProps): ReactElement {
-	return <StickToBottom.Content className={cn("flex flex-col gap-1 py-1.5", className)} {...props} />;
+	return (
+		<StickToBottom.Content
+			className={cn("flex flex-col gap-msg-row py-msg-list-y", className)}
+			aria-live="polite"
+			aria-atomic="false"
+			{...props}
+		/>
+	);
 }
 
 // ===== ConversationScrollButton 回到底部按钮 =====
@@ -56,6 +63,7 @@ export function ConversationScrollButton({ className, ...props }: ConversationSc
 				"absolute bottom-4 right-4 z-10 size-8 rounded-full bg-card p-0 shadow-md hover:bg-accent/80",
 				className,
 			)}
+			aria-label="Scroll to bottom"
 			onClick={handleScrollToBottom}
 			type="button"
 			variant="ghost"
