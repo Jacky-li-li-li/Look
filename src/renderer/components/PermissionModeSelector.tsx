@@ -41,9 +41,9 @@ const MODE_OPTIONS: ModeOption[] = [
 ];
 
 const MODE_COLORS: Record<PermissionMode, string> = {
-	always: "text-emerald-500",
-	ask: "text-amber-500",
-	plan: "text-sky-500",
+	always: "text-emerald-500 dark:text-emerald-400",
+	ask: "text-amber-500 dark:text-amber-300",
+	plan: "text-sky-500 dark:text-sky-400",
 };
 
 interface PermissionModeSelectorProps {

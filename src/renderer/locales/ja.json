@@ -340,6 +340,7 @@
 	"chat": {
 		"placeholder": "何でも聞いてください...",
 		"send": "送信",
+			"enterToQueue": "Enterでキューに追加",
 		"stop": "停止",
 		"you": "あなた",
 		"agent": "Agent",
@@ -456,5 +457,15 @@
 		"error": "[{{id}}] {{message}}",
 		"configFirstModel": "最初のモデルを設定",
 		"configFirstModelDesc": "設定でプロバイダーの API キーを追加してください"
+	},
+	"update": {
+		"checking": "更新を確認中...",
+		"available": "更新があります",
+		"versionAvailable": "バージョン {{version}} が利用可能です。ダウンロードしますか？",
+		"download": "ダウンロード",
+		"later": "後で",
+		"downloading": "ダウンロード中: {{percent}}%",
+		"ready": "更新の準備ができました。再起動してインストールしてください。",
+		"restart": "再起動"
 	}
 }

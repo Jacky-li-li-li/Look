@@ -340,6 +340,7 @@
   "chat": {
     "placeholder": "随便问...",
     "send": "发送",
+    "enterToQueue": "Enter 加入队列",
     "stop": "停止",
     "you": "你",
     "agent": "Agent",
@@ -456,5 +457,15 @@
     "error": "[{{id}}] {{message}}",
     "configFirstModel": "配置第一个模型吧",
     "configFirstModelDesc": "在 API 密钥里添加一个 provider 的 key 即可使用"
+  },
+  "update": {
+    "checking": "正在检查更新...",
+    "available": "有新版本可用",
+    "versionAvailable": "版本 {{version}} 已发布。是否立即下载？",
+    "download": "下载",
+    "later": "稍后",
+    "downloading": "下载中: {{percent}}%",
+    "ready": "更新已就绪。重启以完成安装。",
+    "restart": "立即重启"
   }
 }

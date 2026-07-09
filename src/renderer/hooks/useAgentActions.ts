@@ -52,6 +52,7 @@ export function useAgentActions() {
 			});
 		} catch (error) {
 			markSessionSnapshotLoading(agentId, false);
+			// Guard: only roll back if no other click has changed the active agent in the meantime.
 			if (appStore.get(activeAgentIdAtom) === agentId) {
 				appStore.set(activeAgentIdAtom, previousActiveId);
 			}

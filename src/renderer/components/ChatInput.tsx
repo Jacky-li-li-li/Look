@@ -243,7 +243,7 @@ const ChatInput = function ChatInput({
 
 			<ContentEditableInput
 				ref={inputRef}
-				placeholder={isBusy ? `${t("chat.send")}… (Enter to queue)` : `${t("chat.placeholder")}`}
+				placeholder={isBusy ? `${t("chat.send")}… (${t("chat.enterToQueue")})` : `${t("chat.placeholder")}`}
 				onChange={handleEditorChange}
 				onImagesPasted={handleImagesPasted}
 				onKeyDown={handleEditorKeyDown}

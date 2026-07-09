@@ -1022,13 +1022,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function invokeStartup(fn: () => Promise<any>): Promise<any | null> {
-	let lastResult: any | null = null;
+	let lastResult: unknown = null;
 	for (const delay of STARTUP_INVOKE_DELAYS_MS) {
 		if (delay > 0) await sleep(delay);
 		try {
 			const result = await fn();
 			lastResult = result;
-			if (!(result as any)?.error) return result;
+			if (!result && typeof result === "object" && "error" in result && (result as Record<string, unknown>).error) return result;
 		} catch {
 			lastResult = null;
 		}

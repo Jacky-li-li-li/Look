@@ -146,7 +146,7 @@ function AppLayout({
 
 				<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
 
-				<main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
+				<main className="flex min-w-[340px] flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
 					{appReadyPhase < 1 ? null : projects.length === 0 ? (
 						<WelcomeScreen onOpenProject={handleOpenProject} />
 					) : showAgentSquare ? (

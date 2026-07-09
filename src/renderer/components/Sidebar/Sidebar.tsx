@@ -88,7 +88,7 @@ export default function Sidebar({
 				className="group flex h-10 shrink-0 items-center gap-2.5 border-t border-hairline px-3 text-left transition-colors hover:bg-foreground/[0.02]"
 				title="Agent 广场"
 			>
-				<span className="text-[9px] leading-none text-foreground/[0.15] transition-all duration-500 group-hover:text-foreground/[0.35]">
+				<span className="text-[9px] leading-none text-foreground/25 transition-all duration-500 group-hover:text-foreground/50">
 					◆
 				</span>
 				<span className="text-[11px] font-normal tracking-[0.03em] text-foreground/[0.52]">Agent 广场</span>

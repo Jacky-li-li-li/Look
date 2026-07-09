@@ -340,6 +340,7 @@
   "chat": {
     "placeholder": "Ask anything...",
     "send": "Send",
+    "enterToQueue": "Enter to queue",
     "stop": "Stop",
     "you": "You",
     "agent": "Agent",
@@ -456,5 +457,15 @@
     "error": "[{{id}}] {{message}}",
     "configFirstModel": "Configure your first model",
     "configFirstModelDesc": "Add a provider API key in Settings to get started"
+  },
+  "update": {
+    "checking": "Checking for updates...",
+    "available": "Update available",
+    "versionAvailable": "Version {{version}} is available. Download now?",
+    "download": "Download",
+    "later": "Later",
+    "downloading": "Downloading: {{percent}}%",
+    "ready": "Update ready. Restart to install.",
+    "restart": "Restart"
   }
 }

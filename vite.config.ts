@@ -18,7 +18,21 @@ function gitCommitCount(): string {
 
 const appVersion = `${baseVersion}.${gitCommitCount()}`;
 export default defineConfig({
-	plugins: [tailwindcss(), react()],
+	plugins: [
+		tailwindcss(),
+		react(),
+		{
+			name: "dev-csp-relax",
+			transformIndexHtml(html) {
+				// 开发模式下 Vite 注入内联脚本（React Refresh、HMR），
+				// 需要放宽 CSP 的 script-src。生产构建保留严格 CSP。
+				return html.replace(
+					"script-src 'self'",
+					"script-src 'self' 'unsafe-inline'",
+				);
+			},
+		},
+	],
 	root: "src/renderer",
 	base: "./",
 	envDir: path.resolve(__dirname),
@@ -39,10 +53,13 @@ export default defineConfig({
 			output: {
 				manualChunks: {
 					// Isolate heavy syntax-highlighting and diagram libraries so they
-					// don't bloat the main entry chunk. Languages/themes loaded by Shiki
-					// remain in their own dynamic chunks; this groups the core runtime.
+					// don't bloat the main entry chunk.
 					shiki: ["shiki"],
 					mermaid: ["mermaid"],
+					// Split large vendor libraries into stable chunks for better caching.
+					"vendor-react": ["react", "react-dom"],
+					"vendor-ui": ["lucide-react", /radix-ui/],
+					"vendor-data": ["@supabase/supabase-js", "@larksuiteoapi/node-sdk"],
 				},
 			},
 		},

@@ -36,7 +36,7 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 		return (
 			<div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-muted-foreground cursor-default">
 				<ChevronRight className="size-3 shrink-0" />
-				<Brain className="size-3.5 shrink-0 text-blue-400" />
+				<Brain className="size-3.5 shrink-0 text-blue-400 dark:text-blue-300" />
 				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
 				<span className="inline-block w-2 h-4 bg-blue-400 animate-pulse rounded-xs" />
 			</div>
@@ -51,7 +51,7 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 				onClick={handleToggle}
 			>
 				<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
-				<Brain className="size-3.5 shrink-0 text-blue-400" />
+				<Brain className="size-3.5 shrink-0 text-blue-400 dark:text-blue-300" />
 				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
 				<span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
 					{thinking.length.toLocaleString()} chars

@@ -6,8 +6,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { scan } from "react-scan";
+// DEV: 必须在 App 之前导入，确保模块加载时 window.look 已就绪
+import "./mockApi";
 import App from "./App";
 import "./App.css";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import i18n from "./i18n";
 import { DEFAULT_THEME } from "./lib/look-theme";
 import { appStore, initAppData, initIpcHandlers } from "./store/ipcHandler";
@@ -153,7 +156,9 @@ root.render(
 					disableTransitionOnChange
 				>
 					<Provider store={appStore}>
-						<App />
+						<ErrorBoundary>
+							<App />
+						</ErrorBoundary>
 						<Toaster />
 					</Provider>
 				</ThemeProvider>

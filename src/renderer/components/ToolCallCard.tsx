@@ -50,13 +50,24 @@ const HOME_DIR = typeof window !== "undefined" ? (window.look?.homedir ?? "") : 
  * plain strings. This mirrors the SDK's ToolResultMessage.content format
  * but preserves image blocks alongside text.
  */
+interface ToolResultContentBlock {
+	type?: string;
+	text?: string;
+	data?: string;
+	mimeType?: string;
+}
+
+interface ToolResultValue {
+	content?: ToolResultContentBlock[];
+}
+
 function extractToolResult(value: unknown): { text: string; images: ImageContent[] } {
 	if (value === undefined || value === null) return { text: "", images: [] };
 	if (typeof value === "string") return { text: value, images: [] };
-	if (typeof value === "object" && "content" in value && Array.isArray((value as any).content)) {
+	if (typeof value === "object" && "content" in value && Array.isArray((value as ToolResultValue).content)) {
 		const textParts: string[] = [];
 		const images: ImageContent[] = [];
-		for (const block of (value as any).content) {
+		for (const block of (value as ToolResultValue).content!) {
 			if (block?.type === "text" && typeof block.text === "string") {
 				textParts.push(block.text);
 			} else if (block?.type === "image" && typeof block.data === "string" && typeof block.mimeType === "string") {
@@ -236,11 +247,11 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
 	const statusBadgeColor =
 		toolCall.status === "success"
-			? "text-emerald-500"
+			? "text-emerald-500 dark:text-emerald-400"
 			: toolCall.status === "error"
-				? "text-red-500"
+				? "text-red-500 dark:text-red-400"
 				: toolCall.status === "running"
-					? "text-amber-500"
+					? "text-amber-500 dark:text-amber-300"
 					: "text-muted-foreground";
 
 	return (
@@ -377,11 +388,11 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 function ToolTypeIcon({ toolName, status }: { toolName: string; status: ToolCallViewModel["status"] }) {
 	const colorClass =
 		status === "success"
-			? "text-emerald-500"
+			? "text-emerald-500 dark:text-emerald-400"
 			: status === "error"
-				? "text-red-500"
+				? "text-red-500 dark:text-red-400"
 				: status === "running"
-					? "text-amber-500"
+					? "text-amber-500 dark:text-amber-300"
 					: "text-muted-foreground";
 	const spinClass = status === "running" ? "animate-spin" : status === "pending" ? "animate-pulse" : "";
 	return (

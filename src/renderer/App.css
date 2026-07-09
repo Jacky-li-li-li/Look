@@ -149,7 +149,7 @@
 	--message-bubble-gap: 0.75rem;
 	--message-header-gap: 0.125rem;
 	--message-block-gap: 0.125rem;
-	--message-action-overlap: 0.25rem;
+	--message-action-overlap: 0.5rem;
 	--message-action-inset: 2.5rem;
 	--message-action-gap: 0.25rem;
 	--message-avatar-offset: 0.125rem;

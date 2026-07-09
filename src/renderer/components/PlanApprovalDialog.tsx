@@ -9,16 +9,48 @@ import {
 } from "@shared/components/ui/dialog";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Check, FileText, ShieldCheck, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { agentsAtom, permissionModeAtomFamily, planApprovalRequestAtomFamily } from "../store/atoms";
 import LookMarkdown from "./LookMarkdown";
+
+const AUTO_REJECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function PlanApprovalDialog({ sessionId }: { sessionId: string | null }) {
 	const agents = useAtomValue(agentsAtom);
 	const [request, setRequest] = useAtom(planApprovalRequestAtomFamily(sessionId ?? ""));
 	const setPermissionMode = useSetAtom(permissionModeAtomFamily(sessionId ?? ""));
 	const [responding, setResponding] = useState(false);
+	const [autoRejectAt, setAutoRejectAt] = useState<number | null>(null);
+	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+	// Set up auto-reject timeout
+	useEffect(() => {
+		if (!request) {
+			setAutoRejectAt(null);
+			if (timerRef.current) clearInterval(timerRef.current);
+			return;
+		}
+		const deadline = Date.now() + AUTO_REJECT_TIMEOUT_MS;
+		setAutoRejectAt(deadline);
+		timerRef.current = setInterval(() => {
+			setAutoRejectAt((prev) => {
+				if (!prev) return null;
+				if (Date.now() >= prev) {
+					if (timerRef.current) clearInterval(timerRef.current);
+					// Auto-reject
+					setRequest(null);
+					toast.info("计划审批已超时自动拒绝");
+					return null;
+				}
+				return prev;
+			});
+		}, 1000);
+		return () => {
+			if (timerRef.current) clearInterval(timerRef.current);
+		};
+	}, [request, setRequest]);
+
 	if (!request || request.sessionId !== sessionId) return null;
 	const sessionName = agents.find((agent) => agent.id === request.sessionId)?.name ?? request.sessionId.slice(0, 8);
 
@@ -41,6 +73,10 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 		}
 	};
 
+	const remainingSec = autoRejectAt ? Math.max(0, Math.ceil((autoRejectAt - Date.now()) / 1000)) : 0;
+	const remainingMin = Math.floor(remainingSec / 60);
+	const remainingStr = remainingMin > 0 ? `${remainingMin} 分 ${remainingSec % 60} 秒` : `${remainingSec} 秒`;
+
 	return (
 		<Dialog open>
 			<DialogContent
@@ -54,9 +90,14 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 					<div className="flex items-center gap-2">
 						<ShieldCheck className="size-4 text-sky-500" />
 						<DialogTitle className="text-sm">审批实施计划</DialogTitle>
+						{autoRejectAt && (
+							<span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">
+								{remainingStr} 后自动拒绝
+							</span>
+						)}
 					</div>
 					<DialogDescription className="text-xs">
-						会话“{sessionName}”已完成规划。批准后将切换为 Always 并立即开始实施。
+						会话"{sessionName}"已完成规划。批准后将切换为 Always 并立即开始实施。
 					</DialogDescription>
 					<div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
 						<FileText className="size-3" />

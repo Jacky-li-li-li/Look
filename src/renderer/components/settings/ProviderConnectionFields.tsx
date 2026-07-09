@@ -47,7 +47,7 @@ export default function ProviderConnectionFields({
 						{t("settings.customProviders.dialog.field.api")}
 					</Label>
 					<Select value={form.api} onValueChange={(v) => patchForm("api", v as ApiProtocol)}>
-						<SelectTrigger className="h-8 w-full text-[12px]">
+						<SelectTrigger className="h-8 w-full">
 							<SelectValue placeholder={t("settings.customProviders.dialog.placeholder.api")}>
 								{t(`settings.customProviders.dialog.protocol.${form.api}`, API_PROTOCOL_LABELS[form.api] ?? "")}
 							</SelectValue>

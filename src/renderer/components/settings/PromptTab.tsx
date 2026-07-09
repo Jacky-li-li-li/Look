@@ -263,7 +263,7 @@ export default function PromptTab() {
 									<MoreHorizontal className="size-3.5" />
 								</Button>
 							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" className="w-36">
+							<DropdownMenuContent align="end" className="min-w-[120px]">
 								<DropdownMenuItem
 									onClick={() => {
 										setEditName(prompt.name);
@@ -271,29 +271,28 @@ export default function PromptTab() {
 										setEditing(prompt);
 										setActiveProjectId(projectId);
 									}}
-									className="text-[12px]"
 								>
 									{prompt.isBuiltin ? (
 										<>
-											<Eye className="size-3 mr-1.5" />
+											<Eye className="size-3.5" />
 											{t("common.view")}
 										</>
 									) : (
 										<>
-											<Edit className="size-3 mr-1.5" />
+											<Edit className="size-3.5" />
 											{t("settings.editPrompt")}
 										</>
 									)}
 								</DropdownMenuItem>
 								{!prompt.isBuiltin && (
 									<DropdownMenuItem
+										variant="destructive"
 										onClick={() => {
 											setActiveProjectId(projectId);
 											handleDelete(prompt);
 										}}
-										className="text-[12px] text-destructive"
 									>
-										<Trash2 className="size-3 mr-1.5" />
+										<Trash2 className="size-3.5" />
 										{t("common.delete")}
 									</DropdownMenuItem>
 								)}
