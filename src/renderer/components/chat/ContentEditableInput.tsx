@@ -30,7 +30,7 @@
 
 import type { ImageContent } from "@shared/types";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { useContentEditablePaste } from "../hooks/useContentEditablePaste";
+import { useContentEditablePaste } from "../../hooks/useContentEditablePaste";
 import { placeCaretAtEnd, renderToDOM } from "./contentEditableUtils";
 
 export interface ContentEditableInputHandle {

@@ -7,9 +7,9 @@ import { useAtom } from "jotai";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { supabase } from "../lib/supabase";
-import { userProfileAtom } from "../store/authAtoms";
-import UserAvatar from "./UserAvatar";
+import { supabase } from "../../lib/supabase";
+import { userProfileAtom } from "../../store/authAtoms";
+import UserAvatar from "../UserAvatar";
 
 const api = window.look;
 

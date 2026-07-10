@@ -11,7 +11,7 @@
 
 import type { AgentDefinitionInfo } from "@shared/types";
 import { Bot } from "lucide-react";
-import { SOURCE_LABELS } from "./AgentMarketplace/agentLabels";
+import { SOURCE_LABELS } from "../AgentMarketplace/agentLabels";
 import { usePickerMenu } from "./usePickerMenu";
 
 // ---- 来源标签 ----

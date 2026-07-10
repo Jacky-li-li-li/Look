@@ -155,7 +155,7 @@ describe("pi SDK provider alignment", () => {
 describe("provider source regressions", () => {
 	const runtimeManagerSource = readFileSync(resolve(__dirname, "../src/main/session/runtime-manager.ts"), "utf8");
 	const validatorSource = readFileSync(resolve(__dirname, "../src/main/models/validator.ts"), "utf8");
-	const modelSelectorSource = readFileSync(resolve(__dirname, "../src/renderer/components/ModelSelector.tsx"), "utf8");
+	const modelSelectorSource = readFileSync(resolve(__dirname, "../src/renderer/components/chat/ModelSelector.tsx"), "utf8");
 
 	it("does not hand-roll provider HTTP routing in main", () => {
 		expect(runtimeManagerSource).not.toMatch(/node:https|httpsRequest/);

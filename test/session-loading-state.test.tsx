@@ -14,7 +14,7 @@ import { Provider } from "jotai";
 import { createRef } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ChatMessageList from "../src/renderer/components/ChatMessageList";
+import ChatMessageList from "../src/renderer/components/chat/ChatMessageList";
 import i18n from "../src/renderer/i18n";
 import { sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore, applySnapshot, markSessionSnapshotLoading } from "../src/renderer/store/ipcHandler";

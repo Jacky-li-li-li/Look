@@ -8,7 +8,7 @@ import { ArrowDownCircle, CheckCircle2, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { updateStatusAtom } from "../store/atoms";
+import { updateStatusAtom } from "../../store/atoms";
 
 const api = window.look;
 

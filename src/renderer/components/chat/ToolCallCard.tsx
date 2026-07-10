@@ -21,9 +21,9 @@ import {
 } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { useLookTheme } from "../hooks/useLookTheme";
-import { scheduleCollapse } from "../lib/batchCollapse";
-import LookMarkdown from "./LookMarkdown";
+import { useLookTheme } from "../../hooks/useLookTheme";
+import { scheduleCollapse } from "../../lib/batchCollapse";
+import LookMarkdown from "../markdown/LookMarkdown";
 
 export interface ToolCallViewModel {
 	callId: string;

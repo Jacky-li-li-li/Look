@@ -9,7 +9,7 @@ import { ArrowRight, Check, ChevronDown, Search } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ProviderIcon } from "./ProviderIcon";
+import { ProviderIcon } from "../ProviderIcon";
 
 const api = window.look;
 

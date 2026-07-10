@@ -35,7 +35,7 @@ import {
 	showHiddenFilesAtom,
 	workspaceTreeErrorAtomFamily,
 	workspaceTreeLoadingAtomFamily,
-} from "../store/atoms";
+} from "../../store/atoms";
 import { FileIcon } from "./FileIcon";
 
 interface WorkspaceTreePanelProps {

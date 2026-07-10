@@ -11,7 +11,7 @@ import MarkdownRender, {
 } from "markstream-react";
 import { useTheme } from "next-themes";
 import { memo, useMemo } from "react";
-import { closeAtxHeadings, prepareMessageContent } from "../lib/messageMarkdown";
+import { closeAtxHeadings, prepareMessageContent } from "../../lib/messageMarkdown";
 import { AgentTag } from "./AgentTag";
 import { FileTag } from "./FileTag";
 import { McpTag } from "./McpTag";

@@ -4,8 +4,8 @@ import type { AgentInfo, PlanApprovalRequest, PlanQuestionRequest } from "@share
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider, useAtomValue } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import PlanApprovalDialog from "../src/renderer/components/PlanApprovalDialog";
-import PlanQuestionDialog from "../src/renderer/components/PlanQuestionDialog";
+import PlanApprovalDialog from "../src/renderer/components/dialogs/PlanApprovalDialog";
+import PlanQuestionDialog from "../src/renderer/components/dialogs/PlanQuestionDialog";
 import {
 	activeAgentIdAtom,
 	agentsAtom,

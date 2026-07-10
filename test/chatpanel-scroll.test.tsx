@@ -25,7 +25,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ConversationScrollButton } from "../src/renderer/components/conversation";
+import { ConversationScrollButton } from "../src/renderer/components/chat/conversation";
 
 // ============================================================
 // 1) ConversationScrollButton
@@ -44,7 +44,7 @@ describe("ConversationScrollButton", () => {
 // ============================================================
 
 describe("ChatMessageList source (scroll container wiring)", () => {
-	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/ChatMessageList.tsx"), "utf8");
+	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/chat/ChatMessageList.tsx"), "utf8");
 
 	it("uses Conversation (StickToBottom wrapper) as the scroll container", () => {
 		expect(SRC).toMatch(/<Conversation\b/);

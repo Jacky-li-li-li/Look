@@ -11,8 +11,8 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Check, FileText, ShieldCheck, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { agentsAtom, permissionModeAtomFamily, planApprovalRequestAtomFamily } from "../store/atoms";
-import LookMarkdown from "./LookMarkdown";
+import { agentsAtom, permissionModeAtomFamily, planApprovalRequestAtomFamily } from "../../store/atoms";
+import LookMarkdown from "../markdown/LookMarkdown";
 
 const AUTO_REJECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 

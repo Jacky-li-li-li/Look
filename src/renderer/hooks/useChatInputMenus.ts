@@ -7,9 +7,9 @@
 
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { handleSlashMenuKey } from "../components/handleSlashMenuKey";
-import type { McpPickerEntry } from "../components/McpHashMenu";
-import type { CommonSkillPath, SkillEntry } from "../components/SkillSlashMenu";
+import { handleSlashMenuKey } from "../components/chat/handleSlashMenuKey";
+import type { McpPickerEntry } from "../components/chat/McpHashMenu";
+import type { CommonSkillPath, SkillEntry } from "../components/chat/SkillSlashMenu";
 import { agentDefinitionsAtom } from "../store/agentDefinitionsAtoms";
 import {
 	enabledAgentDefinitionsAtom,

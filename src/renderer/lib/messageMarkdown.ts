@@ -8,8 +8,8 @@
 // 3. Replace `/skill:`, `<skill>`, `<skill-invoke>` and `/agent:` references
 //    with custom HTML-like tags that MarkdownRender renders as chips.
 
-import type { SkillSegment } from "../components/skillSegments";
-import { parseAgentSegments, parseMcpToolSegments, parseSkillSegments } from "../components/skillSegments";
+import type { SkillSegment } from "../components/chat/skillSegments";
+import { parseAgentSegments, parseMcpToolSegments, parseSkillSegments } from "../components/chat/skillSegments";
 
 /** Strip the system-injected subagent hint line(s). */
 export function stripSystemHints(content: string): string {

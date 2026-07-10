@@ -14,8 +14,8 @@ import {
 	rightPanelTabAtom,
 	sharedFilesAtomFamily,
 	sharedFilesLoadingAtomFamily,
-} from "../store/atoms";
-import { appStore } from "../store/ipcHandler";
+} from "../../store/atoms";
+import { appStore } from "../../store/ipcHandler";
 import { SharedAreaPanel } from "./SharedAreaPanel";
 import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
 

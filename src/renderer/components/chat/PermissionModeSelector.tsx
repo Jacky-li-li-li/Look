@@ -10,7 +10,7 @@ import { useSetAtom } from "jotai";
 import { Check, ChevronDown, Shield } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { permissionModeAtomFamily } from "../store/atoms";
+import { permissionModeAtomFamily } from "../../store/atoms";
 
 interface ModeOption {
 	mode: PermissionMode;

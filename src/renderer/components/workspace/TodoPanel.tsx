@@ -8,7 +8,7 @@
 import { useAtomValue } from "jotai";
 import { CheckCircle2, ChevronDown, ChevronRight, Circle, ListTodo } from "lucide-react";
 import { memo, useState } from "react";
-import { activeAgentIdAtom, todoItemsAtomFamily } from "../store/atoms";
+import { activeAgentIdAtom, todoItemsAtomFamily } from "../../store/atoms";
 
 export const TodoPanel = memo(function TodoPanel() {
 	const agentId = useAtomValue(activeAgentIdAtom);

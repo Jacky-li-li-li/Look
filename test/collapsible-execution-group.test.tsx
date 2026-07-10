@@ -3,7 +3,7 @@
 import { I18nextProvider } from "react-i18next";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import CollapsibleExecutionGroup from "../src/renderer/components/CollapsibleExecutionGroup";
+import CollapsibleExecutionGroup from "../src/renderer/components/chat/CollapsibleExecutionGroup";
 import i18n from "../src/renderer/i18n";
 import type { LookUiToolExecState } from "@shared/types";
 

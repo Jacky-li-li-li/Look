@@ -8,7 +8,7 @@
 
 import type { ImageContent } from "@shared/types";
 import { useCallback } from "react";
-import { placeCaretAtEnd, renderToDOM } from "../components/contentEditableUtils";
+import { placeCaretAtEnd, renderToDOM } from "../components/chat/contentEditableUtils";
 
 interface UseContentEditablePasteOptions {
 	editorRef: React.RefObject<HTMLDivElement | null>;

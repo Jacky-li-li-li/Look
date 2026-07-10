@@ -25,7 +25,7 @@ import { File, Folder, FolderOpen, Import, MoreHorizontal, Plus, RefreshCw, Tras
 import { useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
-import { selectedSharedPathAtomFamily } from "../store/atoms";
+import { selectedSharedPathAtomFamily } from "../../store/atoms";
 
 interface SharedAreaPanelProps {
 	projectId: string;

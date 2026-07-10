@@ -18,7 +18,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { AlertTriangle, Check, Shield, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { agentsAtom, permissionAskQueueAtom } from "../store/atoms";
+import { agentsAtom, permissionAskQueueAtom } from "../../store/atoms";
 
 export default function PermissionDialog() {
 	const [queue, setQueue] = useAtom(permissionAskQueueAtom);

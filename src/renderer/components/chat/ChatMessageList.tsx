@@ -8,8 +8,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useStickToBottomContext } from "use-stick-to-bottom";
-import { useScrollPositionManager } from "../hooks/useScrollPositionMemory";
-import { buildTimeline, type TimelineItem } from "../lib/timeline";
+import { useScrollPositionManager } from "../../hooks/useScrollPositionMemory";
+import { buildTimeline, type TimelineItem } from "../../lib/timeline";
 import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
@@ -17,14 +17,14 @@ import {
 	navigatingEntryAtomFamily,
 	recentlyCompletedAtom,
 	sessionStateAtomFamily,
-} from "../store/atoms";
-import { appStore } from "../store/ipcHandler";
-import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
-import { BranchConfirmDialog, type BranchConfirmRequest, type BranchConfirmResult } from "./BranchConfirmDialog";
+} from "../../store/atoms";
+import { appStore } from "../../store/ipcHandler";
+import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
+import { BranchConfirmDialog, type BranchConfirmRequest, type BranchConfirmResult } from "../dialogs/BranchConfirmDialog";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton } from "./conversation";
 import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
-import { PixelAgentAvatar } from "./PixelAgentAvatar";
+import { PixelAgentAvatar } from "../PixelAgentAvatar";
 
 interface ChatMessageListProps {
 	agentId: string;

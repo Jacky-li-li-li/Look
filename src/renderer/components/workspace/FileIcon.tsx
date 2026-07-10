@@ -19,7 +19,7 @@ import {
 	FOLDER_CLOSED_ICONS,
 	FOLDER_OPEN_ICONS,
 	ICON_SVGS,
-} from "../lib/fileIconMap";
+} from "../../lib/fileIconMap";
 
 interface FileIconProps {
 	node: FileTreeNode;

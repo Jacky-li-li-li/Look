@@ -5,7 +5,7 @@ import { useAtom } from "jotai";
 import { Check, CircleHelp, ListChecks, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../store/atoms";
+import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../../store/atoms";
 
 export default function PlanQuestionDialog({ sessionId }: { sessionId: string | null }) {
 	const [request, setRequest] = useAtom(planQuestionRequestAtomFamily(sessionId ?? ""));

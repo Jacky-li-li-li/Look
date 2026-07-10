@@ -3,7 +3,7 @@ import { cn } from "@shared/lib/utils";
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { activeAgentIdAtom, agentsAtom, sessionStateAtomFamily } from "../store/atoms";
+import { activeAgentIdAtom, agentsAtom, sessionStateAtomFamily } from "../../store/atoms";
 
 const RING_RADIUS = 10;
 const STROKE_WIDTH = 2.5;

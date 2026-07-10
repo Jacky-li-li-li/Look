@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAgentSegments, parseSkillSegments } from "../src/renderer/components/skillSegments";
+import { parseAgentSegments, parseSkillSegments } from "../src/renderer/components/chat/skillSegments";
 
 describe("parseAgentSegments", () => {
 	it("parses valid agent references", () => {

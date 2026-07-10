@@ -13,7 +13,7 @@ import { useAtom } from "jotai";
 import { Bot } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { subagentEnabledAtom } from "../store/atoms";
+import { subagentEnabledAtom } from "../../store/atoms";
 
 export default function SubagentToggle() {
 	const [enabled, setEnabled] = useAtom(subagentEnabledAtom);

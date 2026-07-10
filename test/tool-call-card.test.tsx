@@ -3,7 +3,7 @@
 import { I18nextProvider } from "react-i18next";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ToolCallCard, { type ToolCallViewModel } from "../src/renderer/components/ToolCallCard";
+import ToolCallCard, { type ToolCallViewModel } from "../src/renderer/components/chat/ToolCallCard";
 import i18n from "../src/renderer/i18n";
 
 afterEach(() => {

@@ -4,7 +4,7 @@ import type { AgentInfo, PermissionAskQueueItem } from "@shared/types";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import PermissionDialog from "../src/renderer/components/PermissionDialog";
+import PermissionDialog from "../src/renderer/components/dialogs/PermissionDialog";
 import { agentsAtom, permissionAskQueueAtom } from "../src/renderer/store/atoms";
 import { appStore } from "../src/renderer/store/ipcHandler";
 

@@ -9,11 +9,11 @@
 
 import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { memo, useCallback, useRef } from "react";
-import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
+import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
 import ChatMessageList from "./ChatMessageList";
 import ChatQueueDrawer from "./ChatQueueDrawer";
-import { TodoPanel } from "./TodoPanel";
+import { TodoPanel } from "../workspace/TodoPanel";
 
 interface ChatPanelProps {
 	agentId: string;

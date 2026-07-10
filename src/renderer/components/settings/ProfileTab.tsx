@@ -2,7 +2,7 @@
 // ProfileTab — User profile editing
 // ============================================================
 import { useTranslation } from "react-i18next";
-import ProfileEditor from "../ProfileEditor";
+import ProfileEditor from "../dialogs/ProfileEditor";
 import UsageHeatmap from "./UsageHeatmap";
 
 export default function ProfileTab() {

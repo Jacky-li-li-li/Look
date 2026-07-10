@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import LookMarkdown from "../src/renderer/components/LookMarkdown";
+import LookMarkdown from "../src/renderer/components/markdown/LookMarkdown";
 
 beforeEach(() => {
 	vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("LookMarkdown", () => {
-	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/LookMarkdown.tsx"), "utf8");
+	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/markdown/LookMarkdown.tsx"), "utf8");
 
 	it("renders basic markdown", async () => {
 		const content = `# Hello
