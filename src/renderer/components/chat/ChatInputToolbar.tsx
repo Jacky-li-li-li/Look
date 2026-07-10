@@ -5,6 +5,7 @@
 import { Button } from "@shared/components/ui/button";
 import type { PermissionMode, ThinkingLevel } from "@shared/types";
 import { Send, Square } from "lucide-react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
@@ -27,7 +28,7 @@ interface ChatInputToolbarProps {
 	onAbort?: () => void;
 }
 
-export default function ChatInputToolbar({
+const ChatInputToolbar = memo(function ChatInputToolbar({
 	agentId,
 	currentModel,
 	currentThinking,
@@ -95,4 +96,6 @@ export default function ChatInputToolbar({
 			)}
 		</div>
 	);
-}
+});
+
+export default ChatInputToolbar;

@@ -22,7 +22,7 @@ import {
 	DropdownMenuTrigger,
 } from "@shared/components/ui/dropdown-menu";
 import type { FileTreeNode } from "@shared/types";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
@@ -398,8 +398,8 @@ interface WorkspaceTreeNodeRowProps {
 function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNodeRowProps) {
 	const { node, depth } = row;
 	const isDir = node.type === "directory";
-	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const setInsertRequest = useSetAtom(chatInputInsertRequestAtom);
+	const store = useStore();
 
 	const handleClickToggle = () => {
 		onToggle(row);
@@ -412,9 +412,11 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 
 	const handleCopyAsReference = () => {
 		void navigator.clipboard.writeText(`@${node.path}`);
+		// 按需读取 activeAgentId，不订阅 atom，避免切换会话时全行重渲染
+		const agentId = store.get(activeAgentIdAtom) ?? "";
 		setInsertRequest({
 			id: Date.now(),
-			agentId: activeAgentId ?? "",
+			agentId,
 			text: `@${node.path}`,
 		});
 		toast.success("已复制并插入 @ 引用");

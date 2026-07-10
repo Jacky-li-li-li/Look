@@ -6,7 +6,7 @@
 import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtom } from "jotai";
 import type React from "react";
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatInputMenus } from "../../hooks/useChatInputMenus";
 import { chatInputInsertRequestAtom, permissionModeAtomFamily } from "../../store/atoms";
@@ -128,7 +128,7 @@ const ChatInput = function ChatInput({
 
 	const hasContent = input.trim().length > 0 || pendingImages.length > 0;
 
-	const handleSend = async () => {
+	const handleSend = useCallback(async () => {
 		const text = (inputRef.current?.getText() ?? "").trim();
 		if (!text && pendingImages.length === 0) return;
 		const images = pendingImages.length > 0 ? pendingImages : undefined;
@@ -136,11 +136,11 @@ const ChatInput = function ChatInput({
 			setInput("");
 			setPendingImages([]);
 		}
-	};
+	}, [onSend, pendingImages]);
 
-	const handleAbort = () => {
+	const handleAbort = useCallback(() => {
 		onAbort?.();
-	};
+	}, [onAbort]);
 
 	const handleEditorChange = useCallback(
 		(text: string) => {
@@ -264,4 +264,4 @@ const ChatInput = function ChatInput({
 	);
 };
 
-export default ChatInput;
+export default memo(ChatInput);

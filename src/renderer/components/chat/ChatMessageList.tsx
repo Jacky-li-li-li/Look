@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
-import { useAtomValue, useSetAtom } from "jotai";
+import { atom, useAtomValue, useSetAtom } from "jotai";
 import { Check, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -107,7 +107,12 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	// === Sync isAtBottom to global atom ===
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
-	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? "__none__"));
+	// 只订阅 uiPhase，避免 streaming 期间全量 sessionState 变化触发 re-render
+	const activeUiPhaseAtom = useMemo(
+		() => atom((get) => get(sessionStateAtomFamily(activeAgentId ?? "__none__")).uiPhase),
+		[activeAgentId],
+	);
+	const activeUiPhase = useAtomValue(activeUiPhaseAtom);
 	useEffect(() => {
 		setAtBottomAtom(isAtBottom);
 		if (isAtBottom && activeAgentId) {
@@ -398,7 +403,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
 	const showLoading = isLoading && timeline.length === 0;
 
-	const isAgentRunning = activeAgentId ? activeSessionState.uiPhase !== "idle" : false;
+	const isAgentRunning = activeAgentId ? activeUiPhase !== "idle" : false;
 
 	return (
 		<>

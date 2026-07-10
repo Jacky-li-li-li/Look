@@ -9,7 +9,7 @@ import {
 } from "@shared/components/ui/dialog";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Check, FileText, ShieldCheck, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import { agentsAtom, permissionModeAtomFamily, planApprovalRequestAtomFamily } from "../../store/atoms";
 import LookMarkdown from "../markdown/LookMarkdown";
@@ -22,29 +22,34 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 	const setPermissionMode = useSetAtom(permissionModeAtomFamily(sessionId ?? ""));
 	const [responding, setResponding] = useState(false);
 	const [autoRejectAt, setAutoRejectAt] = useState<number | null>(null);
+	const [, tick] = useReducer((n: number) => n + 1, 0);
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const deadlineRef = useRef<number | null>(null);
 
 	// Set up auto-reject timeout
 	useEffect(() => {
 		if (!request) {
 			setAutoRejectAt(null);
+			deadlineRef.current = null;
 			if (timerRef.current) clearInterval(timerRef.current);
 			return;
 		}
 		const deadline = Date.now() + AUTO_REJECT_TIMEOUT_MS;
+		deadlineRef.current = deadline;
 		setAutoRejectAt(deadline);
 		timerRef.current = setInterval(() => {
-			setAutoRejectAt((prev) => {
-				if (!prev) return null;
-				if (Date.now() >= prev) {
-					if (timerRef.current) clearInterval(timerRef.current);
-					// Auto-reject
-					setRequest(null);
-					toast.info("计划审批已超时自动拒绝");
-					return null;
-				}
-				return prev;
-			});
+			const now = Date.now();
+			if (deadlineRef.current && now >= deadlineRef.current) {
+				if (timerRef.current) clearInterval(timerRef.current);
+				setRequest(null);
+				setAutoRejectAt(null);
+				toast.info("计划审批已超时自动拒绝");
+			} else {
+				// Force re-render for the countdown display via tick counter.
+				// Using setAutoRejectAt(deadlineRef.current) would set the same
+				// value and React 18 may bail out, freezing the countdown.
+				tick();
+			}
 		}, 1000);
 		return () => {
 			if (timerRef.current) clearInterval(timerRef.current);
