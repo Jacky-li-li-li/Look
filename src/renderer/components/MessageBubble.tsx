@@ -120,7 +120,12 @@ function MessageHeader({
 	isUser: boolean;
 }) {
 	return (
-		<div className={cn("mb-msg-header flex items-center gap-2 text-[10px] text-muted-foreground", isUser && "justify-end")}>
+		<div
+			className={cn(
+				"mb-msg-header flex items-center gap-2 text-[10px] text-muted-foreground",
+				isUser && "justify-end",
+			)}
+		>
 			<span className="font-medium uppercase tracking-wider">{sender}</span>
 			{isStreaming && <span className="status-mark" data-status="thinking" />}
 		</div>

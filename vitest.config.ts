@@ -9,7 +9,9 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
-			"@shared": path.resolve(__dirname, "src/main/shared"),
+			"@shared": path.resolve(__dirname, "packages/shared/src"),
+			"@look/shared": path.resolve(__dirname, "packages/shared/src"),
+			"@look/core": path.resolve(__dirname, "packages/core/src"),
 		},
 	},
 });

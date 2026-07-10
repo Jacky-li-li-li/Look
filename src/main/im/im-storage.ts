@@ -2,10 +2,10 @@
 // IM channel persistence
 // ============================================================
 
+import { getLookDir } from "@look/shared/look-storage";
 import { safeStorage } from "electron";
 import fs from "fs";
 import path from "path";
-import { getLookDir } from "../shared/look-storage.js";
 
 export type ImProvider = "feishu";
 

@@ -121,7 +121,8 @@ export type AgentSegment = { kind: "text"; value: string } | { kind: "agent"; na
 
 /**
  * 匹配行首或空白后的 /agent:name。
- * /agent 与 /skill 共用 slash command 心智模型，单 @ 保留给 pi 文件引用。
+ * /agent 与 /skill 共用 slash command 心智模型；输入框里也支持用 @ 快速唤起
+ * Agent 选择面板，但最终落盘的引用格式仍是 /agent:name。
  */
 const AT_AGENT_RE = /(?:^|\s)(\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*))(?=$|\s)/g;
 

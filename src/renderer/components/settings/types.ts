@@ -23,7 +23,7 @@ export interface ProviderInfo {
 
 export type TestVerdict = { verdict: "ok" | "error" | "skipped"; reason?: string } | null;
 
-// ── Custom provider types (mirrors src/main/shared/types.ts) ──
+// ── Custom provider types (mirrors packages/shared/src/types.ts) ──
 
 export interface CustomProviderModelInput {
 	id: string;

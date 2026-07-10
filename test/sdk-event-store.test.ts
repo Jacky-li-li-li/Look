@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { agentsAtom, removeAgentAtoms, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore, flushAllUiEvents, initIpcHandlers } from "../src/renderer/store/ipcHandler";
 import { deriveSessionPhase } from "../src/renderer/store/sessionTypes";
-import type { LookUiEvent } from "../src/main/shared/types";
+import type { LookUiEvent } from "@shared/types";
 
 const sessionId = "ui-store-a";
 

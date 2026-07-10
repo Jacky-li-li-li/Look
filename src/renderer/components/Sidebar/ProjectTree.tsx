@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent } from "@shared/components/ui/collapsib
 import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { ChevronsDownUp, ChevronsUpDown, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, memo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {

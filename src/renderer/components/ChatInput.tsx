@@ -155,10 +155,8 @@ const ChatInput = function ChatInput({
 			if (!/^\/[^\s]*$/.test(prev) && /^\/[^\s]*$/.test(text)) {
 				menus.setSlashIndex(0);
 			}
-			if (
-				!/(?:^|\s)\/(?:agent|subagent):?[A-Za-z0-9._-]*$/.test(prev) &&
-				/(?:^|\s)\/(?:agent|subagent):?[A-Za-z0-9._-]*$/.test(text)
-			) {
+			const AGENT_TRIGGER_RE = /(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/;
+			if (!AGENT_TRIGGER_RE.test(prev) && AGENT_TRIGGER_RE.test(text)) {
 				menus.setAtIndex(0);
 			}
 			if (!/(?:^|\s)#[^\s]*$/.test(prev) && /(?:^|\s)#[^\s]*$/.test(text)) {
@@ -197,11 +195,11 @@ const ChatInput = function ChatInput({
 					selectedIndex={menus.atIndex}
 					onSelectedIndexChange={menus.setAtIndex}
 					onSelectAgent={(a) => {
-						const replaced = input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, `/agent:${a.name} `);
+						const replaced = input.replace(/(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/, `/agent:${a.name} `);
 						setInput(replaced);
 					}}
 					onClose={() => {
-						const cleaned = input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, "").trimEnd();
+						const cleaned = input.replace(/(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/, "").trimEnd();
 						setInput(cleaned);
 					}}
 					subagentEnabled={menus.subagentOn}

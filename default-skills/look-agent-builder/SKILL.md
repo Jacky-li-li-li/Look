@@ -2,7 +2,7 @@
 name: look-agent-builder
 description: 交互式创建 Look SubAgent 定义（~/.look/agents/*.md）。当用户说"帮我创建一个 XX Agent/助手"、"我想做个 Agent 做 YY"、"创建/新建 Agent/SubAgent"、"怎么写 Agent 定义"、"帮我写个 SubAgent/Agent 定义"、"改一下/优化/更新 XX Agent"、"给 XX Agent 加一个工具/换个模型/改个图标"时触发。不要和 skill-creator（创建 Proma Skill，输出 SKILL.md）混淆。不要和 tool-builder（创建 Chat 模式 HTTP 工具）混淆。不要和 proma-build-ai-app（生成独立 AI 应用 HTML/CLI）混淆。用户仅询问"Agent 是什么""SubAgent 怎么用"等概念性问题时不触发——先解释，等用户说想创建再触发。
 group: proma
-version: "1.0.0"
+version: "1.1.0"
 ---
 
 # Look Agent Builder
@@ -44,13 +44,29 @@ version: "1.0.0"
 | **description** | ✅ | 一句话："这个 Agent 做什么" |
 | **systemPrompt** | ✅ | 核心价值所在，见 Step 3 |
 | **tools** | | 根据角色推荐（见推荐规则），用户可调整 |
-| **model** | | 默认留空继承父会话，仅在用户指定时填写 |
+| **model** | | 默认留空继承父会话；如需指定，调用 `look_list_models` 获取已连接模型供用户选择 |
 | **icon** | | 根据角色推荐 emoji（见推荐规则） |
 | **tags** | | 中文标签，从用途提取，最多 3 个 |
 | **version** | | 默认 `1.0.0` |
 | **author** | | 默认不填 |
 
 如果用户在对话中已包含了足够信息，直接跳到 Step 3，不要重复追问。
+
+#### 模型选择流程
+
+当用户想为 Agent 指定模型（或你主动建议指定模型）时：
+
+1. 调用 `look_list_models` 工具获取当前已连接模型列表。
+2. 将返回结果按以下格式展示给用户：
+   ```
+   当前已连接模型：
+   1. Claude Sonnet 4.5 (anthropic/claude-sonnet-4-5)
+   2. GPT-4.1 (openai/gpt-4.1)
+   0. 继承父会话模型（默认）
+   ```
+3. 请用户回复序号选择。如果用户说"跳过""不用""继承"等，则 model 留空。
+4. 如果用户直接给出模型名但不在已连接列表中，提醒："该模型当前未连接，配置 API Key 后才能使用。是否仍要写入 frontmatter？"
+5. 最终确定的 model 值必须是 `provider/model-id` 格式（来自 `look_list_models` 的 `key` 字段）。
 
 ### Step 3: 系统提示生成
 
@@ -84,7 +100,7 @@ version: "1.0.0"
 标题: 代码审查专家
 描述: 对代码改动进行质量、安全和可维护性分析
 工具: read, grep, find, ls, bash
-模型: (继承父会话)
+模型: 继承父会话
 图标: 🔎
 标签: 审查, 代码
 版本: 1.0.0
@@ -184,6 +200,8 @@ subagent 工具直接调用它。
 **默认不填**（留空 = 继承父会话模型）。仅在以下情况建议：
 - 用户明确说"用 XX 模型"
 - Agent 需要特定模型能力（如视觉理解需要多模态模型）
+
+确定要指定模型时，必须先调用 `look_list_models` 获取当前已连接模型列表，不要凭空猜测 model key。
 
 ## 边界处理
 

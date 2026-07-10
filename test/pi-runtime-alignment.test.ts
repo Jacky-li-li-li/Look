@@ -8,22 +8,27 @@ const runtime = read("src/main/session/runtime-manager.ts");
 const ipc = read("src/main/ipc/handlers.ts");
 const preload = read("src/main/preload.js");
 const index = read("src/main/index.ts");
-const types = read("src/main/shared/types.ts");
+const types = read("packages/shared/src/types.ts");
 const tsconfig = read("tsconfig.main.json");
 const eventProcessor = read("src/main/session/event-processor.ts");
 const uiBatcher = read("src/main/session/ui-event-batcher.ts");
+const projectService = read("src/main/projects/project-service.ts");
 
 describe("pi runtime architecture regressions", () => {
 	it("1. does not pass a tools allowlist that filters extension tools", () => {
-		expect(runtime).toContain("createAgentSessionFromServices({ services, sessionManager, sessionStartEvent })");
+		expect(runtime).toContain("createAgentSessionFromServices({");
+		expect(runtime).toContain("services,");
+		expect(runtime).toContain("sessionManager,");
+		expect(runtime).toContain("sessionStartEvent,");
 		expect(runtime).not.toMatch(/\btools\s*:/);
 	});
 
 	it("2. gates project resources with pi Project Trust", () => {
 		expect(runtime).toContain("ProjectTrustStore");
-		expect(runtime).toContain("hasTrustRequiringProjectResources");
+		expect(runtime).toContain("resolveProjectTrust");
 		expect(runtime).toContain("resolveProjectTrust: async () => resolveLatestProjectTrust()");
 		expect(runtime).not.toContain("resolveProjectTrust: async () => trusted");
+		expect(projectService).toContain("hasTrustRequiringProjectResources");
 		expect(ipc).toContain("dialog.showMessageBox");
 		expect(index).toContain("await promptForProjectTrust");
 	});
@@ -42,7 +47,7 @@ describe("pi runtime architecture regressions", () => {
 		expect(runtime).toContain("entries: session.sessionManager.getBranch()");
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
-		expect(existsSync(resolve(root, "src/main/shared/message-convert.ts"))).toBe(false);
+		expect(existsSync(resolve(root, "packages/shared/src/message-convert.ts"))).toBe(false);
 	});
 
 	it("5. has pi SDK-aligned permission extension (no old gate)", () => {
@@ -71,7 +76,8 @@ describe("pi runtime architecture regressions", () => {
 		expect(runtime).toContain("forkManager.createBranchedSession(entryId)");
 		expect(runtime).not.toContain("sourceSession.sessionManager.createBranchedSession");
 		expect(runtime).not.toContain("managed.runtime.fork(");
-		expect(runtime).toContain('reason: "fork", previousSessionFile: sourceFile');
+		expect(runtime).toContain('reason: "fork"');
+		expect(runtime).toContain("previousSessionFile: sourceFile");
 	});
 
 	it("7. binds extensions after every runtime replacement", () => {

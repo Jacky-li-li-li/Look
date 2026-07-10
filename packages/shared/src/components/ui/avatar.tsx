@@ -1,4 +1,4 @@
-import { cn } from "@shared/lib/utils";
+import { cn } from "../../lib/utils.js";
 import { Avatar as AvatarPrimitive } from "radix-ui";
 import type * as React from "react";
 

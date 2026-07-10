@@ -10,7 +10,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@shared/components/ui/dropdown-menu";
-import type { AgentInfo } from "@shared/types";
 import { Bot, ChevronDown, ChevronRight, Copy, Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";

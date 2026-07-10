@@ -165,7 +165,7 @@ export function AgentHashMenu(props: AgentHashMenuProps) {
 
 				{/* Footer */}
 				<div className="border-t border-hairline bg-background/30 px-2.5 py-1 text-[10px] text-muted-foreground">
-					输入 /agent 选择 SubAgent
+					输入 /agent 或 @ 选择 SubAgent
 				</div>
 			</div>
 		</>

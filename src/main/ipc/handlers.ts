@@ -5,16 +5,17 @@
 
 import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { type BrowserWindow, dialog, ipcMain } from "electron";
-import type { SessionRuntimeManager } from "../session/runtime-manager.js";
-import { type CustomProviderInput, toProviderConfig } from "../settings/custom-providers.js";
 import type {
 	AgentDefinitionInput,
 	MainToRendererEvent,
 	PermissionMode,
 	RendererToMainEvent,
 	ThinkingLevel,
-} from "../shared/types.js";
+} from "@look/shared/types";
+import { type BrowserWindow, dialog, ipcMain } from "electron";
+import type { McpServerConfig } from "../mcp/types.js";
+import type { SessionRuntimeManager } from "../session/runtime-manager.js";
+import { type CustomProviderInput, toProviderConfig } from "../settings/custom-providers.js";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "../system/updater.js";
 import { getUsage } from "../system/usage.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "../system/user-profile.js";
@@ -34,7 +35,6 @@ import {
 	guardString,
 	guardStringArray,
 } from "./guards.js";
-import type { McpServerConfig } from "../mcp/types.js";
 
 export function registerIpcHandlers(
 	runtimeManager: SessionRuntimeManager,

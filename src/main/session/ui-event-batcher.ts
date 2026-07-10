@@ -11,8 +11,8 @@
 //      (coalesce per-token bursts at ~120fps headroom).
 // ============================================================
 
+import type { LookUiEvent } from "@look/shared/types";
 import type { IEventBus, ISessionScope } from "../core/contracts.js";
-import type { LookUiEvent } from "../shared/types.js";
 
 const UI_EVENT_BATCH_MS = 8;
 const UI_EVENT_FIRST_MS = 1;

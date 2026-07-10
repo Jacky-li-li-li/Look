@@ -1,6 +1,6 @@
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { PermissionMode, PlanApprovalOutcome, PlanQuestion, PlanQuestionOutcome } from "@look/shared/types";
 import { Type } from "typebox";
-import type { PermissionMode, PlanApprovalOutcome, PlanQuestion, PlanQuestionOutcome } from "../shared/types.js";
 
 export const PLAN_TOOL_NAMES = ["read", "grep", "find", "ls", "bash", "AskUserQuestion", "ExitPlanMode"];
 
@@ -24,7 +24,7 @@ const exitPlanModeSchema = Type.Object({
 	plan: Type.String({ minLength: 1, description: "Complete implementation plan in Markdown" }),
 });
 
-export type { PlanApprovalOutcome, PlanQuestionOutcome } from "../shared/types.js";
+export type { PlanApprovalOutcome, PlanQuestionOutcome } from "@look/shared/types";
 
 export interface PlanExtensionHost {
 	getMode(sessionId: string): PermissionMode;

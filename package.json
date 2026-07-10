@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Electron desktop agent app — Look",
   "type": "module",
-  "main": "dist/main/index.js",
+  "main": "dist/src/main/index.js",
+  "workspaces": [
+    "packages/*"
+  ],
   "engines": {
     "node": ">=20.19.0"
   },
@@ -12,18 +15,19 @@
     "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
     "copy-file-icons": "node scripts/copy-file-icons.mjs",
     "dev:renderer": "vite",
-    "dev:main": "npm run build:main && electron dist/main/index.js",
-    "build": "npm run build:main && npm run build:renderer",
-    "build:main": "rm -rf dist/main && tsc -p tsconfig.main.json && cp src/main/preload.js dist/main/preload.js && mkdir -p dist/main/assets && cp -f build/icon.png dist/main/assets/icon-1024.png",
+    "dev:main": "npm run build:main && electron dist/src/main/index.js",
+    "build": "npm run build:shared && npm run build:main && npm run build:renderer",
+    "build:shared": "cd packages/shared && npm run build",
+    "build:main": "rm -rf dist && tsc -p tsconfig.main.json && cp src/main/preload.js dist/src/main/preload.js && mkdir -p dist/src/main/assets && cp -f build/icon.png dist/src/main/assets/icon-1024.png",
     "build:renderer": "vite build",
-    "start": "electron dist/main/index.js",
+    "start": "electron dist/src/main/index.js",
     "package": "npm run build && electron-builder",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "lint": "biome check src",
-    "lint:fix": "biome check --write --unsafe src",
-    "format": "biome format --write src",
-    "check": "biome check src && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json --noEmit && npm test"
+    "lint": "biome check src packages",
+    "lint:fix": "biome check --write --unsafe src packages",
+    "format": "biome format --write src packages",
+    "check": "biome check src packages && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json --noEmit && npm test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -70,6 +74,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.5",
+    "@look/core": "*",
+    "@look/shared": "*",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/qrcode": "^1.5.6",

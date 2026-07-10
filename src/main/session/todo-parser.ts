@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { TodoItem } from "../shared/types.js";
+import type { TodoItem } from "@look/shared/types";
 
 /**
  * 解析项目根目录的 TODO.md。

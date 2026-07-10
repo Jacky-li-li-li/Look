@@ -4,8 +4,7 @@
     "module": "Node16",
     "moduleResolution": "Node16",
     "lib": ["ES2022"],
-    "outDir": "dist/main",
-    "rootDir": "src/main",
+    "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,12 +13,14 @@
     "declaration": true,
     "sourceMap": true,
     "incremental": true,
-    "tsBuildInfoFile": "dist/main/.tsbuildinfo",
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
     "paths": {
-      "@shared/*": ["src/main/shared/*"]
+      "@shared/*": ["packages/shared/src/*"],
+      "@look/shared/*": ["packages/shared/src/*"],
+      "@look/core/*": ["packages/core/src/*"]
     },
     "baseUrl": "."
   },
-  "include": ["src/main/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/renderer"]
+  "include": ["src/main/**/*.ts", "packages/shared/**/*.ts", "packages/core/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/renderer", "packages/shared/dist", "packages/core/dist"]
 }

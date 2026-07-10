@@ -24,9 +24,9 @@
 // needed.
 // ============================================================
 
+import { getSettingsPath, getUiSettingsPath } from "@look/shared/look-storage";
 import fs from "fs";
 import path from "path";
-import { getSettingsPath, getUiSettingsPath } from "../shared/look-storage.js";
 
 /** Legacy field names that move from settings.json → ui-settings.json. */
 const LEGACY_UI_FIELD_RENAMES: ReadonlyArray<readonly [string, string]> = [
@@ -124,7 +124,6 @@ export function migrateLegacySettings(): MigrationResult {
 	if (keys.length > 0) {
 		data._migratedAt = new Date().toISOString();
 	}
-
 
 	// 先写 ui-settings.json（不含 _migrated 标记）。
 	// 如果在此步骤与下一步之间进程崩溃，迁移会在下次启动时安全重跑，

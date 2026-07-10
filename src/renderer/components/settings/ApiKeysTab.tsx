@@ -16,7 +16,7 @@ import { Input } from "@shared/components/ui/input";
 import { cn } from "@shared/lib/utils";
 import type { TFunction } from "i18next";
 import { AlertCircle, ChevronRight, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "../ProviderIcon";
@@ -468,9 +468,10 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 				const r = await api.getApiKey(provider.id);
 				if (r?.success && r.key) {
 					// 防御竞态：只有当前仍在编辑同一 provider 时才写入
+					const key = r.key;
 					setKeyEdit((prev) => {
 						if (prev.editing !== provider.id) return prev;
-						return { ...prev, input: r.key };
+						return { ...prev, input: key };
 					});
 				}
 			} catch {

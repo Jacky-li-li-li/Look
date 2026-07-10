@@ -34,7 +34,9 @@ export const TodoPanel = memo(function TodoPanel() {
 				onClick={() => setExpanded(!expanded)}
 				className="flex w-full items-center gap-2 rounded-lg border border-hairline bg-card/30 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-card/50"
 			>
-				<ListTodo className={`size-3.5 shrink-0 ${allDone ? "text-green-500 dark:text-green-400" : "text-sky-500 dark:text-sky-400"}`} />
+				<ListTodo
+					className={`size-3.5 shrink-0 ${allDone ? "text-green-500 dark:text-green-400" : "text-sky-500 dark:text-sky-400"}`}
+				/>
 				<span className="font-medium">{allDone ? `全部完成 · ${total} 项` : `${doneCount}/${total} 已完成`}</span>
 				{/* 迷你进度条 */}
 				<div className="ml-auto flex items-center gap-1.5">

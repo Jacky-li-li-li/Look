@@ -79,7 +79,7 @@ function extractToolResult(value: unknown): { text: string; images: ImageContent
 	try {
 		const json = JSON.stringify(value, null, 2);
 		// 包裹在代码块中，防止 markdown 解析器将 JSON 结构解析为异常 AST
-		return { text: "```json\n" + json + "\n```", images: [] };
+		return { text: `\`\`\`json\n${json}\n\`\`\``, images: [] };
 	} catch {
 		const str = String(value);
 		if (str !== "[object Object]") return { text: str, images: [] };

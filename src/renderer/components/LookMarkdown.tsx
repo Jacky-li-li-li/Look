@@ -14,8 +14,8 @@ import { memo, useMemo } from "react";
 import { closeAtxHeadings, prepareMessageContent } from "../lib/messageMarkdown";
 import { AgentTag } from "./AgentTag";
 import { FileTag } from "./FileTag";
-import { SkillTag } from "./SkillTag";
 import { McpTag } from "./McpTag";
+import { SkillTag } from "./SkillTag";
 
 // ── Built-in code blocks: lightweight Shiki instead of Monaco ──
 

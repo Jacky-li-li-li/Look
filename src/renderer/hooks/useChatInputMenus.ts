@@ -101,13 +101,15 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 	// ── slash (/) detection ──
 	const slashOpen = useMemo(() => /^\/(?!agent(?::|$)|subagent(?::|$))[^\s]*$/.test(input), [input]);
 
-	// ── /agent (Agent) detection ──
+	// ── /agent / @ (Agent) detection ──
+	// 支持两种触发方式：/agent、/subagent 或 @，后接可选名称
+	const AGENT_TRIGGER_RE = /(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/;
 	const agentDefs = useAtomValue(agentDefinitionsAtom);
 	const subagentOn = useAtomValue(subagentEnabledAtom);
-	const atOpen = useMemo(() => /(?:^|\s)\/(?:agent|subagent):?[A-Za-z0-9._-]*$/.test(input), [input]);
+	const atOpen = useMemo(() => AGENT_TRIGGER_RE.test(input), [input]);
 
 	const atSearchTerm = useMemo(() => {
-		const m = input.match(/\/(?:agent|subagent):?([A-Za-z0-9._-]*)$/);
+		const m = input.match(/(?:\/(?:agent|subagent)|@):?([A-Za-z0-9._-]*)$/);
 		return m ? m[1] : "";
 	}, [input]);
 
@@ -130,7 +132,7 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 		(index: number) => {
 			const a = filteredAgents[index];
 			if (!a) return;
-			setInput(input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, `/agent:${a.name} `));
+			setInput(input.replace(/(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/, `/agent:${a.name} `));
 		},
 		[filteredAgents, setInput, input],
 	);
@@ -263,7 +265,7 @@ export function useChatInputMenus({ input, setInput }: UseChatInputMenusOptions)
 					{ open: true, selectedIndex: atIndex, pickableCount: filteredAgents.length },
 					(next) => {
 						setAtIndex(next.selectedIndex);
-						if (!next.open) setInput(input.replace(/\/(?:agent|subagent):?[A-Za-z0-9._-]*$/, "").trimEnd());
+						if (!next.open) setInput(input.replace(/(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/, "").trimEnd());
 					},
 				);
 				if (handled) {

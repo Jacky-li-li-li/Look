@@ -6,9 +6,9 @@
 // 项目激活 prompt → ~/.look/projects/<projectId>/SYSTEM.md（createRuntimeFactory 显式传入 systemPrompt）
 // ============================================================
 
+import { getProjectSystemPromptPath, getPromptsPath, getSystemPromptPath } from "@look/shared/look-storage";
 import fs from "fs";
 import path from "path";
-import { getProjectSystemPromptPath, getPromptsPath, getSystemPromptPath } from "../shared/look-storage.js";
 
 /** 表示"跟随全局"的哨兵值 */
 const FOLLOW_GLOBAL = "__follow_global__";

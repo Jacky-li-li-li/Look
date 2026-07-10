@@ -12,13 +12,8 @@
 //   before each tool execution.
 // ============================================================
 
-import type {
-	ExtensionContext,
-	ExtensionFactory,
-	ToolCallEvent,
-	ToolCallEventResult,
-} from "@earendil-works/pi-coding-agent";
-import type { ToolCallHandler } from "../shared/types.js";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { ToolCallHandler } from "@look/shared/types";
 
 // ---- Constants ----
 

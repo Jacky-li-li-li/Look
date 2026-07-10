@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as lookStorage from "../../src/main/shared/look-storage";
+import * as lookStorage from "@shared/look-storage";
 import {
 	getUsage,
 	incrementTurn,

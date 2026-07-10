@@ -71,7 +71,7 @@ AI 调用 edit("TODO.md", ...)   ──→  tool_execution_end  ──→  ↑ �
 
 | 文件 | 改动量 | 内容 |
 |------|--------|------|
-| `src/main/shared/types.ts` | +5 行 | 新增 `TodoItem` interface + `todo:update` 事件 |
+| `packages/shared/src/types.ts` | +5 行 | 新增 `TodoItem` interface + `todo:update` 事件 |
 | `src/main/session/event-processor.ts` | +3 行 | `tool_execution_end` case 调用 `host.emitTodoUpdate` |
 | `src/main/session/runtime-manager.ts` | +8 行 | 实现 `emitTodoUpdate` 方法 |
 | `src/renderer/components/ChatPanel.tsx` | -20 +6 行 | 删除 SubAgent 进度卡片，替换为 `<TodoPanel />` |
@@ -87,7 +87,7 @@ AI 调用 edit("TODO.md", ...)   ──→  tool_execution_end  ──→  ↑ �
 
 ## 详细设计
 
-### 1. `src/main/shared/types.ts`
+### 1. `packages/shared/src/types.ts`
 
 在 `MainToRendererEvent` 联合类型中添加：
 

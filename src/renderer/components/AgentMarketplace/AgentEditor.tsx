@@ -17,6 +17,7 @@ import { Textarea } from "@shared/components/ui/textarea";
 import type { AgentDefinitionInfo, AgentDefinitionInput } from "@shared/types";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import AgentModelSelect from "./AgentModelSelect";
 
 interface AgentEditorProps {
 	/** null = 关闭；"create" = 新建；AgentDefinitionInfo = 编辑现有 */
@@ -217,16 +218,7 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 					</div>
 
 					{/* 模型 */}
-					<div className="space-y-1">
-						<Label htmlFor="agent-model">模型</Label>
-						<Input
-							id="agent-model"
-							value={input.model ?? ""}
-							onChange={(e) => setInput({ ...input, model: e.target.value })}
-							placeholder="provider/model-id，留空继承父会话"
-							className="h-8 text-xs font-mono"
-						/>
-					</div>
+					<AgentModelSelect value={input.model ?? ""} onChange={(model) => setInput({ ...input, model })} />
 
 					{/* 标签 */}
 					<div className="space-y-1">

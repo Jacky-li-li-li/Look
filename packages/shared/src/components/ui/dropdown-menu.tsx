@@ -1,4 +1,4 @@
-import { cn } from "@shared/lib/utils";
+import { cn } from "../../lib/utils.js";
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import * as React from "react";

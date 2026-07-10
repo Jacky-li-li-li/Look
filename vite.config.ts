@@ -58,7 +58,7 @@ export default defineConfig({
 					mermaid: ["mermaid"],
 					// Split large vendor libraries into stable chunks for better caching.
 					"vendor-react": ["react", "react-dom"],
-					"vendor-ui": ["lucide-react", /radix-ui/],
+					"vendor-ui": ["lucide-react", "radix-ui"],
 					"vendor-data": ["@supabase/supabase-js", "@larksuiteoapi/node-sdk"],
 				},
 			},
@@ -67,7 +67,7 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
-			"@shared": path.resolve(__dirname, "src/main/shared"),
+			"@shared": path.resolve(__dirname, "packages/shared/src"),
 		},
 	},
 	server: {

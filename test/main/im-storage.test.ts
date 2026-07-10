@@ -25,7 +25,7 @@ vi.mock("electron", () => ({
 	},
 }));
 
-vi.mock("../../src/main/shared/look-storage.js", () => ({
+vi.mock("@shared/look-storage.js", () => ({
 	getLookDir: () => mocks.lookDir,
 }));
 

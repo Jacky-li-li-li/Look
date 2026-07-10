@@ -7,7 +7,7 @@
 // ============================================================
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { LOOK_MESSAGE_DURATION_ENTRY_TYPE, type LookMessageDurationEntryData } from "../shared/types.js";
+import { LOOK_MESSAGE_DURATION_ENTRY_TYPE, type LookMessageDurationEntryData } from "@look/shared/types";
 
 /**
  * Compute and persist the duration of the most recent turn.

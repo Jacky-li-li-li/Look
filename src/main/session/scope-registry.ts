@@ -7,7 +7,7 @@
 // by sessionId without needing to know about SRT internals.
 // ============================================================
 
-import type { ISessionScope, ISessionScopeRegistry } from "../core/contracts.js";
+import type { ISessionScopeRegistry } from "../core/contracts.js";
 import { SessionScope } from "./scope.js";
 
 export class SessionScopeRegistry implements ISessionScopeRegistry {

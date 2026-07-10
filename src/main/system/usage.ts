@@ -9,8 +9,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { getLookDir, getWorkspaceSessionsDir, getWorkspaceSubsessionsDir } from "../shared/look-storage.js";
-import type { ProjectInfo } from "../shared/types.js";
+import { getLookDir, getWorkspaceSessionsDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
+import type { ProjectInfo } from "@look/shared/types";
 
 const USAGE_SCHEMA_VERSION = 2;
 

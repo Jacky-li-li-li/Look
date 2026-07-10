@@ -7,9 +7,9 @@
 // `update:error` event and degrade silently thereafter.
 // ============================================================
 
+import type { MainToRendererEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { AppUpdater } from "electron-updater";
-import type { MainToRendererEvent } from "../shared/types.js";
 
 let autoUpdater: AppUpdater | null = null;
 let loadFailed = false;

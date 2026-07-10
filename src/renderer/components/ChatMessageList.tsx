@@ -305,10 +305,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				<div key={item.id} className="px-msg-item-x py-msg-item-y">
 					<div
 						data-message-id={item.id}
-						className={cn(
-							"group/message flex flex-col",
-							item.isLive && "animate-draw-in",
-						)}
+						className={cn("group/message flex flex-col", item.isLive && "animate-draw-in")}
 					>
 						<MessageBubble
 							message={item.message}
@@ -394,6 +391,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			handleCopyMessage,
 			handleForkToNewChat,
 			copiedEntryId,
+			t,
 		],
 	);
 

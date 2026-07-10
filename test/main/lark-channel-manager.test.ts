@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
 	};
 });
 
-vi.mock("../../src/main/shared/look-storage.js", () => ({
+vi.mock("@shared/look-storage.js", () => ({
 	getLookDir: () => mocks.lookDir,
 }));
 
@@ -125,7 +125,7 @@ vi.mock("@larksuiteoapi/node-sdk", () => ({
 import { BrowserWindow } from "electron";
 import { LarkBridgeService } from "../../src/main/im/lark-bridge-service.js";
 import { LarkChannelManager } from "../../src/main/im/lark-channel-manager.js";
-import type { MainToRendererEvent } from "../../src/main/shared/types.js";
+import type { MainToRendererEvent } from "@shared/types.js";
 
 function createMainWindow(): BrowserWindow {
 	return new BrowserWindow({} as any);

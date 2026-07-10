@@ -12,7 +12,7 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
-import { getWorkspaceSubsessionsDir } from "../src/main/shared/look-storage";
+import { getWorkspaceSubsessionsDir } from "@shared/look-storage";
 
 const RUN = process.env.LOOK_E2E_LLM === "1";
 const TIMEOUT = 240_000; // 父+子 LLM 调用，给足 4 分钟

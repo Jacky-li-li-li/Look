@@ -16,7 +16,7 @@
 import type { Dirent } from "node:fs";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { getLookDir } from "../shared/look-storage.js";
+import { getLookDir } from "@look/shared/look-storage";
 
 /** Look 内置 Skill 的目标目录 */
 export function getBuiltinSkillsDir(): string {

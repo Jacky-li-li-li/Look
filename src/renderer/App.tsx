@@ -13,6 +13,7 @@ import { useAppEffects } from "./hooks/useAppEffects";
 import { useAuthSession } from "./hooks/useAuthSession";
 import { useProjectActions } from "./hooks/useProjectActions";
 import { isSupabaseConfigured } from "./lib/supabase";
+import type { ProviderSettingsData } from "./store/atoms";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
@@ -30,7 +31,6 @@ import {
 	showSettingsAtom,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
-import type { ProviderSettingsData } from "./store/atoms";
 import { appStore } from "./store/ipcHandler";
 import { deriveSessionPhase } from "./store/sessionTypes";
 

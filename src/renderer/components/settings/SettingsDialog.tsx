@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/
 import { FileText, Key, MessageCircle, Palette, Server, UserRound, Zap } from "lucide-react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import type { SettingsTab } from "../../store/atoms";
 import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
@@ -19,7 +18,7 @@ import ProfileTab from "./ProfileTab";
 import PromptTab from "./PromptTab";
 import type { CustomProviderStats, ProviderInfo } from "./types";
 
-const api = window.look;
+const _api = window.look;
 
 interface SettingsDialogProps {
 	open: boolean;
@@ -115,23 +114,38 @@ const SettingsDialog = memo(function SettingsDialog({
 						</TabsTrigger>
 					</TabsList>
 
-					<TabsContent value="profile" className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+					<TabsContent
+						value="profile"
+						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
+					>
 						<ProfileTab />
 					</TabsContent>
 
-					<TabsContent value="general" className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+					<TabsContent
+						value="general"
+						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
+					>
 						<GeneralTab />
 					</TabsContent>
 
-					<TabsContent value="prompt" className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+					<TabsContent
+						value="prompt"
+						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
+					>
 						<PromptTab />
 					</TabsContent>
 
-					<TabsContent value="api-keys" className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+					<TabsContent
+						value="api-keys"
+						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
+					>
 						<ApiKeysTab providers={providers} customStats={customStats} onProvidersChange={onProvidersChange} />
 					</TabsContent>
 
-					<TabsContent value="im-channels" className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+					<TabsContent
+						value="im-channels"
+						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
+					>
 						<ImChannelsTab />
 					</TabsContent>
 
@@ -139,7 +153,10 @@ const SettingsDialog = memo(function SettingsDialog({
 						<McpServersTab />
 					</TabsContent>
 
-					<TabsContent value="about" className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+					<TabsContent
+						value="about"
+						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
+					>
 						<AboutTab providers={providers} customStats={customStats} />
 					</TabsContent>
 				</Tabs>

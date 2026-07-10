@@ -20,9 +20,8 @@ const colorMap = {
 export default function ContextRing() {
 	const { t } = useTranslation();
 	const sessionId = useAtomValue(activeAgentIdAtom);
-	if (!sessionId) return null;
 
-	const sessionState = useAtomValue(sessionStateAtomFamily(sessionId));
+	const sessionState = useAtomValue(sessionStateAtomFamily(sessionId ?? ""));
 
 	const agents = useAtomValue(agentsAtom);
 	const agentInfo = agents.find((a) => a.id === sessionId);
@@ -59,6 +58,8 @@ export default function ContextRing() {
 		if (!canCompress || !sessionId) return;
 		void window.look.compressSession(sessionId);
 	}, [canCompress, sessionId]);
+
+	if (!sessionId) return null;
 
 	return (
 		<Tooltip>

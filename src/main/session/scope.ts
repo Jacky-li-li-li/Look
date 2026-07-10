@@ -8,8 +8,8 @@
 // instead of poking SRT's internal Maps directly.
 // ============================================================
 
+import type { LookUiEvent } from "@look/shared/types";
 import type { ISessionScope } from "../core/contracts.js";
-import type { LookUiEvent } from "../shared/types.js";
 import type { ContentBlockTracker } from "./event-translator.js";
 import { createContentBlockTracker } from "./event-translator.js";
 

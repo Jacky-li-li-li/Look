@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "../../lib/utils.js";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
 import type * as React from "react";
 

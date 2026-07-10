@@ -3,8 +3,8 @@
 // Referencing Proma's user-profile-service.ts pattern
 // ============================================================
 
+import { getUserProfilePath } from "@look/shared/look-storage";
 import fs from "fs";
-import { getUserProfilePath } from "../shared/look-storage.js";
 
 export interface UserProfile {
 	userId: string;

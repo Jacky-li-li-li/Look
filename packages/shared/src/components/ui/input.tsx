@@ -1,4 +1,4 @@
-import { cn } from "@shared/lib/utils";
+import { cn } from "../../lib/utils.js";
 import type * as React from "react";
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {

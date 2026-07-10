@@ -179,8 +179,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 		[liveOpen],
 	);
 
-	if (blocks.length === 0) return null;
-
 	// Every group with ≥1 block collapses to a badge — single tool/thinking
 	// included, so 1-tool / 1-thinking turns also use the badge form.
 	const summary = pickSummary(kind, thinkingCount, toolCount, t);
@@ -204,7 +202,9 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 			if (inlineTexts[i]) result.push({ kind: "text", text: inlineTexts[i] });
 		}
 		return result;
-	}, [blocks, inlineTexts])
+	}, [blocks, inlineTexts]);
+
+	if (blocks.length === 0) return null;
 
 	return (
 		<div className="flex flex-col" data-execution-group="" data-open={isOpen}>

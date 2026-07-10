@@ -11,7 +11,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import { getLookDir, getProjectAgentsDir } from "../../shared/look-storage.js";
+import { getLookDir, getProjectAgentsDir } from "@look/shared/look-storage";
 import type { AgentConfig, AgentCreationMethod, AgentDiscoveryResult, AgentScope, AgentSource } from "./types.js";
 
 /** 用户级 Agent 目录：~/.look/agents */

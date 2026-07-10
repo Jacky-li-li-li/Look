@@ -1,4 +1,4 @@
-import { cn } from "@shared/lib/utils";
+import { cn } from "../../lib/utils.js";
 import type * as React from "react";
 
 function Card({ className, size = "default", ...props }: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {

@@ -10,7 +10,7 @@
 // createAgentSessionServices 传入 tools allowlist）。
 // ============================================================
 
-import type { AgentDefinitionInput } from "../../shared/types.js";
+import type { AgentDefinitionInput } from "@look/shared/types";
 
 /** 将字符串序列化为 YAML 标量：含特殊字符则双引号包裹。 */
 function yamlScalar(value: string): string {

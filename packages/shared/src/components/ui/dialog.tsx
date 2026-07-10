@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@shared/components/ui/button";
-import { cn } from "@shared/lib/utils";
+import { Button } from "./button.js";
+import { cn } from "../../lib/utils.js";
 import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import type * as React from "react";

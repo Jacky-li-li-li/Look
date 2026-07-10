@@ -18,7 +18,7 @@ const api = window.look;
 
 export function useAuthSession() {
 	const [isLoggedIn, setIsLoggedIn] = useAtom(isLoggedInAtom);
-	const [authLoading, setAuthLoading] = useAtom(authLoadingAtom);
+	const [authLoading, _setAuthLoading] = useAtom(authLoadingAtom);
 	const [, setUserProfile] = useAtom(userProfileAtom);
 
 	useEffect(() => {

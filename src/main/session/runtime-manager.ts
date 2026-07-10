@@ -21,9 +21,46 @@ import {
 	type SessionStartEvent,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import {
+	ensureLookDir,
+	ensureWorkspaceDir,
+	ensureWorkspaceSubsessionsDir,
+	getAuthPath,
+	getCustomProvidersPath,
+	getLookDir,
+	getModelsPath,
+	getProjectSharedDir,
+	getProjectSystemPromptPath,
+	getUiSettingsPath,
+	getWorkspaceDir,
+	getWorkspaceSubsessionsDir,
+	resetLegacySessionsOnce,
+} from "@look/shared/look-storage";
+import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
+import type {
+	AgentDefinitionInfo,
+	AgentDefinitionInput,
+	AgentInfo,
+	ForkedSessionResult,
+	ImSessionProvider,
+	MainToRendererEvent,
+	NavigateTreeResult,
+	PermissionMode,
+	PermissionRespondPayload,
+	PlanApprovalOutcome,
+	PlanApprovalRequest,
+	PlanApprovalResponse,
+	PlanQuestionOutcome,
+	PlanQuestionRequest,
+	PlanQuestionResponse,
+	ProjectInfo,
+	SessionSnapshotEnvelope,
+	ThinkingLevel,
+} from "@look/shared/types";
 import { AgentDefinitionService } from "../agents/definition-service.js";
 import type { IEventBus, IPermissionService, IPlanService, IRuntimeLifecycle } from "../core/contracts.js";
 import { createMcpExtensionFactory } from "../extensions/mcp-extension.js";
+import { createModelListExtensionFactory } from "../extensions/model-extension.js";
 import { createPermissionExtensionFactory } from "../extensions/permission-extension.js";
 import { createPlanExtensionFactory } from "../extensions/plan-extension.js";
 import { discoverAgents } from "../extensions/subagent/agent-discovery.js";
@@ -47,42 +84,6 @@ import { migrateLegacySettings } from "../settings/migrate.js";
 import { PromptStore } from "../settings/prompt-store.js";
 import { type UserSettings, UserSettingsStore } from "../settings/store.js";
 import {
-	ensureLookDir,
-	ensureWorkspaceDir,
-	ensureWorkspaceSubsessionsDir,
-	getAuthPath,
-	getCustomProvidersPath,
-	getLookDir,
-	getModelsPath,
-	getProjectSharedDir,
-	getProjectSystemPromptPath,
-	getUiSettingsPath,
-	getWorkspaceDir,
-	getWorkspaceSubsessionsDir,
-	resetLegacySessionsOnce,
-} from "../shared/look-storage.js";
-import { DEFAULT_SESSION_NAME } from "../shared/session-defaults.js";
-import type {
-	AgentDefinitionInfo,
-	AgentDefinitionInput,
-	AgentInfo,
-	ForkedSessionResult,
-	ImSessionProvider,
-	MainToRendererEvent,
-	NavigateTreeResult,
-	PermissionMode,
-	PermissionRespondPayload,
-	PlanApprovalOutcome,
-	PlanApprovalRequest,
-	PlanApprovalResponse,
-	PlanQuestionOutcome,
-	PlanQuestionRequest,
-	PlanQuestionResponse,
-	ProjectInfo,
-	SessionSnapshotEnvelope,
-	ThinkingLevel,
-} from "../shared/types.js";
-import {
 	detectCommonSkillPaths,
 	discoverSkillsFromPaths,
 	isBuiltinSkillPath,
@@ -93,9 +94,9 @@ import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.j
 import { scanSessionDirectory } from "./scan.js";
 import { parseTodoFile } from "./todo-parser.js";
 
-export type { EventCallback } from "../shared/types.js";
+export type { EventCallback } from "@look/shared/types";
 
-import type { EventCallback } from "../shared/types.js";
+import type { EventCallback } from "@look/shared/types";
 
 interface StoredSession extends PiSessionInfo {
 	projectId: string;
@@ -805,6 +806,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 				askQuestions: (id, questions, signal) => this.planService.requestQuestions(id, questions, signal),
 				submitPlan: (id, plan, signal) => this.planService.requestApproval(id, plan, signal),
 			}),
+			createModelListExtensionFactory(async () => this.getAvailableModels()),
 			await createSubagentExtensionFactory(sessionId, this.createSubagentHost(projectId), projectId),
 			createMcpExtensionFactory(sessionId, this.mcpManager, _cwd),
 		];
@@ -906,7 +908,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		const prevScope = this.scopeRegistry.get(previousSessionId);
 		if (prevScope) prevScope.isDefaultName = false;
 		this.scopeRegistry.release(previousSessionId);
-		
+
 		// 为新 sessionId 获取新的 scope，防止 rebind 后事件被静默丢弃。
 		const newScope = this.scopeRegistry.acquire(session.sessionId, managed.projectId);
 		newScope.streamingState = session.isStreaming ? "streaming" : "idle";
@@ -1440,7 +1442,11 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 				const slash = agent.model.indexOf("/");
 				if (slash > 0) {
 					const model = this.modelRegistry.find(agent.model.slice(0, slash), agent.model.slice(slash + 1));
-					if (model) await session.setModel(model);
+					if (model) {
+						await session.setModel(model);
+						// 子会话模型切换后立刻通知渲染层，确保侧边栏与输入框底部模型选择器显示正确
+						this.emitSessionUpdated(childSessionId);
+					}
 				}
 			} catch (error) {
 				console.warn(`[Look][subagent] Failed to set model ${agent.model}:`, error);

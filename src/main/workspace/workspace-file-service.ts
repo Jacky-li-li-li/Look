@@ -10,10 +10,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { ensureProjectSharedDir, getProjectSharedDir } from "@look/shared/look-storage";
+import type { FileTreeNode, MainToRendererEvent } from "@look/shared/types";
 import type { FSWatcher } from "chokidar";
 import chokidar from "chokidar";
-import { ensureProjectSharedDir, getProjectSharedDir } from "../shared/look-storage.js";
-import type { FileTreeNode, MainToRendererEvent } from "../shared/types.js";
 import { resolveInsideRoot } from "./path-guard.js";
 
 export type WorkspaceFileServiceEventCallback = (event: MainToRendererEvent) => void;

@@ -13,7 +13,6 @@
 // ============================================================
 
 import type { AgentSession, AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ContentBlockTracker } from "../session/event-translator.js";
 import type {
 	EventCallback,
 	LookUiEvent,
@@ -26,7 +25,8 @@ import type {
 	PlanQuestionOutcome,
 	PlanQuestionResponse,
 	ToolCallHandler,
-} from "../shared/types.js";
+} from "@look/shared/types";
+import type { ContentBlockTracker } from "../session/event-translator.js";
 
 // ── Infrastructure ──
 

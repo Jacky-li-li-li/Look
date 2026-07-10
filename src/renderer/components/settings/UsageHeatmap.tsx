@@ -5,8 +5,9 @@
 import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { usageDataAtom, type UsageAtomData } from "../../store/atoms";
+import { type UsageAtomData, usageDataAtom } from "../../store/atoms";
 import UsageStackedChart from "./UsageStackedChart";
+
 const WEEK_DAYS = 7;
 const WEEKS_IN_YEAR = 53;
 const CELL_SIZE = 14;

@@ -10,10 +10,9 @@
 // ============================================================
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AgentSessionEvent, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
-import type { IEventBus, ISessionScope, ISessionScopeRegistry } from "../core/contracts.js";
-import type { LookUiEvent } from "../shared/types.js";
-import { createContentBlockTracker, translateAgentSessionEvent } from "./event-translator.js";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { IEventBus, ISessionScopeRegistry } from "../core/contracts.js";
+import { translateAgentSessionEvent } from "./event-translator.js";
 import { UIEventBatcher } from "./ui-event-batcher.js";
 
 /**

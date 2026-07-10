@@ -81,7 +81,6 @@ export async function resolveInsideRoot(opts: ResolveInsideRootOptions): Promise
 		return target;
 	}
 
-
 	// target 不存在(可能正在被创建)。沿祖先链向上查找第一个存在的目录，
 	// 校验它在 root 内，防御通过中间缺失目录中 symlink 的越界攻击。
 	let ancestor = path.dirname(target);

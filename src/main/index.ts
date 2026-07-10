@@ -2,10 +2,10 @@
 // Electron Main Process Entry Point
 // ============================================================
 
+import type { MainToRendererEvent } from "@look/shared/types";
 import { app, BrowserWindow, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
-import type { MainToRendererEvent } from "./shared/types.js";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
 import { syncLookDefaultAgents } from "./agents/defaults.js";
 import { LarkBridgeService } from "./im/lark-bridge-service.js";

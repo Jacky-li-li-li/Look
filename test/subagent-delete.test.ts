@@ -8,7 +8,7 @@ import {
 	getProjectSharedDir,
 	getWorkspaceSubsessionsDir,
 	sanitiseWorkspaceName,
-} from "../src/main/shared/look-storage";
+} from "@shared/look-storage";
 
 /** Test-only access to SessionRuntimeManager internals. */
 interface TestManagerInternals {

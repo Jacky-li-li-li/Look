@@ -22,9 +22,9 @@
 // callers see a single `UserSettings` object.
 // ============================================================
 
+import type { PermissionMode } from "@look/shared/types";
 import fs from "fs";
 import path from "path";
-import type { PermissionMode } from "../shared/types.js";
 
 export type UILanguage = "en" | "zh" | "ja";
 export type LookStyle = "ink-wash" | "swiss" | "bauhaus";

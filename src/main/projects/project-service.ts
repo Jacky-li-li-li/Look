@@ -24,9 +24,9 @@ import fs, { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import type { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { hasTrustRequiringProjectResources, type ProjectTrustStore } from "@earendil-works/pi-coding-agent";
+import { getProjectsIndexPath, getWorkspacesDir } from "@look/shared/look-storage";
+import type { ProjectInfo } from "@look/shared/types";
 import { v4 as uuidv4 } from "uuid";
-import { getProjectsIndexPath, getWorkspacesDir } from "../shared/look-storage.js";
-import type { ProjectInfo } from "../shared/types.js";
 
 export class ProjectService {
 	private readonly projects = new Map<string, ProjectInfo>();
