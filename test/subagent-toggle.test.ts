@@ -8,11 +8,21 @@ import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
 
 /** Test-only access to SessionRuntimeManager internals. */
 interface TestManagerInternals {
-	runtimes: Map<string, { runtime: { session: Record<string, unknown> }; projectId: string; createdAt: number; unsubscribe: () => void }>;
+	runtimeRegistry: {
+		set(
+			sessionId: string,
+			runtime: {
+				runtime: { session: Record<string, unknown> };
+				projectId: string;
+				createdAt: number;
+				unsubscribe: () => void;
+			},
+		): void;
+		delete(sessionId: string): boolean;
+	};
 	permissionService: { setMode: (id: string, mode: string) => void; disposeSession: (id: string) => void };
 	planService: { disposeSession: (id: string) => void };
-	subagentEnabledBySession: Map<string, boolean>;
-	applySubagentEnabled(sessionId: string, enabled: boolean): Promise<void>;
+	sessionSubagentService: { clearSession(sessionId: string): void };
 }
 
 function installFakeRuntime(
@@ -31,7 +41,7 @@ function installFakeRuntime(
 		sessionManager: { isPersisted: () => false },
 	};
 	const internal = manager as unknown as TestManagerInternals;
-	internal.runtimes.set(sessionId, {
+	internal.runtimeRegistry.set(sessionId, {
 		runtime: { session },
 		projectId: "test-project",
 		createdAt: Date.now(),
@@ -41,10 +51,10 @@ function installFakeRuntime(
 	return {
 		getActiveTools: () => [...active],
 		cleanup: () => {
-			internal.runtimes.delete(sessionId);
+			internal.runtimeRegistry.delete(sessionId);
 			internal.permissionService.disposeSession(sessionId);
 			internal.planService.disposeSession(sessionId);
-			internal.subagentEnabledBySession.delete(sessionId);
+			internal.sessionSubagentService.clearSession(sessionId);
 		},
 	};
 }
@@ -110,7 +120,7 @@ describe("SubAgent toggle — API-level behavior", () => {
 	it("7. enabling only adds subagent and does not restore all configured tools", async () => {
 		const fake = installFakeRuntime(manager, "fake-toggle-session", ["read"], ["read", "write", "bash", "subagent"]);
 		try {
-			await (manager as unknown as TestManagerInternals).applySubagentEnabled("fake-toggle-session", true);
+			await manager.setSubagentEnabled("fake-toggle-session", true);
 			expect(fake.getActiveTools()).toEqual(["read", "subagent"]);
 		} finally {
 			fake.cleanup();
@@ -126,7 +136,7 @@ describe("SubAgent toggle — API-level behavior", () => {
 		);
 		try {
 			(manager as unknown as TestManagerInternals).permissionService.setMode("fake-plan-session", "plan");
-			await (manager as unknown as TestManagerInternals).applySubagentEnabled("fake-plan-session", true);
+			await manager.setSubagentEnabled("fake-plan-session", true);
 			expect(fake.getActiveTools()).toEqual(["read", "bash", "AskUserQuestion", "ExitPlanMode"]);
 		} finally {
 			fake.cleanup();
@@ -141,7 +151,7 @@ describe("SubAgent toggle — API-level behavior", () => {
 			["read", "write", "custom-tool", "subagent"],
 		);
 		try {
-			await (manager as unknown as TestManagerInternals).applySubagentEnabled("fake-disable-session", false);
+			await manager.setSubagentEnabled("fake-disable-session", false);
 			expect(fake.getActiveTools()).toEqual(["read", "custom-tool"]);
 		} finally {
 			fake.cleanup();

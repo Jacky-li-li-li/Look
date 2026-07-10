@@ -51,7 +51,15 @@ src/
 ├── main/                 # Electron 主进程
 │   ├── index.ts          # 入口
 │   ├── ipc-handlers.ts   # IPC 通信处理
-│   ├── session-runtime-manager.ts  # 单一 pi 会话运行时
+│   ├── session/                   # 会话 façade、目录、运行时注册与事件处理
+│   │   ├── runtime-manager.ts     # 兼容 façade / 跨领域编排
+│   │   ├── session-catalog.ts     # JSONL 会话发现与索引
+│   │   ├── runtime-registry.ts    # live runtime 与并发初始化
+│   │   └── session-event-bus.ts   # 主进程事件扇出
+│   │   ├── runtime-factory.ts     # pi runtime 资源与创建
+│   │   ├── session-history-service.ts # 导航、标签与 fork
+│   │   ├── session-control-service.ts # 模型、名称与压缩
+│   │   └── session-notifier.ts    # session UI 事件投影
 │   ├── extensions/       # pi 扩展工厂
 │   │   ├── permission-extension.ts
 │   │   ├── plan-extension.ts

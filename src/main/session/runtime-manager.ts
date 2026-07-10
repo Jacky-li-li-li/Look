@@ -1,6 +1,6 @@
-import fs, { existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import path, { join } from "node:path";
+import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import {
@@ -8,14 +8,8 @@ import {
 	type AgentSessionEvent,
 	type AgentSessionRuntime,
 	AuthStorage,
-	type ContextUsage,
-	type CreateAgentSessionRuntimeFactory,
-	createAgentSessionFromServices,
-	createAgentSessionRuntime,
-	createAgentSessionServices,
 	type ExtensionFactory,
 	ModelRegistry,
-	type SessionInfo as PiSessionInfo,
 	ProjectTrustStore,
 	SessionManager,
 	type SessionStartEvent,
@@ -23,17 +17,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
 	ensureLookDir,
-	ensureWorkspaceDir,
-	ensureWorkspaceSubsessionsDir,
 	getAuthPath,
 	getCustomProvidersPath,
 	getLookDir,
 	getModelsPath,
-	getProjectSharedDir,
-	getProjectSystemPromptPath,
 	getUiSettingsPath,
-	getWorkspaceDir,
-	getWorkspaceSubsessionsDir,
 	resetLegacySessionsOnce,
 } from "@look/shared/look-storage";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
@@ -47,11 +35,7 @@ import type {
 	NavigateTreeResult,
 	PermissionMode,
 	PermissionRespondPayload,
-	PlanApprovalOutcome,
-	PlanApprovalRequest,
 	PlanApprovalResponse,
-	PlanQuestionOutcome,
-	PlanQuestionRequest,
 	PlanQuestionResponse,
 	ProjectInfo,
 	SessionSnapshotEnvelope,
@@ -66,11 +50,11 @@ import { createPlanExtensionFactory } from "../extensions/plan-extension.js";
 import { discoverAgents } from "../extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "../extensions/subagent/subagent-extension.js";
 import type { AgentConfig, SubagentHost, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
-import { loadBindings } from "../im/im-storage.js";
 import { MCPManager } from "../mcp/manager.js";
 import { ModelProviderService } from "../models/model-provider-service.js";
 import { PlanService } from "../permissions/plan.js";
 import { PermissionService } from "../permissions/service.js";
+import { ProjectDeletionService } from "../projects/project-deletion-service.js";
 import { ProjectService } from "../projects/project-service.js";
 import { AutoTitleService } from "../services/auto-title.js";
 import { SubAgentRuntimeService } from "../services/subagent-runtime.js";
@@ -91,49 +75,27 @@ import {
 import { formatLocalDate, incrementTurn } from "../system/usage.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
-import { scanSessionDirectory } from "./scan.js";
-import { parseTodoFile } from "./todo-parser.js";
+import { ProjectRuntimeService } from "./project-runtime-service.js";
+import { SessionRuntimeFactory } from "./runtime-factory.js";
+import { type ManagedRuntime, RuntimeRegistry } from "./runtime-registry.js";
+import { SessionCatalog, type StoredSession } from "./session-catalog.js";
+import { SessionControlService } from "./session-control-service.js";
+import { SessionEventBus } from "./session-event-bus.js";
+import { SessionHistoryService } from "./session-history-service.js";
+import { SessionInfoService } from "./session-info-service.js";
+import { SessionLifecycleService } from "./session-lifecycle-service.js";
+import { SessionMessagingService } from "./session-messaging-service.js";
+import { SessionNotifier } from "./session-notifier.js";
+import { SessionPermissionOrchestrator } from "./session-permission-orchestrator.js";
+import { SessionSubagentService } from "./session-subagent-service.js";
 
 export type { EventCallback } from "@look/shared/types";
 
 import type { EventCallback } from "@look/shared/types";
 
-interface StoredSession extends PiSessionInfo {
-	projectId: string;
-}
-
-interface ManagedRuntime {
-	readonly runtime: AgentSessionRuntime;
-	readonly projectId: string;
-	readonly createdAt: number;
-	unsubscribe: () => void;
-}
-
 const MAX_NAME_LENGTH = 80;
-/** 子会话超时（5 分钟）：若 agent_end 未在此时限内触发，强制结算为 aborted。 */
-const _SUBAGENT_TIMEOUT_MS = 5 * 60 * 1000;
 /** 最大子会话递归深度：防止 LLM 无限嵌套调用 subagent 工具。 */
 const MAX_SUBAGENT_DEPTH = 5;
-/** 子会话 runtime 完成后的延迟清理时间（5 分钟）。
- *  任务结束后保留 session JSONL，释放 AgentSessionRuntime 内存资源。 */
-const _SUBAGENT_CLEANUP_DELAY_MS = 5 * 60 * 1000;
-/** 子会话 JSONL 中记录父会话链接的自定义条目类型。
- *  符合 AGENTS.md：parent links 由 pi JSONL 拥有。 */
-const SUBAGENT_PARENT_ENTRY_TYPE = "look.subagent-parent.v1";
-
-interface PendingPlanQuestion {
-	request: PlanQuestionRequest;
-	resolve: (outcome: PlanQuestionOutcome) => void;
-	removeAbortListener: () => void;
-}
-
-interface PendingPlanApproval {
-	request: PlanApprovalRequest;
-	resolve: (outcome: PlanApprovalOutcome) => void;
-	removeAbortListener: () => void;
-	resolving: boolean;
-}
-
 /**
  * Hosts independent pi AgentSessionRuntime instances for sessions that are
  * selected or currently running. Each runtime still owns exactly one active pi
@@ -143,10 +105,8 @@ interface PendingPlanApproval {
  * of the concrete SRT class.
  */
 export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISessionEventHost {
-	// projects Map migrated to ProjectService
-	private readonly sessionsByProject = new Map<string, StoredSession[]>();
-	private readonly sessionsById = new Map<string, StoredSession>();
-	private readonly eventCallbacks: EventCallback[] = [];
+	private readonly eventBus = new SessionEventBus();
+	private readonly sessionCatalog: SessionCatalog;
 	private readonly authStorage: AuthStorage;
 	private readonly modelRegistry: ModelRegistry;
 	private readonly customProvidersStore: CustomProvidersStore;
@@ -160,12 +120,18 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	private readonly globalSettingsManager: SettingsManager;
 	private readonly userSettings: UserSettingsStore;
 	// projectsIndexPath migrated to ProjectService
-	private readonly runtimes = new Map<string, ManagedRuntime>();
-	/** contextUsage emit 节流：sessionId → 上次发送时间戳(ms) */
-	private readonly contextUsageLastEmit = new Map<string, number>();
-	private readonly runtimeInitializations = new Map<string, Promise<ManagedRuntime>>();
-	private readonly forkOperationTails = new Map<string, Promise<void>>();
-	private resourceInitializationTail: Promise<void> = Promise.resolve();
+	private readonly runtimeRegistry = new RuntimeRegistry();
+	private readonly runtimeFactory: SessionRuntimeFactory;
+	private readonly sessionControlService: SessionControlService;
+	private readonly sessionHistoryService: SessionHistoryService;
+	private readonly sessionNotifier: SessionNotifier;
+	private readonly sessionInfoService: SessionInfoService;
+	private readonly projectDeletionService: ProjectDeletionService;
+	private readonly sessionSubagentService: SessionSubagentService;
+	private readonly sessionMessagingService: SessionMessagingService;
+	private readonly sessionPermissionOrchestrator: SessionPermissionOrchestrator;
+	private readonly projectRuntimeService: ProjectRuntimeService;
+	private readonly sessionLifecycleService: SessionLifecycleService;
 	// activeProjectId migrated to ProjectService
 	private activeSessionId: string | null = null;
 	private readonly workspaceFileService: WorkspaceFileService | null;
@@ -193,13 +159,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 
 	/** Plan mode workflow management (questions, approval, tool restrictions). */
 	private readonly planService: IPlanService;
-
-	// ---- SubAgent 子会话注册表 ----
-	// 数据已迁移至 SubAgentRegistry（src/main/session/subagent-registry.ts）
-	/** Agent 开关：sessionId → enabled（Stage 2 持久化；Stage 1 默认 true） */
-	private readonly subagentEnabledBySession = new Map<string, boolean>();
-	/** SubAgent 全局默认开关（新会话继承）。由 user-settings 持久化。 */
-	private subagentDefaultEnabled = true;
 
 	/** usage:updated 事件防抖定时器，合并高频 turn 完成事件。 */
 	private usageUpdateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -235,7 +194,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
 		this.projectService = new ProjectService(this.trustStore, this.globalSettingsManager);
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
-		this.subagentDefaultEnabled = this.userSettings.getAll().subagentEnabled;
 		this.permissionService = new PermissionService(this, this, this.userSettings.getAll().permissionMode);
 		// Tool authorization must never silently grant trust to project resources.
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
@@ -244,9 +202,11 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			getUserSettings: () => this.userSettings.getAll(),
 		});
 		this.promptStore = new PromptStore();
-		this.agentDefinitionService = new AgentDefinitionService(() => this.reloadAllSessionsForAgents());
+		this.agentDefinitionService = new AgentDefinitionService(() =>
+			this.sessionSubagentService.reloadAllSessionsForAgents(),
+		);
 		this.planService = new PlanService(this, this, this.permissionService, async (sessionId) => {
-			await this.applyPermissionMode(sessionId, "always", {
+			await this.sessionPermissionOrchestrator.applyMode(sessionId, "always", {
 				internal: true,
 				updateDefault: false,
 			});
@@ -254,10 +214,160 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		// projectsIndexPath is managed by ProjectService internally
 		this.mcpManager = new MCPManager();
 		this.mcpManager.setOnChange(() => this.emit({ type: "mcp:status-changed" }));
-		this.eventProcessor = new SessionEventProcessor(this, this.scopeRegistry, this);
-		this.subAgentRuntimeService = new SubAgentRuntimeService(this, this.subAgentRegistry);
+		this.runtimeFactory = new SessionRuntimeFactory({
+			agentDir: getLookDir(),
+			authStorage: this.authStorage,
+			modelRegistry: this.modelRegistry,
+			findProjectIdByCwd: (cwd) => this.findProjectIdByCwd(cwd),
+			resolveProjectTrust: (cwd) => this.resolveProjectTrust(cwd),
+			buildExtensionFactories: (cwd, sessionId) => this.buildExtensionFactories(cwd, sessionId),
+		});
+		this.sessionCatalog = new SessionCatalog((metadata) => {
+			if (metadata.parentSessionId) {
+				this.subAgentRegistry.register(metadata.parentSessionId, metadata.sessionId, metadata.agentName ?? "");
+			}
+		});
+		this.projectRuntimeService = new ProjectRuntimeService({
+			projectService: this.projectService,
+			sessionCatalog: this.sessionCatalog,
+			runtimeRegistry: this.runtimeRegistry,
+		});
+		this.sessionInfoService = new SessionInfoService({
+			runtimeRegistry: this.runtimeRegistry,
+			sessionCatalog: this.sessionCatalog,
+			subAgentRegistry: this.subAgentRegistry,
+			scopeRegistry: this.scopeRegistry,
+			maxNameLength: MAX_NAME_LENGTH,
+			isStreaming: (sessionId, sdkValue) => this.isStreaming(sessionId, sdkValue),
+			listProjects: () => this.listProjects(),
+		});
+		this.sessionNotifier = new SessionNotifier(this.eventBus, {
+			sessionInfoService: this.sessionInfoService,
+			listProjects: () => this.listProjects(),
+			getActiveProjectId: () => this.projectService.activeId,
+		});
+		this.sessionHistoryService = new SessionHistoryService({
+			ensureRuntime: (sessionId) => this.ensureRuntime(sessionId),
+			createManagedRuntime: (cwd, sessionManager, projectId, createdAt, sessionStartEvent) =>
+				this.createManagedRuntime(cwd, sessionManager, projectId, createdAt, sessionStartEvent),
+			withSessionLock: (sessionId, task) => this.runtimeRegistry.withExclusive(sessionId, task),
+			disposeRuntime: (sessionId, abort) => this.disposeRuntime(sessionId, abort),
+			getRuntime: (sessionId) => this.getRuntime(sessionId),
+			getSessionManager: (sessionId) => this.sessionManagerFor(sessionId) ?? undefined,
+			refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
+			activateForkedSession: (projectId, sessionId) => {
+				this.projectService.setActiveId(projectId);
+				this.activeSessionId = sessionId;
+			},
+			markSessionDefaultName: (sessionId) => {
+				const scope = this.scopeRegistry.get(sessionId);
+				if (scope) scope.isDefaultName = true;
+			},
+			emitSessionState: (sessionId, reason) => this.emitSessionState(sessionId, reason),
+		});
+		this.sessionControlService = new SessionControlService(
+			{
+				ensureRuntime: (sessionId) => this.ensureRuntime(sessionId),
+				getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
+				getSessionManager: (sessionId) => this.sessionManagerFor(sessionId) ?? undefined,
+				updateStoredName: (sessionId, name) => {
+					const stored = this.findStoredSession(sessionId);
+					if (stored) stored.name = name;
+					return stored;
+				},
+				closeDefaultNameGate: (sessionId) => {
+					const scope = this.scopeRegistry.get(sessionId);
+					if (scope) scope.isDefaultName = false;
+				},
+				emitSessionUpdated: (sessionId) => this.emitSessionUpdated(sessionId),
+				emitSessionList: (projectId) => this.emitSessionList(projectId),
+			},
+			this.modelRegistry,
+			MAX_NAME_LENGTH,
+		);
 		this.workspaceFileService = workspaceFileService ?? null;
 		this.workspaceTreeService = workspaceTreeService ?? null;
+		this.projectDeletionService = new ProjectDeletionService({
+			projectService: this.projectService,
+			sessionCatalog: this.sessionCatalog,
+			runtimeRegistry: this.runtimeRegistry,
+			disposeRuntime: (_sessionId, abort) => this.disposeRuntime(_sessionId, abort),
+			workspaceFileService: this.workspaceFileService,
+			workspaceTreeService: this.workspaceTreeService,
+			emitSessionList: (_projectId) => this.emitSessionList(_projectId),
+			emitProjectList: () => this.emitProjectList(),
+			getActiveSessionId: () => this.activeSessionId,
+			setActiveSessionId: (id) => {
+				this.activeSessionId = id;
+			},
+		});
+		this.eventProcessor = new SessionEventProcessor(this, this.scopeRegistry, this);
+		this.subAgentRuntimeService = new SubAgentRuntimeService(this, this.subAgentRegistry);
+		this.sessionSubagentService = new SessionSubagentService({
+			host: {
+				createManagedRuntime: (cwd, sessionManager, projectId, createdAt, sessionStartEvent, options) =>
+					this.createManagedRuntime(cwd, sessionManager, projectId, createdAt, sessionStartEvent, options),
+				getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
+				reloadSession: async (sessionId) => {
+					const managed = this.runtimeRegistry.get(sessionId);
+					if (managed) await managed.runtime.session.reload();
+				},
+				listRuntimeIds: () => this.runtimeRegistry.keys(),
+				getProjectInfo: (projectId) => this.projectService.getProjectInfo(projectId),
+				emit: (event) => this.emit(event),
+				emitSessionUpdated: (sessionId) => this.emitSessionUpdated(sessionId),
+				getScope: (sessionId) => this.scopeRegistry.get(sessionId),
+				acquireScope: (sessionId, projectId) => this.scopeRegistry.acquire(sessionId, projectId),
+				runtimeInfo: (sessionId) => this.sessionInfoService.getAgentInfo(sessionId),
+			},
+			modelRegistry: this.modelRegistry,
+			subAgentRegistry: this.subAgentRegistry,
+			subAgentRuntimeService: this.subAgentRuntimeService,
+			permissionService: this.permissionService,
+			planService: this.planService,
+			userSettings: this.userSettings,
+			agentDefinitionService: this.agentDefinitionService,
+			maxSubagentDepth: MAX_SUBAGENT_DEPTH,
+			maxNameLength: MAX_NAME_LENGTH,
+		});
+		this.sessionSubagentService.loadDefaultFromSettings();
+		this.sessionLifecycleService = new SessionLifecycleService({
+			host: {
+				createManagedRuntime: (cwd, sessionManager, projectId, createdAt, sessionStartEvent, options) =>
+					this.createManagedRuntime(cwd, sessionManager, projectId, createdAt, sessionStartEvent, options),
+				disposeRuntime: (sessionId, abort) => this.disposeRuntime(sessionId, abort),
+				refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
+				getStoredSession: (sessionId) => this.findStoredSession(sessionId),
+				emit: (event) => this.emit(event),
+				emitSessionState: (sessionId, reason) => this.emitSessionState(sessionId, reason),
+				emitSessionList: (projectId) => this.emitSessionList(projectId),
+				setActiveProjectId: (projectId) => this.projectService.setActiveId(projectId),
+				setActiveSessionId: (id) => {
+					this.activeSessionId = id;
+				},
+				getActiveSessionId: () => this.activeSessionId,
+			},
+			projectService: this.projectService,
+			runtimeRegistry: this.runtimeRegistry,
+			scopeRegistry: this.scopeRegistry,
+			subAgentRuntimeService: this.subAgentRuntimeService,
+			sessionInfoService: this.sessionInfoService,
+			permissionService: this.permissionService,
+			planService: this.planService,
+			userSettings: this.userSettings,
+			modelRegistry: this.modelRegistry,
+			getAvailableModelsSync: () => this.getAvailableModelsSync(),
+		});
+		this.sessionMessagingService = new SessionMessagingService({
+			ensureRuntime: (sessionId) => this.ensureRuntime(sessionId),
+			emitError: (error, sessionId) => this.emitError(error, sessionId),
+		});
+		this.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({
+			host: { ensureRuntime: (sessionId) => this.ensureRuntime(sessionId) },
+			permissionService: this.permissionService,
+			planService: this.planService,
+			userSettings: this.userSettings,
+		});
 	}
 
 	getWorkspaceFileService(): WorkspaceFileService {
@@ -308,6 +418,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		}
 		await this.disposeAllRuntimes();
 		await this.mcpManager.stopAll();
+		this.sessionCatalog.clear();
+		this.sessionNotifier.clear();
+		this.eventBus.clear();
 	}
 
 	async loadProjects(): Promise<ProjectInfo[]> {
@@ -331,15 +444,11 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		// 立即确定 preferred session ID（不 init runtime），让 renderer 在首帧就
 		// 高亮对应 tab 避免 EmptySessionState 闪烁。runtime 由 _autoSelectAgent
 		// 或用户点击异步激活。
-		const sessions = this.sessionsByProject.get(project.id) ?? [];
+		const sessions = this.sessionCatalog.listByProject(project.id);
 		const preferred = sessions.find((s) => s.id === settings.lastActiveSessionId) ?? sessions[0];
 		if (preferred) this.activeSessionId = preferred.id;
 		this.emitProjectList();
 		return total;
-	}
-
-	private saveProjects(): void {
-		this.projectService.saveProjects();
 	}
 
 	listProjects(): ProjectInfo[] {
@@ -364,19 +473,19 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	// ── Runtime accessors (IRuntimeStore compat) ──
 
 	getRuntime(sessionId: string): AgentSessionRuntime | undefined {
-		return this.runtimes.get(sessionId)?.runtime;
+		return this.runtimeRegistry.get(sessionId)?.runtime;
 	}
 
 	getSession(sessionId: string): AgentSession | undefined {
-		return this.runtimes.get(sessionId)?.runtime.session;
+		return this.runtimeRegistry.get(sessionId)?.runtime.session;
 	}
 
 	getSessionManager(sessionId: string): SessionManager | undefined {
-		return this.runtimes.get(sessionId)?.runtime.session.sessionManager;
+		return this.runtimeRegistry.get(sessionId)?.runtime.session.sessionManager;
 	}
 
 	getCwd(sessionId: string): string {
-		const managed = this.runtimes.get(sessionId);
+		const managed = this.runtimeRegistry.get(sessionId);
 		if (!managed) throw new Error(`Session ${sessionId} is not live`);
 		return managed.runtime.cwd;
 	}
@@ -388,7 +497,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 
 	/** Get the cwd for a session (live or stored). */
 	getSessionCwd(sessionId: string): string {
-		const managed = this.runtimes.get(sessionId);
+		const managed = this.runtimeRegistry.get(sessionId);
 		if (managed) return managed.runtime.cwd;
 		const stored = this.findStoredSession(sessionId);
 		if (stored) return stored.cwd;
@@ -407,38 +516,13 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	async setProjectTrust(projectId: string, trusted: boolean): Promise<void> {
-		const project = this.projectService.getProjectInfo(projectId);
-		if (!project?.valid) throw new Error(`Project ${projectId} not found`);
-		this.trustStore.set(project.cwd, trusted);
-		const reloadPromises: Promise<void>[] = [];
-		for (const managed of this.runtimes.values()) {
-			if (managed.runtime.cwd !== project.cwd) continue;
-			reloadPromises.push(
-				(async () => {
-					managed.runtime.services.settingsManager.setProjectTrusted(trusted);
-					await managed.runtime.session.reload();
-				})(),
-			);
-		}
-		await Promise.all(reloadPromises);
+		return this.projectRuntimeService.setProjectTrust(projectId, trusted);
 	}
 
 	async createProject(cwd: string, name?: string): Promise<{ project: ProjectInfo; isDuplicate: boolean }> {
-		if (!existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
-			throw new Error(`Project path is not a directory: ${cwd}`);
-		}
-		const canonicalCwd = fs.realpathSync(cwd);
-		const existing = this.projectService.findByCwd(canonicalCwd);
-		if (existing) {
-			await this.setActiveProject(existing.id);
-			return { project: existing, isDuplicate: true };
-		}
-
-		const project = this.projectService.createProjectRecord(canonicalCwd, name);
-		this.sessionsByProject.set(project.id, []);
-		this.saveProjects();
-		await this.setActiveProject(project.id);
-		return { project, isDuplicate: false };
+		const result = await this.projectRuntimeService.createProject(cwd, name);
+		await this.setActiveProject(result.project.id);
+		return result;
 	}
 
 	async setActiveProject(projectId: string): Promise<void> {
@@ -454,8 +538,8 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	async deleteProject(projectId: string): Promise<void> {
 		const project = this.projectService.getProjectInfo(projectId);
 		if (!project) return;
-		const persisted = this.sessionsByProject.get(projectId) ?? [];
-		const runtimeIds = Array.from(this.runtimes.entries()).flatMap(([sessionId, managed]) =>
+		const persisted = this.sessionCatalog.listByProject(projectId);
+		const runtimeIds = Array.from(this.runtimeRegistry.entries()).flatMap(([sessionId, managed]) =>
 			managed.projectId === projectId ? [sessionId] : [],
 		);
 		this.emit({
@@ -464,78 +548,14 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			projectName: project.name,
 			agentCount: new Set([...persisted.map((session) => session.id), ...runtimeIds]).size,
 			runningCount: runtimeIds.filter((sessionId) => {
-				const session = this.runtimes.get(sessionId)?.runtime.session;
+				const session = this.runtimeRegistry.get(sessionId)?.runtime.session;
 				return Boolean(session && (session.isStreaming || session.isRetrying || session.isCompacting));
 			}).length,
 		});
 	}
 
 	async executeDeleteProject(projectId: string): Promise<void> {
-		const project = this.projectService.getProjectInfo(projectId);
-		const sessions = this.sessionsByProject.get(projectId) ?? [];
-		const runtimeIds: string[] = [];
-		for (const [sessionId, managed] of this.runtimes.entries()) {
-			if (managed.projectId === projectId) runtimeIds.push(sessionId);
-		}
-		const sharedDir = getProjectSharedDir(projectId);
-		const workspaceDir = project ? getWorkspaceDir(project.name) : null;
-		await Promise.all(runtimeIds.map((sessionId) => this.disposeRuntime(sessionId, true)));
-		// 先停 watcher,再删目录,避免 chokidar 监听已删 inode 持续报错
-		if (this.workspaceFileService) {
-			try {
-				await this.workspaceFileService.stopWatching(projectId);
-			} catch (error) {
-				console.error(`[Look] Failed to stop shared area watcher for ${projectId}:`, error);
-			}
-		}
-		if (this.workspaceTreeService) {
-			try {
-				await this.workspaceTreeService.stopAllWatchesForProject(projectId);
-			} catch (error) {
-				console.error(`[Look] Failed to stop workspace tree watchers for ${projectId}:`, error);
-			}
-		}
-		for (const session of sessions) {
-			try {
-				fs.unlinkSync(session.path);
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
-			}
-		}
-		this.sessionsByProject.delete(projectId);
-		this.projectService.removeProject(projectId);
-		// 删除项目时清理共享区 + 整个 workspace 目录（含 sessions / subsessions / schedule-sessions）。
-		// 之前只清 subsessions 留下了孤儿 session 数据，正是导致 ~/.look/workspaces/<name>/
-		// 越攒越多的根因；这里改成一次性 rmSync 整个 workspace 目录，保证删除是完整的。
-		if (existsSync(sharedDir)) {
-			try {
-				fs.rmSync(sharedDir, { recursive: true, force: true });
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
-					console.error(`Failed to remove shared area for project ${projectId}:`, error);
-				}
-			}
-		}
-		if (workspaceDir && existsSync(workspaceDir)) {
-			try {
-				fs.rmSync(workspaceDir, { recursive: true, force: true });
-				if (project) {
-					console.log(`[Look] Removed workspace for deleted project "${project.name}" (${projectId})`);
-				}
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
-					console.error(`Failed to remove workspace for project ${projectId}:`, error);
-				}
-			}
-		}
-		if (this.activeSessionId && runtimeIds.includes(this.activeSessionId)) this.activeSessionId = null;
-		if (this.projectService.activeId === projectId) {
-			this.projectService.setActiveId(this.listProjects().find((project) => project.valid)?.id ?? null);
-		}
-		this.saveProjects();
-		this.emitSessionList(projectId);
-		this.emitProjectList();
-		if (this.projectService.activeId) this.emitSessionList(this.projectService.activeId);
+		return this.projectDeletionService.executeDelete(projectId);
 	}
 
 	renameProject(projectId: string, name: string): void {
@@ -547,174 +567,23 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	private async refreshProjectSessions(projectId: string): Promise<StoredSession[]> {
 		const project = this.projectService.getProjectInfo(projectId);
 		if (!project?.valid) return [];
-		const sessions = (await scanSessionDirectory(ensureWorkspaceDir(project.name), project.cwd)).map((session) => ({
-			...session,
-			projectId,
-		}));
-
-		// Stage 4：扫描 subsessions/ 目录恢复子会话，使用轻量行读取避免 SessionManager.open
-		// 解析整个大文件（每个子会话可能有大量消息）。
-		const subsessionsDir = getWorkspaceSubsessionsDir(project.name);
-		if (existsSync(subsessionsDir)) {
-			let subsessionFiles: string[];
-			try {
-				subsessionFiles = fs.readdirSync(subsessionsDir).filter((f) => f.endsWith(".jsonl"));
-			} catch {
-				subsessionFiles = [];
-			}
-			for (const file of subsessionFiles) {
-				try {
-					const filePath = path.join(subsessionsDir, file);
-					// 轻量扫描：只读 session header + custom 条目，不全量解析消息
-					const meta = this.scanSubsessionMeta(filePath);
-					if (!meta) continue;
-					const { sessionId, parentSessionId, agentName, firstMessage, messageCount, created } = meta;
-					if (parentSessionId) {
-						this.subAgentRegistry.register(parentSessionId, sessionId, agentName ?? "");
-					}
-					const stored: StoredSession = {
-						id: sessionId,
-						name: meta.displayName || firstMessage || "",
-						firstMessage: firstMessage || "",
-						messageCount,
-						created: new Date(created),
-						path: filePath,
-						cwd: project.cwd,
-						projectId,
-						modified: new Date(created),
-						allMessagesText: "",
-					};
-					// 避免同 ID（不太可能但防御）
-					if (!sessions.some((s) => s.id === sessionId)) {
-						sessions.push(stored);
-					}
-				} catch (err) {
-					// 单个子会话文件损坏或解析失败，跳过不影响整体
-					console.warn(`[Look] Failed to restore subagent session from ${file}:`, err);
-				}
-			}
-		}
-
-		this.sessionsByProject.set(projectId, sessions);
-		this.rebuildSessionsIndex();
-		return sessions;
+		return this.sessionCatalog.refresh(project);
 	}
 
 	private findStoredSession(sessionId: string): StoredSession | undefined {
-		return (
-			this.sessionsById.get(sessionId) ??
-			Array.from(this.sessionsByProject.values())
-				.flat()
-				.find((s) => s.id === sessionId)
-		);
-	}
-
-	private rebuildSessionsIndex(): void {
-		this.sessionsById.clear();
-		for (const sessions of this.sessionsByProject.values()) {
-			for (const session of sessions) {
-				this.sessionsById.set(session.id, session);
-			}
-		}
-	}
-	private sessionInfo(session: StoredSession): AgentInfo {
-		const managed = this.runtimes.get(session.id);
-		const piSession = managed?.runtime.session;
-		const stats = piSession?.getSessionStats();
-		const model = piSession?.model;
-		return {
-			id: session.id,
-			name: (session.name || session.firstMessage || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH),
-			imProvider: this.getImProvider(session.id),
-			model: model ? `${model.provider}/${model.id}` : "",
-			thinkingLevel: (piSession?.thinkingLevel as ThinkingLevel | undefined) ?? "off",
-			modelSupportsThinking: piSession?.supportsThinking() ?? false,
-			availableThinkingLevels: (piSession?.getAvailableThinkingLevels() as ThinkingLevel[] | undefined) ?? ["off"],
-			isStreaming: piSession?.isStreaming ?? false,
-			isRetrying: piSession?.isRetrying ?? false,
-			isCompacting: piSession?.isCompacting ?? false,
-			messageCount: stats?.totalMessages ?? session.messageCount,
-			createdAt: session.created.getTime(),
-			sessionFilePath: session.path,
-			projectId: session.projectId,
-			contextUsage: piSession?.getContextUsage(),
-			...this.subagentFields(session.id),
-		};
-	}
-
-	private runtimeInfo(sessionId: string, managed: ManagedRuntime): AgentInfo {
-		const session = managed.runtime.session;
-		const stats = session.getSessionStats();
-		const model = session.model;
-		return {
-			id: sessionId,
-			name: (session.sessionManager.getSessionName() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH),
-			imProvider: this.getImProvider(sessionId),
-			model: model ? `${model.provider}/${model.id}` : "",
-			thinkingLevel: session.thinkingLevel as ThinkingLevel,
-			modelSupportsThinking: session.supportsThinking(),
-			availableThinkingLevels: session.getAvailableThinkingLevels() as ThinkingLevel[],
-			isStreaming: this.isStreaming(sessionId, session.isStreaming),
-			isRetrying: session.isRetrying,
-			isCompacting: session.isCompacting,
-			messageCount: stats.totalMessages,
-			createdAt: managed.createdAt,
-			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
-			projectId: managed.projectId,
-			contextUsage: session.getContextUsage(),
-			...this.subagentFields(sessionId),
-		};
-	}
-
-	private getImProvider(sessionId: string): ImSessionProvider | undefined {
-		const scope = this.scopeRegistry.get(sessionId);
-		if (scope?.imProvider) return scope.imProvider as ImSessionProvider;
-		const binding = loadBindings().find((item) => item.sessionId === sessionId);
-		return binding ? "feishu" : undefined;
-	}
-
-	/** 返回子会话标识字段；非子会话返回空对象（展开后无影响）。 */
-	private subagentFields(
-		sessionId: string,
-	): Pick<AgentInfo, "parentSessionId" | "isSubagentSession" | "agentConfigName"> {
-		const meta = this.subAgentRegistry.getMeta(sessionId);
-		if (!meta) return {};
-		return {
-			parentSessionId: meta.parentSessionId,
-			isSubagentSession: true,
-			agentConfigName: meta.agentName,
-		};
+		return this.sessionCatalog.get(sessionId);
 	}
 
 	listAgents(): AgentInfo[] {
-		return this.listProjects().flatMap((project) => this.listAgentsInProject(project.id));
+		return this.sessionInfoService.listAgents();
 	}
 
 	listAgentsInProject(projectId: string): AgentInfo[] {
-		const persistedEntries = this.sessionsByProject.get(projectId) ?? [];
-		// For sessions that still have a live runtime, prefer the runtime's
-		// view (which reads `session.sessionManager.getSessionName()`) over
-		// the cached `StoredSession`. The cache only refreshes on
-		// `refreshProjectSessions`, but `setSessionName` writes to the
-		// session file in-place — so a freshly applied auto-title would be
-		// invisible in the cached `session.name` until the next refresh,
-		// causing `agent:list` to roll the tab title back to the default.
-		const persisted = persistedEntries.map((session) => {
-			const managed = this.runtimes.get(session.id);
-			return managed ? this.runtimeInfo(session.id, managed) : this.sessionInfo(session);
-		});
-		const persistedIds = new Set(persistedEntries.map((session) => session.id));
-		const drafts = Array.from(this.runtimes.entries()).flatMap(([sessionId, managed]) =>
-			managed.projectId === projectId && !persistedIds.has(sessionId) ? [this.runtimeInfo(sessionId, managed)] : [],
-		);
-		return [...drafts, ...persisted];
+		return this.sessionInfoService.listAgentsInProject(projectId);
 	}
 
 	getAgentInfo(sessionId: string): AgentInfo | undefined {
-		const managed = this.runtimes.get(sessionId);
-		if (managed) return this.runtimeInfo(sessionId, managed);
-		const session = this.findStoredSession(sessionId);
-		return session ? this.sessionInfo(session) : undefined;
+		return this.sessionInfoService.getAgentInfo(sessionId);
 	}
 
 	private findProjectIdByCwd(cwd: string): string | undefined {
@@ -724,80 +593,8 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		return undefined;
 	}
 
-	private createRuntimeFactory(factoryOptions?: { appendSystemPrompt?: string[] }): CreateAgentSessionRuntimeFactory {
-		return async ({ cwd, sessionManager, sessionStartEvent }) => {
-			return this.withResourceInitialization(async () => {
-				const settingsManager = SettingsManager.create(cwd, getLookDir());
-				const resolveLatestProjectTrust = () => {
-					const trusted = this.resolveProjectTrust(cwd);
-					settingsManager.setProjectTrusted(trusted);
-					return trusted;
-				};
-				resolveLatestProjectTrust();
-				const projectId = this.findProjectIdByCwd(cwd);
-				const sharedPath = projectId ? getProjectSharedDir(projectId) : undefined;
-				const sharedPrompt = sharedPath
-					? `\n## 共享区（Shared Area）\n项目共享文件目录：${sharedPath}\n你可以通过 read、write、edit、ls 等工具访问此目录。这些文件在同一项目的所有会话中共享，新建或打开历史会话均可读取。\n`
-					: undefined;
-				const appendPrompts = [sharedPrompt, ...(factoryOptions?.appendSystemPrompt ?? [])].filter(
-					(p): p is string => typeof p === "string" && p.length > 0,
-				);
-
-				// 项目级提示词：如果项目 SYSTEM.md 存在，显式传入 .look 路径
-				// SDK resolvePromptInput 会读取文件内容作为 customPrompt
-				let systemPromptSource: string | undefined;
-				if (projectId) {
-					const projectPromptPath = getProjectSystemPromptPath(projectId);
-					if (existsSync(projectPromptPath)) {
-						systemPromptSource = projectPromptPath;
-					}
-				}
-				// 未传入时 SDK 自动发现 ~/.look/SYSTEM.md（全局提示词）
-
-				const services = await createAgentSessionServices({
-					cwd,
-					agentDir: getLookDir(),
-					authStorage: this.authStorage,
-					modelRegistry: this.modelRegistry,
-					settingsManager,
-					resourceLoaderOptions: {
-						extensionFactories: await this.buildExtensionFactories(cwd, sessionManager.getSessionId()),
-						appendSystemPrompt: appendPrompts.length > 0 ? appendPrompts : undefined,
-						systemPrompt: systemPromptSource,
-					},
-					resourceLoaderReloadOptions: {
-						resolveProjectTrust: async () => resolveLatestProjectTrust(),
-					},
-				});
-				const result = await createAgentSessionFromServices({
-					services,
-					sessionManager,
-					sessionStartEvent,
-				});
-				return { ...result, services, diagnostics: services.diagnostics };
-			});
-		};
-	}
-
-	private async withResourceInitialization<T>(task: () => Promise<T>): Promise<T> {
-		const previous = this.resourceInitializationTail;
-		let release!: () => void;
-		const gate = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		const tail = previous.then(() => gate);
-		this.resourceInitializationTail = tail;
-		await previous;
-		try {
-			return await task();
-		} finally {
-			release();
-			if (this.resourceInitializationTail === tail) this.resourceInitializationTail = Promise.resolve();
-		}
-	}
-
 	private async buildExtensionFactories(_cwd: string, sessionId: string): Promise<ExtensionFactory[]> {
-		const projectId = this.runtimes.get(sessionId)?.projectId ?? "";
+		const projectId = this.runtimeRegistry.get(sessionId)?.projectId ?? "";
 		const handler = this.permissionService.createToolCallHandler(_cwd);
 		return [
 			createPermissionExtensionFactory(handler),
@@ -842,12 +639,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		sessionStartEvent?: SessionStartEvent,
 		factoryOptions?: { appendSystemPrompt?: string[] },
 	): Promise<ManagedRuntime> {
-		const runtime = await createAgentSessionRuntime(this.createRuntimeFactory(factoryOptions), {
-			cwd,
-			agentDir: getLookDir(),
-			sessionManager,
-			sessionStartEvent,
-		});
+		const runtime = await this.runtimeFactory.create(cwd, sessionManager, sessionStartEvent, factoryOptions);
 		return this.bindRuntime(runtime, projectId, createdAt);
 	}
 
@@ -886,15 +678,17 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			}
 		});
 		runtime.setRebindSession(async (nextSession) => this.rebindRuntime(runtime, nextSession));
-		this.runtimes.set(session.sessionId, managed);
+		this.runtimeRegistry.set(session.sessionId, managed);
 		this.planService.syncToolState(session.sessionId);
-		this.applySubagentDefaultOnBind(session.sessionId, session);
+		this.sessionSubagentService.applyDefaultOnBind(session.sessionId, session);
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 		return managed;
 	}
 
 	private async rebindRuntime(runtime: AgentSessionRuntime, session: AgentSession): Promise<void> {
-		const previousEntry = Array.from(this.runtimes.entries()).find(([, managed]) => managed.runtime === runtime);
+		const previousEntry = Array.from(this.runtimeRegistry.entries()).find(
+			([, managed]) => managed.runtime === runtime,
+		);
 		if (!previousEntry) throw new Error("Runtime replacement lost its registry entry");
 		const [previousSessionId, managed] = previousEntry;
 		managed.unsubscribe();
@@ -923,7 +717,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 					message: String(error),
 				}),
 		});
-		this.runtimes.delete(previousSessionId);
+		this.runtimeRegistry.delete(previousSessionId);
 		managed.unsubscribe = session.subscribe((event) => {
 			try {
 				this.handleSessionEvent(session.sessionId, event);
@@ -931,9 +725,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 				console.error("[Look] Error in session event handler:", error);
 			}
 		});
-		this.runtimes.set(session.sessionId, managed);
+		this.runtimeRegistry.set(session.sessionId, managed);
 		this.planService.syncToolState(session.sessionId);
-		this.applySubagentDefaultOnBind(session.sessionId, session);
+		this.sessionSubagentService.applyDefaultOnBind(session.sessionId, session);
 		if (this.activeSessionId === previousSessionId) this.activeSessionId = session.sessionId;
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 	}
@@ -958,36 +752,31 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	private async ensureRuntime(sessionId: string): Promise<ManagedRuntime> {
-		const existing = this.runtimes.get(sessionId);
-		if (existing) return existing;
-		const pending = this.runtimeInitializations.get(sessionId);
-		if (pending) return pending;
-		const stored = this.findStoredSession(sessionId);
-		if (!stored) throw new Error(`Session ${sessionId} not found`);
-		const initialization = this.createManagedRuntime(
-			stored.cwd,
-			SessionManager.open(stored.path),
-			stored.projectId,
-			stored.created.getTime(),
-		).finally(() => this.runtimeInitializations.delete(sessionId));
-		this.runtimeInitializations.set(sessionId, initialization);
-		return initialization;
+		return this.runtimeRegistry.getOrCreate(sessionId, async () => {
+			const stored = this.findStoredSession(sessionId);
+			if (!stored) throw new Error(`Session ${sessionId} not found`);
+			return this.createManagedRuntime(
+				stored.cwd,
+				SessionManager.open(stored.path),
+				stored.projectId,
+				stored.created.getTime(),
+			);
+		});
 	}
 
 	async disposeRuntime(sessionId: string, abort = false): Promise<void> {
-		const pending = this.runtimeInitializations.get(sessionId);
-		if (pending) await pending.catch(() => undefined);
-		const managed = this.runtimes.get(sessionId);
+		await this.runtimeRegistry.awaitInitialization(sessionId);
+		const managed = this.runtimeRegistry.get(sessionId);
 		if (!managed) return;
 		this.permissionService.cancelPending(sessionId);
 		this.planService.cancelInteractions(sessionId, "Session runtime was disposed");
 		// SubAgent: 释放时结算挂起的子会话执行（标记 aborted），避免父会话工具调用悬空；
 		// 并从父子注册表中清理（若本会话是子会话）。
 		if (this.subAgentRegistry.hasPending(sessionId)) {
-			this.finalizeSubSession(sessionId, true);
+			this.subAgentRuntimeService.finalizeSubSession(sessionId, true);
 		}
 		this.subAgentRegistry.abortPendingForParent(sessionId);
-		this.unregisterSubSession(sessionId);
+		this.subAgentRegistry.unregister(sessionId);
 		if (abort && managed.runtime.session.isStreaming) await managed.runtime.session.abort();
 		this.permissionService.persistIfDirty(sessionId);
 		this.planService.persistToolSnapshotIfDirty(sessionId);
@@ -995,25 +784,27 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		this.autoTitleService.dispose(sessionId);
 		const dispScope = this.scopeRegistry.get(sessionId);
 		if (dispScope) dispScope.isDefaultName = false;
-		this.cancelSubSessionCleanup(sessionId);
+		this.subAgentRuntimeService.cancelSubSessionCleanup(sessionId);
 		managed.unsubscribe();
-		this.runtimes.delete(sessionId);
+		this.runtimeRegistry.delete(sessionId);
 		this.permissionService.disposeSession(sessionId);
 		this.planService.disposeSession(sessionId);
 		if (dispScope) this.eventProcessor.dispose(sessionId);
 		this.scopeRegistry.release(sessionId);
-		this.subagentEnabledBySession.delete(sessionId);
-		this.contextUsageLastEmit.delete(sessionId);
-		this.forkOperationTails.delete(sessionId);
+		this.sessionSubagentService.clearSession(sessionId);
+		this.sessionNotifier.disposeSession(sessionId);
+		this.runtimeRegistry.releaseExclusive(sessionId);
 		await managed.runtime.dispose();
 	}
 
 	async disposeAllRuntimes(): Promise<void> {
-		await Promise.all(Array.from(this.runtimes.keys()).map((sessionId) => this.disposeRuntime(sessionId, true)));
+		await Promise.all(
+			Array.from(this.runtimeRegistry.keys()).map((sessionId) => this.disposeRuntime(sessionId, true)),
+		);
 	}
 
 	async activateSession(sessionId: string): Promise<void> {
-		if (this.activeSessionId === sessionId && this.runtimes.has(sessionId)) {
+		if (this.activeSessionId === sessionId && this.runtimeRegistry.has(sessionId)) {
 			this.emitSessionState(sessionId, "activate");
 			return;
 		}
@@ -1021,7 +812,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		this.projectService.setActiveId(managed.projectId);
 		this.activeSessionId = sessionId;
 		// 取消子会话 runtime 的延迟清理（用户重新激活了它）
-		this.cancelSubSessionCleanup(sessionId);
+		this.subAgentRuntimeService.cancelSubSessionCleanup(sessionId);
 		await this.refreshProjectSessions(managed.projectId);
 		this.emitProjectList();
 		this.emit({ type: "project:active-changed", projectId: managed.projectId });
@@ -1031,130 +822,26 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	async createAgent(
 		opts?: { name?: string; projectId?: string; imProvider?: ImSessionProvider } | string,
 	): Promise<string> {
-		const input = typeof opts === "string" ? { name: opts } : (opts ?? {});
-		const projectId = input.projectId ?? this.projectService.activeId;
-		if (!projectId) throw new Error("No active project");
-		const project = this.projectService.getProjectInfo(projectId);
-		if (!project?.valid) throw new Error(`Project path does not exist: ${project?.cwd ?? projectId}`);
-
-		const managed = await this.createManagedRuntime(
-			project.cwd,
-			SessionManager.create(project.cwd, ensureWorkspaceDir(project.name)),
-			projectId,
-		);
-		const session = managed.runtime.session;
-		session.setSessionName((input.name?.trim() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH));
-		// 如果用户未设置偏好模型，使用 API Keys 已连接模型列表的第一个
-		if (!this.userSettings.getAll().preferredModel) {
-			const available = this.getAvailableModelsSync();
-			if (available.length > 0) {
-				const first = available[0];
-				const model = this.modelRegistry.find(first.provider, first.id);
-				if (model && this.modelRegistry.hasConfiguredAuth(model)) {
-					await session.setModel(model);
-				}
-			}
-		}
-		// 标记为"刚创建、还是默认名"，AI 标题生成只覆盖此集合。
-		const scope = this.scopeRegistry.get(session.sessionId);
-		if (scope) scope.isDefaultName = true;
-		if (input.imProvider) {
-			const scope = this.scopeRegistry.get(session.sessionId);
-			if (scope) scope.imProvider = input.imProvider;
-		}
-		this.projectService.setActiveId(projectId);
-		this.activeSessionId = session.sessionId;
-		await this.refreshProjectSessions(projectId);
-		this.emit({
-			type: "agent:created",
-			agentId: session.sessionId,
-			agent: this.runtimeInfo(session.sessionId, managed),
-		});
-		this.emitSessionState(session.sessionId, "initial");
-		return session.sessionId;
+		return this.sessionLifecycleService.createAgent(opts);
 	}
 
 	async destroyAgent(sessionId: string): Promise<void> {
-		// 级联销毁所有子会话（删除父会话时同步清理子会话）
-		await this.destroySubSessions(sessionId);
-		const stored = this.findStoredSession(sessionId);
-		const managed = this.runtimes.get(sessionId);
-		const projectId = stored?.projectId ?? managed?.projectId;
-		if (!projectId) return;
-		await this.disposeRuntime(sessionId, true);
-		if (stored) {
-			try {
-				fs.unlinkSync(stored.path);
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
-			}
-		}
-		if (this.activeSessionId === sessionId) this.activeSessionId = null;
-		await this.refreshProjectSessions(projectId);
-		this.emit({ type: "agent:destroyed", agentId: sessionId });
-		this.emitSessionList(projectId);
+		return this.sessionLifecycleService.destroyAgent(sessionId);
+	}
+
+	async abortAgent(sessionId: string): Promise<void> {
+		return this.sessionLifecycleService.abortAgent(sessionId);
 	}
 
 	private sessionManagerFor(sessionId: string): SessionManager | null {
-		const managed = this.runtimes.get(sessionId);
+		const managed = this.runtimeRegistry.get(sessionId);
 		if (managed) return managed.runtime.session.sessionManager;
 		const stored = this.findStoredSession(sessionId);
 		return stored && existsSync(stored.path) ? SessionManager.open(stored.path) : null;
 	}
 
 	async sendMessage(sessionId: string, text: string, images?: ImageContent[]): Promise<void> {
-		const managed = await this.ensureRuntime(sessionId);
-		const session = managed.runtime.session;
-
-		// 解析 /agent:name 模式：/skill 仍归 pi 技能命令，单 @ 保留给 pi 文件引用。
-		const agentTokens = Array.from(
-			text.matchAll(/(?:^|\s)\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*)(?=$|\s)/g),
-		);
-		if (agentTokens.length > 0) {
-			const discovery = await discoverAgents(managed.projectId, "both");
-			const agentNames = agentTokens.flatMap((match) => match[1] ?? []);
-			const foundAgents = agentNames.flatMap((name) => {
-				const found = discovery.agents.find((a) => a.name === name);
-				return found ? [found] : [];
-			});
-
-			if (foundAgents.length > 0) {
-				// 保留原文 /agent:name chip，仅追加一行最小指令
-				const names = foundAgents.map((a) => a.name).join(", ");
-				const hint = foundAgents.length === 1 ? `[Use subagent: ${names}]` : `[Use subagents: ${names}]`;
-				text = `${hint}\n\n${text}`;
-			}
-		}
-
-		// 统一发送路径
-		await new Promise<void>((resolve, reject) => {
-			let accepted = false;
-			void session
-				.prompt(text, {
-					images,
-					source: "rpc",
-					streamingBehavior: session.isStreaming ? "followUp" : undefined,
-					preflightResult: (success) => {
-						if (!success || accepted) return;
-						accepted = true;
-						resolve();
-					},
-				})
-				.catch((error) => {
-					if (!accepted) reject(error);
-					else this.emitError(error, sessionId);
-				});
-		});
-	}
-
-	async abortAgent(sessionId: string): Promise<void> {
-		const managed = this.runtimes.get(sessionId);
-		if (!managed) return;
-		// 级联中止所有子会话（subagent 调用随父会话中止而中止）。
-		await this.abortSubSessions(sessionId);
-		this.permissionService.cancelPending(sessionId);
-		this.planService.cancelInteractions(sessionId, "Stopped by user");
-		await managed.runtime.session.abort();
+		return this.sessionMessagingService.sendMessage(sessionId, text, images);
 	}
 
 	// ============================================================
@@ -1162,7 +849,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	// ============================================================
 
 	isSubagentEnabled(sessionId: string): boolean {
-		return this.subagentEnabledBySession.get(sessionId) ?? this.subagentDefaultEnabled;
+		return this.sessionSubagentService.isEnabled(sessionId);
 	}
 
 	/**
@@ -1170,25 +857,12 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	 * 更新默认值（新会话继承），并持久化到 user-settings。
 	 */
 	async setSubagentEnabledGlobal(enabled: boolean): Promise<void> {
-		this.subagentDefaultEnabled = enabled;
-		await this.userSettings.update({ subagentEnabled: enabled });
-		await Promise.all(
-			Array.from(this.runtimes.keys()).map((sessionId) => this.applySubagentEnabled(sessionId, enabled)),
-		);
+		return this.sessionSubagentService.setEnabledGlobal(enabled);
 	}
 
 	/** 设置单个 Agent 定义的启用状态。 */
 	async setAgentDefinitionEnabled(name: string, enabled: boolean): Promise<void> {
-		const settings = this.userSettings.getAll();
-		let list = settings.enabledAgentDefinitions;
-		if (list === null) {
-			const all = (await this.listAgentDefinitions()).map((a) => a.name);
-			list = enabled ? all : all.filter((n) => n !== name);
-		} else {
-			list = enabled ? [...new Set([...list, name])] : list.filter((n) => n !== name);
-		}
-		await this.userSettings.update({ enabledAgentDefinitions: list });
-		this.reloadAllSessionsForAgents();
+		return this.sessionSubagentService.setAgentDefinitionEnabled(name, enabled);
 	}
 
 	/** 设置单个 Skill 的启用状态。 */
@@ -1205,108 +879,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		await this.userSettings.update({ enabledSkills: list });
 	}
 
-	/** 把 enabled 状态应用到单个会话：动态增删 subagent 工具 + 记录 per-session 状态。 */
-	private async applySubagentEnabled(sessionId: string, enabled: boolean): Promise<void> {
-		this.subagentEnabledBySession.set(sessionId, enabled);
-		const managed = this.runtimes.get(sessionId);
-		if (!managed) return;
-		const session = managed.runtime.session;
-		if (this.getPermissionMode(sessionId) === "plan") {
-			this.planService.syncToolState(sessionId);
-			return;
-		}
-		if (enabled) {
-			// 只恢复 subagent 工具本身,不要重置当前会话已有的 active tools。
-			const configured = new Set(session.getAllTools().map((tool) => tool.name));
-			if (!configured.has("subagent")) return;
-			const active = session.getActiveToolNames();
-			if (!active.includes("subagent")) session.setActiveToolsByName([...active, "subagent"]);
-		} else {
-			// 关闭：从活动工具中移除 subagent，LLM 即不可见不可调用。
-			session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
-		}
-	}
-
 	/** Stage 2：切换 Agent 开关。Stage 1 默认 true，此方法为后续阶段预留。 */
 	async setSubagentEnabled(sessionId: string, enabled: boolean): Promise<void> {
-		await this.applySubagentEnabled(sessionId, enabled);
-	}
-
-	/**
-	 * 新会话绑定时应用全局默认开关。仅当默认关闭时移除 subagent 工具；
-	 * 默认开启时不触碰活动工具集，避免破坏 plan 模式的工具限制。
-	 */
-	private applySubagentDefaultOnBind(sessionId: string, session: AgentSession): void {
-		if (this.subagentDefaultEnabled) return;
-		this.subagentEnabledBySession.set(sessionId, false);
-		session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
-	}
-
-	/**
-	 * 轻量扫描子会话 JSONL 元数据——只读 session header + custom/message 条目行，
-	 * 不全量解析消息内容。比 SessionManager.open() + getEntries() 快 5-10x。
-	 */
-	private scanSubsessionMeta(filePath: string): {
-		sessionId: string;
-		displayName?: string;
-		parentSessionId?: string;
-		agentName?: string;
-		firstMessage?: string;
-		messageCount: number;
-		created: number;
-	} | null {
-		try {
-			const raw = fs.readFileSync(filePath, "utf-8");
-			const lines = raw.split("\n");
-			let sessionId = "";
-			let displayName: string | undefined;
-			let parentSessionId: string | undefined;
-			let agentName: string | undefined;
-			let firstMessage: string | undefined;
-			let messageCount = 0;
-			let created = Date.now();
-			for (const line of lines) {
-				if (!line.trim()) continue;
-				try {
-					const entry = JSON.parse(line) as Record<string, unknown>;
-					if (entry.type === "session") {
-						sessionId = String(entry.id ?? "");
-						if (entry.timestamp) created = new Date(String(entry.timestamp)).getTime();
-					} else if (entry.type === "session_info") {
-						displayName = String(entry.name ?? "") || undefined;
-					} else if (entry.type === "custom" && entry.customType === SUBAGENT_PARENT_ENTRY_TYPE) {
-						const data = entry.data as { parentSessionId?: string; agentName?: string } | undefined;
-						if (data?.parentSessionId) parentSessionId = data.parentSessionId;
-						if (data?.agentName) agentName = data.agentName;
-					} else if (entry.type === "message") {
-						messageCount++;
-						if (!firstMessage) {
-							const msg = entry.message as { content?: unknown; timestamp?: number } | undefined;
-							const content = msg?.content;
-							if (typeof content === "string") firstMessage = content;
-							else if (Array.isArray(content) && (content[0] as { type?: string })?.type === "text") {
-								firstMessage = (content[0] as { text: string }).text;
-							}
-							if (msg?.timestamp && msg.timestamp < created) created = msg.timestamp;
-						}
-					}
-				} catch {
-					/* skip malformed lines */
-				}
-			}
-			if (!sessionId) return null;
-			return {
-				sessionId,
-				displayName,
-				parentSessionId,
-				agentName,
-				firstMessage,
-				messageCount,
-				created,
-			};
-		} catch {
-			return null;
-		}
+		return this.sessionSubagentService.setEnabledForSession(sessionId, enabled);
 	}
 
 	/** 列出某父会话下的全部子会话 ID。 */
@@ -1343,34 +918,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		return this.agentDefinitionService.installDefinition(name);
 	}
 
-	/** Agent 定义变更后，重载所有活动会话以刷新 subagent 工具的可用 Agent 列表。 */
-	private async reloadAllSessionsForAgents(): Promise<void> {
-		await Promise.all(
-			Array.from(this.runtimes.values()).map((managed) =>
-				managed.runtime.session.reload().catch((error) => {
-					console.warn("[Look][subagent] Failed to reload session after agent definition change:", error);
-				}),
-			),
-		);
-		this.emit({ type: "subagent:definitions-updated" });
-	}
-
-	private async abortSubSessions(parentSessionId: string): Promise<void> {
-		return this.subAgentRuntimeService.abortSubSessions(parentSessionId);
-	}
-
-	private async destroySubSessions(parentSessionId: string): Promise<void> {
-		return this.subAgentRuntimeService.destroySubSessions(parentSessionId);
-	}
-
-	private registerSubSession(parentSessionId: string, childSessionId: string, agentName: string): void {
-		this.subAgentRegistry.register(parentSessionId, childSessionId, agentName);
-	}
-
-	private unregisterSubSession(childSessionId: string): void {
-		this.subAgentRegistry.unregister(childSessionId);
-	}
-
 	/**
 	 * 创建并运行一个 subagent 子会话，返回其最终结果。
 	 *
@@ -1386,206 +933,23 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		onUpdate?: (progress: SubagentProgress) => void,
 		title?: string,
 	): Promise<SubagentResult> {
-		const parentManaged = this.runtimes.get(parentSessionId);
-		if (!parentManaged) throw new Error(`Parent session ${parentSessionId} is not live`);
-
-		// 检查子会话递归深度，防止 LLM 无限嵌套调用 subagent 工具
-		let subDepth = 0;
-		let ancestor = parentSessionId;
-		while (true) {
-			const parent = this.subAgentRegistry.getParent(ancestor);
-			if (!parent) break;
-			subDepth++;
-			ancestor = parent;
-			if (subDepth >= MAX_SUBAGENT_DEPTH) {
-				throw new Error(
-					`Subagent nesting limit of ${MAX_SUBAGENT_DEPTH} exceeded. Cannot create nested sub-session under ${parentSessionId}.`,
-				);
-			}
-		}
-		const projectId = parentManaged.projectId;
-		const project = this.projectService.getProjectInfo(projectId);
-		if (!project?.valid) throw new Error(`Project not found or invalid for subagent: ${projectId}`);
-		const cwd = parentManaged.runtime.cwd;
-
-		// 子会话存放在独立子目录，避免污染顶层 SessionManager.list 结果。
-		const subsessionDir = ensureWorkspaceSubsessionsDir(project.name);
-		const sessionManager = SessionManager.create(cwd, subsessionDir);
-		const managed = await this.createManagedRuntime(
-			cwd,
-			sessionManager,
-			projectId,
-			Date.now(),
-			undefined,
-			agent.systemPrompt.trim() ? { appendSystemPrompt: [agent.systemPrompt] } : undefined,
-		);
-		const session = managed.runtime.session;
-		const childSessionId = session.sessionId;
-
-		// 命名：优先使用 LLM 提供的 title，否则拼接 agentName + task 摘要
-		const rawName = title?.trim()
-			? title.trim()
-			: `${agent.title || agent.name} · ${task.replace(/\s+/g, " ").trim().slice(0, 48)}`;
-		const displayName = `Agent：${rawName}`.slice(0, MAX_NAME_LENGTH);
-		session.setSessionName(displayName);
-
-		// 工具白名单（与已配置工具取交集，避免激活不存在的工具）
-		if (agent.tools && agent.tools.length > 0) {
-			const configured = new Set(session.getAllTools().map((tool) => tool.name));
-			const allowlisted = agent.tools.filter((name) => configured.has(name));
-			if (allowlisted.length > 0) session.setActiveToolsByName(allowlisted);
-		}
-
-		// 模型（找不到则继承父会话模型）
-		if (agent.model) {
-			try {
-				const slash = agent.model.indexOf("/");
-				if (slash > 0) {
-					const model = this.modelRegistry.find(agent.model.slice(0, slash), agent.model.slice(slash + 1));
-					if (model) {
-						await session.setModel(model);
-						// 子会话模型切换后立刻通知渲染层，确保侧边栏与输入框底部模型选择器显示正确
-						this.emitSessionUpdated(childSessionId);
-					}
-				}
-			} catch (error) {
-				console.warn(`[Look][subagent] Failed to set model ${agent.model}:`, error);
-			}
-		}
-
-		// 父子关系持久化到子会话 JSONL（符合 AGENTS.md：parent links 由 pi JSONL 拥有）
-		session.sessionManager.appendCustomEntry(SUBAGENT_PARENT_ENTRY_TYPE, {
-			parentSessionId,
-			agentName: displayName,
-		});
-		this.registerSubSession(parentSessionId, childSessionId, displayName);
-
-		// 通知渲染层子会话已创建（含 parentSessionId，Stage 4 据此嵌套）
-		this.emit({
-			type: "agent:created",
-			agentId: childSessionId,
-			agent: this.runtimeInfo(childSessionId, managed),
-		});
-
-		// 建立完成跟踪（必须在 prompt 之前，避免错过 agent_end）
-		const resultPromise = this.subAgentRuntimeService.setupSubSessionTracking(
-			childSessionId,
-			parentSessionId,
-			agent,
-			task,
-			signal,
-			onUpdate,
-			displayName,
-		);
-
-		// 发送任务 prompt 启动子会话执行
-		await new Promise<void>((resolve, reject) => {
-			let accepted = false;
-			void session
-				.prompt(task, {
-					source: "rpc",
-					streamingBehavior: session.isStreaming ? "followUp" : undefined,
-					preflightResult: (success) => {
-						if (!success || accepted) return;
-						accepted = true;
-						resolve();
-					},
-				})
-				.catch((error) => {
-					if (!accepted) reject(error);
-					else this.emitError(error, childSessionId);
-				});
-		}).catch((error) => {
-			// prompt 接受失败：finalize 为 failed 并清理
-			this.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
-			throw error;
-		});
-
-		return resultPromise;
-	}
-
-	private setupSubSessionTracking(
-		childSessionId: string,
-		parentSessionId: string,
-		agent: AgentConfig,
-		task: string,
-		signal: AbortSignal | undefined,
-		onUpdate?: (progress: SubagentProgress) => void,
-		displayName?: string,
-	): Promise<SubagentResult> {
-		return this.subAgentRuntimeService.setupSubSessionTracking(
-			childSessionId,
-			parentSessionId,
-			agent,
-			task,
-			signal,
-			onUpdate,
-			displayName,
-		);
-	}
-
-	private finalizeSubSession(childSessionId: string, forceFailed = false): void {
-		this.subAgentRuntimeService.finalizeSubSession(childSessionId, forceFailed);
-	}
-
-	private getFinalAssistantText(session: AgentSession): string {
-		return this.subAgentRuntimeService.getFinalAssistantText(session);
-	}
-
-	private scheduleSubSessionCleanup(childSessionId: string): void {
-		this.subAgentRuntimeService.scheduleSubSessionCleanup(childSessionId);
-	}
-
-	private cancelSubSessionCleanup(childSessionId: string): void {
-		this.subAgentRuntimeService.cancelSubSessionCleanup(childSessionId);
-	}
-
-	private trackSubSessionMessageEnd(sessionId: string, message: AgentMessage): void {
-		this.subAgentRuntimeService.trackSubSessionMessageEnd(sessionId, message);
+		return this.sessionSubagentService.runSubSession(parentSessionId, agent, task, signal, onUpdate, title);
 	}
 
 	async setModel(sessionId: string, modelKey: string): Promise<void> {
-		const session = (await this.ensureRuntime(sessionId)).runtime.session;
-		const slash = modelKey.indexOf("/");
-		if (slash <= 0) throw new Error(`Model key must be in provider/model form: ${modelKey}`);
-		const model = this.modelRegistry.find(modelKey.slice(0, slash), modelKey.slice(slash + 1));
-		if (!model) throw new Error(`Model not found: ${modelKey}`);
-		await session.setModel(model);
-		this.emitSessionUpdated(sessionId);
+		await this.sessionControlService.setModel(sessionId, modelKey);
 	}
 
 	async setThinkingLevel(sessionId: string, level: ThinkingLevel): Promise<void> {
-		const managed = await this.ensureRuntime(sessionId);
-		managed.runtime.session.setThinkingLevel(level);
+		await this.sessionControlService.setThinkingLevel(sessionId, level);
 	}
 
 	async compressSession(sessionId: string): Promise<void> {
-		const session = (await this.ensureRuntime(sessionId)).runtime.session;
-		if (!session.isStreaming) await session.compact();
+		await this.sessionControlService.compress(sessionId);
 	}
 
 	renameAgent(sessionId: string, name: string): void {
-		const trimmed = name.trim().slice(0, MAX_NAME_LENGTH);
-		if (!trimmed) return;
-		const managed = this.runtimes.get(sessionId);
-		if (managed) {
-			managed.runtime.session.setSessionName(trimmed);
-		} else {
-			const manager = this.sessionManagerFor(sessionId);
-			manager?.appendSessionInfo(trimmed);
-		}
-		// User-initiated rename: drop the session from the "still on default
-		// name" set so the auto-title gate closes permanently. The service's
-		// `generated` Set never needs clearing here — once the gate is closed
-		// by the Set deletion, the next message_end computes `isDefaultName
-		// === false` and the service short-circuits before reaching any
-		// `generated` check.
-		const renScope = this.scopeRegistry.get(sessionId);
-		if (renScope) renScope.isDefaultName = false;
-		const stored = this.findStoredSession(sessionId);
-		if (stored) stored.name = trimmed;
-		this.emitSessionUpdated(sessionId);
-		if (stored) this.emitSessionList(stored.projectId);
+		this.sessionControlService.rename(sessionId, name);
 	}
 
 	async navigateTreeSession(
@@ -1593,10 +957,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		entryId: string,
 		opts?: { summarize?: boolean; customInstructions?: string; label?: string },
 	): Promise<NavigateTreeResult> {
-		const session = (await this.ensureRuntime(sessionId)).runtime.session;
-		const result = await session.navigateTree(entryId, opts);
-		if (!result.cancelled) this.emitSessionState(sessionId, "navigate");
-		return result;
+		return this.sessionHistoryService.navigate(sessionId, entryId, opts);
 	}
 
 	async createForkedSession(
@@ -1604,95 +965,11 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		entryId: string,
 		opts?: { name?: string },
 	): Promise<ForkedSessionResult> {
-		return this.withForkLock(sessionId, async () => {
-			const managed = await this.ensureRuntime(sessionId);
-			const sourceSession = managed.runtime.session;
-			if (sourceSession.isStreaming || sourceSession.isRetrying || sourceSession.isCompacting) {
-				throw new Error("Stop the session before forking");
-			}
-			const sourceFile = sourceSession.sessionFile;
-			if (!sourceFile) throw new Error("Source session not persisted");
-			if (!sourceSession.sessionManager.getEntry(entryId)) throw new Error("Invalid entry ID for forking");
-
-			const runner = sourceSession.extensionRunner;
-			if (runner.hasHandlers("session_before_fork")) {
-				const hookResult = await runner.emit({
-					type: "session_before_fork",
-					entryId,
-					position: "at" as const,
-				});
-				if (hookResult?.cancel === true) throw new Error("Fork was cancelled by an extension");
-			}
-
-			// createBranchedSession mutates its SessionManager. Always use an
-			// independent manager so the source runtime remains bound to A.
-			const forkManager = SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir());
-			let forkedPath: string | undefined;
-			let forkedSessionId: string | undefined;
-			try {
-				forkedPath = forkManager.createBranchedSession(entryId);
-				if (!forkedPath) throw new Error("Failed to create forked session");
-				forkedSessionId = forkManager.getSessionId();
-				const forkedManaged = await this.createManagedRuntime(
-					forkManager.getCwd(),
-					forkManager,
-					managed.projectId,
-					Date.now(),
-					{
-						type: "session_start",
-						reason: "fork",
-						previousSessionFile: sourceFile,
-					},
-				);
-				const session = forkedManaged.runtime.session;
-				if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, MAX_NAME_LENGTH));
-				// Fork 出的新 session：若没有指定名字，也加入"刚创建默认名"集合。
-				if (!opts?.name?.trim()) {
-					const forkScope = this.scopeRegistry.get(session.sessionId);
-					if (forkScope) forkScope.isDefaultName = true;
-				}
-				if (!session.sessionFile) throw new Error("Forked session was not persisted");
-				await this.refreshProjectSessions(managed.projectId);
-				this.projectService.setActiveId(managed.projectId);
-				this.activeSessionId = session.sessionId;
-				this.emitSessionState(session.sessionId, "initial");
-				return {
-					agentId: session.sessionId,
-					sessionFilePath: session.sessionFile,
-				};
-			} catch (error) {
-				if (forkedSessionId && this.runtimes.has(forkedSessionId)) await this.disposeRuntime(forkedSessionId, true);
-				if (forkedPath && existsSync(forkedPath)) fs.unlinkSync(forkedPath);
-				throw error;
-			}
-		});
-	}
-
-	private async withForkLock<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
-		const previous = this.forkOperationTails.get(sessionId) ?? Promise.resolve();
-		let release!: () => void;
-		const gate = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		const tail = previous.then(() => gate);
-		this.forkOperationTails.set(sessionId, tail);
-		await previous;
-		try {
-			return await task();
-		} finally {
-			release();
-			if (this.forkOperationTails.get(sessionId) === tail) this.forkOperationTails.delete(sessionId);
-		}
+		return this.sessionHistoryService.fork(sessionId, entryId, opts);
 	}
 
 	setEntryLabel(sessionId: string, entryId: string, label: string | null): void {
-		const manager = this.sessionManagerFor(sessionId);
-		if (!manager) return;
-		const leaf = manager.getLeafId();
-		manager.appendLabelChange(entryId, label?.trim() || undefined);
-		if (leaf) manager.branch(leaf);
-		else manager.resetLeaf();
-		this.emitSessionState(sessionId, "navigate");
+		this.sessionHistoryService.setEntryLabel(sessionId, entryId, label);
 	}
 
 	/**
@@ -1701,7 +978,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	 * 把决策权完全交给 Service 内部的并发 / abort / generated 守卫。
 	 */
 	private async onUserMessageEndForTitle(sessionId: string, userMsg: AgentMessage): Promise<void> {
-		const managed = this.runtimes.get(sessionId);
+		const managed = this.runtimeRegistry.get(sessionId);
 		if (!managed) return;
 		const currentName = managed.runtime.session.sessionManager.getSessionName();
 		const titleScope = this.scopeRegistry.get(sessionId);
@@ -1731,7 +1008,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 
 	async onMessageEnd(sessionId: string, message: AgentMessage): Promise<void> {
 		if (message.role === "assistant") {
-			this.trackSubSessionMessageEnd(sessionId, message);
+			this.subAgentRuntimeService.trackSubSessionMessageEnd(sessionId, message);
 			if (message.stopReason !== "aborted") {
 				const model = (message as { model?: string }).model;
 				const cost = (message as { usage?: { cost?: { total?: number } } }).usage?.cost?.total;
@@ -1755,7 +1032,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 
 	onSubSessionAgentEnd(sessionId: string): void {
 		if (this.subAgentRegistry.hasPending(sessionId)) {
-			this.finalizeSubSession(sessionId);
+			this.subAgentRuntimeService.finalizeSubSession(sessionId);
 		}
 	}
 
@@ -1766,7 +1043,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	private async refreshAfterTurn(sessionId: string): Promise<void> {
-		const projectId = this.runtimes.get(sessionId)?.projectId ?? this.findStoredSession(sessionId)?.projectId;
+		const projectId = this.runtimeRegistry.get(sessionId)?.projectId ?? this.findStoredSession(sessionId)?.projectId;
 		if (!projectId) return;
 		await this.refreshProjectSessions(projectId);
 		this.emitSessionUpdated(sessionId);
@@ -1774,82 +1051,31 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	// ISessionEventHost — public for interface compatibility
-	emitSessionState(targetSessionId?: string, reason: string = "activate"): void {
-		const sessionId = targetSessionId ?? this.activeSessionId;
-		if (!sessionId) return;
-		const managed = this.runtimes.get(sessionId);
-		const projectId = managed?.projectId ?? this.findStoredSession(sessionId)?.projectId;
-		if (projectId) this.emitSessionList(projectId);
-		if (managed) {
-			const session = managed.runtime.session;
-			this.emit({
-				type: "session:snapshot",
-				sessionId,
-				reason: reason as SessionSnapshotEnvelope["reason"],
-				leafId: session.sessionManager.getLeafId(),
-				entries: session.sessionManager.getBranch(),
-				runtime: {
-					model: session.model,
-					thinkingLevel: session.thinkingLevel,
-					isStreaming: this.isStreaming(sessionId, session.isStreaming),
-					isRetrying: session.isRetrying,
-					isCompacting: session.isCompacting,
-					retryAttempt: session.retryAttempt,
-					steering: session.getSteeringMessages(),
-					followUp: session.getFollowUpMessages(),
-					stats: session.getSessionStats(),
-					contextUsage: session.getContextUsage(),
-				},
-			});
-		}
-		this.emitSessionUpdated(sessionId);
+	emitSessionState(targetSessionId?: string, reason: SessionSnapshotEnvelope["reason"] = "activate"): void {
+		this.sessionNotifier.emitSessionState(targetSessionId ?? this.activeSessionId, reason);
 	}
 
 	/** ISessionEventHost — 每次 tool_execution_end 时检查并推送 TODO.md 进度 */
 	emitTodoUpdate(sessionId: string): void {
-		const managed = this.runtimes.get(sessionId);
-		if (!managed) return;
-		const items = parseTodoFile(managed.runtime.cwd);
-		// 始终发送事件：items 为 null/空数组时清空渲染端状态
-		this.emit({ type: "todo:update", sessionId, items: items ?? [] });
+		this.sessionNotifier.emitTodoUpdate(sessionId);
 	}
 
 	// ISessionEventHost — public for interface compatibility
 	emitSessionUpdated(sessionId: string): void {
-		const info = this.getAgentInfo(sessionId);
-		if (info) this.emit({ type: "agent:updated", agentId: info.id, agent: info });
+		this.sessionNotifier.emitSessionUpdated(sessionId);
 	}
 
 	// ISessionEventHost — 流式输出时轻量推送 contextUsage（500ms 节流）
 	emitContextUsage(sessionId: string): void {
-		const now = Date.now();
-		const last = this.contextUsageLastEmit.get(sessionId) ?? 0;
-		if (now - last < 500) return;
-		this.contextUsageLastEmit.set(sessionId, now);
-		const managed = this.runtimes.get(sessionId);
-		if (!managed) return;
-		const contextUsage = managed.runtime.session.getContextUsage() as ContextUsage;
-		this.emit({
-			type: "agent:context-usage",
-			agentId: sessionId,
-			contextUsage,
-		});
+		this.sessionNotifier.emitContextUsage(sessionId);
 	}
 
 	private emitSessionList(projectId: string): void {
-		this.emit({
-			type: "agent:list",
-			projectId,
-			agents: this.listAgentsInProject(projectId),
-		});
+		this.sessionNotifier.emitSessionList(projectId);
 	}
 
 	private emitProjectList(): void {
-		this.emit({
-			type: "project:list",
-			projects: this.listProjects(),
-			activeProjectId: this.projectService.activeId,
-		});
+		this.sessionNotifier.emitProjectList();
 	}
 
 	setApiKey(provider: string, key: string): void {
@@ -1947,38 +1173,10 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	async setPermissionMode(sessionId: string, mode: PermissionMode): Promise<void> {
-		await this.applyPermissionMode(sessionId, mode, {
+		return this.sessionPermissionOrchestrator.applyMode(sessionId, mode, {
 			internal: false,
 			updateDefault: true,
 		});
-	}
-
-	private async applyPermissionMode(
-		sessionId: string,
-		mode: PermissionMode,
-		options: { internal: boolean; updateDefault: boolean },
-	): Promise<void> {
-		const managed = await this.ensureRuntime(sessionId);
-		const previousMode = this.permissionService.getMode(sessionId);
-		if (previousMode === mode) return;
-
-		if (!options.internal) this.planService.cancelInteractions(sessionId, "Permission mode was changed manually");
-		if (mode === "plan") this.planService.capturePrePlanTools(sessionId);
-
-		this.permissionService.setMode(sessionId, mode);
-		if (mode === "plan") this.planService.restrictToolsForPlan(sessionId);
-		else if (previousMode === "plan") this.planService.restorePrePlanTools(sessionId);
-		this.permissionService.persistIfDirty(sessionId);
-		this.planService.persistToolSnapshotIfDirty(sessionId);
-
-		if (options.updateDefault) {
-			this.permissionService.setDefaultMode(mode);
-			await this.userSettings.update({ permissionMode: mode });
-		}
-
-		if (!options.internal && managed.runtime.session.isStreaming && (previousMode === "plan" || mode === "plan")) {
-			await managed.runtime.session.abort();
-		}
 	}
 
 	handlePermissionResponse(payload: PermissionRespondPayload): boolean {
@@ -1994,7 +1192,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	private persistTurnDurationIfPossible(sessionId: string): void {
-		const session = this.runtimes.get(sessionId)?.runtime.session;
+		const session = this.runtimeRegistry.get(sessionId)?.runtime.session;
 		const scope = this.scopeRegistry.get(sessionId);
 		const turnStartedAt = scope?.turnStartedAt ?? null;
 		if (scope) scope.turnStartedAt = null;
@@ -2009,16 +1207,16 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	async updateGeneralSettings(partial: Partial<UserSettings>): Promise<UserSettings> {
 		const settings = await this.userSettings.update(partial);
 		if (partial.compactionEnabled !== undefined) {
-			for (const managed of this.runtimes.values()) {
+			for (const managed of this.runtimeRegistry.values()) {
 				managed.runtime.session.setAutoCompactionEnabled(partial.compactionEnabled);
 			}
 		}
 		if (partial.permissionMode !== undefined) this.permissionService.setDefaultMode(partial.permissionMode);
 		if (partial.subagentEnabled !== undefined) {
-			this.subagentDefaultEnabled = partial.subagentEnabled;
+			this.sessionSubagentService.setDefaultEnabled(partial.subagentEnabled);
 			await Promise.all(
-				Array.from(this.runtimes.keys()).map((sessionId) =>
-					this.applySubagentEnabled(sessionId, partial.subagentEnabled as boolean),
+				Array.from(this.runtimeRegistry.keys()).map((sessionId) =>
+					this.sessionSubagentService.setEnabledForSession(sessionId, partial.subagentEnabled as boolean),
 				),
 			);
 		}
@@ -2028,13 +1226,13 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	async resetGeneralSettings(): Promise<UserSettings> {
 		const settings = await this.userSettings.reset();
 		this.permissionService.setDefaultMode(settings.permissionMode);
-		this.subagentDefaultEnabled = settings.subagentEnabled;
+		this.sessionSubagentService.setDefaultEnabled(settings.subagentEnabled);
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		return settings;
 	}
 
 	listSkillsForUI() {
-		const activeRuntime = this.activeSessionId ? this.runtimes.get(this.activeSessionId)?.runtime : undefined;
+		const activeRuntime = this.activeSessionId ? this.runtimeRegistry.get(this.activeSessionId)?.runtime : undefined;
 		const skillPaths =
 			activeRuntime?.services.settingsManager.getSkillPaths() ?? this.globalSettingsManager.getSkillPaths();
 		const loaded = activeRuntime?.services.resourceLoader.getSkills() ?? {
@@ -2043,7 +1241,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		};
 
 		const rawSkills = loaded.skills.length > 0 ? loaded.skills : discoverSkillsFromPaths(skillPaths);
-		const skillsWithCategory = (rawSkills as any[]).map((s) => ({
+		const skillsWithCategory = rawSkills.map((s) => ({
 			...s,
 			category: isBuiltinSkillPath(s) ? ("builtin" as const) : ("mine" as const),
 		}));
@@ -2056,7 +1254,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 
 	async importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }> {
 		try {
-			const activeRuntime = this.activeSessionId ? this.runtimes.get(this.activeSessionId)?.runtime : undefined;
+			const activeRuntime = this.activeSessionId
+				? this.runtimeRegistry.get(this.activeSessionId)?.runtime
+				: undefined;
 			const settingsManager = activeRuntime?.services.settingsManager ?? this.globalSettingsManager;
 			const merged = Array.from(
 				new Set(
@@ -2068,7 +1268,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			);
 			settingsManager.setSkillPaths(merged);
 			await settingsManager.flush();
-			await Promise.all(Array.from(this.runtimes.values()).map((managed) => managed.runtime.session.reload()));
+			await Promise.all(
+				Array.from(this.runtimeRegistry.values()).map((managed) => managed.runtime.session.reload()),
+			);
 			return { success: true, importedCount: merged.length };
 		} catch (error) {
 			return {
@@ -2084,22 +1286,14 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	onEvent(callback: EventCallback): () => void {
-		this.eventCallbacks.push(callback);
-		return () => {
-			const index = this.eventCallbacks.indexOf(callback);
-			if (index >= 0) this.eventCallbacks.splice(index, 1);
-		};
+		return this.eventBus.onEvent(callback);
 	}
 
 	public emit(event: MainToRendererEvent): void {
-		for (const callback of this.eventCallbacks) callback(event);
+		this.eventBus.emit(event);
 	}
 
 	private emitError(error: unknown, sessionId?: string): void {
-		this.emit({
-			type: "error",
-			agentId: sessionId ?? this.activeSessionId ?? undefined,
-			message: error instanceof Error ? error.message : String(error),
-		});
+		this.sessionNotifier.emitError(error, sessionId ?? this.activeSessionId ?? undefined);
 	}
 }

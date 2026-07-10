@@ -6,6 +6,7 @@
 // ============================================================
 
 import path from "node:path";
+import type { AgentDefinitionInput } from "@look/shared/types";
 
 export const VALID_AGENT_ID = /^[a-zA-Z0-9_-]{6,64}$/;
 export const VALID_PROVIDER = /^[a-zA-Z][a-zA-Z0-9_-]{1,63}$/;
@@ -99,4 +100,45 @@ export function guardProvider(provider: unknown): string {
 		throw new Error(`Invalid provider: ${JSON.stringify(provider)}`);
 	}
 	return provider;
+}
+
+/**
+ * 校验自定义 Provider 输入的基本结构。
+ * 详细校验由 CustomProvidersStore.add/update 内部的 assertValid 完成。
+ */
+export function guardCustomProviderInput(x: unknown, label: string): Record<string, unknown> {
+	const obj = guardObject(x, label);
+	guardString(obj.name, `${label}.name`);
+	guardString(obj.baseUrl, `${label}.baseUrl`);
+	if (!Array.isArray(obj.models)) throw new Error(`Invalid ${label}.models: expected array`);
+	return obj;
+}
+
+/**
+ * 校验 MCP Server 配置的基本结构。
+ * 详细校验由 MCPManager 内部完成。
+ */
+export function guardMcpServerConfig(x: unknown, label: string): Record<string, unknown> {
+	const obj = guardObject(x, label);
+	guardString(obj.name, `${label}.name`);
+	guardEnum(obj.type, `${label}.type`, ["stdio", "http", "sse"] as const);
+	if (obj.enabled !== undefined) guardBoolean(obj.enabled, `${label}.enabled`);
+	return obj;
+}
+
+/** 校验 Agent 定义输入（Stage 3 广场创建/编辑） */
+export function guardAgentDefinitionInput(input: unknown): AgentDefinitionInput {
+	const obj = guardObject(input, "input");
+	const name = guardString(obj.name, "input.name");
+	const description = guardString(obj.description, "input.description");
+	const systemPrompt = guardString(obj.systemPrompt, "input.systemPrompt");
+	const result: AgentDefinitionInput = { name, description, systemPrompt };
+	if (obj.title !== undefined) result.title = guardString(obj.title, "input.title");
+	if (obj.model !== undefined) result.model = guardString(obj.model, "input.model");
+	if (obj.icon !== undefined) result.icon = guardString(obj.icon, "input.icon");
+	if (obj.version !== undefined) result.version = guardString(obj.version, "input.version");
+	if (obj.author !== undefined) result.author = guardString(obj.author, "input.author");
+	if (obj.tools !== undefined) result.tools = guardStringArray(obj.tools, "input.tools");
+	if (obj.tags !== undefined) result.tags = guardStringArray(obj.tags, "input.tags");
+	return result;
 }

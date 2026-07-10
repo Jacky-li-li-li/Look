@@ -419,12 +419,14 @@ src/main/
         └── im-router.ts
 ```
 
-`SessionRuntimeManager` 保留为轻量级协调器（Facade），将具体逻辑委托给上述服务。
+`SessionRuntimeManager` 保留为兼容协调器（Facade），将具体逻辑委托给上述服务。
+
+**实施状态（2026-07）**：项目、事件、scope、子代理、模型、权限、计划等服务已完成第一轮拆分；已新增 `session-catalog.ts`、`runtime-registry.ts`、`session-event-bus.ts`、`runtime-factory.ts`、`session-history-service.ts`、`session-control-service.ts` 和 `session-notifier.ts`。会话目录索引、live runtime 初始化/互斥、事件订阅、pi runtime 创建、历史树命令、控制命令和 UI 投影均已从 façade 中移出。完整边界、测试矩阵与后续迁移计划见 [SessionRuntimeManager 拆分架构](./session-runtime-manager-architecture.md)。
 
 **验收标准**：
-- 拆分后单一文件不超过 500 行。
-- `SessionRuntimeManager` 不再直接调用 `fs` 或管理 `Map` 细节。
-- 现有 36 个测试无需改动即可通过（或同步更新）。
+- 持久化会话索引、live runtime/初始化锁、订阅 callback 三类基础设施状态已移出；剩余跨领域命令按阶段继续下沉。
+- 新的会话目录、runtime 注册、事件扇出模块均有独立单元测试；目录恢复与子代理关系有集成测试。
+- 对外 IPC/IM API 和 pi JSONL schema 保持兼容；测试可同步改用显式模块 seam，而不是依赖私有 Map。
 
 ---
 

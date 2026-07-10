@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 const runtime = read("src/main/session/runtime-manager.ts");
-const ipc = read("src/main/ipc/handlers.ts");
+const ipc = read("src/main/ipc/handlers.ts") + read("src/main/ipc/routers/permission-router.ts") + read("src/main/ipc/project-trust.ts");
 const preload = read("src/main/preload.js");
 const index = read("src/main/index.ts");
 const types = read("packages/shared/src/types.ts");
@@ -13,29 +13,38 @@ const tsconfig = read("tsconfig.main.json");
 const eventProcessor = read("src/main/session/event-processor.ts");
 const uiBatcher = read("src/main/session/ui-event-batcher.ts");
 const projectService = read("src/main/projects/project-service.ts");
+const runtimeRegistry = read("src/main/session/runtime-registry.ts");
+const runtimeFactory = read("src/main/session/runtime-factory.ts");
+const sessionHistory = read("src/main/session/session-history-service.ts");
+const sessionNotifier = read("src/main/session/session-notifier.ts");
+const sessionLifecycle = read("src/main/session/session-lifecycle-service.ts");
 
 describe("pi runtime architecture regressions", () => {
 	it("1. does not pass a tools allowlist that filters extension tools", () => {
-		expect(runtime).toContain("createAgentSessionFromServices({");
-		expect(runtime).toContain("services,");
-		expect(runtime).toContain("sessionManager,");
-		expect(runtime).toContain("sessionStartEvent,");
-		expect(runtime).not.toMatch(/\btools\s*:/);
+		expect(runtimeFactory).toContain("createAgentSessionFromServices({");
+		expect(runtimeFactory).toContain("services,");
+		expect(runtimeFactory).toContain("sessionManager,");
+		expect(runtimeFactory).toContain("sessionStartEvent,");
+		expect(runtimeFactory).not.toMatch(/\btools\s*:/);
 	});
 
 	it("2. gates project resources with pi Project Trust", () => {
 		expect(runtime).toContain("ProjectTrustStore");
 		expect(runtime).toContain("resolveProjectTrust");
-		expect(runtime).toContain("resolveProjectTrust: async () => resolveLatestProjectTrust()");
-		expect(runtime).not.toContain("resolveProjectTrust: async () => trusted");
+		expect(runtimeFactory).toContain("resolveProjectTrust: async () => resolveLatestProjectTrust()");
+		expect(runtimeFactory).not.toContain("resolveProjectTrust: async () => trusted");
 		expect(projectService).toContain("hasTrustRequiringProjectResources");
 		expect(ipc).toContain("dialog.showMessageBox");
 		expect(index).toContain("await promptForProjectTrust");
 	});
 
 	it("3. owns one independent AgentSessionRuntime per live session", () => {
-		expect(runtime).toContain("private readonly runtimes = new Map<string, ManagedRuntime>()");
-		expect(runtime).toContain("private readonly runtimeInitializations = new Map<string, Promise<ManagedRuntime>>()");
+		expect(runtime).toContain("private readonly runtimeRegistry = new RuntimeRegistry()");
+		expect(runtimeRegistry).toContain("private readonly runtimes = new Map<string, ManagedRuntime>()");
+		expect(runtimeRegistry).toContain(
+			"private readonly initializations = new Map<string, Promise<ManagedRuntime>>()",
+		);
+		expect(runtimeRegistry).toContain("getOrCreate(sessionId");
 		expect(runtime).not.toContain("private runtime: AgentSessionRuntime | null");
 		expect(existsSync(resolve(root, "src/main/agents/roles.ts"))).toBe(false);
 	});
@@ -44,7 +53,7 @@ describe("pi runtime architecture regressions", () => {
 		// UI event emission is now in SessionEventProcessor (batched via UIEventBatcher)
 		expect(uiBatcher).toContain('type: "session:ui-event"');
 		expect(eventProcessor).toContain("events: uiEvents");
-		expect(runtime).toContain("entries: session.sessionManager.getBranch()");
+		expect(sessionNotifier).toContain("entries: session.sessionManager.getBranch()");
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
 		expect(existsSync(resolve(root, "packages/shared/src/message-convert.ts"))).toBe(false);
@@ -67,17 +76,17 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("6. rebuilds history from SessionManager after tree navigation", () => {
-		expect(runtime).toContain("session.navigateTree(entryId, opts)");
-		expect(runtime).toContain("this.emitSessionState(sessionId)");
+		expect(sessionHistory).toContain("session.navigateTree(entryId, opts)");
+		expect(sessionHistory).toContain('this.host.emitSessionState(sessionId, "navigate")');
 	});
 
 	it("6b. creates parallel forks through an independent SessionManager", () => {
-		expect(runtime).toContain("SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir())");
-		expect(runtime).toContain("forkManager.createBranchedSession(entryId)");
-		expect(runtime).not.toContain("sourceSession.sessionManager.createBranchedSession");
-		expect(runtime).not.toContain("managed.runtime.fork(");
-		expect(runtime).toContain('reason: "fork"');
-		expect(runtime).toContain("previousSessionFile: sourceFile");
+		expect(sessionHistory).toContain("SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir())");
+		expect(sessionHistory).toContain("forkManager.createBranchedSession(entryId)");
+		expect(sessionHistory).not.toContain("sourceSession.sessionManager.createBranchedSession");
+		expect(sessionHistory).not.toContain("managed.runtime.fork(");
+		expect(sessionHistory).toContain('reason: "fork"');
+		expect(sessionHistory).toContain("previousSessionFile: sourceFile");
 	});
 
 	it("7. binds extensions after every runtime replacement", () => {
@@ -91,8 +100,9 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("9. persists names through pi and has no custom title LLM call", () => {
-		expect(runtime).toContain("session.setSessionName");
+		expect(runtime + sessionLifecycle).toContain("session.setSessionName");
 		expect(runtime).not.toContain("completeSimple");
+		expect(sessionLifecycle).not.toContain("completeSimple");
 	});
 
 	it("10. uses AgentSession native skill command expansion only", () => {

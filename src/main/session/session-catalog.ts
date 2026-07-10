@@ -1,0 +1,166 @@
+// ============================================================
+// SessionCatalog — persisted-session discovery and lookup index
+//
+// Owns only durable session metadata. It never initializes a pi runtime and
+// never emits UI events. This keeps sidebar recovery usable before a runtime
+// exists and avoids mixing disk discovery with runtime lifecycle state.
+// ============================================================
+
+import fs, { existsSync } from "node:fs";
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
+import path from "node:path";
+import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
+import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
+import type { ProjectInfo } from "@look/shared/types";
+import { scanSessionDirectory } from "./scan.js";
+
+export interface StoredSession extends PiSessionInfo {
+	projectId: string;
+}
+
+export interface SubsessionMetadata {
+	sessionId: string;
+	displayName?: string;
+	parentSessionId?: string;
+	agentName?: string;
+	firstMessage?: string;
+	messageCount: number;
+	created: number;
+}
+
+export const SUBAGENT_PARENT_ENTRY_TYPE = "look.subagent-parent.v1";
+
+/**
+ * Reads only the small set of JSONL fields needed to recover a sub-session.
+ * Uses streaming reads so that long-running child session files do not block
+ * the main process with large synchronous I/O.
+ */
+export async function scanSubsessionMetadata(filePath: string): Promise<SubsessionMetadata | null> {
+	let stream: ReturnType<typeof createReadStream> | undefined;
+	try {
+		let sessionId = "";
+		let displayName: string | undefined;
+		let parentSessionId: string | undefined;
+		let agentName: string | undefined;
+		let firstMessage: string | undefined;
+		let messageCount = 0;
+		let created = Date.now();
+		let hasSessionEntry = false;
+
+		stream = createReadStream(filePath, "utf-8");
+		const rl = createInterface({ input: stream, crlfDelay: Infinity });
+
+		for await (const line of rl) {
+			if (!line.trim()) continue;
+			try {
+				const entry = JSON.parse(line) as Record<string, unknown>;
+				if (entry.type === "session") {
+					sessionId = String(entry.id ?? "");
+					hasSessionEntry = true;
+					if (entry.timestamp) created = new Date(String(entry.timestamp)).getTime();
+				} else if (entry.type === "session_info") {
+					displayName = String(entry.name ?? "") || undefined;
+				} else if (entry.type === "custom" && entry.customType === SUBAGENT_PARENT_ENTRY_TYPE) {
+					const data = entry.data as { parentSessionId?: string; agentName?: string } | undefined;
+					if (data?.parentSessionId) parentSessionId = data.parentSessionId;
+					if (data?.agentName) agentName = data.agentName;
+				} else if (entry.type === "message") {
+					messageCount++;
+					if (!firstMessage) {
+						const message = entry.message as { content?: unknown; timestamp?: number } | undefined;
+						const content = message?.content;
+						if (typeof content === "string") firstMessage = content;
+						else if (Array.isArray(content) && (content[0] as { type?: string })?.type === "text") {
+							firstMessage = (content[0] as { text: string }).text;
+						}
+						if (message?.timestamp && message.timestamp < created) created = message.timestamp;
+					}
+				}
+			} catch {
+				// One malformed JSONL entry must not make its session disappear.
+			}
+		}
+		if (!hasSessionEntry || !sessionId) return null;
+		return { sessionId, displayName, parentSessionId, agentName, firstMessage, messageCount, created };
+	} catch {
+		return null;
+	} finally {
+		stream?.destroy();
+	}
+}
+
+export class SessionCatalog {
+	private readonly sessionsByProject = new Map<string, StoredSession[]>();
+	private readonly sessionsById = new Map<string, StoredSession>();
+
+	constructor(private readonly onSubsessionDiscovered: (metadata: SubsessionMetadata) => void = () => {}) {}
+
+	async refresh(project: ProjectInfo): Promise<StoredSession[]> {
+		if (!project.valid) return [];
+		const sessions = (await scanSessionDirectory(ensureWorkspaceDir(project.name), project.cwd)).map((session) => ({
+			...session,
+			projectId: project.id,
+		}));
+		const subsessionsDir = getWorkspaceSubsessionsDir(project.name);
+		if (existsSync(subsessionsDir)) {
+			let files: string[] = [];
+			try {
+				files = fs.readdirSync(subsessionsDir).filter((file) => file.endsWith(".jsonl"));
+			} catch {
+				// A deleted folder during refresh is equivalent to an empty folder.
+			}
+			for (const file of files) {
+				const filePath = path.join(subsessionsDir, file);
+				const metadata = await scanSubsessionMetadata(filePath);
+				if (!metadata) continue;
+				this.onSubsessionDiscovered(metadata);
+				if (sessions.some((session) => session.id === metadata.sessionId)) continue;
+				sessions.push({
+					id: metadata.sessionId,
+					name: metadata.displayName || metadata.firstMessage || "",
+					firstMessage: metadata.firstMessage || "",
+					messageCount: metadata.messageCount,
+					created: new Date(metadata.created),
+					path: filePath,
+					cwd: project.cwd,
+					projectId: project.id,
+					modified: new Date(metadata.created),
+					allMessagesText: "",
+				});
+			}
+		}
+		this.replace(project.id, sessions);
+		return sessions;
+	}
+
+	replace(projectId: string, sessions: StoredSession[]): void {
+		this.sessionsByProject.set(projectId, sessions);
+		this.rebuildIndex();
+	}
+
+	removeProject(projectId: string): void {
+		this.sessionsByProject.delete(projectId);
+		this.rebuildIndex();
+	}
+
+	get(sessionId: string): StoredSession | undefined {
+		return this.sessionsById.get(sessionId);
+	}
+
+	listByProject(projectId: string): readonly StoredSession[] {
+		return this.sessionsByProject.get(projectId) ?? [];
+	}
+
+	clear(): void {
+		this.sessionsByProject.clear();
+		this.sessionsById.clear();
+	}
+
+	private rebuildIndex(): void {
+		this.sessionsById.clear();
+		for (const sessions of this.sessionsByProject.values()) {
+			for (const session of sessions) this.sessionsById.set(session.id, session);
+		}
+	}
+}

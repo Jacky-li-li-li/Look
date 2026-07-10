@@ -38,7 +38,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const LOOK_DIR = path.join(os.homedir(), ".look");
+const LOOK_DIR = process.env.LOOK_HOME ?? path.join(os.homedir(), ".look");
 
 // ── Top-level paths ──
 
