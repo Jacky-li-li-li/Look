@@ -9,8 +9,8 @@ import MarkdownRender, {
 	type NodeComponentProps,
 	setCustomComponents,
 } from "markstream-react";
-import { useTheme } from "next-themes";
 import { memo, useMemo } from "react";
+import { useLookTheme } from "../../hooks/useLookTheme";
 import { closeAtxHeadings, prepareMessageContent } from "../../lib/messageMarkdown";
 import { AgentTag } from "./AgentTag";
 import { FileTag } from "./FileTag";
@@ -142,7 +142,7 @@ const STREAMING_MARKDOWN_SMOOTH_OPTIONS = {
 };
 
 const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, docs = false }: LookMarkdownProps) {
-	const { resolvedTheme } = useTheme();
+	const { tone } = useLookTheme();
 	const prepared = useMemo(() => {
 		const raw = prepareMessageContent(content);
 		// Work around a markstream-react 0.0.53 parser bug where an H1 followed
@@ -159,7 +159,7 @@ const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, 
 			smoothStreaming={isStreaming}
 			smoothStreamingOptions={STREAMING_MARKDOWN_SMOOTH_OPTIONS}
 			batchRendering={isStreaming}
-			isDark={resolvedTheme === "dark"}
+			isDark={tone === "dark"}
 			streamingComponents={streamingComponents}
 			customHtmlTags={["skill-tag", "agent-tag", "mcp-tag", "file-tag"]}
 			htmlPolicy="safe"

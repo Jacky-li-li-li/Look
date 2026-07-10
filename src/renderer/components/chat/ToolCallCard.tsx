@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { useLookTheme } from "../../hooks/useLookTheme";
 import { scheduleCollapse } from "../../lib/batchCollapse";
 import LookMarkdown from "../markdown/LookMarkdown";
 
@@ -185,7 +184,6 @@ function formatStatSuffix(
 
 function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { t } = useTranslation();
-	const { style: themeStyle } = useLookTheme();
 	// Auto open when running, auto close on completion after a short delay.
 	// manualOpen = null means "follow derived state"; true/false override it.
 	const [{ manualOpen, autoOpen }, setPanelState] = React.useState<{
@@ -275,56 +273,16 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 				>
 					<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
 					<ToolTypeIcon toolName={toolCall.toolName} status={toolCall.status} />
-					<span
-						className={cn(
-							"shrink-0 font-medium text-foreground",
-							themeStyle === "swiss" && "font-sans text-[10px] uppercase tracking-[0.08em] font-bold",
-							themeStyle === "bauhaus" && "font-display text-[11px] uppercase tracking-[0.04em]",
-							themeStyle === "ink-wash" && "font-mono text-[11px]",
-						)}
-					>
-						{toolCall.toolName}
-					</span>
+					<span className="shrink-0 font-mono text-[11px] font-medium text-foreground">{toolCall.toolName}</span>
 					<span className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground">
 						{toolSummary || argsPreview || t("tool.noArgs")}
 					</span>
 					{statSuffix && (
 						<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
 					)}
-					{themeStyle === "swiss" ? (
-						<span
-							className="ml-auto h-5 shrink-0 px-1.5 font-mono text-[9px] font-bold uppercase tracking-wider inline-flex items-center bg-foreground text-background"
-							style={{ borderRadius: 0 }}
-						>
-							{toolCall.status}
-						</span>
-					) : themeStyle === "bauhaus" ? (
-						<span className="ml-auto inline-flex items-center gap-1">
-							<span
-								className="inline-block size-2.5"
-								style={{
-									background:
-										toolCall.status === "success"
-											? "#1976d2"
-											: toolCall.status === "error"
-												? "#e2231a"
-												: toolCall.status === "running"
-													? "#fbc02d"
-													: "var(--muted-foreground)",
-									borderRadius: 0,
-								}}
-							/>
-							<span className="font-display text-[9px] uppercase tracking-[0.06em] font-bold text-foreground">
-								{toolCall.status}
-							</span>
-						</span>
-					) : (
-						<span
-							className={cn("ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider", statusBadgeColor)}
-						>
-							{toolCall.status}
-						</span>
-					)}
+					<span className={cn("ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wider", statusBadgeColor)}>
+						{toolCall.status}
+					</span>
 				</button>
 
 				{hasBody && (

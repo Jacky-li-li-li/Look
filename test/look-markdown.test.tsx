@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LookMarkdown from "../src/renderer/components/markdown/LookMarkdown";
+import { writeLookThemeToDom } from "../src/renderer/hooks/useLookTheme";
 
 beforeEach(() => {
 	vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -16,6 +17,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
+	writeLookThemeToDom("dark");
 });
 
 describe("LookMarkdown", () => {
@@ -59,5 +61,20 @@ This is **bold**.`;
 		expect(SRC).toMatch(/smoothStreaming=\{isStreaming\}/);
 		expect(SRC).toMatch(/STREAMING_MARKDOWN_SMOOTH_OPTIONS/);
 		expect(SRC).not.toMatch(/smoothStreaming=\{false\}/);
+	});
+
+	it("uses the document tone for Markstream's dark rendering mode", async () => {
+		writeLookThemeToDom("dark");
+		const { container } = render(<LookMarkdown content="```ts\nconst visible = true;\n```" />);
+		await waitFor(() => expect(container.querySelector(".markstream-react.dark")).not.toBeNull());
+
+		writeLookThemeToDom("light");
+		await waitFor(() => expect(container.querySelector(".markstream-react.dark")).toBeNull());
+	});
+
+	it("does not read Markdown appearance from next-themes", () => {
+		expect(SRC).toMatch(/const \{ tone \} = useLookTheme\(\)/);
+		expect(SRC).toMatch(/isDark=\{tone === "dark"\}/);
+		expect(SRC).not.toMatch(/next-themes/);
 	});
 });

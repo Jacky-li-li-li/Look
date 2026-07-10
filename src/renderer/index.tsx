@@ -1,7 +1,6 @@
 import { Toaster } from "@shared/components/ui/sonner";
 import { TooltipProvider } from "@shared/components/ui/tooltip";
 import { Provider } from "jotai";
-import { ThemeProvider } from "next-themes";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
@@ -11,8 +10,8 @@ import "./mockApi";
 import App from "./App";
 import "./App.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { useLookTheme } from "./hooks/useLookTheme";
 import i18n from "./i18n";
-import { DEFAULT_THEME } from "./lib/look-theme";
 import { appStore, initAppData, initIpcHandlers } from "./store/ipcHandler";
 
 if (import.meta.env.DEV) {
@@ -143,25 +142,22 @@ if (api) {
 	initAppData(api);
 }
 
+function ThemedToaster() {
+	const { tone } = useLookTheme();
+	return <Toaster theme={tone} />;
+}
+
 const root = createRoot(document.getElementById("root")!);
 root.render(
 	<React.StrictMode>
 		<I18nextProvider i18n={i18n}>
 			<TooltipProvider>
-				<ThemeProvider
-					attribute="data-theme"
-					defaultTheme={DEFAULT_THEME.tone}
-					themes={["light", "dark"]}
-					enableSystem={false}
-					disableTransitionOnChange
-				>
-					<Provider store={appStore}>
-						<ErrorBoundary>
-							<App />
-						</ErrorBoundary>
-						<Toaster />
-					</Provider>
-				</ThemeProvider>
+				<Provider store={appStore}>
+					<ErrorBoundary>
+						<App />
+					</ErrorBoundary>
+					<ThemedToaster />
+				</Provider>
 			</TooltipProvider>
 		</I18nextProvider>
 	</React.StrictMode>,

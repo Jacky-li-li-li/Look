@@ -656,7 +656,6 @@ export type RendererToMainEvent =
 				lastActiveProjectId: string;
 				openProjectIds: string[];
 				openedSessionIds: string[];
-				themeStyle: "ink-wash" | "swiss" | "bauhaus";
 				themeTone: "light" | "dark";
 				subagentEnabled: boolean;
 				enabledAgentDefinitions: string[] | null;

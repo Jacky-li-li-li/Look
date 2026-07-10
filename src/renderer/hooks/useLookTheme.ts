@@ -1,95 +1,69 @@
 // ============================================================
-// useLookTheme — global theme state synced from <html> class
-//
-// Reads `<html class="theme-{style} tone-{tone}">`, exposes
-// `{ style, tone, setTheme }`. setTheme() updates the DOM
-// class optimistically, then persists via `setGeneralSettings`.
-// A MutationObserver keeps state in sync when App.tsx writes
-// the initial class on boot.
+// useLookTheme — global light / dark state synced from <html>
 // ============================================================
 
 import { useCallback, useSyncExternalStore } from "react";
-import {
-	ALL_STYLES,
-	DEFAULT_THEME,
-	isLookStyle,
-	isLookTone,
-	type LookStyle,
-	type LookTheme,
-	type LookTone,
-} from "../lib/look-theme";
+import { DEFAULT_THEME, isLookTone, type LookTone } from "../lib/look-theme";
 
 const api = window.look;
 
-let cachedTheme: LookTheme | null = null;
+let cachedTone: LookTone | null = null;
 
-/** Read theme from current <html> class. Returns a stable reference while the values stay the same. */
-function getSnapshot(): LookTheme {
+function getSnapshot(): LookTone {
 	const next = readLookThemeFromDom();
-	if (cachedTheme && cachedTheme.style === next.style && cachedTheme.tone === next.tone) {
-		return cachedTheme;
-	}
-	cachedTheme = next;
+	if (cachedTone === next) return cachedTone;
+	cachedTone = next;
 	return next;
 }
 
-/** Read theme from current <html> class. */
-export function readLookThemeFromDom(): LookTheme {
+/** Read the active tone from the document root. */
+export function readLookThemeFromDom(): LookTone {
 	if (typeof document === "undefined") return DEFAULT_THEME;
-	const cls = document.documentElement.className;
-	const styleToken = ALL_STYLES.find((s) => cls.includes(`theme-${s}`));
-	const style: LookStyle = styleToken ?? "ink-wash";
-	const tone: LookTone = cls.includes("tone-dark") ? "dark" : "light";
-	return { style, tone };
+	return document.documentElement.classList.contains("tone-light") ? "light" : "dark";
 }
 
-/** Write theme to <html> class (replaces existing theme-* and tone-*). */
-export function writeLookThemeToDom(theme: LookTheme): void {
+/** Write the active tone and remove legacy style classes. */
+export function writeLookThemeToDom(tone: LookTone): void {
 	if (typeof document === "undefined") return;
 	const html = document.documentElement;
-	const toRemove: string[] = [];
-	for (const s of ALL_STYLES) toRemove.push(`theme-${s}`);
-	toRemove.push("tone-light", "tone-dark");
-	html.classList.remove(...toRemove);
-	html.classList.add(`theme-${theme.style}`, `tone-${theme.tone}`);
+	for (const className of [...html.classList]) {
+		if (className.startsWith("theme-")) html.classList.remove(className);
+	}
+	html.classList.remove("tone-light", "tone-dark");
+	html.classList.add(`tone-${tone}`);
 }
 
 /**
- * Read the boot-time theme from a settings object returned by
- * `getGeneralSettings()`. Falls back to defaults for missing
- * or malformed values.
+ * Read the boot-time tone from general settings. Legacy `themeStyle` is
+ * intentionally ignored so existing users keep their light/dark preference.
  */
-export function themeFromSettings(settings: unknown): LookTheme {
+export function themeFromSettings(settings: unknown): LookTone {
 	if (!settings || typeof settings !== "object") return DEFAULT_THEME;
-	const s = (settings as Record<string, unknown>).themeStyle;
-	const t = (settings as Record<string, unknown>).themeTone;
-	return {
-		style: isLookStyle(s) ? s : DEFAULT_THEME.style,
-		tone: isLookTone(t) ? t : DEFAULT_THEME.tone,
-	};
+	const tone = (settings as Record<string, unknown>).themeTone;
+	return isLookTone(tone) ? tone : DEFAULT_THEME;
 }
 
-export interface UseLookThemeResult extends LookTheme {
-	setTheme: (style: LookStyle, tone: LookTone) => void;
+export interface UseLookThemeResult {
+	tone: LookTone;
+	setTheme: (tone: LookTone) => void;
 }
 
 export function useLookTheme(): UseLookThemeResult {
-	const theme = useSyncExternalStore(
+	const tone = useSyncExternalStore(
 		(callback) => {
 			if (typeof document === "undefined") return () => {};
-			const obs = new MutationObserver(callback);
-			obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-			return () => obs.disconnect();
+			const observer = new MutationObserver(callback);
+			observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+			return () => observer.disconnect();
 		},
 		getSnapshot,
 		() => DEFAULT_THEME,
 	);
 
-	const setTheme = useCallback((style: LookStyle, tone: LookTone) => {
-		writeLookThemeToDom({ style, tone });
-		// Persist via IPC; failures are non-fatal — the DOM update already happened.
-		api?.setGeneralSettings?.({ themeStyle: style, themeTone: tone } as Record<string, unknown>).catch(() => {});
+	const setTheme = useCallback((nextTone: LookTone) => {
+		writeLookThemeToDom(nextTone);
+		api?.setGeneralSettings?.({ themeTone: nextTone } as Record<string, unknown>).catch(() => {});
 	}, []);
 
-	return { style: theme.style, tone: theme.tone, setTheme };
+	return { tone, setTheme };
 }

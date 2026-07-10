@@ -27,7 +27,6 @@ import fs from "fs";
 import path from "path";
 
 export type UILanguage = "en" | "zh" | "ja";
-export type LookStyle = "ink-wash" | "swiss" | "bauhaus";
 export type LookTone = "light" | "dark";
 
 export interface UserSettings {
@@ -46,8 +45,6 @@ export interface UserSettings {
 	openProjectIds: string[];
 	/** Session IDs opened as sheets in the top bar. */
 	openedSessionIds: string[];
-	/** Active visual style (ink-wash / swiss / bauhaus). */
-	themeStyle: LookStyle;
 	/** Active tone variant (light / dark). */
 	themeTone: LookTone;
 	/**
@@ -75,7 +72,6 @@ const DEFAULTS: UserSettings = {
 	lastActiveProjectId: "",
 	openProjectIds: [],
 	openedSessionIds: [],
-	themeStyle: "ink-wash",
 	themeTone: "dark",
 	autoTitleModel: null,
 	subagentEnabled: true,
@@ -102,8 +98,6 @@ interface UiSettings {
 	openProjectIds: string[];
 	/** Session IDs opened as sheets in the top bar. */
 	openedSessionIds: string[];
-	/** Active visual style (ink-wash / swiss / bauhaus). */
-	themeStyle: LookStyle;
 	/** Active tone variant (light / dark). */
 	themeTone: LookTone;
 	/** Model used to auto-generate the first session title. See UserSettings.autoTitleModel. */
@@ -125,7 +119,6 @@ const UI_DEFAULTS: UiSettings = {
 	lastActiveProjectId: "",
 	openProjectIds: [],
 	openedSessionIds: [],
-	themeStyle: "ink-wash",
 	themeTone: "dark",
 	autoTitleModel: null,
 	subagentEnabled: true,
@@ -155,7 +148,9 @@ export class UserSettingsStore {
 	constructor(settingsManager: SettingsManagerLike, uiSettingsPath: string) {
 		this.settingsManager = settingsManager;
 		this.uiSettingsPath = uiSettingsPath;
-		this.ui = this.readUi();
+		const { settings, migrated } = this.readUi();
+		this.ui = settings;
+		if (migrated) this.writeUi();
 	}
 
 	// ----- read -----
@@ -185,24 +180,33 @@ export class UserSettingsStore {
 		return `${provider}/${modelId}`;
 	}
 
-	private readUi(): UiSettings {
+	private readUi(): { settings: UiSettings; migrated: boolean } {
 		try {
 			if (fs.existsSync(this.uiSettingsPath)) {
 				const raw = fs.readFileSync(this.uiSettingsPath, "utf-8");
 				const parsed = JSON.parse(raw);
+				let migrated = false;
 				if (!parsed.lastActiveSessionId && parsed.lastActiveAgentId) {
 					parsed.lastActiveSessionId = parsed.lastActiveAgentId;
 				}
 				if (!Array.isArray(parsed.openProjectIds)) parsed.openProjectIds = [];
 				if (!Array.isArray(parsed.openedSessionIds)) parsed.openedSessionIds = [];
+				if ("themeStyle" in parsed) {
+					delete parsed.themeStyle;
+					migrated = true;
+				}
+				if (parsed.themeTone !== "light" && parsed.themeTone !== "dark") {
+					parsed.themeTone = UI_DEFAULTS.themeTone;
+					migrated = true;
+				}
 				// Merge with defaults so newly-added fields get sane values
 				// when loading an older file.
-				return { ...UI_DEFAULTS, ...parsed };
+				return { settings: { ...UI_DEFAULTS, ...parsed }, migrated };
 			}
 		} catch (err) {
 			console.warn("[Look] Failed to load ui-settings.json, using defaults:", err);
 		}
-		return { ...UI_DEFAULTS };
+		return { settings: { ...UI_DEFAULTS }, migrated: false };
 	}
 
 	// ----- write -----
@@ -237,7 +241,6 @@ export class UserSettingsStore {
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
 		if (partial.openProjectIds !== undefined) uiPartial.openProjectIds = [...partial.openProjectIds];
 		if (partial.openedSessionIds !== undefined) uiPartial.openedSessionIds = [...partial.openedSessionIds];
-		if (partial.themeStyle !== undefined) uiPartial.themeStyle = partial.themeStyle;
 		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
 		if (partial.autoTitleModel !== undefined) uiPartial.autoTitleModel = partial.autoTitleModel;
 		if (partial.subagentEnabled !== undefined) uiPartial.subagentEnabled = partial.subagentEnabled;

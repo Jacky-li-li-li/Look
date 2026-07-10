@@ -2,8 +2,8 @@
 // Settings router — API keys, custom providers, general settings, prompts
 // ============================================================
 
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
 import { toProviderConfig } from "../../settings/custom-providers.js";
 import {
@@ -12,7 +12,6 @@ import {
 	guardEnum,
 	guardNullableString,
 	guardObject,
-	guardOptionalString,
 	guardProvider,
 	guardString,
 	guardStringArray,
@@ -166,9 +165,6 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		}
 		if ("openedSessionIds" in settings) {
 			guardStringArray(settings.openedSessionIds, "settings.openedSessionIds");
-		}
-		if ("themeStyle" in settings) {
-			guardEnum(settings.themeStyle, "settings.themeStyle", ["ink-wash", "swiss", "bauhaus"] as const);
 		}
 		if ("themeTone" in settings) {
 			guardEnum(settings.themeTone, "settings.themeTone", ["light", "dark"] as const);

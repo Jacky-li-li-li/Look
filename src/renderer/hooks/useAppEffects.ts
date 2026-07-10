@@ -48,8 +48,7 @@ export function useAppEffects() {
 		}
 		api.getGeneralSettings()
 			.then((r: any) => {
-				const t = themeFromSettings(r?.settings ?? {});
-				writeLookThemeToDom(t);
+				writeLookThemeToDom(themeFromSettings(r?.settings ?? {}));
 			})
 			.catch(() => {
 				writeLookThemeToDom(DEFAULT_THEME);

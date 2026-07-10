@@ -21,9 +21,7 @@ import type { LookUiToolExecState } from "@shared/types";
 import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { useLookTheme } from "../../hooks/useLookTheme";
 import { scheduleCollapse } from "../../lib/batchCollapse";
-import type { LookStyle } from "../../lib/look-theme";
 import { hashKey } from "../../lib/stableKey";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
@@ -110,7 +108,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	isStreaming,
 }: CollapsibleExecutionGroupProps) {
 	const { t } = useTranslation();
-	const { style: themeStyle } = useLookTheme();
 
 	const { kind, thinkingCount, toolCount } = React.useMemo(() => classify(blocks), [blocks]);
 
@@ -211,7 +208,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 			<BadgeTrigger
 				summary={summary}
 				kind={kind}
-				themeStyle={themeStyle}
 				isOpen={isOpen}
 				disabled={liveOpen}
 				onClick={handleBadgeClick}
@@ -315,70 +311,19 @@ function renderBlock(
 interface BadgeTriggerProps {
 	summary: string;
 	kind: GroupKind;
-	themeStyle: LookStyle;
 	isOpen: boolean;
 	disabled?: boolean;
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
 
-function BadgeTrigger({ summary, kind, themeStyle, isOpen, disabled, onClick, onKeyDown }: BadgeTriggerProps) {
+function BadgeTrigger({ summary, kind, isOpen, disabled, onClick, onKeyDown }: BadgeTriggerProps) {
 	const Icon = kind === "thinking" ? Brain : Wrench;
 	// Chevron rotates 90° when expanded so the same row visually signals "click to collapse".
 	const chevron = (
 		<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", isOpen && "rotate-90")} />
 	);
 
-	if (themeStyle === "swiss") {
-		return (
-			<button
-				type="button"
-				onClick={onClick}
-				onKeyDown={onKeyDown}
-				aria-expanded={isOpen}
-				aria-disabled={disabled || undefined}
-				className={cn(
-					"group inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-opacity",
-					disabled && "cursor-default",
-					isOpen
-						? "bg-background text-foreground ring-1 ring-foreground"
-						: "bg-foreground text-background hover:opacity-80",
-				)}
-				style={{ borderRadius: 0 }}
-			>
-				<Icon className="size-3" />
-				<span className="font-sans">{summary}</span>
-				{chevron}
-			</button>
-		);
-	}
-
-	if (themeStyle === "bauhaus") {
-		return (
-			<button
-				type="button"
-				onClick={onClick}
-				onKeyDown={onKeyDown}
-				aria-expanded={isOpen}
-				aria-disabled={disabled || undefined}
-				className={cn(
-					"inline-flex items-center gap-1.5 border-2 border-foreground px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] transition-colors",
-					disabled && "cursor-default",
-					isOpen
-						? "bg-foreground text-background"
-						: "bg-background text-foreground hover:bg-foreground hover:text-background",
-				)}
-				style={{ borderRadius: 0 }}
-			>
-				<span className="inline-block size-2.5" style={{ background: "#fbc02d" }} />
-				<Icon className="size-3" />
-				<span className="font-display">{summary}</span>
-				{chevron}
-			</button>
-		);
-	}
-
-	// ink-wash (default)
 	return (
 		<button
 			type="button"
