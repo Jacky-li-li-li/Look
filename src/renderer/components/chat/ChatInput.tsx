@@ -136,7 +136,7 @@ const ChatInput = function ChatInput({
 			setInput("");
 			setPendingImages([]);
 		}
-	}, [onSend, pendingImages]);
+	}, [onSend, pendingImages, setInput]);
 
 	const handleAbort = useCallback(() => {
 		onAbort?.();

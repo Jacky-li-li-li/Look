@@ -9,6 +9,7 @@ import { Input } from "@shared/components/ui/input";
 import { useAtom } from "jotai";
 import { FolderOpen, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { agentSkillsAtom, agentSkillsLoadingAtom, skillSourceTabAtom } from "../../store/agentDefinitionsAtoms";
 import { enabledSkillsAtom } from "../../store/atoms";
@@ -16,6 +17,7 @@ import SkillCard from "./SkillCard";
 import { useToggleEnabled } from "./useToggleEnabled";
 
 export default function SkillsPanel() {
+	const { t } = useTranslation();
 	const [skills, setSkills] = useAtom(agentSkillsAtom);
 	const [loading, setLoading] = useAtom(agentSkillsLoadingAtom);
 	const [sourceTab, setSourceTab] = useAtom(skillSourceTabAtom);
@@ -28,7 +30,7 @@ export default function SkillsPanel() {
 		toggle,
 		setEnabledNames: loadEnabled,
 	} = useToggleEnabled({
-		getAllNames: useCallback(() => skills.map((s: any) => s.name), [skills]),
+		getAllNames: useCallback(() => skills.map((s) => s.name), [skills]),
 		setEnabled: useCallback(async (name: string, enabled: boolean) => window.look.setSkillEnabled(name, enabled), []),
 		// 同步启用集合到全局 atom,供输入框 / 弹窗等跨组件读取
 		onChange: useCallback((names: string[] | null) => setEnabledSkills(names), [setEnabledSkills]),
@@ -41,14 +43,14 @@ export default function SkillsPanel() {
 			if (result?.success && Array.isArray(result.skills)) {
 				setSkills(result.skills);
 			} else {
-				toast.error(result?.error ?? "无法加载 Skill 列表");
+				toast.error(result?.error ?? t("marketplace.loadSkillsFailed"));
 			}
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "加载 Skill 列表失败");
+			toast.error(error instanceof Error ? error.message : t("marketplace.loadSkillsFailed"));
 		} finally {
 			setLoading(false);
 		}
-	}, [setSkills, setLoading]);
+	}, [setSkills, setLoading, t]);
 
 	useEffect(() => {
 		loadSkills();
@@ -62,7 +64,7 @@ export default function SkillsPanel() {
 
 		window.look.detectCommonSkillPaths().then((detected) => {
 			if (!detected?.success || !detected.detected) return;
-			const paths = detected.detected.flatMap((d: any) => (d.exists && d.skillCount > 0 ? [d.path] : []));
+			const paths = detected.detected.flatMap((d) => (d.exists && d.skillCount > 0 ? [d.path] : []));
 			if (paths.length > 0) {
 				window.look.importSkillPaths(paths).then((result) => {
 					if (result?.success && result.importedCount > 0) {
@@ -76,15 +78,14 @@ export default function SkillsPanel() {
 	const filteredSkills = useMemo(() => {
 		let list = skills;
 		if (sourceTab === "builtin") {
-			list = list.filter((s: any) => s.category === "builtin");
+			list = list.filter((s) => s.category === "builtin");
 		} else {
-			list = list.filter((s: any) => s.category !== "builtin");
+			list = list.filter((s) => s.category !== "builtin");
 		}
 		const term = searchText.trim().toLowerCase();
 		if (term) {
 			list = list.filter(
-				(s: any) =>
-					(s.name ?? "").toLowerCase().includes(term) || (s.description ?? "").toLowerCase().includes(term),
+				(s) => (s.name ?? "").toLowerCase().includes(term) || (s.description ?? "").toLowerCase().includes(term),
 			);
 		}
 		return list;
@@ -98,7 +99,7 @@ export default function SkillsPanel() {
 				<Input
 					value={searchText}
 					onChange={(e) => setSearchText(e.target.value)}
-					placeholder="搜索 Skill 名称、描述..."
+					placeholder={t("marketplace.searchSkills")}
 					className="h-7 pl-7 pr-7 text-xs"
 				/>
 				{searchText && (
@@ -124,7 +125,7 @@ export default function SkillsPanel() {
 					}`}
 				>
 					<Sparkles className="size-3" />
-					内置
+					{t("marketplace.builtin")}
 				</button>
 				<button
 					type="button"
@@ -136,7 +137,7 @@ export default function SkillsPanel() {
 					}`}
 				>
 					<FolderOpen className="size-3" />
-					我的
+					{t("marketplace.mine")}
 				</button>
 			</div>
 
@@ -145,30 +146,30 @@ export default function SkillsPanel() {
 				{loading ? (
 					<div className="flex flex-col items-center justify-center py-12 gap-2">
 						<Loader2 className="size-4 animate-spin text-muted-foreground" />
-						<p className="text-xs text-muted-foreground">加载中...</p>
+						<p className="text-xs text-muted-foreground">{t("marketplace.loading")}</p>
 					</div>
 				) : filteredSkills.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
 						{searchText ? (
 							<>
 								<Search className="size-5 text-muted-foreground/40" />
-								<p>没有匹配的 Skill</p>
+								<p>{t("marketplace.noSkillMatch")}</p>
 							</>
 						) : sourceTab === "builtin" ? (
 							<>
 								<Sparkles className="size-5 text-muted-foreground/40" />
-								<p>暂无内置 Skill</p>
+								<p>{t("marketplace.noBuiltinSkills")}</p>
 							</>
 						) : (
 							<>
 								<FolderOpen className="size-5 text-muted-foreground/40" />
-								<p>暂无自定义 Skill</p>
+								<p>{t("marketplace.noCustomSkills")}</p>
 							</>
 						)}
 					</div>
 				) : (
 					<div className="grid grid-cols-2 gap-2">
-						{filteredSkills.map((skill: any) => (
+						{filteredSkills.map((skill) => (
 							<SkillCard
 								key={skill.name}
 								skill={skill}

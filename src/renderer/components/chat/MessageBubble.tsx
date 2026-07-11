@@ -14,12 +14,12 @@ import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { hashKey } from "../../lib/stableKey";
 import { userProfileAtom } from "../../store/authAtoms";
-import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
+import UserAvatar from "../UserAvatar";
+import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
-import UserAvatar from "../UserAvatar";
 
 interface MessageBubbleProps {
 	message: AgentMessage;

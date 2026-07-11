@@ -12,6 +12,7 @@ import type { AgentDefinitionInfo } from "@shared/types";
 import { useAtom } from "jotai";
 import { Bot, Plus, Search, User, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
 	agentDefinitionsAtom,
@@ -26,6 +27,7 @@ import AgentEditor from "./AgentEditor";
 import { useToggleEnabled } from "./useToggleEnabled";
 
 export default function SubAgentPanel() {
+	const { t } = useTranslation();
 	const [agents, setAgents] = useAtom(agentDefinitionsAtom);
 	const [editorTarget, setEditorTarget] = useAtom(agentEditorTargetAtom);
 	const [searchText, setSearchText] = useAtom(agentSearchTextAtom);
@@ -56,14 +58,14 @@ export default function SubAgentPanel() {
 			if (result?.success && Array.isArray(result.agents)) {
 				setAgents(result.agents);
 			} else {
-				toast.error(result?.error ?? "无法加载 SubAgent 列表");
+				toast.error(result?.error ?? t("marketplace.loadAgentsFailed"));
 			}
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "加载 SubAgent 列表失败");
+			toast.error(error instanceof Error ? error.message : t("marketplace.loadAgentsFailed"));
 		} finally {
 			setLoading(false);
 		}
-	}, [setAgents, setLoading]);
+	}, [setAgents, setLoading, t]);
 
 	useEffect(() => {
 		loadAgents();
@@ -120,7 +122,7 @@ export default function SubAgentPanel() {
 					<Input
 						value={searchText}
 						onChange={(e) => setSearchText(e.target.value)}
-						placeholder="搜索 Agent 名称、描述..."
+						placeholder={t("marketplace.searchAgents")}
 						className="h-7 pl-7 pr-7 text-xs"
 					/>
 					{searchText && (
@@ -141,7 +143,7 @@ export default function SubAgentPanel() {
 						onClick={() => setEditorTarget("create")}
 					>
 						<Plus className="size-3.5" />
-						新建
+						{t("marketplace.create")}
 					</Button>
 				)}
 			</div>
@@ -158,7 +160,7 @@ export default function SubAgentPanel() {
 					}`}
 				>
 					<Bot className="size-3" />
-					内置
+					{t("marketplace.builtin")}
 				</button>
 				<button
 					type="button"
@@ -170,36 +172,36 @@ export default function SubAgentPanel() {
 					}`}
 				>
 					<User className="size-3" />
-					我的
+					{t("marketplace.mine")}
 				</button>
 			</div>
 
 			{/* Agent 卡片网格 */}
 			<div className="flex-1 overflow-y-auto">
 				{loading ? (
-					<p className="py-12 text-center text-xs text-muted-foreground">加载中...</p>
+					<p className="py-12 text-center text-xs text-muted-foreground">{t("marketplace.loading")}</p>
 				) : filteredAgents.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
 						{searchText ? (
 							<>
-								<p>没有匹配的 Agent</p>
+								<p>{t("marketplace.noAgentMatch")}</p>
 								<button
 									type="button"
 									className="text-[10px] underline hover:text-foreground"
 									onClick={() => setSearchText("")}
 								>
-									清除搜索
+									{t("marketplace.clearSearch")}
 								</button>
 							</>
 						) : sourceTab === "builtin" ? (
 							<>
-								<p>暂无内置 Agent</p>
-								<p className="text-[10px]">请重启应用以加载内置 Agent</p>
+								<p>{t("marketplace.noBuiltinAgents")}</p>
+								<p className="text-[10px]">{t("marketplace.restartForBuiltins")}</p>
 							</>
 						) : (
 							<>
-								<p>还没有自定义 Agent</p>
-								<p className="text-[10px]">点击「新建」或对 Look 说「帮我创建一个 XX Agent」</p>
+								<p>{t("marketplace.noCustomAgents")}</p>
+								<p className="text-[10px]">{t("marketplace.createAgentHint")}</p>
 							</>
 						)}
 					</div>
@@ -215,13 +217,13 @@ export default function SubAgentPanel() {
 								onToggle={(enabled) => toggle(agent.name, enabled)}
 								onEdit={(a) => setEditorTarget(a.name)}
 								onDelete={(a) => {
-									if (window.confirm(`确定删除 Agent "${a.title || a.name}"？`)) {
+									if (window.confirm(t("marketplace.deleteAgentConfirm", { name: a.title || a.name }))) {
 										window.look.deleteAgentDefinition(a.name).then((r) => {
 											if (r?.success) {
 												setAgents((prev) => prev.filter((x) => x.name !== a.name));
-												toast.success("已删除");
+												toast.success(t("marketplace.deleted"));
 											} else {
-												toast.error(r?.error ?? "删除失败");
+												toast.error(r?.error ?? t("marketplace.deleteFailed"));
 											}
 										});
 									}

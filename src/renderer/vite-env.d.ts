@@ -10,7 +10,9 @@ import type {
 } from "@shared/types";
 import type { ProviderSettingsData } from "./store/atoms";
 
-type IpcResult<T extends Record<string, unknown> = {}> = ({ success: true } & T) | { success: false; error: string };
+type IpcResult<T extends Record<string, unknown> = Record<string, never>> =
+	| ({ success: true } & T)
+	| { success: false; error: string };
 
 /**
  * The Look IPC surface injected by preload.js.
@@ -65,7 +67,7 @@ interface LookAPI {
 	 *  path (e.g. dropped directories in HTML5 dataTransfer). */
 	getPathForFile(file: File): string | null;
 	openProjectFolder(projectId?: string): Promise<{ success: boolean; path?: string; error?: string }>;
-	listProjects(): Promise<IpcResult<{ projects: ProjectInfo[] }>>;
+	listProjects(): Promise<IpcResult<{ projects: ProjectInfo[]; activeProjectId?: string | null }>>;
 	createProject(cwd: string, name?: string): Promise<IpcResult<{ project: ProjectInfo; isDuplicate: boolean }>>;
 	renameProject(projectId: string, name: string): Promise<IpcResult>;
 	switchProject(projectId: string): Promise<IpcResult>;
@@ -222,8 +224,11 @@ interface LookAPI {
 		receiveId: string;
 		text: string;
 	}): Promise<{ success: boolean; error?: string }>;
-	testImConnection(appId: string): Promise<{ success: boolean; message: string }>;
-	testImConnectionDirect(appId: string, appSecret: string): Promise<{ success: boolean; message: string }>;
+	testImConnection(appId: string): Promise<{ success: boolean; message?: string; error?: string }>;
+	testImConnectionDirect(
+		appId: string,
+		appSecret: string,
+	): Promise<{ success: boolean; message?: string; error?: string }>;
 	updateImChannel(appId: string, updates: { name?: string }): Promise<{ success: boolean; error?: string }>;
 	// ---- MCP tools ----
 	listAllMcpTools(): Promise<{
@@ -263,6 +268,7 @@ interface SkillEntry {
 	baseDir: string;
 	source: "user" | "project" | "path";
 	disableModelInvocation: boolean;
+	category: "builtin" | "mine";
 }
 
 interface SkillDiagnostic {
@@ -273,8 +279,10 @@ interface SkillDiagnostic {
 
 interface GeneralSettings {
 	language: "en" | "zh" | "ja";
+	themeTone: "light" | "dark";
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
+	autoTitleModel: string | null;
 	permissionMode: "always" | "ask" | "plan";
 	/** Most recent model the user picked in the bottom-bar ModelSelector.
 	 *  Used by quick-create to seed new chat agents with the user's

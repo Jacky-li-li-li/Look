@@ -12,6 +12,7 @@
 import { cn } from "@shared/lib/utils";
 import { Brain, ChevronRight } from "lucide-react";
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 interface ThinkingPanelProps {
 	thinking: string;
@@ -20,6 +21,7 @@ interface ThinkingPanelProps {
 }
 
 const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming, autoCollapse }: ThinkingPanelProps) {
+	const { t } = useTranslation();
 	// Derive open state from streaming, but allow manual toggle to override.
 	// null means "follow isStreaming"; boolean means user has taken control.
 	const [manualOpen, setManualOpen] = React.useState<boolean | null>(null);
@@ -37,7 +39,7 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 			<div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-muted-foreground cursor-default">
 				<ChevronRight className="size-3 shrink-0" />
 				<Brain className="size-3.5 shrink-0 text-blue-400 dark:text-blue-300" />
-				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
+				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">{t("chat.reasoning")}</span>
 				<span className="inline-block w-2 h-4 bg-blue-400 animate-pulse rounded-xs" />
 			</div>
 		);
@@ -47,14 +49,14 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 		<div>
 			<button
 				type="button"
-				className="flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+				className="flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:text-foreground transition-colors"
 				onClick={handleToggle}
 			>
 				<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
 				<Brain className="size-3.5 shrink-0 text-blue-400 dark:text-blue-300" />
-				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">Reasoning</span>
+				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">{t("chat.reasoning")}</span>
 				<span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-					{thinking.length.toLocaleString()} chars
+					{t("chat.characters", { count: thinking.length.toLocaleString() })}
 				</span>
 			</button>
 			<div

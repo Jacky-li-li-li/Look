@@ -25,7 +25,12 @@ const api = window.look;
  *  session's model) so Radix Select always has a controlled value. */
 const USE_SESSION_MODEL = "__session__";
 
-function persistSettings(partial: Record<string, any>) {
+function persistSettings(partial: {
+	language?: "en" | "zh" | "ja";
+	autoCollapse?: boolean;
+	compactionEnabled?: boolean;
+	autoTitleModel?: string | null;
+}) {
 	if (!api) return;
 	api.setGeneralSettings(partial).catch(() => {});
 }
@@ -76,26 +81,27 @@ export default function GeneralTab() {
 	useEffect(() => {
 		if (!api) return;
 		api.getGeneralSettings()
-			.then((r: any) => {
+			.then((r) => {
 				if (r?.success && r.settings) {
+					const settings = r.settings;
 					setState((prev) => ({
 						...prev,
-						...(r.settings.language ? { language: r.settings.language } : {}),
-						...(r.settings.autoCollapse !== undefined ? { autoCollapse: r.settings.autoCollapse } : {}),
-						...(r.settings.compactionEnabled !== undefined
-							? { compactionEnabled: r.settings.compactionEnabled }
+						...(settings.language ? { language: settings.language } : {}),
+						...(settings.autoCollapse !== undefined ? { autoCollapse: settings.autoCollapse } : {}),
+						...(settings.compactionEnabled !== undefined
+							? { compactionEnabled: settings.compactionEnabled }
 							: {}),
-						...("autoTitleModel" in r.settings ? { autoTitleModel: r.settings.autoTitleModel } : {}),
+						...("autoTitleModel" in settings ? { autoTitleModel: settings.autoTitleModel } : {}),
 					}));
 				}
 			})
 			.catch(() => {});
 		api.getModels()
-			.then((r: any) => {
-				if (r?.models) {
+			.then((r) => {
+				if (r?.success && r.models) {
 					setState((prev) => ({
 						...prev,
-						availableModels: r.models.map((m: any) => ({
+						availableModels: r.models.map((m) => ({
 							provider: m.provider,
 							id: m.id,
 							name: m.name ?? m.id,
@@ -123,9 +129,10 @@ export default function GeneralTab() {
 						<Select
 							value={language}
 							onValueChange={(v) => {
-								setState((prev) => ({ ...prev, language: v }));
-								i18n.changeLanguage(v);
-								persistSettings({ language: v });
+								const nextLanguage = v as "en" | "zh" | "ja";
+								setState((prev) => ({ ...prev, language: nextLanguage }));
+								i18n.changeLanguage(nextLanguage);
+								persistSettings({ language: nextLanguage });
 							}}
 						>
 							<SelectTrigger id="language" size="sm" className="w-[110px]">

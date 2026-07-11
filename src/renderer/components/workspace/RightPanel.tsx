@@ -7,6 +7,7 @@ import { Separator } from "@shared/components/ui/separator";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { PanelRightClose } from "lucide-react";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
 	activeProjectAtom,
@@ -23,6 +24,7 @@ import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
 const PLACEHOLDER_PROJECT_ID = "__right_panel_placeholder__";
 
 export function RightPanel() {
+	const { t } = useTranslation();
 	const activeProject = useAtomValue(activeProjectAtom);
 	const collapsed = useAtomValue(rightPanelCollapsedAtom);
 	const [tab, setTab] = useAtom(rightPanelTabAtom);
@@ -49,15 +51,15 @@ export function RightPanel() {
 			.listSharedFiles(pid)
 			.then((result) => {
 				if (cancelled) return;
-				if (result?.success && result.nodes) {
-					appStore.set(sharedFilesAtomFamily(pid), result.nodes);
+				if (result?.success) {
+					appStore.set(sharedFilesAtomFamily(pid), result.nodes ?? []);
 				} else {
-					toast.error(result?.error ?? "加载共享区失败");
+					toast.error(result?.error ?? t("rightPanel.loadFailed"));
 				}
 			})
 			.catch((error: unknown) => {
 				if (cancelled) return;
-				const message = error instanceof Error ? error.message : "加载共享区失败";
+				const message = error instanceof Error ? error.message : t("rightPanel.loadFailed");
 				toast.error(message);
 			})
 			.finally(() => {
@@ -66,22 +68,27 @@ export function RightPanel() {
 		return () => {
 			cancelled = true;
 		};
-	}, [projectId, setIsLoading]);
+	}, [projectId, setIsLoading, t]);
 
 	// 启动 watcher;切项目或卸载时显式 stop,避免 chokidar 句柄累积(H-2)。
 	useEffect(() => {
 		if (projectId === PLACEHOLDER_PROJECT_ID) return;
 		const pid = projectId;
-		window.look.startSharedWatch(pid).catch((error: unknown) => {
-			const message = error instanceof Error ? error.message : "启动共享区监听失败";
-			toast.error(message);
-		});
+		window.look
+			.startSharedWatch(pid)
+			.then((result) => {
+				if (!result?.success) toast.error(result?.error ?? t("rightPanel.watchFailed"));
+			})
+			.catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : t("rightPanel.watchFailed");
+				toast.error(message);
+			});
 		return () => {
 			window.look.stopSharedWatch(pid).catch(() => {
 				// best-effort:切换/卸载时旧 watcher 的停止失败不打扰用户
 			});
 		};
-	}, [projectId]);
+	}, [projectId, t]);
 
 	if (!activeProject) return null;
 
@@ -91,11 +98,11 @@ export function RightPanel() {
 			<aside
 				className="right-panel-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
 				data-collapsed={collapsed}
-				aria-label="右侧面板"
+				aria-label={t("rightPanel.label")}
 				inert={collapsed || undefined}
 			>
 				<header className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
-					<div role="tablist" className="flex flex-1 gap-1" aria-label="右侧面板标签">
+					<div role="tablist" className="flex flex-1 gap-1" aria-label={t("rightPanel.tabsLabel")}>
 						<button
 							type="button"
 							role="tab"
@@ -107,7 +114,7 @@ export function RightPanel() {
 							}`}
 							onClick={() => setTab("workspace")}
 						>
-							工作区
+							{t("rightPanel.workspace")}
 						</button>
 						<button
 							type="button"
@@ -120,7 +127,7 @@ export function RightPanel() {
 							}`}
 							onClick={() => setTab("shared")}
 						>
-							共享区
+							{t("rightPanel.shared")}
 						</button>
 					</div>
 					<Button
@@ -128,8 +135,8 @@ export function RightPanel() {
 						variant="ghost"
 						className="shrink-0 rounded-md border border-hairline"
 						onClick={() => setCollapsed(true)}
-						aria-label="折叠右侧面板"
-						title="折叠右侧面板"
+						aria-label={t("rightPanel.collapse")}
+						title={t("rightPanel.collapse")}
 					>
 						<PanelRightClose className="size-3.5" />
 					</Button>
@@ -144,9 +151,8 @@ export function RightPanel() {
 						isLoading={isLoading}
 						onAfterChange={async () => {
 							const result = await window.look.listSharedFiles(activeProject!.id);
-							if (result?.success && result.nodes) {
-								appStore.set(sharedFilesAtomFamily(activeProject!.id), result.nodes);
-							}
+							if (!result?.success) throw new Error(result?.error ?? t("rightPanel.loadFailed"));
+							appStore.set(sharedFilesAtomFamily(activeProject!.id), result.nodes ?? []);
 						}}
 					/>
 				)}

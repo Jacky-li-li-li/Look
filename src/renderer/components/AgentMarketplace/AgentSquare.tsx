@@ -8,12 +8,14 @@
 import { Button } from "@shared/components/ui/button";
 import { useAtom } from "jotai";
 import { ArrowLeft, Bot, WandSparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { agentSquareTabAtom } from "../../store/agentDefinitionsAtoms";
 import { showAgentSquareAtom } from "../../store/atoms";
 import SkillsPanel from "./SkillsPanel";
 import SubAgentPanel from "./SubAgentPanel";
 
 export default function AgentSquare() {
+	const { t } = useTranslation();
 	const [tab, setTab] = useAtom(agentSquareTabAtom);
 	const [, setShowSquare] = useAtom(showAgentSquareAtom);
 
@@ -28,7 +30,7 @@ export default function AgentSquare() {
 					onClick={() => setShowSquare(false)}
 				>
 					<ArrowLeft className="size-3.5" />
-					返回
+					{t("marketplace.back")}
 				</Button>
 				<div className="flex items-end gap-1">
 					<button
@@ -41,7 +43,7 @@ export default function AgentSquare() {
 						}`}
 					>
 						<Bot className="size-3.5" />
-						SubAgent
+						{t("marketplace.subagents")}
 					</button>
 					<button
 						type="button"
@@ -53,7 +55,7 @@ export default function AgentSquare() {
 						}`}
 					>
 						<WandSparkles className="size-3.5" />
-						Agent Skills
+						{t("marketplace.skills")}
 					</button>
 				</div>
 			</div>

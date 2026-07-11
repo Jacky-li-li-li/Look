@@ -1,8 +1,8 @@
+import type { LookUiEvent } from "@shared/types";
 import { afterEach, describe, expect, it } from "vitest";
 import { agentsAtom, removeAgentAtoms, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore, flushAllUiEvents, initIpcHandlers } from "../src/renderer/store/ipcHandler";
 import { deriveSessionPhase } from "../src/renderer/store/sessionTypes";
-import type { LookUiEvent } from "@shared/types";
 
 const sessionId = "ui-store-a";
 
@@ -275,7 +275,7 @@ describe("UI event canonical store (session:ui-event)", () => {
 		expect(state.uiTools["te-1"].result).toBe("content");
 	});
 
-	it("resets blocks and tools on new run", () => {
+	it("preserves completed blocks until the snapshot and resets them on a new run", () => {
 		let receive!: (event: any) => void;
 		dispose = initIpcHandlers({
 			onEvent(callback: (event: any) => void) {
@@ -289,10 +289,11 @@ describe("UI event canonical store (session:ui-event)", () => {
 		flushReceive(receive, uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "old", timestamp: 3 }));
 		flushReceive(receive, uiEvent({ type: "run_status", status: "idle", timestamp: 4 }));
 
-		// Completed turns are cleared from transient UI state; the persisted
-		// message will arrive with the next snapshot.
+		// Preserve the completed live projection while the persisted snapshot is
+		// still in flight, avoiding a one-frame blank assistant response.
 		const afterFirst = appStore.get(sessionStateAtomFamily(sessionId));
-		expect(afterFirst.uiBlocks.length).toBe(0);
+		expect(afterFirst.uiBlocks.length).toBe(1);
+		expect(afterFirst.uiBlocks[0]?.text).toBe("old");
 		expect(afterFirst.uiPhase).toBe("idle");
 
 		flushReceive(receive, uiEvent({ type: "run_status", status: "streaming", timestamp: 5 }));

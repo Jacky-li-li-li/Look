@@ -8,6 +8,9 @@
 
 const noop = () => {};
 
+const mockScenario = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mock") : null;
+const MOCK_SESSION_ID = "dev-chat-session";
+
 /** 泛型成功响应 */
 function success<T>(data: T) {
 	return Promise.resolve({ success: true, ...data });
@@ -18,6 +21,190 @@ const ok = Promise.resolve({ success: true });
 
 /** IPC 事件监听器 */
 const listeners = new Set<(event: unknown) => void>();
+
+const mockUsage = {
+	input: 640,
+	output: 420,
+	cacheRead: 0,
+	cacheWrite: 0,
+	totalTokens: 1060,
+	cost: { input: 0.0012, output: 0.0028, cacheRead: 0, cacheWrite: 0, total: 0.004 },
+};
+
+let mockEntries: unknown[] = [
+	{
+		type: "message",
+		id: "mock-user-1",
+		parentId: null,
+		timestamp: new Date(Date.now() - 12_000).toISOString(),
+		message: {
+			role: "user",
+			content: [{ type: "text", text: "检查消息排版，并给我一个包含代码和表格的简短示例。" }],
+			timestamp: Date.now() - 12_000,
+		},
+	},
+	{
+		type: "message",
+		id: "mock-assistant-1",
+		parentId: "mock-user-1",
+		timestamp: new Date(Date.now() - 10_000).toISOString(),
+		message: {
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking: "先检查信息层级、行长和代码块的可读性。" },
+				{
+					type: "toolCall",
+					id: "mock-tool-1",
+					name: "read",
+					arguments: { path: "src/renderer/App.css", line_start: 505, line_end: 610 },
+				},
+				{
+					type: "text",
+					text: "## 消息渲染示例\n\n正文应该保持稳定的阅读节奏，并支持 `inline code`、[链接](https://example.com) 与文件引用 @src/renderer/App.css。\n\n| 项目 | 状态 |\n| --- | --- |\n| Markdown | 正常 |\n| 流式光标 | 待验证 |\n\n```ts\nconst experience = { stable: true, accessible: true };\n```\n\n> 动效应提示状态，而不是抢夺注意力。",
+				},
+			],
+			api: "openai-responses",
+			provider: "openai",
+			model: "gpt-5",
+			usage: mockUsage,
+			stopReason: "stop",
+			timestamp: Date.now() - 10_000,
+		},
+	},
+	{
+		type: "message",
+		id: "mock-tool-result-1",
+		parentId: "mock-assistant-1",
+		timestamp: new Date(Date.now() - 9_000).toISOString(),
+		message: {
+			role: "toolResult",
+			toolCallId: "mock-tool-1",
+			toolName: "read",
+			content: [{ type: "text", text: "Loaded message typography styles." }],
+			isError: false,
+			timestamp: Date.now() - 9_000,
+		},
+	},
+];
+
+function emit(event: unknown): void {
+	for (const listener of listeners) listener(event);
+}
+
+function mockRuntime() {
+	return {
+		thinkingLevel: "medium",
+		isStreaming: false,
+		isRetrying: false,
+		isCompacting: false,
+		retryAttempt: 0,
+		steering: [],
+		followUp: [],
+		stats: {},
+		contextUsage: { tokens: 12_480, contextWindow: 128_000, percentage: 9.75 },
+	};
+}
+
+function emitMockSnapshot(reason: "activate" | "agent_end" = "activate"): void {
+	emit({
+		type: "session:snapshot",
+		sessionId: MOCK_SESSION_ID,
+		reason,
+		leafId: "mock-assistant-1",
+		entries: mockEntries,
+		runtime: mockRuntime(),
+	});
+}
+
+function emitUiEvents(events: unknown[]): void {
+	emit({ type: "session:ui-event", sessionId: MOCK_SESSION_ID, events });
+}
+
+function runMockStream(message: string): void {
+	const now = Date.now();
+	const response =
+		"流式文本现在会保持同一个渲染节点，列表与代码块逐步出现时不应闪烁。\n\n- 自动跟随仅在用户位于底部时发生\n- 用户向上滚动后不抢回滚动位置\n- 完成后平滑切换为持久消息";
+	const chunks = response.match(/.{1,9}/gu) ?? [response];
+	emitUiEvents([
+		{ type: "run_status", status: "streaming", timestamp: now },
+		{ type: "user_message", text: message, timestamp: now + 1 },
+		{ type: "assistant_message_start", timestamp: now + 2 },
+		{ type: "thinking_start", contentIndex: 0, timestamp: now + 3 },
+	]);
+	setTimeout(
+		() =>
+			emitUiEvents([
+				{
+					type: "thinking_delta",
+					contentIndex: 0,
+					delta: "检查流式布局稳定性与自动滚动策略…",
+					timestamp: Date.now(),
+				},
+			]),
+		120,
+	);
+	setTimeout(
+		() =>
+			emitUiEvents([
+				{
+					type: "thinking_end",
+					contentIndex: 0,
+					thinking: "检查流式布局稳定性与自动滚动策略…",
+					timestamp: Date.now(),
+				},
+				{ type: "assistant_text_start", contentIndex: 1, timestamp: Date.now() },
+			]),
+		360,
+	);
+	chunks.forEach((delta, index) => {
+		setTimeout(
+			() => emitUiEvents([{ type: "assistant_text_delta", contentIndex: 1, delta, timestamp: Date.now() }]),
+			520 + index * 85,
+		);
+	});
+	const doneAt = 620 + chunks.length * 85;
+	setTimeout(() => {
+		emitUiEvents([
+			{ type: "assistant_text_end", contentIndex: 1, text: response, timestamp: Date.now() },
+			{ type: "assistant_message_end", completed: true, timestamp: Date.now() },
+		]);
+	}, doneAt);
+	setTimeout(() => {
+		const userId = `mock-user-${Date.now()}`;
+		const assistantId = `mock-assistant-${Date.now()}`;
+		mockEntries = [
+			...mockEntries,
+			{
+				type: "message",
+				id: userId,
+				parentId: "mock-assistant-1",
+				timestamp: new Date().toISOString(),
+				message: { role: "user", content: [{ type: "text", text: message }], timestamp: Date.now() },
+			},
+			{
+				type: "message",
+				id: assistantId,
+				parentId: userId,
+				timestamp: new Date().toISOString(),
+				message: {
+					role: "assistant",
+					content: [
+						{ type: "thinking", thinking: "检查流式布局稳定性与自动滚动策略…" },
+						{ type: "text", text: response },
+					],
+					api: "openai-responses",
+					provider: "openai",
+					model: "gpt-5",
+					usage: mockUsage,
+					stopReason: "stop",
+					timestamp: Date.now(),
+				},
+			},
+		];
+		emitUiEvents([{ type: "run_status", status: "idle", timestamp: Date.now() }]);
+		emitMockSnapshot("agent_end");
+	}, doneAt + 180);
+}
 
 const mockApi = {
 	homedir: "/Users/jacky",
@@ -34,8 +221,14 @@ const mockApi = {
 	},
 
 	// ---- Agent ----
-	sendMessage: () => ok,
-	activateSession: () => ok,
+	sendMessage: (_agentId: string, message: string) => {
+		if (mockScenario === "chat") runMockStream(message);
+		return ok;
+	},
+	activateSession: (sessionId: string) => {
+		if (mockScenario === "chat" && sessionId === MOCK_SESSION_ID) queueMicrotask(() => emitMockSnapshot());
+		return ok;
+	},
 	createAgent: () => ok,
 	destroyAgent: () => ok,
 	abortAgent: () => ok,
@@ -49,7 +242,26 @@ const mockApi = {
 	getProviders: () => success({ providers: [] }),
 
 	// ---- Agents ----
-	getAgents: () => success({ agents: [] }),
+	getAgents: () =>
+		success({
+			agents:
+				mockScenario === "chat"
+					? [
+							{
+								id: MOCK_SESSION_ID,
+								name: "前端体验审计",
+								model: "openai/gpt-5",
+								thinkingLevel: "medium",
+								isStreaming: false,
+								isRetrying: false,
+								isCompacting: false,
+								messageCount: mockEntries.length,
+								createdAt: Date.now() - 60_000,
+								projectId: "dev-browser",
+							},
+						]
+					: [],
+		}),
 
 	// ---- Settings ----
 	getSettings: () =>
@@ -61,7 +273,8 @@ const mockApi = {
 	testApiKey: () => Promise.resolve({ success: true, valid: false }),
 	testEnvKey: () => Promise.resolve({ success: true, valid: false }),
 	setApiKey: () => ok,
-	getGeneralSettings: () => success({ settings: {} }),
+	getGeneralSettings: () =>
+		success({ settings: mockScenario === "chat" ? { openedSessionIds: [MOCK_SESSION_ID] } : {} }),
 	setGeneralSettings: () => ok,
 	resetGeneralSettings: () => ok,
 
@@ -125,7 +338,7 @@ const mockApi = {
 	setEntryLabel: () => ok,
 
 	// ---- Shared area ----
-	listSharedFiles: () => success({ files: [] }),
+	listSharedFiles: () => success({ nodes: [] }),
 	startSharedWatch: () => ok,
 	stopSharedWatch: () => ok,
 	writeSharedFile: () => ok,

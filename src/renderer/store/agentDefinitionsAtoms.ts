@@ -35,8 +35,18 @@ export const subagentSourceTabAtom = atom<"builtin" | "mine">("builtin");
 
 // ---- Skill 页面 ----
 
+export interface AgentSkillInfo {
+	name: string;
+	description: string;
+	category: "builtin" | "mine";
+	filePath?: string;
+	baseDir?: string;
+	source?: "user" | "project" | "path";
+	disableModelInvocation?: boolean;
+}
+
 /** 已加载的 Skill 列表（来自 listSkills IPC） */
-export const agentSkillsAtom = atom<any[]>([]);
+export const agentSkillsAtom = atom<AgentSkillInfo[]>([]);
 
 /** 是否正在加载 Skill 列表 */
 export const agentSkillsLoadingAtom = atom(false);

@@ -37,7 +37,7 @@ const SettingsDialog = memo(function SettingsDialog({
 	onClose,
 	defaultTab = "profile",
 }: SettingsDialogProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const [tab, setTab] = useState<string>(defaultTab);
 	// Adjust tab when defaultTab changes (inline during render)
 	const [prevDefaultTab, setPrevDefaultTab] = useState(defaultTab);

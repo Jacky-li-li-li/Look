@@ -19,7 +19,7 @@ import { navigatingEntryAtomFamily } from "../store/atoms";
 /** 模块级缓存：会话 ID → 距底部像素距离 */
 const scrollPositionCache = new Map<string, number>();
 
-const DEBUG = true;
+const DEBUG = false;
 
 /**
  * ScrollPositionManager — 放在 Conversation（StickToBottom）内部
@@ -28,7 +28,7 @@ const DEBUG = true;
  * @param ready  防闪烁 ready 状态，为 true 时才恢复位置
  */
 export function useScrollPositionManager(id: string, ready: boolean): void {
-	const { scrollRef, stopScroll, scrollToBottom } = useStickToBottomContext();
+	const { scrollRef, stopScroll } = useStickToBottomContext();
 	const restoredRef = useRef(false);
 	const prevIdRef = useRef(id);
 

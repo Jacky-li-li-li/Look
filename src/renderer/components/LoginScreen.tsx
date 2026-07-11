@@ -348,6 +348,10 @@ export default function LoginScreen() {
 	async function handleLogin(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
+		if (!supabase) {
+			setError(t("auth.unavailable"));
+			return;
+		}
 		if (!email.trim()) {
 			setError(t("auth.emailRequired"));
 			return;
@@ -391,6 +395,10 @@ export default function LoginScreen() {
 	async function handleRegister(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
+		if (!supabase) {
+			setError(t("auth.unavailable"));
+			return;
+		}
 		if (!email.trim()) {
 			setError(t("auth.emailRequired"));
 			return;
@@ -425,6 +433,10 @@ export default function LoginScreen() {
 	async function handleForgot(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
+		if (!supabase) {
+			setError(t("auth.unavailable"));
+			return;
+		}
 		if (!email.trim()) {
 			setError(t("auth.emailRequired"));
 			return;
@@ -445,6 +457,7 @@ export default function LoginScreen() {
 	// ── Profile ──
 
 	async function loadProfile(userId: string, userEmail: string) {
+		if (!supabase) return;
 		const { data: p } = await supabase.from("user_profiles").select("user_name, avatar").eq("id", userId).single();
 
 		const profile = {

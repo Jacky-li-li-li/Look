@@ -184,11 +184,13 @@ describe("buildTimeline", () => {
 		expect(timeline[0]?.uiBlocks).toBe(blocks);
 	});
 
-	it("does not append a live item when uiPhase is idle even if blocks remain", () => {
+	it("keeps completed live blocks visible while the agent_end snapshot is pending", () => {
 		const blocks: LookUiStreamBlock[] = [textBlock(0, "hello", true)];
 		const timeline = buildTimeline([], {}, blocks, {}, "idle");
 
-		expect(timeline).toHaveLength(0);
+		expect(timeline).toHaveLength(1);
+		expect(timeline[0]?.id).toBe("streaming-live");
+		expect(timeline[0]?.uiBlocks).toBe(blocks);
 	});
 
 	it("does not append a live item when idle and no blocks exist", () => {

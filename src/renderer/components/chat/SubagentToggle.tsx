@@ -12,10 +12,12 @@ import { Button } from "@shared/components/ui/button";
 import { useAtom } from "jotai";
 import { Bot } from "lucide-react";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { subagentEnabledAtom } from "../../store/atoms";
 
 export default function SubagentToggle() {
+	const { t } = useTranslation();
 	const [enabled, setEnabled] = useAtom(subagentEnabledAtom);
 	const [switching, setSwitching] = useState(false);
 
@@ -28,11 +30,11 @@ export default function SubagentToggle() {
 			if (!result?.success) throw new Error(result?.error ?? "SubAgent toggle failed");
 			setEnabled(next);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "SubAgent 开关切换失败");
+			toast.error(error instanceof Error ? error.message : t("marketplace.subagentToggleFailed"));
 		} finally {
 			setSwitching(false);
 		}
-	}, [enabled, switching, setEnabled]);
+	}, [enabled, switching, setEnabled, t]);
 
 	return (
 		<Button
@@ -41,8 +43,8 @@ export default function SubagentToggle() {
 			className="h-7 w-7"
 			onClick={handleToggle}
 			disabled={switching}
-			title={enabled ? "SubAgent 已启用 — 复杂任务自动协作" : "SubAgent 已关闭 — 快速简单响应"}
-			aria-label={enabled ? "SubAgent 已启用" : "SubAgent 已关闭"}
+			title={enabled ? t("marketplace.subagentEnabledDesc") : t("marketplace.subagentDisabledDesc")}
+			aria-label={enabled ? t("marketplace.subagentEnabled") : t("marketplace.subagentDisabled")}
 		>
 			<Bot
 				className={`size-3.5 ${enabled ? "text-sky-500" : "text-muted-foreground/40"}`}

@@ -20,11 +20,15 @@ import {
 } from "../../store/atoms";
 import { appStore } from "../../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
-import { BranchConfirmDialog, type BranchConfirmRequest, type BranchConfirmResult } from "../dialogs/BranchConfirmDialog";
+import {
+	BranchConfirmDialog,
+	type BranchConfirmRequest,
+	type BranchConfirmResult,
+} from "../dialogs/BranchConfirmDialog";
+import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton } from "./conversation";
 import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
-import { PixelAgentAvatar } from "../PixelAgentAvatar";
 
 interface ChatMessageListProps {
 	agentId: string;
@@ -325,7 +329,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						{showActions && itemEntryId && (
 							<div
 								className={cn(
-									"flex items-center gap-msg-action -mt-msg-action-overlap opacity-0 transition-opacity group-hover/message:opacity-100",
+									"flex items-center gap-msg-action -mt-msg-action-overlap opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100",
 									item.message.role === "user" ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
 								)}
 							>
@@ -352,7 +356,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								<Button
 									variant="ghost"
 									size="icon-xs"
-									aria-label={t("chat.copy")}
+									aria-label={t("chat.copyMessage")}
 									onClick={() => handleCopyMessage(item.id, item.message!)}
 								>
 									{copiedEntryId === item.id ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -449,7 +453,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 	);
 	const liveTimeline = useMemo<TimelineItem[]>(
 		() =>
-			sessionState.uiPhase === "idle" && !sessionState.pendingUserMessage
+			sessionState.uiPhase === "idle" && !sessionState.pendingUserMessage && sessionState.uiBlocks.length === 0
 				? []
 				: buildTimeline(
 						[],

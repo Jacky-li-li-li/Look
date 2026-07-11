@@ -524,8 +524,8 @@ export class LarkChannelManager {
 		if (!channel) {
 			return { success: false, message: "Channel not found" };
 		}
-		const appSecret = decryptSecret(channel);
 		try {
+			const appSecret = decryptSecret(channel);
 			const client = new lark.Client({
 				appId,
 				appSecret,

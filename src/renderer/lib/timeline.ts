@@ -151,10 +151,10 @@ export function buildTimeline(
 		});
 	}
 
-	// Append the active streaming assistant as a single live item. Hide it as
-	// soon as the phase returns to idle so we never duplicate a completed turn
-	// that has already been persisted by a snapshot.
-	if (uiPhase !== "idle") {
+	// Append the active assistant as a single live item. Completed blocks remain
+	// visible during the short idle → agent_end snapshot handoff; the snapshot
+	// clears them atomically when persisted entries become the source of truth.
+	if (uiPhase !== "idle" || uiBlocks.length > 0) {
 		items.push({
 			id: "streaming-live",
 			isLive: true,

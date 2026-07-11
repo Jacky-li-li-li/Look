@@ -100,7 +100,7 @@ const AgentCard = memo(function AgentCard({
 				))}
 				{/* 编辑/删除（仅 user 来源） */}
 				{agent.source === "user" && (
-					<div className="ml-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+					<div className="ml-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
 						<Button
 							variant="ghost"
 							size="icon-sm"

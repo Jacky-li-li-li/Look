@@ -11,6 +11,7 @@ import { cn } from "@shared/lib/utils";
 import { ArrowDown } from "lucide-react";
 import type { ComponentProps, ReactElement } from "react";
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
 // ===== Conversation 根容器 =====
@@ -49,6 +50,7 @@ export function ConversationContent({ className, ...props }: ConversationContent
 export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
 
 export function ConversationScrollButton({ className, ...props }: ConversationScrollButtonProps): ReactElement | null {
+	const { t } = useTranslation();
 	const { isAtBottom, scrollToBottom } = useStickToBottomContext();
 
 	const handleScrollToBottom = useCallback(() => {
@@ -63,7 +65,7 @@ export function ConversationScrollButton({ className, ...props }: ConversationSc
 				"absolute bottom-4 right-4 z-10 size-8 rounded-full bg-card p-0 shadow-md hover:bg-accent/80",
 				className,
 			)}
-			aria-label="Scroll to bottom"
+			aria-label={t("chat.scrollToBottom")}
 			onClick={handleScrollToBottom}
 			type="button"
 			variant="ghost"

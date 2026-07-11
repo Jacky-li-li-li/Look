@@ -1,9 +1,9 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import path from "path";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+import { defineConfig } from "vite";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 const baseVersion = pkg.version;
@@ -26,10 +26,7 @@ export default defineConfig({
 			transformIndexHtml(html) {
 				// 开发模式下 Vite 注入内联脚本（React Refresh、HMR），
 				// 需要放宽 CSP 的 script-src。生产构建保留严格 CSP。
-				return html.replace(
-					"script-src 'self'",
-					"script-src 'self' 'unsafe-inline'",
-				);
+				return html.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'");
 			},
 		},
 	],
@@ -59,7 +56,7 @@ export default defineConfig({
 					// Split large vendor libraries into stable chunks for better caching.
 					"vendor-react": ["react", "react-dom"],
 					"vendor-ui": ["lucide-react", "radix-ui"],
-					"vendor-data": ["@supabase/supabase-js", "@larksuiteoapi/node-sdk"],
+					"vendor-data": ["@supabase/supabase-js"],
 				},
 			},
 		},

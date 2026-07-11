@@ -29,6 +29,10 @@ export default function ProfileEditor() {
 			}
 			// RLS enforces auth.uid() = id on user_profiles;
 			// the id comes from supabase.auth.getUser() — server-verified identity
+			if (!supabase) {
+				setEditingName(false);
+				return;
+			}
 			const { data: authData } = await supabase.auth.getUser();
 			if (authData.user) {
 				supabase
@@ -63,6 +67,7 @@ export default function ProfileEditor() {
 				}
 				// RLS enforces auth.uid() = id on user_profiles;
 				// the id comes from supabase.auth.getUser() — server-verified identity
+				if (!supabase) return;
 				const { data: authData } = await supabase.auth.getUser();
 				if (authData.user) {
 					supabase

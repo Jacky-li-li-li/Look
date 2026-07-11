@@ -584,7 +584,7 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 					loadCustomProviders();
 					patchCustom("view", { type: "list" });
 					api?.getSettings?.()
-						.then((r: any) => {
+						.then((r) => {
 							if (r?.success) onProvidersChange({ providers: r.providers, customStats: r.customStats });
 						})
 						.catch(() => {});

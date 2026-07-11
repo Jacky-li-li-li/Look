@@ -31,7 +31,7 @@ export function useAuthSession() {
 		 * 同步 I/O，头像秒显。
 		 */
 		api.getUserProfile()
-			.then((r: any) => {
+			.then((r) => {
 				if (cancelled) return;
 				if (r?.success && r.profile?.userId) {
 					setUserProfile(r.profile);
@@ -42,7 +42,7 @@ export function useAuthSession() {
 		const configured = isSupabaseConfigured();
 
 		async function restoreSession() {
-			if (!configured) {
+			if (!configured || !supabase) {
 				// 本地模式：步骤 1 已拉取本地 profile，无需额外操作
 				return;
 			}

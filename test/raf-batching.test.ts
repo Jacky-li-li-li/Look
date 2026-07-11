@@ -1,7 +1,7 @@
+import type { LookUiEvent } from "@shared/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { agentsAtom, removeAgentAtoms, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore, flushAllUiEvents, initIpcHandlers } from "../src/renderer/store/ipcHandler";
-import type { LookUiEvent } from "@shared/types";
 
 const sessionId = "raf-batch-a";
 
@@ -79,14 +79,15 @@ describe("rAF batching — renderer IPC coalescing", () => {
 		receive(uiEvent({ type: "assistant_text_delta", contentIndex: 0, delta: "Hello", timestamp: 3 }));
 
 		// Terminal event: run_status idle — should flush pending deltas first,
-		// then apply the idle (which clears blocks)
+		// then preserve the completed projection until the snapshot arrives.
 		receive(uiEvent({ type: "run_status", status: "idle", timestamp: 4 }));
 
 		// The immediate flush should have processed everything.
 		// No need to call flushAllUiEvents — terminal events flush inline.
 		const state = appStore.get(sessionStateAtomFamily(sessionId));
 		expect(state.uiPhase).toBe("idle");
-		expect(state.uiBlocks.length).toBe(0);
+		expect(state.uiBlocks.length).toBe(1);
+		expect(state.uiBlocks[0]?.text).toBe("Hello");
 	});
 
 	/**

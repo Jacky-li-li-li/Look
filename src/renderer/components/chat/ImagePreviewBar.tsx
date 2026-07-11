@@ -42,7 +42,7 @@ export default function ImagePreviewBar({ pendingImages, onRemove }: ImagePrevie
 						<button
 							type="button"
 							onClick={() => onRemove(idx)}
-							className="absolute top-0.5 right-0.5 flex size-4 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
+							className="absolute top-0.5 right-0.5 flex size-4 items-center justify-center rounded-full bg-background/80 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100 focus-visible:opacity-100"
 							aria-label={`Remove image ${idx + 1}`}
 						>
 							<X className="size-3" />

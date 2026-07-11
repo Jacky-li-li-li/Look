@@ -14,7 +14,10 @@ import { useLookTheme } from "./hooks/useLookTheme";
 import i18n from "./i18n";
 import { appStore, initAppData, initIpcHandlers } from "./store/ipcHandler";
 
-if (import.meta.env.DEV) {
+// React Scan is intentionally opt-in: its highlight overlays make the normal
+// development build visually unusable and distort screenshot-based UI review.
+// Append `?react-scan` when profiling renders.
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("react-scan")) {
 	// ---------- react-scan 自动性能分析 ----------
 	// 不刷屏，数据存到环形缓冲区，随时在控制台调用 reactScanReport() 查看聚合报告
 
@@ -26,8 +29,12 @@ if (import.meta.env.DEV) {
 		unnecessary: boolean;
 		timestamp: number;
 	}> = [];
+	const debugWindow = window as typeof window & {
+		reactScanReport?: (topN?: number) => void;
+		reactScanReset?: () => void;
+	};
 
-	(window as any).reactScanReport = (topN = 20) => {
+	debugWindow.reactScanReport = (topN = 20) => {
 		if (samples.length === 0) {
 			console.log("[React Scan] 暂无渲染数据，请先操作应用再查看。");
 			return;
@@ -104,7 +111,7 @@ if (import.meta.env.DEV) {
 		}
 	};
 
-	(window as any).reactScanReset = () => {
+	debugWindow.reactScanReset = () => {
 		samples.length = 0;
 		console.log("[React Scan] 采样已清空，继续操作后再次 reactScanReport() 查看。");
 	};

@@ -630,14 +630,10 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	}
 
 	const nextPhase = phase ?? prev.uiPhase;
-	// Once the turn is no longer active, discard transient streaming state. The
-	// persisted entries from the next snapshot become the source of truth.
-	if (nextPhase === "idle") {
-		blocks = [];
-		blocksChanged = true;
-		toolExecs = {};
-		toolExecsChanged = true;
-	}
+	// Keep the completed live projection until the agent_end snapshot arrives.
+	// Clearing it on run_status("idle") creates a visible empty gap when the
+	// terminal status and persisted snapshot are delivered in separate IPC
+	// tasks. applySnapshot atomically swaps in history and clears this state.
 
 	appStore.set(atom, {
 		...prev,
@@ -662,8 +658,9 @@ function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 }
 
 /** Register all IPC event listeners. Call once at app startup. */
-export function initIpcHandlers(api: any): () => void {
-	const unsub = api.onEvent((event: MainToRendererEvent) => {
+export function initIpcHandlers(api: Window["look"]): () => void {
+	const unsub = api.onEvent((rawEvent: unknown) => {
+		const event = rawEvent as MainToRendererEvent;
 		switch (event.type) {
 			// ---- Look-specific list / status events ----
 			case "agent:list": {
@@ -1020,14 +1017,14 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function invokeStartup(fn: () => Promise<any>): Promise<any | null> {
-	let lastResult: unknown = null;
+async function invokeStartup<T>(fn: () => Promise<T>): Promise<T | null> {
+	let lastResult: T | null = null;
 	for (const delay of STARTUP_INVOKE_DELAYS_MS) {
 		if (delay > 0) await sleep(delay);
 		try {
 			const result = await fn();
 			lastResult = result;
-			if (!result && typeof result === "object" && "error" in result && (result as Record<string, unknown>).error)
+			if (result && typeof result === "object" && "error" in result && (result as Record<string, unknown>).error)
 				return result;
 		} catch {
 			lastResult = null;
@@ -1051,7 +1048,7 @@ function _autoSelectAgent(): void {
 	markSessionSnapshotLoading(sessionId, true);
 	void window.look
 		.activateSession(sessionId)
-		.then((result: any) => {
+		.then((result) => {
 			if (result?.success) return;
 			markSessionSnapshotLoading(sessionId, false);
 			if (appStore.get(activeAgentIdAtom) === sessionId) appStore.set(activeAgentIdAtom, null);
@@ -1070,10 +1067,10 @@ function _autoSelectAgent(): void {
  * 原实现为全串行瀑布流（5 步 x 7 级重试 = 最坏 ~39s），
  * 现改为分层并行（最坏 ~1.2s），通常启动从 ~2s 降至 ~500ms。
  */
-export async function initAppData(api: any): Promise<void> {
+export async function initAppData(api: Window["look"]): Promise<void> {
 	// ── Layer 1: settings 并行 ──
 	const settingsPromise = invokeStartup(() => api.getSettings())
-		.then((r: any) => {
+		.then((r) => {
 			if (r?.success) {
 				appStore.set(providerSettingsAtom, {
 					providers: r.providers ?? [],

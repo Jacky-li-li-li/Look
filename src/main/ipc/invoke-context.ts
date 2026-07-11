@@ -13,7 +13,6 @@ import type { RendererToMainEvent } from "@look/shared/types";
 
 type InvokeHandler<T extends RendererToMainEvent["type"] = RendererToMainEvent["type"]> = (
 	data: Extract<RendererToMainEvent, { type: T }>,
-	ctx: InvokeContext,
 ) => unknown;
 
 export interface InvokeContext {

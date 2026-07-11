@@ -676,7 +676,10 @@ export default function ImChannelsTab() {
 		try {
 			const result = await api.testImConnectionDirect(manualForm.appId.trim(), manualForm.appSecret.trim());
 			if (result) {
-				setManualTestResult({ success: result.success, message: result.message });
+				setManualTestResult({
+					success: result.success,
+					message: result.message ?? result.error ?? t("settings.testFailed"),
+				});
 				if (result.success) setManualTestPassed(true);
 			}
 		} catch (_err) {
@@ -748,7 +751,10 @@ export default function ImChannelsTab() {
 		try {
 			const result = await api.testImConnection(selectedChannel.appId);
 			if (result) {
-				setTestResult({ success: result.success, message: result.message });
+				setTestResult({
+					success: result.success,
+					message: result.message ?? result.error ?? t("settings.testNoResponse"),
+				});
 			} else {
 				setTestResult({ success: false, message: t("settings.testNoResponse") });
 			}

@@ -10,7 +10,7 @@ import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir } from "@look/shared/look-storage";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
-import type { ImSessionProvider, MainToRendererEvent } from "@look/shared/types";
+import type { ImSessionProvider, MainToRendererEvent, SessionSnapshotEnvelope } from "@look/shared/types";
 import type { IPermissionService, IPlanService } from "../core/contracts.js";
 import type { ProjectService } from "../projects/project-service.js";
 import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
@@ -45,7 +45,7 @@ export interface SessionLifecycleHost {
 	refreshProjectSessions(projectId: string): Promise<StoredSession[]>;
 	getStoredSession(sessionId: string): StoredSession | undefined;
 	emit(event: MainToRendererEvent): void;
-	emitSessionState(sessionId: string, reason?: string): void;
+	emitSessionState(sessionId: string, reason?: SessionSnapshotEnvelope["reason"]): void;
 	emitSessionList(projectId: string): void;
 	setActiveProjectId(projectId: string): void;
 	setActiveSessionId(sessionId: string | null): void;

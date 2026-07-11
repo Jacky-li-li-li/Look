@@ -1,4 +1,15 @@
+import { Button } from "@shared/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@shared/components/ui/dialog";
+import { Input } from "@shared/components/ui/input";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 const api = window.look;
@@ -18,6 +29,7 @@ interface McpServerDialogProps {
 }
 
 export function McpServerDialog({ open, onClose, onSave, editingName, initialConfig }: McpServerDialogProps) {
+	const { t } = useTranslation();
 	const [name, setName] = useState("");
 	const [type, setType] = useState<"stdio" | "http" | "sse">("stdio");
 	const [command, setCommand] = useState("");
@@ -50,15 +62,15 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 
 	const handleSave = async () => {
 		if (!name.trim()) {
-			toast.error("请输入服务器名称");
+			toast.error(t("mcpDialog.nameRequired"));
 			return;
 		}
 		if (type === "stdio" && !command.trim()) {
-			toast.error("请输入命令");
+			toast.error(t("mcpDialog.commandRequired"));
 			return;
 		}
 		if ((type === "http" || type === "sse") && !url.trim()) {
-			toast.error("请输入 URL");
+			toast.error(t("mcpDialog.urlRequired"));
 			return;
 		}
 
@@ -79,68 +91,69 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 				? await api.updateMcpServer(editingName, config)
 				: await api.addMcpServer({ name: name.trim(), ...config });
 			if (result?.success) {
-				toast.success(editingName ? "MCP 服务器已更新" : "MCP 服务器已添加");
+				toast.success(t(editingName ? "mcpDialog.updated" : "mcpDialog.added"));
 				onSave(config);
 				resetForm();
 			} else {
-				toast.error(result?.error ?? (editingName ? "更新失败" : "添加失败"));
+				toast.error(result?.error ?? t(editingName ? "mcpDialog.updateFailed" : "mcpDialog.addFailed"));
 			}
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : editingName ? "更新失败" : "添加失败");
+			toast.error(
+				error instanceof Error ? error.message : t(editingName ? "mcpDialog.updateFailed" : "mcpDialog.addFailed"),
+			);
 		} finally {
 			setSaving(false);
 		}
 	};
 
 	return (
-		<>
-			{/* Backdrop */}
-			<button type="button" className="fixed inset-0 z-40 bg-black/20" onClick={onClose} aria-label="关闭" />
+		<Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && !saving && onClose()}>
+			<DialogContent
+				className="flex max-h-[min(680px,calc(100vh-2rem))] max-w-md flex-col gap-0 overflow-hidden p-0"
+				onEscapeKeyDown={(event) => saving && event.preventDefault()}
+				onInteractOutside={(event) => saving && event.preventDefault()}
+				showCloseButton={!saving}
+			>
+				<DialogHeader className="border-b border-hairline px-5 py-4 pr-12">
+					<DialogTitle>
+						{editingName ? t("mcpDialog.editTitle", { name: editingName }) : t("mcpDialog.addTitle")}
+					</DialogTitle>
+					<DialogDescription>
+						{t(editingName ? "mcpDialog.editDescription" : "mcpDialog.addDescription")}
+					</DialogDescription>
+				</DialogHeader>
 
-			{/* Dialog */}
-			<div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-hairline bg-popover shadow-2xl">
-				{/* Header */}
-				<div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-					<div>
-						<h3 className="text-sm font-semibold">{editingName ? `编辑 ${editingName}` : "添加 MCP 服务器"}</h3>
-						<p className="mt-0.5 text-xs text-muted-foreground">
-							{editingName ? "修改 MCP 服务器的连接参数" : "配置 MCP 服务器的连接方式和参数"}
-						</p>
-					</div>
-				</div>
-
-				{/* Body */}
-				<div className="space-y-4 px-5 py-4">
+				<div className="min-h-0 space-y-4 overflow-y-auto px-5 py-4">
 					{/* Name */}
 					<div className="space-y-1.5">
 						<label className="text-xs font-medium" htmlFor="mcp-name">
-							名称 <span className="text-red-500">*</span>
+							{t("mcpDialog.name")} <span className="text-destructive">*</span>
 						</label>
-						<input
+						<Input
 							id="mcp-name"
 							type="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
-							placeholder="例如：filesystem, github, postgres"
+							placeholder={t("mcpDialog.namePlaceholder")}
 							readOnly={!!editingName}
-							className={`w-full rounded-lg border border-hairline bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-sky-500 ${editingName ? "cursor-not-allowed opacity-60" : ""}`}
+							className={editingName ? "cursor-not-allowed opacity-60" : undefined}
 						/>
 					</div>
 
 					{/* Transport type */}
 					<div className="space-y-1.5">
 						<label className="text-xs font-medium" htmlFor="mcp-type">
-							传输类型
+							{t("mcpDialog.transport")}
 						</label>
 						<select
 							id="mcp-type"
 							value={type}
 							onChange={(e) => setType(e.target.value as typeof type)}
-							className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
+							className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
 						>
-							<option value="stdio">stdio（子进程）</option>
+							<option value="stdio">stdio ({t("mcpDialog.subprocess")})</option>
 							<option value="http">HTTP</option>
-							<option value="sse">SSE（Server-Sent Events）</option>
+							<option value="sse">SSE (Server-Sent Events)</option>
 						</select>
 					</div>
 
@@ -149,28 +162,26 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 						<>
 							<div className="space-y-1.5">
 								<label className="text-xs font-medium" htmlFor="mcp-command">
-									命令 <span className="text-red-500">*</span>
+									{t("mcpDialog.command")} <span className="text-destructive">*</span>
 								</label>
-								<input
+								<Input
 									id="mcp-command"
 									type="text"
 									value={command}
 									onChange={(e) => setCommand(e.target.value)}
-									placeholder="npx 或 uvx 或绝对路径"
-									className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-sky-500"
+									placeholder={t("mcpDialog.commandPlaceholder")}
 								/>
 							</div>
 							<div className="space-y-1.5">
 								<label className="text-xs font-medium" htmlFor="mcp-args">
-									参数（空格分隔）
+									{t("mcpDialog.args")}
 								</label>
-								<input
+								<Input
 									id="mcp-args"
 									type="text"
 									value={args}
 									onChange={(e) => setArgs(e.target.value)}
 									placeholder="-y @modelcontextprotocol/server-xxx"
-									className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-sky-500"
 								/>
 							</div>
 						</>
@@ -180,42 +191,42 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 					{(type === "http" || type === "sse") && (
 						<div className="space-y-1.5">
 							<label className="text-xs font-medium" htmlFor="mcp-url">
-								URL <span className="text-red-500">*</span>
+								URL <span className="text-destructive">*</span>
 							</label>
-							<input
+							<Input
 								id="mcp-url"
 								type="text"
 								value={url}
 								onChange={(e) => setUrl(e.target.value)}
 								placeholder="https://mcp.example.com/jsonrpc"
-								className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-sky-500"
 							/>
 						</div>
 					)}
 				</div>
 
-				{/* Footer */}
-				<div className="flex justify-end gap-2 border-t border-hairline px-5 py-3">
-					<button
-						type="button"
-						className="inline-flex items-center rounded-lg border border-hairline bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+				<DialogFooter className="m-0 shrink-0 rounded-none px-5 py-3">
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={saving}
 						onClick={() => {
 							resetForm();
 							onClose();
 						}}
 					>
-						取消
-					</button>
-					<button
-						type="button"
-						className="inline-flex items-center rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-600 transition-colors disabled:opacity-50"
+						{t("common.cancel")}
+					</Button>
+					<Button
+						size="sm"
 						onClick={handleSave}
 						disabled={saving}
 					>
-						{saving ? (editingName ? "更新中..." : "添加中...") : editingName ? "保存更改" : "添加服务器"}
-					</button>
-				</div>
-			</div>
-		</>
+						{saving
+							? t(editingName ? "mcpDialog.updating" : "mcpDialog.adding")
+							: t(editingName ? "mcpDialog.saveChanges" : "mcpDialog.addServer")}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

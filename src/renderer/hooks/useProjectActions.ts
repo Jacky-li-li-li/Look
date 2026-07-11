@@ -42,7 +42,7 @@ export function useProjectActions() {
 	const handleDeleteProjectConfirmed = useCallback(() => {
 		appStore.set(pendingDeleteProjectAtom, null);
 		api.listProjects()
-			.then((r: any) => {
+			.then((r) => {
 				if (r?.success) appStore.set(projectsAtom, r.projects);
 			})
 			.catch(() => {});

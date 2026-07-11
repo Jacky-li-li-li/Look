@@ -28,7 +28,12 @@ export function useAppEffects() {
 	useEffect(() => {
 		if (!api) return;
 		const timer = setTimeout(() => {
-			const payload: Record<string, any> = {};
+			const payload: {
+				lastActiveSessionId?: string;
+				lastActiveProjectId?: string;
+				openProjectIds?: string[];
+				openedSessionIds?: string[];
+			} = {};
 			if (activeAgentId) payload.lastActiveSessionId = activeAgentId;
 			if (activeProjectId) payload.lastActiveProjectId = activeProjectId;
 			payload.openProjectIds = openProjectIds;
@@ -47,7 +52,7 @@ export function useAppEffects() {
 			return;
 		}
 		api.getGeneralSettings()
-			.then((r: any) => {
+			.then((r) => {
 				writeLookThemeToDom(themeFromSettings(r?.settings ?? {}));
 			})
 			.catch(() => {

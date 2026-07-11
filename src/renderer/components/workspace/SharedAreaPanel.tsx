@@ -23,6 +23,7 @@ import type { FileTreeNode } from "@shared/types";
 import { useAtom } from "jotai";
 import { File, Folder, FolderOpen, Import, MoreHorizontal, Plus, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
 import { selectedSharedPathAtomFamily } from "../../store/atoms";
@@ -43,6 +44,15 @@ interface FileSystemEntryLike {
 	fullPath?: string;
 	file(success: (file: File) => void, error?: (err: Error) => void): void;
 	createReader(): { readEntries(success: (entries: FileSystemEntryLike[]) => void): void };
+}
+
+interface IpcActionResult {
+	success: boolean;
+	error?: string;
+}
+
+function ensureSuccess(result: IpcActionResult | null | undefined, fallback: string): void {
+	if (!result?.success) throw new Error(result?.error ?? fallback);
 }
 
 function readEntryAsFile(entry: FileSystemEntryLike): Promise<File> {
@@ -80,7 +90,7 @@ async function fileToBase64(file: File): Promise<string> {
 
 async function importEntriesByPath(projectId: string, paths: string[]): Promise<number> {
 	if (paths.length === 0) return 0;
-	await window.look.importToShared(projectId, paths);
+	ensureSuccess(await window.look.importToShared(projectId, paths), "Import failed");
 	return paths.length;
 }
 
@@ -96,11 +106,14 @@ async function importEntriesByContent(
 				const file = await readEntryAsFile(entry);
 				const base64 = await fileToBase64(file);
 				const targetPath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-				await window.look.writeSharedContent(projectId, targetPath, base64, "base64");
+				ensureSuccess(
+					await window.look.writeSharedContent(projectId, targetPath, base64, "base64"),
+					"Import failed",
+				);
 				count += 1;
 			} else if (entry.isDirectory) {
 				const subDir = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-				await window.look.createSharedDir(projectId, subDir);
+				ensureSuccess(await window.look.createSharedDir(projectId, subDir), "Import failed");
 				const reader = entry.createReader();
 				let done = false;
 				const allChildren: FileSystemEntryLike[] = [];
@@ -118,41 +131,59 @@ async function importEntriesByContent(
 	return count;
 }
 
+async function importFilesByContent(projectId: string, files: File[]): Promise<number> {
+	await Promise.all(
+		files.map(async (file) => {
+			const base64 = await fileToBase64(file);
+			ensureSuccess(await window.look.writeSharedContent(projectId, file.name, base64, "base64"), "Import failed");
+		}),
+	);
+	return files.length;
+}
+
+type SharedOperation = "create" | "delete" | "refresh" | "import" | "export" | null;
+
 export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: SharedAreaPanelProps) {
+	const { t } = useTranslation();
 	const [selectedPath, setSelectedPath] = useAtom(selectedSharedPathAtomFamily(projectId));
 	const [creating, setCreating] = useState<"file" | "dir" | null>(null);
 	const [newName, setNewName] = useState("");
 	const [deleteTarget, setDeleteTarget] = useState<FileTreeNode | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
+	const [operation, setOperation] = useState<SharedOperation>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const handleCreate = async () => {
+		if (operation) return;
 		const trimmed = newName.trim();
 		if (!trimmed) {
 			setCreating(null);
 			return;
 		}
 		if (INVALID_NAME_CHARS.test(trimmed) || trimmed === ".." || trimmed === ".") {
-			toast.error("文件名包含非法字符");
+			toast.error(t("sharedArea.invalidName"));
 			return;
 		}
 		if (files.some((f) => f.name === trimmed)) {
-			toast.error("文件名已存在");
+			toast.error(t("sharedArea.nameExists"));
 			return;
 		}
+		setOperation("create");
 		try {
 			if (creating === "file") {
-				await window.look.writeSharedFile(projectId, trimmed, "");
+				ensureSuccess(await window.look.writeSharedFile(projectId, trimmed, ""), t("sharedArea.createFailed"));
 			} else {
-				await window.look.createSharedDir(projectId, trimmed);
+				ensureSuccess(await window.look.createSharedDir(projectId, trimmed), t("sharedArea.createFailed"));
 			}
 			await onAfterChange();
+			setNewName("");
+			setCreating(null);
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : "创建失败";
+			const message = error instanceof Error ? error.message : t("sharedArea.createFailed");
 			toast.error(message);
+		} finally {
+			setOperation(null);
 		}
-		setNewName("");
-		setCreating(null);
 	};
 
 	const handleCancelCreate = () => {
@@ -161,53 +192,74 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 	};
 
 	const handleDelete = async (node: FileTreeNode) => {
+		if (operation) return;
+		setOperation("delete");
 		try {
-			await window.look.deleteSharedItem(projectId, node.path);
+			ensureSuccess(await window.look.deleteSharedItem(projectId, node.path), t("sharedArea.deleteFailed"));
 			if (selectedPath === node.path) setSelectedPath(null);
 			await onAfterChange();
-			toast.success("已删除");
+			toast.success(t("sharedArea.deleted"));
+			setDeleteTarget(null);
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : "删除失败";
+			const message = error instanceof Error ? error.message : t("sharedArea.deleteFailed");
 			toast.error(message);
+		} finally {
+			setOperation(null);
 		}
-		setDeleteTarget(null);
 	};
 
 	const handleRefresh = async () => {
+		if (operation) return;
+		setOperation("refresh");
 		try {
 			await onAfterChange();
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : "刷新共享区失败";
+			const message = error instanceof Error ? error.message : t("sharedArea.refreshFailed");
 			toast.error(message);
+		} finally {
+			setOperation(null);
 		}
 	};
 
 	const handleImport = async () => {
+		if (operation) return;
+		setOperation("import");
 		try {
 			const result = await window.look.openFileDialog({
-				title: "选择要导入的文件或文件夹",
+				title: t("sharedArea.importDialogTitle"),
 				allowDirectories: true,
 				allowMultiple: true,
 			});
-			if (!result?.success || !result.paths || result.paths.length === 0) return;
-			await window.look.importToShared(projectId, result.paths);
+			if (!result?.success) throw new Error(result?.error ?? t("sharedArea.importFailed"));
+			if (!result.paths || result.paths.length === 0) return;
+			ensureSuccess(await window.look.importToShared(projectId, result.paths), t("sharedArea.importFailed"));
 			await onAfterChange();
-			toast.success(`已导入 ${result.paths.length} 项`);
+			toast.success(t("sharedArea.imported", { count: result.paths.length }));
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : "导入失败";
+			const message = error instanceof Error ? error.message : t("sharedArea.importFailed");
 			toast.error(message);
+		} finally {
+			setOperation(null);
 		}
 	};
 
 	const handleExport = async (node: FileTreeNode) => {
+		if (operation) return;
+		setOperation("export");
 		try {
-			const dir = await window.look.openDirectoryDialog("选择导出位置");
-			if (!dir?.success || !dir.path) return;
-			await window.look.exportFromShared(projectId, [node.path], dir.path);
-			toast.success(`已导出到 ${dir.path}`);
+			const dir = await window.look.openDirectoryDialog(t("sharedArea.exportDialogTitle"));
+			if (!dir?.success) throw new Error(dir?.error ?? t("sharedArea.exportFailed"));
+			if (!dir.path) return;
+			ensureSuccess(
+				await window.look.exportFromShared(projectId, [node.path], dir.path),
+				t("sharedArea.exportFailed"),
+			);
+			toast.success(t("sharedArea.exported", { path: dir.path }));
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : "导出失败";
+			const message = error instanceof Error ? error.message : t("sharedArea.exportFailed");
 			toast.error(message);
+		} finally {
+			setOperation(null);
 		}
 	};
 
@@ -220,6 +272,8 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 	const handleDragLeave = (e: React.DragEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
+		const nextTarget = e.relatedTarget;
+		if (nextTarget instanceof Node && e.currentTarget.contains(nextTarget)) return;
 		setIsDragOver(false);
 	};
 
@@ -241,13 +295,11 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 
 		const items = e.dataTransfer.items;
 		const files = e.dataTransfer.files;
-		if (items.length === 0) {
-			toast.info("无法识别拖入内容,请使用「导入」按钮");
-			return;
-		}
+		if (operation) return;
 
 		const paths: string[] = [];
 		const fallbackEntries: FileSystemEntryLike[] = [];
+		const fallbackFiles: File[] = [];
 
 		// 关键:用 items[i].webkitGetAsEntry() 而非 dataTransfer.files,前者能识别目录
 		for (let i = 0; i < items.length; i += 1) {
@@ -266,21 +318,31 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 				fallbackEntries.push(entry);
 			}
 		}
+		if (items.length === 0) {
+			for (const file of Array.from(files)) {
+				const filePath = window.look.getPathForFile(file);
+				if (filePath) paths.push(filePath);
+				else fallbackFiles.push(file);
+			}
+		}
 
+		setOperation("import");
 		try {
 			const viaPath = await importEntriesByPath(projectId, paths);
 			const viaContent = await importEntriesByContent(projectId, fallbackEntries, "");
-			const total = viaPath + viaContent;
+			const viaFiles = await importFilesByContent(projectId, fallbackFiles);
+			const total = viaPath + viaContent + viaFiles;
 			if (total === 0) {
-				toast.info("无法识别拖入内容,请使用「导入」按钮");
+				toast.info(t("sharedArea.dropUnrecognized"));
 				return;
 			}
 			await onAfterChange();
-			const detail = viaContent > 0 ? ` (${viaPath} 个用绝对路径, ${viaContent} 个用内容上传)` : "";
-			toast.success(`已导入 ${total} 项${detail}`);
+			toast.success(t("sharedArea.imported", { count: total }));
 		} catch (error: unknown) {
-			const message = error instanceof Error ? error.message : "导入失败";
+			const message = error instanceof Error ? error.message : t("sharedArea.importFailed");
 			toast.error(message);
+		} finally {
+			setOperation(null);
 		}
 	};
 
@@ -290,6 +352,8 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<SharedAreaToolbar
+				disabled={operation !== null}
+				isRefreshing={operation === "refresh"}
 				onRefresh={handleRefresh}
 				onCreateFile={() => setCreating("file")}
 				onCreateDir={() => setCreating("dir")}
@@ -301,13 +365,15 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
-				aria-label="共享区文件列表，可拖入文件导入"
+				aria-label={t("sharedArea.listLabel")}
+				aria-busy={operation !== null || isLoading}
 			>
 				{creating ? (
 					<FileCreationInput
 						inputRef={inputRef}
 						creating={creating}
 						newName={newName}
+						disabled={operation === "create"}
 						onNewNameChange={setNewName}
 						onKeyDown={(e) => {
 							if (e.key === "Enter") {
@@ -328,7 +394,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 						}}
 					/>
 				) : isLoadingAndEmpty ? (
-					<div className="px-3 py-8 text-center text-xs text-muted-foreground">加载中…</div>
+					<div className="px-3 py-8 text-center text-xs text-muted-foreground">{t("sharedArea.loading")}</div>
 				) : isEmpty ? (
 					<EmptySharedState onImport={handleImport} />
 				) : (
@@ -353,17 +419,29 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 			</section>
 
 			<Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-				<DialogContent>
+				<DialogContent onEscapeKeyDown={(event) => operation === "delete" && event.preventDefault()}>
 					<DialogHeader>
-						<DialogTitle>确认删除</DialogTitle>
-						<DialogDescription>确定要删除 “{deleteTarget?.name}” 吗？此操作不可撤销。</DialogDescription>
+						<DialogTitle>{t("sharedArea.deleteTitle")}</DialogTitle>
+						<DialogDescription>
+							{t("sharedArea.deleteDescription", { name: deleteTarget?.name })}
+						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
-						<Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)}>
-							取消
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => setDeleteTarget(null)}
+							disabled={operation === "delete"}
+						>
+							{t("common.cancel")}
 						</Button>
-						<Button variant="destructive" size="sm" onClick={() => deleteTarget && handleDelete(deleteTarget)}>
-							删除
+						<Button
+							variant="destructive"
+							size="sm"
+							onClick={() => deleteTarget && handleDelete(deleteTarget)}
+							disabled={operation === "delete"}
+						>
+							{operation === "delete" ? t("sharedArea.deleting") : t("common.delete")}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
@@ -373,28 +451,57 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 }
 
 function SharedAreaToolbar({
+	disabled,
+	isRefreshing,
 	onRefresh,
 	onCreateFile,
 	onCreateDir,
 	onImport,
 }: {
+	disabled: boolean;
+	isRefreshing: boolean;
 	onRefresh: () => void;
 	onCreateFile: () => void;
 	onCreateDir: () => void;
 	onImport: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
-			<Button variant="ghost" size="icon-xs" onClick={onRefresh} aria-label="刷新">
-				<RefreshCw className="size-3.5" />
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				onClick={onRefresh}
+				aria-label={t("sharedArea.refresh")}
+				disabled={disabled}
+			>
+				<RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
 			</Button>
-			<Button variant="ghost" size="icon-xs" onClick={onCreateFile} aria-label="新建文件">
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				onClick={onCreateFile}
+				aria-label={t("sharedArea.newFile")}
+				disabled={disabled}
+			>
 				<Plus className="size-3.5" />
 			</Button>
-			<Button variant="ghost" size="icon-xs" onClick={onCreateDir} aria-label="新建文件夹">
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				onClick={onCreateDir}
+				aria-label={t("sharedArea.newFolder")}
+				disabled={disabled}
+			>
 				<FolderOpen className="size-3.5" />
 			</Button>
-			<Button variant="ghost" size="icon-xs" onClick={onImport} aria-label="导入文件或文件夹">
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				onClick={onImport}
+				aria-label={t("sharedArea.importAction")}
+				disabled={disabled}
+			>
 				<Import className="size-3.5" />
 			</Button>
 		</div>
@@ -405,6 +512,7 @@ function FileCreationInput({
 	inputRef,
 	creating,
 	newName,
+	disabled,
 	onNewNameChange,
 	onKeyDown,
 	onBlur,
@@ -412,10 +520,12 @@ function FileCreationInput({
 	inputRef: React.RefObject<HTMLInputElement | null>;
 	creating: "file" | "dir";
 	newName: string;
+	disabled: boolean;
 	onNewNameChange: (value: string) => void;
 	onKeyDown: (e: React.KeyboardEvent) => void;
 	onBlur: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<div className="flex items-center gap-2 px-2 py-1">
 			{creating === "file" ? (
@@ -426,11 +536,12 @@ function FileCreationInput({
 			<Input
 				ref={inputRef}
 				autoFocus
+				disabled={disabled}
 				value={newName}
 				onChange={(e) => onNewNameChange(e.target.value)}
 				onKeyDown={onKeyDown}
 				onBlur={onBlur}
-				placeholder={creating === "file" ? "文件名" : "文件夹名"}
+				placeholder={creating === "file" ? t("sharedArea.fileName") : t("sharedArea.folderName")}
 				className="h-6 text-xs"
 			/>
 		</div>
@@ -438,13 +549,14 @@ function FileCreationInput({
 }
 
 function EmptySharedState({ onImport }: { onImport: () => void }) {
+	const { t } = useTranslation();
 	return (
 		<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
 			<UploadCloud className="size-5 text-muted-foreground" />
-			<p className="text-xs font-medium">共享区为空</p>
-			<p className="max-w-[200px] text-[10px] text-muted-foreground">创建文件、点击导入，或将文件拖入此处</p>
+			<p className="text-xs font-medium">{t("sharedArea.empty")}</p>
+			<p className="max-w-[200px] text-[10px] text-muted-foreground">{t("sharedArea.emptyHint")}</p>
 			<Button variant="line" size="sm" onClick={onImport}>
-				导入文件
+				{t("sharedArea.importFiles")}
 			</Button>
 		</div>
 	);
@@ -459,62 +571,62 @@ interface SharedAreaNodeProps {
 }
 
 function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: SharedAreaNodeProps) {
+	const { t } = useTranslation();
 	const Icon = node.type === "directory" ? Folder : File;
+	const revealInFinder = async () => {
+		const result = await window.look.revealInFinder(node.absolutePath);
+		if (!result?.success) toast.error(result?.error ?? t("sharedArea.revealFailed"));
+	};
+	const copyAbsolutePath = async () => {
+		try {
+			await navigator.clipboard.writeText(node.absolutePath);
+			toast.success(t("sharedArea.pathCopied"));
+		} catch {
+			toast.error(t("sharedArea.copyFailed"));
+		}
+	};
 	return (
-		<button
-			type="button"
-			aria-label={node.type === "directory" ? `文件夹: ${node.name}` : `文件: ${node.name}`}
-			className={`group flex h-7 cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+		<div
+			className={`group flex h-7 w-full items-center rounded-md text-sm ${
 				selected ? "bg-accent text-accent-foreground" : "text-foreground hover:bg-muted"
 			}`}
-			onClick={() => onSelect(node.path)}
-			onDoubleClick={() => {
-				if (node.type === "file") {
-					window.look.revealInFinder(node.absolutePath);
-				}
-			}}
-			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault();
-					onSelect(node.path);
-				}
-			}}
 		>
-			<div className="flex min-w-0 items-center gap-2">
+			<button
+				type="button"
+				aria-label={t(node.type === "directory" ? "sharedArea.folderLabel" : "sharedArea.fileLabel", {
+					name: node.name,
+				})}
+				className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				onClick={() => onSelect(node.path)}
+				onDoubleClick={() => node.type === "file" && void revealInFinder()}
+			>
 				<Icon className="size-4 shrink-0 text-muted-foreground" />
 				<span className="truncate">{node.name}</span>
-			</div>
+			</button>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
 						variant="ghost"
 						size="icon-xs"
-						className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+						className="mr-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
 						onClick={(e) => e.stopPropagation()}
-						aria-label="更多操作"
+						aria-label={t("sharedArea.moreActions")}
 					>
 						<MoreHorizontal className="size-3.5" />
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem
-						onClick={() => {
-							void navigator.clipboard.writeText(node.absolutePath);
-							toast.success("已复制绝对路径");
-						}}
-					>
-						复制绝对路径
+					<DropdownMenuItem onClick={() => void copyAbsolutePath()}>{t("sharedArea.copyPath")}</DropdownMenuItem>
+					<DropdownMenuItem onClick={() => void revealInFinder()}>
+						{t("sharedArea.revealInFinder")}
 					</DropdownMenuItem>
-					<DropdownMenuItem onClick={() => window.look.revealInFinder(node.absolutePath)}>
-						在 Finder 中打开
-					</DropdownMenuItem>
-					<DropdownMenuItem onClick={() => onExport(node)}>导出到…</DropdownMenuItem>
+					<DropdownMenuItem onClick={() => onExport(node)}>{t("sharedArea.exportAction")}</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem variant="destructive" onClick={() => onDelete(node)}>
-						<Trash2 className="size-4" /> 删除
+						<Trash2 className="size-4" /> {t("common.delete")}
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
-		</button>
+		</div>
 	);
 }

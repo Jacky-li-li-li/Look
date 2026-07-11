@@ -22,9 +22,10 @@ import {
 	DropdownMenuTrigger,
 } from "@shared/components/ui/dropdown-menu";
 import type { FileTreeNode } from "@shared/types";
-import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
+import { useAtom, useSetAtom, useStore } from "jotai";
 import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
 import {
@@ -81,6 +82,7 @@ function useLazyRef<T>(factory: () => T): React.MutableRefObject<T> {
 }
 
 export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelProps) {
+	const { t } = useTranslation();
 	const [expanded, setExpanded] = useAtom(expandedWorkspacePathsAtomFamily(projectId));
 	const [loaded, setLoaded] = useAtom(loadedWorkspaceChildrenAtomFamily(projectId));
 	const [isLoading, setIsLoading] = useAtom(workspaceTreeLoadingAtomFamily(projectId));
@@ -189,11 +191,11 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 						})
 						.catch(() => undefined);
 				} else if (result && !result.success) {
-					toast.error(result.error ?? "加载子目录失败");
+					toast.error(result.error ?? t("workspaceTree.loadChildFailed"));
 				}
 			} catch (error) {
 				if (operationGenRef.current !== gen) return;
-				const message = error instanceof Error ? error.message : "加载子目录失败";
+				const message = error instanceof Error ? error.message : t("workspaceTree.loadChildFailed");
 				toast.error(message);
 			}
 			// parentPath 参数保留供后续扩展
@@ -209,6 +211,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 			showHiddenFiles,
 			watchedPathsRef,
 			operationGenRef,
+			t,
 		],
 	);
 
@@ -240,21 +243,21 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 						console.error("[WorkspaceTree] Failed to start root watcher on refresh:", err);
 					});
 			} else {
-				const errMsg = result?.error ?? "刷新失败";
+				const errMsg = result?.error ?? t("workspaceTree.refreshFailed");
 				console.error(`[WorkspaceTree] Refresh failed: ${errMsg}`);
 				setError(errMsg);
 				toast.error(errMsg);
 			}
 		} catch (error) {
 			if (operationGenRef.current !== gen) return;
-			const message = error instanceof Error ? error.message : "刷新失败";
+			const message = error instanceof Error ? error.message : t("workspaceTree.refreshFailed");
 			console.error("[WorkspaceTree] Refresh exception:", error);
 			setError(message);
 			toast.error(message);
 		} finally {
 			if (operationGenRef.current === gen) setIsLoading(false);
 		}
-	}, [projectId, setLoaded, setIsLoading, setError, showHiddenFiles, watchedPathsRef, operationGenRef]);
+	}, [projectId, setLoaded, setIsLoading, setError, showHiddenFiles, watchedPathsRef, operationGenRef, t]);
 
 	const handleCollapseAll = useCallback(() => {
 		setExpanded(new Set());
@@ -263,10 +266,15 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
-				<Button variant="ghost" size="icon-xs" onClick={handleRefresh} aria-label="刷新">
+				<Button variant="ghost" size="icon-xs" onClick={handleRefresh} aria-label={t("workspaceTree.refresh")}>
 					<RefreshCw className="size-3.5" />
 				</Button>
-				<Button variant="ghost" size="icon-xs" onClick={handleCollapseAll} aria-label="折叠全部">
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					onClick={handleCollapseAll}
+					aria-label={t("workspaceTree.collapseAll")}
+				>
 					<ChevronsDownUp className="size-3.5" />
 				</Button>
 				<div className="flex-1" />
@@ -274,27 +282,27 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 					variant="ghost"
 					size="icon-xs"
 					onClick={handleToggleShowHidden}
-					aria-label={showHiddenFiles ? "隐藏隐藏文件" : "显示隐藏文件"}
-					title={showHiddenFiles ? "隐藏隐藏文件" : "显示隐藏文件"}
+					aria-label={t(showHiddenFiles ? "workspaceTree.hideHidden" : "workspaceTree.showHidden")}
+					title={t(showHiddenFiles ? "workspaceTree.hideHidden" : "workspaceTree.showHidden")}
 				>
 					{showHiddenFiles ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
 				</Button>
 			</div>
-			<div className="min-h-0 flex-1" role="tree" aria-label="工作区文件树">
+			<div className="min-h-0 flex-1" role="tree" aria-label={t("workspaceTree.label")}>
 				{isLoading ? (
 					<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
 						<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-						<span className="text-xs text-muted-foreground">加载中…</span>
+						<span className="text-xs text-muted-foreground">{t("workspaceTree.loading")}</span>
 					</div>
 				) : error ? (
 					<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
 						<p className="text-xs text-destructive">{error}</p>
 						<Button variant="outline" size="sm" onClick={handleRefresh}>
-							重试
+							{t("workspaceTree.retry")}
 						</Button>
 					</div>
 				) : rootChildren.length === 0 ? (
-					<div className="px-3 py-8 text-center text-xs text-muted-foreground">目录为空</div>
+					<div className="px-3 py-8 text-center text-xs text-muted-foreground">{t("workspaceTree.empty")}</div>
 				) : (
 					<Virtuoso
 						data={flatRows}

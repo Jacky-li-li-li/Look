@@ -9,34 +9,31 @@ import type { PermissionMode } from "@shared/types";
 import { useSetAtom } from "jotai";
 import { Check, ChevronDown, Shield } from "lucide-react";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { permissionModeAtomFamily } from "../../store/atoms";
 
 interface ModeOption {
 	mode: PermissionMode;
-	label: string;
-	labelZh: string;
-	description: string;
+	labelKey: string;
+	descriptionKey: string;
 }
 
 const MODE_OPTIONS: ModeOption[] = [
 	{
 		mode: "always",
-		label: "Always",
-		labelZh: "始终信任",
-		description: "本次会话授权所有工具，无需确认",
+		labelKey: "permission.always",
+		descriptionKey: "permission.alwaysDesc",
 	},
 	{
 		mode: "ask",
-		label: "Ask",
-		labelZh: "每次询问",
-		description: "写入类工具调用前弹出确认对话框",
+		labelKey: "permission.ask",
+		descriptionKey: "permission.askDesc",
 	},
 	{
 		mode: "plan",
-		label: "Plan",
-		labelZh: "规划后执行",
-		description: "只读探索、提问并提交计划；批准后执行",
+		labelKey: "permission.plan",
+		descriptionKey: "permission.planDesc",
 	},
 ];
 
@@ -52,6 +49,7 @@ interface PermissionModeSelectorProps {
 }
 
 export default function PermissionModeSelector({ agentId, currentMode }: PermissionModeSelectorProps) {
+	const { t } = useTranslation();
 	const setMode = useSetAtom(permissionModeAtomFamily(agentId));
 	const [switching, setSwitching] = useState(false);
 
@@ -66,12 +64,12 @@ export default function PermissionModeSelector({ agentId, currentMode }: Permiss
 				if (!result?.success) throw new Error(result?.error ?? "Permission mode switch failed");
 				setMode(mode);
 			} catch (error) {
-				toast.error(error instanceof Error ? error.message : "权限模式切换失败");
+				toast.error(error instanceof Error ? error.message : t("permission.switchFailed"));
 			} finally {
 				setSwitching(false);
 			}
 		},
-		[agentId, currentMode, switching, setMode],
+		[agentId, currentMode, switching, setMode, t],
 	);
 
 	return (
@@ -83,8 +81,8 @@ export default function PermissionModeSelector({ agentId, currentMode }: Permiss
 					variant="line"
 					size="sm"
 					className="group/perm h-7 gap-1 font-mono text-[11px]"
-					title={current.description}
-					aria-label={current.description}
+					title={t(current.descriptionKey)}
+					aria-label={t(current.descriptionKey)}
 				>
 					<Shield className={`size-3 ${MODE_COLORS[currentMode]}`} data-icon="inline-start" />
 					<ChevronDown
@@ -111,11 +109,12 @@ export default function PermissionModeSelector({ agentId, currentMode }: Permiss
 							<Shield className={`mt-0.5 size-3 shrink-0 ${MODE_COLORS[option.mode]}`} />
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-1">
-									<span className="font-medium">{option.label}</span>
-									<span className="text-[10px] text-muted-foreground">{option.labelZh}</span>
+									<span className="font-medium">{t(option.labelKey)}</span>
 									{isActive && <Check className="ml-auto size-3 shrink-0" />}
 								</div>
-								<p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{option.description}</p>
+								<p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+									{t(option.descriptionKey)}
+								</p>
 							</div>
 						</button>
 					);

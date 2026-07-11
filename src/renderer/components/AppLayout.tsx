@@ -10,18 +10,18 @@ import { appReadyPhaseAtom, type ProviderSettingsData, type SettingsTab } from "
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import AgentSquare from "./AgentMarketplace/AgentSquare";
 import ChatPanel from "./chat/ChatPanel";
-import DeleteProjectDialog from "./dialogs/DeleteProjectDialog";
 import EmptySessionState from "./chat/EmptySessionState";
+import WelcomeScreen from "./chat/WelcomeScreen";
+import DeleteProjectDialog from "./dialogs/DeleteProjectDialog";
 import NewProjectDialog from "./dialogs/NewProjectDialog";
 import PermissionDialog from "./dialogs/PermissionDialog";
 import PlanApprovalDialog from "./dialogs/PlanApprovalDialog";
 import PlanQuestionDialog from "./dialogs/PlanQuestionDialog";
-import { RightPanel } from "./workspace/RightPanel";
+import UpdateNotification from "./dialogs/UpdateNotification";
 import SessionSheetBar from "./SessionSheetBar";
 import Sidebar from "./Sidebar";
 import SettingsDialog from "./settings/SettingsDialog";
-import UpdateNotification from "./dialogs/UpdateNotification";
-import WelcomeScreen from "./chat/WelcomeScreen";
+import { RightPanel } from "./workspace/RightPanel";
 
 interface AppLayoutProps {
 	sidebarCollapsed: boolean;

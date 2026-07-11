@@ -72,7 +72,7 @@ export function useAgentActions() {
 				appStore.set(activeAgentIdAtom, fallbackId);
 				markSessionSnapshotLoading(fallbackId, true);
 				api.activateSession(fallbackId)
-					.then((result: any) => {
+					.then((result) => {
 						if (result?.success) {
 							appStore.set(activeAgentIdAtom, fallbackId);
 						} else {

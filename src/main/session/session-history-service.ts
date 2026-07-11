@@ -8,7 +8,7 @@
 
 import fs, { existsSync } from "node:fs";
 import { type AgentSessionRuntime, SessionManager, type SessionStartEvent } from "@earendil-works/pi-coding-agent";
-import type { ForkedSessionResult, NavigateTreeResult } from "@look/shared/types";
+import type { ForkedSessionResult, NavigateTreeResult, SessionSnapshotEnvelope } from "@look/shared/types";
 import type { ManagedRuntime } from "./runtime-registry.js";
 
 export interface SessionHistoryHost {
@@ -27,7 +27,7 @@ export interface SessionHistoryHost {
 	refreshProjectSessions(projectId: string): Promise<unknown>;
 	activateForkedSession(projectId: string, sessionId: string): void;
 	markSessionDefaultName(sessionId: string): void;
-	emitSessionState(sessionId: string, reason: string): void;
+	emitSessionState(sessionId: string, reason: SessionSnapshotEnvelope["reason"]): void;
 }
 
 export class SessionHistoryService {

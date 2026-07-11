@@ -225,6 +225,9 @@ function createWindow(): void {
 		minWidth: 900,
 		minHeight: 600,
 		title: "Look",
+		// 默认暗色主题底色（tone-dark 的 --background = oklch(0.09 0.002 85)）。
+		// 消除 Electron 默认白色窗口底在主题切换 repaint 间隙透出导致的白闪。
+		backgroundColor: "#030202",
 		icon: path.join(__dirname, "assets/icon-1024.png"),
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
