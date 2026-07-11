@@ -7,7 +7,7 @@ import { useAtom } from "jotai";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { supabase } from "../../lib/supabase";
+import { getSupabase } from "../../lib/supabase";
 import { userProfileAtom } from "../../store/authAtoms";
 import UserAvatar from "../UserAvatar";
 
@@ -29,6 +29,7 @@ export default function ProfileEditor() {
 			}
 			// RLS enforces auth.uid() = id on user_profiles;
 			// the id comes from supabase.auth.getUser() — server-verified identity
+			const supabase = await getSupabase();
 			if (!supabase) {
 				setEditingName(false);
 				return;
@@ -67,6 +68,7 @@ export default function ProfileEditor() {
 				}
 				// RLS enforces auth.uid() = id on user_profiles;
 				// the id comes from supabase.auth.getUser() — server-verified identity
+				const supabase = await getSupabase();
 				if (!supabase) return;
 				const { data: authData } = await supabase.auth.getUser();
 				if (authData.user) {

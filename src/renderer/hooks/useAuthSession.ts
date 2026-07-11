@@ -11,7 +11,7 @@
 
 import { useAtom } from "jotai";
 import { useEffect } from "react";
-import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
 
 const api = window.look;
@@ -39,13 +39,18 @@ export function useAuthSession() {
 			})
 			.catch(() => {});
 
-		const configured = isSupabaseConfigured();
+		// Browser mock scenarios are deterministic renderer fixtures and must not
+		// be replaced by a real Supabase session from the developer's .env.
+		const isBrowserMock = import.meta.env.DEV && new URLSearchParams(window.location.search).has("mock");
+		const configured = isSupabaseConfigured() && !isBrowserMock;
 
 		async function restoreSession() {
-			if (!configured || !supabase) {
+			if (!configured) {
 				// 本地模式：步骤 1 已拉取本地 profile，无需额外操作
 				return;
 			}
+			const supabase = await getSupabase();
+			if (!supabase || cancelled) return;
 
 			// Supabase 模式：后台校验会话，仅在校验失败时切到 LoginScreen。
 			const {

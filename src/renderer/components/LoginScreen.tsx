@@ -12,7 +12,7 @@ import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { supabase } from "../lib/supabase";
+import { getSupabase } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
@@ -348,10 +348,6 @@ export default function LoginScreen() {
 	async function handleLogin(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
-		if (!supabase) {
-			setError(t("auth.unavailable"));
-			return;
-		}
 		if (!email.trim()) {
 			setError(t("auth.emailRequired"));
 			return;
@@ -362,6 +358,12 @@ export default function LoginScreen() {
 		}
 
 		setSubmitting(true);
+		const supabase = await getSupabase();
+		if (!supabase) {
+			setError(t("auth.unavailable"));
+			setSubmitting(false);
+			return;
+		}
 		const { data, error: err } = await supabase.auth.signInWithPassword({
 			email: email.trim(),
 			password,
@@ -395,10 +397,6 @@ export default function LoginScreen() {
 	async function handleRegister(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
-		if (!supabase) {
-			setError(t("auth.unavailable"));
-			return;
-		}
 		if (!email.trim()) {
 			setError(t("auth.emailRequired"));
 			return;
@@ -409,6 +407,12 @@ export default function LoginScreen() {
 		}
 
 		setSubmitting(true);
+		const supabase = await getSupabase();
+		if (!supabase) {
+			setError(t("auth.unavailable"));
+			setSubmitting(false);
+			return;
+		}
 		const { error: err } = await supabase.auth.signUp({
 			email: email.trim(),
 			password,
@@ -433,16 +437,18 @@ export default function LoginScreen() {
 	async function handleForgot(e: React.FormEvent) {
 		e.preventDefault();
 		setError(null);
-		if (!supabase) {
-			setError(t("auth.unavailable"));
-			return;
-		}
 		if (!email.trim()) {
 			setError(t("auth.emailRequired"));
 			return;
 		}
 
 		setSubmitting(true);
+		const supabase = await getSupabase();
+		if (!supabase) {
+			setError(t("auth.unavailable"));
+			setSubmitting(false);
+			return;
+		}
 		const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim());
 		setSubmitting(false);
 
@@ -457,6 +463,7 @@ export default function LoginScreen() {
 	// ── Profile ──
 
 	async function loadProfile(userId: string, userEmail: string) {
+		const supabase = await getSupabase();
 		if (!supabase) return;
 		const { data: p } = await supabase.from("user_profiles").select("user_name, avatar").eq("id", userId).single();
 

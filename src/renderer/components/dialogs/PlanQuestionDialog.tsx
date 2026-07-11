@@ -13,10 +13,13 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 	const [responding, setResponding] = useState(false);
 	const [visible, setVisible] = useState(false);
 	const panelRef = useRef<HTMLDivElement>(null);
+	const respondingRef = useRef(false);
+	respondingRef.current = responding;
 	const draft = storedDraft.requestId === request?.requestId ? storedDraft : emptyPlanQuestionDraft();
 	const { selections, otherEnabled, otherValues } = draft;
 
 	const dismiss = useCallback(() => {
+		if (respondingRef.current) return;
 		setRequest(null);
 		setDraft(emptyPlanQuestionDraft());
 	}, [setRequest, setDraft]);
@@ -30,17 +33,43 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 		setVisible(false);
 	}, [request, sessionId]);
 
-	// Close on Escape
+	// Move focus into the modal sheet, trap Tab within it, and restore focus on close.
 	useEffect(() => {
 		if (!request || !visible) return;
+		const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		panelRef.current?.focus();
 		const onKey = (event: KeyboardEvent) => {
 			if (event.key === "Escape") {
 				event.preventDefault();
 				dismiss();
+				return;
+			}
+			if (event.key !== "Tab" || !panelRef.current) return;
+			const focusable = Array.from(
+				panelRef.current.querySelectorAll<HTMLElement>(
+					'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+				),
+			).filter((element) => !element.hidden);
+			if (focusable.length === 0) {
+				event.preventDefault();
+				panelRef.current.focus();
+				return;
+			}
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			if (event.shiftKey && document.activeElement === first) {
+				event.preventDefault();
+				last.focus();
+			} else if (!event.shiftKey && document.activeElement === last) {
+				event.preventDefault();
+				first.focus();
 			}
 		};
 		document.addEventListener("keydown", onKey);
-		return () => document.removeEventListener("keydown", onKey);
+		return () => {
+			document.removeEventListener("keydown", onKey);
+			previouslyFocused?.focus();
+		};
 	}, [request, visible, dismiss]);
 
 	const complete = useMemo(() => {
@@ -117,6 +146,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 		<>
 			{/* Backdrop */}
 			<div
+				aria-hidden="true"
 				className={cn(
 					"fixed inset-0 z-40 bg-black/5 transition-opacity duration-200",
 					visible ? "opacity-100" : "opacity-0 pointer-events-none",
@@ -127,6 +157,11 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 			{/* Options Panel */}
 			<div
 				ref={panelRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="plan-question-title"
+				aria-describedby="plan-question-description"
+				tabIndex={-1}
 				className={cn(
 					"fixed top-0 right-0 z-50 flex h-full w-[420px] max-w-[90vw] flex-col",
 					"bg-popover border-l border-hairline shadow-2xl",
@@ -141,13 +176,15 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 							<CircleHelp className="size-4 text-sky-500" />
 						</div>
 						<div>
-							<p className="text-[13px] font-medium leading-tight">Agent 提问</p>
-							<p className="text-[10px] text-muted-foreground">
+							<p id="plan-question-title" className="text-[13px] font-medium leading-tight">
+								Agent 提问
+							</p>
+							<p id="plan-question-description" className="text-[10px] text-muted-foreground">
 								{request.questions.length} 个问题 · 请选择后提交
 							</p>
 						</div>
 					</div>
-					<Button variant="ghost" size="icon-sm" onClick={dismiss}>
+					<Button variant="ghost" size="icon-sm" onClick={dismiss} disabled={responding} aria-label="关闭">
 						<X className="size-4" />
 					</Button>
 				</div>
@@ -177,6 +214,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 											<button
 												key={option.label}
 												type="button"
+												disabled={responding}
 												onClick={() => chooseOption(question.question, option.label, isMulti)}
 												className={cn(
 													"flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-all",
@@ -211,6 +249,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 										variant={otherEnabled[question.question] ? "line-filled" : "line"}
 										size="sm"
 										onClick={() => chooseOther(question.question, isMulti)}
+										disabled={responding}
 										className="h-7 text-[11px]"
 									>
 										Other
@@ -218,6 +257,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 									{otherEnabled[question.question] && (
 										<Input
 											autoFocus
+											disabled={responding}
 											value={otherValues[question.question] ?? ""}
 											onChange={(event) => {
 												const value = event.target.value;

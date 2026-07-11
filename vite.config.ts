@@ -24,6 +24,7 @@ export default defineConfig({
 		react(),
 		{
 			name: "dev-csp-relax",
+			apply: "serve",
 			transformIndexHtml(html) {
 				// 开发模式下 Vite 注入内联脚本（React Refresh、HMR），
 				// 需要放宽 CSP 的 script-src。生产构建保留严格 CSP。
@@ -50,12 +51,7 @@ export default defineConfig({
 			},
 			output: {
 				manualChunks: {
-					// Isolate heavy syntax-highlighting and diagram libraries so they
-					// don't bloat the main entry chunk.
-					shiki: ["shiki"],
-					mermaid: ["mermaid"],
 					// Split large vendor libraries into stable chunks for better caching.
-					"vendor-react": ["react", "react-dom"],
 					"vendor-ui": ["lucide-react", "radix-ui"],
 					"vendor-data": ["@supabase/supabase-js"],
 				},

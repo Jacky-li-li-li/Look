@@ -9,10 +9,11 @@ import {
 } from "@shared/components/ui/dialog";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Check, FileText, ShieldCheck, X } from "lucide-react";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import { agentsAtom, permissionModeAtomFamily, planApprovalRequestAtomFamily } from "../../store/atoms";
-import LookMarkdown from "../markdown/LookMarkdown";
+
+const LookMarkdown = lazy(() => import("../markdown/LookMarkdown"));
 
 const AUTO_REJECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -112,7 +113,9 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 					</div>
 				</DialogHeader>
 				<div className="max-h-[68vh] overflow-y-auto px-6 py-5">
-					<LookMarkdown content={request.plan} docs />
+					<Suspense fallback={<PlanMarkdownFallback content={request.plan} />}>
+						<LookMarkdown content={request.plan} docs />
+					</Suspense>
 				</div>
 				<DialogFooter className="mx-0 mb-0 flex-row justify-end rounded-none px-5 py-3">
 					<Button variant="line" size="sm" disabled={responding} onClick={() => void respond("reject")}>
@@ -126,5 +129,17 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+function PlanMarkdownFallback({ content }: { content: string }) {
+	return (
+		<div className="space-y-1 text-sm leading-6 text-foreground">
+			{content.split("\n").map((line, index) => (
+				<p key={`${index}:${line}`} className="min-h-6 whitespace-pre-wrap">
+					{line.replace(/^#{1,6}\s+/, "")}
+				</p>
+			))}
+		</div>
 	);
 }

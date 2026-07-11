@@ -1,5 +1,7 @@
 # Look 项目架构审查报告
 
+> ⚠️ **2026-07-11 复核说明**：当前报告中的部分定量数据已过期，最新审计见 [`docs/architecture-audit-2026-07-11.md`](./architecture-audit-2026-07-11.md)。下文保留原审查结论供历史参考，执行整改前请以最新审计报告为准。
+
 **审查对象**：Look（基于 Electron + React 的 pi SDK 桌面客户端）  
 **审查版本**：`v1.0.0`（commit 基线：当前工作区）  
 **审查维度**：分层合理性、可扩展性、性能、可维护性、安全性  
@@ -23,13 +25,14 @@
 
 ### 1.2 关键数据
 
-- **源码总行数**：`33,771` 行（`src/`）
-- **测试总行数**：`5,512` 行，测试文件 `36` 个
-- **最大单文件**：`src/main/session-runtime-manager.ts`（`2,432` 行）
-- **次大模块**：`src/main/ipc-handlers.ts`（`1,071` 行）、`src/main/im/lark-bridge-service.ts`（`1,094` 行）
-- **渲染层最大模块**：`src/renderer/store/ipcHandler.ts`（`968` 行）、`src/renderer/store/atoms.ts`（`352` 行）
-- **测试状态**：`230 passed / 15 failed / 3 skipped`（3 个测试文件失败）
-- **Lint 状态**：`27 errors / 9 warnings`（未通过）
+- **源码总行数**：`36,879` 行（`src/`，198 个 `.ts/.tsx` 文件）
+- **测试总行数**：约 `5,512` 行，测试文件 `58` 个
+- **最大单文件**：`src/main/session/runtime-manager.ts`（`1,312` 行）
+- **次大模块**：`src/main/im/lark-bridge-service.ts`（`1,136` 行）、`src/renderer/store/ipcHandler.ts`（`1,138` 行）
+- **渲染层最大模块**：`src/renderer/store/ipcHandler.ts`（`1,138` 行）、`src/renderer/store/atoms.ts`（`352` 行）
+- **测试状态**：`319 passed / 3 skipped`，56 个测试文件通过 / 2 个 skipped（全绿）
+- **Lint 状态**：通过（0 errors / 0 warnings）
+- **TypeCheck 状态**：`tsconfig.main.json` + `tsconfig.json` 均通过
 
 ---
 
@@ -73,25 +76,16 @@
 
 ### 2.3 问题发现
 
-#### P0 — `SessionRuntimeManager` 演化为上帝类
+#### P1 — `SessionRuntimeManager` 已大幅拆分，仍偏大
 
-- **证据**：`src/main/session-runtime-manager.ts` 共 `2,432` 行，import 了 `20` 个内部模块，直接管理：
-  - 项目索引与生命周期（`projects`、`sessionsByProject`、`sessionsById`）
-  - pi 运行时注册表（`runtimes`、`runtimeInitializations`）
-  - 权限/计划模式状态同步
-  - 子会话注册表与执行跟踪
-  - UI 事件翻译与 8ms 批处理
-  - 自动标题触发
-  - IM Provider 绑定
-  - 模型/提供商发现
-  - 自定义 provider 与 prompt store 暴露
-- **影响**：任何会话/项目/权限/子代理的改动都需要修改该文件；单文件冲突概率高；新人接入成本高；单测难以针对单一职责编写。
-- **根因**：早期以“一个管理器管所有运行时”为设计起点，随着 v0.3~v0.6 功能快速叠加，未及时进行领域拆分。
+- **证据**：原 `src/main/session-runtime-manager.ts`（`2,432` 行）已不存在；当前 `src/main/session/runtime-manager.ts` 为 `1,312` 行，并拆出 `session-catalog.ts`、`runtime-registry.ts`、`runtime-factory.ts`、`session-event-bus.ts`、`session-lifecycle-service.ts`、`session-history-service.ts`、`session-control-service.ts`、`session-messaging-service.ts`、`session-notifier.ts`、`session-subagent-service.ts`、`session-permission-orchestrator.ts`、`event-translator.ts`、`ui-event-batcher.ts`。
+- **影响**：SRT 现在主要作为 facade 与跨领域编排器；但 1,312 行仍偏大，模型/设置查询等仍可继续下沉。
+- **状态**：Phase 1 拆分已完成，剩余 facade 精简与新增问题见最新审计报告 `docs/architecture-audit-2026-07-11.md`。
 
-#### P1 — IPC Handler 为巨型 Switch
+#### P2 — IPC Handler 已拆分为领域 Router，但 renderer store 仍庞大
 
-- **证据**：`src/main/ipc-handlers.ts` 共 `1,071` 行，单个 `handleRendererInvoke` 函数包含近 60 个 `case`，涵盖消息发送、设置、项目、文件、IM、权限、计划、子代理等所有领域。
-- **影响**：新增一个 IPC 命令需要修改中心文件；不同领域的事件处理代码互相干扰；难以按领域进行单元测试与权限审计。
+- **证据**：`src/main/ipc-handlers.ts` 已改为 router 注册器（171 行），具体逻辑分布在 `src/main/ipc/routers/*.ts`；但 `src/renderer/store/ipcHandler.ts` 仍为 `1,138` 行，承担所有主进程事件 → Jotai 的转换。
+- **影响**：主进程 IPC 扩展性已改善，渲染层状态中心仍是瓶颈。
 
 #### P1 — 渲染层状态中心过于庞大
 
@@ -219,25 +213,20 @@
 #### P0 — 核心文件过大，违反单一职责
 
 - **证据**：
-  - `session-runtime-manager.ts`：`2,432` 行
-  - `ipc-handlers.ts`：`1,071` 行
-  - `lark-bridge-service.ts`：`1,094` 行
-  - `store/ipcHandler.ts`：`968` 行
+  - `src/main/session/runtime-manager.ts`：`1,312` 行
+  - `src/main/im/lark-bridge-service.ts`：`1,136` 行
+  - `src/renderer/store/ipcHandler.ts`：`1,138` 行
+  - `src/renderer/store/atoms.ts`：`352` 行
 - **影响**：代码审查困难、合并冲突频繁、新人难以定位逻辑、单测难以拆分。
 - **优化方向**：按领域拆分为 `ProjectService`、`SessionService`、`SubagentService`、`EventTranslationService`、`IpcRouter` 等。
 
-#### P0 — Lint 与测试未通过（建议升为 P0）
+#### ✅ Lint 与测试已恢复全绿
 
-- **证据**：
-  - `npm run lint`：`27 errors / 9 warnings`（Biome check）
-  - `npm run test`：`3 failed test files / 15 failed tests / 230 passed / 3 skipped`
-- **影响**：CI 无法作为质量门禁。在启动 SRT 拆分等重大重构前，必须先修好门禁——否则重构过程中引入的回归无法自动化发现。**任何架构重构的安全网依赖于此。**
-- **优化方向**：
-  - 立即修复 lint（多数为格式问题，可 `npm run lint:fix` 自动处理）。
-  - 修复测试：
-    - `plan-dialogs.test.tsx` 因 UI 文案/placeholder 变化导致断言失败。
-    - `session-loading-state.test.tsx` 因 `use-stick-to-bottom` 依赖调用 `ResizeObserver` 而未在 Vitest setup 中 polyfill。
-  - 将 `npm run check` 接入 GitHub Actions CI（lint + typecheck + test 全绿才允许合并）。
+- **当前状态**：
+  - `npm run lint`：通过（0 errors / 0 warnings）
+  - `npx vitest run`：`319 passed / 3 skipped`，56 个测试文件通过 / 2 个 skipped
+  - `npm run check`（lint + typecheck + test）：通过
+- **建议**：保持当前状态，将 `npm run check` 接入 GitHub Actions CI，作为 PR 合并门禁。
 
 #### P1 — 中英混合注释与命名
 

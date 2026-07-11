@@ -8,7 +8,7 @@ import {
 	DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Input } from "@shared/components/ui/input";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -36,6 +36,7 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 	const [args, setArgs] = useState("");
 	const [url, setUrl] = useState("");
 	const [saving, setSaving] = useState(false);
+	const returnFocusRef = useRef<HTMLElement | null>(null);
 
 	const resetForm = useCallback(() => {
 		setName("");
@@ -58,8 +59,6 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 			resetForm();
 		}
 	}, [open, editingName, initialConfig, resetForm]);
-	if (!open) return null;
-
 	const handleSave = async () => {
 		if (!name.trim()) {
 			toast.error(t("mcpDialog.nameRequired"));
@@ -110,6 +109,15 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 		<Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && !saving && onClose()}>
 			<DialogContent
 				className="flex max-h-[min(680px,calc(100vh-2rem))] max-w-md flex-col gap-0 overflow-hidden p-0"
+				onOpenAutoFocus={() => {
+					if (document.activeElement instanceof HTMLElement) returnFocusRef.current = document.activeElement;
+				}}
+				onCloseAutoFocus={(event) => {
+					if (!returnFocusRef.current) return;
+					event.preventDefault();
+					returnFocusRef.current.focus();
+					returnFocusRef.current = null;
+				}}
 				onEscapeKeyDown={(event) => saving && event.preventDefault()}
 				onInteractOutside={(event) => saving && event.preventDefault()}
 				showCloseButton={!saving}
