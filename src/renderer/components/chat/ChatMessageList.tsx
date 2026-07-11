@@ -7,7 +7,6 @@ import { Check, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-re
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { useStickToBottomContext } from "use-stick-to-bottom";
 import { useScrollPositionManager } from "../../hooks/useScrollPositionMemory";
 import { buildTimeline, type TimelineItem } from "../../lib/timeline";
 import {
@@ -27,7 +26,7 @@ import {
 } from "../dialogs/BranchConfirmDialog";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import type { ChatInputHandle } from "./ChatInput";
-import { Conversation, ConversationContent, ConversationScrollButton } from "./conversation";
+import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
 import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
 
 interface ChatMessageListProps {
@@ -70,7 +69,7 @@ function messageText(message: AgentMessage): string {
 
 // ============================================================
 // ChatMessagesInner
-// 渲染在 Conversation（StickToBottom）内部，可以使用 Context。
+// 渲染在 Conversation 内部，可以使用 Context。
 // ready/transitioning 由外层计算后传入。
 // ============================================================
 
@@ -105,8 +104,8 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 }: ChatMessagesInnerProps) {
 	const { t } = useTranslation();
 
-	// === StickToBottom context (now safe — we're inside Conversation) ===
-	const { isAtBottom, scrollToBottom, stopScroll, scrollRef } = useStickToBottomContext();
+	// === Conversation context (now safe — we're inside Conversation) ===
+	const { isAtBottom, scrollToBottom, stopScroll, scrollRef } = useConversationContext();
 
 	// 使用 ref 追踪 isAtBottom 最新值，避免 stale closure
 	const isAtBottomRef = useRef(isAtBottom);
@@ -535,8 +534,6 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 	return (
 		<Conversation
 			key={agentId}
-			resize="instant"
-			initial="instant"
 			className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}
 		>
 			<ChatMessagesInner

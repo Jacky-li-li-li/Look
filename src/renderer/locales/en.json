@@ -580,6 +580,7 @@
     "title": "Profile",
     "userName": "Username",
     "avatar": "Avatar",
+    "handle": "Handle",
     "uploadAvatar": "Upload image",
     "chooseEmoji": "Choose emoji",
     "logout": "Sign Out",

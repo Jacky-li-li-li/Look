@@ -1,19 +1,19 @@
 /**
  * 滚动位置记忆 — 切换会话时保存并恢复滚动位置
  *
- * 配合 Conversation（StickToBottom）使用：
+ * 配合 Conversation 使用：
  * - scroll 事件持续保存 distanceFromBottom 到模块级 Map
- * - 切换会话时 ready=false → Conversation 的 resize 切为 "instant"（消除动画）
+ * - 切换会话时 ready=false → Conversation 用 opacity-0 隐藏
  * - ready=true 时：有保存位置 → stopScroll() + 恢复 scrollTop；
  *   有 Branch 导航目标 → 滚动到指定消息；
- *   无保存 → scrollToBottom("instant")
+ *   无保存 → 保持底部（Conversation 默认已在底部）
  *
- * 放在 Conversation（StickToBottom）内部使用。
+ * 放在 Conversation 内部使用。
  */
 
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { useStickToBottomContext } from "use-stick-to-bottom";
+import { useConversationContext } from "../components/chat/conversation";
 import { navigatingEntryAtomFamily } from "../store/atoms";
 
 /** 模块级缓存：会话 ID → 距底部像素距离 */
@@ -22,13 +22,13 @@ const scrollPositionCache = new Map<string, number>();
 const DEBUG = false;
 
 /**
- * ScrollPositionManager — 放在 Conversation（StickToBottom）内部
+ * ScrollPositionManager — 放在 Conversation 内部
  *
  * @param id     会话/Agent ID，用作缓存 key
  * @param ready  防闪烁 ready 状态，为 true 时才恢复位置
  */
 export function useScrollPositionManager(id: string, ready: boolean): void {
-	const { scrollRef, stopScroll } = useStickToBottomContext();
+	const { scrollRef, stopScroll } = useConversationContext();
 	const restoredRef = useRef(false);
 	const prevIdRef = useRef(id);
 
@@ -76,10 +76,10 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 
 	// ready 后恢复位置
 	// 关键：用 rAF 把 scrollToBottom 延迟到下一帧，
-	// 确保 StickToBottom 内部的 ResizeObserver 已经处理完本轮布局。
+	// 确保 Conversation 内部的 ResizeObserver 已经处理完本轮布局。
 	//
 	// 注意：刷新/首次加载时无保存位置 → 不做任何滚动操作，
-	// StickToBottom 默认已在底部，额外的 scrollToBottom 反而造成可见跳动。
+	// Conversation 默认已在底部，额外的 scrollToBottom 反而造成可见跳动。
 	useLayoutEffect(() => {
 		if (!ready || restoredRef.current) return;
 		restoredRef.current = true;
@@ -123,7 +123,7 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 			});
 		}
 		// 无保存位置时（刷新/首次加载）不调用 scrollToBottom：
-		// StickToBottom 组件在挂载时默认已在底部，额外的滚动调用反而造成可见跳动
+	// Conversation 组件在挂载时默认已在底部，额外的滚动调用反而造成可见跳动
 	}, [ready, id, navigatingEntry, scrollRef, stopScroll, scrollToMessage]);
 }
 

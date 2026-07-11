@@ -580,6 +580,7 @@
     "title": "个人信息",
     "userName": "用户名",
     "avatar": "头像",
+    "handle": "账号",
     "uploadAvatar": "上传图片",
     "chooseEmoji": "选择表情",
     "logout": "退出登录",

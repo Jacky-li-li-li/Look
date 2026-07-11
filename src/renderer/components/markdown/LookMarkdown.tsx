@@ -12,10 +12,10 @@ import MarkdownRender, {
 import { memo, useMemo } from "react";
 import { useLookTheme } from "../../hooks/useLookTheme";
 import { closeAtxHeadings, prepareMessageContent } from "../../lib/messageMarkdown";
-import { AgentTag } from "./AgentTag";
-import { FileTag } from "./FileTag";
-import { McpTag } from "./McpTag";
-import { SkillTag } from "./SkillTag";
+import { AgentTag } from "@shared/components/AgentTag";
+import { FileTag } from "@shared/components/FileTag";
+import { McpTag } from "@shared/components/McpTag";
+import { SkillTag } from "@shared/components/SkillTag";
 
 // ── Built-in code blocks: lightweight Shiki instead of Monaco ──
 

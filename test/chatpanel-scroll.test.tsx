@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 //
-// 回归测试：聊天滚动架构 —— use-stick-to-bottom + Conversation 原语
+// 回归测试：聊天滚动架构 —— Conversation 原语（原生实现）
 //
-// Look 现在使用 `use-stick-to-bottom`（原生 DOM 滚动 + ResizeObserver），
-// 替代了 react-virtuoso。Conversation / ConversationContent / ConversationScrollButton
-// 封装了 StickToBottom 及其 Context。
+// Look 现在使用原生实现（React Context + ResizeObserver + scroll 事件），
+// 替代了 react-virtuoso 和 use-stick-to-bottom。
+// Conversation / ConversationContent / ConversationScrollButton 封装了滚动逻辑。
 //
 // 验证：
-//   1. ConversationScrollButton — 使用 StickToBottom Context 控制显隐 + 点击回底部
-//   2. 静态源码检查 ChatMessageList — 确认使用 use-stick-to-bottom，不再引用 react-virtuoso
+//   1. ConversationScrollButton — 使用 Conversation Context 控制显隐 + 点击回底部
+//   2. 静态源码检查 ChatMessageList — 确认使用 Conversation，不再引用 use-stick-to-bottom 或 react-virtuoso
 
 // ---- Module-level mocks ----------------------------------------------
 
@@ -32,7 +32,7 @@ import { ConversationScrollButton } from "../src/renderer/components/chat/conver
 // ============================================================
 
 describe("ConversationScrollButton", () => {
-	// ConversationScrollButton 依赖 StickToBottom Context（useStickToBottomContext），
+	// ConversationScrollButton 依赖 Conversation Context（useConversationContext），
 	// 直接渲染会抛出 Context 缺失错误。这里验证它导出了一个可导入的组件函数。
 	it("is a named export from conversation.tsx", () => {
 		expect(typeof ConversationScrollButton).toBe("function");
@@ -46,25 +46,21 @@ describe("ConversationScrollButton", () => {
 describe("ChatMessageList source (scroll container wiring)", () => {
 	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/chat/ChatMessageList.tsx"), "utf8");
 
-	it("uses Conversation (StickToBottom wrapper) as the scroll container", () => {
+	it("uses Conversation as the scroll container", () => {
 		expect(SRC).toMatch(/<Conversation\b/);
 		expect(SRC).toMatch(/<ConversationContent/);
 		expect(SRC).toMatch(/<ConversationScrollButton/);
 	});
 
-	it("imports from use-stick-to-bottom via Conversation context", () => {
-		expect(SRC).toMatch(/useStickToBottomContext/);
+	it("imports from Conversation via useConversationContext", () => {
+		expect(SRC).toMatch(/useConversationContext/);
 	});
 
 	it("uses Conversation key={agentId} for per-session remount on switch", () => {
 		expect(SRC).toMatch(/key=\{agentId\}/);
 	});
 
-	it("uses Conversation resize prop to avoid smooth scroll interfering with user scrolling", () => {
-		expect(SRC).toMatch(/resize="instant"/);
-	});
-
-	it("sets isAtBottom from useStickToBottomContext", () => {
+	it("sets isAtBottom from useConversationContext", () => {
 		expect(SRC).toMatch(/isAtBottom/);
 	});
 
@@ -80,8 +76,9 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 		expect(SRC).not.toMatch(/atBottomStateChange/);
 	});
 
-	it("uses useStickToBottomContext from use-stick-to-bottom (inside Conversation wrapper)", () => {
-		expect(SRC).toMatch(/from\s+["']use-stick-to-bottom["']/);
-		expect(SRC).toMatch(/useStickToBottomContext/);
+	it("no longer imports use-stick-to-bottom", () => {
+		expect(SRC).not.toMatch(/from\s+["']use-stick-to-bottom["']/);
+		expect(SRC).not.toMatch(/useStickToBottomContext/);
+		expect(SRC).not.toMatch(/StickToBottom/);
 	});
 });

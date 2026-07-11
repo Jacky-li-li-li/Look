@@ -471,6 +471,8 @@ export default function LoginScreen() {
 			userId,
 			email: userEmail,
 			userName: p?.user_name || userEmail.split("@")[0],
+			handle: "",
+			role: "Pro",
 			avatar: p?.avatar || "",
 		};
 		setUserProfile(profile);

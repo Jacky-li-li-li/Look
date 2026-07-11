@@ -3,56 +3,83 @@
 // Used inside SettingsDialog
 // ============================================================
 
+import { Badge } from "@shared/components/ui/badge";
 import { useAtom } from "jotai";
+import { Camera } from "lucide-react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { getSupabase } from "../../lib/supabase";
 import { userProfileAtom } from "../../store/authAtoms";
-import UserAvatar from "../UserAvatar";
+import { UserAvatar } from "@shared/components/UserAvatar";
 
 const api = window.look;
+
+function deriveHandle(profile: { handle?: string; email: string; userName: string }): string {
+	if (profile.handle?.trim()) return profile.handle.trim();
+	if (profile.email) {
+		const prefix = profile.email.split("@")[0];
+		if (prefix) return prefix;
+	}
+	return profile.userName || "you";
+}
 
 export default function ProfileEditor() {
 	const { t } = useTranslation();
 	const [profile, setProfile] = useAtom(userProfileAtom);
 	const [editingName, setEditingName] = useState(false);
 	const [nameValue, setNameValue] = useState(profile.userName);
+	const [editingHandle, setEditingHandle] = useState(false);
+	const [handleValue, setHandleValue] = useState(deriveHandle(profile));
 	const nameRef = useRef<HTMLInputElement>(null);
+	const handleRef = useRef<HTMLInputElement>(null);
 
-	async function commitName() {
-		const trimmed = nameValue.trim();
-		if (trimmed && trimmed !== profile.userName) {
-			setProfile((prev) => ({ ...prev, userName: trimmed }));
-			if (api?.updateUserProfile) {
-				api.updateUserProfile({ userName: trimmed }).catch(() => {});
-			}
-			// RLS enforces auth.uid() = id on user_profiles;
-			// the id comes from supabase.auth.getUser() — server-verified identity
-			const supabase = await getSupabase();
-			if (!supabase) {
-				setEditingName(false);
-				return;
-			}
-			const { data: authData } = await supabase.auth.getUser();
-			if (authData.user) {
+	function persistProfile(patch: Partial<typeof profile>) {
+		setProfile((prev) => ({ ...prev, ...patch }));
+		if (api?.updateUserProfile) {
+			api.updateUserProfile(patch).catch(() => {});
+		}
+		// RLS enforces auth.uid() = id on user_profiles;
+		// the id comes from supabase.auth.getUser() — server-verified identity
+		getSupabase().then((supabase) => {
+			if (!supabase) return;
+			supabase.auth.getUser().then(({ data: authData }) => {
+				if (!authData.user) return;
 				supabase
 					.from("user_profiles")
 					.upsert({
 						id: authData.user.id,
-						email: profile.email,
-						user_name: trimmed,
-						avatar: profile.avatar,
+						email: "email" in patch ? patch.email : profile.email,
+						user_name: "userName" in patch ? patch.userName : profile.userName,
+						avatar: "avatar" in patch ? patch.avatar : profile.avatar,
 					})
 					.then(({ error }) => {
-						if (!error) toast.success(t("profile.userNameSaved"));
+						if (!error) {
+							if ("userName" in patch) toast.success(t("profile.userNameSaved"));
+							if ("avatar" in patch) toast.success(t("profile.avatarSaved"));
+						}
 					});
-			}
+			});
+		});
+	}
+
+	function commitName() {
+		const trimmed = nameValue.trim();
+		if (trimmed && trimmed !== profile.userName) {
+			persistProfile({ userName: trimmed });
 		}
 		setEditingName(false);
 	}
 
-	async function handleAvatarUpload() {
+	function commitHandle() {
+		const trimmed = handleValue.trim().replace(/^@/, "");
+		if (trimmed !== (profile.handle ?? "")) {
+			persistProfile({ handle: trimmed });
+		}
+		setEditingHandle(false);
+	}
+
+	function handleAvatarUpload() {
 		const input = document.createElement("input");
 		input.type = "file";
 		input.accept = "image/*";
@@ -62,83 +89,107 @@ export default function ProfileEditor() {
 			const reader = new FileReader();
 			reader.onload = async () => {
 				const dataUrl = reader.result as string;
-				setProfile((prev) => ({ ...prev, avatar: dataUrl }));
-				if (api?.updateUserProfile) {
-					api.updateUserProfile({ avatar: dataUrl }).catch(() => {});
-				}
-				// RLS enforces auth.uid() = id on user_profiles;
-				// the id comes from supabase.auth.getUser() — server-verified identity
-				const supabase = await getSupabase();
-				if (!supabase) return;
-				const { data: authData } = await supabase.auth.getUser();
-				if (authData.user) {
-					supabase
-						.from("user_profiles")
-						.upsert({
-							id: authData.user.id,
-							email: profile.email,
-							user_name: profile.userName,
-							avatar: dataUrl,
-						})
-						.then(({ error }) => {
-							if (!error) toast.success(t("profile.avatarSaved"));
-						});
-				}
+				persistProfile({ avatar: dataUrl });
 			};
 			reader.readAsDataURL(file);
 		};
 		input.click();
 	}
 
+	const displayHandle = deriveHandle(profile);
+	const displayRole = profile.role?.trim();
+
 	return (
-		<>
-			<div className="flex items-center justify-between gap-4 py-3">
-				<div className="flex min-w-0 flex-col gap-0.5">
-					<label className="text-[13px] font-medium leading-none">{t("profile.avatar")}</label>
-					<span className="text-[11px] text-muted-foreground leading-tight">{t("profile.chooseEmoji")}</span>
-				</div>
-				<button type="button" onClick={handleAvatarUpload} className="transition-opacity hover:opacity-80">
-					<UserAvatar avatar={profile.avatar} size="lg" />
+		<div className="flex flex-col items-center py-6">
+			{/* Avatar */}
+			<button
+				type="button"
+				onClick={handleAvatarUpload}
+				className="group relative mb-4 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+				aria-label={t("profile.uploadAvatar")}
+			>
+				<UserAvatar avatar={profile.avatar} size="xl" circular />
+				<span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+					<Camera className="size-6 text-white" />
+				</span>
+			</button>
+
+			{/* Display name */}
+			{editingName ? (
+				<input
+					ref={nameRef}
+					aria-label={t("profile.userName")}
+					value={nameValue}
+					onChange={(e) => setNameValue(e.target.value)}
+					onBlur={commitName}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") commitName();
+						if (e.key === "Escape") {
+							setEditingName(false);
+							setNameValue(profile.userName);
+						}
+					}}
+					className="mb-1 h-9 w-48 rounded-md border border-border bg-transparent px-2 text-center text-xl font-semibold outline-none focus:border-foreground"
+					maxLength={30}
+					autoFocus
+				/>
+			) : (
+				<button
+					type="button"
+					onClick={() => {
+						setEditingName(true);
+						setNameValue(profile.userName);
+						setTimeout(() => nameRef.current?.focus(), 0);
+					}}
+					className="mb-1 text-xl font-semibold hover:opacity-80"
+				>
+					{profile.userName || t("chat.you")}
 				</button>
-			</div>
-			<div className="flex items-center justify-between gap-4 py-3">
-				<div className="flex min-w-0 flex-col gap-0.5">
-					<label className="text-[13px] font-medium leading-none">{t("profile.userName")}</label>
-					<span className="text-[11px] text-muted-foreground leading-tight">
-						{t("profile.userNamePlaceholder")}
-					</span>
-				</div>
-				{editingName ? (
+			)}
+
+			{/* Handle + role badge */}
+			{editingHandle ? (
+				<div className="flex items-center gap-2">
+					<span className="text-sm text-muted-foreground">@</span>
 					<input
-						ref={nameRef}
-						aria-label={t("profile.userName")}
-						value={nameValue}
-						onChange={(e) => setNameValue(e.target.value)}
-						onBlur={commitName}
+						ref={handleRef}
+						aria-label={t("profile.handle")}
+						value={handleValue}
+						onChange={(e) => setHandleValue(e.target.value.replace(/^@/, ""))}
+						onBlur={commitHandle}
 						onKeyDown={(e) => {
-							if (e.key === "Enter") commitName();
+							if (e.key === "Enter") commitHandle();
 							if (e.key === "Escape") {
-								setEditingName(false);
-								setNameValue(profile.userName);
+								setEditingHandle(false);
+								setHandleValue(deriveHandle(profile));
 							}
 						}}
-						className="h-8 w-36 rounded-md border border-border bg-transparent px-2 text-[13px] outline-none focus:border-foreground"
+						className="h-7 w-32 rounded-md border border-border bg-transparent px-2 text-center text-[13px] outline-none focus:border-foreground"
 						maxLength={30}
+						autoFocus
 					/>
-				) : (
-					<button
-						type="button"
-						onClick={() => {
-							setEditingName(true);
-							setNameValue(profile.userName);
-							setTimeout(() => nameRef.current?.focus(), 0);
-						}}
-						className="text-[13px] font-medium underline-offset-2 hover:underline"
-					>
-						{profile.userName || t("chat.you")}
-					</button>
-				)}
-			</div>
-		</>
+				</div>
+			) : (
+				<button
+					type="button"
+					onClick={() => {
+						setEditingHandle(true);
+						setHandleValue(deriveHandle(profile));
+						setTimeout(() => handleRef.current?.focus(), 0);
+					}}
+					className="flex items-center gap-2 text-sm text-muted-foreground hover:opacity-80"
+				>
+					<span>@{displayHandle}</span>
+					{displayRole && (
+						<>
+							<span className="text-muted-foreground/60">·</span>
+							<Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-medium">
+								{displayRole}
+							</Badge>
+						</>
+					)}
+				</button>
+			)}
+		</div>
 	);
 }

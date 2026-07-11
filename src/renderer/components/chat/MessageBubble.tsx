@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { hashKey } from "../../lib/stableKey";
 import { userProfileAtom } from "../../store/authAtoms";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
-import UserAvatar from "../UserAvatar";
+import { UserAvatar } from "@shared/components/UserAvatar";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";

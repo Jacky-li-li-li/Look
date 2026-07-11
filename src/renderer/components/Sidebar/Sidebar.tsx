@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { projectsAtom, rightPanelCollapsedAtom, showAgentSquareAtom, sidebarCollapsedAtom } from "../../store/atoms";
 import { userProfileAtom } from "../../store/authAtoms";
 import { appStore } from "../../store/ipcHandler";
-import UserAvatar from "../UserAvatar";
+import { UserAvatar } from "@shared/components/UserAvatar";
 import ProjectTree from "./ProjectTree";
 import type { SidebarProps } from "./types";
 

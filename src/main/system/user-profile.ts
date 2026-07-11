@@ -9,6 +9,8 @@ export interface UserProfile {
 	userId: string;
 	email: string;
 	userName: string;
+	handle?: string;
+	role?: string;
 	avatar: string;
 }
 
@@ -16,6 +18,8 @@ const DEFAULT_PROFILE: UserProfile = {
 	userId: "",
 	email: "",
 	userName: "You",
+	handle: "",
+	role: "Pro",
 	avatar: "",
 };
 

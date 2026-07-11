@@ -1,15 +1,9 @@
-// ============================================================
-// ErrorBoundary — crash-safe wrapper for key component trees
-// ============================================================
-
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface ErrorBoundaryProps {
 	children: ReactNode;
-	/** Custom fallback UI. If omitted, renders the default crash screen. */
 	fallback?: ReactNode;
-	/** Called when an error is caught (e.g. for logging). */
 	onError?: (error: Error, info: ErrorInfo) => void;
 }
 

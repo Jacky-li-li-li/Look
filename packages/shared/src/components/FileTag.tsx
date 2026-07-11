@@ -1,12 +1,4 @@
-// ============================================================
-// FileTag — 消息气泡中 @path 文件引用 chip 的 post-send 渲染
-//
-// 对标 SkillTag.tsx / AgentTag.tsx / McpTag.tsx。
-// 输入框中 ContentEditableInput 用 .file-chip DOM 元素渲染，
-// 消息气泡中则用此 React 组件渲染。
-// ============================================================
-
-import { Badge } from "@shared/components/ui/badge";
+import { Badge } from "./ui/badge.js";
 import { File } from "lucide-react";
 
 interface FileTagProps {

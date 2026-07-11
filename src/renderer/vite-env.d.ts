@@ -9,6 +9,7 @@ import type {
 	ProjectInfo,
 } from "@shared/types";
 import type { ProviderSettingsData } from "./store/atoms";
+import type { UserProfile } from "./types/user-profile";
 
 type IpcResult<T extends Record<string, unknown> = Record<string, never>> =
 	| ({ success: true } & T)
@@ -154,9 +155,7 @@ interface LookAPI {
 	// ---- Skills：Skill 开关 ----
 	setSkillEnabled(name: string, enabled: boolean): Promise<{ success: boolean; error?: string }>;
 	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
-	getUserProfile(): Promise<
-		IpcResult<{ profile: { userId: string; email: string; userName: string; avatar: string } | null }>
-	>;
+	getUserProfile(): Promise<IpcResult<{ profile: UserProfile | null }>>;
 	updateUserProfile(patch: unknown): Promise<IpcResult>;
 	resetUserProfile(): Promise<IpcResult>;
 	// ---- Shared area ----

@@ -1,11 +1,4 @@
-// ============================================================
-// McpTag — 消息气泡中 #server__toolName chip 的 post-send 渲染
-//
-// 对标 AgentTag.tsx / SkillTag.tsx。消息气泡中 `<mcp-tag>`
-// 由 markstream-react 路由到此 React 组件。
-// ============================================================
-
-import { Badge } from "@shared/components/ui/badge";
+import { Badge } from "./ui/badge.js";
 import { Wrench } from "lucide-react";
 
 interface McpTagProps {

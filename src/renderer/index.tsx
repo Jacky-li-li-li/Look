@@ -8,7 +8,7 @@ import { I18nextProvider } from "react-i18next";
 import "./mockApi";
 import App from "./App";
 import "./App.css";
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ErrorBoundary } from "@shared/components/ErrorBoundary";
 import { useLookTheme } from "./hooks/useLookTheme";
 import i18n from "./i18n";
 import { appStore, initAppData, initIpcHandlers } from "./store/ipcHandler";

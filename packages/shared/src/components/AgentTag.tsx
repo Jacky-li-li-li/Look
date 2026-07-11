@@ -1,11 +1,4 @@
-// ============================================================
-// AgentTag — 消息气泡中 /agent:name chip 的 post-send 渲染
-//
-// 对标 SkillTag.tsx：输入框中 ContentEditableInput 用
-// .agent-chip DOM 元素渲染，消息气泡中则用此 React 组件渲染。
-// ============================================================
-
-import { Badge } from "@shared/components/ui/badge";
+import { Badge } from "./ui/badge.js";
 import { Bot } from "lucide-react";
 
 interface AgentTagProps {

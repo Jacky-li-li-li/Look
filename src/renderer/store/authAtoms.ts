@@ -5,7 +5,7 @@
 
 import { atom } from "jotai";
 import type { UserProfile } from "../types/user-profile";
-import { DEFAULT_USER_AVATAR, DEFAULT_USER_NAME } from "../types/user-profile";
+import { DEFAULT_USER_AVATAR, DEFAULT_USER_NAME, DEFAULT_USER_ROLE } from "../types/user-profile";
 
 /** 乐观假设已登录——本地 Electron 应用，auth 检查几乎瞬时完成。异步检查后若未登录再切到 LoginScreen。 */
 export const isLoggedInAtom = atom(true);
@@ -17,5 +17,7 @@ export const userProfileAtom = atom<UserProfile>({
 	userId: "",
 	email: "",
 	userName: DEFAULT_USER_NAME,
+	handle: "",
+	role: DEFAULT_USER_ROLE,
 	avatar: DEFAULT_USER_AVATAR,
 });

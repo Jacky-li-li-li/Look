@@ -580,6 +580,7 @@
 		"title": "プロフィール",
 		"userName": "ユーザー名",
 		"avatar": "アバター",
+		"handle": "ハンドル",
 		"uploadAvatar": "画像をアップロード",
 		"chooseEmoji": "絵文字を選択",
 		"logout": "ログアウト",

@@ -60,7 +60,7 @@ export function useAuthSession() {
 			if (cancelled) return;
 
 			if (session?.user) {
-				// 从云端拉取最新资料，覆盖本地缓存
+				// 从云端拉取最新资料（handle/role 暂存本地，不查询云端未存在的列）
 				const { data: cloudProfile } = await supabase
 					.from("user_profiles")
 					.select("user_name, avatar")
@@ -70,12 +70,13 @@ export function useAuthSession() {
 				if (cancelled) return;
 
 				if (cloudProfile) {
-					setUserProfile({
+					setUserProfile((prev) => ({
+						...prev,
 						userId: session.user.id,
-						email: session.user.email ?? "",
-						userName: cloudProfile.user_name || session.user.email || "",
-						avatar: cloudProfile.avatar || "",
-					});
+						email: session.user.email ?? prev.email,
+						userName: cloudProfile.user_name || session.user.email || prev.userName,
+						avatar: cloudProfile.avatar || prev.avatar,
+					}));
 				} else {
 					// 云端无记录 → 回退到本地 profile（已在步骤 1 加载）
 					try {
@@ -89,6 +90,8 @@ export function useAuthSession() {
 								userId: session.user.id,
 								email: session.user.email ?? "",
 								userName: session.user.email ?? "",
+								handle: "",
+								role: "Pro",
 								avatar: "",
 							});
 						}
