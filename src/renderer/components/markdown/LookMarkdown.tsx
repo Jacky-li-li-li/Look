@@ -2,6 +2,10 @@
 // LookMarkdown — Look-themed wrapper around markstream-react
 // ============================================================
 
+import { AgentTag } from "@shared/components/AgentTag";
+import { FileTag } from "@shared/components/FileTag";
+import { McpTag } from "@shared/components/McpTag";
+import { SkillTag } from "@shared/components/SkillTag";
 import type { MarkdownCodeBlockNodeProps } from "markstream-react";
 import MarkdownRender, {
 	defineStreamingComponents,
@@ -12,10 +16,6 @@ import MarkdownRender, {
 import { memo, useMemo } from "react";
 import { useLookTheme } from "../../hooks/useLookTheme";
 import { closeAtxHeadings, prepareMessageContent } from "../../lib/messageMarkdown";
-import { AgentTag } from "@shared/components/AgentTag";
-import { FileTag } from "@shared/components/FileTag";
-import { McpTag } from "@shared/components/McpTag";
-import { SkillTag } from "@shared/components/SkillTag";
 
 // ── Built-in code blocks: lightweight Shiki instead of Monaco ──
 

@@ -12,6 +12,7 @@
     "resolveJsonModule": true,
     "declaration": true,
     "sourceMap": true,
+    "jsx": "preserve",
     "incremental": true,
     "tsBuildInfoFile": "dist/.tsbuildinfo",
     "paths": {

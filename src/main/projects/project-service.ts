@@ -20,13 +20,13 @@
 // SRT and delegate pure-project operations to this service.
 // ============================================================
 
-import fs, { existsSync } from "node:fs";
+import fs, { existsSync, mkdirSync } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import type { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { hasTrustRequiringProjectResources, type ProjectTrustStore } from "@earendil-works/pi-coding-agent";
-import { getProjectsIndexPath, getWorkspacesDir } from "@look/shared/look-storage";
-import type { ProjectInfo } from "@look/shared/types";
+import { getDefaultWorkspaceCwd, getProjectsIndexPath, getWorkspacesDir } from "@look/shared/look-storage";
+import { DEFAULT_PROJECT_ID, type ProjectInfo } from "@look/shared/types";
 import { v4 as uuidv4 } from "uuid";
 
 export class ProjectService {
@@ -59,13 +59,17 @@ export class ProjectService {
 				for (const item of Array.isArray(raw.projects) ? raw.projects : []) {
 					let valid = false;
 					let cwd = item.cwd;
-					try {
-						await fsp.access(cwd);
-						const stat = await fsp.stat(cwd);
-						valid = stat.isDirectory();
-						if (valid) cwd = await fsp.realpath(cwd);
-					} catch {
-						valid = false;
+					if (item.id === DEFAULT_PROJECT_ID) {
+						valid = true;
+					} else {
+						try {
+							await fsp.access(cwd);
+							const stat = await fsp.stat(cwd);
+							valid = stat.isDirectory();
+							if (valid) cwd = await fsp.realpath(cwd);
+						} catch {
+							valid = false;
+						}
 					}
 					const info: ProjectInfo = { ...item, cwd, valid };
 					if (seenCwds.has(info.cwd)) continue;
@@ -77,6 +81,8 @@ export class ProjectService {
 		} catch (error) {
 			console.error("[Look] Failed to load projects:", error);
 		}
+
+		this.ensureDefaultProject();
 
 		return this.listProjects();
 	}
@@ -138,6 +144,21 @@ export class ProjectService {
 
 		if (changed) this.saveProjects();
 		return changed;
+	}
+
+	ensureDefaultProject(): void {
+		if (this.projects.has(DEFAULT_PROJECT_ID)) return;
+		const cwd = getDefaultWorkspaceCwd();
+		mkdirSync(cwd, { recursive: true });
+		const project: ProjectInfo = {
+			id: DEFAULT_PROJECT_ID,
+			name: "默认工作区",
+			cwd,
+			createdAt: Date.now(),
+			valid: true,
+		};
+		this.projects.set(project.id, project);
+		this.saveProjects();
 	}
 
 	saveProjects(): void {
@@ -221,6 +242,7 @@ export class ProjectService {
 	}
 
 	removeProject(projectId: string): void {
+		if (projectId === DEFAULT_PROJECT_ID) return;
 		this.projects.delete(projectId);
 	}
 

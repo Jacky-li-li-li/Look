@@ -27,9 +27,12 @@ export interface UserProfile {
 // Project types (cwd-based project management)
 // ============================================================
 
+/** Fixed ID for the system-managed default workspace project. */
+export const DEFAULT_PROJECT_ID = "__default__";
+
 /** Project info — represents a workspace folder */
 export interface ProjectInfo {
-	id: string; // 8-char uuid
+	id: string; // 8-char uuid, or "__default__" for the built-in default workspace
 	name: string; // display name, derived from folder name
 	cwd: string; // absolute path to project directory
 	createdAt: number;

@@ -323,10 +323,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 			return (
 				<div key={item.id} className="px-msg-item-x py-msg-item-y">
-					<div
-						data-message-id={item.id}
-						className={cn("group/message flex flex-col", item.isLive && "animate-draw-in")}
-					>
+					<div data-message-id={item.id} className={cn("group/message flex flex-col animate-draw-in")}>
 						<MessageBubble
 							message={item.message}
 							agentName={agentName}
@@ -532,10 +529,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 	]);
 
 	return (
-		<Conversation
-			key={agentId}
-			className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}
-		>
+		<Conversation key={agentId} className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}>
 			<ChatMessagesInner
 				agentId={props.agentId}
 				agentName={props.agentName}

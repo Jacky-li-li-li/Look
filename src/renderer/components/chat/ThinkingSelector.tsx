@@ -20,11 +20,11 @@ const LEVELS: { value: ThinkingLevel; label: string; desc: string }[] = [
 
 const LEVEL_COLORS: Record<ThinkingLevel, string> = {
 	off: "text-muted-foreground",
-	minimal: "text-emerald-500 dark:text-emerald-400",
-	low: "text-sky-500 dark:text-sky-400",
-	medium: "text-amber-500 dark:text-amber-300",
-	high: "text-orange-500 dark:text-orange-400",
-	xhigh: "text-rose-500 dark:text-rose-400",
+	minimal: "text-blue-400 dark:text-blue-300",
+	low: "text-blue-500 dark:text-blue-400",
+	medium: "text-blue-600 dark:text-blue-400",
+	high: "text-indigo-500 dark:text-indigo-400",
+	xhigh: "text-indigo-600 dark:text-indigo-300",
 };
 
 interface ThinkingSelectorProps {

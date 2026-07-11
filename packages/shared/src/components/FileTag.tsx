@@ -10,7 +10,7 @@ export function FileTag({ path, className }: FileTagProps) {
 	return (
 		<Badge
 			variant="outline"
-			className={["font-mono align-baseline text-amber-600 dark:text-amber-400 border-amber-400/40", className]
+			className={["font-mono align-baseline text-emerald-600 dark:text-emerald-400 border-emerald-400/40", className]
 				.filter(Boolean)
 				.join(" ")}
 		>

@@ -3,6 +3,7 @@
 // Used inside SettingsDialog
 // ============================================================
 
+import { UserAvatar } from "@shared/components/UserAvatar";
 import { Badge } from "@shared/components/ui/badge";
 import { useAtom } from "jotai";
 import { Camera } from "lucide-react";
@@ -11,7 +12,6 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { getSupabase } from "../../lib/supabase";
 import { userProfileAtom } from "../../store/authAtoms";
-import { UserAvatar } from "@shared/components/UserAvatar";
 
 const api = window.look;
 

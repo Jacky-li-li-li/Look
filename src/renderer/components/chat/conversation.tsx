@@ -139,11 +139,7 @@ export function ConversationContent({ className, ...props }: ConversationContent
 	const { scrollRef, contentRef } = useConversationContext();
 
 	return (
-		<div
-			ref={scrollRef}
-			className="h-full w-full overflow-auto"
-			style={{ scrollbarGutter: "stable both-edges" }}
-		>
+		<div ref={scrollRef} className="h-full w-full overflow-auto" style={{ scrollbarGutter: "stable both-edges" }}>
 			<div
 				ref={contentRef}
 				className={cn("flex flex-col gap-msg-row py-msg-list-y", className)}

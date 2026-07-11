@@ -187,7 +187,7 @@ const ChatInput = function ChatInput({
 	};
 
 	return (
-		<div className="relative mx-5 mb-2.5 rounded-lg border border-hairline bg-card/60 shadow-none backdrop-blur-sm">
+		<div className="relative mx-5 mb-2.5 rounded-lg border border-hairline bg-background/30 shadow-none backdrop-blur-sm">
 			{menus.atOpen ? (
 				<AgentHashMenu
 					agents={menus.filteredAgents}

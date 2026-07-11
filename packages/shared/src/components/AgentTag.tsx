@@ -10,7 +10,7 @@ export function AgentTag({ name, className }: AgentTagProps) {
 	return (
 		<Badge
 			variant="outline"
-			className={["font-mono align-baseline text-sky-600 dark:text-sky-400 border-sky-400/40", className]
+			className={["font-mono align-baseline text-indigo-600 dark:text-indigo-400 border-indigo-400/40", className]
 				.filter(Boolean)
 				.join(" ")}
 		>

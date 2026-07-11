@@ -9,6 +9,7 @@
 
 import fs, { existsSync } from "node:fs";
 import { getProjectSharedDir, getWorkspaceDir } from "@look/shared/look-storage";
+import { DEFAULT_PROJECT_ID } from "@look/shared/types";
 import type { RuntimeRegistry } from "../session/runtime-registry.js";
 import type { SessionCatalog } from "../session/session-catalog.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
@@ -101,7 +102,12 @@ export class ProjectDeletionService {
 			this.deps.setActiveSessionId(null);
 		}
 		if (this.deps.projectService.activeId === projectId) {
-			this.deps.projectService.setActiveId(this.deps.projectService.listProjects().find((p) => p.valid)?.id ?? null);
+			const fallback = this.deps.projectService.listProjects().find((p) => p.valid && p.id !== DEFAULT_PROJECT_ID);
+			if (fallback) {
+				this.deps.projectService.setActiveId(fallback.id);
+			} else {
+				this.deps.projectService.setActiveId(DEFAULT_PROJECT_ID);
+			}
 		}
 
 		this.deps.projectService.saveProjects();

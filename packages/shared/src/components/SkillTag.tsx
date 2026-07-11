@@ -13,7 +13,7 @@ export function SkillTag({ name, className, prefixed = true }: SkillTagProps) {
 	return (
 		<Badge
 			variant="outline"
-			className={["font-mono align-baseline text-pink-600 dark:text-pink-400 border-pink-400/40", className]
+			className={["font-mono align-baseline text-indigo-600 dark:text-indigo-400 border-indigo-400/40", className]
 				.filter(Boolean)
 				.join(" ")}
 		>

@@ -2,6 +2,7 @@
 // Project router — project CRUD and trust prompts
 // ============================================================
 
+import { DEFAULT_PROJECT_ID } from "@look/shared/types";
 import { guardBoolean, guardOptionalString, guardPath, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 import { promptForProjectTrust } from "../project-trust.js";
@@ -36,12 +37,18 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 	register("project:rename", async (data) => {
 		guardString(data.projectId, "projectId");
 		guardString(data.name, "name");
+		if (data.projectId === DEFAULT_PROJECT_ID) {
+			return { success: false, error: "Cannot rename the default workspace" };
+		}
 		ctx.runtimeManager.renameProject(data.projectId, data.name);
 		return { success: true };
 	});
 
 	register("project:delete", async (data) => {
 		guardString(data.projectId, "projectId");
+		if (data.projectId === DEFAULT_PROJECT_ID) {
+			return { success: false, error: "Cannot delete the default workspace" };
+		}
 		await ctx.runtimeManager.deleteProject(data.projectId);
 		return { success: true };
 	});

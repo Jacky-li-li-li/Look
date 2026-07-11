@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Collapsible, CollapsibleContent } from "@shared/components/ui/collapsible";
-import type { AgentInfo, ProjectInfo } from "@shared/types";
+import { type AgentInfo, DEFAULT_PROJECT_ID, type ProjectInfo } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { ChevronsDownUp, ChevronsUpDown, Plus } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -100,9 +100,17 @@ export default function ProjectTree({
 		});
 	}, []);
 
+	const sortedProjects = useMemo(() => {
+		return [...projects].sort((a, b) => {
+			if (a.id === DEFAULT_PROJECT_ID) return -1;
+			if (b.id === DEFAULT_PROJECT_ID) return 1;
+			return 0;
+		});
+	}, [projects]);
+
 	const sessionsByProject = useMemo(() => {
 		const grouped = new Map<string, AgentInfo[]>();
-		for (const project of projects) grouped.set(project.id, []);
+		for (const project of sortedProjects) grouped.set(project.id, []);
 		for (const agent of agents) {
 			if (!agent.projectId) continue;
 			const list = grouped.get(agent.projectId) ?? [];
@@ -111,7 +119,7 @@ export default function ProjectTree({
 		}
 		for (const sessions of grouped.values()) sessions.sort((a, b) => b.createdAt - a.createdAt);
 		return grouped;
-	}, [agents, projects]);
+	}, [agents, sortedProjects]);
 
 	const childSessionsByParent = useMemo(() => {
 		const map = new Map<string, AgentInfo[]>();
@@ -227,7 +235,7 @@ export default function ProjectTree({
 
 	return (
 		<>
-			{projects.map((project) => (
+			{sortedProjects.map((project) => (
 				<ProjectTreeItem
 					key={project.id}
 					project={project}

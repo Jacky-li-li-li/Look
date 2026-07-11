@@ -16,17 +16,23 @@ export default function EmptySessionState({ activeProject, handleCreateClick }: 
 	return (
 		<div className="flex flex-1 items-center justify-center p-10 text-center">
 			<div className="flex max-w-sm flex-col items-center gap-3">
-				<div className="flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
+				<div className="animate-draw-in flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
 					<FolderOpen className="size-5 text-muted-foreground" />
 				</div>
-				<p className="text-sm font-medium">
+				<p className="animate-draw-in text-sm font-medium" style={{ animationDelay: "80ms" }}>
 					{activeProject?.name ?? t("workspace.noSessionSelected", "No session selected")}
 				</p>
-				<p className="text-xs text-muted-foreground">
+				<p className="animate-draw-in text-xs text-muted-foreground" style={{ animationDelay: "160ms" }}>
 					{t("workspace.emptyProjectHint", "Create a session inside a workspace to begin.")}
 				</p>
 				{activeProject?.valid && (
-					<Button variant="line" size="sm" onClick={() => handleCreateClick(activeProject.id)}>
+					<Button
+						variant="line"
+						size="sm"
+						onClick={() => handleCreateClick(activeProject.id)}
+						className="animate-draw-in"
+						style={{ animationDelay: "240ms" }}
+					>
 						{t("sidebar.newSession", "New session")}
 					</Button>
 				)}

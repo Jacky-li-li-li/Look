@@ -122,6 +122,11 @@ export function getSystemPromptPath(): string {
 
 // ── Workspace-per-project session storage ──
 
+/** The cwd used for the built-in default workspace (no user folder required). */
+export function getDefaultWorkspaceCwd(): string {
+	return path.join(LOOK_DIR, "default-workspace");
+}
+
 /** Root directory for project-workspace session storage. */
 export function getWorkspacesDir(): string {
 	return path.join(LOOK_DIR, "workspaces");

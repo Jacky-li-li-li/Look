@@ -123,7 +123,7 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 			});
 		}
 		// 无保存位置时（刷新/首次加载）不调用 scrollToBottom：
-	// Conversation 组件在挂载时默认已在底部，额外的滚动调用反而造成可见跳动
+		// Conversation 组件在挂载时默认已在底部，额外的滚动调用反而造成可见跳动
 	}, [ready, id, navigatingEntry, scrollRef, stopScroll, scrollToMessage]);
 }
 

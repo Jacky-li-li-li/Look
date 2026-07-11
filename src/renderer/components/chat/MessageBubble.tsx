@@ -7,6 +7,7 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 } from "@earendil-works/pi-ai";
+import { UserAvatar } from "@shared/components/UserAvatar";
 import { cn } from "@shared/lib/utils";
 import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
@@ -15,7 +16,6 @@ import { useTranslation } from "react-i18next";
 import { hashKey } from "../../lib/stableKey";
 import { userProfileAtom } from "../../store/authAtoms";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
-import { UserAvatar } from "@shared/components/UserAvatar";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
