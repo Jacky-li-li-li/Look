@@ -24,7 +24,7 @@
 
 import type { PermissionMode } from "@look/shared/types";
 import fs from "fs";
-import path from "path";
+import { writeJsonFile } from "../utils/atomic-writer.js";
 
 export type UILanguage = "en" | "zh" | "ja";
 export type LookTone = "light" | "dark";
@@ -292,8 +292,7 @@ export class UserSettingsStore {
 
 	private writeUi(): void {
 		try {
-			fs.mkdirSync(path.dirname(this.uiSettingsPath), { recursive: true });
-			fs.writeFileSync(this.uiSettingsPath, JSON.stringify(this.ui, null, 2));
+			writeJsonFile(this.uiSettingsPath, this.ui, false);
 		} catch (err) {
 			console.error("[Look] Failed to write ui-settings.json:", err);
 		}

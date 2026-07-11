@@ -126,9 +126,10 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 		case "message_end": {
 			finishActiveBlocks(tracker, events, now);
 			const msg = event.message;
-			// Only assistant messages carry stopReason; user/toolResult are always complete.
-			const completed = msg.role !== "assistant" || msg.stopReason !== "aborted";
-			events.push({ type: "assistant_message_end", completed, timestamp: now });
+			if (msg.role === "assistant") {
+				const completed = msg.stopReason !== "aborted";
+				events.push({ type: "assistant_message_end", completed, timestamp: now });
+			}
 			break;
 		}
 

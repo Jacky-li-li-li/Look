@@ -5,8 +5,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { DEFAULT_THEME, type LookTone, readLookThemeFromDom, writeLookThemeToDom } from "../lib/look-theme";
 
-const api = window.look;
-
 let cachedTone: LookTone | null = null;
 
 function getSnapshot(): LookTone {
@@ -35,7 +33,14 @@ export function useLookTheme(): UseLookThemeResult {
 
 	const setTheme = useCallback((nextTone: LookTone) => {
 		writeLookThemeToDom(nextTone);
-		api?.setGeneralSettings?.({ themeTone: nextTone } as Record<string, unknown>).catch(() => {});
+		const api = window.look;
+		if (!api?.setGeneralSettings) {
+			console.warn("[useLookTheme] window.look.setGeneralSettings is not available");
+			return;
+		}
+		api.setGeneralSettings({ themeTone: nextTone } as Record<string, unknown>).catch((err: unknown) => {
+			console.error("[useLookTheme] Failed to persist theme tone:", err);
+		});
 	}, []);
 
 	return { tone, setTheme };

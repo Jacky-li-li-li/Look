@@ -199,12 +199,10 @@ export class WorkspaceFileService {
 			// 失败时 catch 块统一回滚已成功项，保证原子性语义。
 			const outcomes = await Promise.allSettled(
 				sources.map(async (source) => {
-					const resolved = path.resolve(source);
-					if (path.isAbsolute(source) || path.isAbsolute(resolved)) {
-						const prefix = homeDir.endsWith(path.sep) ? homeDir : `${homeDir}${path.sep}`;
-						if (resolved !== homeDir && !resolved.startsWith(prefix)) {
-							throw new Error(`Import source must be within the user home directory: ${source}`);
-						}
+					const resolved = path.isAbsolute(source) ? path.resolve(source) : path.resolve(homeDir, source);
+					const prefix = homeDir.endsWith(path.sep) ? homeDir : `${homeDir}${path.sep}`;
+					if (resolved !== homeDir && !resolved.startsWith(prefix)) {
+						throw new Error(`Import source must be within the user home directory: ${source}`);
 					}
 					const srcStat = await this.statSafe(resolved);
 					if (!srcStat) return null;

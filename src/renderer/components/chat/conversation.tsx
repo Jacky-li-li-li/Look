@@ -23,7 +23,7 @@ export function Conversation({ className, ...props }: ConversationProps): ReactE
 		<StickToBottom
 			className={cn("relative flex-1 overflow-hidden", className)}
 			initial="instant"
-			resize="smooth"
+			resize="instant"
 			role="log"
 			{...props}
 		/>

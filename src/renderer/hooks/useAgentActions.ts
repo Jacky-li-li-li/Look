@@ -13,7 +13,8 @@ import {
 	recentlyActiveSessionIdsAtom,
 	userPreferredModelAtom,
 } from "../store/atoms";
-import { appStore, markSessionSnapshotLoading } from "../store/ipcHandler";
+import { appStore } from "../store/ipcHandler";
+import { markSessionSnapshotLoading } from "../store/snapshot";
 
 const api = window.look;
 

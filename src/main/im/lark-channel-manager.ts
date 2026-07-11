@@ -415,7 +415,9 @@ export class LarkChannelManager {
 		try {
 			this.unsubscribeMessage?.();
 			this.unsubscribeMessage = undefined;
-			this.channel?.disconnect().catch(() => {});
+			this.channel?.disconnect().catch((err) => {
+				console.error("[LarkChannelManager] disconnect failed:", err);
+			});
 		} catch {
 			// best-effort
 		}

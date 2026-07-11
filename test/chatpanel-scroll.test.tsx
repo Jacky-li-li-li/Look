@@ -60,8 +60,8 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 		expect(SRC).toMatch(/key=\{agentId\}/);
 	});
 
-	it("uses Conversation resize prop for smooth/instant transition", () => {
-		expect(SRC).toMatch(/resize=\{ready && !transitioning \? "smooth" : "instant"\}/);
+	it("uses Conversation resize prop to avoid smooth scroll interfering with user scrolling", () => {
+		expect(SRC).toMatch(/resize="instant"/);
 	});
 
 	it("sets isAtBottom from useStickToBottomContext", () => {

@@ -19,8 +19,9 @@
 			html.classList.add(`tone-${tone}`);
 			html.style.colorScheme = tone;
 		}
-	} catch {
-		/* ignore */
+		console.log("[preload] initial theme tone from query:", tone, window.location.search);
+	} catch (err) {
+		console.error("[preload] failed to apply initial theme tone:", err);
 	}
 })();
 

@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { decryptApiKey, encryptApiKey } from "../security/secrets.js";
 
 // ProviderConfigInput is exported from the SDK's model-registry module but not
 // re-exported from the package entry point. Re-declare it here so callers can
@@ -173,6 +174,7 @@ export class CustomProvidersStore {
 		for (const p of raw.providers) {
 			try {
 				assertValid(p);
+				if (p.apiKey) p.apiKey = decryptApiKey(p.apiKey);
 				this.applyToRegistry(p);
 				loaded++;
 			} catch (err) {
@@ -190,7 +192,11 @@ export class CustomProvidersStore {
 		if (!fs.existsSync(this.filePath)) return [];
 		try {
 			const raw = JSON.parse(fs.readFileSync(this.filePath, "utf8")) as PersistedProviders;
-			return raw.providers ?? [];
+			const providers = raw.providers ?? [];
+			for (const p of providers) {
+				if (p.apiKey) p.apiKey = decryptApiKey(p.apiKey);
+			}
+			return providers;
 		} catch {
 			return [];
 		}
@@ -261,7 +267,11 @@ export class CustomProvidersStore {
 		const dir = path.dirname(this.filePath);
 		fs.mkdirSync(dir, { recursive: true });
 		const tmp = `${this.filePath}.tmp`;
-		fs.writeFileSync(tmp, JSON.stringify({ providers: list }, null, 2));
+		const persisted = list.map((p) => ({
+			...p,
+			apiKey: p.apiKey ? encryptApiKey(p.apiKey) : undefined,
+		}));
+		fs.writeFileSync(tmp, JSON.stringify({ providers: persisted }, null, 2));
 		fs.renameSync(tmp, this.filePath);
 	}
 }

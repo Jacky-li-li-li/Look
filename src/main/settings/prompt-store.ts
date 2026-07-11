@@ -9,6 +9,7 @@
 import { getProjectSystemPromptPath, getPromptsPath, getSystemPromptPath } from "@look/shared/look-storage";
 import fs from "fs";
 import path from "path";
+import { writeJsonFile, writeTextFile } from "../utils/atomic-writer.js";
 
 /** 表示"跟随全局"的哨兵值 */
 const FOLLOW_GLOBAL = "__follow_global__";
@@ -481,8 +482,7 @@ export class PromptStore {
 
 	private save(): void {
 		try {
-			fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-			fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2));
+			writeJsonFile(this.filePath, this.data, false);
 		} catch (err) {
 			console.error("[Look] Failed to write prompts.json:", err);
 		}
@@ -492,8 +492,7 @@ export class PromptStore {
 		try {
 			const active = this.getActive();
 			if (active) {
-				fs.mkdirSync(path.dirname(this.systemPromptPath), { recursive: true });
-				fs.writeFileSync(this.systemPromptPath, active.content);
+				writeTextFile(this.systemPromptPath, active.content);
 			}
 		} catch (err) {
 			console.error("[Look] Failed to write SYSTEM.md:", err);

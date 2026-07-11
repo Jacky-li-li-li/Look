@@ -43,7 +43,9 @@ export class SessionControlService {
 
 	async compress(sessionId: string): Promise<void> {
 		const session = (await this.host.ensureRuntime(sessionId)).runtime.session;
-		if (!session.isStreaming) await session.compact();
+		if (!session.isStreaming && !session.isRetrying && !session.isCompacting) {
+			await session.compact();
+		}
 	}
 
 	rename(sessionId: string, name: string): void {

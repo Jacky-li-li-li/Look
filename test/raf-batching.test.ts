@@ -1,7 +1,8 @@
 import type { LookUiEvent } from "@shared/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { agentsAtom, removeAgentAtoms, sessionStateAtomFamily } from "../src/renderer/store/atoms";
-import { appStore, flushAllUiEvents, initIpcHandlers } from "../src/renderer/store/ipcHandler";
+import { appStore, initIpcHandlers } from "../src/renderer/store/ipcHandler";
+import { flushAllUiEvents } from "../src/renderer/store/ui-event-processor";
 
 const sessionId = "raf-batch-a";
 

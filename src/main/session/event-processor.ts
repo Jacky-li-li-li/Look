@@ -84,7 +84,9 @@ export class SessionEventProcessor {
 			case "agent_end":
 				scope.streamingState = event.willRetry ? "retrying" : "idle";
 				this.host.emitSessionState(sessionId, "agent_end");
-				this.host.onAgentEnd(sessionId, event.willRetry).catch(() => {});
+				this.host.onAgentEnd(sessionId, event.willRetry).catch((err) => {
+					console.error("[SessionEventProcessor] onAgentEnd failed:", err);
+				});
 				if (!event.willRetry) this.host.onSubSessionAgentEnd(sessionId);
 				break;
 			case "agent_start":
@@ -93,7 +95,9 @@ export class SessionEventProcessor {
 				this.host.emitSessionUpdated(sessionId);
 				break;
 			case "message_end":
-				this.host.onMessageEnd(sessionId, event.message).catch(() => {});
+				this.host.onMessageEnd(sessionId, event.message).catch((err) => {
+					console.error("[SessionEventProcessor] onMessageEnd failed:", err);
+				});
 				break;
 			case "message_update":
 				this.host.emitContextUsage(sessionId);

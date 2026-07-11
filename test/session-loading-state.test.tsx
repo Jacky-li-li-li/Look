@@ -17,7 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatMessageList from "../src/renderer/components/chat/ChatMessageList";
 import i18n from "../src/renderer/i18n";
 import { sessionStateAtomFamily } from "../src/renderer/store/atoms";
-import { appStore, applySnapshot, markSessionSnapshotLoading } from "../src/renderer/store/ipcHandler";
+import { appStore } from "../src/renderer/store/ipcHandler";
+import { applySnapshot, markSessionSnapshotLoading } from "../src/renderer/store/snapshot";
 import { emptyRendererSessionState } from "../src/renderer/store/sessionTypes";
 
 function renderList(state = emptyRendererSessionState()) {

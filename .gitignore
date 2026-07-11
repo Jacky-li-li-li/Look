@@ -8,5 +8,7 @@ release/
 .alma-snapshots
 # Claude / Codex local settings — not part of the project
 .claude/
+# Trae local settings — not part of the project
+.trae/
 # Throwaway probes — kept locally for debugging, not part of the codebase
 _probe.ts

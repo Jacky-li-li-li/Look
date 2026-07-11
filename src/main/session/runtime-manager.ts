@@ -56,6 +56,7 @@ import { PlanService } from "../permissions/plan.js";
 import { PermissionService } from "../permissions/service.js";
 import { ProjectDeletionService } from "../projects/project-deletion-service.js";
 import { ProjectService } from "../projects/project-service.js";
+import { wrapAuthStorage } from "../security/secrets.js";
 import { AutoTitleService } from "../services/auto-title.js";
 import { SubAgentRuntimeService } from "../services/subagent-runtime.js";
 import { persistTurnDuration } from "../services/turn-metrics.js";
@@ -181,7 +182,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		if (migration.migrated && migration.keys.length > 0) {
 			console.log(`[Look] Migrated settings: ${migration.keys.join(", ")}`);
 		}
-		this.authStorage = AuthStorage.create(getAuthPath());
+		this.authStorage = wrapAuthStorage(AuthStorage.create(getAuthPath()));
 		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
 		this.customProvidersStore = new CustomProvidersStore(this.modelRegistry, getCustomProvidersPath());
 		this.customProvidersStore.load();
@@ -653,7 +654,12 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		factoryOptions?: { appendSystemPrompt?: string[] },
 	): Promise<ManagedRuntime> {
 		const runtime = await this.runtimeFactory.create(cwd, sessionManager, sessionStartEvent, factoryOptions);
-		return this.bindRuntime(runtime, projectId, createdAt);
+		try {
+			return await this.bindRuntime(runtime, projectId, createdAt);
+		} catch (err) {
+			await runtime.dispose();
+			throw err;
+		}
 	}
 
 	private async bindRuntime(
@@ -811,9 +817,8 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	async disposeAllRuntimes(): Promise<void> {
-		await Promise.all(
-			Array.from(this.runtimeRegistry.keys()).map((sessionId) => this.disposeRuntime(sessionId, true)),
-		);
+		const keys = [...this.runtimeRegistry.keys()];
+		await Promise.all(keys.map((sessionId) => this.disposeRuntime(sessionId, true)));
 	}
 
 	async activateSession(sessionId: string): Promise<void> {
@@ -1108,35 +1113,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	getAvailableModelsSync() {
-		// Filter to providers with explicitly configured auth (stored keys,
-		// models.json keys, runtime overrides, custom providers). Exclude
-		// providers that are only reachable via environment variables — the
-		// user didn't opt into those through the settings UI and ModelSelector
-		// should align with what the API Keys tab shows as "configured".
-		// Also exclude providers with no configured auth at all — without this
-		// guard, built-in providers whose key is missing would still appear
-		// here (auth.source is undefined when configured=false) and the new-
-		// session fallback would pick one, fail to setModel, and silently leave
-		// the SDK's default (typically anthropic/claude-opus-4-8) in place.
-		return this.modelRegistry.getAvailable().flatMap((model) => {
-			const auth = this.modelRegistry.getProviderAuthStatus(model.provider);
-			if (auth.source === "environment") return [];
-			if (!auth.configured) return [];
-			return [
-				{
-					provider: model.provider,
-					id: model.id,
-					name: model.name ?? model.id,
-					reasoning: model.reasoning ?? false,
-					contextWindow: model.contextWindow ?? 128000,
-					maxTokens: model.maxTokens ?? 16384,
-					cost: {
-						input: model.cost?.input ?? 0,
-						output: model.cost?.output ?? 0,
-					},
-				},
-			];
-		});
+		return this.modelProviderService.getAvailableModels();
 	}
 
 	async getAvailableModels() {
@@ -1148,37 +1125,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	async getProviderSettings() {
-		const customList = this.customProvidersStore.list();
-		const customNames = new Set(customList.map((p) => p.name));
-		const providers = await this.getProviders();
-		const filtered = providers.flatMap((provider) => {
-			if (customNames.has(provider.id)) return [];
-			const auth = this.modelRegistry.getProviderAuthStatus(provider.id);
-			const models = this.getAvailableModelsSync().filter((model) => model.provider === provider.id);
-			return [
-				{
-					id: provider.id,
-					name: provider.name,
-					hasKey: provider.hasCredentials,
-					envVar: auth.source === "environment" ? auth.label : undefined,
-					modelsAvailable: models.length,
-					models,
-					authSource: auth.source,
-					envLabel: auth.label,
-				},
-			];
-		});
-
-		const customConfigured = customList.filter((cp) => !!cp.apiKey).length;
-		const customTotalModels = customList.reduce((sum, cp) => sum + cp.models.length, 0);
-
-		return {
-			providers: filtered,
-			customStats: {
-				configured: customConfigured,
-				totalModels: customTotalModels,
-			},
-		};
+		return this.modelProviderService.getProviderSettings();
 	}
 
 	getPermissionMode(sessionId: string): PermissionMode {

@@ -108,7 +108,11 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	// === StickToBottom context (now safe — we're inside Conversation) ===
 	const { isAtBottom, scrollToBottom, stopScroll, scrollRef } = useStickToBottomContext();
 
-	// === Sync isAtBottom to global atom ===
+	// 使用 ref 追踪 isAtBottom 最新值，避免 stale closure
+	const isAtBottomRef = useRef(isAtBottom);
+	isAtBottomRef.current = isAtBottom;
+
+	// === Sync isAtBottom to global atom (debounced to avoid state churn while scrolling) ===
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	// 只订阅 uiPhase，避免 streaming 期间全量 sessionState 变化触发 re-render
@@ -117,21 +121,29 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		[activeAgentId],
 	);
 	const activeUiPhase = useAtomValue(activeUiPhaseAtom);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: ref + dep trigger re-schedules debounce on change
 	useEffect(() => {
-		setAtBottomAtom(isAtBottom);
-		if (isAtBottom && activeAgentId) {
-			appStore.set(
-				recentlyCompletedAtom,
-				appStore.get(recentlyCompletedAtom).filter((id) => id !== activeAgentId),
-			);
+		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+		const sync = () => {
+			timeoutId = null;
+			const atBottom = isAtBottomRef.current;
+			setAtBottomAtom(atBottom);
+			if (atBottom && activeAgentId) {
+				appStore.set(
+					recentlyCompletedAtom,
+					appStore.get(recentlyCompletedAtom).filter((id) => id !== activeAgentId),
+				);
+			}
+		};
+		if (!timeoutId) {
+			timeoutId = setTimeout(sync, 100);
 		}
+		return () => {
+			if (timeoutId) clearTimeout(timeoutId);
+		};
 	}, [isAtBottom, setAtBottomAtom, activeAgentId]);
 
 	// === Streaming auto-follow ===
-	// 使用 ref 追踪 isAtBottom 最新值，避免 stale closure：
-	// isBusy 变化时闭包中的 isAtBottom 可能是上一帧的值。
-	const isAtBottomRef = useRef(isAtBottom);
-	isAtBottomRef.current = isAtBottom;
 	useEffect(() => {
 		if (isBusy && isAtBottomRef.current) {
 			scrollToBottom();
@@ -520,31 +532,12 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 		isBusy,
 	]);
 
-	// === Transitioning ===
-	const wasStreamingRef = useRef(isBusy);
-	const [transitioningCooldown, setTransitioningCooldown] = useState(false);
-
-	useEffect(() => {
-		if (wasStreamingRef.current && !isBusy) {
-			setTransitioningCooldown(true);
-		}
-		wasStreamingRef.current = isBusy;
-	}, [isBusy]);
-
-	useEffect(() => {
-		if (isBusy) return;
-		const timer = setTimeout(() => setTransitioningCooldown(false), 150);
-		return () => clearTimeout(timer);
-	}, [isBusy]);
-
-	const transitioning = !isBusy && transitioningCooldown;
-
 	return (
 		<Conversation
 			key={agentId}
-			resize={ready && !transitioning ? "smooth" : "instant"}
+			resize="instant"
 			initial="instant"
-			className={cn(ready ? "opacity-100 transition-opacity duration-200" : "opacity-0", "min-h-0 flex-1")}
+			className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}
 		>
 			<ChatMessagesInner
 				agentId={props.agentId}
@@ -556,7 +549,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 				phase={props.phase}
 				isBusy={isBusy}
 				ready={ready}
-				transitioning={transitioning}
+				transitioning={false}
 				inputRef={props.inputRef}
 				onSend={props.onSend}
 			/>

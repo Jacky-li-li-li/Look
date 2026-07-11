@@ -199,7 +199,7 @@ function setupCsp(): void {
 		`default-src 'self'`,
 		`script-src 'self'`,
 		`style-src 'self' 'unsafe-inline'`,
-		`img-src 'self' data: blob: file: https:`,
+		`img-src 'self' data: blob: file:`,
 		`font-src 'self' data:`,
 		`connect-src ${connectSrc}`,
 		`media-src 'self' data: blob: file:`,

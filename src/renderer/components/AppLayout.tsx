@@ -9,6 +9,7 @@ import { lazy, memo, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { appReadyPhaseAtom, type ProviderSettingsData, type SettingsTab } from "../store/atoms";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
+import ChatPanel from "./chat/ChatPanel";
 import EmptySessionState from "./chat/EmptySessionState";
 import WelcomeScreen from "./chat/WelcomeScreen";
 import DeleteProjectDialog from "./dialogs/DeleteProjectDialog";
@@ -19,11 +20,10 @@ import PlanQuestionDialog from "./dialogs/PlanQuestionDialog";
 import UpdateNotification from "./dialogs/UpdateNotification";
 import SessionSheetBar from "./SessionSheetBar";
 import Sidebar from "./Sidebar";
+import SettingsDialog from "./settings/SettingsDialog";
 import { RightPanel } from "./workspace/RightPanel";
 
 const AgentSquare = lazy(() => import("./AgentMarketplace/AgentSquare"));
-const ChatPanel = lazy(() => import("./chat/ChatPanel"));
-const SettingsDialog = lazy(() => import("./settings/SettingsDialog"));
 
 interface AppLayoutProps {
 	sidebarCollapsed: boolean;
@@ -180,25 +180,23 @@ function AppLayout({
 								onExpandRightPanel={handleExpandRightPanel}
 							/>
 							{activeAgent ? (
-								<Suspense fallback={<ChatPanelFallback label={t("chat.loading", "Loading conversation…")} />}>
-									<ChatPanel
-										agentId={activeAgent.id}
-										agentName={activeAgent.name}
-										sessionState={activeSessionState}
-										autoCollapse={autoCollapse}
-										queue={activeQueue}
-										phase={activePhase}
-										currentModel={activeAgent.model}
-										currentThinking={activeAgent.thinkingLevel}
-										availableThinkingLevels={thinkingLevels}
-										onSend={handleSendMessage}
-										onThinkingChange={handleThinkingChange}
-										onModelChange={handleModelChanged}
-										onRequestApiKeys={handleRequestApiKeys}
-										onAbort={handleAbortAgent}
-										onDequeueAll={handleDequeueAll}
-									/>
-								</Suspense>
+								<ChatPanel
+									agentId={activeAgent.id}
+									agentName={activeAgent.name}
+									sessionState={activeSessionState}
+									autoCollapse={autoCollapse}
+									queue={activeQueue}
+									phase={activePhase}
+									currentModel={activeAgent.model}
+									currentThinking={activeAgent.thinkingLevel}
+									availableThinkingLevels={thinkingLevels}
+									onSend={handleSendMessage}
+									onThinkingChange={handleThinkingChange}
+									onModelChange={handleModelChanged}
+									onRequestApiKeys={handleRequestApiKeys}
+									onAbort={handleAbortAgent}
+									onDequeueAll={handleDequeueAll}
+								/>
 							) : appReadyPhase >= 2 && agents.length === 0 ? (
 								<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
 							) : null}
@@ -228,16 +226,14 @@ function AppLayout({
 					/>
 				)}
 				{showSettings && (
-					<Suspense fallback={<LazyDialogFallback label={t("settings.loading", "Loading settings…")} />}>
-						<SettingsDialog
-							open={showSettings}
-							providers={providerSettings.providers}
-							customStats={providerSettings.customStats}
-							onProvidersChange={onProvidersChange}
-							onClose={handleCloseSettings}
-							defaultTab={settingsTab}
-						/>
-					</Suspense>
+					<SettingsDialog
+						open={showSettings}
+						providers={providerSettings.providers}
+						customStats={providerSettings.customStats}
+						onProvidersChange={onProvidersChange}
+						onClose={handleCloseSettings}
+						defaultTab={settingsTab}
+					/>
 				)}
 				<PermissionDialog />
 				<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
@@ -245,31 +241,6 @@ function AppLayout({
 			</div>
 			<UpdateNotification />
 		</>
-	);
-}
-
-function LazyDialogFallback({ label }: { label: string }) {
-	return (
-		<div className="fixed inset-0 z-50 grid place-items-center" role="status" aria-live="polite">
-			<div className="absolute inset-0 bg-black/10 backdrop-blur-xs" />
-			<div className="relative rounded-xl bg-popover px-5 py-4 text-sm text-muted-foreground shadow-xl ring-1 ring-foreground/10">
-				{label}
-			</div>
-		</div>
-	);
-}
-
-function ChatPanelFallback({ label }: { label: string }) {
-	return (
-		<div className="flex min-h-0 flex-1 flex-col" role="status" aria-label={label}>
-			<span className="sr-only">{label}</span>
-			<div className="flex flex-1 flex-col gap-5 overflow-hidden px-[8%] py-8 motion-safe:animate-pulse">
-				<div className="h-4 w-2/5 rounded-full bg-muted" />
-				<div className="ml-auto h-16 w-3/5 rounded-2xl bg-muted/80" />
-				<div className="h-28 w-4/5 rounded-2xl bg-muted/60" />
-			</div>
-			<div className="mx-4 mb-4 h-24 shrink-0 rounded-xl border border-hairline bg-muted/30" />
-		</div>
 	);
 }
 

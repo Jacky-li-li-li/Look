@@ -1,10 +1,9 @@
 // ============================================================
 // User Profile Service — local ~/.look/user-profile.json
-// Referencing Proma's user-profile-service.ts pattern
 // ============================================================
 
 import { getUserProfilePath } from "@look/shared/look-storage";
-import fs from "fs";
+import { readJsonFile, writeJsonFile } from "../utils/atomic-writer.js";
 
 export interface UserProfile {
 	userId: string;
@@ -21,16 +20,11 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 function readRaw(): Partial<UserProfile> {
-	try {
-		const raw = fs.readFileSync(getUserProfilePath(), "utf-8");
-		return JSON.parse(raw);
-	} catch {
-		return {};
-	}
+	return readJsonFile<Partial<UserProfile>>(getUserProfilePath(), {});
 }
 
 function writeRaw(profile: UserProfile): void {
-	fs.writeFileSync(getUserProfilePath(), JSON.stringify(profile, null, "\t"), "utf-8");
+	writeJsonFile(getUserProfilePath(), profile);
 }
 
 export function getUserProfile(): UserProfile {

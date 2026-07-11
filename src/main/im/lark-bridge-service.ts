@@ -257,7 +257,9 @@ export class LarkBridgeService {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			await this.getConnectedChannel()
 				?.send(chatId, { text: `❌ 命令执行失败: ${errorMsg}` })
-				.catch(() => {});
+				.catch((sendErr) => {
+					console.error("[LarkBridgeService] Failed to notify command error:", sendErr);
+				});
 		}
 	}
 
@@ -530,7 +532,9 @@ export class LarkBridgeService {
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				console.error("[LarkBridgeService] Failed to create agent:", errorMsg);
-				await channel.send(chatId, { text: `❌ 无法创建 Agent 会话: ${errorMsg}` }).catch(() => {});
+				await channel.send(chatId, { text: `❌ 无法创建 Agent 会话: ${errorMsg}` }).catch((sendErr) => {
+					console.error("[LarkBridgeService] Failed to notify agent creation error:", sendErr);
+				});
 				return;
 			}
 		}
@@ -580,6 +584,11 @@ export class LarkBridgeService {
 						} catch (err) {
 							const errorMsg = err instanceof Error ? err.message : String(err);
 							console.warn("[LarkBridgeService] Wait for reply failed:", errorMsg);
+							try {
+								await this.runtimeManager.abortAgent(sessionId);
+							} catch (abortErr) {
+								console.error("[LarkBridgeService] abortAgent failed:", abortErr);
+							}
 							acc!.status = "error";
 							acc!.error = errorMsg;
 							acc!.done = true;
@@ -597,7 +606,9 @@ export class LarkBridgeService {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			console.warn("[LarkBridgeService] Stream failed:", errorMsg);
 			// 回退到普通文本消息
-			await channel.send(chatId, { text: `❌ 回复失败: ${errorMsg}` }).catch(() => {});
+			await channel.send(chatId, { text: `❌ 回复失败: ${errorMsg}` }).catch((sendErr) => {
+				console.error("[LarkBridgeService] Failed to notify reply error:", sendErr);
+			});
 		} finally {
 			// 清理累积器
 			if (acc?.updateTimer) clearTimeout(acc.updateTimer);
