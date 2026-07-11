@@ -216,11 +216,7 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 					>
 						{t("common.cancel")}
 					</Button>
-					<Button
-						size="sm"
-						onClick={handleSave}
-						disabled={saving}
-					>
+					<Button size="sm" onClick={handleSave} disabled={saving}>
 						{saving
 							? t(editingName ? "mcpDialog.updating" : "mcpDialog.adding")
 							: t(editingName ? "mcpDialog.saveChanges" : "mcpDialog.addServer")}

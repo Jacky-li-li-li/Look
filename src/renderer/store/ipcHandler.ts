@@ -21,6 +21,7 @@ import {
 import { createStore } from "jotai";
 import { toast } from "sonner";
 import i18n from "../i18n";
+import { themeFromSettings, writeLookThemeToDom } from "../lib/look-theme";
 import { agentDefinitionsAtom } from "./agentDefinitionsAtoms";
 import {
 	activeAgentIdAtom,
@@ -1011,7 +1012,7 @@ let _startupComplete = false;
 let _hasAutoSelected = false;
 
 /** 精简重试延迟：首试 0ms，失败后 50ms/200ms 重试。原 7 级（最坏 8s）过于保守。 */
-const STARTUP_INVOKE_DELAYS_MS = [0, 50, 200];
+const STARTUP_INVOKE_DELAYS_MS = [0, 50, 200, 500];
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1024,7 +1025,7 @@ async function invokeStartup<T>(fn: () => Promise<T>): Promise<T | null> {
 		try {
 			const result = await fn();
 			lastResult = result;
-			if (result && typeof result === "object" && "error" in result && (result as Record<string, unknown>).error)
+			if (result && typeof result === "object" && "success" in result && (result as Record<string, unknown>).success)
 				return result;
 		} catch {
 			lastResult = null;
@@ -1060,15 +1061,11 @@ function _autoSelectAgent(): void {
 }
 
 /**
- * 初始化应用数据，分层并行拉取以减少启动延迟：
- *   Layer 1: getSettings() (fire-and-forget) + getGeneralSettings() (await)
- *   Layer 2: listProjects() + getAgents() + listAgentDefinitions() (并行)
- *
- * 原实现为全串行瀑布流（5 步 x 7 级重试 = 最坏 ~39s），
- * 现改为分层并行（最坏 ~1.2s），通常启动从 ~2s 降至 ~500ms。
+ * 初始化应用数据：settings / projects / agents / agentDefinitions 全部并行拉取，
+ * 不再等待 settings 完成才开始拉项目/会话，减少刷新后的首屏等待时间。
  */
 export async function initAppData(api: Window["look"]): Promise<void> {
-	// ── Layer 1: settings 并行 ──
+	// provider settings 不阻塞启动
 	const settingsPromise = invokeStartup(() => api.getSettings())
 		.then((r) => {
 			if (r?.success) {
@@ -1080,27 +1077,25 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		})
 		.catch(() => {});
 
-	const genSettingsPromise = invokeStartup(() => api.getGeneralSettings());
+	// 并行发起所有启动请求
+	const [genSettingsResult, projectResult, agentsResult, agentDefsResult] = await Promise.all([
+		invokeStartup(() => api.getGeneralSettings()),
+		invokeStartup(() => api.listProjects()),
+		invokeStartup(() => api.getAgents()),
+		invokeStartup(() => api.listAgentDefinitions()),
+	]);
 
-	const settingsResult = await genSettingsPromise;
-	if (settingsResult?.success && settingsResult.settings) {
-		const settings = settingsResult.settings;
+	// 应用 general settings（language 需要在写入 store 前准备好）
+	if (genSettingsResult?.success && genSettingsResult.settings) {
+		const settings = genSettingsResult.settings;
 		if (settings.language) await i18n.changeLanguage(settings.language);
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
 		if (Array.isArray(settings.openedSessionIds)) appStore.set(openedSessionIdsAtom, settings.openedSessionIds);
+		writeLookThemeToDom(themeFromSettings(settings));
 	}
-	// 不阻塞后续：provider settings 完成后自动写入 store
-	settingsPromise.catch(() => {});
-
-	// ── Layer 2: 并行拉取 projects + agents + agentDefinitions ──
-	const [projectResult, agentsResult, agentDefsResult] = await Promise.all([
-		invokeStartup(() => api.listProjects()),
-		invokeStartup(() => api.getAgents()),
-		invokeStartup(() => api.listAgentDefinitions()),
-	]);
 
 	// 批量写入，减少中间态渲染
 	if (projectResult?.success && Array.isArray(projectResult.projects)) {
@@ -1114,23 +1109,27 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		appStore.set(agentDefinitionsAtom, agentDefsResult.agents);
 	}
 
-	// readyPhase 从 0 直接跳转到 2（跳过中间 1），减少一次不必要的重渲染
+	// 阶段推进：项目到达即显示侧边栏外壳，agent 到达后即可选择会话
+	if (appStore.get(appReadyPhaseAtom) < 1) appStore.set(appReadyPhaseAtom, 1);
 	if (appStore.get(appReadyPhaseAtom) < 2) appStore.set(appReadyPhaseAtom, 2);
 
-	// ── Layer 3: 自动选择 + 订阅 ──
-	_autoSelectAgent();
-
-	// 启动完成，后续 IPC push 事件可以安全处理
+	// 启动完成后再自动选择，避免 push 事件在初始化过程中提前触发 _autoSelectAgent
 	_startupComplete = true;
 
 	// 仅在 agents 首次加载后自动选择一次，后续 IPC agent:list 不再触发
 	appStore.sub(agentsAtom, () => {
-		if (_hasAutoSelected) return;
+		if (!_startupComplete || _hasAutoSelected) return;
 		const agents = appStore.get(agentsAtom);
 		if (agents.length === 0) return;
 		_hasAutoSelected = true;
 		_autoSelectAgent();
 	});
+
+	_hasAutoSelected = true;
+	_autoSelectAgent();
+
+	// 不阻塞启动：provider settings 错误已静默处理
+	settingsPromise.catch(() => {});
 }
 
 /** 启动是否已完成（供 IPC handler 去重 push/pull 双重写入）。 */

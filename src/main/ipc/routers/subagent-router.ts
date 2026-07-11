@@ -2,8 +2,7 @@
 // Subagent router — sub-session queries, agent definitions, skill toggles
 // ============================================================
 
-import { guardAgentDefinitionInput } from "../guards.js";
-import { guardAgentId, guardBoolean, guardString } from "../guards.js";
+import { guardAgentDefinitionInput, guardAgentId, guardBoolean, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
 export const subagentRouter: IpcRouter = (ctx, register) => {

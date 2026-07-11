@@ -427,24 +427,37 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		return this.projectService.loadProjects();
 	}
 
-	async restoreWorkspace(): Promise<number> {
-		const refreshPromises: Promise<StoredSession[]>[] = [];
-		for (const p of this.projectService.listProjects()) {
-			if (p.valid) refreshPromises.push(this.refreshProjectSessions(p.id));
-		}
-		const results = await Promise.all(refreshPromises);
-		const total = results.reduce((sum, sessions) => sum + sessions.length, 0);
+	async recoverOrphanedProjects(): Promise<boolean> {
+		return this.projectService.recoverOrphanedProjects();
+	}
 
+	async restoreWorkspace(): Promise<number> {
 		const settings = this.userSettings.getAll();
 		const preferredProject = this.projectService.getProjectInfo(settings.lastActiveProjectId);
-		const project = preferredProject?.valid ? preferredProject : this.listProjects().find((p) => p.valid);
-		if (!project) return total;
+		const activeProject = preferredProject?.valid ? preferredProject : this.listProjects().find((p) => p.valid);
 
-		this.projectService.setActiveId(project.id);
+		// 并发扫描所有项目，但每个项目扫描完成后立即推送 agent:list，
+		// 让侧边栏会话列表可以逐项目渲染，而不必等全部扫描结束。
+		let total = 0;
+		const scanPromises: Promise<void>[] = [];
+		for (const project of this.projectService.listProjects()) {
+			if (!project.valid) continue;
+			scanPromises.push(
+				this.refreshProjectSessions(project.id).then((sessions) => {
+					total += sessions.length;
+					this.emitSessionList(project.id);
+				}),
+			);
+		}
+		await Promise.all(scanPromises);
+
+		if (!activeProject) return total;
+
+		this.projectService.setActiveId(activeProject.id);
 		// 立即确定 preferred session ID（不 init runtime），让 renderer 在首帧就
 		// 高亮对应 tab 避免 EmptySessionState 闪烁。runtime 由 _autoSelectAgent
 		// 或用户点击异步激活。
-		const sessions = this.sessionCatalog.listByProject(project.id);
+		const sessions = this.sessionCatalog.listByProject(activeProject.id);
 		const preferred = sessions.find((s) => s.id === settings.lastActiveSessionId) ?? sessions[0];
 		if (preferred) this.activeSessionId = preferred.id;
 		this.emitProjectList();

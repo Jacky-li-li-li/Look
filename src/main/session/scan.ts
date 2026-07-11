@@ -8,8 +8,10 @@
 // Extracted from SessionRuntimeManager (Phase 1 refactor).
 // ============================================================
 
-import fs from "node:fs";
+import fs, { createReadStream } from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 
@@ -25,15 +27,6 @@ export function parseJsonLine(line: string): Record<string, unknown> | null {
 		return JSON.parse(trimmed);
 	} catch {
 		return null;
-	}
-}
-
-function normalizeCwdForSessionMatch(cwd: string): string {
-	if (!cwd) return "";
-	try {
-		return fs.realpathSync(cwd);
-	} catch {
-		return path.resolve(cwd);
 	}
 }
 
@@ -136,11 +129,28 @@ export function scanSessionFileSummary(filePath: string): PiSessionInfo | null {
 }
 
 async function scanSessionFileSummaryAsync(filePath: string): Promise<PiSessionInfo | null> {
+	let stream: ReturnType<typeof createReadStream> | undefined;
 	try {
-		const [stats, raw] = await Promise.all([fs.promises.stat(filePath), fs.promises.readFile(filePath, "utf8")]);
-		return buildSessionSummaryFromLines(filePath, stats, raw.split(/\r?\n/));
+		const stats = await fsp.stat(filePath);
+		const lines: string[] = [];
+		stream = createReadStream(filePath, "utf-8");
+		const rl = createInterface({ input: stream, crlfDelay: Infinity });
+		for await (const line of rl) {
+			lines.push(line);
+		}
+		return buildSessionSummaryFromLines(filePath, stats, lines);
 	} catch {
 		return null;
+	} finally {
+		stream?.destroy();
+	}
+}
+
+async function resolveCwd(cwd: string): Promise<string> {
+	try {
+		return await fsp.realpath(cwd);
+	} catch {
+		return path.resolve(cwd);
 	}
 }
 
@@ -151,14 +161,14 @@ async function scanSessionFileSummaryAsync(filePath: string): Promise<PiSessionI
 export async function scanSessionDirectory(sessionDir: string, cwd: string): Promise<PiSessionInfo[]> {
 	let files: string[];
 	try {
-		files = (await fs.promises.readdir(sessionDir))
+		files = (await fsp.readdir(sessionDir))
 			.filter((file) => file.endsWith(".jsonl"))
 			.map((file) => path.join(sessionDir, file));
 	} catch {
 		return [];
 	}
 
-	const resolvedCwd = normalizeCwdForSessionMatch(cwd);
+	const resolvedCwd = await resolveCwd(cwd);
 	const results = new Array<PiSessionInfo | null>(files.length).fill(null);
 	let nextIndex = 0;
 	const workers = Array.from({ length: Math.min(SESSION_SUMMARY_CONCURRENCY, files.length) }, async () => {
@@ -166,7 +176,7 @@ export async function scanSessionDirectory(sessionDir: string, cwd: string): Pro
 			const index = nextIndex++;
 			const summary = await scanSessionFileSummaryAsync(files[index]!);
 			if (summary) {
-				const summaryCwd = normalizeCwdForSessionMatch(summary.cwd);
+				const summaryCwd = await resolveCwd(summary.cwd);
 				if (!summaryCwd || summaryCwd === resolvedCwd) results[index] = summary;
 			}
 		}

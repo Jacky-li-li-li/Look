@@ -3,8 +3,8 @@
 // ============================================================
 
 import { guardBoolean, guardOptionalString, guardPath, guardString } from "../guards.js";
-import { promptForProjectTrust } from "../project-trust.js";
 import type { IpcRouter } from "../invoke-context.js";
+import { promptForProjectTrust } from "../project-trust.js";
 
 export const projectRouter: IpcRouter = (ctx, register) => {
 	register("project:list", async () => {

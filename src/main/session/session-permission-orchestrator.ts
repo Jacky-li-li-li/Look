@@ -9,7 +9,7 @@
 
 import type { PermissionMode } from "@look/shared/types";
 import type { IPermissionService, IPlanService } from "../core/contracts.js";
-import { UserSettingsStore } from "../settings/store.js";
+import type { UserSettingsStore } from "../settings/store.js";
 import type { ManagedRuntime } from "./runtime-registry.js";
 
 export interface SessionPermissionOrchestratorHost {

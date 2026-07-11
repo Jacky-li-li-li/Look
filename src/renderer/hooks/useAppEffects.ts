@@ -5,7 +5,6 @@
 import type { ThinkingLevel } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo } from "react";
-import { DEFAULT_THEME } from "../lib/look-theme";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
@@ -13,7 +12,6 @@ import {
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
 } from "../store/atoms";
-import { themeFromSettings, writeLookThemeToDom } from "./useLookTheme";
 
 const api = window.look;
 
@@ -44,21 +42,6 @@ export function useAppEffects() {
 		}, 500);
 		return () => clearTimeout(timer);
 	}, [activeAgentId, activeProjectId, openProjectIds, openedSessionIds]);
-
-	// Boot-time theme sync
-	useEffect(() => {
-		if (!api) {
-			writeLookThemeToDom(DEFAULT_THEME);
-			return;
-		}
-		api.getGeneralSettings()
-			.then((r) => {
-				writeLookThemeToDom(themeFromSettings(r?.settings ?? {}));
-			})
-			.catch(() => {
-				writeLookThemeToDom(DEFAULT_THEME);
-			});
-	}, []);
 
 	const thinkingLevels = useMemo(() => {
 		const levels =

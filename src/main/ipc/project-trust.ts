@@ -3,7 +3,7 @@
 // on the monolithic handlers.ts registration file.
 // ============================================================
 
-import { BrowserWindow, dialog } from "electron";
+import { type BrowserWindow, dialog } from "electron";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 
 export async function promptForProjectTrust(

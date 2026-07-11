@@ -6,6 +6,24 @@
 // must consume the API through `window.look`.
 // ============================================================
 
+// Synchronously apply the theme tone passed by the main process via the
+// ?theme= query string before the first paint. This prevents a hard-coded
+// dark flash when refreshing in light mode.
+(function initThemeFromQuery() {
+	try {
+		const params = new URLSearchParams(window.location.search);
+		const tone = params.get("theme") === "light" ? "light" : "dark";
+		const html = document.documentElement;
+		if (html) {
+			html.classList.remove("tone-dark", "tone-light");
+			html.classList.add(`tone-${tone}`);
+			html.style.colorScheme = tone;
+		}
+	} catch {
+		/* ignore */
+	}
+})();
+
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const api = {

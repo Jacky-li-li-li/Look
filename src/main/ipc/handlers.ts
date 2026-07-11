@@ -6,7 +6,7 @@
 // ============================================================
 
 import type { RendererToMainEvent } from "@look/shared/types";
-import { BrowserWindow, ipcMain } from "electron";
+import { type BrowserWindow, ipcMain } from "electron";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";

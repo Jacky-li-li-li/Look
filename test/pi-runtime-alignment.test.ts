@@ -53,7 +53,8 @@ describe("pi runtime architecture regressions", () => {
 		// UI event emission is now in SessionEventProcessor (batched via UIEventBatcher)
 		expect(uiBatcher).toContain('type: "session:ui-event"');
 		expect(eventProcessor).toContain("events: uiEvents");
-		expect(sessionNotifier).toContain("entries: session.sessionManager.getBranch()");
+		expect(sessionNotifier).toContain("const allEntries = session.sessionManager.getBranch()");
+		expect(sessionNotifier).toContain("entries,");
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
 		expect(existsSync(resolve(root, "packages/shared/src/message-convert.ts"))).toBe(false);
@@ -114,7 +115,7 @@ describe("pi runtime architecture regressions", () => {
 
 	it("11. sends projectId in the startup session-list contract", () => {
 		const listEvents = index.match(/type: "agent:list" as const,[\s\S]{0,80}?projectId: project\.id/g);
-		expect(listEvents).toHaveLength(2);
+		expect(listEvents).toHaveLength(1);
 	});
 
 	it("12. removes subagent orchestration from source and TypeScript exclusions", () => {

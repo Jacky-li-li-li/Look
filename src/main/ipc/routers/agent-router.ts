@@ -4,8 +4,8 @@
 
 import type { ThinkingLevel } from "@look/shared/types";
 import { guardAgentId, guardEnum, guardOptionalString, guardString } from "../guards.js";
-import { promptForProjectTrust } from "../project-trust.js";
 import type { IpcRouter } from "../invoke-context.js";
+import { promptForProjectTrust } from "../project-trust.js";
 
 export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:send-message", async (data) => {

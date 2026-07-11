@@ -54,7 +54,10 @@ export const mcpRouter: IpcRouter = (ctx, register) => {
 
 	register("mcp:update-server", async (data) => {
 		try {
-			await ctx.mcpManager.updateServer(guardString(data.name, "name"), guardMcpServerConfig(data.config, "config") as unknown as McpServerConfig);
+			await ctx.mcpManager.updateServer(
+				guardString(data.name, "name"),
+				guardMcpServerConfig(data.config, "config") as unknown as McpServerConfig,
+			);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };

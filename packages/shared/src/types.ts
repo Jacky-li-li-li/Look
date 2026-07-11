@@ -171,6 +171,10 @@ export interface SessionSnapshotEnvelope {
 	type: "session:snapshot";
 	sessionId: string;
 	reason: "initial" | "activate" | "agent_end" | "navigate" | "compaction_end";
+	/** When true, this snapshot carries only a subset of the persisted history.
+	 *  The renderer should render what it has and expect a full snapshot shortly.
+	 *  Other reasons (agent_end, navigate) are always complete. */
+	partial?: boolean;
 	leafId: string | null;
 	entries: SessionEntry[];
 	runtime: SessionRuntimeSnapshot;

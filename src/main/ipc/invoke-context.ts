@@ -5,11 +5,11 @@
 // on the monolithic registration file.
 // ============================================================
 
+import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
-import type { RendererToMainEvent } from "@look/shared/types";
 
 type InvokeHandler<T extends RendererToMainEvent["type"] = RendererToMainEvent["type"]> = (
 	data: Extract<RendererToMainEvent, { type: T }>,
@@ -29,11 +29,6 @@ export type InvokeRouteMap = Partial<{
 	[K in RendererToMainEvent["type"]]: InvokeHandler<K>;
 }>;
 
-export type RegisterHandler = <T extends RendererToMainEvent["type"]>(
-	type: T,
-	handler: InvokeHandler<T>,
-) => void;
+export type RegisterHandler = <T extends RendererToMainEvent["type"]>(type: T, handler: InvokeHandler<T>) => void;
 
-export interface IpcRouter {
-	(ctx: InvokeContext, register: RegisterHandler): void;
-}
+export type IpcRouter = (ctx: InvokeContext, register: RegisterHandler) => void;

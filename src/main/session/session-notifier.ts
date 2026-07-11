@@ -35,25 +35,47 @@ export class SessionNotifier {
 		const managed = this.getManagedRuntime(sessionId);
 		if (managed) {
 			const session = managed.runtime.session;
+			const allEntries = session.sessionManager.getBranch();
+			const leafId = session.sessionManager.getLeafId();
+			const runtime = {
+				model: session.model,
+				thinkingLevel: session.thinkingLevel,
+				isStreaming: info?.isStreaming ?? session.isStreaming,
+				isRetrying: session.isRetrying,
+				isCompacting: session.isCompacting,
+				retryAttempt: session.retryAttempt,
+				steering: session.getSteeringMessages(),
+				followUp: session.getFollowUpMessages(),
+				stats: session.getSessionStats(),
+				contextUsage: session.getContextUsage(),
+			};
+
+			// On activation, send the most recent messages first so the chat area
+			// renders quickly, then follow up with the full history.
+			const PARTIAL_SIZE = 100;
+			const usePartial = reason === "activate" && allEntries.length > PARTIAL_SIZE;
+			const entries = usePartial ? allEntries.slice(-PARTIAL_SIZE) : allEntries;
 			this.eventBus.emit({
 				type: "session:snapshot",
 				sessionId,
 				reason,
-				leafId: session.sessionManager.getLeafId(),
-				entries: session.sessionManager.getBranch(),
-				runtime: {
-					model: session.model,
-					thinkingLevel: session.thinkingLevel,
-					isStreaming: info?.isStreaming ?? session.isStreaming,
-					isRetrying: session.isRetrying,
-					isCompacting: session.isCompacting,
-					retryAttempt: session.retryAttempt,
-					steering: session.getSteeringMessages(),
-					followUp: session.getFollowUpMessages(),
-					stats: session.getSessionStats(),
-					contextUsage: session.getContextUsage(),
-				},
+				partial: usePartial,
+				leafId,
+				entries,
+				runtime,
 			});
+			if (usePartial) {
+				setImmediate(() => {
+					this.eventBus.emit({
+						type: "session:snapshot",
+						sessionId,
+						reason,
+						leafId,
+						entries: allEntries,
+						runtime,
+					});
+				});
+			}
 		}
 		this.emitSessionUpdated(sessionId);
 	}

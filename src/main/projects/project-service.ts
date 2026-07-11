@@ -20,7 +20,8 @@
 // SRT and delegate pure-project operations to this service.
 // ============================================================
 
-import fs, { existsSync, readdirSync } from "node:fs";
+import fs, { existsSync } from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import type { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { hasTrustRequiringProjectResources, type ProjectTrustStore } from "@earendil-works/pi-coding-agent";
@@ -42,14 +43,31 @@ export class ProjectService {
 
 	// ── Persistence ──
 
+	/** Load projects from the persisted index. Does NOT scan for orphans —
+	 *  call {@link recoverOrphanedProjects} separately so it can run off the
+	 *  startup critical path.
+	 */
 	async loadProjects(): Promise<ProjectInfo[]> {
 		try {
-			if (existsSync(this.projectsIndexPath)) {
-				const raw = JSON.parse(fs.readFileSync(this.projectsIndexPath, "utf8"));
+			const indexExists = await fsp.access(this.projectsIndexPath).then(
+				() => true,
+				() => false,
+			);
+			if (indexExists) {
+				const raw = JSON.parse(await fsp.readFile(this.projectsIndexPath, "utf8"));
 				const seenCwds = new Set<string>();
 				for (const item of Array.isArray(raw.projects) ? raw.projects : []) {
-					const valid = existsSync(item.cwd) && fs.statSync(item.cwd).isDirectory();
-					const info: ProjectInfo = { ...item, cwd: valid ? fs.realpathSync(item.cwd) : item.cwd, valid };
+					let valid = false;
+					let cwd = item.cwd;
+					try {
+						await fsp.access(cwd);
+						const stat = await fsp.stat(cwd);
+						valid = stat.isDirectory();
+						if (valid) cwd = await fsp.realpath(cwd);
+					} catch {
+						valid = false;
+					}
+					const info: ProjectInfo = { ...item, cwd, valid };
 					if (seenCwds.has(info.cwd)) continue;
 					seenCwds.add(info.cwd);
 					this.projects.set(info.id, info);
@@ -60,19 +78,6 @@ export class ProjectService {
 			console.error("[Look] Failed to load projects:", error);
 		}
 
-		// Recover orphaned projects: scan ~/.look/workspaces/ for project directories
-		// whose session jsonl files are still on disk but whose projects.json entry
-		// has been lost (e.g. wiped via an earlier bug or manual edit). Each workspace
-		// stores its session jsonl files; the first `session` event in any jsonl holds
-		// the project's `cwd`, so we can recover the project record without user input.
-		//
-		// Pairs with executeDeleteProject's full workspace cleanup so this recovery only
-		// fires for workspaces left over from before that fix — new deletions won't
-		// produce orphans.
-		const recoveredBefore = this.projects.size;
-		this.recoverOrphanedProjects();
-		if (this.projects.size > recoveredBefore) this.saveProjects();
-
 		return this.listProjects();
 	}
 
@@ -82,10 +87,11 @@ export class ProjectService {
 	 * most recent jsonl to recover its `cwd`. Skip if the recovered cwd
 	 * already maps to an existing project (de-dupe by cwd), or if the cwd
 	 * no longer exists on disk (test data, since-deleted folders).
+	 * @returns true if any new project was recovered.
 	 */
-	private recoverOrphanedProjects(): void {
+	async recoverOrphanedProjects(): Promise<boolean> {
 		const workspacesDir = getWorkspacesDir();
-		if (!existsSync(workspacesDir)) return;
+		if (!existsSync(workspacesDir)) return false;
 
 		const knownCwds = new Set<string>();
 		for (const info of this.projects.values()) {
@@ -94,22 +100,23 @@ export class ProjectService {
 
 		let entries: string[];
 		try {
-			entries = readdirSync(workspacesDir).filter((n) => existsSync(path.join(workspacesDir, n)));
+			entries = (await fsp.readdir(workspacesDir)).filter((n) => existsSync(path.join(workspacesDir, n)));
 		} catch {
-			return;
+			return false;
 		}
 
+		let changed = false;
 		for (const name of entries) {
 			const workspaceDir = path.join(workspacesDir, name);
 			if (!existsSync(path.join(workspaceDir, "sessions"))) continue;
 
-			const cwd = readFirstSessionCwd(workspaceDir);
+			const cwd = await readFirstSessionCwd(workspaceDir);
 			if (!cwd) continue;
 			if (!existsSync(cwd)) continue;
 
 			let canonicalCwd: string;
 			try {
-				canonicalCwd = fs.realpathSync(cwd);
+				canonicalCwd = await fsp.realpath(cwd);
 			} catch {
 				canonicalCwd = cwd;
 			}
@@ -125,8 +132,12 @@ export class ProjectService {
 			};
 			this.projects.set(project.id, project);
 			knownCwds.add(canonicalCwd);
+			changed = true;
 			console.log(`[Look] Recovered orphaned project "${name}" (cwd: ${canonicalCwd})`);
 		}
+
+		if (changed) this.saveProjects();
+		return changed;
 	}
 
 	saveProjects(): void {
@@ -255,28 +266,31 @@ export class ProjectService {
  * first `session` event found in the most recently modified jsonl file.
  * Returns `null` if no session jsonl exists or no `cwd` is recoverable.
  */
-function readFirstSessionCwd(workspaceDir: string): string | null {
+async function readFirstSessionCwd(workspaceDir: string): Promise<string | null> {
 	const sessionsDir = path.join(workspaceDir, "sessions");
 	if (!existsSync(sessionsDir)) return null;
 
 	let jsonls: string[];
 	try {
-		jsonls = readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl"));
+		jsonls = (await fsp.readdir(sessionsDir)).filter((f) => f.endsWith(".jsonl"));
 	} catch {
 		return null;
 	}
 	if (jsonls.length === 0) return null;
 
-	jsonls.sort((a, b) => {
-		try {
-			return fs.statSync(path.join(sessionsDir, b)).mtimeMs - fs.statSync(path.join(sessionsDir, a)).mtimeMs;
-		} catch {
-			return 0;
-		}
-	});
+	const stats = await Promise.all(
+		jsonls.map(async (file) => {
+			try {
+				return { file, mtimeMs: (await fsp.stat(path.join(sessionsDir, file))).mtimeMs };
+			} catch {
+				return { file, mtimeMs: 0 };
+			}
+		}),
+	);
+	stats.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
 	try {
-		const content = fs.readFileSync(path.join(sessionsDir, jsonls[0]), "utf8");
+		const content = await fsp.readFile(path.join(sessionsDir, stats[0].file), "utf8");
 		const firstLine = content.split("\n", 1)[0].trim();
 		if (!firstLine) return null;
 		const obj = JSON.parse(firstLine);

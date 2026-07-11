@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { themeFromSettings, writeLookThemeToDom } from "../src/renderer/hooks/useLookTheme";
+import { themeFromSettings, writeLookThemeToDom } from "../src/renderer/lib/look-theme";
 
 describe("Look tone", () => {
 	it("keeps only the active tone class and removes legacy style classes", () => {

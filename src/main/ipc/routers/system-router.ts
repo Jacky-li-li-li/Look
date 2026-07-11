@@ -6,7 +6,7 @@ import { dialog } from "electron";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "../../system/updater.js";
 import { getUsage } from "../../system/usage.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "../../system/user-profile.js";
-import { guardObject, guardOptionalBoolean, guardOptionalString, guardPath, guardString } from "../guards.js";
+import { guardObject, guardOptionalBoolean, guardOptionalString, guardPath } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
 export const systemRouter: IpcRouter = (ctx, register) => {

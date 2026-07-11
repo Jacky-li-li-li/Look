@@ -6,8 +6,8 @@
 // façade from owning the projection logic.
 // ============================================================
 
-import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
+import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import type { AgentInfo, ImSessionProvider, ProjectInfo, ThinkingLevel } from "@look/shared/types";
 import { loadBindings } from "../im/im-storage.js";
@@ -29,6 +29,8 @@ export interface SessionInfoServiceDependencies {
 export class SessionInfoService {
 	private imBindingsCache: ReturnType<typeof loadBindings> | undefined;
 	private imBindingsCacheTime = 0;
+	/** Cache for non-live persisted sessions; key is derived from stable metadata. */
+	private readonly persistedInfoCache = new Map<string, { key: string; info: AgentInfo }>();
 
 	constructor(private readonly deps: SessionInfoServiceDependencies) {}
 
@@ -73,27 +75,33 @@ export class SessionInfoService {
 
 	private sessionInfo(session: StoredSession): AgentInfo {
 		const managed = this.deps.runtimeRegistry.get(session.id);
-		const piSession = managed?.runtime.session;
-		const stats = piSession?.getSessionStats();
-		const model = piSession?.model;
-		return {
+		// Live runtimes can change between calls, so bypass the cache for them.
+		if (managed) return this.runtimeInfo(session.id, managed);
+
+		const cacheKey = `${session.path}:${session.modified.getTime()}:${session.messageCount}:${session.name}:${session.firstMessage}`;
+		const cached = this.persistedInfoCache.get(session.id);
+		if (cached && cached.key === cacheKey) return cached.info;
+
+		const info: AgentInfo = {
 			id: session.id,
 			name: (session.name || session.firstMessage || DEFAULT_SESSION_NAME).slice(0, this.deps.maxNameLength),
 			imProvider: this.getImProvider(session.id),
-			model: model ? `${model.provider}/${model.id}` : "",
-			thinkingLevel: (piSession?.thinkingLevel as ThinkingLevel | undefined) ?? "off",
-			modelSupportsThinking: piSession?.supportsThinking() ?? false,
-			availableThinkingLevels: (piSession?.getAvailableThinkingLevels() as ThinkingLevel[] | undefined) ?? ["off"],
-			isStreaming: piSession?.isStreaming ?? false,
-			isRetrying: piSession?.isRetrying ?? false,
-			isCompacting: piSession?.isCompacting ?? false,
-			messageCount: stats?.totalMessages ?? session.messageCount,
+			model: "",
+			thinkingLevel: "off",
+			modelSupportsThinking: false,
+			availableThinkingLevels: ["off"],
+			isStreaming: false,
+			isRetrying: false,
+			isCompacting: false,
+			messageCount: session.messageCount,
 			createdAt: session.created.getTime(),
 			sessionFilePath: session.path,
 			projectId: session.projectId,
-			contextUsage: piSession?.getContextUsage(),
+			contextUsage: undefined,
 			...this.subagentFields(session.id),
 		};
+		this.persistedInfoCache.set(session.id, { key: cacheKey, info });
+		return info;
 	}
 
 	private runtimeInfo(

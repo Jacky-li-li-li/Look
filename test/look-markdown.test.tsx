@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LookMarkdown from "../src/renderer/components/markdown/LookMarkdown";
-import { writeLookThemeToDom } from "../src/renderer/hooks/useLookTheme";
+import { writeLookThemeToDom } from "../src/renderer/lib/look-theme";
 
 beforeEach(() => {
 	vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {

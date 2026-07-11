@@ -267,19 +267,14 @@ async function initSessionRuntime(): Promise<void> {
 	workspaceTreeService = new WorkspaceTreeService();
 	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
 
-	// 1) 加载项目书签和会话列表（快：纯文件读取，无 SDK 初始化）。
+	// 1) 加载项目书签（快：只读 projects.json）。
 	await runtimeManager.loadProjects();
-	await runtimeManager.restoreWorkspace();
 
-	// 初始化用量统计服务：一次性从历史会话中回算每日轮数。
-	initializeUsageService(runtimeManager.listProjects()).catch((error) => {
-		console.error("[Look] Failed to initialize usage service:", error);
+	// 对从 workspaces 目录恢复出来的 orphan project，必须在 restoreWorkspace 之前完成，
+	// 否则这些项目在启动时不会被扫描，导致侧边栏只显示项目而没有会话。
+	await runtimeManager.recoverOrphanedProjects().catch((error) => {
+		console.error("[Look] Orphaned project recovery failed:", error);
 	});
-
-	// 2) 尽快把初始数据推给 renderer，让 UI 立即渲染。
-	//    session runtime 初始化 (activateSession) 仍会在后台运行，
-	//    结果通过 agent:list / session:snapshot 事件异步送达。
-	const restoredProject = runtimeManager.getActiveProject();
 
 	// The app requires the user to select a project folder first
 	// before any agent can be created. Builtin agents are synced below.
@@ -289,8 +284,29 @@ async function initSessionRuntime(): Promise<void> {
 		larkBridgeService = new LarkBridgeService();
 		larkChannelManager.onConnectionReady = bootstrapLarkBridge;
 		larkChannelManager.onConnectionClosed = detachLarkBridge;
+
+		// 先注册 IPC handler，让 renderer 的 pull / push 都能被处理，
+		// 避免 restoreWorkspace 推送的 agent:list 在 renderer 还没准备好时丢失。
 		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager, larkBridgeService);
 
+		// 2) 注册完 handler 后立即推送项目列表，让侧边栏先渲染。
+		const allProjects = runtimeManager.listProjects();
+		const activeProject = runtimeManager.getActiveProject();
+		safeSendEvent({
+			type: "project:list" as const,
+			projects: allProjects,
+			activeProjectId: activeProject?.id ?? null,
+		});
+
+		// 3) 扫描所有项目的会话并逐项目推送 agent:list。
+		await runtimeManager.restoreWorkspace();
+
+		// 初始化用量统计服务：一次性从历史会话中回算每日轮数。
+		initializeUsageService(runtimeManager.listProjects()).catch((error) => {
+			console.error("[Look] Failed to initialize usage service:", error);
+		});
+
+		const restoredProject = runtimeManager.getActiveProject();
 		if (restoredProject) {
 			await promptForProjectTrust(runtimeManager, restoredProject.id, mainWindow);
 		}
@@ -300,26 +316,6 @@ async function initSessionRuntime(): Promise<void> {
 		});
 		bootstrapLarkBridge();
 
-		// Push initial project/session summaries. Message history is loaded
-		// on activation as a raw SDK SessionEntry snapshot.
-		const allProjects = runtimeManager.listProjects();
-		const activeProject = runtimeManager.getActiveProject();
-		safeSendEvent({
-			type: "project:list" as const,
-			projects: allProjects,
-			activeProjectId: activeProject?.id ?? null,
-		});
-
-		for (const project of allProjects) {
-			const agents = runtimeManager.listAgentsInProject(project.id);
-			if (agents.length > 0) {
-				safeSendEvent({
-					type: "agent:list" as const,
-					projectId: project.id,
-					agents,
-				});
-			}
-		}
 		console.log("[Look] IPC handlers registered");
 
 		// 同步 Look 内置 Skills 到 ~/.look/builtin-skills/ 并注册路径

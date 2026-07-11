@@ -6,10 +6,10 @@
 // exists and avoids mixing disk discovery with runtime lifecycle state.
 // ============================================================
 
-import fs, { existsSync } from "node:fs";
-import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
+import { createReadStream, existsSync } from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { ProjectInfo } from "@look/shared/types";
@@ -90,23 +90,65 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 	}
 }
 
+async function directoryFingerprint(dir: string): Promise<string> {
+	let files: string[];
+	try {
+		files = await fsp.readdir(dir);
+	} catch {
+		return "";
+	}
+	const entries = await Promise.all(
+		files
+			.filter((file) => file.endsWith(".jsonl"))
+			.map(async (file) => {
+				try {
+					const stat = await fsp.stat(path.join(dir, file));
+					return `${file}:${stat.mtimeMs}`;
+				} catch {
+					return `${file}:?`;
+				}
+			}),
+	);
+	entries.sort();
+	return entries.join(";");
+}
+
 export class SessionCatalog {
 	private readonly sessionsByProject = new Map<string, StoredSession[]>();
 	private readonly sessionsById = new Map<string, StoredSession>();
+	private readonly projectFingerprint = new Map<string, string>();
 
 	constructor(private readonly onSubsessionDiscovered: (metadata: SubsessionMetadata) => void = () => {}) {}
 
 	async refresh(project: ProjectInfo): Promise<StoredSession[]> {
 		if (!project.valid) return [];
-		const sessions = (await scanSessionDirectory(ensureWorkspaceDir(project.name), project.cwd)).map((session) => ({
+		const sessionsDir = ensureWorkspaceDir(project.name);
+		const subsessionsDir = getWorkspaceSubsessionsDir(project.name);
+
+		const fingerprintParts: string[] = [];
+		try {
+			fingerprintParts.push(await directoryFingerprint(sessionsDir));
+		} catch {
+			fingerprintParts.push("");
+		}
+		if (existsSync(subsessionsDir)) {
+			fingerprintParts.push(await directoryFingerprint(subsessionsDir));
+		}
+		const fingerprint = fingerprintParts.join("|");
+		const cached = this.sessionsByProject.get(project.id);
+		if (cached && this.projectFingerprint.get(project.id) === fingerprint) {
+			return cached;
+		}
+		this.projectFingerprint.set(project.id, fingerprint);
+
+		const sessions = (await scanSessionDirectory(sessionsDir, project.cwd)).map((session) => ({
 			...session,
 			projectId: project.id,
 		}));
-		const subsessionsDir = getWorkspaceSubsessionsDir(project.name);
 		if (existsSync(subsessionsDir)) {
 			let files: string[] = [];
 			try {
-				files = fs.readdirSync(subsessionsDir).filter((file) => file.endsWith(".jsonl"));
+				files = (await fsp.readdir(subsessionsDir)).filter((file) => file.endsWith(".jsonl"));
 			} catch {
 				// A deleted folder during refresh is equivalent to an empty folder.
 			}
