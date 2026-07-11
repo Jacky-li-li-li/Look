@@ -252,9 +252,17 @@ body {
 /* Consistent keyboard affordance for bespoke controls that do not use the
 	 shared Button primitive. `:where` keeps specificity low so components can
 	 still provide a more tailored focus treatment. */
-:where(button, a, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+:where(button, a, [role="button"], [tabindex]):focus-visible {
 	outline: 2px solid color-mix(in oklch, var(--ring), transparent 28%);
 	outline-offset: 2px;
+}
+
+/* Remove the default focus outline from form inputs and contenteditable
+   text boxes — shadcn/ui components and bespoke inputs bring their own
+   `focus-visible:ring-*` treatment. */
+:where(input, textarea, select, [role="textbox"], [contenteditable="true"]):focus,
+:where(input, textarea, select, [role="textbox"], [contenteditable="true"]):focus-visible {
+	outline: none;
 }
 
 #root {
@@ -1382,6 +1390,35 @@ body {
 	transition-duration: 0s;
 	animation-duration: 0s;
 	animation-delay: 0s;
+}
+
+/* Freeze all transitions during theme switch to prevent the flash caused by
+   component-level transitions animating 60+ CSS variable changes in parallel.
+   The flag is set synchronously before the class swap and cleared after two
+   rAFs so the browser has committed at least one frame in the new theme. */
+html[style*="--theme-transitioning:1"] *,
+html[style*="--theme-transitioning:1"] *::before,
+html[style*="--theme-transitioning:1"] *::after {
+	/* biome-ignore lint/complexity/noImportantStyles: intentionally override component transitions during theme switch */
+	transition-duration: 0s !important;
+}
+
+/* View Transition — smooth cross-fade for theme switches */
+/* biome-ignore lint/correctness/noUnknownTypeSelector: View Transition API pseudo-elements */
+::view-transition-old(root),
+/* biome-ignore lint/correctness/noUnknownTypeSelector: View Transition API pseudo-elements */
+	::view-transition-new(root) {
+	animation-duration: 200ms;
+	animation-timing-function: ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	/* biome-ignore lint/correctness/noUnknownTypeSelector: View Transition API pseudo-elements */
+	::view-transition-old(root),
+	/* biome-ignore lint/correctness/noUnknownTypeSelector: View Transition API pseudo-elements */
+		::view-transition-new(root) {
+		animation-duration: 0s;
+	}
 }
 
 /* Dialog overlay — deeper shade in dark mode */

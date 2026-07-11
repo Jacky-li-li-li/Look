@@ -186,6 +186,14 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 			}
 		}
 		const updated = await ctx.runtimeManager.updateGeneralSettings(data.settings ?? {});
+
+		if (typeof (data.settings as Record<string, unknown>)?.themeTone === "string") {
+			const tone = (data.settings as Record<string, unknown>).themeTone;
+			if (!ctx.mainWindow.isDestroyed()) {
+				ctx.mainWindow.setBackgroundColor(tone === "light" ? "#fbfbfa" : "#030202");
+			}
+		}
+
 		return { success: true, settings: updated };
 	});
 

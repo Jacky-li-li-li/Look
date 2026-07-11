@@ -126,6 +126,20 @@ const UI_DEFAULTS: UiSettings = {
 	enabledSkills: null,
 };
 
+/** Synchronously read the persisted tone from disk without instantiating the
+ *  full store. Used at window-creation time before the runtime manager exists. */
+export function readThemeToneSync(uiSettingsPath: string): LookTone {
+	try {
+		if (fs.existsSync(uiSettingsPath)) {
+			const parsed = JSON.parse(fs.readFileSync(uiSettingsPath, "utf-8")) as Record<string, unknown>;
+			if (parsed.themeTone === "light" || parsed.themeTone === "dark") return parsed.themeTone;
+		}
+	} catch {
+		/* fall through to default */
+	}
+	return UI_DEFAULTS.themeTone;
+}
+
 /** Minimal surface we need from `SettingsManager` — the SDK
  *  fields' getters + setters that mark themselves as modified
  *  on set, plus `flush()` for the durability boundary. */

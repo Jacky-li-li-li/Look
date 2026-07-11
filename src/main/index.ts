@@ -2,6 +2,7 @@
 // Electron Main Process Entry Point
 // ============================================================
 
+import { getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent } from "@look/shared/types";
 import { app, BrowserWindow, session } from "electron";
 import path from "path";
@@ -13,6 +14,7 @@ import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
 import { SessionRuntimeManager } from "./session/runtime-manager.js";
+import { readThemeToneSync } from "./settings/store.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { checkForUpdates, initUpdater } from "./system/updater.js";
 import { initializeUsageService } from "./system/usage.js";
@@ -219,15 +221,16 @@ function setupCsp(): void {
 }
 
 function createWindow(): void {
+	const initialTone = readThemeToneSync(getUiSettingsPath());
+
 	mainWindow = new BrowserWindow({
 		width: 1400,
 		height: 900,
 		minWidth: 900,
 		minHeight: 600,
 		title: "Look",
-		// 默认暗色主题底色（tone-dark 的 --background = oklch(0.09 0.002 85)）。
-		// 消除 Electron 默认白色窗口底在主题切换 repaint 间隙透出导致的白闪。
-		backgroundColor: "#030202",
+		// 使用 persisted theme 的底色，避免启动时暗色窗口底从 repaint 间隙透出。
+		backgroundColor: initialTone === "light" ? "#fbfbfa" : "#030202",
 		icon: path.join(__dirname, "assets/icon-1024.png"),
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
@@ -237,10 +240,12 @@ function createWindow(): void {
 	});
 
 	if (isDev) {
-		mainWindow.loadURL("http://localhost:5174");
+		mainWindow.loadURL(`http://localhost:5174?theme=${initialTone}`);
 		mainWindow.webContents.openDevTools();
 	} else {
-		mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+		mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"), {
+			query: { theme: initialTone },
+		});
 	}
 
 	mainWindow.on("closed", () => {

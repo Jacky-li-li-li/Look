@@ -18,6 +18,7 @@ function gitCommitCount(): string {
 
 const appVersion = `${baseVersion}.${gitCommitCount()}`;
 export default defineConfig({
+	publicDir: "../../public",
 	plugins: [
 		tailwindcss(),
 		react(),
