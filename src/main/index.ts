@@ -2,9 +2,9 @@
 // Electron Main Process Entry Point
 // ============================================================
 
-import { getUiSettingsPath } from "@look/shared/look-storage";
+import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent } from "@look/shared/types";
-import { app, BrowserWindow, session } from "electron";
+import { app, BrowserWindow, Notification, session } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
@@ -13,6 +13,10 @@ import { LarkBridgeService } from "./im/lark-bridge-service.js";
 import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
+import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
+import { SchedulerService } from "./scheduler/scheduler-service.js";
+import { FileTaskLock } from "./scheduler/task-lock.js";
+import { ScheduledTaskStore } from "./scheduler/task-store.js";
 import { SessionRuntimeManager } from "./session/runtime-manager.js";
 import { readThemeToneSync } from "./settings/store.js";
 import { loadShellEnv } from "./system/shell-env.js";
@@ -26,10 +30,13 @@ const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let runtimeManager: SessionRuntimeManager | null = null;
+let schedulerService: SchedulerService | null = null;
 let workspaceFileService: WorkspaceFileService | null = null;
 let workspaceTreeService: WorkspaceTreeService | null = null;
 let larkChannelManager: LarkChannelManager | null = null;
 let larkBridgeService: LarkBridgeService | null = null;
+let quitCleanupStarted = false;
+let quitCleanupComplete = false;
 
 /** 安全向渲染进程推送事件，避免 TOCTOU 窗口销毁竞态导致主进程崩溃。 */
 function safeSendEvent(event: MainToRendererEvent): void {
@@ -266,6 +273,72 @@ async function initSessionRuntime(): Promise<void> {
 	// 工作区文件树服务:服务项目 cwd 的 lazy-load 浏览
 	workspaceTreeService = new WorkspaceTreeService();
 	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
+	const schedulerOwnerId = `${process.pid}:${Date.now()}`;
+	schedulerService = new SchedulerService({
+		store: new ScheduledTaskStore(getScheduledTasksPath()),
+		lock: new FileTaskLock(getScheduledTaskLocksDir(), schedulerOwnerId),
+		executor: new AgentScheduledTaskExecutor(runtimeManager),
+		ownerId: schedulerOwnerId,
+		getProjectInfo: (projectId) => runtimeManager!.getProjectInfo(projectId),
+		onAlert: ({ task, log }) => {
+			const body = `${task.name}: ${log.errorMessage ?? "Task failed after all retry attempts"}`;
+			safeSendEvent({ type: "error", message: body });
+			if (Notification.isSupported()) new Notification({ title: "Look scheduled task failed", body }).show();
+		},
+			onFinished: async ({ task, log }) => {
+				const notification = task.notification;
+				if (!notification?.enabled) return;
+				if (!larkChannelManager) throw new Error("IM channel manager is not available");
+				const succeeded = log.status === "success";
+				const rawDetail = succeeded ? (log.output || "") : (log.errorMessage || "");
+				const finishedAt = log.finishedAt ?? new Date().toISOString();
+				const text = [
+					`${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
+					`时间：${finishedAt}`,
+					task.model ? `模型：${task.model}` : undefined,
+					rawDetail ? `结果：${rawDetail.slice(0, 1_500)}` : undefined,
+				]
+					.filter(Boolean)
+					.join("\n");
+				// 先截断再转义：避免转义膨胀（*→\*）导致有效内容被额外压缩
+				// Feishu 卡片 markdown 元素支持大段文本，20K 字符远在安全范围内
+				const MAX_RESULT = 20_000;
+				const snippet = rawDetail.length > MAX_RESULT
+					? rawDetail.slice(0, MAX_RESULT) + "…[内容过长已截断]"
+					: rawDetail;
+				const escaped = snippet
+					.replace(/\*/g, "\\*")
+					.replace(/_/g, "\\_")
+					.replace(/`/g, "\\`");
+				const resultContent = rawDetail
+					? `**执行结果：**\n${escaped}`
+					: (succeeded ? "**执行结果：** （无输出内容）" : "**执行结果：** （无错误信息）");
+				const card = {
+					config: { wide_screen_mode: true },
+					header: {
+						title: {
+							tag: "plain_text" as const,
+							content: `${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
+						},
+						template: succeeded ? ("green" as const) : ("red" as const),
+					},
+					elements: [
+						{ tag: "markdown" as const, content: `**任务状态：** ${succeeded ? "成功" : "失败"}` },
+						{ tag: "markdown" as const, content: `**执行时间：** ${finishedAt}` },
+						...(task.model ? [{ tag: "markdown" as const, content: `**执行模型：** ${task.model}` }] : []),
+						{ tag: "markdown" as const, content: resultContent },
+					],
+				};
+				const result = await larkChannelManager.sendTestMessage({
+					receiveIdType: "chat_id",
+					receiveId: notification.targetChatId,
+					text,
+					card,
+				});
+				if (!result.success) throw new Error(result.error ?? "Failed to send IM notification");
+		},
+	});
+	runtimeManager.setSchedulerService(schedulerService);
 
 	// 1) 加载项目书签（快：只读 projects.json）。
 	await runtimeManager.loadProjects();
@@ -287,7 +360,7 @@ async function initSessionRuntime(): Promise<void> {
 
 		// 先注册 IPC handler，让 renderer 的 pull / push 都能被处理，
 		// 避免 restoreWorkspace 推送的 agent:list 在 renderer 还没准备好时丢失。
-		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager, larkBridgeService);
+		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager, larkBridgeService, schedulerService);
 
 		// 2) 注册完 handler 后立即推送项目列表，让侧边栏先渲染。
 		const allProjects = runtimeManager.listProjects();
@@ -315,6 +388,9 @@ async function initSessionRuntime(): Promise<void> {
 			console.warn("[Look] Failed to initialize Feishu channel manager:", err);
 		});
 		bootstrapLarkBridge();
+		await schedulerService.initialize().catch((error) => {
+			console.error("[Look] Failed to initialize scheduled tasks:", error);
+		});
 
 		console.log("[Look] IPC handlers registered");
 
@@ -367,6 +443,7 @@ app.whenReady().then(async () => {
 					mainWindow,
 					larkChannelManager ?? undefined,
 					larkBridgeService ?? undefined,
+					schedulerService ?? undefined,
 				);
 				larkChannelManager?.setMainWindow(mainWindow);
 				const allProjects = runtimeManager.listProjects();
@@ -398,10 +475,16 @@ app.on("window-all-closed", () => {
 	}
 });
 
-// Clean up on quit
-// orphaned child processes behind. `dispose()` first tears down the
-// shared-area watchers (H-1) and then disposes all agent runtimes.
-app.on("before-quit", async () => {
+// Clean up on quit. Prevent the first quit event so asynchronous scheduler,
+// channel, watcher, and runtime disposal completes before Electron exits.
+async function disposeApplicationServices(): Promise<void> {
+	if (schedulerService) {
+		try {
+			await schedulerService.dispose();
+		} catch {
+			// best-effort cleanup
+		}
+	}
 	if (larkBridgeService) {
 		try {
 			larkBridgeService.dispose();
@@ -423,4 +506,15 @@ app.on("before-quit", async () => {
 			// best-effort cleanup
 		}
 	}
+}
+
+app.on("before-quit", (event) => {
+	if (quitCleanupComplete) return;
+	event.preventDefault();
+	if (quitCleanupStarted) return;
+	quitCleanupStarted = true;
+	void disposeApplicationServices().finally(() => {
+		quitCleanupComplete = true;
+		app.quit();
+	});
 });

@@ -30,6 +30,8 @@ export interface ProjectDeletionDependencies {
 	emitProjectList(): void;
 	getActiveSessionId(): string | null;
 	setActiveSessionId(id: string | null): void;
+	/** Optional hook to remove scheduled tasks bound to the deleted project. */
+	deleteScheduledTasksByProject?(projectId: string): Promise<void>;
 }
 
 export class ProjectDeletionService {
@@ -73,6 +75,13 @@ export class ProjectDeletionService {
 
 		this.deps.sessionCatalog.removeProject(projectId);
 		this.deps.projectService.removeProject(projectId);
+		if (this.deps.deleteScheduledTasksByProject) {
+			try {
+				await this.deps.deleteScheduledTasksByProject(projectId);
+			} catch (error) {
+				console.error(`[Look] Failed to clean up scheduled tasks for deleted project ${projectId}:`, error);
+			}
+		}
 
 		// Remove shared area and the entire workspace directory (sessions/subsessions/schedule-sessions).
 		if (existsSync(sharedDir)) {

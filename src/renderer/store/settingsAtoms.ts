@@ -73,6 +73,9 @@ export const sidebarCollapsedAtom = atom(false);
 
 export const showAgentSquareAtom = atom(false);
 
+/** Whether the central content area is showing the scheduled-task workspace. */
+export const showScheduledTasksAtom = atom(false);
+
 export const activeChatAtBottomAtom = atom(true);
 
 export interface ChatInputInsertRequest {

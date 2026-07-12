@@ -14,7 +14,10 @@ import {
 	openProjectIdsAtom,
 	projectsAtom,
 	recentlyCompletedAtom,
+	rightPanelCollapsedAtom,
 	sessionStateAtomFamily,
+	showAgentSquareAtom,
+	showScheduledTasksAtom,
 } from "../src/renderer/store/atoms";
 import { appStore } from "../src/renderer/store/ipcHandler";
 
@@ -92,6 +95,9 @@ describe("workspace ledger sidebar", () => {
 		appStore.set(activeAgentIdAtom, "session-a");
 		appStore.set(recentlyCompletedAtom, []);
 		appStore.set(openProjectIdsAtom, []);
+		appStore.set(showAgentSquareAtom, false);
+		appStore.set(showScheduledTasksAtom, false);
+		appStore.set(rightPanelCollapsedAtom, false);
 		appStore.set(sessionStateAtomFamily("session-b"), {
 			...appStore.get(sessionStateAtomFamily("session-b")),
 			uiPhase: "working",
@@ -112,11 +118,29 @@ describe("workspace ledger sidebar", () => {
 
 	it("selects a session without collapsing other project groups", async () => {
 		const onSelect = vi.fn();
+		appStore.set(showScheduledTasksAtom, true);
 		renderSidebar({ onSelect });
 		await waitFor(() => screen.getByText("Audit runtime"));
 		fireEvent.click(screen.getByText("Audit runtime"));
 		expect(onSelect).toHaveBeenCalledWith("session-b");
+		expect(appStore.get(showScheduledTasksAtom)).toBe(false);
 		expect(screen.getByText("Refine sidebar")).toBeTruthy();
+	});
+
+	it("opens scheduled tasks above the agent marketplace and keeps the two workspaces mutually exclusive", () => {
+		renderSidebar();
+		const scheduledTasks = screen.getByRole("button", { name: /Scheduled tasks/i });
+		const marketplace = screen.getByRole("button", { name: "Agent marketplace" });
+		expect(scheduledTasks.compareDocumentPosition(marketplace) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+		fireEvent.click(scheduledTasks);
+		expect(appStore.get(showScheduledTasksAtom)).toBe(true);
+		expect(appStore.get(showAgentSquareAtom)).toBe(false);
+		expect(appStore.get(rightPanelCollapsedAtom)).toBe(true);
+
+		fireEvent.click(marketplace);
+		expect(appStore.get(showScheduledTasksAtom)).toBe(false);
+		expect(appStore.get(showAgentSquareAtom)).toBe(true);
 	});
 
 	it("creates the first session inside the requested empty project", async () => {

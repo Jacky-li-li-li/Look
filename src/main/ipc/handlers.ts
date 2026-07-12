@@ -19,6 +19,7 @@ import {
 	modelRouter,
 	permissionRouter,
 	projectRouter,
+	schedulerRouter,
 	settingsRouter,
 	sharedRouter,
 	skillRouter,
@@ -33,6 +34,7 @@ const domainRouters = [
 	modelRouter,
 	settingsRouter,
 	projectRouter,
+	schedulerRouter,
 	permissionRouter,
 	subagentRouter,
 	skillRouter,
@@ -51,7 +53,9 @@ export function registerIpcHandlers(
 	mainWindow: BrowserWindow,
 	larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager,
 	larkBridgeService?: import("../im/lark-bridge-service.js").LarkBridgeService,
+	schedulerService?: import("../scheduler/scheduler-service.js").SchedulerService,
 ): void {
+	if (!schedulerService) throw new Error("Scheduler service is not initialized");
 	// Clean up previous registrations to support macOS activate re-creation
 	ipcMain.removeHandler("look:invoke");
 	ipcMain.removeAllListeners("look:event");
@@ -96,6 +100,7 @@ export function registerIpcHandlers(
 		larkChannelManager,
 		larkBridgeService,
 		mcpManager: runtimeManager.mcpManager,
+		schedulerService,
 	};
 	invokeRouteMap = {};
 	for (const router of domainRouters) {

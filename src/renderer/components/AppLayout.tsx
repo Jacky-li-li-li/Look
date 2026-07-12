@@ -20,6 +20,7 @@ import PlanQuestionDialog from "./dialogs/PlanQuestionDialog";
 import UpdateNotification from "./dialogs/UpdateNotification";
 import SessionSheetBar from "./SessionSheetBar";
 import Sidebar from "./Sidebar";
+import ScheduledTasksPage from "./scheduler/ScheduledTasksPage";
 import SettingsDialog from "./settings/SettingsDialog";
 import { RightPanel } from "./workspace/RightPanel";
 
@@ -40,6 +41,7 @@ interface AppLayoutProps {
 	projects: ProjectInfo[];
 	activeProject: ProjectInfo | null;
 	showAgentSquare: boolean;
+	showScheduledTasks: boolean;
 	newProjectCwd: string | null;
 	setNewProjectCwd: (v: string | null) => void;
 	pendingDelete: { projectId: string; projectName: string; agentCount: number; runningCount: number } | null;
@@ -86,6 +88,7 @@ function AppLayout({
 	projects,
 	activeProject,
 	showAgentSquare,
+	showScheduledTasks,
 	newProjectCwd,
 	setNewProjectCwd,
 	pendingDelete,
@@ -150,7 +153,9 @@ function AppLayout({
 				<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
 
 				<main className="flex min-w-[340px] flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
-					{appReadyPhase < 1 ? null : projects.length === 0 ? (
+					{appReadyPhase < 1 ? null : showScheduledTasks ? (
+						<ScheduledTasksPage />
+					) : projects.length === 0 ? (
 						<WelcomeScreen onOpenProject={handleOpenProject} />
 					) : showAgentSquare ? (
 						<Suspense
@@ -197,7 +202,11 @@ function AppLayout({
 									onAbort={handleAbortAgent}
 									onDequeueAll={handleDequeueAll}
 								/>
-							) : appReadyPhase >= 2 && agents.length === 0 ? (
+							) : agents.length > 0 ? (
+								<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+									选择左侧会话查看消息
+								</div>
+							) : appReadyPhase >= 2 ? (
 								<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
 							) : null}
 						</>

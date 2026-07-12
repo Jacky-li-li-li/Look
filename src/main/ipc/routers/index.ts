@@ -5,6 +5,7 @@ export { mcpRouter } from "./mcp-router.js";
 export { modelRouter } from "./model-router.js";
 export { permissionRouter } from "./permission-router.js";
 export { projectRouter } from "./project-router.js";
+export { schedulerRouter } from "./scheduler-router.js";
 export { settingsRouter } from "./settings-router.js";
 export { sharedRouter } from "./shared-router.js";
 export { skillRouter } from "./skill-router.js";

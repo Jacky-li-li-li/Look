@@ -7,6 +7,10 @@ import type {
 	FileTreeNode,
 	ImageContent,
 	ProjectInfo,
+	ScheduledTask,
+	ScheduledTaskInput,
+	ScheduledTaskRunLog,
+	ScheduledTaskTestResult,
 } from "@shared/types";
 import type { ProviderSettingsData } from "./store/atoms";
 import type { UserProfile } from "./types/user-profile";
@@ -39,6 +43,20 @@ interface LookAPI {
 	getModels(): Promise<IpcResult<{ models: AvailableModel[] }>>;
 	getProviders(): Promise<IpcResult<{ providers: ProviderInfo[] }>>;
 	getAgents(): Promise<{ success: boolean; agents?: AgentInfo[]; error?: string }>;
+	listScheduledTasks(): Promise<IpcResult<{ tasks: ScheduledTask[] }>>;
+	createScheduledTask(task: ScheduledTaskInput): Promise<IpcResult<{ task: ScheduledTask }>>;
+	updateScheduledTask(taskId: string, patch: Partial<ScheduledTaskInput>): Promise<IpcResult<{ task: ScheduledTask }>>;
+	startScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;
+	pauseScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;
+	resumeScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;
+	deleteScheduledTask(taskId: string): Promise<IpcResult>;
+	runScheduledTaskNow(taskId: string): Promise<IpcResult<{ accepted: true }>>;
+	testScheduledTask(task: ScheduledTaskInput): Promise<IpcResult<ScheduledTaskTestResult>>;
+	listScheduledTaskLogs(taskId?: string, limit?: number): Promise<IpcResult<{ logs: ScheduledTaskRunLog[] }>>;
+	validateCron(
+		cron: string,
+		timezone?: string,
+	): Promise<IpcResult<{ valid: boolean; error?: string; nextRunAt?: string }>>;
 	switchModel(agentId: string, model: string): Promise<IpcResult>;
 	updateThinking(agentId: string, level: string): Promise<IpcResult>;
 	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
@@ -203,6 +221,11 @@ interface LookAPI {
 			enabled: boolean;
 			error?: string;
 		}>;
+		error?: string;
+	}>;
+	getImBindings(): Promise<{
+		success: boolean;
+		bindings?: Array<{ chatId: string; sessionId: string; projectId: string; createdAt: number }>;
 		error?: string;
 	}>;
 	connectFeishuChannel(options?: {

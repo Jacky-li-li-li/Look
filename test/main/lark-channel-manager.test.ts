@@ -122,10 +122,10 @@ vi.mock("@larksuiteoapi/node-sdk", () => ({
 	registerApp: larkMocks.registerApp,
 }));
 
+import type { MainToRendererEvent } from "@shared/types.js";
 import { BrowserWindow } from "electron";
 import { LarkBridgeService } from "../../src/main/im/lark-bridge-service.js";
 import { LarkChannelManager } from "../../src/main/im/lark-channel-manager.js";
-import type { MainToRendererEvent } from "@shared/types.js";
 
 function createMainWindow(): BrowserWindow {
 	return new BrowserWindow({} as any);
@@ -436,6 +436,31 @@ describe("LarkChannelManager", () => {
 		await manager.connect({ appId: "cli_feishu", appSecret: "secret" });
 
 		expect(larkMocks.createLarkChannel.mock.calls[0][0].domain).toBe(larkMocks.Domain.Feishu);
+	});
+
+	it("sends an interactive card when card payload is provided", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		await manager.connect({ appId: "cli_card", appSecret: "secret" });
+
+		const card = {
+			header: { title: { tag: "plain_text", content: "Test card" }, template: "green" },
+			elements: [{ tag: "markdown", content: "Hello" }],
+		};
+		const result = await manager.sendTestMessage({
+			receiveIdType: "chat_id",
+			receiveId: "chat-1",
+			text: "fallback text",
+			card,
+		});
+
+		expect(result.success).toBe(true);
+		const client = manager.getRawClient() as ReturnType<typeof larkMocks.Client>;
+		const call = client.im.v1.message.create.mock.calls[0][0];
+		expect(call.data.msg_type).toBe("interactive");
+		expect(call.data.receive_id).toBe("chat-1");
+		// Feishu interactive messages expect the card object directly as content,
+		// not wrapped in { card: ... }.
+		expect(JSON.parse(call.data.content)).toEqual(card);
 	});
 
 	it("manually connects and stores a Feishu channel", async () => {

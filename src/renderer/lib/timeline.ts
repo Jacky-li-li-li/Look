@@ -139,6 +139,10 @@ export function buildTimeline(
 	// snapshot arrives — the snapshot atomically clears pendingUserMessage
 	// and updates entries, so there is no visual duplicate.
 	if (pendingUserMessage) {
+		// A pending user message means a new turn has started. Any preceding
+		// persisted assistant belongs to a previous turn, so close it before
+		// showing the pending message and its streaming response.
+		closeAssistantContext();
 		const textBlock: TextContent[] = pendingUserMessage.text ? [{ type: "text", text: pendingUserMessage.text }] : [];
 		const imageBlocks: ImageContent[] = pendingUserMessage.images ?? [];
 		items.push({
@@ -155,12 +159,27 @@ export function buildTimeline(
 	// visible during the short idle → agent_end snapshot handoff; the snapshot
 	// clears them atomically when persisted entries become the source of truth.
 	if (uiPhase !== "idle" || uiBlocks.length > 0) {
-		items.push({
-			id: "streaming-live",
-			isLive: true,
-			uiBlocks,
-			uiTools,
-		});
+		// Within a single assistant turn, multiple assistant messages (and the
+		// tool results between them) are merged into one bubble. If a persisted
+		// assistant bubble already exists for this turn, attach the live blocks
+		// to it instead of creating a second avatar. This prevents duplicates
+		// both in normal sessions and in subagent sessions, where the snapshot
+		// may already contain the current assistant entry while it is streaming.
+		// Only fall back to a standalone streaming bubble when there is no
+		// preceding assistant to attach to (e.g., the very first message of a
+		// new turn that has not been persisted yet).
+		if (currentAssistant?.message && isAssistantMessage(currentAssistant.message)) {
+			currentAssistant.isLive = true;
+			currentAssistant.uiBlocks = uiBlocks;
+			currentAssistant.uiTools = uiTools;
+		} else {
+			items.push({
+				id: "streaming-live",
+				isLive: true,
+				uiBlocks,
+				uiTools,
+			});
+		}
 	}
 
 	return items;

@@ -615,6 +615,90 @@ export interface TestCustomProviderResult {
 	results: ModelTestResult[];
 }
 
+// ---- Scheduled tasks ----
+
+export type ScheduledTaskStatus = "paused" | "scheduled";
+export type ScheduledTaskRunStatus = "running" | "retrying" | "success" | "failed" | "skipped" | "interrupted";
+
+export interface ScheduledTaskRetryPolicy {
+	maxAttempts: number;
+	initialDelayMs: number;
+	backoffMultiplier: number;
+	maxDelayMs: number;
+}
+
+export type ScheduledTaskSchedule =
+	| { kind: "once"; runAt: string }
+	| { kind: "daily"; time: string }
+	| { kind: "weekly"; weekday: number; time: string }
+	| { kind: "monthly"; day: number; time: string };
+
+export interface ScheduledTaskNotification {
+	enabled: boolean;
+	provider: "feishu";
+	targetChatId: string;
+}
+
+export interface ScheduledTask {
+	id: string;
+	name: string;
+	projectId: string;
+	cron: string;
+	schedule?: ScheduledTaskSchedule;
+	timezone?: string;
+	prompt: string;
+	parameters: Record<string, string>;
+	model?: string;
+	notification?: ScheduledTaskNotification;
+	status: ScheduledTaskStatus;
+	retry: ScheduledTaskRetryPolicy;
+	executionTimeoutMs: number;
+	createdAt: string;
+	updatedAt: string;
+	lastRunAt?: string;
+	/** Set only after the configured one-time schedule is consumed (manual Run now does not set it). */
+	scheduleCompletedAt?: string;
+	nextRunAt?: string;
+}
+
+export interface ScheduledTaskInput {
+	name: string;
+	projectId: string;
+	/** Internal/legacy cron input. New UI clients should send `schedule`. */
+	cron?: string;
+	schedule?: ScheduledTaskSchedule;
+	timezone?: string;
+	prompt: string;
+	parameters?: Record<string, string>;
+	model?: string;
+	notification?: ScheduledTaskNotification;
+	retry?: Partial<ScheduledTaskRetryPolicy>;
+	executionTimeoutMs?: number;
+}
+
+export interface ScheduledTaskRunLog {
+	id: string;
+	taskId: string;
+	taskName: string;
+	scheduledAt: string;
+	startedAt: string;
+	finishedAt?: string;
+	status: ScheduledTaskRunStatus;
+	attempt: number;
+	maxAttempts: number;
+	output?: string;
+	errorMessage?: string;
+	errorStack?: string;
+	sessionId?: string;
+	notificationStatus?: "sent" | "failed";
+	notificationError?: string;
+	ownerId: string;
+}
+
+export interface ScheduledTaskTestResult {
+	log: ScheduledTaskRunLog;
+}
+
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =
 	| {
@@ -631,6 +715,17 @@ export type RendererToMainEvent =
 	| { type: "model:list" }
 	| { type: "model:providers" }
 	| { type: "agents:list" }
+	| { type: "scheduled-task:list" }
+	| { type: "scheduled-task:create"; task: ScheduledTaskInput }
+	| { type: "scheduled-task:update"; taskId: string; patch: Partial<ScheduledTaskInput> }
+	| { type: "scheduled-task:start"; taskId: string }
+	| { type: "scheduled-task:pause"; taskId: string }
+	| { type: "scheduled-task:resume"; taskId: string }
+	| { type: "scheduled-task:delete"; taskId: string }
+	| { type: "scheduled-task:run-now"; taskId: string }
+	| { type: "scheduled-task:test"; task: ScheduledTaskInput }
+	| { type: "scheduled-task:logs"; taskId?: string; limit?: number }
+	| { type: "scheduled-task:validate-cron"; cron: string; timezone?: string }
 	| { type: "settings:get" }
 	| { type: "settings:get-api-key"; provider: string }
 	| { type: "settings:set-api-key"; provider: string; key: string }

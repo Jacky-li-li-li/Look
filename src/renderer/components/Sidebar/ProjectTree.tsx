@@ -20,6 +20,7 @@ import {
 	runningAgentsAtom,
 	sessionPhasesAtom,
 	showAgentSquareAtom,
+	showScheduledTasksAtom,
 } from "../../store/atoms";
 import { appStore } from "../../store/ipcHandler";
 import ProjectHeader from "./ProjectHeader";
@@ -205,6 +206,7 @@ export default function ProjectTree({
 				);
 			}
 			appStore.set(showAgentSquareAtom, false);
+			appStore.set(showScheduledTasksAtom, false);
 			onSelect(agent.id);
 		},
 		[onSelect, recentlyCompleted],

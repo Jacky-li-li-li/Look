@@ -105,6 +105,16 @@ export function getUiSettingsPath(): string {
 	return path.join(LOOK_DIR, "ui-settings.json");
 }
 
+/** Persisted scheduled-task definitions and execution history. */
+export function getScheduledTasksPath(): string {
+	return path.join(LOOK_DIR, "scheduled-tasks.json");
+}
+
+/** Cross-process lock directory used by the scheduled-task coordinator. */
+export function getScheduledTaskLocksDir(): string {
+	return path.join(LOOK_DIR, "scheduled-task-locks");
+}
+
 /** User profile (avatar, display name, etc.) */
 export function getUserProfilePath(): string {
 	return path.join(LOOK_DIR, "user-profile.json");

@@ -28,6 +28,7 @@ import {
 	sessionStateAtomFamily,
 	settingsTabAtom,
 	showAgentSquareAtom,
+	showScheduledTasksAtom,
 	showSettingsAtom,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
@@ -52,6 +53,7 @@ export default function App() {
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 	const [showAgentSquare] = useAtom(showAgentSquareAtom);
+	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? ""));
 	const activeQueue = useMemo(() => {
@@ -143,6 +145,7 @@ export default function App() {
 			projects={projects}
 			activeProject={activeProject}
 			showAgentSquare={showAgentSquare}
+			showScheduledTasks={showScheduledTasks}
 			newProjectCwd={projectActions.newProjectCwd}
 			setNewProjectCwd={projectActions.setNewProjectCwd}
 			pendingDelete={pendingDelete}

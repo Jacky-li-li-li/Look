@@ -7,6 +7,7 @@
 
 import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
+import type { SchedulerService } from "../scheduler/scheduler-service.js";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
@@ -23,6 +24,7 @@ export interface InvokeContext {
 	larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager;
 	larkBridgeService?: import("../im/lark-bridge-service.js").LarkBridgeService;
 	mcpManager: import("../mcp/manager.js").MCPManager;
+	schedulerService: SchedulerService;
 }
 
 export type InvokeRouteMap = Partial<{

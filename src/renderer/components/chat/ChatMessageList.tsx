@@ -455,27 +455,24 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 	const { agentId, sessionState, isBusy } = props;
 
 	// === Timeline ===
-	const persistedTimeline = useMemo<TimelineItem[]>(
-		() => buildTimeline(sessionState.entries, sessionState.messageDurations, [], {}, "idle", null),
-		[sessionState.entries, sessionState.messageDurations],
-	);
-	const liveTimeline = useMemo<TimelineItem[]>(
-		() =>
-			sessionState.uiPhase === "idle" && !sessionState.pendingUserMessage && sessionState.uiBlocks.length === 0
-				? []
-				: buildTimeline(
-						[],
-						{},
-						sessionState.uiBlocks,
-						sessionState.uiTools,
-						sessionState.uiPhase,
-						sessionState.pendingUserMessage,
-					),
-		[sessionState.uiBlocks, sessionState.uiTools, sessionState.uiPhase, sessionState.pendingUserMessage],
-	);
 	const timeline = useMemo<TimelineItem[]>(
-		() => [...persistedTimeline, ...liveTimeline],
-		[persistedTimeline, liveTimeline],
+		() =>
+			buildTimeline(
+				sessionState.entries,
+				sessionState.messageDurations,
+				sessionState.uiBlocks,
+				sessionState.uiTools,
+				sessionState.uiPhase,
+				sessionState.pendingUserMessage,
+			),
+		[
+			sessionState.entries,
+			sessionState.messageDurations,
+			sessionState.uiBlocks,
+			sessionState.uiTools,
+			sessionState.uiPhase,
+			sessionState.pendingUserMessage,
+		],
 	);
 
 	const { leafId } = sessionState;

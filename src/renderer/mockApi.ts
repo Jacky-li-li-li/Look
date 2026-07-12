@@ -239,6 +239,34 @@ const mockApi = {
 
 	// ---- Model ----
 	getModels: () => success({ models: [] }),
+
+	// ---- Scheduled tasks ----
+	listScheduledTasks: () => success({ tasks: [] }),
+	createScheduledTask: () => success({ task: null }),
+	updateScheduledTask: () => success({ task: null }),
+	startScheduledTask: () => success({ task: null }),
+	pauseScheduledTask: () => success({ task: null }),
+	resumeScheduledTask: () => success({ task: null }),
+	deleteScheduledTask: () => ok,
+	runScheduledTaskNow: () => success({ accepted: true }),
+	testScheduledTask: () =>
+		success({
+			log: {
+				id: "mock-test-run",
+				taskId: "mock-test-task",
+				taskName: "Test task",
+				scheduledAt: new Date().toISOString(),
+				startedAt: new Date().toISOString(),
+				finishedAt: new Date().toISOString(),
+				status: "success",
+				attempt: 1,
+				maxAttempts: 1,
+				output: "Test completed",
+				ownerId: "mock",
+			},
+		}),
+	listScheduledTaskLogs: () => success({ logs: [] }),
+	validateCron: () => success({ valid: true }),
 	getProviders: () => success({ providers: [] }),
 
 	// ---- Agents ----
@@ -390,6 +418,7 @@ const mockApi = {
 
 	// ---- IM Channels ----
 	getImChannels: () => success({ channels: [] }),
+	getImBindings: () => success({ bindings: [] }),
 	connectFeishuChannel: () => ok,
 	connectFeishuManualChannel: () => ok,
 	cancelFeishuRegistration: () => ok,

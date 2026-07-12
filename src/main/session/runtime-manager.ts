@@ -135,6 +135,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	private readonly sessionLifecycleService: SessionLifecycleService;
 	// activeProjectId migrated to ProjectService
 	private activeSessionId: string | null = null;
+	private schedulerService?: import("../scheduler/scheduler-service.js").SchedulerService;
 	private readonly workspaceFileService: WorkspaceFileService | null;
 	private readonly workspaceTreeService: WorkspaceTreeService | null;
 	private disposed = false;
@@ -301,6 +302,9 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			setActiveSessionId: (id) => {
 				this.activeSessionId = id;
 			},
+			deleteScheduledTasksByProject: async (projectId) => {
+				await this.schedulerService?.deleteTasksByProject(projectId);
+			},
 		});
 		this.eventProcessor = new SessionEventProcessor(this, this.scopeRegistry, this);
 		this.subAgentRuntimeService = new SubAgentRuntimeService(this, this.subAgentRegistry);
@@ -398,6 +402,11 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	/** O(1) lookup by id. */
 	getProjectInfo(projectId: string): ProjectInfo | null {
 		return this.projectService.getProjectInfo(projectId);
+	}
+
+	/** Allows the owner to wire the scheduler service after both objects are created. */
+	setSchedulerService(schedulerService: import("../scheduler/scheduler-service.js").SchedulerService): void {
+		this.schedulerService = schedulerService;
 	}
 
 	async dispose(): Promise<void> {
@@ -838,7 +847,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	async createAgent(
-		opts?: { name?: string; projectId?: string; imProvider?: ImSessionProvider } | string,
+		opts?: { name?: string; projectId?: string; imProvider?: ImSessionProvider; background?: boolean } | string,
 	): Promise<string> {
 		return this.sessionLifecycleService.createAgent(opts);
 	}
@@ -1136,6 +1145,14 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		return this.sessionPermissionOrchestrator.applyMode(sessionId, mode, {
 			internal: false,
 			updateDefault: true,
+		});
+	}
+
+	/** Configure an unattended internal session without changing the user's default permission mode. */
+	async setInternalPermissionMode(sessionId: string, mode: PermissionMode): Promise<void> {
+		return this.sessionPermissionOrchestrator.applyMode(sessionId, mode, {
+			internal: true,
+			updateDefault: false,
 		});
 	}
 

@@ -6,9 +6,15 @@ import { UserAvatar } from "@shared/components/UserAvatar";
 import { Button } from "@shared/components/ui/button";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { useAtomValue } from "jotai";
-import { Bot, FolderOpen, PanelLeftClose, Plus } from "lucide-react";
+import { Bot, Clock3, FolderOpen, PanelLeftClose, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { projectsAtom, rightPanelCollapsedAtom, showAgentSquareAtom, sidebarCollapsedAtom } from "../../store/atoms";
+import {
+	projectsAtom,
+	rightPanelCollapsedAtom,
+	showAgentSquareAtom,
+	showScheduledTasksAtom,
+	sidebarCollapsedAtom,
+} from "../../store/atoms";
 import { userProfileAtom } from "../../store/authAtoms";
 import { appStore } from "../../store/ipcHandler";
 import ProjectTree from "./ProjectTree";
@@ -28,6 +34,8 @@ export default function Sidebar({
 	const projects = useAtomValue(projectsAtom);
 	const userProfile = useAtomValue(userProfileAtom);
 	const collapsed = useAtomValue(sidebarCollapsedAtom);
+	const showAgentSquare = useAtomValue(showAgentSquareAtom);
+	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
 
 	return (
 		<aside
@@ -82,11 +90,30 @@ export default function Sidebar({
 			<button
 				type="button"
 				onClick={() => {
-					appStore.set(showAgentSquareAtom, true);
+					appStore.set(showScheduledTasksAtom, true);
+					appStore.set(showAgentSquareAtom, false);
 					appStore.set(rightPanelCollapsedAtom, true);
 				}}
-				className="group flex h-10 shrink-0 items-center gap-2.5 px-3 text-left transition-colors hover:bg-foreground/[0.06]"
+				className={`group flex h-10 shrink-0 items-center gap-2.5 border-t border-hairline px-3 text-left transition-colors ${showScheduledTasks ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
+				title={t("scheduledTasks.title")}
+				aria-current={showScheduledTasks ? "page" : undefined}
+			>
+				<span className="inline-flex size-5 items-center justify-center rounded-[5px] bg-foreground/[0.06] transition-colors group-hover:bg-foreground/[0.12]">
+					<Clock3 className="size-3 text-foreground/40 transition-colors group-hover:text-foreground/60" />
+				</span>
+				<span className="text-[11px] font-medium text-muted-foreground">{t("scheduledTasks.title")}</span>
+			</button>
+
+			<button
+				type="button"
+				onClick={() => {
+					appStore.set(showAgentSquareAtom, true);
+					appStore.set(showScheduledTasksAtom, false);
+					appStore.set(rightPanelCollapsedAtom, true);
+				}}
+				className={`group flex h-10 shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showAgentSquare ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
 				title={t("marketplace.title")}
+				aria-current={showAgentSquare ? "page" : undefined}
 			>
 				<span className="inline-flex size-5 items-center justify-center rounded-[5px] bg-foreground/[0.06] transition-colors group-hover:bg-foreground/[0.12]">
 					<Bot className="size-3 text-foreground/35 transition-colors group-hover:text-foreground/55" />

@@ -1,5 +1,7 @@
 # Look
 
+See [Scheduled tasks](docs/scheduled-tasks.md) for user-friendly background execution plans, lifecycle APIs, retries, logs, and recovery behavior.
+
 基于 Electron 的 pi SDK 桌面客户端。
 
 ## 特性

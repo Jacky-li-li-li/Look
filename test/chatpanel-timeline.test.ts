@@ -206,7 +206,7 @@ describe("buildTimeline", () => {
 		expect(timeline[0]?.uiTools).toBe(tools);
 	});
 
-	it("places the live item after persisted entries", () => {
+	it("merges live state into the most recent persisted assistant bubble after message_end", () => {
 		const entries: SessionEntry[] = [
 			messageEntry("u1", baseUser("hello")),
 			messageEntry("a1", baseAssistant("a1", [{ type: "text", text: "ok" }])),
@@ -215,9 +215,22 @@ describe("buildTimeline", () => {
 
 		const timeline = buildTimeline(entries, {}, blocks, {}, "streaming");
 
-		expect(timeline).toHaveLength(3);
-		expect(timeline[2]?.isLive).toBe(true);
-		expect(timeline[2]?.uiBlocks).toBe(blocks);
+		expect(timeline).toHaveLength(2);
+		expect(timeline[1]?.entryId).toBe("a1");
+		expect(timeline[1]?.isLive).toBe(true);
+		expect(timeline[1]?.uiBlocks).toBe(blocks);
+	});
+
+	it("keeps a standalone live item when there is no persisted assistant yet", () => {
+		const entries: SessionEntry[] = [messageEntry("u1", baseUser("hello"))];
+		const blocks: LookUiStreamBlock[] = [textBlock(0, "streaming", false)];
+
+		const timeline = buildTimeline(entries, {}, blocks, {}, "streaming");
+
+		expect(timeline).toHaveLength(2);
+		expect(timeline[1]?.id).toBe("streaming-live");
+		expect(timeline[1]?.isLive).toBe(true);
+		expect(timeline[1]?.uiBlocks).toBe(blocks);
 	});
 
 	it("attaches per-message duration to assistant bubbles", () => {
@@ -298,6 +311,8 @@ describe("buildTimeline", () => {
 		];
 		const blocks: LookUiStreamBlock[] = [textBlock(0, "streaming...", false)];
 
+		// A pending user message starts a new turn, so the previous persisted
+		// assistant is closed and the live response gets its own bubble.
 		const timeline = buildTimeline(entries, {}, blocks, {}, "streaming", { text: "new question" });
 
 		expect(timeline).toHaveLength(4); // prev user + prev assistant + pending user + live
@@ -305,5 +320,21 @@ describe("buildTimeline", () => {
 		expect(timeline[1]?.id).toBe("a1"); // persisted assistant
 		expect(timeline[2]?.id).toBe("pending-user"); // pending user
 		expect(timeline[3]?.id).toBe("streaming-live"); // live streaming
+	});
+
+	it("does not duplicate the current assistant when it is already persisted", () => {
+		const entries: SessionEntry[] = [
+			messageEntry("u1", baseUser("hello")),
+			messageEntry("a1", baseAssistant("a1", [{ type: "toolCall", id: "tc1", name: "subagent", arguments: {} }])),
+		];
+		const blocks: LookUiStreamBlock[] = [toolcallBlock(0, "tc1", "subagent", true)];
+		const tools: Record<string, LookUiToolExecState> = { tc1: runningTool("tc1", "subagent") };
+
+		const timeline = buildTimeline(entries, {}, blocks, tools, "working");
+
+		const assistantItems = timeline.filter((item) => item.message?.role === "assistant");
+		expect(assistantItems).toHaveLength(1);
+		expect(assistantItems[0]?.isLive).toBe(true);
+		expect(assistantItems[0]?.uiTools).toBe(tools);
 	});
 });

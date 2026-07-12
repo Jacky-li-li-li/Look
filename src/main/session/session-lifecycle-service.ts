@@ -70,7 +70,7 @@ export class SessionLifecycleService {
 	constructor(private readonly deps: SessionLifecycleServiceDependencies) {}
 
 	async createAgent(
-		opts?: { name?: string; projectId?: string; imProvider?: ImSessionProvider } | string,
+		opts?: { name?: string; projectId?: string; imProvider?: ImSessionProvider; background?: boolean } | string,
 	): Promise<string> {
 		const input = typeof opts === "string" ? { name: opts } : (opts ?? {});
 		const projectId = input.projectId ?? this.deps.projectService.activeId;
@@ -105,8 +105,10 @@ export class SessionLifecycleService {
 			if (scope) scope.imProvider = input.imProvider;
 		}
 
-		this.deps.host.setActiveProjectId(projectId);
-		this.deps.host.setActiveSessionId(session.sessionId);
+		if (!input.background) {
+			this.deps.host.setActiveProjectId(projectId);
+			this.deps.host.setActiveSessionId(session.sessionId);
+		}
 		await this.deps.host.refreshProjectSessions(projectId);
 		const agent = this.deps.sessionInfoService.getAgentInfo(session.sessionId);
 		if (agent) {

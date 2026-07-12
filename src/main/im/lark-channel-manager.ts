@@ -109,6 +109,7 @@ export interface SendTestMessageInput {
 	receiveIdType: string;
 	receiveId: string;
 	text: string;
+	card?: object;
 }
 
 export interface ManualConnectInput {
@@ -503,15 +504,18 @@ export class LarkChannelManager {
 			return { success: false, error: "Feishu client is not connected" };
 		}
 		try {
+			const data = input.card
+				? {
+						receive_id: input.receiveId,
+						content: JSON.stringify(input.card),
+						msg_type: "interactive" as const,
+					}
+				: { receive_id: input.receiveId, content: JSON.stringify({ text: input.text }), msg_type: "text" as const };
 			await this.client.im.v1.message.create({
 				params: {
 					receive_id_type: input.receiveIdType as "chat_id" | "open_id" | "user_id" | "union_id" | "email",
 				},
-				data: {
-					receive_id: input.receiveId,
-					content: JSON.stringify({ text: input.text }),
-					msg_type: "text",
-				},
+				data,
 			});
 			return { success: true };
 		} catch (err) {

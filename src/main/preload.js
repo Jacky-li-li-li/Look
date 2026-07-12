@@ -66,6 +66,22 @@ const api = {
 
 	getAgents: () => ipcRenderer.invoke("look:invoke", { type: "agents:list" }),
 
+	// ---- Scheduled tasks ----
+	listScheduledTasks: () => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:list" }),
+	createScheduledTask: (task) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:create", task }),
+	updateScheduledTask: (taskId, patch) =>
+		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:update", taskId, patch }),
+	startScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:start", taskId }),
+	pauseScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:pause", taskId }),
+	resumeScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:resume", taskId }),
+	deleteScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:delete", taskId }),
+	runScheduledTaskNow: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:run-now", taskId }),
+	testScheduledTask: (task) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:test", task }),
+	listScheduledTaskLogs: (taskId, limit) =>
+		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:logs", taskId, limit }),
+	validateCron: (cron, timezone) =>
+		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:validate-cron", cron, timezone }),
+
 	switchModel: (agentId, model) => ipcRenderer.invoke("look:invoke", { type: "agent:switch-model", agentId, model }),
 
 	updateThinking: (agentId, level) =>
@@ -272,6 +288,7 @@ const api = {
 
 	// ---- IM Channels ----
 	getImChannels: () => ipcRenderer.invoke("look:invoke", { type: "im:get-channels" }),
+	getImBindings: () => ipcRenderer.invoke("look:invoke", { type: "im:get-bindings" }),
 	connectFeishuChannel: (options) =>
 		ipcRenderer.invoke("look:invoke", {
 			type: "im:connect-feishu",
