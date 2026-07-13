@@ -84,7 +84,7 @@ describe("SubAgent deletion cleanup", () => {
 			);
 			const createdId = created.id;
 			const sharedDir = getProjectSharedDir(createdId);
-			const actualSubsessionsDir = getWorkspaceSubsessionsDir(created.name);
+			const actualSubsessionsDir = getWorkspaceSubsessionsDir(createdId);
 			cleanup.push(sharedDir, join(actualSubsessionsDir, ".."));
 			await mkdir(sharedDir, { recursive: true });
 			await mkdir(actualSubsessionsDir, { recursive: true });

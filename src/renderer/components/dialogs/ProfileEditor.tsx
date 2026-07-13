@@ -5,12 +5,13 @@
 
 import { UserAvatar } from "@shared/components/UserAvatar";
 import { useAtom } from "jotai";
-import { Camera } from "lucide-react";
+import { Camera, LogOut } from "lucide-react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { getSupabase } from "../../lib/supabase";
-import { userProfileAtom } from "../../store/authAtoms";
+import { clearAuthCache, writeAuthCache } from "../../lib/authCache";
+import { getSupabase, resetSupabaseClient } from "../../lib/supabase";
+import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../../store/authAtoms";
 
 const api = window.look;
 
@@ -26,6 +27,8 @@ function deriveHandle(profile: { handle?: string; email: string; userName: strin
 export default function ProfileEditor() {
 	const { t } = useTranslation();
 	const [profile, setProfile] = useAtom(userProfileAtom);
+	const [, setIsLoggedIn] = useAtom(isLoggedInAtom);
+	const [, setAuthLoading] = useAtom(authLoadingAtom);
 	const [editingName, setEditingName] = useState(false);
 	const [nameValue, setNameValue] = useState(profile.userName);
 	const [editingHandle, setEditingHandle] = useState(false);
@@ -33,8 +36,38 @@ export default function ProfileEditor() {
 	const nameRef = useRef<HTMLInputElement>(null);
 	const handleRef = useRef<HTMLInputElement>(null);
 
+	async function handleLogout() {
+		try {
+			await api.logout();
+		} catch {
+			/* ignore */
+		}
+		try {
+			const supabase = await getSupabase();
+			if (supabase) await supabase.auth.signOut();
+		} catch {
+			/* ignore */
+		}
+		resetSupabaseClient();
+		clearAuthCache();
+		setProfile({
+			userId: "",
+			email: "",
+			userName: "You",
+			handle: "",
+			avatar: "",
+		});
+		setIsLoggedIn(false);
+		setAuthLoading(false);
+		toast.success(t("auth.logout"));
+	}
+
 	function persistProfile(patch: Partial<typeof profile>) {
-		setProfile((prev) => ({ ...prev, ...patch }));
+		setProfile((prev) => {
+			const next = { ...prev, ...patch };
+			writeAuthCache(next);
+			return next;
+		});
 		if (api?.updateUserProfile) {
 			api.updateUserProfile(patch).catch(() => {});
 		}
@@ -145,7 +178,7 @@ export default function ProfileEditor() {
 				</button>
 			)}
 
-			{/* Handle + role badge */}
+			{/* Handle */}
 			{editingHandle ? (
 				<div className="flex items-center gap-2">
 					<span className="text-sm text-muted-foreground">@</span>
@@ -180,6 +213,16 @@ export default function ProfileEditor() {
 					<span>@{displayHandle}</span>
 				</button>
 			)}
+
+			{/* Logout */}
+			<button
+				type="button"
+				onClick={handleLogout}
+				className="mt-6 flex items-center gap-2 rounded-md border border-hairline px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+			>
+				<LogOut className="size-4" />
+				{t("auth.logout")}
+			</button>
 		</div>
 	);
 }

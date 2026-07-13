@@ -25,7 +25,12 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import type { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { hasTrustRequiringProjectResources, type ProjectTrustStore } from "@earendil-works/pi-coding-agent";
-import { getDefaultWorkspaceCwd, getProjectsIndexPath, getWorkspacesDir } from "@look/shared/look-storage";
+import {
+	getDefaultWorkspaceCwd,
+	getProjectsIndexPath,
+	getWorkspaceDir,
+	getWorkspacesDir,
+} from "@look/shared/look-storage";
 import { DEFAULT_PROJECT_ID, type ProjectInfo } from "@look/shared/types";
 import { v4 as uuidv4 } from "uuid";
 
@@ -88,35 +93,48 @@ export class ProjectService {
 	}
 
 	/**
-	 * Walk ~/.look/workspaces/<name>/ and for any directory whose `sessions/`
-	 * contains at least one `.jsonl`, read the first `session` event in the
-	 * most recent jsonl to recover its `cwd`. Skip if the recovered cwd
-	 * already maps to an existing project (de-dupe by cwd), or if the cwd
-	 * no longer exists on disk (test data, since-deleted folders).
-	 * @returns true if any new project was recovered.
+	 * Walk ~/.look/workspaces/ and migrate every workspace directory to a
+	 * stable path keyed by `projectId` instead of the mutable project name.
+	 *
+	 * For each directory we read the `cwd` from the first `session` event in the
+	 * most recent jsonl. If the cwd matches a known project we rename the
+	 * directory to `workspaces/<projectId>/`. If it does not match we create an
+	 * orphan project (de-dupe by cwd) and rename to `workspaces/<orphanId>/`.
+	 *
+	 * Conflicts (target directory already exists) are resolved by merging
+	 * session/subsession files so data is not lost.
+	 *
+	 * @returns true if any directory was migrated or any orphan project created.
 	 */
 	async recoverOrphanedProjects(): Promise<boolean> {
 		const workspacesDir = getWorkspacesDir();
 		if (!existsSync(workspacesDir)) return false;
 
-		const knownCwds = new Set<string>();
+		const projectByCwd = new Map<string, ProjectInfo>();
 		for (const info of this.projects.values()) {
-			knownCwds.add(info.cwd);
+			projectByCwd.set(info.cwd, info);
 		}
 
 		let entries: string[];
 		try {
-			entries = (await fsp.readdir(workspacesDir)).filter((n) => existsSync(path.join(workspacesDir, n)));
+			entries = (await fsp.readdir(workspacesDir)).filter((n) => {
+				const full = path.join(workspacesDir, n);
+				try {
+					return fs.statSync(full).isDirectory();
+				} catch {
+					return false;
+				}
+			});
 		} catch {
 			return false;
 		}
 
 		let changed = false;
 		for (const name of entries) {
-			const workspaceDir = path.join(workspacesDir, name);
-			if (!existsSync(path.join(workspaceDir, "sessions"))) continue;
+			const sourceDir = path.join(workspacesDir, name);
+			if (!existsSync(path.join(sourceDir, "sessions"))) continue;
 
-			const cwd = await readFirstSessionCwd(workspaceDir);
+			const cwd = await readFirstSessionCwd(sourceDir);
 			if (!cwd) continue;
 			if (!existsSync(cwd)) continue;
 
@@ -127,23 +145,77 @@ export class ProjectService {
 				canonicalCwd = cwd;
 			}
 
-			if (knownCwds.has(canonicalCwd)) continue;
+			let project = projectByCwd.get(canonicalCwd);
+			let isOrphan = false;
+			if (!project) {
+				project = {
+					id: uuidv4().slice(0, 8),
+					name,
+					cwd: canonicalCwd,
+					createdAt: Date.now(),
+					valid: true,
+				};
+				this.projects.set(project.id, project);
+				projectByCwd.set(canonicalCwd, project);
+				isOrphan = true;
+				changed = true;
+				console.log(`[Look] Recovered orphaned project "${name}" (cwd: ${canonicalCwd})`);
+			}
 
-			const project: ProjectInfo = {
-				id: uuidv4().slice(0, 8),
-				name,
-				cwd: canonicalCwd,
-				createdAt: Date.now(),
-				valid: true,
-			};
-			this.projects.set(project.id, project);
-			knownCwds.add(canonicalCwd);
-			changed = true;
-			console.log(`[Look] Recovered orphaned project "${name}" (cwd: ${canonicalCwd})`);
+			const targetDir = getWorkspaceDir(project.id);
+			if (sourceDir === targetDir) continue;
+
+			if (existsSync(targetDir)) {
+				await this.mergeWorkspaceDirs(sourceDir, targetDir);
+			} else {
+				await fsp.rename(sourceDir, targetDir);
+			}
+			if (!isOrphan) {
+				changed = true;
+				console.log(`[Look] Migrated workspace for "${project.name}" to ${targetDir}`);
+			}
 		}
 
 		if (changed) this.saveProjects();
 		return changed;
+	}
+
+	/**
+	 * Move session/subsession files from `sourceDir` into `targetDir`, renaming
+	 * on collision so no JSONL is overwritten. Empty source subdirectories are
+	 * removed after a successful merge.
+	 */
+	private async mergeWorkspaceDirs(sourceDir: string, targetDir: string): Promise<void> {
+		for (const sub of ["sessions", "subsessions"]) {
+			const sourceSub = path.join(sourceDir, sub);
+			const targetSub = path.join(targetDir, sub);
+			if (!existsSync(sourceSub)) continue;
+			fs.mkdirSync(targetSub, { recursive: true });
+
+			let files: string[];
+			try {
+				files = await fsp.readdir(sourceSub);
+			} catch {
+				continue;
+			}
+
+			for (const file of files) {
+				const sourceFile = path.join(sourceSub, file);
+				const stat = await fsp.stat(sourceFile).catch(() => null);
+				if (!stat?.isFile()) continue;
+
+				let targetFile = path.join(targetSub, file);
+				if (existsSync(targetFile)) {
+					const ext = path.extname(file);
+					const base = path.basename(file, ext);
+					targetFile = path.join(targetSub, `${base}-${Date.now()}${ext}`);
+				}
+				await fsp.rename(sourceFile, targetFile);
+			}
+		}
+
+		// Remove the now-empty source directory tree if possible.
+		await fsp.rm(sourceDir, { recursive: true, force: true }).catch(() => {});
 	}
 
 	ensureDefaultProject(): void {

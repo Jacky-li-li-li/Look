@@ -6,7 +6,7 @@
 // ============================================================
 
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { McpClient } from "./client.js";
@@ -28,6 +28,26 @@ export class MCPManager {
 	private readonly circuitOpenMs = 30_000;
 	private onChange: (() => void) | null = null;
 
+	/** 生成 project 隔离的复合键。 */
+	private projectKey(projectId: string, name: string): string {
+		return `${projectId}:${name}`;
+	}
+
+	private projectPrefix(projectId: string): string {
+		return `${projectId}:`;
+	}
+
+	private getProjectConfigMap(projectId: string): Map<string, McpServerConfig> {
+		const prefix = this.projectPrefix(projectId);
+		const map = new Map<string, McpServerConfig>();
+		for (const [key, config] of this.configs) {
+			if (key.startsWith(prefix)) {
+				map.set(config.name, config);
+			}
+		}
+		return map;
+	}
+
 	/** 注册变更回调 — 当服务器列表变化时通知渲染进程。 */
 	setOnChange(cb: () => void): void {
 		this.onChange = cb;
@@ -40,10 +60,10 @@ export class MCPManager {
 	// ── 配置加载 ──
 
 	/**
-	 * 加载并合并 MCP 服务器配置。
+	 * 加载并合并指定 project 的 MCP 服务器配置。
 	 * 优先级：用户级 > 项目级 > 自动发现
 	 */
-	async loadConfig(cwd?: string): Promise<void> {
+	async loadConfig(projectId: string, cwd?: string): Promise<void> {
 		const merged = new Map<string, McpServerConfig>();
 
 		// 1. 自动发现兼容配置（优先级最低）
@@ -65,16 +85,28 @@ export class MCPManager {
 			merged.set(config.name, { ...config, _source: "user" });
 		}
 
-		const previous = this.configs;
+		const previous = this.getProjectConfigMap(projectId);
 		const changed = !configMapsEqual(previous, merged);
-		this.configs = merged;
+
+		// 仅替换本 project 命名空间下的配置
+		const prefix = this.projectPrefix(projectId);
+		for (const key of this.configs.keys()) {
+			if (key.startsWith(prefix)) {
+				this.configs.delete(key);
+			}
+		}
+		for (const [name, config] of merged) {
+			this.configs.set(this.projectKey(projectId, name), config);
+		}
 
 		// 清理已从配置中移除、禁用或连接参数变化的客户端连接。
-		for (const [name, client] of this.clients) {
+		for (const [key, client] of this.clients) {
+			if (!key.startsWith(prefix)) continue;
+			const name = key.slice(prefix.length);
 			const nextConfig = merged.get(name);
 			if (!nextConfig?.enabled || !mcpConfigEqual(previous.get(name), nextConfig)) {
 				await client.disconnect();
-				this.clients.delete(name);
+				this.clients.delete(key);
 			}
 		}
 		if (changed) this.notifyChange();
@@ -82,18 +114,46 @@ export class MCPManager {
 
 	/**
 	 * 持久化用户级配置到 ~/.look/mcp.json。
-	 * 只持久化 _source === "user" 的配置。
+	 * 只持久化指定 project 命名空间中 _source === "user" 的配置。
 	 */
-	async persistConfig(): Promise<void> {
-		const { writeFile, mkdir } = await import("node:fs/promises");
+	async persistConfig(projectId = "global"): Promise<void> {
 		const lookDir = path.join(homedir(), ".look");
 		const configPath = path.join(lookDir, "mcp.json");
 
 		await mkdir(lookDir, { recursive: true });
 
+		const prefix = this.projectPrefix(projectId);
 		const servers: Record<string, unknown> = {};
-		for (const [, config] of this.configs) {
+		for (const [key, config] of this.configs) {
+			if (!key.startsWith(prefix)) continue;
 			if (config._source !== "user") continue;
+			const {
+				name: _name,
+				_source: _src,
+				_discoveredFrom: _disc,
+				...rest
+			} = config as unknown as Record<string, unknown>;
+			servers[config.name] = rest;
+		}
+
+		await writeFile(configPath, JSON.stringify({ mcpServers: servers }, null, 2), "utf-8");
+	}
+
+	/**
+	 * 持久化项目级配置到 <cwd>/.look/mcp.json。
+	 * 只持久化 _source === "project" 的配置。
+	 */
+	async persistProjectConfig(projectId: string, cwd: string): Promise<void> {
+		const lookDir = path.join(cwd, ".look");
+		const configPath = path.join(lookDir, "mcp.json");
+
+		await mkdir(lookDir, { recursive: true });
+
+		const prefix = this.projectPrefix(projectId);
+		const servers: Record<string, unknown> = {};
+		for (const [key, config] of this.configs) {
+			if (!key.startsWith(prefix)) continue;
+			if (config._source !== "project") continue;
 			const {
 				name: _name,
 				_source: _src,
@@ -109,21 +169,22 @@ export class MCPManager {
 	// ── 生命周期 ──
 
 	/**
-	 * 并行启动所有已启用的服务器。
+	 * 并行启动指定 project 下所有已启用的服务器。
 	 * 单个服务器启动失败不影响其他服务器。
 	 */
-	async startEnabled(): Promise<{
+	async startEnabled(projectId: string): Promise<{
 		started: string[];
 		failed: Array<{ name: string; error: string }>;
 	}> {
 		const started: string[] = [];
 		const failed: Array<{ name: string; error: string }> = [];
 
-		const tasks = Array.from(this.configs.values())
-			.filter((c) => c.enabled)
-			.map(async (config) => {
+		const prefix = this.projectPrefix(projectId);
+		const tasks = Array.from(this.configs.entries())
+			.filter(([key, c]) => key.startsWith(prefix) && c.enabled)
+			.map(async ([_key, config]) => {
 				try {
-					await this.startServer(config.name);
+					await this.startServer(projectId, config.name);
 					started.push(config.name);
 				} catch (error) {
 					failed.push({
@@ -138,49 +199,50 @@ export class MCPManager {
 	}
 
 	/** 启动单个服务器。并发调用会复用同一个 in-flight connect。 */
-	async startServer(name: string): Promise<McpClient> {
-		const config = this.configs.get(name);
+	async startServer(projectId: string, name: string): Promise<McpClient> {
+		const key = this.projectKey(projectId, name);
+		const config = this.configs.get(key);
 		if (!config) throw new Error(`MCP server "${name}" not found`);
 		if (!config.enabled) throw new Error(`MCP server "${name}" is disabled`);
 
-		const existing = this.clients.get(name);
+		const existing = this.clients.get(key);
 		if (existing?.isConnected) return existing;
 
-		const pending = this.clientStarts.get(name);
+		const pending = this.clientStarts.get(key);
 		if (pending) return pending;
 
 		const start = (async () => {
-			const stale = this.clients.get(name);
+			const stale = this.clients.get(key);
 			if (stale) {
 				await stale.disconnect();
-				this.clients.delete(name);
+				this.clients.delete(key);
 			}
 
 			const client = new McpClient(name, config);
-			this.clients.set(name, client);
-			this.lastErrors.delete(name);
+			this.clients.set(key, client);
+			this.lastErrors.delete(key);
 			this.notifyChange();
 
 			try {
 				await client.connect();
-				if (this.clients.get(name) !== client || !this.configs.get(name)?.enabled) {
+				if (this.clients.get(key) !== client || !this.configs.get(key)?.enabled) {
 					await client.disconnect();
 					throw new Error(`MCP server "${name}" start was cancelled`);
 				}
-				this.lastErrors.delete(name);
+				this.lastErrors.delete(key);
 				return client;
 			} catch (error) {
-				if (this.clients.get(name) === client) this.clients.delete(name);
+				if (this.clients.get(key) === client) this.clients.delete(key);
 				const message = error instanceof Error ? error.message : String(error);
-				if (!message.includes("start was cancelled")) this.lastErrors.set(name, message);
+				if (!message.includes("start was cancelled")) this.lastErrors.set(key, message);
 				throw error;
 			} finally {
-				this.clientStarts.delete(name);
+				this.clientStarts.delete(key);
 				this.notifyChange();
 			}
 		})();
 
-		this.clientStarts.set(name, start);
+		this.clientStarts.set(key, start);
 		return start;
 	}
 
@@ -199,15 +261,18 @@ export class MCPManager {
 	/** 聚合所有已连接服务器的工具列表 */
 
 	/** 获取单个服务器的工具列表 */
-	getToolsForServer(name: string): McpTool[] {
-		const client = this.clients.get(name);
+	getToolsForServer(projectId: string, name: string): McpTool[] {
+		const client = this.clients.get(this.projectKey(projectId, name));
 		return client?.getTools() ?? [];
 	}
 
-	getAllTools(): Array<{ server: string; tool: McpTool }> {
+	getAllTools(projectId: string): Array<{ server: string; tool: McpTool }> {
+		const prefix = this.projectPrefix(projectId);
 		const result: Array<{ server: string; tool: McpTool }> = [];
-		for (const [serverName, client] of this.clients) {
+		for (const [key, client] of this.clients) {
+			if (!key.startsWith(prefix)) continue;
 			if (!client.isConnected) continue;
+			const serverName = key.slice(prefix.length);
 			for (const tool of client.getTools()) {
 				result.push({ server: serverName, tool });
 			}
@@ -220,13 +285,16 @@ export class MCPManager {
 	 * 30s 窗口内 5 次失败 → 断路 30s。
 	 */
 	async executeTool(
+		projectId: string,
 		server: string,
 		tool: string,
 		params: Record<string, unknown>,
 		signal?: AbortSignal,
 	): Promise<McpCallResult> {
+		const key = this.projectKey(projectId, server);
+
 		// 熔断器检查
-		const circuit = this.circuitStates.get(server);
+		const circuit = this.circuitStates.get(key);
 		if (circuit && circuit.failures >= this.failureThreshold) {
 			if (Date.now() < circuit.openUntil) {
 				throw new Error(
@@ -235,10 +303,10 @@ export class MCPManager {
 				);
 			}
 			// 半开状态：允许一次尝试
-			this.circuitStates.delete(server);
+			this.circuitStates.delete(key);
 		}
 
-		const client = this.clients.get(server);
+		const client = this.clients.get(key);
 		if (!client) {
 			throw new Error(`MCP server "${server}" is not connected`);
 		}
@@ -246,126 +314,163 @@ export class MCPManager {
 		try {
 			const result = await client.callTool(tool, params, signal);
 			// 成功 → 重置熔断器
-			this.circuitStates.delete(server);
+			this.circuitStates.delete(key);
 			return result;
 		} catch (error) {
 			// 失败 → 记录
-			const state = this.circuitStates.get(server) ?? { failures: 0, openUntil: 0 };
+			const state = this.circuitStates.get(key) ?? { failures: 0, openUntil: 0 };
 			state.failures++;
 			if (state.failures >= this.failureThreshold) {
 				state.openUntil = Date.now() + this.circuitOpenMs;
 			}
-			this.circuitStates.set(server, state);
+			this.circuitStates.set(key, state);
 			throw error;
 		}
 	}
 
 	// ── 管理操作 ──
 
-	/** 获取所有服务器状态列表 */
-	getStatusList(): McpServerStatus[] {
-		return Array.from(this.configs.values()).map((config) => {
-			const client = this.clients.get(config.name);
-			const isConnected = client?.isConnected ?? false;
-			// server 不启用 → 不可能 connected；toolCount 必须 0
-			const active = config.enabled && isConnected;
-			return {
-				name: config.name,
-				type: config.type,
-				enabled: config.enabled,
-				connected: active,
-				connecting: config.enabled && this.clientStarts.has(config.name),
-				toolCount: active ? (client?.getTools().length ?? 0) : 0,
-				lastError: this.lastErrors.get(config.name),
-				source: config._source,
-				discoveredFrom: config._discoveredFrom,
-				command: config.command,
-				args: config.args,
-				url: config.url,
-			};
-		});
+	/** 获取指定 project 下所有服务器状态列表 */
+	getStatusList(projectId: string): McpServerStatus[] {
+		const prefix = this.projectPrefix(projectId);
+		return Array.from(this.configs.entries())
+			.filter(([key]) => key.startsWith(prefix))
+			.map(([_key, config]) => {
+				const clientKey = this.projectKey(projectId, config.name);
+				const client = this.clients.get(clientKey);
+				const isConnected = client?.isConnected ?? false;
+				// server 不启用 → 不可能 connected；toolCount 必须 0
+				const active = config.enabled && isConnected;
+				return {
+					name: config.name,
+					type: config.type,
+					enabled: config.enabled,
+					connected: active,
+					connecting: config.enabled && this.clientStarts.has(clientKey),
+					toolCount: active ? (client?.getTools().length ?? 0) : 0,
+					lastError: this.lastErrors.get(clientKey),
+					source: config._source,
+					discoveredFrom: config._discoveredFrom,
+					command: config.command,
+					args: config.args,
+					url: config.url,
+				};
+			});
 	}
 
 	/** 添加服务器配置 */
-	async addServer(config: McpServerConfig): Promise<void> {
-		if (this.configs.has(config.name)) {
+	async addServer(projectId: string, config: McpServerConfig, cwd?: string): Promise<void> {
+		const key = this.projectKey(projectId, config.name);
+		if (this.configs.has(key)) {
 			throw new Error(`MCP server "${config.name}" already exists`);
 		}
 
-		config._source = "user";
-		this.configs.set(config.name, normalizeConfig(config));
-		await this.persistConfig();
+		const normalized = normalizeConfig(config);
+		if (projectId !== "global" && cwd) {
+			normalized._source = "project";
+			this.configs.set(key, normalized);
+			await this.persistProjectConfig(projectId, cwd);
+		} else {
+			normalized._source = "user";
+			this.configs.set(key, normalized);
+			await this.persistConfig(projectId);
+		}
 		this.notifyChange();
 
-		if (config.enabled) {
-			void this.startServer(config.name).catch(() => undefined);
+		if (normalized.enabled) {
+			void this.startServer(projectId, normalized.name).catch(() => undefined);
 		}
 	}
 
 	/** 删除服务器配置 */
-	async removeServer(name: string): Promise<void> {
-		const client = this.clients.get(name);
+	async removeServer(projectId: string, name: string, cwd?: string): Promise<void> {
+		const key = this.projectKey(projectId, name);
+		const config = this.configs.get(key);
+		const client = this.clients.get(key);
 		if (client) {
 			await client.disconnect();
-			this.clients.delete(name);
+			this.clients.delete(key);
 		}
-		this.clientStarts.delete(name);
-		this.lastErrors.delete(name);
-		this.configs.delete(name);
-		await this.persistConfig();
+		this.clientStarts.delete(key);
+		this.lastErrors.delete(key);
+		this.circuitStates.delete(key);
+		this.configs.delete(key);
+
+		if (config?._source === "project" && cwd) {
+			await this.persistProjectConfig(projectId, cwd);
+		} else {
+			await this.persistConfig(projectId);
+		}
 		this.notifyChange();
 	}
 
 	/** 切换服务器启用状态 */
-	async toggleServer(name: string, enabled: boolean): Promise<void> {
-		const config = this.configs.get(name);
+	async toggleServer(projectId: string, name: string, enabled: boolean, cwd?: string): Promise<void> {
+		const key = this.projectKey(projectId, name);
+		const config = this.configs.get(key);
 		if (!config) throw new Error(`MCP server "${name}" not found`);
 
 		config.enabled = enabled;
-		config._source = "user";
-		this.lastErrors.delete(name);
-		await this.persistConfig();
+		if (projectId !== "global" && cwd) {
+			config._source = "project";
+		} else {
+			config._source = "user";
+		}
+		this.lastErrors.delete(key);
+
+		if (config._source === "project" && cwd) {
+			await this.persistProjectConfig(projectId, cwd);
+		} else {
+			await this.persistConfig(projectId);
+		}
 		this.notifyChange();
 
 		if (enabled) {
-			void this.startServer(name).catch(() => undefined);
+			void this.startServer(projectId, name).catch(() => undefined);
 		} else {
-			const client = this.clients.get(name);
+			const client = this.clients.get(key);
 			if (client) {
 				await client.disconnect();
-				this.clients.delete(name);
+				this.clients.delete(key);
 			}
-			this.clientStarts.delete(name);
+			this.clientStarts.delete(key);
 			this.notifyChange();
 		}
 	}
 
 	/** 更新服务器配置 */
-	async updateServer(name: string, patch: Partial<McpServerConfig>): Promise<void> {
-		const config = this.configs.get(name);
+	async updateServer(projectId: string, name: string, patch: Partial<McpServerConfig>, cwd?: string): Promise<void> {
+		const key = this.projectKey(projectId, name);
+		const config = this.configs.get(key);
 		if (!config) throw new Error(`MCP server "${name}" not found`);
 
 		// 先断开旧连接
-		const client = this.clients.get(name);
+		const client = this.clients.get(key);
 		if (client) {
 			await client.disconnect();
-			this.clients.delete(name);
+			this.clients.delete(key);
 		}
 
 		// 更新配置
-		Object.assign(config, patch, { _source: "user" });
-		this.lastErrors.delete(name);
-		await this.persistConfig();
+		const nextSource = projectId !== "global" && cwd ? "project" : "user";
+		Object.assign(config, patch, { _source: nextSource });
+		this.lastErrors.delete(key);
+
+		if (config._source === "project" && cwd) {
+			await this.persistProjectConfig(projectId, cwd);
+		} else {
+			await this.persistConfig(projectId);
+		}
 		this.notifyChange();
 
 		if (config.enabled) {
-			void this.startServer(name).catch(() => undefined);
+			void this.startServer(projectId, name).catch(() => undefined);
 		}
 	}
 
 	/** 测试服务器连接 */
-	async testServer(name: string): Promise<McpTestResult> {
-		const config = this.configs.get(name);
+	async testServer(projectId: string, name: string): Promise<McpTestResult> {
+		const config = this.configs.get(this.projectKey(projectId, name));
 		if (!config) return { success: false, error: `MCP server "${name}" not found` };
 
 		const testClient = new McpClient(`test-${name}`, config);

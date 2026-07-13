@@ -207,7 +207,12 @@ export default function SessionSheetBar({
 	);
 
 	return (
-		<header className={cn("flex h-12 shrink-0 items-center gap-2 border-b border-hairline", rightPanelCollapsed ? "px-2" : "pl-2")}>
+		<header
+			className={cn(
+				"flex h-12 shrink-0 items-center gap-2 border-b border-hairline",
+				rightPanelCollapsed ? "px-2" : "pl-2",
+			)}
+		>
 			{sidebarCollapsed && (
 				<Button
 					size="icon-sm"

@@ -4,20 +4,25 @@
 // ============================================================
 
 import { atom } from "jotai";
+import { readAuthCache } from "../lib/authCache";
 import type { UserProfile } from "../types/user-profile";
-import { DEFAULT_USER_AVATAR, DEFAULT_USER_NAME, DEFAULT_USER_ROLE } from "../types/user-profile";
+import { DEFAULT_USER_AVATAR, DEFAULT_USER_NAME } from "../types/user-profile";
 
-/** 乐观假设已登录——本地 Electron 应用，auth 检查几乎瞬时完成。异步检查后若未登录再切到 LoginScreen。 */
-export const isLoggedInAtom = atom(true);
+const cached = readAuthCache();
 
-/** authLoading 初始 false——不阻塞 UI 首屏渲染。仅 Supabase 模式下网络校验期间短暂为 true。 */
+/** 默认未登录；异步 auth 检查完成后根据本地 profile / Supabase 会话切到已登录。 */
+export const isLoggedInAtom = atom(!!cached?.userId);
+
+/**
+ * 不再用全局 loading 页阻塞首屏。刷新时若存在 auth cache，直接渲染主界面并在后台校验；
+ * 无 cache 时首屏即显示登录页。各操作仍可在需要时局部设置 authLoading。
+ */
 export const authLoadingAtom = atom(false);
 
 export const userProfileAtom = atom<UserProfile>({
-	userId: "",
-	email: "",
-	userName: DEFAULT_USER_NAME,
-	handle: "",
-	role: DEFAULT_USER_ROLE,
-	avatar: DEFAULT_USER_AVATAR,
+	userId: cached?.userId ?? "",
+	email: cached?.email ?? "",
+	userName: cached?.userName ?? DEFAULT_USER_NAME,
+	handle: cached?.handle ?? "",
+	avatar: cached?.avatar ?? DEFAULT_USER_AVATAR,
 });

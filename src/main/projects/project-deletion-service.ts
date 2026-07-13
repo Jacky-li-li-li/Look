@@ -45,7 +45,7 @@ export class ProjectDeletionService {
 			if (managed.projectId === projectId) runtimeIds.push(sessionId);
 		}
 		const sharedDir = getProjectSharedDir(projectId);
-		const workspaceDir = project ? getWorkspaceDir(project.name) : null;
+		const workspaceDir = project ? getWorkspaceDir(project.id) : null;
 
 		await Promise.all(runtimeIds.map((sessionId) => this.deps.disposeRuntime(sessionId, true)));
 

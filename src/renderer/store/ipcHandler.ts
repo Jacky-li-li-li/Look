@@ -22,6 +22,8 @@ import {
 	openProjectIdsAtom,
 	projectsAtom,
 	providerSettingsAtom,
+	rightPanelCollapsedAtom,
+	sidebarCollapsedAtom,
 	userPreferredModelAtom,
 } from "./atoms";
 import { handlePermissionEvent } from "./permissionHandlers";
@@ -146,6 +148,9 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		console.log("[initAppData] applying general settings, themeTone:", settings.themeTone);
 		if (settings.language) await i18n.changeLanguage(settings.language);
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
+		if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
+		if (settings.rightPanelCollapsed !== undefined)
+			appStore.set(rightPanelCollapsedAtom, settings.rightPanelCollapsed);
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);

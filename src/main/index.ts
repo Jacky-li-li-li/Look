@@ -4,7 +4,7 @@
 
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent } from "@look/shared/types";
-import { app, BrowserWindow, Notification, session } from "electron";
+import { app, BrowserWindow, Notification, session, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
@@ -258,6 +258,46 @@ function createWindow(): void {
 	mainWindow.on("closed", () => {
 		mainWindow = null;
 	});
+
+	// 阻止 renderer 内嵌窗口/外链导航，只允许经过校验的 https/http 链接走系统浏览器
+	mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+		if (isAllowedExternalUrl(url)) {
+			shell.openExternal(url).catch((error) => console.error("[Look] Failed to open external URL:", error));
+		}
+		return { action: "deny" };
+	});
+	mainWindow.webContents.on("will-navigate", (event, url) => {
+		// 允许初始加载的本地/开发服务器 URL；阻止任何外部导航
+		if (!isAllowedNavigationUrl(url)) {
+			event.preventDefault();
+			if (isAllowedExternalUrl(url)) {
+				shell.openExternal(url).catch((error) => console.error("[Look] Failed to open external URL:", error));
+			}
+		}
+	});
+}
+
+/** 只允许标准 https/http 外部链接通过系统浏览器打开。 */
+function isAllowedExternalUrl(raw: string): boolean {
+	try {
+		const url = new URL(raw);
+		return url.protocol === "https:" || url.protocol === "http:";
+	} catch {
+		return false;
+	}
+}
+
+/** 允许导航到本地打包文件或开发服务器；禁止任何外部 origin。 */
+function isAllowedNavigationUrl(raw: string): boolean {
+	if (raw === "about:blank") return true;
+	try {
+		const url = new URL(raw);
+		if (url.protocol === "file:") return true;
+		if (isDev && url.protocol === "http:" && url.hostname === "localhost" && url.port === "5174") return true;
+		return false;
+	} catch {
+		return false;
+	}
 }
 
 // ============================================================
@@ -304,7 +344,7 @@ async function initSessionRuntime(): Promise<void> {
 			// Feishu 卡片 markdown 元素支持大段文本，20K 字符远在安全范围内
 			const MAX_RESULT = 20_000;
 			const snippet =
-				rawDetail.length > MAX_RESULT ? rawDetail.slice(0, MAX_RESULT) + "…[内容过长已截断]" : rawDetail;
+				rawDetail.length > MAX_RESULT ? `${rawDetail.slice(0, MAX_RESULT)}…[内容过长已截断]` : rawDetail;
 			const escaped = snippet.replace(/\*/g, "\\*").replace(/_/g, "\\_").replace(/`/g, "\\`");
 			const resultContent = rawDetail
 				? `**执行结果：**\n${escaped}`

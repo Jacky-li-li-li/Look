@@ -282,6 +282,7 @@ const api = {
 	getUserProfile: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),
 	updateUserProfile: (patch) => ipcRenderer.invoke("look:invoke", { type: "user-profile:update", patch }),
 	resetUserProfile: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:reset" }),
+	logout: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:logout" }),
 
 	// ---- Usage heatmap ----
 	getUsage: () => ipcRenderer.invoke("look:invoke", { type: "usage:get" }),

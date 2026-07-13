@@ -6,7 +6,7 @@ See [Scheduled tasks](docs/scheduled-tasks.md) for user-friendly background exec
 
 ## 特性
 
-- **单会话运行时** — 任意时刻只保留一个活动的 pi `AgentSessionRuntime`
+- **多会话运行时** — 每个会话拥有独立的 pi `AgentSessionRuntime`，已初始化会话可并发运行
 - **原生会话历史** — 新建、恢复、Fork 和树导航均使用 pi `SessionManager`
 - **技能系统** — 使用 pi ResourceLoader 和 `/skill:name` 原生调用
 - **32+ AI 提供商** — 内置 Anthropic、OpenAI、Google、DeepSeek、Groq 等主流模型提供商图标与配置

@@ -29,7 +29,7 @@
 //   ├── shared/
 //   │   └── <project-id>/   → 项目共享区
 //   └── workspaces/
-//       └── <project-name>/ → 项目工作区
+//       └── <project-id>/   → 项目工作区（按稳定 projectId，避免重命名/删除后复活）
 //           ├── sessions/   → pi SessionManager .jsonl
 //           └── subsessions/ → SubAgent 子会话
 // ============================================================
@@ -143,8 +143,10 @@ export function getWorkspacesDir(): string {
 }
 
 /**
- * Sanitise a project name for use as a directory name.
- * Replaces characters that are problematic on common file systems.
+ * Legacy helper: sanitise a project name for use as a directory name.
+ * Kept only for migrating pre-projectId workspace directories; new code
+ * should use `getWorkspaceDir(projectId)`.
+ * @deprecated
  */
 export function sanitiseWorkspaceName(name: string): string {
 	return (
@@ -156,14 +158,15 @@ export function sanitiseWorkspaceName(name: string): string {
 	);
 }
 
-/** Workspace directory for a specific project. */
-export function getWorkspaceDir(name: string): string {
-	return path.join(getWorkspacesDir(), sanitiseWorkspaceName(name));
+/** Workspace directory for a specific project. Bound to the stable project id
+ *  so renaming the project display name does not break the path. */
+export function getWorkspaceDir(projectId: string): string {
+	return path.join(getWorkspacesDir(), projectId);
 }
 
 /** Session storage directory for a specific project. */
-export function getWorkspaceSessionsDir(name: string): string {
-	return path.join(getWorkspaceDir(name), "sessions");
+export function getWorkspaceSessionsDir(projectId: string): string {
+	return path.join(getWorkspaceDir(projectId), "sessions");
 }
 
 /**
@@ -174,20 +177,20 @@ export function getWorkspaceSessionsDir(name: string): string {
  * 分离——这样 `SessionManager.list(cwd, sessionsDir)` 列出的顶层
  * 会话列表不会被子会话污染，Stage 4 再从该目录单独列表实现嵌套。
  */
-export function getWorkspaceSubsessionsDir(name: string): string {
-	return path.join(getWorkspaceDir(name), "subsessions");
+export function getWorkspaceSubsessionsDir(projectId: string): string {
+	return path.join(getWorkspaceDir(projectId), "subsessions");
 }
 
 /** Ensure the subsessions directory for a project exists. */
-export function ensureWorkspaceSubsessionsDir(name: string): string {
-	const dir = getWorkspaceSubsessionsDir(name);
+export function ensureWorkspaceSubsessionsDir(projectId: string): string {
+	const dir = getWorkspaceSubsessionsDir(projectId);
 	fs.mkdirSync(dir, { recursive: true });
 	return dir;
 }
 
 /**
  * Deprecated — legacy flat sessions directory kept for resetLegacySessionsOnce.
- * New sessions use getWorkspaceSessionsDir(projectName).
+ * New sessions use getWorkspaceSessionsDir(projectId).
  */
 export function getSessionsDir(): string {
 	return path.join(LOOK_DIR, "sessions");
@@ -226,8 +229,8 @@ export function ensureLookDir(): void {
 /**
  * Ensure the workspace directories for a project exist.
  */
-export function ensureWorkspaceDir(name: string): string {
-	const dir = getWorkspaceSessionsDir(name);
+export function ensureWorkspaceDir(projectId: string): string {
+	const dir = getWorkspaceSessionsDir(projectId);
 	fs.mkdirSync(dir, { recursive: true });
 	return dir;
 }

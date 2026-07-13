@@ -222,7 +222,8 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			modelRegistry: this.modelRegistry,
 			findProjectIdByCwd: (cwd) => this.findProjectIdByCwd(cwd),
 			resolveProjectTrust: (cwd) => this.resolveProjectTrust(cwd),
-			buildExtensionFactories: (cwd, sessionId) => this.buildExtensionFactories(cwd, sessionId),
+			buildExtensionFactories: (cwd, sessionId, projectId) =>
+				this.buildExtensionFactories(cwd, sessionId, projectId),
 		});
 		this.sessionCatalog = new SessionCatalog((metadata) => {
 			if (metadata.parentSessionId) {
@@ -616,8 +617,12 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		return undefined;
 	}
 
-	private async buildExtensionFactories(_cwd: string, sessionId: string): Promise<ExtensionFactory[]> {
-		const projectId = this.runtimeRegistry.get(sessionId)?.projectId ?? "";
+	private async buildExtensionFactories(
+		_cwd: string,
+		sessionId: string,
+		projectId: string | undefined,
+	): Promise<ExtensionFactory[]> {
+		const resolvedProjectId = projectId ?? this.runtimeRegistry.get(sessionId)?.projectId ?? "";
 		const handler = this.permissionService.createToolCallHandler(_cwd);
 		return [
 			createPermissionExtensionFactory(handler),
@@ -627,8 +632,8 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 				submitPlan: (id, plan, signal) => this.planService.requestApproval(id, plan, signal),
 			}),
 			createModelListExtensionFactory(async () => this.getAvailableModels()),
-			await createSubagentExtensionFactory(sessionId, this.createSubagentHost(projectId), projectId),
-			createMcpExtensionFactory(sessionId, this.mcpManager, _cwd),
+			await createSubagentExtensionFactory(sessionId, this.createSubagentHost(resolvedProjectId), resolvedProjectId),
+			createMcpExtensionFactory(sessionId, this.mcpManager, _cwd, resolvedProjectId),
 		];
 	}
 
@@ -1178,10 +1183,55 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	getGeneralSettings(): UserSettings {
-		return this.userSettings.getAll();
+		const settings = this.userSettings.getAll();
+
+		// Keep UI settings in sync with the actual persisted session/project catalog.
+		// If session files are deleted externally (or by a workspace migration), stale
+		// IDs in openedSessionIds / lastActiveSessionId must not produce ghost tabs.
+		const validProjectIds = new Set(this.projectService.listProjects().map((p) => p.id));
+		const validSessionIds = new Set(this.sessionInfoService.listAgents().map((a) => a.id));
+
+		const openProjectIds = (settings.openProjectIds ?? []).filter((id) => validProjectIds.has(id));
+		const openedSessionIds = (settings.openedSessionIds ?? []).filter((id) => validSessionIds.has(id));
+
+		let lastActiveProjectId = settings.lastActiveProjectId;
+		if (!validProjectIds.has(lastActiveProjectId)) {
+			lastActiveProjectId = openProjectIds[0] ?? this.projectService.getActiveProject()?.id ?? "";
+		}
+
+		let lastActiveSessionId = settings.lastActiveSessionId;
+		if (!validSessionIds.has(lastActiveSessionId)) {
+			lastActiveSessionId = "";
+		}
+
+		return {
+			...settings,
+			openProjectIds,
+			openedSessionIds,
+			lastActiveProjectId,
+			lastActiveSessionId,
+		};
 	}
 
 	async updateGeneralSettings(partial: Partial<UserSettings>): Promise<UserSettings> {
+		// Sanitize session/project references before persisting so the UI never keeps
+		// stale IDs that no longer exist on disk.
+		const validProjectIds = new Set(this.projectService.listProjects().map((p) => p.id));
+		const validSessionIds = new Set(this.sessionInfoService.listAgents().map((a) => a.id));
+
+		if (partial.openProjectIds !== undefined) {
+			partial.openProjectIds = partial.openProjectIds.filter((id) => validProjectIds.has(id));
+		}
+		if (partial.openedSessionIds !== undefined) {
+			partial.openedSessionIds = partial.openedSessionIds.filter((id) => validSessionIds.has(id));
+		}
+		if (partial.lastActiveProjectId !== undefined && !validProjectIds.has(partial.lastActiveProjectId)) {
+			partial.lastActiveProjectId = "";
+		}
+		if (partial.lastActiveSessionId !== undefined && !validSessionIds.has(partial.lastActiveSessionId)) {
+			partial.lastActiveSessionId = "";
+		}
+
 		const settings = await this.userSettings.update(partial);
 		if (partial.compactionEnabled !== undefined) {
 			for (const managed of this.runtimeRegistry.values()) {

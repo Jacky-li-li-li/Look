@@ -184,7 +184,7 @@ export class SessionSubagentService {
 		if (!project?.valid) throw new Error(`Project not found or invalid for subagent: ${projectId}`);
 		const cwd = parentManaged.runtime.cwd;
 
-		const subsessionDir = ensureWorkspaceSubsessionsDir(project.name);
+		const subsessionDir = ensureWorkspaceSubsessionsDir(projectId);
 		const sessionManager = SessionManager.create(cwd, subsessionDir);
 		const managed = await this.deps.host.createManagedRuntime(
 			cwd,
@@ -203,18 +203,24 @@ export class SessionSubagentService {
 		const displayName = `Agent：${rawName}`.slice(0, this.deps.maxNameLength);
 		session.setSessionName(displayName);
 
-			// 继承父会话权限：定时任务等后台会话的父会话已设为 always，
-			// 子会话需同步，否则会回退到默认的 ask 模式导致工具调用被阻塞
-			const parentMode = this.deps.permissionService.getMode(parentSessionId);
-			if (parentMode === "always") {
-				this.deps.permissionService.setMode(childSessionId, "always");
-			}
+		// 继承父会话权限：定时任务等后台会话的父会话已设为 always，
+		// 子会话需同步，否则会回退到默认的 ask 模式导致工具调用被阻塞
+		const parentMode = this.deps.permissionService.getMode(parentSessionId);
+		if (parentMode === "always") {
+			this.deps.permissionService.setMode(childSessionId, "always");
+		}
 
-			if (agent.tools && agent.tools.length > 0) {
-				const configured = new Set(session.getAllTools().map((tool) => tool.name));
-				const allowlisted = agent.tools.filter((name: string) => configured.has(name));
-				if (allowlisted.length > 0) session.setActiveToolsByName(allowlisted);
+		if (agent.tools && agent.tools.length > 0) {
+			const configured = new Set(session.getAllTools().map((tool) => tool.name));
+			const allowlisted = agent.tools.filter((name: string) => configured.has(name));
+			if (allowlisted.length === 0) {
+				throw new Error(
+					`Agent "${agent.name}" allowlist contains no valid tools. ` +
+						`Configured tools: ${[...configured].join(", ") || "(none)"}`,
+				);
 			}
+			session.setActiveToolsByName(allowlisted);
+		}
 
 		if (agent.model) {
 			try {

@@ -418,9 +418,10 @@ const mockApi = {
 	getUserProfile: () => Promise.resolve({ success: true, profile: null }),
 	updateUserProfile: () => ok,
 	resetUserProfile: () => ok,
+	logout: () => ok,
 
 	// ---- Usage ----
-	getUsage: () => success({ usage: {}, modelCost: {}, years: [] }),
+	getUsage: () => success({ usage: { usage: {}, modelCost: {}, years: [] } }),
 
 	// ---- IM Channels ----
 	getImChannels: () => success({ channels: [] }),

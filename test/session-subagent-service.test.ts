@@ -76,6 +76,38 @@ describe("SessionSubagentService", () => {
 		expect(session.setActiveToolsByName).toHaveBeenCalledWith(["read"]);
 	});
 
+	it("rejects an allowlist that contains no valid tools", async () => {
+		const childSession = makeSession("child", [], ["read", "edit"]);
+		const parentRuntime = makeManagedRuntime(makeSession("parent"), "p1");
+		const service = new SessionSubagentService({
+			host: makeHost({
+				getManagedRuntime: vi.fn(() => parentRuntime),
+				createManagedRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(childSession, "p1"))),
+			}),
+			modelRegistry: { find: vi.fn() } as unknown as ModelRegistry,
+			subAgentRegistry: { getParent: vi.fn(() => null), register: vi.fn() } as unknown as SubAgentRegistry,
+			subAgentRuntimeService: { setupSubSessionTracking: vi.fn() } as unknown as SubAgentRuntimeService,
+			permissionService: { getMode: vi.fn() } as unknown as IPermissionService,
+			planService: {} as unknown as IPlanService,
+			userSettings: { getAll: vi.fn(() => ({})) } as unknown as UserSettingsStore,
+			agentDefinitionService: {} as unknown as AgentDefinitionService,
+			maxSubagentDepth: 5,
+			maxNameLength: 80,
+		});
+
+		const agent: AgentConfig = {
+			name: "test",
+			description: "",
+			systemPrompt: "",
+			tools: ["nonexistent-tool"],
+		};
+
+		await expect(service.runSubSession("parent", agent, "task", undefined)).rejects.toThrow(
+			'Agent "test" allowlist contains no valid tools',
+		);
+		expect(childSession.setActiveToolsByName).not.toHaveBeenCalled();
+	});
+
 	it("runSubSession throws when parent is not live", async () => {
 		const service = new SessionSubagentService({
 			host: makeHost({ getManagedRuntime: vi.fn(() => undefined) }),

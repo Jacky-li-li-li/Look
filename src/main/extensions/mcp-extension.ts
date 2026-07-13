@@ -25,11 +25,16 @@ const McpConnectParams = Type.Object({
  * 创建 MCP Extension 工厂函数。
  * 注入点：SessionRuntimeManager.buildExtensionFactories()。
  */
-export function createMcpExtensionFactory(sessionId: string, mcpManager: MCPManager, cwd: string): ExtensionFactory {
+export function createMcpExtensionFactory(
+	sessionId: string,
+	mcpManager: MCPManager,
+	cwd: string,
+	projectId: string,
+): ExtensionFactory {
 	return (api) => {
 		const registeredToolNames = new Set<string>();
 		const registerConnectedMcpTools = () => {
-			for (const { server, tool } of mcpManager.getAllTools()) {
+			for (const { server, tool } of mcpManager.getAllTools(projectId)) {
 				const toolName = `mcp__${server}__${tool.name}`;
 				if (registeredToolNames.has(toolName)) continue;
 
@@ -52,6 +57,7 @@ export function createMcpExtensionFactory(sessionId: string, mcpManager: MCPMana
 							}
 
 							const result: McpCallResult = await mcpManager.executeTool(
+								projectId,
 								server,
 								tool.name,
 								params as Record<string, unknown>,
@@ -81,44 +87,36 @@ export function createMcpExtensionFactory(sessionId: string, mcpManager: MCPMana
 			parameters: McpConnectParams,
 			executionMode: "sequential",
 			async execute(_toolCallId, params) {
-				try {
-					await mcpManager.addServer({
+				await mcpManager.addServer(
+					projectId,
+					{
 						name: params.name,
 						type: "stdio",
 						command: params.command,
 						args: shellSplitArgs(params.args),
 						enabled: true,
-					});
-					await mcpManager.startServer(params.name);
-					registerConnectedMcpTools();
+					},
+					cwd,
+				);
+				await mcpManager.startServer(projectId, params.name);
+				registerConnectedMcpTools();
 
-					return {
-						content: [
-							{
-								type: "text",
-								text: `MCP server "${params.name}" added and connected. Registered ${mcpManager.getToolsForServer(params.name).length} tool(s).`,
-							},
-						],
-						details: { server: params.name },
-					};
-				} catch (error) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Failed to connect "${params.name}": ${error instanceof Error ? error.message : String(error)}`,
-							},
-						],
-						details: { server: params.name, error: error instanceof Error ? error.message : String(error) },
-					};
-				}
+				return {
+					content: [
+						{
+							type: "text",
+							text: `MCP server "${params.name}" added and connected. Registered ${mcpManager.getToolsForServer(projectId, params.name).length} tool(s).`,
+						},
+					],
+					details: { server: params.name },
+				};
 			},
 		});
 
 		// ── session_start —— 启动所有已配置的 MCP 服务器 ──
 		api.on("session_start", async () => {
-			await mcpManager.loadConfig(cwd);
-			const { started, failed } = await mcpManager.startEnabled();
+			await mcpManager.loadConfig(projectId, cwd);
+			const { started, failed } = await mcpManager.startEnabled(projectId);
 
 			// 注册所有 MCP 工具到 pi SDK
 			registerConnectedMcpTools();
@@ -145,7 +143,6 @@ export function createMcpExtensionFactory(sessionId: string, mcpManager: MCPMana
 	};
 }
 
-/** 将 MCP 调用结果转换为 pi SDK 的 AgentToolResult 格式 */
 /** 将命令行字符串按 shell 引号规则分割，支持单引号、双引号和反斜杠转义。 */
 function shellSplitArgs(input: string): string[] {
 	const args: string[] = [];
@@ -208,6 +205,16 @@ function normalizeResult(
 	content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
 	details: unknown;
 } {
+	if (result.isError) {
+		const text = (result.content ?? [])
+			.filter(
+				(item): item is { type: "text"; text: string } => item.type === "text" && typeof item.text === "string",
+			)
+			.map((item) => item.text)
+			.join("\n");
+		throw new Error(text || "MCP tool call failed");
+	}
+
 	const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
 
 	for (const item of result.content ?? []) {
@@ -228,6 +235,6 @@ function normalizeResult(
 
 	return {
 		content,
-		details: { isError: result.isError ?? false },
+		details: { isError: false },
 	};
 }

@@ -789,7 +789,6 @@ body {
 	[data-tool-panel-body],
 	[data-execution-group-body] {
 		overflow-anchor: none;
-		will-change: grid-template-rows, opacity;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -797,6 +796,32 @@ body {
 		[data-execution-group-body] {
 			transition-duration: 1ms;
 		}
+	}
+
+	/* ============================================================
+		 Tool panel content reveal — slides down + fades in as the
+		 grid row expands. Played only when data-open flips to true.
+		 ============================================================ */
+
+	@keyframes tool-reveal {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+	}
+
+	[data-tool-panel-body] > .overflow-hidden > *,
+	[data-execution-group-body] > .overflow-hidden > *,
+	[data-execution-group-body] > .overflow-hidden > * > [data-tool-group-item] {
+		animation: none;
+	}
+
+	[data-tool-panel-body][data-open="true"] > .overflow-hidden > * {
+		animation: tool-reveal 240ms cubic-bezier(0, 0, 0.2, 1) both;
+	}
+
+	[data-execution-group-body][data-open="true"] > .overflow-hidden > * > [data-tool-group-item] {
+		animation: tool-reveal 240ms cubic-bezier(0, 0, 0.2, 1) both;
 	}
 
 	/* ============================================================
@@ -1173,42 +1198,37 @@ body {
 
 	/* ============================================================
 		 Collapsible Sidebar — smooth width + fade transitions
+		 Only width changes trigger layout; min/max-width are instant
+		 to avoid 3× layout per frame. border-width transitions removed
+		 (only border-radius needed for rounded corners).
 		 ============================================================ */
 
 	.sidebar-wrapper {
 		width: var(--sidebar-width);
-		min-width: var(--sidebar-width);
+		min-width: 0;
 		max-width: var(--sidebar-width);
 		opacity: 1;
-		will-change: width, min-width, max-width, opacity;
 		contain: layout style;
 		transition:
-			width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			min-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			opacity 220ms ease,
-			border-radius 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			border-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			box-shadow 280ms ease;
+			width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 200ms ease,
+			border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.sidebar-wrapper[data-collapsed="true"] {
 		width: 0;
-		min-width: 0;
 		max-width: 0;
 		opacity: 0;
 		border-radius: 0;
-		border-width: 0;
-		box-shadow: none;
 		pointer-events: none;
 	}
 
 	.sidebar-separator {
 		opacity: 1;
 		transition:
-			opacity 220ms ease,
-			margin 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+			opacity 200ms ease,
+			margin 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			width 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.app-shell[data-sidebar-collapsed="true"] .sidebar-separator {
@@ -1226,7 +1246,7 @@ body {
 		transform: translateX(-4px);
 		pointer-events: none;
 		transition:
-			opacity 220ms ease,
+			opacity 200ms ease,
 			width 220ms cubic-bezier(0.22, 1, 0.36, 1),
 			transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
 			padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1243,40 +1263,34 @@ body {
 
 	/* ============================================================
 		 Collapsible Right Panel — mirrors sidebar mechanism
+		 Only width changes trigger layout; min/max-width are instant.
 		 ============================================================ */
 
 	.right-panel-wrapper {
 		width: var(--right-panel-width);
-		min-width: var(--right-panel-width);
+		min-width: 0;
 		max-width: var(--right-panel-width);
 		opacity: 1;
 		transition:
-			width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			min-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			max-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			opacity 220ms ease,
-			border-radius 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			border-width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			box-shadow 280ms ease;
+			width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 200ms ease,
+			border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.right-panel-wrapper[data-collapsed="true"] {
 		width: 0;
-		min-width: 0;
 		max-width: 0;
 		opacity: 0;
 		border-radius: 0;
-		border-width: 0;
-		box-shadow: none;
 		pointer-events: none;
 	}
 
 	.right-panel-separator {
 		opacity: 1;
 		transition:
-			opacity 220ms ease,
-			margin 280ms cubic-bezier(0.22, 1, 0.36, 1),
-			width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+			opacity 200ms ease,
+			margin 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			width 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.app-shell[data-right-panel-collapsed="true"] .right-panel-separator {
@@ -1291,15 +1305,13 @@ body {
 		width: 0;
 		padding-left: 0;
 		padding-right: 0;
-		border-width: 0;
 		transform: translateX(4px);
 		pointer-events: none;
 		transition:
-			opacity 220ms ease,
+			opacity 200ms ease,
 			width 220ms cubic-bezier(0.22, 1, 0.36, 1),
 			transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-			padding 220ms cubic-bezier(0.22, 1, 0.36, 1),
-			border-width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+			padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.app-shell[data-right-panel-collapsed="true"] .expand-right-panel-btn {
@@ -1307,7 +1319,6 @@ body {
 		width: 1.75rem;
 		padding-left: 0;
 		padding-right: 0;
-		border-width: 1px;
 		transform: translateX(0);
 		pointer-events: auto;
 	}

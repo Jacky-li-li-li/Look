@@ -92,6 +92,11 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 		return { success: true, profile };
 	});
 
+	register("user-profile:logout", async () => {
+		resetUserProfile();
+		return { success: true };
+	});
+
 	register("usage:get", async () => {
 		const usage = await getUsage(ctx.runtimeManager.listProjects());
 		return { success: true, usage };

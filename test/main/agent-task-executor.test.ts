@@ -32,6 +32,7 @@ describe("AgentScheduledTaskExecutor", () => {
 			}),
 			abortAgent: vi.fn(async () => {}),
 			destroyAgent: vi.fn(async () => {}),
+			disposeRuntime: vi.fn(async () => {}),
 		} as unknown as SessionRuntimeManager;
 		const executor = new AgentScheduledTaskExecutor(runtimeManager);
 		const task: ScheduledTask = {
@@ -94,6 +95,7 @@ describe("AgentScheduledTaskExecutor", () => {
 			}),
 			abortAgent: vi.fn(async () => {}),
 			destroyAgent: vi.fn(async () => {}),
+			disposeRuntime: vi.fn(async () => {}),
 		} as unknown as SessionRuntimeManager;
 		const executor = new AgentScheduledTaskExecutor(runtimeManager);
 		const task: ScheduledTask = {
@@ -111,7 +113,8 @@ describe("AgentScheduledTaskExecutor", () => {
 		};
 
 		await executor.execute(task, { runId: "run-1", attempt: 1, signal: new AbortController().signal });
-		expect(runtimeManager.destroyAgent).toHaveBeenCalledWith("session-1");
+		expect(runtimeManager.disposeRuntime).toHaveBeenCalledWith("session-1", true);
+		expect(runtimeManager.destroyAgent).not.toHaveBeenCalled();
 	});
 
 	it("resets terminal error when a retry succeeds", async () => {
@@ -142,6 +145,7 @@ describe("AgentScheduledTaskExecutor", () => {
 			}),
 			abortAgent: vi.fn(async () => {}),
 			destroyAgent: vi.fn(async () => {}),
+			disposeRuntime: vi.fn(async () => {}),
 		} as unknown as SessionRuntimeManager;
 		const executor = new AgentScheduledTaskExecutor(runtimeManager);
 		const task: ScheduledTask = {

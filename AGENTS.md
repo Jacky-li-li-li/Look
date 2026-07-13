@@ -11,7 +11,7 @@ Type: rule
 - A session ID may have at most one live runtime. Runtime creation must be deduplicated while initialization is in flight.
 - A runtime's project ID and cwd are immutable for its lifetime. Model and thinking changes are session-scoped and must route by session ID; never mutate a global active-model state.
 - Persisted sidebar rows are pi session files discovered with `SessionManager.list`. A newly created, unsent session may appear as a runtime-backed draft and is intentionally not recoverable until pi writes its JSONL.
-- Creating or resuming an independent session uses a new `AgentSessionRuntime` with `SessionManager.create` or `SessionManager.open`. Fork uses `AgentSessionRuntime.fork` and rekeys that runtime to the forked pi session.
+- Creating or resuming an independent session uses a new `AgentSessionRuntime` with `SessionManager.create` or `SessionManager.open`. Fork branches the source pi session via `SessionManager.createBranchedSession` and loads the forked session into a new `AgentSessionRuntime`.
 - Selecting a session changes the renderer view; it must not replace, abort or dispose a different running session.
 - Tree navigation must use `AgentSession.navigateTree`.
 - Session names must be stored with `AgentSession.setSessionName` or pi's native `SessionManager.appendSessionInfo` for an inactive file.

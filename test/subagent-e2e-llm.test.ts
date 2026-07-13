@@ -30,7 +30,7 @@ describe.skipIf(!RUN)("SubAgent real-LLM E2E", () => {
 			expect(project, "需要一个有效项目").toBeTruthy();
 			await manager.setActiveProject(project!.id);
 
-			const subsessionsDir = getWorkspaceSubsessionsDir(project!.name);
+			const subsessionsDir = getWorkspaceSubsessionsDir(project!.id);
 			const beforeFiles = new Set(existsSync(subsessionsDir) ? readdirSync(subsessionsDir) : []);
 
 			let parentId: string | undefined;

@@ -12,7 +12,8 @@ import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { getSupabase } from "../lib/supabase";
+import { writeAuthCache } from "../lib/authCache";
+import { getSupabase, resetSupabaseClient } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
@@ -73,6 +74,7 @@ function LoginForm({
 				<Input
 					type="email"
 					placeholder={t("auth.emailPlaceholder")}
+					aria-label={t("auth.email", "Email")}
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
 					className="h-11 pl-10 text-[13px]"
@@ -85,6 +87,7 @@ function LoginForm({
 				<Input
 					type="password"
 					placeholder={t("auth.passwordPlaceholder")}
+					aria-label={t("auth.password", "Password")}
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 					className="h-11 pl-10 text-[13px]"
@@ -172,6 +175,7 @@ function RegisterForm({
 				<Input
 					type="email"
 					placeholder={t("auth.emailPlaceholder")}
+					aria-label={t("auth.email", "Email")}
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
 					className="h-11 pl-10 text-[13px]"
@@ -184,6 +188,7 @@ function RegisterForm({
 				<Input
 					type="password"
 					placeholder={t("auth.setYourPassword")}
+					aria-label={t("auth.password", "Password")}
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 					className="h-11 pl-10 text-[13px]"
@@ -263,6 +268,7 @@ function ForgotForm({
 				<Input
 					type="email"
 					placeholder={t("auth.emailPlaceholder")}
+					aria-label={t("auth.email", "Email")}
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
 					className="h-11 pl-10 text-[13px]"
@@ -358,6 +364,18 @@ export default function LoginScreen() {
 		}
 
 		setSubmitting(true);
+		// Apply remember-me preference before creating the Supabase client so the
+		// sign-in session is persisted (or not) according to the user's choice.
+		if (!rememberMe) {
+			try {
+				localStorage.setItem("look_remember_me", "0");
+			} catch {}
+		} else {
+			try {
+				localStorage.removeItem("look_remember_me");
+			} catch {}
+		}
+		resetSupabaseClient();
 		const supabase = await getSupabase();
 		if (!supabase) {
 			setError(t("auth.unavailable"));
@@ -369,24 +387,14 @@ export default function LoginScreen() {
 			password,
 			options: { captchaToken: undefined },
 		});
-		// Store remember-me preference (session is always persisted by default;
-		// when unchecked, a future enhancement would use sessionStorage instead)
-		if (!rememberMe) {
-			try {
-				localStorage.setItem("look_remember_me", "0");
-			} catch {}
-		} else {
-			try {
-				localStorage.removeItem("look_remember_me");
-			} catch {}
-		}
 		if (err) {
 			setError(err.message);
 			setSubmitting(false);
 			return;
 		}
 		if (data.user) {
-			await loadProfile(data.user.id, data.user.email ?? email);
+			const profile = await loadProfile(data.user.id, data.user.email ?? email);
+			if (profile) writeAuthCache(profile);
 			setIsLoggedIn(true);
 			setAuthLoading(false);
 		}
@@ -462,9 +470,12 @@ export default function LoginScreen() {
 
 	// ── Profile ──
 
-	async function loadProfile(userId: string, userEmail: string) {
+	async function loadProfile(
+		userId: string,
+		userEmail: string,
+	): Promise<import("../types/user-profile").UserProfile | undefined> {
 		const supabase = await getSupabase();
-		if (!supabase) return;
+		if (!supabase) return undefined;
 		const { data: p } = await supabase.from("user_profiles").select("user_name, avatar").eq("id", userId).single();
 
 		const profile = {
@@ -472,11 +483,11 @@ export default function LoginScreen() {
 			email: userEmail,
 			userName: p?.user_name || userEmail.split("@")[0],
 			handle: "",
-			role: p?.role || "",
 			avatar: p?.avatar || "",
 		};
 		setUserProfile(profile);
 		if (api?.updateUserProfile) api.updateUserProfile(profile).catch(() => {});
+		return profile;
 	}
 
 	return (

@@ -176,6 +176,7 @@ interface LookAPI {
 	getUserProfile(): Promise<IpcResult<{ profile: UserProfile | null }>>;
 	updateUserProfile(patch: unknown): Promise<IpcResult>;
 	resetUserProfile(): Promise<IpcResult>;
+	logout(): Promise<IpcResult>;
 	// ---- Shared area ----
 	listSharedFiles(projectId: string): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
 	startSharedWatch(projectId: string): Promise<{ success: boolean; error?: string }>;

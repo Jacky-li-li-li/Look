@@ -1,5 +1,6 @@
 // ============================================================
 // Sidebar — 主编排组件（Header + ProjectTree + Footer）
+// 外层只读 collapsed 用于 CSS 动画；内层 memo 避免过渡期重渲染
 // ============================================================
 
 import { UserAvatar } from "@shared/components/UserAvatar";
@@ -7,6 +8,7 @@ import { Button } from "@shared/components/ui/button";
 import { ScrollArea } from "@shared/components/ui/scroll-area";
 import { useAtomValue } from "jotai";
 import { Bot, Clock3, FolderOpen, PanelLeftClose, Plus } from "lucide-react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	projectsAtom,
@@ -20,7 +22,7 @@ import { appStore } from "../../store/ipcHandler";
 import ProjectTree from "./ProjectTree";
 import type { SidebarProps } from "./types";
 
-export default function Sidebar({
+const SidebarInner = memo(function SidebarInner({
 	onSelect,
 	onDestroy,
 	onCreateClick,
@@ -33,15 +35,11 @@ export default function Sidebar({
 	const { t } = useTranslation();
 	const projects = useAtomValue(projectsAtom);
 	const userProfile = useAtomValue(userProfileAtom);
-	const collapsed = useAtomValue(sidebarCollapsedAtom);
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
 	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
 
 	return (
-		<aside
-			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border"
-			data-collapsed={collapsed}
-		>
+		<>
 			<header className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
 				<div className="min-w-0">
 					<div className="text-sm font-bold tracking-[0.2em] text-foreground">LOOK</div>
@@ -134,6 +132,19 @@ export default function Sidebar({
 					{t("sidebar.settings", "Settings")}
 				</span>
 			</button>
+		</>
+	);
+});
+
+export default function Sidebar(props: SidebarProps) {
+	const collapsed = useAtomValue(sidebarCollapsedAtom);
+
+	return (
+		<aside
+			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border"
+			data-collapsed={collapsed}
+		>
+			<SidebarInner {...props} />
 		</aside>
 	);
 }

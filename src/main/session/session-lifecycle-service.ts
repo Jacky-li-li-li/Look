@@ -80,7 +80,7 @@ export class SessionLifecycleService {
 
 		const managed = await this.deps.host.createManagedRuntime(
 			project.cwd,
-			SessionManager.create(project.cwd, ensureWorkspaceDir(project.name)),
+			SessionManager.create(project.cwd, ensureWorkspaceDir(projectId)),
 			projectId,
 			Date.now(),
 		);

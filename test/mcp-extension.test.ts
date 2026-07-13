@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createMcpExtensionFactory } from "../src/main/extensions/mcp-extension.js";
 import type { MCPManager } from "../src/main/mcp/manager.js";
 
+const TEST_PROJECT_ID = "test-project";
+
 /** 创建一个 mock MCPManager */
 function createMockMCPManager(overrides: Partial<MCPManager> = {}): MCPManager {
 	return {
@@ -47,7 +49,7 @@ function createMockMCPManager(overrides: Partial<MCPManager> = {}): MCPManager {
 
 /** 创建一个 mock ExtensionAPI */
 function createMockAPI() {
-	const tools: Array<{ name: string }> = [];
+	const tools: Array<{ name: string; execute: (...args: any[]) => any }> = [];
 	const eventHandlers: Record<string, Array<(...args: any[]) => any>> = {};
 	const messages: any[] = [];
 
@@ -55,7 +57,7 @@ function createMockAPI() {
 		tools,
 		eventHandlers,
 		messages,
-		registerTool: vi.fn((tool: { name: string }) => {
+		registerTool: vi.fn((tool: { name: string; execute: (...args: any[]) => any }) => {
 			tools.push(tool);
 		}),
 		on: vi.fn((event: string, handler: (...args: any[]) => any) => {
@@ -71,7 +73,7 @@ function createMockAPI() {
 describe("createMcpExtensionFactory", () => {
 	it("registers tools on session_start", async () => {
 		const mcpManager = createMockMCPManager();
-		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd");
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID);
 		const api = createMockAPI();
 
 		factory(api as any);
@@ -81,6 +83,8 @@ describe("createMcpExtensionFactory", () => {
 		expect(handler).toBeDefined();
 		await handler!();
 
+		expect(mcpManager.loadConfig).toHaveBeenCalledWith(TEST_PROJECT_ID, "/test/cwd");
+		expect(mcpManager.startEnabled).toHaveBeenCalledWith(TEST_PROJECT_ID);
 		expect(api.registerTool).toHaveBeenCalled();
 		expect(api.tools.length).toBe(2);
 		expect(api.tools[1].name).toBe("mcp__test-server__hello");
@@ -88,7 +92,7 @@ describe("createMcpExtensionFactory", () => {
 
 	it("does not stop shared MCP clients on session_shutdown", async () => {
 		const mcpManager = createMockMCPManager();
-		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd");
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID);
 		const api = createMockAPI();
 
 		factory(api as any);
@@ -109,7 +113,7 @@ describe("createMcpExtensionFactory", () => {
 			}),
 			getAllTools: vi.fn().mockReturnValue([]),
 		});
-		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd");
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID);
 		const api = createMockAPI();
 
 		factory(api as any);
@@ -125,7 +129,7 @@ describe("createMcpExtensionFactory", () => {
 
 	it("executes tool calls via MCPManager", async () => {
 		const mcpManager = createMockMCPManager();
-		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd");
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID);
 		const api = createMockAPI();
 
 		factory(api as any);
@@ -139,8 +143,58 @@ describe("createMcpExtensionFactory", () => {
 		expect(tool).toBeDefined();
 
 		const result = await tool.execute("call-1", { name: "World" }, undefined);
-		expect(mcpManager.executeTool).toHaveBeenCalledWith("test-server", "hello", { name: "World" }, undefined);
+		expect(mcpManager.executeTool).toHaveBeenCalledWith(
+			TEST_PROJECT_ID,
+			"test-server",
+			"hello",
+			{ name: "World" },
+			undefined,
+		);
 		expect(result.content).toBeDefined();
 		expect(result.content[0].text).toBe("Hello, World!");
+	});
+
+	it("throws when executeTool result has isError", async () => {
+		const mcpManager = createMockMCPManager({
+			executeTool: vi.fn().mockResolvedValue({
+				content: [{ type: "text", text: "Something went wrong" }],
+				isError: true,
+			}),
+		});
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID);
+		const api = createMockAPI();
+
+		factory(api as any);
+
+		const startHandler = api.eventHandlers["session_start"]?.[0];
+		await startHandler!();
+
+		const tool = api.registerTool.mock.calls[1]?.[0];
+		expect(tool).toBeDefined();
+
+		await expect(tool.execute("call-1", { name: "World" }, undefined)).rejects.toThrow(
+			"Something went wrong",
+		);
+	});
+
+	it("throws when mcp_connect fails", async () => {
+		const mcpManager = createMockMCPManager({
+			addServer: vi.fn().mockRejectedValue(new Error("add failed")),
+		});
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID);
+		const api = createMockAPI();
+
+		factory(api as any);
+
+		const connectTool = api.tools.find((t) => t.name === "mcp_connect");
+		expect(connectTool).toBeDefined();
+
+		await expect(
+			connectTool!.execute("call-1", {
+				name: "new-server",
+				command: "npx",
+				args: "-y @modelcontextprotocol/server-filesystem /tmp",
+			}),
+		).rejects.toThrow("add failed");
 	});
 });

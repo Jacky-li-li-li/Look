@@ -11,6 +11,7 @@
 
 import { useAtom } from "jotai";
 import { useEffect } from "react";
+import { clearAuthCache, writeAuthCache } from "../lib/authCache";
 import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
 
@@ -35,6 +36,7 @@ export function useAuthSession() {
 				if (cancelled) return;
 				if (r?.success && r.profile?.userId) {
 					setUserProfile(r.profile);
+					writeAuthCache(r.profile);
 				}
 			})
 			.catch(() => {});
@@ -45,69 +47,80 @@ export function useAuthSession() {
 		const configured = isSupabaseConfigured() && !isBrowserMock;
 
 		async function restoreSession() {
-			if (!configured) {
-				// 本地模式：步骤 1 已拉取本地 profile，无需额外操作
-				return;
-			}
-			const supabase = await getSupabase();
-			if (!supabase || cancelled) return;
+			// 刷新时不进入全屏 loading；后台校验，失败再转登录页。
+			_setAuthLoading(false);
 
-			// Supabase 模式：后台校验会话，仅在校验失败时切到 LoginScreen。
-			const {
-				data: { session },
-			} = await supabase.auth.getSession();
-
-			if (cancelled) return;
-
-			if (session?.user) {
-				// 从云端拉取最新资料（handle/role 暂存本地，不查询云端未存在的列）
-				const { data: cloudProfile } = await supabase
-					.from("user_profiles")
-					.select("user_name, avatar")
-					.eq("id", session.user.id)
-					.single();
-
-				if (cancelled) return;
-
-				if (cloudProfile) {
-					setUserProfile((prev) => ({
-						...prev,
-						userId: session.user.id,
-						email: session.user.email ?? prev.email,
-						userName: cloudProfile.user_name || session.user.email || prev.userName,
-						avatar: cloudProfile.avatar || prev.avatar,
-					}));
-				} else {
-					// 云端无记录 → 回退到本地 profile（已在步骤 1 加载）
-					try {
-						const r = await api.getUserProfile();
-						if (!cancelled && r?.success && r.profile?.userId === session.user.id) {
-							setUserProfile(r.profile);
-						}
-					} catch {
-						if (!cancelled) {
-							setUserProfile({
-								userId: session.user.id,
-								email: session.user.email ?? "",
-								userName: session.user.email ?? "",
-								handle: "",
-								role: "Pro",
-								avatar: "",
-							});
-						}
-					}
-				}
-				// isLoggedIn 已经是 true（乐观），无需再设
-			} else {
-				// 无 Supabase 会话 → 检查本地 profile
-				try {
+			try {
+				if (!configured) {
+					// 本地模式：仅依赖本地 profile
 					const r = await api.getUserProfile();
 					if (!cancelled && r?.success && r.profile?.userId) {
 						setUserProfile(r.profile);
-						return; // isLoggedIn 保持 true
+						writeAuthCache(r.profile);
+						setIsLoggedIn(true);
+					} else if (!cancelled) {
+						clearAuthCache();
+						setIsLoggedIn(false);
 					}
-				} catch {}
-				if (!cancelled) setIsLoggedIn(false);
+					return;
+				}
+
+				const supabase = await getSupabase();
+				if (!supabase || cancelled) {
+					if (!cancelled) {
+						clearAuthCache();
+						setIsLoggedIn(false);
+					}
+					return;
+				}
+
+				// Supabase 模式：后台校验会话
+				const {
+					data: { session },
+				} = await supabase.auth.getSession();
+
+				if (cancelled) return;
+
+				if (session?.user) {
+					const { data: cloudProfile } = await supabase
+						.from("user_profiles")
+						.select("user_name, avatar")
+						.eq("id", session.user.id)
+						.single();
+
+					if (cancelled) return;
+
+					setUserProfile((prev) => {
+						let next: import("../types/user-profile").UserProfile;
+						if (cloudProfile) {
+							next = {
+								...prev,
+								userId: session.user.id,
+								email: session.user.email ?? prev.email,
+								userName: cloudProfile.user_name || session.user.email || prev.userName || "You",
+								avatar: cloudProfile.avatar || prev.avatar,
+							};
+						} else {
+							next = {
+								...prev,
+								userId: session.user.id,
+								email: session.user.email ?? prev.email,
+								userName: session.user.email || prev.userName || "You",
+							};
+						}
+						writeAuthCache(next);
+						return next;
+					});
+					setIsLoggedIn(true);
+				} else {
+					// 无 Supabase 会话 → 不再仅凭本地 profile 视为已登录
+					if (!cancelled) {
+						clearAuthCache();
+						setIsLoggedIn(false);
+					}
+				}
+			} finally {
+				if (!cancelled) _setAuthLoading(false);
 			}
 		}
 
@@ -116,7 +129,7 @@ export function useAuthSession() {
 		return () => {
 			cancelled = true;
 		};
-	}, [setIsLoggedIn, setUserProfile]);
+	}, [setIsLoggedIn, setUserProfile, _setAuthLoading]);
 
 	return { isLoggedIn, authLoading };
 }

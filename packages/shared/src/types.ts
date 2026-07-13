@@ -842,6 +842,7 @@ export type RendererToMainEvent =
 			}>;
 	  }
 	| { type: "user-profile:reset" }
+	| { type: "user-profile:logout" }
 	// ---- Usage heatmap (renderer → main) ----
 	| { type: "usage:get" }
 	// ---- Shared area (renderer → main) ----

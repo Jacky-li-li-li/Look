@@ -290,8 +290,12 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					<div
 						data-tool-panel-body=""
 						data-open={open}
-						className="grid transition-all duration-200 ease-out"
-						style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}
+						className="grid"
+						style={{
+							gridTemplateRows: open ? "1fr" : "0fr",
+							opacity: open ? 1 : 0,
+							transition: "grid-template-rows 320ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 280ms ease",
+						}}
 					>
 						<div className="overflow-hidden">
 							<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">

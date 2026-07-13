@@ -3,8 +3,7 @@
 // ============================================================
 
 import { useAtom, useAtomValue } from "jotai";
-import { useCallback, useMemo } from "react";
-import { useTranslation } from "react-i18next";
+import { useCallback, useEffect, useMemo } from "react";
 import AppLayout from "./components/AppLayout";
 import LoginScreen from "./components/LoginScreen";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
@@ -38,10 +37,8 @@ import { deriveSessionPhase } from "./store/sessionTypes";
 const api = window.look;
 
 export default function App() {
-	const { t } = useTranslation();
-
 	// ── Auth ──
-	const { isLoggedIn, authLoading } = useAuthSession();
+	const { isLoggedIn } = useAuthSession();
 
 	// ── Atom reads ──
 	const activeAgent = useAtomValue(activeAgentAtom);
@@ -99,6 +96,11 @@ export default function App() {
 	const handleExpandRightPanel = useCallback(() => appStore.set(rightPanelCollapsedAtom, false), []);
 	const onProvidersChange = useCallback((data: ProviderSettingsData) => appStore.set(providerSettingsAtom, data), []);
 
+	useEffect(() => {
+		if (!api) return;
+		api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed }).catch(() => {});
+	}, [sidebarCollapsed, rightPanelCollapsed]);
+
 	// ── Early return guards ──
 	if (!api) {
 		return (
@@ -110,16 +112,6 @@ export default function App() {
 					Run with <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">npm run dev</code> inside
 					Electron.
 				</p>
-			</div>
-		);
-	}
-
-	if (isSupabaseConfigured() && authLoading) {
-		return (
-			<div className="app-shell flex h-screen flex-col items-center justify-center gap-4 p-10 text-center">
-				<PixelAgentAvatar size="lg" active />
-				<h1 className="text-xl font-semibold tracking-tight text-foreground">Look</h1>
-				<p className="text-xs text-muted-foreground">{t("common.loading")}</p>
 			</div>
 		);
 	}

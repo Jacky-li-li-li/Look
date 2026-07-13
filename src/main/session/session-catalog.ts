@@ -122,8 +122,8 @@ export class SessionCatalog {
 
 	async refresh(project: ProjectInfo): Promise<StoredSession[]> {
 		if (!project.valid) return [];
-		const sessionsDir = ensureWorkspaceDir(project.name);
-		const subsessionsDir = getWorkspaceSubsessionsDir(project.name);
+		const sessionsDir = ensureWorkspaceDir(project.id);
+		const subsessionsDir = getWorkspaceSubsessionsDir(project.id);
 
 		const fingerprintParts: string[] = [];
 		try {

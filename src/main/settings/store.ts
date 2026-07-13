@@ -60,6 +60,10 @@ export interface UserSettings {
 	enabledAgentDefinitions: string[] | null;
 	/** 已启用的 Skill 名称列表。null=全部启用（向后兼容） */
 	enabledSkills: string[] | null;
+	/** 侧边栏是否折叠 */
+	sidebarCollapsed: boolean;
+	/** 右侧面板是否折叠 */
+	rightPanelCollapsed: boolean;
 }
 
 const DEFAULTS: UserSettings = {
@@ -77,6 +81,8 @@ const DEFAULTS: UserSettings = {
 	subagentEnabled: true,
 	enabledAgentDefinitions: null,
 	enabledSkills: null,
+	sidebarCollapsed: false,
+	rightPanelCollapsed: false,
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -108,6 +114,10 @@ interface UiSettings {
 	enabledAgentDefinitions: string[] | null;
 	/** 已启用的 Skill 名称列表。null=全部启用（向后兼容） */
 	enabledSkills: string[] | null;
+	/** 侧边栏是否折叠 */
+	sidebarCollapsed: boolean;
+	/** 右侧面板是否折叠 */
+	rightPanelCollapsed: boolean;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -124,6 +134,8 @@ const UI_DEFAULTS: UiSettings = {
 	subagentEnabled: true,
 	enabledAgentDefinitions: null,
 	enabledSkills: null,
+	sidebarCollapsed: false,
+	rightPanelCollapsed: false,
 };
 
 /** Synchronously read the persisted tone from disk without instantiating the
@@ -263,6 +275,8 @@ export class UserSettingsStore {
 				partial.enabledAgentDefinitions === null ? null : [...partial.enabledAgentDefinitions];
 		if (partial.enabledSkills !== undefined)
 			uiPartial.enabledSkills = partial.enabledSkills === null ? null : [...partial.enabledSkills];
+		if (partial.sidebarCollapsed !== undefined) uiPartial.sidebarCollapsed = partial.sidebarCollapsed;
+		if (partial.rightPanelCollapsed !== undefined) uiPartial.rightPanelCollapsed = partial.rightPanelCollapsed;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

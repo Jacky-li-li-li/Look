@@ -54,7 +54,7 @@ describe("usage service", () => {
 
 		const project = makeProject("p1", "Test Project", path.join(tempDir, "project"));
 		fs.mkdirSync(project.cwd, { recursive: true });
-		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.name);
+		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.id);
 		const date = "2026-03-15";
 		const ts = new Date(`${date}T12:00:00`).getTime();
 
@@ -81,7 +81,7 @@ describe("usage service", () => {
 
 		const project = makeProject("p1", "Cost Project", path.join(tempDir, "project"));
 		fs.mkdirSync(project.cwd, { recursive: true });
-		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.name);
+		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.id);
 		const date = "2026-05-20";
 		const ts = new Date(`${date}T12:00:00`).getTime();
 
@@ -141,7 +141,7 @@ describe("usage service", () => {
 
 		const project = makeProject("p1", "Test Project", path.join(tempDir, "project"));
 		fs.mkdirSync(project.cwd, { recursive: true });
-		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.name);
+		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.id);
 		const date = "2026-04-01";
 		const ts = new Date(`${date}T10:00:00`).getTime();
 
@@ -187,7 +187,7 @@ describe("usage service", () => {
 
 		const project = makeProject("p1", "Merge Project", path.join(tempDir, "project"));
 		fs.mkdirSync(project.cwd, { recursive: true });
-		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.name);
+		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.id);
 		const todayTs = new Date(`${todayKey}T12:00:00`).getTime();
 		const yesterdayTs = new Date(`${yesterdayKey}T10:00:00`).getTime();
 
@@ -230,7 +230,7 @@ describe("usage service", () => {
 
 		const project = makeProject("p1", "Stale Project", path.join(tempDir, "project"));
 		fs.mkdirSync(project.cwd, { recursive: true });
-		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.name);
+		const sessionsDir = lookStorage.getWorkspaceSessionsDir(project.id);
 		const date = "2026-06-10";
 		const ts = new Date(`${date}T09:00:00`).getTime();
 

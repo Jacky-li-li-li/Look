@@ -152,7 +152,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	React.useEffect(() => () => cancelCollapseRef.current?.(), []);
 
 	const expanded = manualOpen ?? autoOpen;
-	const bodyPresent = useDelayedPresence(expanded, 220);
+	const isOpen = expanded;
 
 	const handleBadgeClick = React.useCallback(() => {
 		if (liveOpen) return;
@@ -179,7 +179,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	// Every group with ≥1 block collapses to a badge — single tool/thinking
 	// included, so 1-tool / 1-thinking turns also use the badge form.
 	const summary = pickSummary(kind, thinkingCount, toolCount, t);
-	const isOpen = expanded;
 
 	// Optional inlineTexts: when provided (e.g. caller wants a note shown
 	// alongside the cards), interleave them between blocks. When empty
@@ -213,49 +212,46 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 				onClick={handleBadgeClick}
 				onKeyDown={handleBadgeKeyDown}
 			/>
-			{bodyPresent && (
-				<div
-					data-execution-group-body=""
-					data-open={isOpen}
-					aria-hidden={!isOpen}
-					className="grid transition-all duration-200 ease-out"
-					style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", opacity: isOpen ? 1 : 0 }}
-				>
-					<div className="overflow-hidden">
-						<div className="flex flex-col">
-							{interleaved.map((node, i) =>
-								node.kind === "text" ? (
-									<div
-										key={`note-${hashKey(node.text)}`}
-										className="message-prose text-[10px] text-muted-foreground"
-									>
-										<SkillAwareContent content={node.text} isStreaming={isStreaming} />
-									</div>
-								) : (
-									renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)
-								),
-							)}
-						</div>
+			<div
+				data-execution-group-body=""
+				data-open={isOpen}
+				aria-hidden={!isOpen}
+				className="grid"
+				style={{
+					gridTemplateRows: isOpen ? "1fr" : "0fr",
+					opacity: isOpen ? 1 : 0,
+					transition: "grid-template-rows 350ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 300ms ease",
+					pointerEvents: isOpen ? undefined : "none",
+				}}
+			>
+				<div className="overflow-hidden">
+					<div className="flex flex-col">
+						{interleaved.map((node, i) =>
+							node.kind === "text" ? (
+								<div
+									key={`note-${hashKey(node.text)}`}
+									data-tool-group-item=""
+									className="message-prose text-[10px] text-muted-foreground"
+									style={{ animationDelay: `${i * 50}ms` }}
+								>
+									<SkillAwareContent content={node.text} isStreaming={isStreaming} />
+								</div>
+							) : (
+								<div
+									key={node.kind === "block" ? `item-${node.index}` : `node-${i}`}
+									data-tool-group-item=""
+									style={{ animationDelay: `${i * 50}ms` }}
+								>
+									{renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)}
+								</div>
+							),
+						)}
 					</div>
 				</div>
-			)}
+			</div>
 		</div>
 	);
 });
-
-function useDelayedPresence(open: boolean, delayMs: number): boolean {
-	const [present, setPresent] = React.useState(open);
-	React.useEffect(() => {
-		if (open) {
-			setPresent(true);
-			return;
-		}
-		if (!present) return;
-		const timer = setTimeout(() => setPresent(false), delayMs);
-		return () => clearTimeout(timer);
-	}, [open, delayMs, present]);
-	return open || present;
-}
 
 function pickSummary(
 	kind: GroupKind,

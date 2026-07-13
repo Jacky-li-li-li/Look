@@ -63,10 +63,12 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 				</span>
 			</button>
 			<div
-				className={cn(
-					"grid transition-all duration-200 ease-out",
-					open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-				)}
+				data-tool-panel-body=""
+				data-open={open}
+				className={cn("grid", open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}
+				style={{
+					transition: "grid-template-rows 320ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 280ms ease",
+				}}
 			>
 				<div className="overflow-hidden">
 					<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">

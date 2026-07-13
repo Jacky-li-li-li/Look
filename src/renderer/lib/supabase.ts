@@ -15,16 +15,28 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
  * module evaluation and leaving the renderer on a blank screen.
  */
 let clientPromise: Promise<SupabaseClient | null> | null = null;
+let lastPersistSession = true;
+
+function readRememberMe(): boolean {
+	try {
+		return localStorage.getItem("look_remember_me") !== "0";
+	} catch {
+		return true;
+	}
+}
 
 export function getSupabase(): Promise<SupabaseClient | null> {
 	if (!isSupabaseConfigured()) return Promise.resolve(null);
-	if (!clientPromise) {
+	const persistSession = readRememberMe();
+	if (!clientPromise || lastPersistSession !== persistSession) {
+		lastPersistSession = persistSession;
 		clientPromise = import("@supabase/supabase-js")
 			.then(({ createClient }) =>
 				createClient(supabaseUrl, supabaseAnonKey, {
 					auth: {
-						persistSession: true,
-						autoRefreshToken: true,
+						persistSession,
+						autoRefreshToken: persistSession,
+						storage: persistSession ? undefined : globalThis.sessionStorage,
 					},
 				}),
 			)
@@ -35,6 +47,13 @@ export function getSupabase(): Promise<SupabaseClient | null> {
 			});
 	}
 	return clientPromise;
+}
+
+/**
+ * 重置 Supabase 客户端，使 remember-me 偏好在下一次 getSupabase() 时生效。
+ */
+export function resetSupabaseClient(): void {
+	clientPromise = null;
 }
 
 export function isSupabaseConfigured(): boolean {

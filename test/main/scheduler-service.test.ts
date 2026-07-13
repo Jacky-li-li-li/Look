@@ -38,6 +38,8 @@ const INPUT: ScheduledTaskInput = {
 	executionTimeoutMs: 5_000,
 };
 
+const defaultProjectInfo = { id: "project-1", name: "Project", cwd: "/tmp/project", valid: true };
+
 function createService(
 	dir: string,
 	executor: ScheduledTaskExecutor,
@@ -55,7 +57,7 @@ function createService(
 		lock: new FileTaskLock(path.join(dir, "locks"), ownerId),
 		executor,
 		ownerId,
-		getProjectInfo: options?.getProjectInfo,
+		getProjectInfo: options?.getProjectInfo ?? (() => defaultProjectInfo),
 		onAlert: options?.onAlert,
 		onFinished: options?.onFinished,
 	});
@@ -451,11 +453,14 @@ describe("SchedulerService", () => {
 		let aborted = false;
 		const executor: ScheduledTaskExecutor = {
 			execute: async (_task, context) => {
-				context.signal.addEventListener("abort", () => {
-					aborted = true;
+				return new Promise((resolve) => {
+					const timeout = setTimeout(() => resolve({ output: "done" }), 5_000);
+					context.signal.addEventListener("abort", () => {
+						clearTimeout(timeout);
+						aborted = true;
+						resolve({ output: "aborted" });
+					});
 				});
-				await new Promise((resolve) => setTimeout(resolve, 200));
-				return { output: "done" };
 			},
 		};
 		const service = createService(dir, executor);

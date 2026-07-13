@@ -5,10 +5,16 @@
 import { Separator } from "@shared/components/ui/separator";
 import { cn } from "@shared/lib/utils";
 import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { lazy, memo, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { appReadyPhaseAtom, type ProviderSettingsData, type SettingsTab } from "../store/atoms";
+import {
+	appReadyPhaseAtom,
+	type ProviderSettingsData,
+	rightPanelCollapsedAtom,
+	type SettingsTab,
+	sidebarCollapsedAtom,
+} from "../store/atoms";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatPanel from "./chat/ChatPanel";
 import EmptySessionState from "./chat/EmptySessionState";
@@ -122,6 +128,8 @@ function AppLayout({
 }: AppLayoutProps) {
 	const { t } = useTranslation();
 	const appReadyPhase = useAtomValue(appReadyPhaseAtom);
+	const setSidebarCollapsed = useSetAtom(sidebarCollapsedAtom);
+	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
 
 	// 首帧渲染后标记 data-app-ready，CSS 可据此禁用初始加载过渡
 	useEffect(() => {
@@ -132,6 +140,22 @@ function AppLayout({
 		});
 		return () => cancelAnimationFrame(raf);
 	}, []);
+
+	// 窄窗口自动折叠侧边栏：优先折叠右栏，再折叠左栏
+	useEffect(() => {
+		function onResize() {
+			const width = window.innerWidth;
+			if (width < 1050) setRightPanelCollapsed(true);
+			if (width < 950) setSidebarCollapsed(true);
+			if (width >= 1100) {
+				setRightPanelCollapsed(false);
+				setSidebarCollapsed(false);
+			}
+		}
+		onResize();
+		window.addEventListener("resize", onResize);
+		return () => window.removeEventListener("resize", onResize);
+	}, [setRightPanelCollapsed, setSidebarCollapsed]);
 
 	return (
 		<>
@@ -153,7 +177,12 @@ function AppLayout({
 
 				<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
 
-				<main className={cn("flex min-w-[340px] flex-1 flex-col overflow-hidden bg-background", !sidebarCollapsed || !rightPanelCollapsed ? "rounded-lg border border-hairline" : "")}>
+				<main
+					className={cn(
+						"flex min-w-[340px] flex-1 flex-col overflow-hidden bg-background",
+						!sidebarCollapsed || !rightPanelCollapsed ? "rounded-lg border border-hairline" : "",
+					)}
+				>
 					{appReadyPhase < 1 ? null : showScheduledTasks ? (
 						<ScheduledTasksPage />
 					) : projects.length === 0 ? (

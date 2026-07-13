@@ -33,7 +33,7 @@ describe("SessionRuntimeFactory", () => {
 		try {
 			expect(runtime.cwd).toBe(cwd);
 			expect(runtime.session.sessionId).toBeTruthy();
-			expect(buildExtensionFactories).toHaveBeenCalledWith(cwd, runtime.session.sessionId);
+			expect(buildExtensionFactories).toHaveBeenCalledWith(cwd, runtime.session.sessionId, undefined);
 		} finally {
 			await runtime.dispose();
 		}

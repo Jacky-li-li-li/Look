@@ -32,7 +32,7 @@ export interface SessionRuntimeFactoryDependencies {
 	modelRegistry: ModelRegistry;
 	findProjectIdByCwd(cwd: string): string | undefined;
 	resolveProjectTrust(cwd: string): boolean;
-	buildExtensionFactories(cwd: string, sessionId: string): Promise<ExtensionFactory[]>;
+	buildExtensionFactories(cwd: string, sessionId: string, projectId: string | undefined): Promise<ExtensionFactory[]>;
 }
 
 export class SessionRuntimeFactory {
@@ -86,6 +86,7 @@ export class SessionRuntimeFactory {
 						extensionFactories: await this.dependencies.buildExtensionFactories(
 							cwd,
 							sessionManager.getSessionId(),
+							projectId,
 						),
 						appendSystemPrompt: appendSystemPrompt.length > 0 ? appendSystemPrompt : undefined,
 						systemPrompt,

@@ -35,8 +35,8 @@ export interface SchedulerServiceOptions {
 	lock: FileTaskLock;
 	executor: ScheduledTaskExecutor;
 	ownerId?: string;
-	/** Optional project lookup used to validate task projectIds and pause tasks whose project was removed. */
-	getProjectInfo?: (projectId: string) => ProjectInfo | null | undefined;
+	/** Project lookup used to validate task projectIds and pause tasks whose project was removed. */
+	getProjectInfo: (projectId: string) => ProjectInfo | null | undefined;
 	onAlert?: (alert: ScheduledTaskAlert) => void | Promise<void>;
 	onFinished?: (event: ScheduledTaskAlert) => void | Promise<void>;
 }
@@ -158,7 +158,7 @@ export class SchedulerService {
 
 				for (const task of this.options.store.listTasks()) {
 					if (task.status !== "scheduled") continue;
-					const proj = this.options.getProjectInfo?.(task.projectId);
+					const proj = this.options.getProjectInfo(task.projectId);
 					if (!proj || !proj.valid) {
 						console.warn(
 							`[SchedulerService] Pausing task "${task.name}" because project ${task.projectId} ` +

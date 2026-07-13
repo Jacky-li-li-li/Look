@@ -244,8 +244,8 @@ async function backfillFromProjects(
 	const dirsToScan: string[] = [];
 	for (const project of projects) {
 		if (!project.valid) continue;
-		dirsToScan.push(getWorkspaceSessionsDir(project.name));
-		dirsToScan.push(getWorkspaceSubsessionsDir(project.name));
+		dirsToScan.push(getWorkspaceSessionsDir(project.id));
+		dirsToScan.push(getWorkspaceSubsessionsDir(project.id));
 	}
 	await Promise.all(dirsToScan.map((dir) => scanDirectory(dir, turns, modelCost)));
 	return { turns, modelCost };
