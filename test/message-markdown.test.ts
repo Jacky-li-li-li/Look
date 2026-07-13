@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-	closeAtxHeadings,
-	escapeGlobAsterisks,
-	prepareMessageContent,
-	stripSystemHints,
-} from "../src/renderer/lib/messageMarkdown";
+import { prepareMessageContent, stripSystemHints } from "../src/renderer/lib/messageMarkdown";
+import { isAsciiDiagram, remarkLookReferences, tokenizeLookReferences } from "../src/renderer/lib/remarkLookReferences";
 
 describe("stripSystemHints", () => {
 	it("removes a single subagent hint", () => {
@@ -20,67 +16,129 @@ describe("stripSystemHints", () => {
 	});
 });
 
-describe("escapeGlobAsterisks", () => {
-	it("escapes file globs outside code fences", () => {
-		const input = "Load all *.md files";
-		expect(escapeGlobAsterisks(input)).toBe("Load all \\*.md files");
-	});
-
-	it("does not escape globs inside fenced code blocks", () => {
-		const input = "```text\n*.md\n```";
-		expect(escapeGlobAsterisks(input)).toBe(input);
-	});
-
-	it("preserves normal emphasis", () => {
-		expect(escapeGlobAsterisks("this is *italic*")).toBe("this is *italic*");
-	});
-});
-
 describe("prepareMessageContent", () => {
-	it("converts /skill:name to a skill-tag", () => {
-		expect(prepareMessageContent("Use /skill:search to find it")).toBe(
-			'Use <skill-tag name="search"></skill-tag> to find it',
-		);
+	it("leaves user references for the parser-aware remark plugin", () => {
+		const input = "Use /skill:search, ask /agent:planner, call #github__search, then open @src/app.ts.";
+		expect(prepareMessageContent(input)).toBe(input);
 	});
 
-	it("converts /agent:name to an agent-tag", () => {
-		expect(prepareMessageContent("Ask /agent:planner for help")).toBe(
-			'Ask <agent-tag name="planner"></agent-tag> for help',
-		);
-	});
-
-	it("converts @file references to file-tag", () => {
-		expect(prepareMessageContent("Open @src/app.ts")).toBe('Open <file-tag path="src/app.ts"></file-tag>');
-	});
-
-	it("converts legacy <skill> blocks to skill-tags", () => {
+	it("leaves legacy skill payloads for parser-aware normalization", () => {
 		const input = 'prefix <skill name="foo" location="/x">body</skill> suffix';
-		expect(prepareMessageContent(input)).toBe('prefix <skill-tag name="foo"></skill-tag> suffix');
+		expect(prepareMessageContent(input)).toBe(input);
 	});
 
-	it("converts legacy <skill-invoke> blocks to skill-tags", () => {
+	it("leaves compact legacy skill invocations for parser-aware normalization", () => {
 		const input = '<skill-invoke name="bar" location="/y">args</skill-invoke>';
-		expect(prepareMessageContent(input)).toBe('<skill-tag name="bar"></skill-tag>');
+		expect(prepareMessageContent(input)).toBe(input);
 	});
 
-	it("escapes globs while preserving chips", () => {
-		expect(prepareMessageContent("Check *.md and /skill:read")).toBe(
-			'Check \\*.md and <skill-tag name="read"></skill-tag>',
-		);
-	});
-
-	it("does not treat markdown headings as agents", () => {
-		expect(prepareMessageContent("# Title\n\nHello")).toBe("# Title\n\nHello");
+	it("does not rewrite ordinary Markdown syntax", () => {
+		const input = "# Title\n\nLoad `*.md` files.";
+		expect(prepareMessageContent(input)).toBe(input);
 	});
 });
 
-describe("closeAtxHeadings", () => {
-	it("adds a closing sequence to an H1 without one", () => {
-		expect(closeAtxHeadings("# Hello\n\nThis is **bold**.")).toBe("# Hello #\n\nThis is **bold**.");
+describe("remarkLookReferences", () => {
+	it("recognizes multiline box-drawing diagrams but not ordinary code", () => {
+		const diagram = "┌──────────┐\n│ Renderer │\n└────┬─────┘\n     ▼";
+		expect(isAsciiDiagram(diagram)).toBe(true);
+		expect(isAsciiDiagram(diagram, "text")).toBe(true);
+		expect(isAsciiDiagram(diagram, "typescript")).toBe(false);
+		expect(isAsciiDiagram("const line = '────────';", "typescript")).toBe(false);
 	});
 
-	it("leaves fenced code alone", () => {
-		const input = "```\n# Hello\n```";
-		expect(closeAtxHeadings(input)).toBe(input);
+	it("tokenizes references and keeps trailing punctuation outside file tags", () => {
+		const nodes = tokenizeLookReferences("Use /skill:search and @src/app.ts.");
+		expect(nodes).toEqual([
+			{ type: "text", value: "Use " },
+			{ type: "html", value: '<skill-tag data-look-name="search"></skill-tag>' },
+			{ type: "text", value: " and " },
+			{ type: "html", value: '<file-tag data-look-path="src/app.ts"></file-tag>' },
+			{ type: "text", value: "." },
+		]);
+	});
+
+	it("only transforms text nodes and preserves fenced and inline code", () => {
+		const tree = {
+			type: "root",
+			children: [
+				{ type: "code", value: "/skill:search #github__search @src/app.ts" },
+				{
+					type: "paragraph",
+					children: [
+						{ type: "inlineCode", value: "@src/app.ts" },
+						{ type: "text", value: " then @src/app.ts" },
+					],
+				},
+			],
+		};
+		remarkLookReferences()(tree);
+
+		expect(tree.children[0]).toEqual({
+			type: "code",
+			value: "/skill:search #github__search @src/app.ts",
+		});
+		expect(tree.children[1].children?.[0]).toEqual({ type: "inlineCode", value: "@src/app.ts" });
+		expect(tree.children[1].children?.[2]).toEqual({
+			type: "html",
+			value: '<file-tag data-look-path="src/app.ts"></file-tag>',
+		});
+	});
+
+	it("marks unlabeled box-drawing code nodes for the ASCII renderer", () => {
+		const tree = {
+			type: "root",
+			children: [{ type: "code", value: "┌──────────┐\n│ Renderer │\n└────┬─────┘\n     ▼" }],
+		};
+		remarkLookReferences()(tree);
+		expect(tree.children[0]).toMatchObject({ type: "code", lang: "ascii" });
+	});
+
+	it("collapses split legacy skill blocks without exposing their payload", () => {
+		const tree = {
+			type: "root",
+			children: [
+				{
+					type: "paragraph",
+					children: [
+						{ type: "text", value: "before " },
+						{ type: "html", value: '<skill name="search" location="/tmp/SKILL.md">' },
+						{ type: "text", value: "private skill body" },
+						{ type: "html", value: "</skill>" },
+						{ type: "text", value: " after" },
+					],
+				},
+			],
+		};
+		remarkLookReferences()(tree);
+
+		expect(tree.children[0].children).toEqual([
+			{ type: "text", value: "before " },
+			{ type: "html", value: '<skill-tag data-look-name="search"></skill-tag>' },
+			{ type: "text", value: " after" },
+		]);
+	});
+
+	it("normalizes historical custom-tag attributes", () => {
+		const tree = {
+			type: "root",
+			children: [
+				{ type: "html", value: '<skill-tag name="search"></skill-tag>' },
+				{ type: "html", value: '<agent-tag name="planner"></agent-tag>' },
+				{ type: "html", value: '<mcp-tag server="github" tool="search"></mcp-tag>' },
+				{ type: "html", value: '<file-tag path="src/app.ts"></file-tag>' },
+			],
+		};
+		remarkLookReferences()(tree);
+
+		expect(tree.children).toEqual([
+			{ type: "html", value: '<skill-tag data-look-name="search"></skill-tag>' },
+			{ type: "html", value: '<agent-tag data-look-name="planner"></agent-tag>' },
+			{
+				type: "html",
+				value: '<mcp-tag data-look-server="github" data-look-tool="search"></mcp-tag>',
+			},
+			{ type: "html", value: '<file-tag data-look-path="src/app.ts"></file-tag>' },
+		]);
 	});
 });

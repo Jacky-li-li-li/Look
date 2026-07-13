@@ -664,13 +664,15 @@
     "start": "Start",
     "empty": "No scheduled tasks",
     "emptyHint": "Create a task, review it, then start its schedule.",
+    "details": "Task details",
     "history": "Execution trail",
     "noRuns": "No runs recorded yet.",
     "attemptLabel": "Attempt {{attempt}} of {{max}}",
     "tasks": "Tasks",
     "showAll": "Show all",
     "noSelection": "Select a task",
-    "noSelectionHint": "Choose a task from the list to view details, or create a new scheduled task."
+    "noSelectionHint": "Choose a task from the list to view details, or create a new scheduled task.",
+    "sessionOpenFailed": "Failed to open session."
   },
   "toast": {
     "modelUnavailable": "Model unavailable: {{primary}}. Switched to {{resolved}}.",

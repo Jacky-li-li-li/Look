@@ -188,7 +188,7 @@ describe("ScheduledTasksPage", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Daily summary" }));
 		await waitFor(() => expect(listScheduledTaskLogs).toHaveBeenCalledWith(task.id, 40));
-		expect(screen.getByText("success")).toBeTruthy();
+		expect(screen.getByText("Summarize")).toBeTruthy();
 
 		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 		await waitFor(() => expect(deleteScheduledTask).toHaveBeenCalledWith(task.id));
@@ -197,7 +197,7 @@ describe("ScheduledTasksPage", () => {
 		expect(screen.getByText("Select a task")).toBeTruthy();
 	});
 
-	it("shows a three-pane layout with list, detail, and execution history", async () => {
+	it("shows task detail after selection with tab access to execution history", async () => {
 		const task = {
 			id: "task-2",
 			name: "Weekly report",
@@ -226,11 +226,12 @@ describe("ScheduledTasksPage", () => {
 
 		await waitFor(() => expect(screen.getByRole("button", { name: "Weekly report" })).toBeTruthy());
 		expect(screen.getByText("Tasks")).toBeTruthy();
-		expect(screen.getByText("Execution trail")).toBeTruthy();
 
 		fireEvent.click(screen.getByRole("button", { name: "Weekly report" }));
 		await waitFor(() => expect(listScheduledTaskLogs).toHaveBeenCalledWith(task.id, 40));
 		expect(screen.getByText("Generate weekly report")).toBeTruthy();
+		expect(screen.getByText("Task details")).toBeTruthy();
+		expect(screen.getByText("Execution trail")).toBeTruthy();
 		expect(screen.getAllByText("openai/gpt-test").length).toBeGreaterThanOrEqual(2);
 	});
 });

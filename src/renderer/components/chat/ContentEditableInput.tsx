@@ -17,7 +17,7 @@
 // Rendering model:
 //   - We never trust the DOM as the source of truth. Every
 //     external mutation (`setText`) and every user gesture
-//     (keypress, paste) flows through `parseSkillSegments`
+//     (keypress, paste) flows through `renderToDOM`
 //     to rebuild the editor from a plain-text string.
 //   - `editorContent` (React state) is the source of truth.
 //     It's mirrored into the DOM on mount, on `setText`, and

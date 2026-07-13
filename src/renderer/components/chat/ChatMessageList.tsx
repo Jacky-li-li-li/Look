@@ -105,7 +105,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	const { t } = useTranslation();
 
 	// === Conversation context (now safe — we're inside Conversation) ===
-	const { isAtBottom, scrollToBottom, stopScroll, scrollRef } = useConversationContext();
+	const { isAtBottom, followToBottom, stopScroll, scrollRef } = useConversationContext();
 
 	// 使用 ref 追踪 isAtBottom 最新值，避免 stale closure
 	const isAtBottomRef = useRef(isAtBottom);
@@ -143,11 +143,10 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	}, [isAtBottom, setAtBottomAtom, activeAgentId]);
 
 	// === Streaming auto-follow ===
+	// biome-ignore lint/correctness/useExhaustiveDependencies: live block/tool reference changes are the follow signal
 	useEffect(() => {
-		if (isBusy && isAtBottomRef.current) {
-			scrollToBottom();
-		}
-	}, [isBusy, scrollToBottom]);
+		if (isBusy) followToBottom();
+	}, [isBusy, sessionState.uiBlocks, sessionState.uiTools, followToBottom]);
 
 	// === Branch / fork state ===
 	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
@@ -337,7 +336,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						{showActions && itemEntryId && (
 							<div
 								className={cn(
-									"flex items-center gap-msg-action -mt-msg-action-overlap opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100",
+									"flex items-center gap-msg-action mt-msg-action-offset opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100",
 									item.message.role === "user" ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
 								)}
 							>

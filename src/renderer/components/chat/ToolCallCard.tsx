@@ -256,10 +256,11 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 		<div data-tool-panel="" data-open={open}>
 			<div>
 				<button
+					data-tool-panel-trigger=""
 					type="button"
 					aria-expanded={open}
 					className={cn(
-						"flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+						"flex w-full items-center gap-1.5 px-2 py-1 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
 						!hasBody && "cursor-default",
 					)}
 					disabled={!hasBody}
@@ -293,10 +294,10 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 						style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}
 					>
 						<div className="overflow-hidden">
-							<div className="px-3 py-2.5 max-h-72 overflow-auto text-[11px] leading-relaxed text-muted-foreground">
-								<div className="flex flex-col gap-2 text-[10px] leading-relaxed">
-									<section className="flex flex-col gap-1">
-										<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">
+							<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
+								<div className="flex flex-col gap-1 text-[10px] leading-[1.4]">
+									<section className="flex flex-col gap-0.5">
+										<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
 											{t("tool.arguments")}
 										</span>
 										<pre className="whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
@@ -304,8 +305,8 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 										</pre>
 									</section>
 									{resultStr && (
-										<section className="flex flex-col gap-1">
-											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">
+										<section className="flex flex-col gap-0.5">
+											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
 												{toolCall.isError ? t("tool.error") : t("tool.result")}
 												{resultTooLong && (
 													<span className="ml-1 text-[9px] text-muted-foreground">
@@ -317,8 +318,8 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 										</section>
 									)}
 									{resultImages.length > 0 && (
-										<section className="flex flex-col gap-1">
-											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground mb-1">
+										<section className="flex flex-col gap-0.5">
+											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
 												{t("tool.result")}
 											</span>
 											<div className="flex flex-wrap gap-2">

@@ -203,11 +203,18 @@ export class SessionSubagentService {
 		const displayName = `Agent：${rawName}`.slice(0, this.deps.maxNameLength);
 		session.setSessionName(displayName);
 
-		if (agent.tools && agent.tools.length > 0) {
-			const configured = new Set(session.getAllTools().map((tool) => tool.name));
-			const allowlisted = agent.tools.filter((name: string) => configured.has(name));
-			if (allowlisted.length > 0) session.setActiveToolsByName(allowlisted);
-		}
+			// 继承父会话权限：定时任务等后台会话的父会话已设为 always，
+			// 子会话需同步，否则会回退到默认的 ask 模式导致工具调用被阻塞
+			const parentMode = this.deps.permissionService.getMode(parentSessionId);
+			if (parentMode === "always") {
+				this.deps.permissionService.setMode(childSessionId, "always");
+			}
+
+			if (agent.tools && agent.tools.length > 0) {
+				const configured = new Set(session.getAllTools().map((tool) => tool.name));
+				const allowlisted = agent.tools.filter((name: string) => configured.has(name));
+				if (allowlisted.length > 0) session.setActiveToolsByName(allowlisted);
+			}
 
 		if (agent.model) {
 			try {

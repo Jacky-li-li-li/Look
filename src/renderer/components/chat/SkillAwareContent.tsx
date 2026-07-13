@@ -2,9 +2,9 @@
 // SkillAwareContent — 消息气泡中渲染 /skill:name、/agent:name 和 #server__toolName chip
 // ============================================================
 //
-// 现在由 LookMarkdown 统一处理 Markdown + chip：它会在把内容交给
-// markstream-react 之前把 skill/agent/MCP 引用替换成自定义 HTML-like 标签，
-// 并在 renderer 中映射回 SkillTag / AgentTag / McpTag。
+// 现在由 LookMarkdown 统一处理 Markdown + chip：Streamdown 负责流式
+// Markdown，remarkLookReferences 只改写普通文本 AST 节点，再映射回
+// SkillTag / AgentTag / McpTag / FileTag。
 import LookMarkdown from "../markdown/LookMarkdown";
 
 interface SkillAwareContentProps {

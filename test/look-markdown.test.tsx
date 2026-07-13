@@ -26,10 +26,15 @@ describe("LookMarkdown", () => {
 	it("renders basic markdown", async () => {
 		const content = `# Hello
 
+## Details
+
 This is **bold**.`;
 		const { container } = render(<LookMarkdown content={content} />);
-		await waitFor(() => expect(container.querySelector("h1")).not.toBeNull());
+		await waitFor(() => expect(container.querySelector("strong")?.textContent).toBe("bold"));
 		expect(container.querySelector("h1")?.textContent).toBe("Hello");
+		expect(container.querySelector("h2")?.textContent).toBe("Details");
+		expect(container.querySelector("h1")?.classList.contains("look-md-h1")).toBe(true);
+		expect(container.querySelector("h2")?.classList.contains("look-md-h2")).toBe(true);
 		expect(container.querySelector("strong")?.textContent).toBe("bold");
 	});
 
@@ -50,6 +55,62 @@ This is **bold**.`;
 		await waitFor(() => expect(container.textContent).toContain("/agent:planner"));
 	});
 
+	it("renders MCP and file references as chips", async () => {
+		const { container } = render(<LookMarkdown content="Call #github__search and open @src/app.ts" />);
+		await waitFor(() => expect(container.textContent).toContain("#github__search"));
+		expect(container.textContent).toContain("@src/app.ts");
+	});
+
+	it("renders historical custom tags with their original values", async () => {
+		const content = '<skill-tag name="search"></skill-tag> <agent-tag name="planner"></agent-tag>';
+		const { container } = render(<LookMarkdown content={content} />);
+		await waitFor(() => expect(container.textContent).toContain("/skill:search"));
+		expect(container.textContent).toContain("/agent:planner");
+		expect(container.textContent).not.toContain("user-content-");
+	});
+
+	it("collapses historical skill payloads without exposing their body", async () => {
+		const content = 'before <skill name="search" location="/tmp/SKILL.md">private body</skill> after';
+		const { container } = render(<LookMarkdown content={content} />);
+		await waitFor(() => expect(container.textContent).toContain("/skill:search"));
+		expect(container.textContent).toContain("before");
+		expect(container.textContent).toContain("after");
+		expect(container.textContent).not.toContain("private body");
+	});
+
+	it("renders GFM lists and tables with Look-owned components", async () => {
+		const content = "- one\n- two\n\n| Name | State |\n| --- | --- |\n| Markdown | Ready |";
+		const { container } = render(<LookMarkdown content={content} />);
+		await waitFor(() => expect(container.querySelector("table")).not.toBeNull());
+		expect(container.querySelectorAll(".look-md-list-item")).toHaveLength(2);
+		expect(container.querySelector(".look-md-table-wrap")).not.toBeNull();
+		expect(container.querySelector(".look-md-th")?.textContent).toBe("Name");
+	});
+
+	it("does not turn references inside code into chips", async () => {
+		const content = "```text\n/skill:search #github__search @src/app.ts\n```";
+		const { container } = render(<LookMarkdown content={content} />);
+		await waitFor(() => expect(container.textContent).toContain("/skill:search"));
+		expect(container.querySelector("[data-icon='inline-start']")).toBeNull();
+	});
+
+	it("keeps content after a closed code fence outside the code block", async () => {
+		const content = "```ts\nconst ready = true;\n```\n\n## After code\n\nStill readable.";
+		const { container } = render(<LookMarkdown content={content} />);
+		await waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("After code"));
+		expect(container.querySelector('[data-streamdown="code-block"]')?.textContent).not.toContain("After code");
+		expect(container.textContent).toContain("Still readable.");
+	});
+
+	it("renders unlabeled box-drawing architecture as a dedicated ASCII diagram", async () => {
+		const content = "```\n┌──────────┐\n│ Renderer │\n└────┬─────┘\n     ▼\n```";
+		const { container } = render(<LookMarkdown content={content} />);
+		await waitFor(() => expect(container.querySelector("[data-look-ascii-diagram]")).not.toBeNull());
+		expect(container.querySelector("[data-look-ascii-diagram] pre")?.textContent).toContain("│ Renderer │");
+		expect(container.querySelector('[data-streamdown="code-block"]')).toBeNull();
+		expect(container.querySelector('button[aria-label="Copy diagram"]')).not.toBeNull();
+	});
+
 	it("renders streaming content without error", async () => {
 		const { container, rerender } = render(<LookMarkdown content="Hello" isStreaming />);
 		await waitFor(() => expect(container.textContent).toContain("Hello"), { timeout: 3000 });
@@ -57,24 +118,27 @@ This is **bold**.`;
 		await waitFor(() => expect(container.textContent).toContain("Hello world"), { timeout: 3000 });
 	});
 
-	it("uses native smooth streaming instead of disabling it", () => {
-		expect(SRC).toMatch(/smoothStreaming=\{isStreaming\}/);
-		expect(SRC).toMatch(/STREAMING_MARKDOWN_SMOOTH_OPTIONS/);
-		expect(SRC).not.toMatch(/smoothStreaming=\{false\}/);
+	it("uses Streamdown incomplete-Markdown handling only while streaming", () => {
+		expect(SRC).toMatch(/parseIncompleteMarkdown=\{isStreaming\}/);
+		expect(SRC).toMatch(/isAnimating=\{isStreaming\}/);
+		expect(SRC).toMatch(/mode=\{docs \? "static" : "streaming"\}/);
 	});
 
-	it("uses the document tone for Markstream's dark rendering mode", async () => {
-		writeLookThemeToDom("dark");
-		const { container } = render(<LookMarkdown content="```ts\nconst visible = true;\n```" />);
-		await waitFor(() => expect(container.querySelector(".markstream-react.dark")).not.toBeNull());
-
-		writeLookThemeToDom("light");
-		await waitFor(() => expect(container.querySelector(".markstream-react.dark")).toBeNull());
+	it("configures matching light and dark Shiki themes", () => {
+		expect(SRC).toMatch(/themes: \["github-light", "github-dark"\]/);
+		expect(SRC).toMatch(/shikiTheme=\{\["github-light", "github-dark"\]\}/);
 	});
 
-	it("does not read Markdown appearance from next-themes", () => {
-		expect(SRC).toMatch(/const \{ tone \} = useLookTheme\(\)/);
-		expect(SRC).toMatch(/isDark=\{tone === "dark"\}/);
-		expect(SRC).not.toMatch(/next-themes/);
+	it("configures the official Mermaid plugin with theme and strict security", () => {
+		expect(SRC).toMatch(/@streamdown\/mermaid/);
+		expect(SRC).toMatch(/import\("@streamdown\/mermaid"\)/);
+		expect(SRC).toMatch(/mermaid:\s*diagramPlugin/);
+		expect(SRC).toMatch(/securityLevel:\s*"strict"/);
+		expect(SRC).toMatch(/theme:\s*tone === "dark" \? "dark" : "neutral"/);
+	});
+
+	it("does not depend on Markstream workarounds", () => {
+		expect(SRC).not.toMatch(/markstream-react/);
+		expect(SRC).not.toMatch(/closeAtxHeadings/);
 	});
 });

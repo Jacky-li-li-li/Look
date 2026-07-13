@@ -43,25 +43,25 @@ export default function ProjectHeader({
 						className={cn("size-3 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")}
 					/>
 					<span className="workspace-folder-mark relative">
-					{project.valid ? (
-						<>
-							<Folder
-								className={cn(
-									"size-3.5 absolute inset-0 m-auto transition-all duration-300",
-									isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100",
-								)}
-							/>
-							<FolderOpen
-								className={cn(
-									"size-3.5 absolute inset-0 m-auto transition-all duration-300",
-									isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0",
-								)}
-							/>
-						</>
-					) : (
-						<AlertTriangle className="size-3.5" />
-					)}
-				</span>
+						{project.valid ? (
+							<>
+								<Folder
+									className={cn(
+										"size-3.5 absolute inset-0 m-auto transition-all duration-300",
+										isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100",
+									)}
+								/>
+								<FolderOpen
+									className={cn(
+										"size-3.5 absolute inset-0 m-auto transition-all duration-300",
+										isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0",
+									)}
+								/>
+							</>
+						) : (
+							<AlertTriangle className="size-3.5" />
+						)}
+					</span>
 					<span className="min-w-0 flex-1">
 						{editingProjectId === project.id ? (
 							<input

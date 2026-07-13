@@ -472,7 +472,7 @@ export default function LoginScreen() {
 			email: userEmail,
 			userName: p?.user_name || userEmail.split("@")[0],
 			handle: "",
-			role: "Pro",
+			role: p?.role || "",
 			avatar: p?.avatar || "",
 		};
 		setUserProfile(profile);

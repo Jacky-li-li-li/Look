@@ -216,7 +216,7 @@ function ContentBlocks({
 	}, [blocks, toolExecutions, toolResultMap]);
 
 	return (
-		<div className="flex flex-col">
+		<div className="flex flex-col gap-msg-block">
 			{segments.map((seg, segIdx) => {
 				if (seg.kind === "single") {
 					const block = seg.block;
@@ -338,7 +338,7 @@ const MessageBubble = memo(function MessageBubble({
 				<MessageHeader sender={sender} isStreaming={isStreaming} isActiveLeaf={isActiveLeaf} isUser={isUser} />
 				<div
 					className={cn(
-						"whisper-bubble flex flex-col gap-msg-block text-[13px] leading-relaxed",
+						"whisper-bubble flex flex-col gap-msg-block text-[13px] leading-[var(--prose-line-height)]",
 						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant w-full",
 						flash && "bubble-flash",
 					)}
@@ -496,7 +496,7 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 	}
 
 	return (
-		<div className="flex flex-col">
+		<div className="flex flex-col gap-msg-block">
 			{blocks.map((block) => {
 				const key = block.uid != null ? `sb-${block.uid}` : `sb-${block.contentIndex ?? block.kind}`;
 				return (
@@ -542,7 +542,7 @@ export const StreamingMessageBubble = memo(function StreamingMessageBubble({
 					isActiveLeaf={false}
 					isUser={false}
 				/>
-				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-msg-block text-[13px] leading-relaxed">
+				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-msg-block text-[13px] leading-[var(--prose-line-height)]">
 					<StreamingBlocksBubble
 						blocks={blocks}
 						toolExecutions={toolExecutions}

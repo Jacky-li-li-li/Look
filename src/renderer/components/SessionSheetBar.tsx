@@ -30,6 +30,7 @@ interface SessionSheetBarProps {
 	projects: { id: string; name: string }[];
 	activeAgentId: string | null;
 	sidebarCollapsed: boolean;
+	rightPanelCollapsed: boolean;
 	onSelect: (agentId: string) => void;
 	onClose: (agentId: string) => void;
 	onReorder: (agentIds: string[]) => void;
@@ -138,6 +139,7 @@ export default function SessionSheetBar({
 	projects,
 	activeAgentId,
 	sidebarCollapsed,
+	rightPanelCollapsed,
 	onSelect,
 	onClose,
 	onReorder,
@@ -205,7 +207,7 @@ export default function SessionSheetBar({
 	);
 
 	return (
-		<header className="flex h-12 shrink-0 items-center gap-2 border-b border-hairline px-2">
+		<header className={cn("flex h-12 shrink-0 items-center gap-2 border-b border-hairline", rightPanelCollapsed ? "px-2" : "pl-2")}>
 			{sidebarCollapsed && (
 				<Button
 					size="icon-sm"
@@ -249,16 +251,18 @@ export default function SessionSheetBar({
 					</DndContext>
 				</div>
 			)}
-			<Button
-				size="icon-sm"
-				variant="ghost"
-				className="expand-right-panel-btn shrink-0 rounded-md border border-hairline"
-				onClick={onExpandRightPanel}
-				aria-label={t("rightPanel.expand", "展开右侧面板")}
-				title={t("rightPanel.expand", "展开右侧面板")}
-			>
-				<PanelLeftOpen className="size-3.5" />
-			</Button>
+			{rightPanelCollapsed && (
+				<Button
+					size="icon-sm"
+					variant="ghost"
+					className="expand-right-panel-btn shrink-0 rounded-md border border-hairline"
+					onClick={onExpandRightPanel}
+					aria-label={t("rightPanel.expand", "展开右侧面板")}
+					title={t("rightPanel.expand", "展开右侧面板")}
+				>
+					<PanelLeftOpen className="size-3.5" />
+				</Button>
+			)}
 		</header>
 	);
 }

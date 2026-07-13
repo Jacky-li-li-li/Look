@@ -4,7 +4,6 @@
 // ============================================================
 
 import { UserAvatar } from "@shared/components/UserAvatar";
-import { Badge } from "@shared/components/ui/badge";
 import { useAtom } from "jotai";
 import { Camera } from "lucide-react";
 import { useRef, useState } from "react";
@@ -97,7 +96,6 @@ export default function ProfileEditor() {
 	}
 
 	const displayHandle = deriveHandle(profile);
-	const displayRole = profile.role?.trim();
 
 	return (
 		<div className="flex flex-col items-center py-6">
@@ -180,14 +178,6 @@ export default function ProfileEditor() {
 					className="flex items-center gap-2 text-sm text-muted-foreground hover:opacity-80"
 				>
 					<span>@{displayHandle}</span>
-					{displayRole && (
-						<>
-							<span className="text-muted-foreground/60">·</span>
-							<Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-medium">
-								{displayRole}
-							</Badge>
-						</>
-					)}
 				</button>
 			)}
 		</div>

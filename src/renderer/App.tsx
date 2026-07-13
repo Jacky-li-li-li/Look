@@ -87,7 +87,7 @@ export default function App() {
 
 	// ── Layout callbacks ──
 	const handleSettingsClick = useCallback(() => {
-		appStore.set(settingsTabAtom, "general");
+		appStore.set(settingsTabAtom, "profile");
 		appStore.set(showSettingsAtom, true);
 	}, []);
 	const handleRequestApiKeys = useCallback(() => {

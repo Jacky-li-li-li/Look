@@ -36,7 +36,10 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 	if (!thinking) {
 		if (!isStreaming) return null;
 		return (
-			<div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-muted-foreground cursor-default">
+			<div
+				data-thinking-panel=""
+				className="flex cursor-default items-center gap-1.5 px-2 py-1 text-[11px] text-muted-foreground"
+			>
 				<ChevronRight className="size-3 shrink-0" />
 				<Brain className="size-3.5 shrink-0 text-blue-400 dark:text-blue-300" />
 				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">{t("chat.reasoning")}</span>
@@ -46,10 +49,10 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 	}
 
 	return (
-		<div>
+		<div data-thinking-panel="">
 			<button
 				type="button"
-				className="flex w-full items-center gap-2 px-2.5 py-2 text-left outline-none text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:text-foreground transition-colors"
+				className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] text-muted-foreground outline-none transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted/50 focus-visible:text-foreground"
 				onClick={handleToggle}
 			>
 				<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
@@ -66,8 +69,8 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 				)}
 			>
 				<div className="overflow-hidden">
-					<div className="px-3 py-2.5 max-h-72 overflow-auto text-[11px] leading-relaxed text-muted-foreground">
-						<div className="whitespace-pre-wrap break-words leading-relaxed">{thinking}</div>
+					<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
+						<div className="whitespace-pre-wrap break-words">{thinking}</div>
 					</div>
 				</div>
 			</div>

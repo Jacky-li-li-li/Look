@@ -332,7 +332,7 @@ function BadgeTrigger({ summary, kind, isOpen, disabled, onClick, onKeyDown }: B
 			aria-expanded={isOpen}
 			aria-disabled={disabled || undefined}
 			className={cn(
-				"flex w-full items-center gap-2 pr-2.5 py-1 text-left outline-none cursor-pointer",
+				"flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-2 text-left outline-none",
 				"font-mono text-[10px] hover:text-foreground transition-colors",
 				disabled && "cursor-default hover:text-muted-foreground",
 				isOpen ? "text-foreground" : "text-muted-foreground",

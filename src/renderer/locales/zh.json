@@ -664,13 +664,15 @@
     "start": "启动",
     "empty": "暂无定时任务",
     "emptyHint": "创建任务，确认配置后再启动调度。",
+    "details": "任务详情",
     "history": "执行轨迹",
     "noRuns": "暂无执行记录。",
     "attemptLabel": "第 {{attempt}} / {{max}} 次尝试",
     "tasks": "任务",
     "showAll": "显示全部",
     "noSelection": "选择任务",
-    "noSelectionHint": "从左侧列表选择一个任务查看详情，或新建一个定时任务。"
+    "noSelectionHint": "从左侧列表选择一个任务查看详情，或新建一个定时任务。",
+    "sessionOpenFailed": "无法打开会话。"
   },
   "toast": {
     "modelUnavailable": "模型不可用: {{primary}}。已切换到 {{resolved}}。",

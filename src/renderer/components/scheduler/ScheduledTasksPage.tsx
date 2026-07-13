@@ -23,8 +23,8 @@ import {
 	CirclePause,
 	CirclePlay,
 	Clock3,
+	ExternalLink,
 	FlaskConical,
-	History,
 	LoaderCircle,
 	Pencil,
 	Play,
@@ -36,7 +36,7 @@ import {
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { showScheduledTasksAtom } from "../../store/atoms";
+import { activeAgentIdAtom, showScheduledTasksAtom } from "../../store/atoms";
 
 type ModelChoice = { provider: string; id: string; name: string };
 type ImBinding = { chatId: string; sessionId: string; projectId: string; createdAt: number };
@@ -112,18 +112,18 @@ function formatTimeLeft(nextRunAt?: string): string {
 	return `${days}d ${hours % 24}h`;
 }
 
-function statusTone(status: ScheduledTaskRunLog["status"]): string {
-	if (status === "success") return "bg-emerald-500";
+function statusDotColor(status: ScheduledTaskRunLog["status"]): string {
+	if (status === "success") return "bg-emerald-400";
 	if (status === "failed" || status === "interrupted") return "bg-destructive";
-	if (status === "running" || status === "retrying") return "bg-amber-500";
-	return "bg-muted-foreground/50";
+	if (status === "running" || status === "retrying") return "bg-amber-400";
+	return "bg-muted-foreground/40";
 }
 
-function statusBorder(status: ScheduledTaskRunLog["status"]): string {
-	if (status === "success") return "border-emerald-500/30";
-	if (status === "failed" || status === "interrupted") return "border-destructive/30";
-	if (status === "running" || status === "retrying") return "border-amber-500/30";
-	return "border-muted-foreground/20";
+function statusBadgeStyle(status: ScheduledTaskRunLog["status"]): string {
+	if (status === "success") return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+	if (status === "failed" || status === "interrupted") return "bg-destructive/10 text-destructive";
+	if (status === "running" || status === "retrying") return "bg-amber-500/10 text-amber-600 dark:text-amber-400";
+	return "bg-muted-foreground/10 text-muted-foreground";
 }
 
 function EmptyTaskList() {
@@ -215,27 +215,30 @@ function TaskDetail({ task, projects, describeSchedule, busy, openEdit, act }: T
 	const { t } = useTranslation();
 	const projectName = projects.find((p) => p.id === task.projectId)?.name ?? task.projectId;
 	return (
-		<div className="mx-auto max-w-3xl">
-			<div className="flex items-start justify-between gap-4">
-				<div>
-					<div className="flex items-center gap-2">
-						<h2 className="text-lg font-semibold tracking-tight">{task.name}</h2>
-						<Badge variant={task.status === "scheduled" ? "default" : "secondary"} className="text-[10px]">
+		<div className="mx-auto max-w-3xl space-y-6">
+			<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+				<div className="min-w-0 flex-1">
+					<div className="flex items-center gap-2.5">
+						<h2 className="truncate text-lg font-semibold tracking-tight">{task.name}</h2>
+						<Badge
+							variant={task.status === "scheduled" ? "default" : "secondary"}
+							className="shrink-0 text-[10px]"
+						>
 							{task.status === "scheduled" ? t("scheduledTasks.active") : t("scheduledTasks.paused")}
 						</Badge>
 					</div>
-					<p className="mt-1 text-[11px] text-muted-foreground">
+					<p className="mt-1 truncate text-[11px] text-muted-foreground">
 						{t("scheduledTasks.project")}: {projectName}
 					</p>
 				</div>
-				<div className="flex shrink-0 gap-1">
+				<div className="flex shrink-0 flex-wrap gap-1">
 					<Button variant="outline" size="sm" onClick={() => openEdit(task)}>
 						<Pencil className="size-3.5" />
-						{t("scheduledTasks.edit")}
+						<span className="hidden sm:inline">{t("scheduledTasks.edit")}</span>
 					</Button>
 					<Button variant="outline" size="sm" onClick={() => void act("run", task)} disabled={busy}>
 						<Play className="size-3.5" />
-						{t("scheduledTasks.runNow")}
+						<span className="hidden sm:inline">{t("scheduledTasks.runNow")}</span>
 					</Button>
 					<Button
 						variant="outline"
@@ -244,15 +247,9 @@ function TaskDetail({ task, projects, describeSchedule, busy, openEdit, act }: T
 						disabled={busy}
 					>
 						{task.status === "scheduled" ? (
-							<>
-								<CirclePause className="size-3.5" />
-								{t("scheduledTasks.pause")}
-							</>
+							<CirclePause className="size-3.5" />
 						) : (
-							<>
-								<CirclePlay className="size-3.5" />
-								{t("scheduledTasks.start")}
-							</>
+							<CirclePlay className="size-3.5" />
 						)}
 					</Button>
 					<Button
@@ -267,57 +264,64 @@ function TaskDetail({ task, projects, describeSchedule, busy, openEdit, act }: T
 				</div>
 			</div>
 
-			<div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-				<div className="rounded-lg border border-hairline bg-muted/20 p-3">
-					<p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+			<div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 rounded-lg border border-hairline bg-muted/15 px-4 py-3">
+				<div className="min-w-0">
+					<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
 						{t("scheduledTasks.frequency")}
-					</p>
-					<p className="mt-1 text-sm font-medium">{describeSchedule(task)}</p>
+					</span>
+					<p className="mt-0.5 truncate text-[13px] font-medium">{describeSchedule(task)}</p>
 				</div>
-				<div className="rounded-lg border border-hairline bg-muted/20 p-3">
-					<p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+				<div className="min-w-0">
+					<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
 						{t("scheduledTasks.next")}
-					</p>
-					<p className="mt-1 text-sm font-medium">{formatDate(task.nextRunAt)}</p>
-					<p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{formatTimeLeft(task.nextRunAt)}</p>
+					</span>
+					<p className="mt-0.5 truncate text-[13px] font-medium">{formatDate(task.nextRunAt)}</p>
+					<p className="font-mono text-[10px] text-muted-foreground">{formatTimeLeft(task.nextRunAt)}</p>
 				</div>
-				<div className="rounded-lg border border-hairline bg-muted/20 p-3">
-					<p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+				<div className="min-w-0">
+					<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
 						{t("scheduledTasks.model")}
-					</p>
-					<p className="mt-1 font-mono text-sm font-medium">{task.model ?? "—"}</p>
+					</span>
+					<p className="mt-0.5 truncate font-mono text-[13px] font-medium">{task.model ?? "—"}</p>
 				</div>
-				<div className="rounded-lg border border-hairline bg-muted/20 p-3">
-					<p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+				<div className="min-w-0">
+					<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
 						{t("scheduledTasks.attempts")}
-					</p>
-					<p className="mt-1 text-sm font-medium">
+					</span>
+					<p className="mt-0.5 text-[13px] font-medium">
 						{task.retry.maxAttempts} / {task.retry.initialDelayMs / 1_000}s
 					</p>
 				</div>
 			</div>
 
-			<div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-				<div className="rounded-lg border border-hairline bg-muted/20 p-3">
-					<p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+			<div className="space-y-4">
+				<div>
+					<h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
 						{t("scheduledTasks.prompt")}
-					</p>
-					<p className="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-foreground">{task.prompt}</p>
+					</h3>
+					<div className="max-h-48 overflow-y-auto rounded-lg border border-hairline bg-muted/15 p-3">
+						<p className="whitespace-pre-wrap break-words text-[12px] leading-relaxed">{task.prompt}</p>
+					</div>
 				</div>
-				<div className="rounded-lg border border-hairline bg-muted/20 p-3">
-					<p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-						{t("scheduledTasks.parameters")}
-					</p>
-					<pre className="mt-1 overflow-x-auto font-mono text-[11px] text-muted-foreground">
-						{JSON.stringify(task.parameters, null, 2)}
-					</pre>
-				</div>
+
+				{Object.keys(task.parameters).length > 0 && (
+					<div>
+						<h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+							{t("scheduledTasks.parameters")}
+						</h3>
+						<div className="max-h-40 overflow-auto rounded-lg border border-hairline bg-muted/15 p-3">
+							<pre className="whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-muted-foreground">
+								{JSON.stringify(task.parameters, null, 2)}
+							</pre>
+						</div>
+					</div>
+				)}
 			</div>
 
 			{task.notification?.enabled && (
-				<div className="mt-4 flex items-center gap-2 rounded-lg border border-hairline bg-muted/20 px-3 py-2">
-					<BellRing className="size-3.5 text-muted-foreground" />
-					<span className="text-[11px] text-muted-foreground">
+				<div className="flex items-center gap-2 rounded-lg border border-hairline bg-muted/15 px-3 py-2">
+					<BellRing className="size-3.5 shrink-0 text-muted-foreground" />
+					<span className="truncate text-[11px] text-muted-foreground">
 						{t("scheduledTasks.imEnabled")} · …{task.notification.targetChatId.slice(-8)}
 					</span>
 				</div>
@@ -358,40 +362,6 @@ function Field({
 			<Label htmlFor={id} className="text-[11px] font-medium text-muted-foreground">
 				{label}
 			</Label>
-			{children}
-		</div>
-	);
-}
-
-function SectionCard({
-	icon,
-	title,
-	headerAction,
-	children,
-	accent = false,
-}: {
-	icon?: React.ReactNode;
-	title?: string;
-	headerAction?: React.ReactNode;
-	children: React.ReactNode;
-	accent?: boolean;
-}) {
-	return (
-		<div
-			className={cn(
-				"rounded-lg border border-hairline bg-muted/15 p-4",
-				accent && "border-l-4 border-l-primary/30 pl-3.5",
-			)}
-		>
-			{(title || icon || headerAction) && (
-				<div className="mb-3 flex items-center justify-between gap-3">
-					<div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-						{icon}
-						{title}
-					</div>
-					{headerAction}
-				</div>
-			)}
 			{children}
 		</div>
 	);
@@ -470,7 +440,7 @@ function TaskEditor({
 	const imDisabled = !form.notifyIm && (!imConnected || imBindings.length === 0);
 
 	return (
-		<div className="mx-auto max-w-3xl">
+		<div className="mx-auto max-w-3xl space-y-6">
 			<div className="flex items-center justify-between gap-4">
 				<h2 className="text-lg font-semibold tracking-tight">
 					{editingId ? t("scheduledTasks.edit") : t("scheduledTasks.newTask")}
@@ -481,247 +451,259 @@ function TaskEditor({
 				</Button>
 			</div>
 
-			<div className="mt-6 space-y-6">
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<Field id={`${id}-name`} label={t("scheduledTasks.name")}>
-						<Input id={`${id}-name`} value={form.name} onChange={handleNameChange} autoComplete="off" />
-					</Field>
-					<Field id={`${id}-project`} label={t("scheduledTasks.project")}>
-						<Select value={form.projectId} onValueChange={handleProjectChange}>
-							<SelectTrigger id={`${id}-project`}>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{projects.map((project) => (
-									<SelectItem key={project.id} value={project.id}>
-										{project.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</Field>
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<Field id={`${id}-name`} label={t("scheduledTasks.name")}>
+					<Input id={`${id}-name`} value={form.name} onChange={handleNameChange} autoComplete="off" />
+				</Field>
+				<Field id={`${id}-project`} label={t("scheduledTasks.project")}>
+					<Select value={form.projectId} onValueChange={handleProjectChange}>
+						<SelectTrigger id={`${id}-project`}>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{projects.map((project) => (
+								<SelectItem key={project.id} value={project.id}>
+									{project.name}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</Field>
+			</div>
+
+			<div className="rounded-lg border border-hairline bg-muted/15 p-4 pl-3.5 border-l-4 border-l-primary/30">
+				<div className="mb-3 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+					<CalendarDays className="size-3.5" />
+					{t("scheduledTasks.executionPlan")}
 				</div>
 
-				<SectionCard title={t("scheduledTasks.executionPlan")} icon={<CalendarDays className="size-3.5" />} accent>
-					<div className="grid grid-cols-12 gap-4">
-						<div className="col-span-12 sm:col-span-6 lg:col-span-3">
-							<Field id={`${id}-frequency`} label={t("scheduledTasks.frequency")}>
-								<Select value={form.scheduleKind} onValueChange={handleScheduleKindChange}>
-									<SelectTrigger id={`${id}-frequency`}>
+				<div className="flex flex-wrap items-end gap-3">
+					<div className="min-w-0 flex-1" style={{ flexBasis: 120 }}>
+						<Field id={`${id}-frequency`} label={t("scheduledTasks.frequency")}>
+							<Select value={form.scheduleKind} onValueChange={handleScheduleKindChange}>
+								<SelectTrigger id={`${id}-frequency`}>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="once">{t("scheduledTasks.once")}</SelectItem>
+									<SelectItem value="daily">{t("scheduledTasks.daily")}</SelectItem>
+									<SelectItem value="weekly">{t("scheduledTasks.weekly")}</SelectItem>
+									<SelectItem value="monthly">{t("scheduledTasks.monthly")}</SelectItem>
+								</SelectContent>
+							</Select>
+						</Field>
+					</div>
+					{form.scheduleKind === "once" && (
+						<div className="min-w-0 flex-1" style={{ flexBasis: 140 }}>
+							<Field id={`${id}-once-date`} label={t("scheduledTasks.runDate")}>
+								<Input
+									id={`${id}-once-date`}
+									type="date"
+									value={form.onceDate}
+									onChange={handleOnceDateChange}
+								/>
+							</Field>
+						</div>
+					)}
+					{form.scheduleKind === "weekly" && (
+						<div className="min-w-0 flex-1" style={{ flexBasis: 140 }}>
+							<Field id={`${id}-weekday`} label={t("scheduledTasks.weekday")}>
+								<Select value={form.weekday} onValueChange={handleWeekdayChange}>
+									<SelectTrigger id={`${id}-weekday`}>
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="once">{t("scheduledTasks.once")}</SelectItem>
-										<SelectItem value="daily">{t("scheduledTasks.daily")}</SelectItem>
-										<SelectItem value="weekly">{t("scheduledTasks.weekly")}</SelectItem>
-										<SelectItem value="monthly">{t("scheduledTasks.monthly")}</SelectItem>
+										{[1, 2, 3, 4, 5, 6, 0].map((day) => (
+											<SelectItem key={day} value={String(day)}>
+												{t(`scheduledTasks.weekday${day}`)}
+											</SelectItem>
+										))}
 									</SelectContent>
 								</Select>
 							</Field>
 						</div>
-						{form.scheduleKind === "once" && (
-							<div className="col-span-12 sm:col-span-6 lg:col-span-3">
-								<Field id={`${id}-once-date`} label={t("scheduledTasks.runDate")}>
-									<Input
-										id={`${id}-once-date`}
-										type="date"
-										value={form.onceDate}
-										onChange={handleOnceDateChange}
-									/>
-								</Field>
-							</div>
-						)}
-						{form.scheduleKind === "weekly" && (
-							<div className="col-span-12 sm:col-span-6 lg:col-span-3">
-								<Field id={`${id}-weekday`} label={t("scheduledTasks.weekday")}>
-									<Select value={form.weekday} onValueChange={handleWeekdayChange}>
-										<SelectTrigger id={`${id}-weekday`}>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{[1, 2, 3, 4, 5, 6, 0].map((day) => (
-												<SelectItem key={day} value={String(day)}>
-													{t(`scheduledTasks.weekday${day}`)}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</Field>
-							</div>
-						)}
-						{form.scheduleKind === "monthly" && (
-							<div className="col-span-12 sm:col-span-6 lg:col-span-3">
-								<Field id={`${id}-month-day`} label={t("scheduledTasks.monthDay")}>
-									<Input
-										id={`${id}-month-day`}
-										type="number"
-										min="1"
-										max="31"
-										value={form.monthDay}
-										onChange={handleMonthDayChange}
-									/>
-								</Field>
-							</div>
-						)}
-						<div className="col-span-12 sm:col-span-6 lg:col-span-3">
-							<Field id={`${id}-time`} label={t("scheduledTasks.runTime")}>
-								<Input id={`${id}-time`} type="time" value={form.time} onChange={handleTimeChange} />
+					)}
+					{form.scheduleKind === "monthly" && (
+						<div className="min-w-0" style={{ width: 100 }}>
+							<Field id={`${id}-month-day`} label={t("scheduledTasks.monthDay")}>
+								<Input
+									id={`${id}-month-day`}
+									type="number"
+									min="1"
+									max="31"
+									value={form.monthDay}
+									onChange={handleMonthDayChange}
+								/>
+							</Field>
+						</div>
+					)}
+					<div className="min-w-0 flex-1" style={{ flexBasis: 120 }}>
+						<Field id={`${id}-time`} label={t("scheduledTasks.runTime")}>
+							<Input id={`${id}-time`} type="time" value={form.time} onChange={handleTimeChange} />
+						</Field>
+					</div>
+				</div>
+
+				<div className="mt-4 border-t border-hairline pt-3">
+					<div className="flex flex-wrap items-end gap-3">
+						<div className="min-w-0 flex-1" style={{ flexBasis: 100 }}>
+							<Field id={`${id}-max-attempts`} label={t("scheduledTasks.attempts")}>
+								<Input
+									id={`${id}-max-attempts`}
+									type="number"
+									min="1"
+									max="20"
+									value={form.maxAttempts}
+									onChange={handleMaxAttemptsChange}
+								/>
+							</Field>
+						</div>
+						<div className="min-w-0 flex-1" style={{ flexBasis: 110 }}>
+							<Field id={`${id}-retry-delay`} label={t("scheduledTasks.retryDelay")}>
+								<Input
+									id={`${id}-retry-delay`}
+									type="number"
+									min="0"
+									value={form.initialDelaySeconds}
+									onChange={handleInitialDelayChange}
+								/>
 							</Field>
 						</div>
 					</div>
-					<p className="mt-3 text-[10px] text-muted-foreground">
-						{t("scheduledTasks.localTimezone", {
-							timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-						})}
-					</p>
-				</SectionCard>
+				</div>
 
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<Field id={`${id}-model`} label={t("scheduledTasks.model")}>
-						<Select value={form.model} onValueChange={handleModelChange}>
-							<SelectTrigger id={`${id}-model`}>
-								<SelectValue placeholder={t("scheduledTasks.selectModel")} />
+				<p className="mt-3 text-[10px] text-muted-foreground">
+					{t("scheduledTasks.localTimezone", {
+						timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+					})}
+				</p>
+			</div>
+
+			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<Field id={`${id}-model`} label={t("scheduledTasks.model")}>
+					<Select value={form.model} onValueChange={handleModelChange}>
+						<SelectTrigger id={`${id}-model`}>
+							<SelectValue placeholder={t("scheduledTasks.selectModel")} />
+						</SelectTrigger>
+						<SelectContent>
+							{models.map((model) => (
+								<SelectItem key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+									{model.name} · {model.provider}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</Field>
+
+				<div className="rounded-lg border border-hairline bg-muted/15 p-3">
+					<div className="flex items-start justify-between gap-3">
+						<div className="min-w-0">
+							<div className="flex items-center gap-2">
+								<BellRing className="size-3.5 text-muted-foreground" />
+								<Label htmlFor={`${id}-notify-im`} className="text-[11px]">
+									{t("scheduledTasks.imNotification")}
+								</Label>
+							</div>
+							<p className="mt-0.5 text-[10px] text-muted-foreground">
+								{t("scheduledTasks.imNotificationDesc")}
+							</p>
+						</div>
+						<Switch
+							id={`${id}-notify-im`}
+							size="sm"
+							checked={form.notifyIm}
+							disabled={imDisabled}
+							onCheckedChange={handleNotifyImChange}
+						/>
+					</div>
+					{form.notifyIm && (
+						<Select value={form.notificationTarget} onValueChange={handleNotificationTargetChange}>
+							<SelectTrigger className="mt-2">
+								<SelectValue placeholder={t("scheduledTasks.selectNotificationTarget")} />
 							</SelectTrigger>
 							<SelectContent>
-								{models.map((model) => (
-									<SelectItem key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-										{model.name} · {model.provider}
+								{imBindings.map((binding) => (
+									<SelectItem key={binding.chatId} value={binding.chatId}>
+										{projects.find((project) => project.id === binding.projectId)?.name ??
+											t("scheduledTasks.imConversation")}{" "}
+										· …{binding.chatId.slice(-8)}
 									</SelectItem>
 								))}
 							</SelectContent>
 						</Select>
-					</Field>
-					<SectionCard icon={<BellRing className="size-3.5 text-muted-foreground" />}>
-						<div className="flex items-start justify-between gap-3">
-							<div>
-								<Label htmlFor={`${id}-notify-im`} className="text-[11px]">
-									{t("scheduledTasks.imNotification")}
-								</Label>
-								<p className="mt-0.5 text-[10px] text-muted-foreground">
-									{t("scheduledTasks.imNotificationDesc")}
-								</p>
-							</div>
-							<Switch
-								id={`${id}-notify-im`}
-								size="sm"
-								checked={form.notifyIm}
-								disabled={imDisabled}
-								onCheckedChange={handleNotifyImChange}
-							/>
-						</div>
-						{form.notifyIm && (
-							<Select value={form.notificationTarget} onValueChange={handleNotificationTargetChange}>
-								<SelectTrigger className="mt-2">
-									<SelectValue placeholder={t("scheduledTasks.selectNotificationTarget")} />
-								</SelectTrigger>
-								<SelectContent>
-									{imBindings.map((binding) => (
-										<SelectItem key={binding.chatId} value={binding.chatId}>
-											{projects.find((project) => project.id === binding.projectId)?.name ??
-												t("scheduledTasks.imConversation")}{" "}
-											· …{binding.chatId.slice(-8)}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						)}
-						{(!imConnected || imBindings.length === 0) && (
-							<p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400">
-								{t("scheduledTasks.imUnavailable")}
-							</p>
-						)}
-					</SectionCard>
+					)}
+					{(!imConnected || imBindings.length === 0) && (
+						<p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400">
+							{t("scheduledTasks.imUnavailable")}
+						</p>
+					)}
 				</div>
+			</div>
 
-				<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-					<Field id={`${id}-prompt`} label={t("scheduledTasks.prompt")}>
-						<Textarea
-							id={`${id}-prompt`}
-							className="min-h-24 resize-y"
-							value={form.prompt}
-							onChange={handlePromptChange}
-							placeholder={t("scheduledTasks.promptPlaceholder")}
-						/>
-					</Field>
-					<Field id={`${id}-parameters`} label={t("scheduledTasks.parameters")}>
-						<Textarea
-							id={`${id}-parameters`}
-							className="min-h-24 font-mono text-[11px]"
-							value={form.parameters}
-							onChange={handleParametersChange}
-						/>
-					</Field>
-				</div>
+			<div className="space-y-4">
+				<Field id={`${id}-prompt`} label={t("scheduledTasks.prompt")}>
+					<Textarea
+						id={`${id}-prompt`}
+						className="min-h-32 resize-y"
+						value={form.prompt}
+						onChange={handlePromptChange}
+						placeholder={t("scheduledTasks.promptPlaceholder")}
+					/>
+				</Field>
+				<Field id={`${id}-parameters`} label={t("scheduledTasks.parameters")}>
+					<Textarea
+						id={`${id}-parameters`}
+						className="min-h-24 resize-y font-mono text-[11px]"
+						value={form.parameters}
+						onChange={handleParametersChange}
+					/>
+				</Field>
+			</div>
 
-				<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-					<Field id={`${id}-max-attempts`} label={t("scheduledTasks.attempts")}>
-						<Input
-							id={`${id}-max-attempts`}
-							type="number"
-							min="1"
-							max="20"
-							value={form.maxAttempts}
-							onChange={handleMaxAttemptsChange}
-						/>
-					</Field>
-					<Field id={`${id}-retry-delay`} label={t("scheduledTasks.retryDelay")}>
-						<Input
-							id={`${id}-retry-delay`}
-							type="number"
-							min="0"
-							value={form.initialDelaySeconds}
-							onChange={handleInitialDelayChange}
-						/>
-					</Field>
-				</div>
-
-				{testResult && (
-					<div
-						className={cn(
-							"rounded-lg border px-3 py-2.5",
-							testResult.status === "success"
-								? "border-emerald-500/30 bg-emerald-500/5"
-								: "border-destructive/30 bg-destructive/5",
+			{testResult && (
+				<div
+					className={cn(
+						"rounded-lg border px-3 py-2.5",
+						testResult.status === "success"
+							? "border-emerald-500/30 bg-emerald-500/5"
+							: "border-destructive/30 bg-destructive/5",
+					)}
+				>
+					<div className="flex items-center gap-2 text-[11px] font-medium">
+						{testResult.status === "success" ? (
+							<CheckCircle2 className="size-3.5 text-emerald-600" />
+						) : (
+							<AlertCircle className="size-3.5 text-destructive" />
 						)}
-					>
-						<div className="flex items-center gap-2 text-[11px] font-medium">
-							{testResult.status === "success" ? (
-								<CheckCircle2 className="size-3.5 text-emerald-600" />
-							) : (
-								<AlertCircle className="size-3.5 text-destructive" />
-							)}
-							{testResult.status === "success"
-								? t("scheduledTasks.testSuccess")
-								: t("scheduledTasks.testFailed")}
-						</div>
-						{(testResult.output || testResult.errorMessage) && (
-							<p className="mt-1.5 max-h-28 overflow-y-auto whitespace-pre-wrap text-[10px] leading-relaxed text-muted-foreground">
-								{testResult.output || testResult.errorMessage}
-							</p>
-						)}
-						{testResult.notificationStatus && (
-							<p className="mt-1 text-[9px] text-muted-foreground">
-								{testResult.notificationStatus === "sent"
-									? t("scheduledTasks.notificationSent")
-									: t("scheduledTasks.notificationFailed", { error: testResult.notificationError })}
-							</p>
-						)}
+						{testResult.status === "success" ? t("scheduledTasks.testSuccess") : t("scheduledTasks.testFailed")}
 					</div>
-				)}
+					{(testResult.output || testResult.errorMessage) && (
+						<p className="mt-1.5 max-h-28 overflow-y-auto whitespace-pre-wrap break-words text-[10px] leading-relaxed text-muted-foreground">
+							{testResult.output || testResult.errorMessage}
+						</p>
+					)}
+					{testResult.notificationStatus && (
+						<p className="mt-1 text-[9px] text-muted-foreground">
+							{testResult.notificationStatus === "sent"
+								? t("scheduledTasks.notificationSent")
+								: t("scheduledTasks.notificationFailed", { error: testResult.notificationError })}
+						</p>
+					)}
+				</div>
+			)}
 
-				<div className="flex items-center justify-between gap-3 pt-2">
-					<Button variant="outline" size="sm" disabled={busy || testing} onClick={() => void testTask()}>
-						{testing ? <LoaderCircle className="size-3.5 animate-spin" /> : <FlaskConical className="size-3.5" />}
-						{testing ? t("scheduledTasks.testingTask") : t("scheduledTasks.testTask")}
+			<div className="flex items-center justify-between gap-3 pt-2">
+				<Button variant="outline" size="sm" disabled={busy || testing} onClick={() => void testTask()}>
+					{testing ? <LoaderCircle className="size-3.5 animate-spin" /> : <FlaskConical className="size-3.5" />}
+					{testing ? t("scheduledTasks.testingTask") : t("scheduledTasks.testTask")}
+				</Button>
+				<div className="flex items-center gap-2">
+					<Button variant="ghost" size="sm" disabled={testing} onClick={closeEditor}>
+						{t("common.cancel")}
 					</Button>
-					<div className="flex items-center gap-2">
-						<Button variant="ghost" size="sm" disabled={testing} onClick={closeEditor}>
-							{t("common.cancel")}
-						</Button>
-						<Button size="sm" disabled={busy || testing} onClick={() => void save()}>
-							{t("common.save")}
-						</Button>
-					</div>
+					<Button size="sm" disabled={busy || testing} onClick={() => void save()}>
+						{t("common.save")}
+					</Button>
 				</div>
 			</div>
 		</div>
@@ -731,85 +713,91 @@ function TaskEditor({
 type ExecutionHistoryProps = {
 	logs: ScheduledTaskRunLog[];
 	selected: ScheduledTask | null;
-	selectedId: string | null;
-	refreshLogs: (taskId?: string) => void;
-	setSelectedId: (id: string | null) => void;
+	navigateToSession: (sessionId: string) => void;
 };
 
-function ExecutionHistory({ logs, selected, selectedId, refreshLogs, setSelectedId }: ExecutionHistoryProps) {
+function ExecutionHistory({ logs, selected, navigateToSession }: ExecutionHistoryProps) {
 	const { t } = useTranslation();
-	return (
-		<div className="flex h-full flex-col">
-			<div className="flex items-center justify-between border-b border-hairline px-4 py-2">
-				<div className="flex items-center gap-2 text-[11px] font-medium">
-					<History className="size-3.5" />
-					{t("scheduledTasks.history")}
-					{selected && <span className="text-muted-foreground">· {selected.name}</span>}
-				</div>
-				<div className="flex items-center gap-2">
-					{selected && (
-						<Button variant="ghost" size="xs" onClick={() => setSelectedId(null)}>
-							{t("scheduledTasks.showAll")}
-						</Button>
-					)}
-					<Button variant="ghost" size="icon-xs" onClick={() => void refreshLogs(selectedId ?? undefined)}>
-						<RotateCw className="size-3" />
-					</Button>
-				</div>
+	if (logs.length === 0) {
+		return (
+			<div className="flex flex-col items-center justify-center py-16 text-center">
+				<Clock3 className="size-5 text-muted-foreground/30" />
+				<p className="mt-2 text-[11px] text-muted-foreground">{t("scheduledTasks.noRuns")}</p>
 			</div>
-			<div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-				{logs.length === 0 ? (
-					<div className="flex h-full flex-col items-center justify-center text-center">
-						<CheckCircle2 className="size-5 text-muted-foreground" />
-						<p className="mt-2 text-[11px] text-muted-foreground">{t("scheduledTasks.noRuns")}</p>
-					</div>
-				) : (
-					<div className="relative space-y-4 before:absolute before:left-[5px] before:top-1.5 before:bottom-1.5 before:w-px before:bg-border">
-						{logs.map((log) => (
-							<div
-								key={log.id}
-								className={`relative rounded-md border pl-4 pr-3 py-2 ${statusBorder(log.status)}`}
-							>
+		);
+	}
+	return (
+		<div className="relative">
+			<div className="absolute left-[6px] top-2 bottom-2 w-px bg-border" />
+			{logs.map((log) => (
+				<div key={log.id} className="group relative pb-5 last:pb-0">
+					<span
+						className={cn(
+							"absolute left-0 top-1.5 z-10 size-3 rounded-full border-2 border-background transition-shadow",
+							statusDotColor(log.status),
+							"group-hover:shadow-[0_0_0_3px_var(--tw-shadow-color)] group-hover:shadow-current/20",
+						)}
+					/>
+					<div className="ml-6 rounded-lg px-3 py-2 transition-colors group-hover:bg-accent/40">
+						<div className="flex items-center justify-between gap-3">
+							<div className="flex min-w-0 items-center gap-2">
 								<span
-									className={`absolute -left-px top-3 size-2.5 rounded-full ring-2 ring-background ${statusTone(log.status)}`}
-								/>
-								<div className="flex items-center justify-between gap-2">
-									<div className="flex items-center gap-2">
-										<span className="text-[10px] font-semibold uppercase tracking-wider">{log.status}</span>
-										<span className="text-[10px] text-muted-foreground">
-											{t("scheduledTasks.attemptLabel", { attempt: log.attempt, max: log.maxAttempts })}
-										</span>
-									</div>
-									<span className="font-mono text-[10px] text-muted-foreground">
-										{formatDate(log.startedAt)}
+									className={cn(
+										"shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+										statusBadgeStyle(log.status),
+									)}
+								>
+									{log.status}
+								</span>
+								{log.attempt > 1 && (
+									<span className="text-[10px] text-muted-foreground">
+										{t("scheduledTasks.attemptLabel", { attempt: log.attempt, max: log.maxAttempts })}
 									</span>
-								</div>
-								{!selected && <p className="mt-0.5 truncate text-[10px] font-medium">{log.taskName}</p>}
-								{log.errorMessage && (
-									<div className="mt-1.5 flex items-start gap-1.5 rounded bg-destructive/10 px-2 py-1">
-										<AlertCircle className="mt-0.5 size-3 shrink-0 text-destructive" />
-										<p className="text-[10px] leading-relaxed text-destructive">{log.errorMessage}</p>
-									</div>
-								)}
-								{log.output && !log.errorMessage && (
-									<p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
-										{log.output}
-									</p>
-								)}
-								{log.notificationStatus && (
-									<p
-										className={`mt-1 text-[9px] ${log.notificationStatus === "failed" ? "text-destructive" : "text-muted-foreground"}`}
-									>
-										{log.notificationStatus === "sent"
-											? t("scheduledTasks.notificationSent")
-											: t("scheduledTasks.notificationFailed", { error: log.notificationError })}
-									</p>
 								)}
 							</div>
-						))}
+							<span className="shrink-0 font-mono text-[10px] text-muted-foreground/50">
+								{formatDate(log.startedAt)}
+							</span>
+						</div>
+						{log.errorMessage && (
+							<div className="mt-2 flex items-start gap-1.5 rounded-lg bg-destructive/5 px-2.5 py-2">
+								<AlertCircle className="mt-0.5 size-3 shrink-0 text-destructive" />
+								<p className="text-[10px] leading-relaxed text-destructive/80">{log.errorMessage}</p>
+							</div>
+						)}
+						{log.sessionId && log.status === "success" && (
+							<button
+								type="button"
+								className="mt-1.5 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+								onClick={() => log.sessionId && navigateToSession(log.sessionId)}
+							>
+								{log.taskName}
+								<ExternalLink className="size-3" />
+							</button>
+						)}
+						{log.sessionId && log.status !== "success" && (
+							<p className="mt-1.5 text-[11px] text-muted-foreground/50">{log.taskName}</p>
+						)}
+						{!log.sessionId && log.output && (
+							<p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">
+								{log.output}
+							</p>
+						)}
+						{log.notificationStatus && (
+							<p
+								className={cn(
+									"mt-1.5 text-[10px]",
+									log.notificationStatus === "failed" ? "text-destructive/70" : "text-muted-foreground",
+								)}
+							>
+								{log.notificationStatus === "sent"
+									? t("scheduledTasks.notificationSent")
+									: t("scheduledTasks.notificationFailed", { error: log.notificationError })}
+							</p>
+						)}
 					</div>
-				)}
-			</div>
+				</div>
+			))}
 		</div>
 	);
 }
@@ -817,6 +805,7 @@ function ExecutionHistory({ logs, selected, selectedId, refreshLogs, setSelected
 export default function ScheduledTasksPage() {
 	const { t } = useTranslation();
 	const setShowScheduledTasks = useSetAtom(showScheduledTasksAtom);
+	const setActiveAgentId = useSetAtom(activeAgentIdAtom);
 	const [tasks, setTasks] = useState<ScheduledTask[]>([]);
 	const [projects, setProjects] = useState<ProjectInfo[]>([]);
 	const [models, setModels] = useState<ModelChoice[]>([]);
@@ -830,6 +819,7 @@ export default function ScheduledTasksPage() {
 	const [busy, setBusy] = useState(false);
 	const [testing, setTesting] = useState(false);
 	const [testResult, setTestResult] = useState<ScheduledTaskRunLog | null>(null);
+	const [activeTab, setActiveTab] = useState<"detail" | "history">("detail");
 
 	const selected = useMemo(() => tasks.find((task) => task.id === selectedId) ?? null, [tasks, selectedId]);
 	const activeCount = useMemo(() => tasks.filter((t) => t.status === "scheduled").length, [tasks]);
@@ -1108,7 +1098,21 @@ export default function ScheduledTasksPage() {
 		if (editingId === task.id) return;
 		setSelectedId(task.id);
 		setShowEditor(false);
+		setActiveTab("detail");
 	};
+
+	const navigateToSession = useCallback(
+		async (sessionId: string) => {
+			setActiveAgentId(sessionId);
+			setShowScheduledTasks(false);
+			try {
+				await window.look.activateSession(sessionId);
+			} catch {
+				toast.error(t("scheduledTasks.sessionOpenFailed"));
+			}
+		},
+		[setActiveAgentId, setShowScheduledTasks, t],
+	);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -1173,7 +1177,46 @@ export default function ScheduledTasksPage() {
 				</aside>
 
 				<main className="flex min-h-0 min-w-0 flex-1 flex-col">
-					<section className="min-h-0 flex-1 overflow-y-auto p-5">
+					{selected && !showEditor && (
+						<div className="flex items-center justify-between border-b border-hairline px-4 py-1.5">
+							<div className="flex items-center gap-1">
+								<button
+									type="button"
+									onClick={() => setActiveTab("detail")}
+									className={cn(
+										"rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+										activeTab === "detail"
+											? "bg-accent text-foreground"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									{t("scheduledTasks.details")}
+								</button>
+								<button
+									type="button"
+									onClick={() => setActiveTab("history")}
+									className={cn(
+										"rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+										activeTab === "history"
+											? "bg-accent text-foreground"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									{t("scheduledTasks.history")}
+								</button>
+							</div>
+							<div className="flex items-center gap-2">
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={() => void refreshLogs(selectedId ?? undefined)}
+								>
+									<RotateCw className="size-3" />
+								</Button>
+							</div>
+						</div>
+					)}
+					<div className="min-h-0 flex-1 overflow-y-auto p-5">
 						{showEditor ? (
 							<TaskEditor
 								editingId={editingId}
@@ -1191,27 +1234,22 @@ export default function ScheduledTasksPage() {
 								testTask={testTask}
 							/>
 						) : selected ? (
-							<TaskDetail
-								task={selected}
-								projects={projects}
-								describeSchedule={describeSchedule}
-								busy={busy}
-								openEdit={openEdit}
-								act={act}
-							/>
+							activeTab === "detail" ? (
+								<TaskDetail
+									task={selected}
+									projects={projects}
+									describeSchedule={describeSchedule}
+									busy={busy}
+									openEdit={openEdit}
+									act={act}
+								/>
+							) : (
+								<ExecutionHistory logs={logs} selected={selected} navigateToSession={navigateToSession} />
+							)
 						) : (
 							<EmptyWorkspace />
 						)}
-					</section>
-					<section className="h-60 shrink-0 border-t border-hairline bg-muted/10">
-						<ExecutionHistory
-							logs={logs}
-							selected={selected}
-							selectedId={selectedId}
-							refreshLogs={refreshLogs}
-							setSelectedId={setSelectedId}
-						/>
-					</section>
+					</div>
 				</main>
 			</div>
 		</div>

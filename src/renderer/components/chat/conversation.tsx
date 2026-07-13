@@ -19,7 +19,10 @@ interface ConversationContextValue {
 	scrollRef: ((el: HTMLDivElement | null) => void) & { readonly current: HTMLDivElement | null };
 	contentRef: ((el: HTMLDivElement | null) => void) & { readonly current: HTMLDivElement | null };
 	isAtBottom: boolean;
+	/** Re-enable following and move to the latest content. */
 	scrollToBottom: () => void;
+	/** Keep following only when the user has not intentionally scrolled away. */
+	followToBottom: () => void;
 	stopScroll: () => void;
 }
 
@@ -35,64 +38,127 @@ export function useConversationContext(): ConversationContextValue {
 
 // ===== useChatScroll hook =====
 
+const BOTTOM_PROXIMITY_PX = 24;
+const STOP_FOLLOW_KEYS = new Set(["ArrowUp", "PageUp", "Home"]);
+
+function isEditableTarget(target: EventTarget | null): boolean {
+	if (!(target instanceof HTMLElement)) return false;
+	return target.isContentEditable || Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
 function useChatScroll(): ConversationContextValue {
 	const scrollElRef = useRef<HTMLDivElement | null>(null);
 	const contentElRef = useRef<HTMLDivElement | null>(null);
 	const [isAtBottom, setIsAtBottom] = useState(true);
-	const isAtBottomRef = useRef(true);
+	const shouldFollowRef = useRef(true);
+	const pointerDownRef = useRef(false);
+	const followFrameRef = useRef<number | null>(null);
 
-	useEffect(() => {
-		isAtBottomRef.current = isAtBottom;
-	}, [isAtBottom]);
+	const updateAtBottom = useCallback((next: boolean) => {
+		setIsAtBottom((current) => (current === next ? current : next));
+	}, []);
+
+	const followToBottom = useCallback(() => {
+		if (!shouldFollowRef.current || followFrameRef.current !== null) return;
+
+		followFrameRef.current = requestAnimationFrame(() => {
+			followFrameRef.current = null;
+			if (!shouldFollowRef.current) return;
+
+			const scrollEl = scrollElRef.current;
+			if (!scrollEl) return;
+			scrollEl.scrollTop = scrollEl.scrollHeight;
+			updateAtBottom(true);
+		});
+	}, [updateAtBottom]);
 
 	// ResizeObserver — 内容高度增长时自动滚到底部
 	useEffect(() => {
 		const content = contentElRef.current;
 		if (!content) return;
 
-		const observer = new ResizeObserver(() => {
-			if (isAtBottomRef.current && scrollElRef.current) {
-				scrollElRef.current.scrollTop = scrollElRef.current.scrollHeight;
-			}
-		});
+		const observer = new ResizeObserver(followToBottom);
 		observer.observe(content);
 		return () => observer.disconnect();
-	}, []);
+	}, [followToBottom]);
 
-	// scroll 事件 — 判断用户是否滚离底部（阈值 2px）
+	// 几何位置只负责 UI 状态。自动跟随意图由用户输入单独控制，
+	// 避免流式 Markdown 重排产生的瞬时距离误判永久关闭跟随。
 	useEffect(() => {
 		const el = scrollElRef.current;
 		if (!el) return;
 
 		const onScroll = () => {
-			const s = scrollElRef.current;
-			if (!s) return;
-			const dist = s.scrollHeight - s.scrollTop - s.clientHeight;
-			const atBottom = dist <= 2;
-			if (atBottom !== isAtBottomRef.current) {
-				isAtBottomRef.current = atBottom;
-				setIsAtBottom(atBottom);
+			const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+			const atBottom = distance <= BOTTOM_PROXIMITY_PX;
+			updateAtBottom(atBottom);
+
+			if (atBottom) {
+				shouldFollowRef.current = true;
+			} else if (pointerDownRef.current) {
+				shouldFollowRef.current = false;
 			}
 		};
+		const onWheel = (event: WheelEvent) => {
+			if (event.deltaY < 0) shouldFollowRef.current = false;
+		};
+		const onPointerDown = () => {
+			pointerDownRef.current = true;
+		};
+		const onPointerUp = () => {
+			pointerDownRef.current = false;
+		};
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (!isEditableTarget(event.target) && STOP_FOLLOW_KEYS.has(event.key)) {
+				shouldFollowRef.current = false;
+			}
+		};
+
 		el.addEventListener("scroll", onScroll, { passive: true });
-		return () => el.removeEventListener("scroll", onScroll);
-	}, []);
+		el.addEventListener("wheel", onWheel, { passive: true });
+		el.addEventListener("pointerdown", onPointerDown, { passive: true });
+		window.addEventListener("pointerup", onPointerUp, { passive: true });
+		window.addEventListener("pointercancel", onPointerUp, { passive: true });
+		window.addEventListener("keydown", onKeyDown);
+		return () => {
+			el.removeEventListener("scroll", onScroll);
+			el.removeEventListener("wheel", onWheel);
+			el.removeEventListener("pointerdown", onPointerDown);
+			window.removeEventListener("pointerup", onPointerUp);
+			window.removeEventListener("pointercancel", onPointerUp);
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [updateAtBottom]);
 
 	// 初始滚到底部
 	useEffect(() => {
-		if (scrollElRef.current) {
-			scrollElRef.current.scrollTop = scrollElRef.current.scrollHeight;
-		}
-	}, []);
+		followToBottom();
+	}, [followToBottom]);
+
+	useEffect(
+		() => () => {
+			if (followFrameRef.current !== null) {
+				cancelAnimationFrame(followFrameRef.current);
+				followFrameRef.current = null;
+			}
+		},
+		[],
+	);
 
 	const scrollToBottom = useCallback(() => {
-		if (scrollElRef.current) {
-			scrollElRef.current.scrollTop = scrollElRef.current.scrollHeight;
-			setIsAtBottom(true);
+		shouldFollowRef.current = true;
+		const scrollEl = scrollElRef.current;
+		if (scrollEl) {
+			scrollEl.scrollTop = scrollEl.scrollHeight;
+			updateAtBottom(true);
 		}
-	}, []);
+		followToBottom();
+	}, [followToBottom, updateAtBottom]);
 
-	const stopScroll = useCallback(() => setIsAtBottom(false), []);
+	const stopScroll = useCallback(() => {
+		shouldFollowRef.current = false;
+		updateAtBottom(false);
+	}, [updateAtBottom]);
 
 	const scrollRefCallback = useCallback((el: HTMLDivElement | null) => {
 		scrollElRef.current = el;
@@ -114,7 +180,7 @@ function useChatScroll(): ConversationContextValue {
 		},
 	});
 
-	return { scrollRef, contentRef, isAtBottom, scrollToBottom, stopScroll };
+	return { scrollRef, contentRef, isAtBottom, scrollToBottom, followToBottom, stopScroll };
 }
 
 // ===== Conversation 根容器 =====

@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Separator } from "@shared/components/ui/separator";
+import { cn } from "@shared/lib/utils";
 import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { lazy, memo, Suspense, useEffect } from "react";
@@ -152,7 +153,7 @@ function AppLayout({
 
 				<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
 
-				<main className="flex min-w-[340px] flex-1 flex-col overflow-hidden rounded-lg border border-hairline bg-background">
+				<main className={cn("flex min-w-[340px] flex-1 flex-col overflow-hidden bg-background", !sidebarCollapsed || !rightPanelCollapsed ? "rounded-lg border border-hairline" : "")}>
 					{appReadyPhase < 1 ? null : showScheduledTasks ? (
 						<ScheduledTasksPage />
 					) : projects.length === 0 ? (
@@ -178,6 +179,7 @@ function AppLayout({
 								projects={projects}
 								activeAgentId={activeAgentId}
 								sidebarCollapsed={sidebarCollapsed}
+								rightPanelCollapsed={rightPanelCollapsed}
 								onSelect={handleSelectAgent}
 								onClose={handleCloseSessionSheet}
 								onReorder={handleReorderSessionSheets}

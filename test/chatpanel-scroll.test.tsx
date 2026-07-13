@@ -1,47 +1,193 @@
 // @vitest-environment jsdom
 //
-// 回归测试：聊天滚动架构 —— Conversation 原语（原生实现）
-//
-// Look 现在使用原生实现（React Context + ResizeObserver + scroll 事件），
-// 替代了 react-virtuoso 和 use-stick-to-bottom。
-// Conversation / ConversationContent / ConversationScrollButton 封装了滚动逻辑。
-//
-// 验证：
-//   1. ConversationScrollButton — 使用 Conversation Context 控制显隐 + 点击回底部
-//   2. 静态源码检查 ChatMessageList — 确认使用 Conversation，不再引用 use-stick-to-bottom 或 react-virtuoso
-
-// ---- Module-level mocks ----------------------------------------------
+// Conversation 原语的滚动状态机回归测试。
 
 class ResizeObserverMock {
-	observe(): void {}
+	static instances: ResizeObserverMock[] = [];
+	readonly callback: ResizeObserverCallback;
+	target: Element | null = null;
+
+	constructor(callback: ResizeObserverCallback) {
+		this.callback = callback;
+		ResizeObserverMock.instances.push(this);
+	}
+
+	observe(target: Element): void {
+		this.target = target;
+	}
 	unobserve(): void {}
 	disconnect(): void {}
+
+	trigger(): void {
+		this.callback([], this as unknown as ResizeObserver);
+	}
 }
 vi.stubGlobal("ResizeObserver", ResizeObserverMock);
 
-// ---- Imports --------------------------------------------------------
+let nextFrameId = 0;
+const pendingFrames = new Map<number, FrameRequestCallback>();
+vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+	const id = ++nextFrameId;
+	pendingFrames.set(id, callback);
+	return id;
+});
+vi.stubGlobal("cancelAnimationFrame", (id: number) => pendingFrames.delete(id));
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { ConversationScrollButton } from "../src/renderer/components/chat/conversation";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { type ReactElement, StrictMode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	Conversation,
+	ConversationContent,
+	ConversationScrollButton,
+	useConversationContext,
+} from "../src/renderer/components/chat/conversation";
 
-// ============================================================
-// 1) ConversationScrollButton
-// ============================================================
+function flushFrames(): void {
+	const frames = [...pendingFrames.entries()];
+	pendingFrames.clear();
+	for (const [, callback] of frames) callback(performance.now());
+}
+
+interface ScrollMetrics {
+	scrollHeight: number;
+	clientHeight: number;
+	scrollTop: number;
+}
+
+function installScrollMetrics(element: HTMLDivElement): ScrollMetrics {
+	const metrics: ScrollMetrics = { scrollHeight: 600, clientHeight: 200, scrollTop: 0 };
+	Object.defineProperties(element, {
+		scrollHeight: { configurable: true, get: () => metrics.scrollHeight },
+		clientHeight: { configurable: true, get: () => metrics.clientHeight },
+		scrollTop: {
+			configurable: true,
+			get: () => metrics.scrollTop,
+			set: (value: number) => {
+				metrics.scrollTop = Math.max(0, Math.min(Number(value), metrics.scrollHeight - metrics.clientHeight));
+			},
+		},
+	});
+	return metrics;
+}
+
+function ScrollHarness(): ReactElement {
+	const { followToBottom, isAtBottom, scrollToBottom, stopScroll } = useConversationContext();
+	return (
+		<>
+			<ConversationContent>
+				<div>Streaming content</div>
+			</ConversationContent>
+			<output data-testid="bottom-state">{String(isAtBottom)}</output>
+			<button type="button" onClick={followToBottom}>
+				Follow
+			</button>
+			<button type="button" onClick={scrollToBottom}>
+				Force bottom
+			</button>
+			<button type="button" onClick={stopScroll}>
+				Stop
+			</button>
+		</>
+	);
+}
+
+function renderHarness(): {
+	scroller: HTMLDivElement;
+	metrics: ScrollMetrics;
+	observer: ResizeObserverMock;
+} {
+	const { container } = render(
+		<StrictMode>
+			<Conversation>
+				<ScrollHarness />
+			</Conversation>
+		</StrictMode>,
+	);
+	const scroller = container.querySelector('[role="log"] > div');
+	if (!(scroller instanceof HTMLDivElement)) throw new Error("scroll container missing");
+	const metrics = installScrollMetrics(scroller);
+	act(flushFrames);
+	const observer = ResizeObserverMock.instances.at(-1);
+	if (!observer) throw new Error("ResizeObserver missing");
+	return { scroller, metrics, observer };
+}
+
+beforeEach(() => {
+	ResizeObserverMock.instances = [];
+	pendingFrames.clear();
+});
+
+afterEach(() => {
+	cleanup();
+	pendingFrames.clear();
+});
 
 describe("ConversationScrollButton", () => {
-	// ConversationScrollButton 依赖 Conversation Context（useConversationContext），
-	// 直接渲染会抛出 Context 缺失错误。这里验证它导出了一个可导入的组件函数。
 	it("is a named export from conversation.tsx", () => {
 		expect(typeof ConversationScrollButton).toBe("function");
 	});
 });
 
-// ============================================================
-// 2) Static source check
-// ============================================================
+describe("Conversation streaming follow", () => {
+	it("keeps following after a transient non-bottom scroll event caused by layout growth", () => {
+		const { scroller, metrics, observer } = renderHarness();
+		expect(metrics.scrollTop).toBe(400);
+
+		metrics.scrollHeight = 700;
+		fireEvent.scroll(scroller);
+		expect(screen.getByTestId("bottom-state").textContent).toBe("false");
+
+		act(() => {
+			observer.trigger();
+			flushFrames();
+		});
+		expect(metrics.scrollTop).toBe(500);
+		expect(screen.getByTestId("bottom-state").textContent).toBe("true");
+	});
+
+	it("stops for an intentional upward wheel and resumes when the user returns to the bottom", () => {
+		const { scroller, metrics, observer } = renderHarness();
+
+		fireEvent.wheel(scroller, { deltaY: -48 });
+		metrics.scrollTop = 280;
+		fireEvent.scroll(scroller);
+		metrics.scrollHeight = 700;
+		act(() => {
+			observer.trigger();
+			flushFrames();
+		});
+		expect(metrics.scrollTop).toBe(280);
+		expect(screen.getByTestId("bottom-state").textContent).toBe("false");
+
+		metrics.scrollTop = 500;
+		fireEvent.scroll(scroller);
+		metrics.scrollHeight = 760;
+		act(() => {
+			observer.trigger();
+			flushFrames();
+		});
+		expect(metrics.scrollTop).toBe(560);
+		expect(screen.getByTestId("bottom-state").textContent).toBe("true");
+	});
+
+	it("force-scroll re-enables following after position restoration disabled it", () => {
+		const { metrics, observer } = renderHarness();
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+		metrics.scrollHeight = 700;
+		act(() => {
+			observer.trigger();
+			flushFrames();
+		});
+		expect(metrics.scrollTop).toBe(400);
+
+		fireEvent.click(screen.getByRole("button", { name: "Force bottom" }));
+		act(flushFrames);
+		expect(metrics.scrollTop).toBe(500);
+	});
+});
 
 describe("ChatMessageList source (scroll container wiring)", () => {
 	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/chat/ChatMessageList.tsx"), "utf8");

@@ -285,57 +285,55 @@ async function initSessionRuntime(): Promise<void> {
 			safeSendEvent({ type: "error", message: body });
 			if (Notification.isSupported()) new Notification({ title: "Look scheduled task failed", body }).show();
 		},
-			onFinished: async ({ task, log }) => {
-				const notification = task.notification;
-				if (!notification?.enabled) return;
-				if (!larkChannelManager) throw new Error("IM channel manager is not available");
-				const succeeded = log.status === "success";
-				const rawDetail = succeeded ? (log.output || "") : (log.errorMessage || "");
-				const finishedAt = log.finishedAt ?? new Date().toISOString();
-				const text = [
-					`${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
-					`时间：${finishedAt}`,
-					task.model ? `模型：${task.model}` : undefined,
-					rawDetail ? `结果：${rawDetail.slice(0, 1_500)}` : undefined,
-				]
-					.filter(Boolean)
-					.join("\n");
-				// 先截断再转义：避免转义膨胀（*→\*）导致有效内容被额外压缩
-				// Feishu 卡片 markdown 元素支持大段文本，20K 字符远在安全范围内
-				const MAX_RESULT = 20_000;
-				const snippet = rawDetail.length > MAX_RESULT
-					? rawDetail.slice(0, MAX_RESULT) + "…[内容过长已截断]"
-					: rawDetail;
-				const escaped = snippet
-					.replace(/\*/g, "\\*")
-					.replace(/_/g, "\\_")
-					.replace(/`/g, "\\`");
-				const resultContent = rawDetail
-					? `**执行结果：**\n${escaped}`
-					: (succeeded ? "**执行结果：** （无输出内容）" : "**执行结果：** （无错误信息）");
-				const card = {
-					config: { wide_screen_mode: true },
-					header: {
-						title: {
-							tag: "plain_text" as const,
-							content: `${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
-						},
-						template: succeeded ? ("green" as const) : ("red" as const),
+		onFinished: async ({ task, log }) => {
+			const notification = task.notification;
+			if (!notification?.enabled) return;
+			if (!larkChannelManager) throw new Error("IM channel manager is not available");
+			const succeeded = log.status === "success";
+			const rawDetail = succeeded ? log.output || "" : log.errorMessage || "";
+			const finishedAt = log.finishedAt ?? new Date().toISOString();
+			const text = [
+				`${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
+				`时间：${finishedAt}`,
+				task.model ? `模型：${task.model}` : undefined,
+				rawDetail ? `结果：${rawDetail.slice(0, 1_500)}` : undefined,
+			]
+				.filter(Boolean)
+				.join("\n");
+			// 先截断再转义：避免转义膨胀（*→\*）导致有效内容被额外压缩
+			// Feishu 卡片 markdown 元素支持大段文本，20K 字符远在安全范围内
+			const MAX_RESULT = 20_000;
+			const snippet =
+				rawDetail.length > MAX_RESULT ? rawDetail.slice(0, MAX_RESULT) + "…[内容过长已截断]" : rawDetail;
+			const escaped = snippet.replace(/\*/g, "\\*").replace(/_/g, "\\_").replace(/`/g, "\\`");
+			const resultContent = rawDetail
+				? `**执行结果：**\n${escaped}`
+				: succeeded
+					? "**执行结果：** （无输出内容）"
+					: "**执行结果：** （无错误信息）";
+			const card = {
+				config: { wide_screen_mode: true },
+				header: {
+					title: {
+						tag: "plain_text" as const,
+						content: `${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
 					},
-					elements: [
-						{ tag: "markdown" as const, content: `**任务状态：** ${succeeded ? "成功" : "失败"}` },
-						{ tag: "markdown" as const, content: `**执行时间：** ${finishedAt}` },
-						...(task.model ? [{ tag: "markdown" as const, content: `**执行模型：** ${task.model}` }] : []),
-						{ tag: "markdown" as const, content: resultContent },
-					],
-				};
-				const result = await larkChannelManager.sendTestMessage({
-					receiveIdType: "chat_id",
-					receiveId: notification.targetChatId,
-					text,
-					card,
-				});
-				if (!result.success) throw new Error(result.error ?? "Failed to send IM notification");
+					template: succeeded ? ("green" as const) : ("red" as const),
+				},
+				elements: [
+					{ tag: "markdown" as const, content: `**任务状态：** ${succeeded ? "成功" : "失败"}` },
+					{ tag: "markdown" as const, content: `**执行时间：** ${finishedAt}` },
+					...(task.model ? [{ tag: "markdown" as const, content: `**执行模型：** ${task.model}` }] : []),
+					{ tag: "markdown" as const, content: resultContent },
+				],
+			};
+			const result = await larkChannelManager.sendTestMessage({
+				receiveIdType: "chat_id",
+				receiveId: notification.targetChatId,
+				text,
+				card,
+			});
+			if (!result.success) throw new Error(result.error ?? "Failed to send IM notification");
 		},
 	});
 	runtimeManager.setSchedulerService(schedulerService);

@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useAtomValue, useSetAtom } from "jotai";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type UsageAtomData, usageDataAtom } from "../../store/atoms";
 import UsageStackedChart from "./UsageStackedChart";
@@ -107,6 +107,24 @@ export default function UsageHeatmap() {
 	);
 	const visibleMonthLabels = useMemo(() => nonOverlappingLabels(monthLabels), [monthLabels]);
 
+	// 热力图自动滚动到今天所在列居中
+	const scrollRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const container = scrollRef.current;
+		if (!container) return;
+		const today = new Date();
+		// 仅当前年份时执行滚动
+		if (today.getFullYear() !== selectedYear) return;
+		const jan1 = startOfYear(selectedYear);
+		const startDay = jan1.getDay();
+		const gridStart = new Date(selectedYear, 0, 1 - startDay);
+		const daysSinceGridStart = Math.floor((today.getTime() - gridStart.getTime()) / (1000 * 60 * 60 * 24));
+		const todayCol = Math.floor(daysSinceGridStart / WEEK_DAYS);
+		const colWidth = CELL_SIZE + GAP;
+		const scrollLeft = todayCol * colWidth - container.clientWidth / 2 + colWidth / 2;
+		container.scrollLeft = Math.max(0, scrollLeft);
+	}, [selectedYear]);
+
 	const total = useMemo(() => {
 		if (!data) return 0;
 		return days.reduce((sum, day) => {
@@ -161,7 +179,7 @@ export default function UsageHeatmap() {
 					</span>
 				</div>
 
-				<div className="flex-1 min-w-0 overflow-x-auto">
+				<div ref={scrollRef} className="flex-1 min-w-0 overflow-x-auto">
 					{/* Month labels */}
 					<div className="relative" style={{ height: labelHeight }}>
 						{visibleMonthLabels.map(({ colIndex, label }) => (

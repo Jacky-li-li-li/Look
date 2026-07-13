@@ -14,4 +14,4 @@ export interface UserProfile {
 
 export const DEFAULT_USER_NAME = "You";
 export const DEFAULT_USER_AVATAR = "";
-export const DEFAULT_USER_ROLE = "Pro";
+export const DEFAULT_USER_ROLE = "";

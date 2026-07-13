@@ -664,13 +664,15 @@
 		"start": "開始",
 		"empty": "スケジュールタスクはありません",
 		"emptyHint": "タスクを作成し、内容を確認してから開始してください。",
+		"details": "タスク詳細",
 		"history": "実行履歴",
 		"noRuns": "実行履歴はありません。",
 		"attemptLabel": "{{max}} 回中 {{attempt}} 回目",
 		"tasks": "タスク",
 		"showAll": "すべて表示",
 		"noSelection": "タスクを選択",
-		"noSelectionHint": "リストからタスクを選んで詳細を表示するか、新しいタスクを作成してください。"
+		"noSelectionHint": "リストからタスクを選んで詳細を表示するか、新しいタスクを作成してください。",
+		"sessionOpenFailed": "セッションを開けませんでした。"
 	},
 	"toast": {
 		"modelUnavailable": "モデルが利用できません: {{primary}}。{{resolved}} に切り替えました。",
