@@ -5,7 +5,7 @@
 import { Button } from "@shared/components/ui/button";
 import SimplePopover from "@shared/components/ui/simple-popover";
 import type { ThinkingLevel } from "@shared/types";
-import { Brain, Check, ChevronDown } from "lucide-react";
+import { Brain, Check } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -66,10 +66,6 @@ export default function ThinkingSelector({ currentLevel, availableThinkingLevels
 			className="group/selector h-7 font-mono text-[11px]"
 		>
 			<Brain data-icon="inline-start" className={`size-3 ${LEVEL_COLORS[current.value]}`} />
-			<ChevronDown
-				data-icon="inline-end"
-				className="size-3 transition-transform duration-150 group-data-[state=open]/selector:rotate-180"
-			/>
 		</Button>
 	);
 

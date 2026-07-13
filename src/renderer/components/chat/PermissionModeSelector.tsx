@@ -7,7 +7,7 @@ import { Button } from "@shared/components/ui/button";
 import SimplePopover from "@shared/components/ui/simple-popover";
 import type { PermissionMode } from "@shared/types";
 import { useSetAtom } from "jotai";
-import { Check, ChevronDown, Shield } from "lucide-react";
+import { Check, Shield } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -80,15 +80,11 @@ export default function PermissionModeSelector({ agentId, currentMode }: Permiss
 				<Button
 					variant="line"
 					size="sm"
-					className="group/perm h-7 gap-1 font-mono text-[11px]"
+					className="group/perm h-7 font-mono text-[11px]"
 					title={t(current.descriptionKey)}
 					aria-label={t(current.descriptionKey)}
 				>
 					<Shield className={`size-3 ${MODE_COLORS[currentMode]}`} data-icon="inline-start" />
-					<ChevronDown
-						data-icon="inline-end"
-						className="size-3 transition-transform duration-150 group-data-[state=open]/perm:rotate-180"
-					/>
 				</Button>
 			}
 		>

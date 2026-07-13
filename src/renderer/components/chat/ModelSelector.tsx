@@ -5,7 +5,7 @@
 import { Button } from "@shared/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@shared/components/ui/dialog";
 import type { AvailableModel } from "@shared/types";
-import { ArrowRight, Check, ChevronDown, Search } from "lucide-react";
+import { ArrowRight, Check, Search } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -133,10 +133,6 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 						data-icon="inline-start"
 					/>
 					<span className="whitespace-nowrap">{label}</span>
-					<ChevronDown
-						data-icon="inline-end"
-						className="size-3 transition-transform duration-150 group-data-[state=open]/selector:rotate-180"
-					/>
 				</Button>
 			</DialogTrigger>
 			<DialogContent className="max-w-xl p-0 max-h-[85vh] overflow-hidden grid-rows-[auto_auto_1fr]" showCloseButton>
