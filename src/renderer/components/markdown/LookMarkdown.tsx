@@ -130,14 +130,17 @@ const CODE_LANGS = [
 ];
 
 const STREAMING_MARKDOWN_SMOOTH_OPTIONS = {
-	minCharsPerSecond: 600,
-	maxCharsPerSecond: 8000,
-	targetLatencyMs: 90,
-	catchUpLatencyMs: 35,
-	catchUpThreshold: 160,
-	maxCommitFps: 60,
+	// ── 瀑布流式行级展开 ──
+	// 每帧交付一整行甚至一整段（~800-1200 字符），
+	// 而非逐字吐出，配合 CSS 曲线动画实现逐行瀑布效果。
+	minCharsPerSecond: 2000,
+	maxCharsPerSecond: 12000,
+	targetLatencyMs: 40,
+	catchUpLatencyMs: 20,
+	catchUpThreshold: 120,
+	maxCommitFps: 30,
 	startDelayMs: 0,
-	maxCharsPerCommit: 160,
+	maxCharsPerCommit: 1200,
 	flushOnFinish: true,
 };
 

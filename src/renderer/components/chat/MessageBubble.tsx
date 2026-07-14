@@ -542,7 +542,10 @@ export const StreamingMessageBubble = memo(function StreamingMessageBubble({
 					isActiveLeaf={false}
 					isUser={false}
 				/>
-				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-msg-block text-[13px] leading-relaxed">
+				<div
+					className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-msg-block text-[13px] leading-relaxed"
+					data-streaming={isStreaming ? "true" : undefined}
+				>
 					<StreamingBlocksBubble
 						blocks={blocks}
 						toolExecutions={toolExecutions}

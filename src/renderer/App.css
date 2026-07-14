@@ -1002,8 +1002,75 @@ body {
 	}
 
 	/* ============================================================
-		 Streaming Cursor — smooth blink for streaming markdown tail
+		 Waterfall Streaming — 逐行曲线展开瀑布流式效果
+		 ============================================================
+		 Instead of a character-by-character typewriter, streaming
+		 messages reveal block-level children (paragraphs, headings,
+		 list items, code blocks) one by one with a smooth slide-down
+		 + fade-in curve, creating a waterfall cascade effect.
 		 ============================================================ */
+
+	/* ── 瀑布行入场动画 ── */
+	@keyframes waterfall-line-in {
+		0% {
+			opacity: 0;
+			transform: translateY(-6px) scale(0.98);
+			filter: blur(1px);
+		}
+		60% {
+			opacity: 0.7;
+			transform: translateY(1px) scale(1.001);
+			filter: blur(0px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+			filter: blur(0px);
+		}
+	}
+
+	/* ── 流式容器整体遮罩展开 ── */
+	@keyframes waterfall-reveal {
+		0% {
+			clip-path: inset(0 0 100% 0);
+		}
+		100% {
+			clip-path: inset(0 0 0 0);
+		}
+	}
+
+	/* ── 流式消息中的块级子元素逐行动画 ──
+	   message-prose 是 markstream-react 渲染输出的容器，
+	   其直接子元素为 p, h1-h6, pre, ul, ol, blockquote 等。
+	   每个新出现的块级元素获得瀑布展开动画。
+	   仅在 data-streaming="true" 的流式气泡中生效，
+	   避免已持久化的静态消息产生闪烁。 ── */
+	[data-streaming="true"] .message-prose > * {
+		animation: waterfall-line-in 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+	}
+
+	/* ── 流式容器整体遮罩入场 ──
+	   仅在流式消息首次渲染时触发，整体从上到下展开。 ── */
+	.whisper-bubble--assistant[data-streaming="true"] {
+		animation: waterfall-reveal 0.5s ease-out both;
+	}
+
+	/* ── 流式光标 ──
+	   在流式输出末尾显示一个柔和的脉冲光标作为"正在输入"提示。 ── */
+	@keyframes streaming-cursor-pulse {
+		0%, 100% { opacity: 0.4; }
+		50% { opacity: 1; }
+	}
+
+	.streaming-cursor {
+		display: inline-block;
+		width: 1px;
+		height: 1em;
+		background: var(--muted-foreground);
+		margin-left: 1px;
+		vertical-align: text-bottom;
+		animation: streaming-cursor-pulse 0.8s ease-in-out infinite;
+	}
 
 	/* ============================================================
 		 Liquid Row — session list item
