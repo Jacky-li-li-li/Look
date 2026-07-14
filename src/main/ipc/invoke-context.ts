@@ -5,10 +5,12 @@
 // on the monolithic registration file.
 // ============================================================
 
+import type { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
+import type { CustomProvidersStore } from "../settings/custom-providers.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 
@@ -19,6 +21,9 @@ type InvokeHandler<T extends RendererToMainEvent["type"] = RendererToMainEvent["
 export interface InvokeContext {
 	runtimeManager: SessionRuntimeManager;
 	mainWindow: BrowserWindow;
+	modelRegistry: ModelRegistry;
+	authStorage: AuthStorage;
+	customProviders: CustomProvidersStore;
 	workspaceFileService: WorkspaceFileService;
 	workspaceTreeService: WorkspaceTreeService;
 	larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager;

@@ -69,7 +69,7 @@ export default function ProfileEditor() {
 			return next;
 		});
 		if (api?.updateUserProfile) {
-			api.updateUserProfile(patch).catch(() => {});
+			api.updateUserProfile(patch).catch((err) => console.warn("[ProfileEditor] updateUserProfile failed:", err));
 		}
 		// RLS enforces auth.uid() = id on user_profiles;
 		// the id comes from supabase.auth.getUser() — server-verified identity

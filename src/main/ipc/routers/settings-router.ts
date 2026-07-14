@@ -4,6 +4,8 @@
 
 import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
+import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
 import { toProviderConfig } from "../../settings/custom-providers.js";
 import {
@@ -20,40 +22,40 @@ import type { IpcRouter } from "../invoke-context.js";
 
 export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:get", async () => {
-		const result = await ctx.runtimeManager.getProviderSettings();
+		const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
 		return { success: true, ...result };
 	});
 
 	register("settings:get-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
-		const key = ctx.runtimeManager.getApiKey(_provider);
+		const key = getApiKey(ctx.authStorage, _provider);
 		return { success: true, key: key ?? null };
 	});
 
 	register("settings:set-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
 		guardString(data.key, "key");
-		ctx.runtimeManager.setApiKey(_provider, data.key);
-		const result = await ctx.runtimeManager.getProviderSettings();
+		setApiKey(ctx.authStorage, _provider, data.key);
+		const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
 		return { success: true, ...result };
 	});
 
 	register("settings:test-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
 		guardString(data.key, "key");
-		const result = await ctx.runtimeManager.testApiKey(_provider, data.key);
+		const result = await testApiKey(_provider, data.key);
 		return { success: true, result };
 	});
 
 	register("settings:test-env-key", async (data) => {
 		const _provider = guardProvider(data.provider);
-		const result = await ctx.runtimeManager.testEnvKey(_provider);
+		const result = await testConfiguredProvider(ctx.modelRegistry, _provider);
 		return { success: true, result };
 	});
 
 	register("settings:add-custom-provider", async (data) => {
 		const input = guardCustomProviderInput(data.payload, "payload") as unknown as CustomProviderInput;
-		ctx.runtimeManager.customProviders.add(input);
+		ctx.customProviders.add(input);
 		return { success: true };
 	});
 
@@ -61,18 +63,18 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const payload = guardObject(data.payload, "payload");
 		const name = guardString(payload.name, "payload.name");
 		const patch = guardObject(payload.patch, "payload.patch") as Partial<CustomProviderInput>;
-		ctx.runtimeManager.customProviders.update(name, patch);
+		ctx.customProviders.update(name, patch);
 		return { success: true };
 	});
 
 	register("settings:remove-custom-provider", async (data) => {
 		const payload = guardObject(data.payload, "payload");
 		const name = guardString(payload.name, "payload.name");
-		return { success: true, removed: ctx.runtimeManager.customProviders.remove(name) };
+		return { success: true, removed: ctx.customProviders.remove(name) };
 	});
 
 	register("settings:list-custom-providers", async () => {
-		return { success: true, providers: ctx.runtimeManager.customProviders.list() };
+		return { success: true, providers: ctx.customProviders.list() };
 	});
 
 	register("settings:test-custom-provider", async (data) => {

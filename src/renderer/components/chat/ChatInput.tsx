@@ -83,7 +83,7 @@ const ChatInput = function ChatInput({
 			.then((result) => {
 				if (!cancelled && result?.success && result.mode) setPermissionMode(result.mode);
 			})
-			.catch(() => {});
+			.catch((err) => console.warn("[ChatInput] getPermissionMode failed:", err));
 		return () => {
 			cancelled = true;
 		};

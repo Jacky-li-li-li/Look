@@ -23,11 +23,10 @@ import { UIEventBatcher } from "./ui-event-batcher.js";
  */
 export interface ISessionEventHost {
 	onAgentEnd(sessionId: string, willRetry: boolean): Promise<void>;
-	onAgentStart(sessionId: string): number;
 	onMessageEnd(sessionId: string, message: AgentMessage): Promise<void>;
 	onSubSessionAgentEnd(sessionId: string): void;
 	emitSessionUpdated(sessionId: string): void;
-	emitSessionState(sessionId: string, reason: SessionSnapshotEnvelope["reason"]): void;
+	emitSessionState(sessionId: string, reason: SessionSnapshotEnvelope["reason"], willRetry?: boolean): void;
 	/** 每次 tool_execution_end 时检查 TODO.md 是否需要更新 */
 	emitTodoUpdate(sessionId: string): void;
 	/** 流式输出期间轻量推送上下文使用量（带内部节流） */
@@ -82,16 +81,14 @@ export class SessionEventProcessor {
 		// 3. Side-effect dispatch
 		switch (event.type) {
 			case "agent_end":
-				scope.streamingState = event.willRetry ? "retrying" : "idle";
-				this.host.emitSessionState(sessionId, "agent_end");
+				this.host.emitSessionState(sessionId, "agent_end", event.willRetry);
 				this.host.onAgentEnd(sessionId, event.willRetry).catch((err) => {
 					console.error("[SessionEventProcessor] onAgentEnd failed:", err);
 				});
 				if (!event.willRetry) this.host.onSubSessionAgentEnd(sessionId);
 				break;
 			case "agent_start":
-				scope.streamingState = "streaming";
-				scope.turnStartedAt = this.host.onAgentStart(sessionId);
+				scope.turnStartedAt = Date.now();
 				this.host.emitSessionUpdated(sessionId);
 				break;
 			case "message_end":
@@ -110,17 +107,15 @@ export class SessionEventProcessor {
 				this.host.emitTodoUpdate(sessionId);
 				break;
 			case "compaction_end":
-				scope.streamingState = event.willRetry ? "retrying" : "idle";
 				if (event.willRetry) {
-					this.host.emitSessionState(sessionId, "compaction_end");
+					this.host.emitSessionState(sessionId, "compaction_end", event.willRetry);
 				} else {
-					this.host.emitSessionState(sessionId, "agent_end");
+					this.host.emitSessionState(sessionId, "agent_end", event.willRetry);
 				}
 				break;
 			case "auto_retry_start":
 			case "auto_retry_end":
 				if (event.type === "auto_retry_end" && !event.success) {
-					scope.streamingState = "idle";
 					this.host.onSubSessionAgentEnd(sessionId);
 				}
 				this.host.emitSessionUpdated(sessionId);

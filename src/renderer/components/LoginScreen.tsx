@@ -486,7 +486,8 @@ export default function LoginScreen() {
 			avatar: p?.avatar || "",
 		};
 		setUserProfile(profile);
-		if (api?.updateUserProfile) api.updateUserProfile(profile).catch(() => {});
+		if (api?.updateUserProfile)
+			api.updateUserProfile(profile).catch((err) => console.warn("[LoginScreen] updateUserProfile failed:", err));
 		return profile;
 	}
 

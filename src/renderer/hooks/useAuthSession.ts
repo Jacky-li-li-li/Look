@@ -39,7 +39,7 @@ export function useAuthSession() {
 					writeAuthCache(r.profile);
 				}
 			})
-			.catch(() => {});
+			.catch((err) => console.warn("[useAuthSession] profile fetch failed:", err));
 
 		// Browser mock scenarios are deterministic renderer fixtures and must not
 		// be replaced by a real Supabase session from the developer's .env.

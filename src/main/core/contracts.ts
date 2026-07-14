@@ -134,9 +134,6 @@ export interface ISessionScope {
 	readonly sessionId: string;
 	readonly projectId: string;
 
-	/** Canonical streaming state derived from SDK events. */
-	streamingState: "idle" | "streaming" | "retrying";
-
 	/** Buffered UI events awaiting batch flush. */
 	uiEventBuffer: LookUiEvent[];
 

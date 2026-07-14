@@ -136,7 +136,10 @@ export function useAgentActions() {
 
 	const handleModelChanged = useCallback((newModel: string) => {
 		appStore.set(userPreferredModelAtom, newModel);
-		if (api) api.setGeneralSettings({ preferredModel: newModel }).catch(() => {});
+		if (api)
+			api.setGeneralSettings({ preferredModel: newModel }).catch((err) =>
+				console.warn("[useAgentActions] setGeneralSettings failed:", err),
+			);
 	}, []);
 
 	const handleCreateClick = useCallback(async (projectId: string) => {

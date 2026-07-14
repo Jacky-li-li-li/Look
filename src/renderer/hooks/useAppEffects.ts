@@ -37,7 +37,9 @@ export function useAppEffects() {
 			payload.openProjectIds = openProjectIds;
 			payload.openedSessionIds = openedSessionIds;
 			if (Object.keys(payload).length > 0) {
-				api.setGeneralSettings(payload).catch(() => {});
+				api.setGeneralSettings(payload).catch((err) =>
+					console.warn("[useAppEffects] setGeneralSettings failed:", err),
+				);
 			}
 		}, 500);
 		return () => clearTimeout(timer);

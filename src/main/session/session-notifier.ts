@@ -27,7 +27,7 @@ export class SessionNotifier {
 		private readonly queries: SessionNotifierQueries,
 	) {}
 
-	emitSessionState(sessionId: string | null, reason: SessionSnapshotEnvelope["reason"]): void {
+	emitSessionState(sessionId: string | null, reason: SessionSnapshotEnvelope["reason"], willRetry?: boolean): void {
 		if (!sessionId) return;
 		const info = this.queries.sessionInfoService.getAgentInfo(sessionId);
 		const projectId = info?.projectId;
@@ -40,7 +40,7 @@ export class SessionNotifier {
 			const runtime = {
 				model: session.model,
 				thinkingLevel: session.thinkingLevel,
-				isStreaming: info?.isStreaming ?? session.isStreaming,
+				isStreaming: willRetry !== undefined ? willRetry : (info?.isStreaming ?? session.isStreaming),
 				isRetrying: session.isRetrying,
 				isCompacting: session.isCompacting,
 				retryAttempt: session.retryAttempt,

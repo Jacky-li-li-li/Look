@@ -76,19 +76,7 @@ export default function ProjectHeader({
 								maxLength={64}
 							/>
 						) : (
-							<span
-								className="block truncate text-[12px] font-semibold"
-								onDoubleClick={
-									isDefault
-										? undefined
-										: (event) => {
-												event.stopPropagation();
-												beginEdit("project", project.id, project.name);
-											}
-								}
-							>
-								{project.name}
-							</span>
+							<span className="block truncate text-[12px] font-semibold">{project.name}</span>
 						)}
 						<span className="block truncate font-mono text-[9px] leading-tight text-muted-foreground/55">
 							{shortenPath(project.cwd, homedir)}
@@ -117,7 +105,7 @@ export default function ProjectHeader({
 						<MoreHorizontal className="size-3" />
 					</Button>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end" className="w-44">
+				<DropdownMenuContent align="end" className="w-44" onCloseAutoFocus={(e) => e.preventDefault()}>
 					{!isDefault && (
 						<DropdownMenuItem onSelect={() => onOpenProject(project.id)} className="gap-2 text-[12px]">
 							<FolderOpen className="size-3.5" /> {t("workspace.openFolder", "Open folder")}

@@ -587,7 +587,7 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 						.then((r) => {
 							if (r?.success) onProvidersChange({ providers: r.providers, customStats: r.customStats });
 						})
-						.catch(() => {});
+						.catch((err) => console.warn("[ApiKeysTab] refresh settings failed:", err));
 				}}
 				mode="inline"
 				onBack={() => patchCustom("view", { type: "list" })}

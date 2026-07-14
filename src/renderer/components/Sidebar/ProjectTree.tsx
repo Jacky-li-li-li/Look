@@ -170,7 +170,10 @@ export default function ProjectTree({
 	// Edit handlers
 	const beginEdit = useCallback((kind: "project" | "session", id: string, value: string) => {
 		setEdit({ projectId: kind === "project" ? id : null, sessionId: kind === "session" ? id : null, value });
-		setTimeout(() => editRef.current?.select(), 0);
+		requestAnimationFrame(() => {
+			editRef.current?.focus();
+			editRef.current?.select();
+		});
 	}, []);
 
 	const cancelEdit = useCallback(() => {
@@ -188,9 +191,13 @@ export default function ProjectTree({
 		(event: React.KeyboardEvent) => {
 			if (event.key === "Enter") {
 				event.preventDefault();
+				event.stopPropagation();
+				event.nativeEvent.stopImmediatePropagation();
 				commitEdit();
 			} else if (event.key === "Escape") {
 				event.preventDefault();
+				event.stopPropagation();
+				event.nativeEvent.stopImmediatePropagation();
 				cancelEdit();
 			}
 		},

@@ -9,17 +9,6 @@
 // SRT and delegate pure-project operations to this service.
 // ============================================================
 
-// ============================================================
-// ProjectService — project CRUD, persistence, and trust management
-//
-// Extracted from SessionRuntimeManager. Owns the project index,
-// persistent storage (projects.json), and trust decision logic.
-//
-// Methods that cross into session/runtime territory (setActiveProject,
-// deleteProject, executeDeleteProject, setProjectTrust) remain in
-// SRT and delegate pure-project operations to this service.
-// ============================================================
-
 import fs, { existsSync, mkdirSync } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";

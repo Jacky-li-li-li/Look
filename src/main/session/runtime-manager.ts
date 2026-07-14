@@ -29,6 +29,7 @@ import type {
 	AgentDefinitionInfo,
 	AgentDefinitionInput,
 	AgentInfo,
+	EventCallback,
 	ForkedSessionResult,
 	ImSessionProvider,
 	MainToRendererEvent,
@@ -51,7 +52,7 @@ import { discoverAgents } from "../extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "../extensions/subagent/subagent-extension.js";
 import type { AgentConfig, SubagentHost, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
 import { MCPManager } from "../mcp/manager.js";
-import { ModelProviderService } from "../models/model-provider-service.js";
+import { getAvailableModels } from "../models/model-queries.js";
 import { PlanService } from "../permissions/plan.js";
 import { PermissionService } from "../permissions/service.js";
 import { ProjectDeletionService } from "../projects/project-deletion-service.js";
@@ -90,9 +91,7 @@ import { SessionNotifier } from "./session-notifier.js";
 import { SessionPermissionOrchestrator } from "./session-permission-orchestrator.js";
 import { SessionSubagentService } from "./session-subagent-service.js";
 
-export type { EventCallback } from "@look/shared/types";
-
-import type { EventCallback } from "@look/shared/types";
+export type { EventCallback };
 
 const MAX_NAME_LENGTH = 80;
 /** 最大子会话递归深度：防止 LLM 无限嵌套调用 subagent 工具。 */
@@ -108,10 +107,9 @@ const MAX_SUBAGENT_DEPTH = 5;
 export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISessionEventHost {
 	private readonly eventBus = new SessionEventBus();
 	private readonly sessionCatalog: SessionCatalog;
-	private readonly authStorage: AuthStorage;
-	private readonly modelRegistry: ModelRegistry;
-	private readonly customProvidersStore: CustomProvidersStore;
-	private readonly modelProviderService: ModelProviderService;
+	readonly authStorage: AuthStorage;
+	readonly modelRegistry: ModelRegistry;
+	readonly customProviders: CustomProvidersStore;
 	private readonly projectService: ProjectService;
 	private readonly scopeRegistry = new SessionScopeRegistry();
 	private readonly subAgentRegistry = new SubAgentRegistry();
@@ -165,17 +163,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	/** usage:updated 事件防抖定时器，合并高频 turn 完成事件。 */
 	private usageUpdateTimer: ReturnType<typeof setTimeout> | null = null;
 
-	/** Whether the session should be reported as streaming to the renderer.
-	 *  Falls back to the SDK getter only when no event-derived state exists. */
-	private isStreaming(sessionId: string, sdkValue: boolean): boolean {
-		const scope = this.scopeRegistry.get(sessionId);
-		if (scope) {
-			if (scope.streamingState === "idle") return false;
-			if (scope.streamingState === "streaming" || scope.streamingState === "retrying") return true;
-		}
-		return sdkValue;
-	}
-
 	constructor(workspaceFileService?: WorkspaceFileService, workspaceTreeService?: WorkspaceTreeService) {
 		ensureLookDir();
 		resetLegacySessionsOnce();
@@ -185,13 +172,8 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		}
 		this.authStorage = wrapAuthStorage(AuthStorage.create(getAuthPath()));
 		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
-		this.customProvidersStore = new CustomProvidersStore(this.modelRegistry, getCustomProvidersPath());
-		this.customProvidersStore.load();
-		this.modelProviderService = new ModelProviderService(
-			this.modelRegistry,
-			this.authStorage,
-			this.customProvidersStore,
-		);
+		this.customProviders = new CustomProvidersStore(this.modelRegistry, getCustomProvidersPath());
+		this.customProviders.load();
 		this.trustStore = new ProjectTrustStore(getLookDir());
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
 		this.projectService = new ProjectService(this.trustStore, this.globalSettingsManager);
@@ -241,7 +223,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			subAgentRegistry: this.subAgentRegistry,
 			scopeRegistry: this.scopeRegistry,
 			maxNameLength: MAX_NAME_LENGTH,
-			isStreaming: (sessionId, sdkValue) => this.isStreaming(sessionId, sdkValue),
 			listProjects: () => this.listProjects(),
 		});
 		this.sessionNotifier = new SessionNotifier(this.eventBus, {
@@ -362,7 +343,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			planService: this.planService,
 			userSettings: this.userSettings,
 			modelRegistry: this.modelRegistry,
-			getAvailableModelsSync: () => this.getAvailableModelsSync(),
+			getAvailableModelsSync: () => getAvailableModels(this.modelRegistry),
 		});
 		this.sessionMessagingService = new SessionMessagingService({
 			ensureRuntime: (sessionId) => this.ensureRuntime(sessionId),
@@ -394,10 +375,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			throw new Error("WorkspaceTreeService is not configured for this SessionRuntimeManager");
 		}
 		return this.workspaceTreeService;
-	}
-
-	get customProviders(): CustomProvidersStore {
-		return this.customProvidersStore;
 	}
 
 	/** O(1) lookup by id. */
@@ -631,7 +608,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 				askQuestions: (id, questions, signal) => this.planService.requestQuestions(id, questions, signal),
 				submitPlan: (id, plan, signal) => this.planService.requestApproval(id, plan, signal),
 			}),
-			createModelListExtensionFactory(async () => this.getAvailableModels()),
+			createModelListExtensionFactory(async () => getAvailableModels(this.modelRegistry)),
 			await createSubagentExtensionFactory(sessionId, this.createSubagentHost(resolvedProjectId), resolvedProjectId),
 			createMcpExtensionFactory(sessionId, this.mcpManager, _cwd, resolvedProjectId),
 		];
@@ -699,10 +676,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 			createdAt,
 			unsubscribe: () => {},
 		};
-		// Initialize canonical streaming state from the SDK snapshot at bind time.
-		// Subsequent transitions are driven by agent_start / agent_end events.
-		const scope = this.scopeRegistry.acquire(session.sessionId, projectId);
-		scope.streamingState = session.isStreaming ? "streaming" : "idle";
+		this.scopeRegistry.acquire(session.sessionId, projectId);
 		managed.unsubscribe = session.subscribe((event) => {
 			try {
 				this.handleSessionEvent(session.sessionId, event);
@@ -737,8 +711,7 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		this.scopeRegistry.release(previousSessionId);
 
 		// 为新 sessionId 获取新的 scope，防止 rebind 后事件被静默丢弃。
-		const newScope = this.scopeRegistry.acquire(session.sessionId, managed.projectId);
-		newScope.streamingState = session.isStreaming ? "streaming" : "idle";
+		this.scopeRegistry.acquire(session.sessionId, managed.projectId);
 		this.permissionService.restoreFromSession(session.sessionId, session.sessionManager);
 		this.planService.restoreToolSnapshot(session.sessionId, session.sessionManager);
 		await session.bindExtensions({
@@ -1033,11 +1006,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		await this.refreshAfterTurn(sessionId).catch((error) => this.emitError(error, sessionId));
 	}
 
-	onAgentStart(sessionId: string): number {
-		const now = Date.now();
-		return now;
-	}
-
 	async onMessageEnd(sessionId: string, message: AgentMessage): Promise<void> {
 		if (message.role === "assistant") {
 			this.subAgentRuntimeService.trackSubSessionMessageEnd(sessionId, message);
@@ -1083,8 +1051,12 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 	}
 
 	// ISessionEventHost — public for interface compatibility
-	emitSessionState(targetSessionId?: string, reason: SessionSnapshotEnvelope["reason"] = "activate"): void {
-		this.sessionNotifier.emitSessionState(targetSessionId ?? this.activeSessionId, reason);
+	emitSessionState(
+		targetSessionId?: string,
+		reason: SessionSnapshotEnvelope["reason"] = "activate",
+		willRetry?: boolean,
+	): void {
+		this.sessionNotifier.emitSessionState(targetSessionId ?? this.activeSessionId, reason, willRetry);
 	}
 
 	/** ISessionEventHost — 每次 tool_execution_end 时检查并推送 TODO.md 进度 */
@@ -1108,38 +1080,6 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 
 	private emitProjectList(): void {
 		this.sessionNotifier.emitProjectList();
-	}
-
-	setApiKey(provider: string, key: string): void {
-		this.modelProviderService.setApiKey(provider, key);
-	}
-
-	getApiKey(provider: string): string | undefined {
-		return this.modelProviderService.getApiKey(provider);
-	}
-
-	async testApiKey(provider: string, key: string) {
-		return this.modelProviderService.testApiKey(provider, key);
-	}
-
-	async testEnvKey(provider: string) {
-		return this.modelProviderService.testEnvKey(provider);
-	}
-
-	getAvailableModelsSync() {
-		return this.modelProviderService.getAvailableModels();
-	}
-
-	async getAvailableModels() {
-		return this.modelProviderService.getAvailableModels();
-	}
-
-	async getProviders() {
-		return this.modelProviderService.getProviders();
-	}
-
-	async getProviderSettings() {
-		return this.modelProviderService.getProviderSettings();
 	}
 
 	getPermissionMode(sessionId: string): PermissionMode {

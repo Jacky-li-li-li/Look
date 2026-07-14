@@ -143,8 +143,13 @@ export function createMcpExtensionFactory(
 	};
 }
 
-/** 将命令行字符串按 shell 引号规则分割，支持单引号、双引号和反斜杠转义。 */
+/** 将命令行字符串按 shell 引号规则分割，支持单引号、双引号和反斜杠转义。
+ *  拒绝 $()、反引号等 shell 扩展语法，防止命令注入。 */
 function shellSplitArgs(input: string): string[] {
+	// 拒绝 shell 命令替换和扩展语法
+	if (/\$\(|`|\$\(\(/.test(input)) {
+		throw new Error("MCP args must not contain shell expansions ($(), backticks, $(()))");
+	}
 	const args: string[] = [];
 	let current = "";
 	let inSingle = false;

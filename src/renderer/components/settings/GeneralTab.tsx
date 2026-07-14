@@ -32,7 +32,7 @@ function persistSettings(partial: {
 	autoTitleModel?: string | null;
 }) {
 	if (!api) return;
-	api.setGeneralSettings(partial).catch(() => {});
+	api.setGeneralSettings(partial).catch((err) => console.warn("[GeneralTab] setGeneralSettings failed:", err));
 }
 
 function SettingRow({
@@ -95,7 +95,7 @@ export default function GeneralTab() {
 					}));
 				}
 			})
-			.catch(() => {});
+			.catch((err) => console.warn("[GeneralTab] getGeneralSettings failed:", err));
 		api.getModels()
 			.then((r) => {
 				if (r?.success && r.models) {
@@ -109,7 +109,7 @@ export default function GeneralTab() {
 					}));
 				}
 			})
-			.catch(() => {});
+			.catch((err) => console.warn("[GeneralTab] getModels failed:", err));
 	}, []);
 
 	return (

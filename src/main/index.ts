@@ -454,7 +454,7 @@ async function initSessionRuntime(): Promise<void> {
 		// Auto-updater: check for updates 3s after startup
 		initUpdater(mainWindow);
 		setTimeout(() => {
-			checkForUpdates().catch(() => {});
+			checkForUpdates().catch((err) => console.warn("[Look] Update check failed:", err));
 		}, 3000);
 	}
 }

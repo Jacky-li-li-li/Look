@@ -9,6 +9,7 @@
 import type * as lark from "@larksuiteoapi/node-sdk";
 import type { NormalizedMessage } from "@larksuiteoapi/node-sdk";
 import type { LookUiEvent, MainToRendererEvent, ProjectInfo } from "@look/shared/types";
+import { getAvailableModels } from "../models/model-queries.js";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import { type ChatBinding, loadBindings, saveBindings } from "./im-storage.js";
 import type { LarkChannelManager } from "./lark-channel-manager.js";
@@ -467,7 +468,7 @@ export class LarkBridgeService {
 
 		if (args.length === 0) {
 			// 列出所有可用模型
-			const models = this.runtimeManager.getAvailableModelsSync();
+			const models = getAvailableModels(this.runtimeManager.modelRegistry);
 			if (models.length === 0) {
 				await channel?.send(chatId, { text: "📭 没有可用的模型。" });
 				return;
@@ -523,7 +524,7 @@ export class LarkBridgeService {
 				if (!activeProject) {
 					await channel
 						.send(chatId, { text: "❌ 无法创建 Agent 会话：请先在 Look 桌面端打开一个项目文件夹。" })
-						.catch(() => {});
+						.catch((err) => console.warn("[LarkBridgeService] Failed to send no-project error:", err));
 					return;
 				}
 				const projectId = activeProject.id;

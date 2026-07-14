@@ -63,12 +63,12 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("update:check", async () => {
-		checkForUpdates().catch(() => {});
+		checkForUpdates().catch((err) => console.warn("[system-router] checkForUpdates failed:", err));
 		return { success: true };
 	});
 
 	register("update:download", async () => {
-		downloadUpdate().catch(() => {});
+		downloadUpdate().catch((err) => console.warn("[system-router] downloadUpdate failed:", err));
 		return { success: true };
 	});
 

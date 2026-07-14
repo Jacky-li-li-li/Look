@@ -22,7 +22,6 @@ export interface SessionInfoServiceDependencies {
 	subAgentRegistry: Pick<SubAgentRegistry, "getMeta">;
 	scopeRegistry: Pick<SessionScopeRegistry, "get">;
 	maxNameLength: number;
-	isStreaming(sessionId: string, sdkValue: boolean): boolean;
 	listProjects(): ProjectInfo[];
 }
 
@@ -119,7 +118,7 @@ export class SessionInfoService {
 			thinkingLevel: session.thinkingLevel as ThinkingLevel,
 			modelSupportsThinking: session.supportsThinking(),
 			availableThinkingLevels: session.getAvailableThinkingLevels() as ThinkingLevel[],
-			isStreaming: this.deps.isStreaming(sessionId, session.isStreaming),
+			isStreaming: session.isStreaming || session.isRetrying || session.isCompacting,
 			isRetrying: session.isRetrying,
 			isCompacting: session.isCompacting,
 			messageCount: stats.totalMessages,

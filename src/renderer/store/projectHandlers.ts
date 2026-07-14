@@ -20,12 +20,7 @@ export function handleProjectEvent(
 		case "project:list": {
 			const previous = appStore.get(projectsAtom);
 			const previousIds = new Set(previous.map((project) => project.id));
-			const projectsChanged =
-				previous.length !== event.projects.length ||
-				!event.projects.every((p) => previous.some((pp) => pp.id === p.id));
-			if (projectsChanged) {
-				appStore.set(projectsAtom, event.projects);
-			}
+			appStore.set(projectsAtom, event.projects);
 			if (appStore.get(appReadyPhaseAtom) < 1) appStore.set(appReadyPhaseAtom, 1);
 			const projectIds = new Set(event.projects.map((project) => project.id));
 			appStore.set(

@@ -17,7 +17,6 @@ export class SessionScope implements ISessionScope {
 	public readonly sessionId: string;
 	public readonly projectId: string;
 
-	public streamingState: "idle" | "streaming" | "retrying" = "idle";
 	public uiEventBuffer: LookUiEvent[] = [];
 	public uiEventFlushTimer: ReturnType<typeof setTimeout> | null = null;
 	public uiEventFirstTimer: ReturnType<typeof setTimeout> | null = null;

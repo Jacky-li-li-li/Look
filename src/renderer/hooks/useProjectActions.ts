@@ -45,7 +45,7 @@ export function useProjectActions() {
 			.then((r) => {
 				if (r?.success) appStore.set(projectsAtom, r.projects);
 			})
-			.catch(() => {});
+			.catch((err) => console.warn("[useProjectActions] refreshProjects failed:", err));
 	}, []);
 
 	const handleRenameProject = useCallback(async (projectId: string, name: string) => {

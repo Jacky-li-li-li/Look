@@ -113,7 +113,9 @@ export class AgentScheduledTaskExecutor implements ScheduledTaskExecutor {
 		} finally {
 			// 使用 disposeRuntime 而非 destroyAgent：保留 session JSONL 文件在磁盘上，
 			// 让用户可以在侧边栏回看定时任务的完整对话记录（含工具调用和思考过程）
-			await this.runtimeManager.disposeRuntime(sessionId, true).catch(() => {});
+			await this.runtimeManager
+				.disposeRuntime(sessionId, true)
+				.catch((err) => console.warn("[TaskExecutor] disposeRuntime failed:", err));
 		}
 	}
 }

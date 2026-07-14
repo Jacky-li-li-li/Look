@@ -98,7 +98,9 @@ export default function App() {
 
 	useEffect(() => {
 		if (!api) return;
-		api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed }).catch(() => {});
+		api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed }).catch((err) =>
+			console.warn("[App] setGeneralSettings failed:", err),
+		);
 	}, [sidebarCollapsed, rightPanelCollapsed]);
 
 	// ── Early return guards ──
