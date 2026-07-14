@@ -8,6 +8,36 @@
 			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://*.supabase.co; media-src 'self' data: blob: file:; frame-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
 		/>
 		<title>Look</title>
+		<script>
+			(()=>{var p=new URLSearchParams(window.location.search);var t="light"===p.get("theme")?"light":"dark";document.documentElement.classList.add(`tone-${t}`);document.documentElement.style.colorScheme=t})()
+		</script>
+		<!-- Critical inline theme: prevents white flash on reload by defining
+		     the CSS variable chain before App.css loads asynchronously.
+		     Matches BrowserWindow backgroundColor and App.css .tone-dark values. -->
+		<style>
+			:root {
+				--ink-0: oklch(0.985 0.002 85);
+				--ink-8: oklch(0.09 0.002 85);
+			}
+			html, body, #root, .app-shell {
+				--background: var(--ink-8);
+				--foreground: var(--ink-0);
+				--color-background: var(--background);
+				--color-foreground: var(--foreground);
+				background-color: var(--background);
+				color: var(--foreground);
+			}
+			html { color-scheme: dark; }
+			html.tone-light, html.tone-light body, html.tone-light #root, html.tone-light .app-shell {
+				--background: var(--ink-0);
+				--foreground: var(--ink-8);
+				--color-background: var(--background);
+				--color-foreground: var(--foreground);
+				background-color: var(--background);
+				color: var(--foreground);
+			}
+			html.tone-light { color-scheme: light; }
+		</style>
 	</head>
 	<body>
 		<div id="root"></div>

@@ -15,9 +15,7 @@
 /* ============================================================
 	 Look — Neutral light / dark design system
 	 ============================================================ */
-:root,
-.tone-light {
-	color-scheme: light;
+:root {
 	--sidebar-width: 280px;
 	--right-panel-width: 260px;
 
@@ -32,6 +30,40 @@
 	--ink-7: oklch(0.16 0.002 85);
 	--ink-8: oklch(0.09 0.002 85);
 	--ink-full: oklch(0.04 0.002 85);
+
+	--radius: 0.375rem;
+
+	/* Type and motion baselines */
+	--font-display: "Geist Variable", system-ui, sans-serif;
+	--font-body: "Geist Variable", system-ui, sans-serif;
+	--font-mono: ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+	--motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+	--motion-fast: 160ms;
+
+	/* Message area spacing tokens */
+	--message-row-gap: 0.375rem;
+	--message-list-py: 0.625rem;
+	--message-item-py: 0.125rem;
+	--message-item-px: 1.25rem;
+	--message-bubble-gap: 0.625rem;
+	--message-header-gap: 0.25rem;
+	--message-block-gap: 0.625rem;
+	--message-action-offset: 0.375rem;
+	--message-action-inset: 2.5rem;
+	--message-action-gap: 0.25rem;
+	--message-avatar-offset: 0.125rem;
+
+	/* Prose spacing tokens */
+	--prose-line-height: 1.58;
+	--prose-flow-gap: 0.5rem;
+	--prose-heading-gap: 0.375rem;
+	--prose-block-gap: 0.75rem;
+	--prose-section-gap: 1rem;
+	--prose-hr-gap: 0.75em;
+}
+
+.tone-light {
+	color-scheme: light;
 
 	/* shadcn semantic mapping */
 	--background: var(--ink-0);
@@ -60,8 +92,6 @@
 	--chart-4: var(--ink-4);
 	--chart-5: var(--ink-3);
 
-	--radius: 0.375rem;
-
 	/* Sidebar — frosted glass */
 	--sidebar: oklch(0.985 0.002 85 / 0.72);
 	--sidebar-foreground: var(--ink-8);
@@ -89,37 +119,6 @@
 	--code-rail: oklch(0.955 0.003 85);
 	--code-foreground: var(--ink-8);
 	--code-border: oklch(0.04 0.002 85 / 0.12);
-
-	/* Type and motion baselines */
-	--font-display: "Geist Variable", system-ui, sans-serif;
-	--font-body: "Geist Variable", system-ui, sans-serif;
-	--font-mono: ui-monospace, "SF Mono", "JetBrains Mono", monospace;
-	--motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
-	--motion-fast: 160ms;
-
-	/* Message area spacing tokens
-	 * Centralize vertical/horizontal rhythm of the conversation surface so
-	 * adjustments don't scatter across ChatMessageList, MessageBubble,
-	 * conversation.tsx and the prose overrides below. */
-	--message-row-gap: 0.375rem;
-	--message-list-py: 0.625rem;
-	--message-item-py: 0.125rem;
-	--message-item-px: 1.25rem;
-	--message-bubble-gap: 0.625rem;
-	--message-header-gap: 0.25rem;
-	--message-block-gap: 0.625rem;
-	--message-action-offset: 0.375rem;
-	--message-action-inset: 2.5rem;
-	--message-action-gap: 0.25rem;
-	--message-avatar-offset: 0.125rem;
-
-	/* Prose spacing tokens */
-	--prose-line-height: 1.58;
-	--prose-flow-gap: 0.5rem;
-	--prose-heading-gap: 0.375rem;
-	--prose-block-gap: 0.75rem;
-	--prose-section-gap: 1rem;
-	--prose-hr-gap: 0.75em;
 }
 
 .tone-dark {
