@@ -30,6 +30,8 @@ interface MessageBubbleProps {
 	toolResultMap?: Record<string, ToolResultMessage>;
 	isActiveLeaf?: boolean;
 	flash?: boolean;
+	liveBlocks?: LookUiStreamBlock[];
+	liveToolExecutions?: Record<string, LookUiToolExecState>;
 }
 
 function resultText(value: unknown): string | undefined {
@@ -309,6 +311,8 @@ const MessageBubble = memo(function MessageBubble({
 	toolResultMap,
 	isActiveLeaf = false,
 	flash = false,
+	liveBlocks,
+	liveToolExecutions,
 }: MessageBubbleProps) {
 	const { t } = useTranslation();
 	const userProfile = useAtomValue(userProfileAtom);
@@ -343,13 +347,22 @@ const MessageBubble = memo(function MessageBubble({
 						flash && "bubble-flash",
 					)}
 				>
-					<ContentBlocks
-						blocks={derivedBlocks}
-						isStreaming={isStreaming}
-						autoCollapse={autoCollapse}
-						toolExecutions={toolExecutions}
-						toolResultMap={toolResultMap}
-					/>
+					{liveBlocks && liveBlocks.length > 0 ? (
+						<StreamingBlocksBubble
+							blocks={liveBlocks}
+							toolExecutions={liveToolExecutions ?? {}}
+							isStreaming={isStreaming}
+							autoCollapse={autoCollapse}
+						/>
+					) : (
+						<ContentBlocks
+							blocks={derivedBlocks}
+							isStreaming={isStreaming}
+							autoCollapse={autoCollapse}
+							toolExecutions={toolExecutions}
+							toolResultMap={toolResultMap}
+						/>
+					)}
 					{assistant?.errorMessage && <div className="text-destructive">{assistant.errorMessage}</div>}
 					{assistant && assistant.stopReason !== "stop" && assistant.stopReason !== "toolUse" && (
 						<div className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -495,19 +508,70 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 		return null;
 	}
 
+	// Group consecutive thinking/toolcall blocks into CollapsibleExecutionGroup
+	// so the badge with rolling counts is shown during streaming, not after.
+	type StreamSegment =
+		| { kind: "single"; block: LookUiStreamBlock; index: number }
+		| { kind: "group"; blocks: LookUiStreamBlock[]; startIndex: number };
+
+	const segments: StreamSegment[] = [];
+	let i = 0;
+	while (i < blocks.length) {
+		const b = blocks[i];
+		if (b.kind === "thinking" || b.kind === "toolcall") {
+			const startIndex = i;
+			const groupBlocks: LookUiStreamBlock[] = [];
+			while (i < blocks.length && (blocks[i].kind === "thinking" || blocks[i].kind === "toolcall")) {
+				groupBlocks.push(blocks[i]);
+				i++;
+			}
+			segments.push({ kind: "group", blocks: groupBlocks, startIndex });
+		} else {
+			segments.push({ kind: "single", block: b, index: i });
+			i++;
+		}
+	}
+
 	return (
 		<div className="flex flex-col gap-msg-block">
-			{blocks.map((block) => {
-				const key = block.uid != null ? `sb-${block.uid}` : `sb-${block.contentIndex ?? block.kind}`;
+			{segments.map((seg, segIdx) => {
+				if (seg.kind === "single") {
+					const block = seg.block;
+					const key = block.uid != null ? `sb-${block.uid}` : `sb-${block.contentIndex ?? block.kind}`;
+					return (
+						<StreamingBlockView
+							key={key}
+							block={block}
+							toolExecution={
+								block.kind === "toolcall" && block.toolCallId ? toolExecutions[block.toolCallId] : undefined
+							}
+							isStreaming={isStreaming}
+							autoCollapse={autoCollapse}
+						/>
+					);
+				}
+
+				// Convert stream blocks to content blocks for CollapsibleExecutionGroup
+				const contentBlocks = seg.blocks.map((b) =>
+					b.kind === "thinking"
+						? { type: "thinking" as const, thinking: b.thinking, thinkingSignature: b.thinkingSignature }
+						: ({
+								type: "toolCall" as const,
+								id: b.toolCallId ?? "",
+								name: b.toolName ?? "unknown",
+								arguments: b.args ?? {},
+							} as ToolCall),
+				);
+
+				const groupEndIndex = seg.startIndex + seg.blocks.length;
+				const isActiveGroup = isStreaming && groupEndIndex === blocks.length;
+
 				return (
-					<StreamingBlockView
-						key={key}
-						block={block}
-						toolExecution={
-							block.kind === "toolcall" && block.toolCallId ? toolExecutions[block.toolCallId] : undefined
-						}
-						isStreaming={isStreaming}
-						autoCollapse={autoCollapse}
+					<CollapsibleExecutionGroup
+						key={`group-${seg.startIndex}-0`}
+						blocks={contentBlocks}
+						toolExecutions={toolExecutions}
+						isStreaming={isActiveGroup}
 					/>
 				);
 			})}

@@ -59,7 +59,7 @@ export default function ThinkingSelector({ currentLevel, availableThinkingLevels
 
 	const trigger = (
 		<Button
-			variant="line"
+			variant="line-ghost"
 			size="sm"
 			title={triggerTitle}
 			aria-label={triggerTitle}

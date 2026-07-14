@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { scheduleCollapse } from "../../lib/batchCollapse";
 import LookMarkdown from "../markdown/LookMarkdown";
 
 export interface ToolCallViewModel {
@@ -184,53 +183,7 @@ function formatStatSuffix(
 
 function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { t } = useTranslation();
-	// Auto open when running, auto close on completion after a short delay.
-	// manualOpen = null means "follow derived state"; true/false override it.
-	const [{ manualOpen, autoOpen }, setPanelState] = React.useState<{
-		manualOpen: boolean | null;
-		autoOpen: boolean;
-	}>(() => ({ manualOpen: null, autoOpen: toolCall.status === "running" }));
-	const prevStatusRef = React.useRef(toolCall.status);
-	const cancelCollapseRef = React.useRef<(() => void) | null>(null);
-
-	const open = manualOpen ?? autoOpen;
-
-	// Schedule delayed collapse once when the tool completes.
-	React.useEffect(() => {
-		const previousStatus = prevStatusRef.current;
-		const currentStatus = toolCall.status;
-		prevStatusRef.current = currentStatus;
-
-		cancelCollapseRef.current?.();
-		cancelCollapseRef.current = null;
-
-		if (currentStatus === "running") {
-			setPanelState((state) =>
-				state.manualOpen === null && state.autoOpen ? state : { manualOpen: null, autoOpen: true },
-			);
-			return;
-		}
-
-		if ((currentStatus === "success" || currentStatus === "error") && previousStatus === "running") {
-			setPanelState((state) =>
-				state.manualOpen === null && state.autoOpen ? state : { manualOpen: null, autoOpen: true },
-			);
-			cancelCollapseRef.current = scheduleCollapse(() => {
-				setPanelState((state) => (state.manualOpen === null ? { ...state, autoOpen: false } : state));
-				cancelCollapseRef.current = null;
-			});
-			return () => cancelCollapseRef.current?.();
-		}
-
-		if (currentStatus === "pending") {
-			setPanelState((state) =>
-				state.manualOpen === null && !state.autoOpen ? state : { manualOpen: null, autoOpen: false },
-			);
-		}
-	}, [toolCall.status]);
-
-	// Clean up pending collapse on unmount.
-	React.useEffect(() => () => cancelCollapseRef.current?.(), []);
+	const [open, setOpen] = React.useState(false);
 
 	const argsJson = React.useMemo(() => safeJson(toolCall.args), [toolCall.args]);
 	const argsPreview = argsJson.slice(0, 80);
@@ -266,9 +219,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					disabled={!hasBody}
 					onClick={() => {
 						if (hasBody) {
-							cancelCollapseRef.current?.();
-							cancelCollapseRef.current = null;
-							setPanelState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? state.autoOpen) }));
+							setOpen((prev) => !prev);
 						}
 					}}
 				>
@@ -294,7 +245,7 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 						style={{
 							gridTemplateRows: open ? "1fr" : "0fr",
 							opacity: open ? 1 : 0,
-							transition: "grid-template-rows 320ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 280ms ease",
+							transition: "grid-template-rows 380ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 320ms ease",
 						}}
 					>
 						<div className="overflow-hidden">

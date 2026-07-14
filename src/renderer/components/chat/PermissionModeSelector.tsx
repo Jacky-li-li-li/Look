@@ -78,7 +78,7 @@ export default function PermissionModeSelector({ agentId, currentMode }: Permiss
 			className="w-52 rounded-lg border border-hairline bg-popover p-1 shadow-lg"
 			trigger={
 				<Button
-					variant="line"
+					variant="line-ghost"
 					size="sm"
 					className="group/perm h-7 font-mono text-[11px]"
 					title={t(current.descriptionKey)}

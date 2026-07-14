@@ -810,6 +810,13 @@ body {
 		}
 	}
 
+	@keyframes roll-in {
+		from {
+			opacity: 0;
+			transform: translateY(60%);
+		}
+	}
+
 	[data-tool-panel-body] > .overflow-hidden > *,
 	[data-execution-group-body] > .overflow-hidden > *,
 	[data-execution-group-body] > .overflow-hidden > * > [data-tool-group-item] {

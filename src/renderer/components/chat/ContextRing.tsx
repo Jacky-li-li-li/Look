@@ -69,7 +69,7 @@ export default function ContextRing() {
 					onClick={handleClick}
 					disabled={!canCompress}
 					className={cn(
-						"group relative flex size-7 items-center justify-center rounded-md border border-hairline transition-colors",
+						"group relative flex size-7 items-center justify-center rounded-md transition-colors",
 						"hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40",
 						pulsing && "animate-pulse",
 					)}

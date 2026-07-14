@@ -1,18 +1,8 @@
 // ============================================================
 // CollapsibleExecutionGroup — collapses a run of consecutive
-// thinking + tool blocks into a single "executed N tools" badge
-// once everything has finished streaming. While any block is
-// still running, renders the underlying cards in full so live
-// progress stays visible.
-//
-// State machine:
-//   - isStreaming && anyRunning       → expanded (live cards)
-//   - active group / running tool      → expanded (live cards)
-//   - completed active group           → delayed collapse to badge
-//   - manual open                      → expanded (user inspection)
-//
-// Reuses ToolCallCard + ThinkingPanel + scheduleCollapse()
-// rather than re-implementing their per-card collapse logic.
+// thinking + tool blocks into a single "executed N tools" badge.
+// Auto-open is disabled; user clicks to expand/collapse manually.
+// The badge title shows real-time tool/thinking counts.
 // ============================================================
 
 import type { ThinkingContent, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
@@ -20,8 +10,6 @@ import { cn } from "@shared/lib/utils";
 import type { LookUiToolExecState } from "@shared/types";
 import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";
-import { useTranslation } from "react-i18next";
-import { scheduleCollapse } from "../../lib/batchCollapse";
 import { hashKey } from "../../lib/stableKey";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
@@ -56,18 +44,6 @@ function classify(blocks: Array<ThinkingContent | ToolCall>): {
 	else if (thinkingCount > 0) kind = "thinking";
 	else kind = "tools";
 	return { kind, thinkingCount, toolCount };
-}
-
-function isBlockRunning(
-	block: ThinkingContent | ToolCall,
-	toolExecutions: Record<string, LookUiToolExecState>,
-	toolResultMap: Record<string, ToolResultMessage> | undefined,
-): boolean {
-	if (block.type === "thinking") return false;
-	const execution = toolExecutions[block.id];
-	if (execution) return execution.phase === "running";
-	const persisted = toolResultMap?.[block.id];
-	return !persisted;
 }
 
 function statusFor(
@@ -107,78 +83,22 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	toolResultMap,
 	isStreaming,
 }: CollapsibleExecutionGroupProps) {
-	const { t } = useTranslation();
-
 	const { kind, thinkingCount, toolCount } = React.useMemo(() => classify(blocks), [blocks]);
 
-	const anyRunning = React.useMemo(
-		() => blocks.some((b) => isBlockRunning(b, toolExecutions, toolResultMap)),
-		[blocks, toolExecutions, toolResultMap],
-	);
+	const [expanded, setExpanded] = React.useState(false);
 
-	const liveOpen = isStreaming || anyRunning;
-	const [{ manualOpen, autoOpen }, setGroupState] = React.useState<{
-		manualOpen: boolean | null;
-		autoOpen: boolean;
-	}>(() => ({ manualOpen: null, autoOpen: liveOpen }));
-	const prevLiveOpenRef = React.useRef(liveOpen);
-	const cancelCollapseRef = React.useRef<(() => void) | null>(null);
-
-	React.useEffect(() => {
-		const wasLiveOpen = prevLiveOpenRef.current;
-		prevLiveOpenRef.current = liveOpen;
-
-		cancelCollapseRef.current?.();
-		cancelCollapseRef.current = null;
-
-		if (liveOpen) {
-			setGroupState((state) =>
-				state.manualOpen === null && state.autoOpen ? state : { manualOpen: null, autoOpen: true },
-			);
-			return;
-		}
-
-		if (wasLiveOpen) {
-			cancelCollapseRef.current = scheduleCollapse(() => {
-				setGroupState((state) => (state.manualOpen === null ? { ...state, autoOpen: false } : state));
-				cancelCollapseRef.current = null;
-			});
-			return () => cancelCollapseRef.current?.();
-		}
-
-		setGroupState((state) => (state.manualOpen === null && state.autoOpen ? { ...state, autoOpen: false } : state));
-	}, [liveOpen]);
-
-	React.useEffect(() => () => cancelCollapseRef.current?.(), []);
-
-	const expanded = manualOpen ?? autoOpen;
 	const isOpen = expanded;
 
 	const handleBadgeClick = React.useCallback(() => {
-		if (liveOpen) return;
-		cancelCollapseRef.current?.();
-		cancelCollapseRef.current = null;
-		// Toggle: clicking the badge when collapsed opens it; clicking when
-		// already manually open collapses back to the badge.
-		setGroupState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? state.autoOpen) }));
-	}, [liveOpen]);
+		setExpanded((prev) => !prev);
+	}, []);
 
-	const handleBadgeKeyDown = React.useCallback(
-		(e: React.KeyboardEvent<HTMLButtonElement>) => {
-			if (e.key === "Enter" || e.key === " ") {
-				e.preventDefault();
-				if (liveOpen) return;
-				cancelCollapseRef.current?.();
-				cancelCollapseRef.current = null;
-				setGroupState((state) => ({ ...state, manualOpen: !(state.manualOpen ?? state.autoOpen) }));
-			}
-		},
-		[liveOpen],
-	);
-
-	// Every group with ≥1 block collapses to a badge — single tool/thinking
-	// included, so 1-tool / 1-thinking turns also use the badge form.
-	const summary = pickSummary(kind, thinkingCount, toolCount, t);
+	const handleBadgeKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault();
+			setExpanded((prev) => !prev);
+		}
+	}, []);
 
 	// Optional inlineTexts: when provided (e.g. caller wants a note shown
 	// alongside the cards), interleave them between blocks. When empty
@@ -205,10 +125,10 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	return (
 		<div className="flex flex-col" data-execution-group="" data-open={isOpen}>
 			<BadgeTrigger
-				summary={summary}
 				kind={kind}
 				isOpen={isOpen}
-				disabled={liveOpen}
+				thinkingCount={thinkingCount}
+				toolCount={toolCount}
 				onClick={handleBadgeClick}
 				onKeyDown={handleBadgeKeyDown}
 			/>
@@ -220,7 +140,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 				style={{
 					gridTemplateRows: isOpen ? "1fr" : "0fr",
 					opacity: isOpen ? 1 : 0,
-					transition: "grid-template-rows 350ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 300ms ease",
+					transition: "grid-template-rows 380ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 320ms ease",
 					pointerEvents: isOpen ? undefined : "none",
 				}}
 			>
@@ -252,21 +172,6 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 		</div>
 	);
 });
-
-function pickSummary(
-	kind: GroupKind,
-	thinkingCount: number,
-	toolCount: number,
-	t: (key: string, vars?: Record<string, string | number>) => string,
-): string {
-	if (kind === "mixed") {
-		return t("tool.mixedExecuted", { thinking: thinkingCount, tools: toolCount });
-	}
-	if (kind === "thinking") {
-		return t("tool.thinkingExecuted", { count: thinkingCount });
-	}
-	return t("tool.executed", { count: toolCount });
-}
 
 function renderBlock(
 	block: ThinkingContent | ToolCall,
@@ -305,17 +210,52 @@ function renderBlock(
 }
 
 interface BadgeTriggerProps {
-	summary: string;
 	kind: GroupKind;
 	isOpen: boolean;
-	disabled?: boolean;
+	thinkingCount: number;
+	toolCount: number;
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
 
-function BadgeTrigger({ summary, kind, isOpen, disabled, onClick, onKeyDown }: BadgeTriggerProps) {
+function RollingNumber({ value }: { value: number }) {
+	return (
+		<span className="inline-flex overflow-hidden" style={{ height: "1em", lineHeight: 1 }}>
+			<span
+				key={value}
+				className="inline-block animate-[roll-in_220ms_cubic-bezier(0,0,0.2,1)_both]"
+				style={{ animationFillMode: "both" }}
+			>
+				{value}
+			</span>
+		</span>
+	);
+}
+
+function buildLabel(kind: GroupKind, thinkingCount: number, toolCount: number): React.ReactNode {
+	if (kind === "mixed") {
+		return (
+			<span>
+				Thought <RollingNumber value={thinkingCount} /> / <RollingNumber value={toolCount} /> tools
+			</span>
+		);
+	}
+	if (kind === "thinking") {
+		return (
+			<span>
+				Thought <RollingNumber value={thinkingCount} /> time{thinkingCount !== 1 ? "s" : ""}
+			</span>
+		);
+	}
+	return (
+		<span>
+			Executed <RollingNumber value={toolCount} /> tool{toolCount !== 1 ? "s" : ""}
+		</span>
+	);
+}
+
+function BadgeTrigger({ kind, isOpen, thinkingCount, toolCount, onClick, onKeyDown }: BadgeTriggerProps) {
 	const Icon = kind === "thinking" ? Brain : Wrench;
-	// Chevron rotates 90° when expanded so the same row visually signals "click to collapse".
 	const chevron = (
 		<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", isOpen && "rotate-90")} />
 	);
@@ -326,17 +266,17 @@ function BadgeTrigger({ summary, kind, isOpen, disabled, onClick, onKeyDown }: B
 			onClick={onClick}
 			onKeyDown={onKeyDown}
 			aria-expanded={isOpen}
-			aria-disabled={disabled || undefined}
 			className={cn(
 				"flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-2 text-left outline-none",
-				"font-mono text-[10px] hover:text-foreground transition-colors",
-				disabled && "cursor-default hover:text-muted-foreground",
+				"text-[10px] hover:text-foreground transition-colors",
 				isOpen ? "text-foreground" : "text-muted-foreground",
 			)}
 		>
 			{chevron}
 			<Icon className="size-3.5 shrink-0 text-muted-foreground" />
-			<span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{summary}</span>
+			<span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] tracking-wide text-muted-foreground">
+				{buildLabel(kind, thinkingCount, toolCount)}
+			</span>
 		</button>
 	);
 }

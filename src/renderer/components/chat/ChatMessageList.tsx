@@ -297,6 +297,28 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			}
 
 			if (item.isLive && item.uiBlocks) {
+				const itemEntryId = item.entryId;
+				if (item.message) {
+					return (
+						<div key={item.id} className="px-msg-item-x py-msg-item-y">
+							<div data-message-id={item.id} className="group/message flex flex-col">
+								<MessageBubble
+									message={item.message}
+									agentName={agentName}
+									isStreaming={isBusy}
+									autoCollapse={autoCollapse}
+									toolExecutions={{} as Record<string, import("@shared/types").LookUiToolExecState>}
+									toolResultMap={item.toolResultMap}
+									isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
+									liveBlocks={item.uiBlocks}
+									liveToolExecutions={
+										item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)
+									}
+								/>
+							</div>
+						</div>
+					);
+				}
 				return (
 					<div key="streaming-live" className="px-msg-item-x py-msg-item-y">
 						<StreamingMessageBubble

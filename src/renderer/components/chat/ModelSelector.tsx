@@ -126,7 +126,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 			}}
 		>
 			<DialogTrigger asChild>
-				<Button variant="line" size="sm" className="group/selector h-7 font-mono text-[11px]" title={label}>
+				<Button variant="line-ghost" size="sm" className="group/selector h-7 font-mono text-[11px]" title={label}>
 					<ProviderIcon
 						id={currentModelObj?.provider ?? currentModel?.split("/")[0] ?? ""}
 						className="size-3"

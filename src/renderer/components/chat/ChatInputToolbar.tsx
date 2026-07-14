@@ -45,7 +45,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 	const { t } = useTranslation();
 
 	return (
-		<div className="flex items-center gap-1.5 border-t border-hairline px-2 py-2">
+		<div className="flex items-center gap-1.5 px-2 py-2">
 			<ModelSelector
 				agentId={agentId}
 				currentModel={currentModel}
@@ -64,7 +64,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 			{isBusy ? (
 				<>
 					<Button
-						variant="line"
+						variant="line-ghost"
 						size="icon-sm"
 						onClick={onAbort}
 						aria-label={t("chat.stop")}
@@ -74,7 +74,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 						<Square data-icon="inline-start" className="size-3 fill-current" />
 					</Button>
 					<Button
-						variant={hasContent ? "line-filled" : "line"}
+						variant={hasContent ? "line-filled" : "line-ghost"}
 						size="icon-sm"
 						onClick={() => void onSend()}
 						disabled={!hasContent}
@@ -85,7 +85,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 				</>
 			) : (
 				<Button
-					variant={hasContent ? "line-filled" : "line"}
+					variant={hasContent ? "line-filled" : "line-ghost"}
 					size="icon-sm"
 					onClick={() => void onSend()}
 					disabled={!hasContent}

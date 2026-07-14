@@ -38,7 +38,7 @@ export default function SubagentToggle() {
 
 	return (
 		<Button
-			variant="line"
+			variant="line-ghost"
 			size="icon-sm"
 			className="h-7 w-7"
 			onClick={handleToggle}
