@@ -48,7 +48,7 @@ export interface AgentConfig {
 	source: AgentSource;
 	/** 定义文件绝对路径 */
 	filePath: string;
-	/** 可选图标（emoji） */
+	/** 可选头像标识，格式 `open-peeps:<id>` */
 	icon?: string;
 	/** 分类标签 */
 	tags?: string[];

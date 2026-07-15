@@ -394,6 +394,7 @@ export interface AgentDefinitionInfo {
 	systemPrompt: string;
 	source: AgentDefinitionSource;
 	filePath: string;
+	/** Open Peeps 头像标识，格式 `open-peeps:<id>` */
 	icon?: string;
 	tags?: string[];
 	version?: string;
@@ -411,6 +412,7 @@ export interface AgentDefinitionInput {
 	tools?: string[];
 	model?: string;
 	systemPrompt: string;
+	/** Open Peeps 头像标识，格式 `open-peeps:<id>` */
 	icon?: string;
 	tags?: string[];
 	version?: string;

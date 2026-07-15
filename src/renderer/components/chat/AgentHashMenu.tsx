@@ -11,6 +11,7 @@
 
 import type { AgentDefinitionInfo } from "@shared/types";
 import { Bot } from "lucide-react";
+import AgentAvatar from "../AgentMarketplace/AgentAvatar";
 import { SOURCE_LABELS } from "../AgentMarketplace/agentLabels";
 import { usePickerMenu } from "./usePickerMenu";
 
@@ -78,9 +79,7 @@ function MenuRow({
 					: "border-2 border-transparent text-foreground/85 hover:bg-accent/10",
 			].join(" ")}
 		>
-			<span className="text-base leading-none shrink-0 mt-px" aria-hidden>
-				{agent.icon ?? "🤖"}
-			</span>
+			<AgentAvatar icon={agent.icon} className="shrink-0 mt-px" />
 			<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 				<span className="flex items-center gap-1.5">
 					<span className="truncate font-mono text-[12px] font-medium">{agent.title || agent.name}</span>

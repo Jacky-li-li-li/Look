@@ -741,5 +741,28 @@
     "downloading": "Downloading: {{percent}}%",
     "ready": "Update ready. Restart to install.",
     "restart": "Restart"
+  },
+  "agentAvatar": {
+    "title": "Open Peeps avatar selection",
+    "default": "Default",
+    "explorer": "Explorer",
+    "planner": "Planner",
+    "builder": "Builder",
+    "inspector": "Inspector",
+    "pensive": "Pensive",
+    "cheerful": "Cheerful",
+    "curious": "Curious",
+    "dapper": "Dapper",
+    "professional": "Professional",
+    "confident": "Confident",
+    "cool": "Cool",
+    "gamer": "Gamer",
+    "casual": "Casual",
+    "neat": "Neat",
+    "friendly": "Friendly",
+    "bold": "Bold",
+    "pirate": "Pirate",
+    "cozy": "Cozy",
+    "rebel": "Rebel"
   }
 }

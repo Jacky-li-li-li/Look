@@ -3,9 +3,9 @@ name: worker
 title: Worker
 description: 执行实现工作的编码专家，按计划落地代码改动
 tools: read, write, edit, grep, find, ls, bash
-icon: 🔧
+icon: open-peeps:builder
 tags: 实现
-version: 1.0.0
+version: 1.0.1
 createdBy: seed
 ---
 

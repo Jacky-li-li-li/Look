@@ -3,9 +3,9 @@ name: reviewer
 title: Reviewer
 description: 代码审查专家，聚焦质量、安全和可维护性分析
 tools: read, grep, find, ls, bash
-icon: 🔎
+icon: open-peeps:inspector
 tags: 审查
-version: 1.0.0
+version: 1.0.1
 createdBy: seed
 ---
 

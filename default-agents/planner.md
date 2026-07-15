@@ -3,9 +3,9 @@ name: planner
 title: Planner
 description: 基于上下文和需求产出清晰实现计划的规划专家
 tools: read, grep, find, ls
-icon: 🗺️
+icon: open-peeps:planner
 tags: 规划
-version: 1.0.0
+version: 1.0.1
 createdBy: seed
 ---
 

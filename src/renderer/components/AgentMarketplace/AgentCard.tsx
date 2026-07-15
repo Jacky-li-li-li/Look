@@ -12,6 +12,7 @@ import { Switch } from "@shared/components/ui/switch";
 import type { AgentDefinitionInfo } from "@shared/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
+import AgentAvatar from "./AgentAvatar";
 
 interface AgentCardProps {
 	agent: AgentDefinitionInfo;
@@ -58,11 +59,9 @@ const AgentCard = memo(function AgentCard({
 					: "border-hairline bg-card/40 hover:border-hairline hover:bg-accent/5"
 			} ${!enabled ? "opacity-50 hover:opacity-70" : ""}`}
 		>
-			{/* 图标 + 名称 + Switch */}
+			{/* 头像 + 名称 + Switch */}
 			<div className="flex w-full items-center gap-2">
-				<span className="text-lg leading-none" aria-hidden>
-					{agent.icon ?? "🤖"}
-				</span>
+				<AgentAvatar icon={agent.icon} />
 				<span className="min-w-0 flex-1 truncate text-[13px] font-medium">{agent.title || agent.name}</span>
 				{onToggle && (
 					<Switch

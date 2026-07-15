@@ -3,9 +3,9 @@ name: scout
 title: Scout
 description: 代码侦察专家，快速定位和理解相关代码，不做修改
 tools: read, grep, find, ls, bash
-icon: 🔍
+icon: open-peeps:explorer
 tags: 代码, 搜索
-version: 1.0.0
+version: 1.0.1
 createdBy: seed
 ---
 

@@ -14,7 +14,7 @@ name: scout
 title: Scout
 description: 代码侦察专家，快速定位和理解相关代码，不做修改
 tools: read, grep, find, ls, bash
-icon: 🔍
+icon: open-peeps:explorer
 tags: 代码, 搜索
 ---
 
@@ -51,7 +51,7 @@ name: planner
 title: Planner
 description: 基于上下文和需求产出清晰实现计划的规划专家
 tools: read, grep, find, ls
-icon: 🗺️
+icon: open-peeps:planner
 tags: 规划
 ---
 
@@ -89,7 +89,7 @@ name: worker
 title: Worker
 description: 执行实现工作的编码专家，按计划落地代码改动
 tools: read, write, edit, grep, find, ls, bash
-icon: 🔧
+icon: open-peeps:builder
 tags: 实现
 ---
 
@@ -123,7 +123,7 @@ name: reviewer
 title: Reviewer
 description: 代码审查专家，聚焦质量、安全和可维护性分析
 tools: read, grep, find, ls, bash
-icon: 🔎
+icon: open-peeps:inspector
 tags: 审查
 ---
 
@@ -167,7 +167,7 @@ tags: 审查
 | `description` | ✅ | 一句话 | Agent 用途描述，显示在 Agent 卡片和工具列表中 |
 | `tools` | | 逗号分割 | 工具白名单。有效值：`read`, `write`, `edit`, `grep`, `find`, `ls`, `bash`。留空 = 继承父会话全部工具 |
 | `model` | | `provider/model-id` | 指定模型，留空继承父会话。如 `deepseek-v4-pro` |
-| `icon` | | 单个 emoji | Agent 卡片图标，如 `🔍` |
+| `icon` | | `open-peeps:<id>` | Agent 卡片图标，如 `open-peeps:explorer`。可用 ID 见下表 |
 | `tags` | | 逗号分割 | 分类标签，用于 Agent 广场筛选。建议 1-3 个中文标签 |
 | `version` | | semver | 版本号，如 `1.0.0` |
 | `author` | | 任意文本 | 作者名 |
@@ -196,20 +196,20 @@ tags: 审查
 
 ## 四、图标-角色映射
 
-| 图标 | 角色 | 典型 name |
-|------|------|----------|
-| 🔍 | 搜索/侦察 | scout, searcher, explorer |
-| 🗺️ | 规划/设计 | planner, architect, designer |
-| 🔧 | 实现/编码 | worker, coder, implementer, builder |
-| 🔎 | 审查/检查 | reviewer, inspector, auditor |
-| 🧪 | 测试 | tester, qa-engineer |
-| 📝 | 文档/写作 | writer, documenter |
-| 🔄 | 重构 | refactorer, optimizer |
-| 🚀 | 部署/运维 | deployer, devops |
-| 🛡️ | 安全 | security-scanner, guardian |
-| ⚙️ | 数据处理 | extractor, processor, analyzer |
-| 📊 | 分析/统计 | analyst, reporter |
-| 🤖 | 通用/默认 | assistant, helper |
+| 图标 ID | 角色 | 典型 name |
+|---------|------|----------|
+| `open-peeps:explorer` | 搜索/侦察 | scout, searcher, explorer |
+| `open-peeps:planner` | 规划/设计 | planner, architect, designer |
+| `open-peeps:builder` | 实现/编码 | worker, coder, implementer, builder |
+| `open-peeps:inspector` | 审查/检查 | reviewer, inspector, auditor |
+| `open-peeps:curious` | 测试 | tester, qa-engineer |
+| `open-peeps:pensive` | 文档/写作 | writer, documenter |
+| `open-peeps:neat` | 重构 | refactorer, optimizer |
+| `open-peeps:professional` | 部署/运维 | deployer, devops |
+| `open-peeps:confident` | 安全 | security-scanner, guardian |
+| `open-peeps:professional` | 数据处理 | extractor, processor, analyzer |
+| `open-peeps:dapper` | 分析/统计 | analyst, reporter |
+| `open-peeps:default` | 通用/默认 | assistant, helper |
 
 ---
 

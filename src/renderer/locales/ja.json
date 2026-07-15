@@ -741,5 +741,28 @@
 		"downloading": "ダウンロード中: {{percent}}%",
 		"ready": "更新の準備ができました。再起動してインストールしてください。",
 		"restart": "再起動"
+	},
+	"agentAvatar": {
+		"title": "Open Peeps アバター選択",
+		"default": "デフォルト",
+		"explorer": "探検家",
+		"planner": "プランナー",
+		"builder": "ビルダー",
+		"inspector": "検査官",
+		"pensive": "物思い",
+		"cheerful": "陽気",
+		"curious": "好奇心",
+		"dapper": "洒落者",
+		"professional": "プロ",
+		"confident": "自信家",
+		"cool": "クール",
+		"gamer": "ゲーマー",
+		"casual": "カジュアル",
+		"neat": "きれい好き",
+		"friendly": "フレンドリー",
+		"bold": "大胆",
+		"pirate": "海賊",
+		"cozy": "温かみ",
+		"rebel": "反逆者"
 	}
 }

@@ -49,7 +49,9 @@ describe("handleAgentEvent", () => {
 	});
 
 	it("returns false for unhandled event types", () => {
-		const result = handleAgentEvent({ type: "session:snapshot" } as unknown as Parameters<typeof handleAgentEvent>[0]);
+		const result = handleAgentEvent({ type: "session:snapshot" } as unknown as Parameters<
+			typeof handleAgentEvent
+		>[0]);
 		expect(result).toBe(false);
 	});
 

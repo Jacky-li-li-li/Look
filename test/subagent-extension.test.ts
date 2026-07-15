@@ -2,8 +2,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { discoverAgents, parseAgentFile } from "../src/main/extensions/subagent/agent-discovery";
 import { serializeAgentDefinition } from "../src/main/extensions/subagent/agent-definition-serializer";
+import { discoverAgents, parseAgentFile } from "../src/main/extensions/subagent/agent-discovery";
 import { createSubagentExtensionFactory } from "../src/main/extensions/subagent/subagent-extension";
 import type { AgentConfig, SubagentHost, SubagentResult } from "../src/main/extensions/subagent/types";
 import { zeroUsage } from "../src/main/extensions/subagent/types";
@@ -33,7 +33,10 @@ function createMockHost(captured: { calls: Array<{ agent: string; task: string }
 /** 捕获工厂注册的工具。 */
 async function captureRegisteredTool(host: SubagentHost, cwd: string) {
 	let registered: { name: string; execute: (...args: unknown[]) => Promise<unknown> } | null = null;
-	const api = { registerTool: (tool: unknown) => (registered = tool as { name: string; execute: (...args: unknown[]) => Promise<unknown> }) };
+	const api = {
+		registerTool: (tool: unknown) =>
+			(registered = tool as { name: string; execute: (...args: unknown[]) => Promise<unknown> }),
+	};
 	const factory = await createSubagentExtensionFactory("parent-1", host, cwd);
 	factory(api as Parameters<typeof factory>[0]);
 	if (!registered) throw new Error("subagent tool was not registered");
@@ -153,7 +156,7 @@ describe("SubAgent — definition serialization round-trip", () => {
 			tools: ["read", "grep", "find"],
 			model: "anthropic/claude-sonnet-4-5",
 			systemPrompt: "You are a test agent.\n\nDo things.\n",
-			icon: "🧪",
+			icon: "open-peeps:test",
 			tags: ["test", "demo"],
 		};
 		const filePath = join(tmp, "roundtrip-agent.md");
@@ -166,7 +169,7 @@ describe("SubAgent — definition serialization round-trip", () => {
 		expect(parsed?.tools).toEqual(["read", "grep", "find"]);
 		expect(parsed?.model).toBe("anthropic/claude-sonnet-4-5");
 		expect(parsed?.systemPrompt.trim()).toBe("You are a test agent.\n\nDo things.");
-		expect(parsed?.icon).toBe("🧪");
+		expect(parsed?.icon).toBe("open-peeps:test");
 		expect(parsed?.tags).toEqual(["test", "demo"]);
 	});
 });

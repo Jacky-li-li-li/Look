@@ -741,5 +741,28 @@
     "downloading": "下载中: {{percent}}%",
     "ready": "更新已就绪。重启以完成安装。",
     "restart": "立即重启"
+  },
+  "agentAvatar": {
+    "title": "Open Peeps 头像选择",
+    "default": "默认",
+    "explorer": "探索者",
+    "planner": "规划者",
+    "builder": "实现者",
+    "inspector": "审查者",
+    "pensive": "沉思",
+    "cheerful": "开朗",
+    "curious": "好奇",
+    "dapper": "时髦",
+    "professional": "专业",
+    "confident": "自信",
+    "cool": "酷",
+    "gamer": "玩家",
+    "casual": "休闲",
+    "neat": "整洁",
+    "friendly": "友好",
+    "bold": "大胆",
+    "pirate": "海盗",
+    "cozy": "温暖",
+    "rebel": "叛逆"
   }
 }

@@ -17,7 +17,9 @@ import { Textarea } from "@shared/components/ui/textarea";
 import type { AgentDefinitionInfo, AgentDefinitionInput } from "@shared/types";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import AgentAvatarPicker from "./AgentAvatarPicker";
 import AgentModelSelect from "./AgentModelSelect";
+import { getOpenPeepId, getOpenPeepPreset, isOpenPeepIcon, makeOpenPeepIcon, OPEN_PEEPS } from "./openPeeps";
 
 interface AgentEditorProps {
 	/** null = 关闭；"create" = 新建；AgentDefinitionInfo = 编辑现有 */
@@ -34,7 +36,7 @@ function emptyInput(): AgentDefinitionInput {
 		tools: [],
 		model: "",
 		systemPrompt: "",
-		icon: "",
+		icon: makeOpenPeepIcon(OPEN_PEEPS[0].id),
 		tags: [],
 		version: "",
 		author: "",
@@ -52,7 +54,7 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 					tools: target.tools ?? [],
 					model: target.model ?? "",
 					systemPrompt: target.systemPrompt,
-					icon: target.icon ?? "",
+					icon: target.icon ?? makeOpenPeepIcon(OPEN_PEEPS[0].id),
 					tags: target.tags ?? [],
 					version: target.version ?? "",
 					author: target.author ?? "",
@@ -83,7 +85,7 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 				tools: target.tools ?? [],
 				model: target.model ?? "",
 				systemPrompt: target.systemPrompt,
-				icon: target.icon ?? "",
+				icon: target.icon ?? makeOpenPeepIcon(OPEN_PEEPS[0].id),
 				tags: target.tags ?? [],
 				version: target.version ?? "",
 				author: target.author ?? "",
@@ -108,7 +110,10 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 				tags: tagsText.split(",").flatMap((t) => t.trim() || []),
 				title: input.title?.trim() || undefined,
 				model: input.model?.trim() || undefined,
-				icon: input.icon?.trim() || undefined,
+				icon:
+					isOpenPeepIcon(input.icon) && getOpenPeepPreset(getOpenPeepId(input.icon)!)
+						? input.icon.trim()
+						: makeOpenPeepIcon(OPEN_PEEPS[0].id),
 				version: input.version?.trim() || undefined,
 				author: input.author?.trim() || undefined,
 			};
@@ -180,16 +185,12 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 						/>
 					</div>
 
-					{/* 图标 */}
+					{/* 头像 */}
 					<div className="space-y-1">
-						<Label htmlFor="agent-icon">图标</Label>
-						<Input
-							id="agent-icon"
-							value={input.icon ?? ""}
-							onChange={(e) => setInput({ ...input, icon: e.target.value })}
-							placeholder="emoji（可选）"
-							className="h-8 w-24 text-xs"
-							maxLength={4}
+						<Label>头像</Label>
+						<AgentAvatarPicker
+							value={input.icon ?? makeOpenPeepIcon(OPEN_PEEPS[0].id)}
+							onChange={(icon) => setInput({ ...input, icon })}
 						/>
 					</div>
 
