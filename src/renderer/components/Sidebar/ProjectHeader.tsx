@@ -66,7 +66,7 @@ export default function ProjectHeader({
 						{editingProjectId === project.id ? (
 							<input
 								ref={editRef}
-								aria-label="编辑项目名称"
+								aria-label={t("sidebar.editProjectName", "编辑项目名称")}
 								value={editValue}
 								onChange={(event) => setEditValue(event.target.value)}
 								onBlur={commitEdit}
@@ -94,45 +94,39 @@ export default function ProjectHeader({
 			>
 				<Plus className="size-3" />
 			</Button>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button
-						variant="line-ghost"
-						size="icon-xs"
-						className="opacity-0 group-hover/project:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
-						aria-label={t("workspace.projectMenu", "Project menu")}
-					>
-						<MoreHorizontal className="size-3" />
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end" className="w-44" onCloseAutoFocus={(e) => e.preventDefault()}>
-					{!isDefault && (
+			{!isDefault && (
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button
+							variant="line-ghost"
+							size="icon-xs"
+							className="opacity-0 group-hover/project:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
+							aria-label={t("workspace.projectMenu", "Project menu")}
+						>
+							<MoreHorizontal className="size-3" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" className="w-44" onCloseAutoFocus={(e) => e.preventDefault()}>
 						<DropdownMenuItem onSelect={() => onOpenProject(project.id)} className="gap-2 text-[12px]">
 							<FolderOpen className="size-3.5" /> {t("workspace.openFolder", "Open folder")}
 						</DropdownMenuItem>
-					)}
-					{!isDefault && (
 						<DropdownMenuItem
 							onSelect={() => beginEdit("project", project.id, project.name)}
 							className="gap-2 text-[12px]"
 						>
 							<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
 						</DropdownMenuItem>
-					)}
-					{!isDefault && (
-						<>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								variant="destructive"
-								onSelect={() => onDeleteProject(project)}
-								className="gap-2 text-[12px]"
-							>
-								<Trash2 className="size-3.5" /> {t("project.delete", "Delete project")}
-							</DropdownMenuItem>
-						</>
-					)}
-				</DropdownMenuContent>
-			</DropdownMenu>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							variant="destructive"
+							onSelect={() => onDeleteProject(project)}
+							className="gap-2 text-[12px]"
+						>
+							<Trash2 className="size-3.5" /> {t("project.delete", "Delete project")}
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			)}
 		</div>
 	);
 }

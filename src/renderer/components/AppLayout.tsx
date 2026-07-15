@@ -3,7 +3,6 @@
 // ============================================================
 
 import { Separator } from "@shared/components/ui/separator";
-import { cn } from "@shared/lib/utils";
 import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { lazy, memo, Suspense, useEffect } from "react";
@@ -160,7 +159,7 @@ function AppLayout({
 	return (
 		<>
 			<div
-				className="app-shell flex h-screen overflow-hidden bg-background p-2"
+				className="app-shell flex h-screen overflow-hidden bg-background"
 				data-sidebar-collapsed={sidebarCollapsed}
 				data-right-panel-collapsed={rightPanelCollapsed}
 			>
@@ -175,14 +174,9 @@ function AppLayout({
 					onRenameProject={handleRenameProject}
 				/>
 
-				<Separator orientation="vertical" className="sidebar-separator mx-1 bg-transparent" />
+				<Separator orientation="vertical" className="sidebar-separator bg-transparent" />
 
-				<main
-					className={cn(
-						"flex min-w-[340px] flex-1 flex-col overflow-hidden bg-background",
-						!sidebarCollapsed || !rightPanelCollapsed ? "rounded-lg border border-hairline" : "",
-					)}
-				>
+				<main className="flex min-w-[340px] flex-1 flex-col overflow-hidden bg-background">
 					{appReadyPhase < 1 ? null : showScheduledTasks ? (
 						<ScheduledTasksPage />
 					) : projects.length === 0 ? (

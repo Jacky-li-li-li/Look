@@ -1,4 +1,9 @@
 {
+  "welcome": {
+    "title": "欢迎使用 Look",
+    "description": "选择项目文件夹以开始。所有对话将限定在该文件夹内。",
+    "openProject": "打开项目"
+  },
   "common": {
     "ok": "确定",
     "cancel": "取消",
@@ -15,7 +20,21 @@
     "newSession": "新建会话",
     "settings": "设置",
     "noAgents": "暂无 Agent。",
-    "clickToStart": "点击上方 + 新建对话开始"
+    "clickToStart": "点击上方 + 新建对话开始",
+    "rename": "重命名",
+    "copyId": "复制会话 ID",
+    "exportChat": "导出会话",
+    "delete": "删除",
+    "copiedId": "会话 ID 已复制",
+    "copyFailed": "复制失败",
+    "exportSuccess": "会话已导出",
+    "exportFailed": "导出失败",
+    "collapse": "折叠侧边栏",
+    "expand": "展开侧边栏",
+    "editSessionName": "编辑会话名称",
+    "editProjectName": "编辑项目名称",
+    "expandSubSessions": "展开子会话",
+    "collapseSubSessions": "折叠子会话"
   },
   "workspace": {
     "title": "工作区",
@@ -203,7 +222,9 @@
       "working": "调用工具",
       "error": "错误",
       "idle": "空闲"
-    }
+    },
+    "send": "发送",
+    "stop": "停止"
   },
   "project": {
     "openProject": "打开项目文件夹",
@@ -477,7 +498,23 @@
     "noModelsCategory": "该分类下没有模型。",
     "reasoning": "推理",
     "modelBase": "基础",
-    "modelThink": "思考"
+    "modelThink": "思考",
+    "thinkingOff": "关闭",
+    "thinkingMinimal": "最小",
+    "thinkingLow": "低",
+    "thinkingMedium": "中",
+    "thinkingHigh": "高",
+    "thinkingXHigh": "极高",
+    "thinkingOffDesc": "不进行扩展思考",
+    "thinkingMinimalDesc": "~1K tokens",
+    "thinkingLowDesc": "~4K tokens",
+    "thinkingMediumDesc": "~10K tokens",
+    "thinkingHighDesc": "~32K tokens",
+    "thinkingXHighDesc": "最大推理",
+    "thinkingMax": "最大",
+    "thinkingMaxDesc": "完整推理",
+    "searchModels": "搜索模型…",
+    "you": "你"
   },
   "chat": {
     "placeholder": "随便问...",
@@ -523,7 +560,8 @@
     "reasoning": "思考过程",
     "characters": "{{count}} 字符",
     "copied": "已复制",
-    "copyFailed": "复制失败：{{message}}"
+    "copyFailed": "复制失败：{{message}}",
+    "welcomeNoProject": "选择项目文件夹以开始。所有对话将限定在该文件夹内。"
   },
   "context": {
     "compressing": "压缩中…",
@@ -673,6 +711,17 @@
     "noSelection": "选择任务",
     "noSelectionHint": "从左侧列表选择一个任务查看详情，或新建一个定时任务。",
     "sessionOpenFailed": "无法打开会话。"
+  },
+  "mcpHash": {
+    "noTools": "没有匹配的工具",
+    "noToolsHint": "尝试其他关键词",
+    "empty": "暂无 MCP 工具可用",
+    "emptyHint": "在设置中连接 MCP 服务器"
+  },
+  "skillSlash": {
+    "noMatch": "没有匹配的 Skill",
+    "noMatchHint": "尝试其他关键词或输入 / 查看全部 Skill",
+    "empty": "暂无可用 Skill"
   },
   "toast": {
     "modelUnavailable": "模型不可用: {{primary}}。已切换到 {{resolved}}。",

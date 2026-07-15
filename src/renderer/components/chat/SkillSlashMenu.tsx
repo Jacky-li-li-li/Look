@@ -14,6 +14,7 @@
 // ============================================================
 
 import { ChevronRight, FileCode2, FolderGit2, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { usePickerMenu } from "./usePickerMenu";
 
 /**
@@ -151,6 +152,7 @@ function MenuRow({
 }
 
 export function SkillSlashMenu(props: SkillSlashMenuProps) {
+	const { t } = useTranslation();
 	const {
 		skills,
 		importedPaths,
@@ -212,11 +214,13 @@ export function SkillSlashMenu(props: SkillSlashMenuProps) {
 						<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
 							<FileCode2 className="size-5 text-muted-foreground/60" />
 							<div className="text-[11.5px] text-muted-foreground">
-								{searchTerm ? `No skills matching "${searchTerm}"` : "No skills available yet."}
+								{searchTerm
+									? t("skillSlash.noMatch", "No matching skills")
+									: t("skillSlash.empty", "No skills available yet.")}
 							</div>
 							<div className="text-[10px] text-muted-foreground/70">
 								{searchTerm ? (
-									"Try a different keyword or type / to see all skills."
+									t("skillSlash.noMatchHint", "Try a different keyword or type / to see all skills.")
 								) : (
 									<>
 										Drop a <span className="font-mono">SKILL.md</span> into{" "}

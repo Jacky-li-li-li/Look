@@ -10,6 +10,7 @@
 // ============================================================
 
 import { Wrench } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { usePickerMenu } from "./usePickerMenu";
 
 // ---- Types ----
@@ -87,6 +88,7 @@ function MenuRow({
 // ---- Main Component ----
 
 export function McpHashMenu(props: McpHashMenuProps) {
+	const { t } = useTranslation();
 	const { tools, selectedIndex, onSelectTool, onClose, searchTerm } = props;
 	const { menuRef, containerClassName, onKeyDown, refs } = usePickerMenu({
 		total: tools.length,
@@ -114,10 +116,14 @@ export function McpHashMenu(props: McpHashMenuProps) {
 						<li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
 							<Wrench className="size-5 text-muted-foreground/60" />
 							<div className="text-[11.5px] text-muted-foreground">
-								{searchTerm ? `No tools matching "${searchTerm}"` : "No MCP tools available"}
+								{searchTerm
+									? t("mcpHash.noTools", "No matching tools")
+									: t("mcpHash.empty", "No MCP tools available")}
 							</div>
 							<div className="text-[10px] text-muted-foreground/70">
-								{searchTerm ? "Try a different keyword" : "Connect MCP servers in Settings"}
+								{searchTerm
+									? t("mcpHash.noToolsHint", "Try a different keyword")
+									: t("mcpHash.emptyHint", "Connect MCP servers in Settings")}
 							</div>
 						</li>
 					) : (

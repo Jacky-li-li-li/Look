@@ -3,7 +3,6 @@
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
-import { Separator } from "@shared/components/ui/separator";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { PanelRightClose } from "lucide-react";
 import { useEffect } from "react";
@@ -93,70 +92,67 @@ export function RightPanel() {
 	if (!activeProject) return null;
 
 	return (
-		<>
-			<Separator orientation="vertical" className="right-panel-separator mx-1 bg-transparent" />
-			<aside
-				className="right-panel-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
-				data-collapsed={collapsed}
-				aria-label={t("rightPanel.label")}
-				inert={collapsed || undefined}
-			>
-				<header className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
-					<div role="tablist" className="flex flex-1 gap-1" aria-label={t("rightPanel.tabsLabel")}>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={tab === "workspace"}
-							className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-								tab === "workspace"
-									? "bg-foreground/10 text-foreground"
-									: "text-muted-foreground hover:bg-foreground/5"
-							}`}
-							onClick={() => setTab("workspace")}
-						>
-							{t("rightPanel.workspace")}
-						</button>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={tab === "shared"}
-							className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-								tab === "shared"
-									? "bg-foreground/10 text-foreground"
-									: "text-muted-foreground hover:bg-foreground/5"
-							}`}
-							onClick={() => setTab("shared")}
-						>
-							{t("rightPanel.shared")}
-						</button>
-					</div>
-					<Button
-						size="icon-sm"
-						variant="ghost"
-						className="shrink-0 rounded-md border border-hairline"
-						onClick={() => setCollapsed(true)}
-						aria-label={t("rightPanel.collapse")}
-						title={t("rightPanel.collapse")}
+		<aside
+			className="right-panel-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
+			data-collapsed={collapsed}
+			aria-label={t("rightPanel.label")}
+			inert={collapsed || undefined}
+		>
+			<header className="flex h-12 shrink-0 items-center gap-1 border-b px-2">
+				<div role="tablist" className="flex flex-1 gap-1" aria-label={t("rightPanel.tabsLabel")}>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === "workspace"}
+						className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+							tab === "workspace"
+								? "bg-foreground/10 text-foreground"
+								: "text-muted-foreground hover:bg-foreground/5"
+						}`}
+						onClick={() => setTab("workspace")}
 					>
-						<PanelRightClose className="size-3.5" />
-					</Button>
-				</header>
-				{tab === "workspace" && activeProject && (
-					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
-				)}
-				{tab === "shared" && activeProject && (
-					<SharedAreaPanel
-						projectId={activeProject.id}
-						files={sharedFiles}
-						isLoading={isLoading}
-						onAfterChange={async () => {
-							const result = await window.look.listSharedFiles(activeProject!.id);
-							if (!result?.success) throw new Error(result?.error ?? t("rightPanel.loadFailed"));
-							appStore.set(sharedFilesAtomFamily(activeProject!.id), result.nodes ?? []);
-						}}
-					/>
-				)}
-			</aside>
-		</>
+						{t("rightPanel.workspace")}
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === "shared"}
+						className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+							tab === "shared"
+								? "bg-foreground/10 text-foreground"
+								: "text-muted-foreground hover:bg-foreground/5"
+						}`}
+						onClick={() => setTab("shared")}
+					>
+						{t("rightPanel.shared")}
+					</button>
+				</div>
+				<Button
+					size="icon-sm"
+					variant="ghost"
+					className="shrink-0 rounded-md border border-hairline"
+					onClick={() => setCollapsed(true)}
+					aria-label={t("rightPanel.collapse")}
+					title={t("rightPanel.collapse")}
+				>
+					<PanelRightClose className="size-3.5" />
+				</Button>
+			</header>
+			{tab === "workspace" && activeProject && (
+				<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
+			)}
+			{tab === "shared" && activeProject && (
+				<SharedAreaPanel
+					projectId={activeProject.id}
+					files={sharedFiles}
+					isLoading={isLoading}
+					onAfterChange={async () => {
+						const result = await window.look.listSharedFiles(activeProject!.id);
+						if (!result?.success) throw new Error(result?.error ?? t("rightPanel.loadFailed"));
+						appStore.set(sharedFilesAtomFamily(activeProject!.id), result.nodes ?? []);
+					}}
+				/>
+			)}
+		</aside>
 	);
 }

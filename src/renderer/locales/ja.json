@@ -1,4 +1,9 @@
 {
+	"welcome": {
+		"title": "Look へようこそ",
+		"description": "プロジェクトフォルダを選択して開始してください。すべての会話はこのフォルダに限定されます。",
+		"openProject": "プロジェクトを開く"
+	},
 	"common": {
 		"ok": "OK",
 		"cancel": "キャンセル",
@@ -15,7 +20,21 @@
 		"newSession": "新しいセッション",
 		"settings": "設定",
 		"noAgents": "Agent がまだありません。",
-		"clickToStart": "上部の + をクリックして開始"
+		"clickToStart": "上部の + をクリックして開始",
+		"rename": "名前を変更",
+		"copyId": "セッションIDをコピー",
+		"exportChat": "セッションをエクスポート",
+		"delete": "削除",
+		"copiedId": "セッションIDをコピーしました",
+		"copyFailed": "コピーに失敗しました",
+		"exportSuccess": "セッションをエクスポートしました",
+		"exportFailed": "エクスポートに失敗しました",
+		"collapse": "サイドバーを折りたたむ",
+		"expand": "サイドバーを展開",
+		"editSessionName": "セッション名を編集",
+		"editProjectName": "プロジェクト名を編集",
+		"expandSubSessions": "サブセッションを展開",
+		"collapseSubSessions": "サブセッションを折りたたむ"
 	},
 	"workspace": {
 		"title": "ワークスペース",
@@ -203,7 +222,9 @@
 			"working": "ツール実行中",
 			"error": "エラー",
 			"idle": "待機中"
-		}
+		},
+		"send": "送信",
+		"stop": "停止"
 	},
 	"project": {
 		"openProject": "プロジェクトフォルダを開く",
@@ -477,7 +498,23 @@
 		"noModelsCategory": "このカテゴリにモデルはありません。",
 		"reasoning": "推論",
 		"modelBase": "ベース",
-		"modelThink": "思考"
+		"modelThink": "思考",
+		"thinkingOff": "オフ",
+		"thinkingMinimal": "最小",
+		"thinkingLow": "低",
+		"thinkingMedium": "中",
+		"thinkingHigh": "高",
+		"thinkingXHigh": "最高",
+		"thinkingOffDesc": "拡張思考なし",
+		"thinkingMinimalDesc": "~1K tokens",
+		"thinkingLowDesc": "~4K tokens",
+		"thinkingMediumDesc": "~10K tokens",
+		"thinkingHighDesc": "~32K tokens",
+		"thinkingXHighDesc": "最大推論",
+		"thinkingMax": "最大",
+		"thinkingMaxDesc": "フル推論",
+		"searchModels": "モデルを検索…",
+		"you": "あなた"
 	},
 	"chat": {
 		"placeholder": "何でも聞いてください...",
@@ -523,7 +560,8 @@
 		"reasoning": "推論",
 		"characters": "{{count}} 文字",
 		"copied": "コピーしました",
-		"copyFailed": "コピーに失敗しました：{{message}}"
+		"copyFailed": "コピーに失敗しました：{{message}}",
+		"welcomeNoProject": "プロジェクトフォルダを選択して開始してください。すべての会話はこのフォルダに限定されます。"
 	},
 	"context": {
 		"compressing": "圧縮中…",
@@ -673,6 +711,17 @@
 		"noSelection": "タスクを選択",
 		"noSelectionHint": "リストからタスクを選んで詳細を表示するか、新しいタスクを作成してください。",
 		"sessionOpenFailed": "セッションを開けませんでした。"
+	},
+	"mcpHash": {
+		"noTools": "一致するツールがありません",
+		"noToolsHint": "別のキーワードをお試しください",
+		"empty": "利用可能なMCPツールはありません",
+		"emptyHint": "設定でMCPサーバーに接続してください"
+	},
+	"skillSlash": {
+		"noMatch": "一致するスキルがありません",
+		"noMatchHint": "別のキーワードを試すか、/を入力してすべてのスキルを表示",
+		"empty": "利用可能なスキルはまだありません"
 	},
 	"toast": {
 		"modelUnavailable": "モデルが利用できません: {{primary}}。{{resolved}} に切り替えました。",

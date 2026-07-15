@@ -126,7 +126,7 @@ const SidebarInner = memo(function SidebarInner({
 			>
 				<UserAvatar avatar={userProfile.avatar} size="sm" />
 				<span className="min-w-0 flex-1 truncate text-[11px] font-medium text-muted-foreground">
-					{userProfile.userName || "You"}
+					{userProfile.userName || t("agent.you", "You")}
 				</span>
 				<span className="font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground/45">
 					{t("sidebar.settings", "Settings")}
@@ -141,7 +141,7 @@ export default function Sidebar(props: SidebarProps) {
 
 	return (
 		<aside
-			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border"
+			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-l-xl border"
 			data-collapsed={collapsed}
 		>
 			<SidebarInner {...props} />

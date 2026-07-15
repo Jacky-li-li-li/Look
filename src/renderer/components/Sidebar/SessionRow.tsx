@@ -61,7 +61,7 @@ function SessionRowImpl({
 						{editingSessionId === agent.id ? (
 							<input
 								ref={editRef}
-								aria-label="编辑会话名称"
+								aria-label={t("sidebar.editSessionName", "编辑会话名称")}
 								value={editValue}
 								onChange={(event) => setEditValue(event.target.value)}
 								onBlur={commitEdit}
@@ -97,11 +97,11 @@ function SessionRowImpl({
 					</span>
 				</button>
 				{hasChildren && (
-					<button
+						<button
 						type="button"
 						className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
 						onClick={(e) => toggleSubSessions(agent.id, e)}
-						title={collapsedSubSessions.has(agent.id) ? "展开子会话" : "折叠子会话"}
+						title={collapsedSubSessions.has(agent.id) ? t("sidebar.expandSubSessions", "展开子会话") : t("sidebar.collapseSubSessions", "折叠子会话")}
 					>
 						{collapsedSubSessions.has(agent.id) ? (
 							<ChevronRight className="size-3" />

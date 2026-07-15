@@ -147,7 +147,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 							type="text"
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
-							placeholder="Search models..."
+							placeholder={t("agent.searchModels", "Search models…")}
 							className="flex-1 bg-transparent text-[12px] outline-hidden placeholder:text-muted-foreground"
 						/>
 					</div>

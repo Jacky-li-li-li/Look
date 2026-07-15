@@ -1,4 +1,9 @@
 {
+  "welcome": {
+    "title": "Welcome to Look",
+    "description": "Select a project folder to get started. All conversations will be scoped to this folder.",
+    "openProject": "Open Project"
+  },
   "common": {
     "ok": "OK",
     "cancel": "Cancel",
@@ -15,7 +20,21 @@
     "newSession": "New session",
     "settings": "Settings",
     "noAgents": "No agents yet.",
-    "clickToStart": "Click + above to start"
+    "clickToStart": "Click + above to start",
+    "rename": "Rename",
+    "copyId": "Copy session ID",
+    "exportChat": "Export session",
+    "delete": "Delete",
+    "copiedId": "Session ID copied",
+    "copyFailed": "Copy failed",
+    "exportSuccess": "Session exported",
+    "exportFailed": "Export failed",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "editSessionName": "Edit session name",
+    "editProjectName": "Edit project name",
+    "expandSubSessions": "Expand sub-sessions",
+    "collapseSubSessions": "Collapse sub-sessions"
   },
   "workspace": {
     "title": "Workspaces",
@@ -203,7 +222,9 @@
       "working": "using tools",
       "error": "error",
       "idle": "idle"
-    }
+    },
+    "send": "Send",
+    "stop": "Stop"
   },
   "project": {
     "openProject": "Open project folder",
@@ -477,7 +498,23 @@
     "noModelsCategory": "No models in this category.",
     "reasoning": "Reasoning",
     "modelBase": "base",
-    "modelThink": "think"
+    "modelThink": "think",
+    "thinkingOff": "Off",
+    "thinkingMinimal": "Minimal",
+    "thinkingLow": "Low",
+    "thinkingMedium": "Medium",
+    "thinkingHigh": "High",
+    "thinkingXHigh": "X-High",
+    "thinkingOffDesc": "No extended thinking",
+    "thinkingMinimalDesc": "~1K tokens",
+    "thinkingLowDesc": "~4K tokens",
+    "thinkingMediumDesc": "~10K tokens",
+    "thinkingHighDesc": "~32K tokens",
+    "thinkingXHighDesc": "Maximum reasoning",
+    "thinkingMax": "Max",
+    "thinkingMaxDesc": "Full reasoning",
+    "searchModels": "Search models…",
+    "you": "You"
   },
   "chat": {
     "placeholder": "Ask anything...",
@@ -523,7 +560,8 @@
     "reasoning": "Reasoning",
     "characters": "{{count}} chars",
     "copied": "Copied",
-    "copyFailed": "Copy failed: {{message}}"
+    "copyFailed": "Copy failed: {{message}}",
+    "welcomeNoProject": "Select a project folder to get started. All conversations will be scoped to this folder."
   },
   "context": {
     "compressing": "Compressing…",
@@ -673,6 +711,17 @@
     "noSelection": "Select a task",
     "noSelectionHint": "Choose a task from the list to view details, or create a new scheduled task.",
     "sessionOpenFailed": "Failed to open session."
+  },
+  "mcpHash": {
+    "noTools": "No matching tools",
+    "noToolsHint": "Try a different keyword",
+    "empty": "No MCP tools available",
+    "emptyHint": "Connect MCP servers in Settings"
+  },
+  "skillSlash": {
+    "noMatch": "No matching skills",
+    "noMatchHint": "Try a different keyword or type / to see all skills.",
+    "empty": "No skills available yet."
   },
   "toast": {
     "modelUnavailable": "Model unavailable: {{primary}}. Switched to {{resolved}}.",

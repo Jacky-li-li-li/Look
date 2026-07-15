@@ -7,16 +7,20 @@ import SimplePopover from "@shared/components/ui/simple-popover";
 import type { ThinkingLevel } from "@shared/types";
 import { Brain, Check } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
-const LEVELS: { value: ThinkingLevel; label: string; desc: string }[] = [
-	{ value: "off", label: "Off", desc: "No extended thinking" },
-	{ value: "minimal", label: "Minimal", desc: "~1K tokens" },
-	{ value: "low", label: "Low", desc: "~4K tokens" },
-	{ value: "medium", label: "Medium", desc: "~10K tokens" },
-	{ value: "high", label: "High", desc: "~32K tokens" },
-	{ value: "xhigh", label: "X-High", desc: "Maximum reasoning" },
-];
+function buildLevels(t: TFunction): { value: ThinkingLevel; label: string; desc: string }[] {
+	return [
+		{ value: "off", label: t("agent.thinkingOff", "Off"), desc: t("agent.thinkingOffDesc", "No extended thinking") },
+		{ value: "minimal", label: t("agent.thinkingMinimal", "Minimal"), desc: t("agent.thinkingMinimalDesc", "~1K tokens") },
+		{ value: "low", label: t("agent.thinkingLow", "Low"), desc: t("agent.thinkingLowDesc", "~4K tokens") },
+		{ value: "medium", label: t("agent.thinkingMedium", "Medium"), desc: t("agent.thinkingMediumDesc", "~10K tokens") },
+		{ value: "high", label: t("agent.thinkingHigh", "High"), desc: t("agent.thinkingHighDesc", "~32K tokens") },
+		{ value: "xhigh", label: t("agent.thinkingXHigh", "X-High"), desc: t("agent.thinkingXHighDesc", "Maximum reasoning") },
+		{ value: "max", label: t("agent.thinkingMax", "Max"), desc: t("agent.thinkingMaxDesc", "Full reasoning") },
+	];
+}
 
 const LEVEL_COLORS: Record<ThinkingLevel, string> = {
 	off: "text-muted-foreground",
@@ -25,6 +29,7 @@ const LEVEL_COLORS: Record<ThinkingLevel, string> = {
 	medium: "text-blue-600 dark:text-blue-400",
 	high: "text-indigo-500 dark:text-indigo-400",
 	xhigh: "text-indigo-600 dark:text-indigo-300",
+	max: "text-purple-500 dark:text-purple-300",
 };
 
 interface ThinkingSelectorProps {
@@ -37,6 +42,8 @@ export default function ThinkingSelector({ currentLevel, availableThinkingLevels
 	const { t } = useTranslation();
 	const onChangedRef = useRef(onChanged);
 	onChangedRef.current = onChanged;
+
+	const LEVELS = useMemo(() => buildLevels(t), [t]);
 
 	const handleSelect = useCallback((level: string) => {
 		onChangedRef.current?.(level);

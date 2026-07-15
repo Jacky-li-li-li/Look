@@ -295,7 +295,7 @@ export class ProjectService {
 
 	renameProject(projectId: string, name: string): boolean {
 		const project = this.projects.get(projectId);
-		const trimmed = name.trim();
+		const trimmed = name.trim().slice(0, 64);
 		if (!project || !trimmed) return false;
 		project.name = trimmed;
 		this.saveProjects();
