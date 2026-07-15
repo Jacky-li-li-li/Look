@@ -283,6 +283,98 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		[t],
 	);
 
+	const renderMessageActions = useCallback(
+		(item: TimelineItem, reserveOnly: boolean) => {
+			const message = item.message;
+			const role = message?.role;
+			const supportsActions = role === "assistant" || role === "user";
+			if (!reserveOnly && !supportsActions) return null;
+
+			const itemEntryId = item.entryId;
+			const showActions = !reserveOnly && supportsActions && Boolean(itemEntryId);
+			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
+
+			return (
+				<div
+					data-message-actions=""
+					data-reserved={showActions ? undefined : ""}
+					aria-hidden={!showActions}
+					className={cn(
+						"mt-msg-action-offset flex min-h-6 items-center gap-msg-action opacity-0 transition-opacity",
+						role === "user" ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
+						showActions
+							? "group-hover/message:opacity-100 group-focus-within/message:opacity-100"
+							: "invisible pointer-events-none",
+					)}
+				>
+					{showActions && itemEntryId && message && (
+						<>
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								disabled={actionBusy}
+								aria-label={t("chat.branchFromHere")}
+								onClick={() => handleBranchFromHere(itemEntryId)}
+							>
+								<Undo2 />
+							</Button>
+							{message.role !== "user" && (
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									disabled={actionBusy}
+									aria-label={t("chat.forkToNewChat")}
+									onClick={() => handleForkToNewChat(itemEntryId)}
+								>
+									<GitBranch />
+								</Button>
+							)}
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								aria-label={t("chat.copyMessage")}
+								onClick={() => handleCopyMessage(item.id, message)}
+							>
+								{copiedEntryId === item.id ? <Check /> : <Copy />}
+							</Button>
+							{message.role === "assistant" && (
+								<>
+									{"model" in message && (
+										<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
+											{(message as { model: string }).model}
+										</span>
+									)}
+									{message.usage.totalTokens > 0 && (
+										<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
+											{fmtUsage(message)}
+										</span>
+									)}
+									{item.turnDurationMs != null && item.turnDurationMs > 0 && (
+										<span className="ml-auto font-mono text-[10px] text-muted-foreground/60 tabular-nums">
+											{item.turnDurationMs >= 60_000
+												? `${(item.turnDurationMs / 60_000).toFixed(1)}m`
+												: `${(item.turnDurationMs / 1_000).toFixed(1)}s`}
+										</span>
+									)}
+								</>
+							)}
+						</>
+					)}
+				</div>
+			);
+		},
+		[
+			copiedEntryId,
+			forkingEntry,
+			handleBranchFromHere,
+			handleCopyMessage,
+			handleForkToNewChat,
+			isBusy,
+			navigatingEntry,
+			t,
+		],
+	);
+
 	// === Render timeline item ===
 	const renderTimelineItem = useCallback(
 		(item: TimelineItem) => {
@@ -315,21 +407,25 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 										item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)
 									}
 								/>
+								{renderMessageActions(item, true)}
 							</div>
 						</div>
 					);
 				}
 				return (
-					<div key="streaming-live" className="px-msg-item-x py-msg-item-y">
-						<StreamingMessageBubble
-							agentName={agentName}
-							blocks={item.uiBlocks}
-							toolExecutions={
-								item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)
-							}
-							isStreaming={isBusy}
-							autoCollapse={autoCollapse}
-						/>
+					<div key={item.id} className="px-msg-item-x py-msg-item-y">
+						<div data-message-id={item.id} className="group/message flex flex-col">
+							<StreamingMessageBubble
+								agentName={agentName}
+								blocks={item.uiBlocks}
+								toolExecutions={
+									item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)
+								}
+								isStreaming={isBusy}
+								autoCollapse={autoCollapse}
+							/>
+							{renderMessageActions(item, true)}
+						</div>
 					</div>
 				);
 			}
@@ -337,14 +433,9 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			if (!item.message) return null;
 
 			const itemEntryId = item.entryId;
-			const showActions = Boolean(
-				itemEntryId && (item.message.role === "assistant" || item.message.role === "user"),
-			);
-			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
-
 			return (
 				<div key={item.id} className="px-msg-item-x py-msg-item-y">
-					<div data-message-id={item.id} className={cn("group/message flex flex-col animate-draw-in")}>
+					<div data-message-id={item.id} className="group/message flex flex-col">
 						<MessageBubble
 							message={item.message}
 							agentName={agentName}
@@ -355,82 +446,12 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 							isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
 							flash={flashEntryId === item.id}
 						/>
-						{showActions && itemEntryId && (
-							<div
-								className={cn(
-									"flex items-center gap-msg-action mt-msg-action-offset opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100",
-									item.message.role === "user" ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
-								)}
-							>
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									disabled={actionBusy}
-									aria-label={t("chat.branchFromHere")}
-									onClick={() => handleBranchFromHere(itemEntryId)}
-								>
-									<Undo2 className="size-3.5" />
-								</Button>
-								{item.message.role !== "user" && (
-									<Button
-										variant="ghost"
-										size="icon-xs"
-										disabled={actionBusy}
-										aria-label={t("chat.forkToNewChat")}
-										onClick={() => handleForkToNewChat(itemEntryId)}
-									>
-										<GitBranch className="size-3.5" />
-									</Button>
-								)}
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									aria-label={t("chat.copyMessage")}
-									onClick={() => handleCopyMessage(item.id, item.message!)}
-								>
-									{copiedEntryId === item.id ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-								</Button>
-								{item.message.role === "assistant" && (
-									<>
-										{"model" in item.message && (
-											<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
-												{(item.message as { model: string }).model}
-											</span>
-										)}
-										{item.message.usage.totalTokens > 0 && (
-											<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
-												{fmtUsage(item.message)}
-											</span>
-										)}
-										{item.turnDurationMs != null && item.turnDurationMs > 0 && (
-											<span className="ml-auto font-mono text-[10px] text-muted-foreground/60 tabular-nums">
-												{item.turnDurationMs >= 60_000
-													? `${(item.turnDurationMs / 60_000).toFixed(1)}m`
-													: `${(item.turnDurationMs / 1_000).toFixed(1)}s`}
-											</span>
-										)}
-									</>
-								)}
-							</div>
-						)}
+						{renderMessageActions(item, false)}
 					</div>
 				</div>
 			);
 		},
-		[
-			agentName,
-			autoCollapse,
-			flashEntryId,
-			forkingEntry,
-			isBusy,
-			leafId,
-			navigatingEntry,
-			handleBranchFromHere,
-			handleCopyMessage,
-			handleForkToNewChat,
-			copiedEntryId,
-			t,
-		],
+		[agentName, autoCollapse, flashEntryId, isBusy, leafId, renderMessageActions],
 	);
 
 	const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);

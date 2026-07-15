@@ -22,6 +22,7 @@ afterEach(() => {
 
 describe("LookMarkdown", () => {
 	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/markdown/LookMarkdown.tsx"), "utf8");
+	const APP_CSS = readFileSync(resolve(__dirname, "../src/renderer/App.css"), "utf8");
 
 	it("renders basic markdown", async () => {
 		const content = `# Hello
@@ -114,13 +115,46 @@ This is **bold**.`;
 	it("renders streaming content without error", async () => {
 		const { container, rerender } = render(<LookMarkdown content="Hello" isStreaming />);
 		await waitFor(() => expect(container.textContent).toContain("Hello"), { timeout: 3000 });
+		const firstAnimatedWord = container.querySelector<HTMLElement>("[data-sd-animate]");
+		expect(firstAnimatedWord?.style.getPropertyValue("--sd-animation")).toBe("sd-look-text-reveal");
+		expect(firstAnimatedWord?.style.getPropertyValue("--sd-easing")).toBe("cubic-bezier(0, 0, 0.2, 1)");
+		expect(firstAnimatedWord?.style.getPropertyValue("--sd-delay")).toBe("");
 		rerender(<LookMarkdown content="Hello world" isStreaming />);
 		await waitFor(() => expect(container.textContent).toContain("Hello world"), { timeout: 3000 });
+		await waitFor(() => {
+			const words = [...container.querySelectorAll<HTMLElement>("[data-sd-animate]")];
+			expect(words.find((word) => word.textContent === "Hello")?.style.getPropertyValue("--sd-duration")).toBe(
+				"0ms",
+			);
+			expect(words.find((word) => word.textContent === "world")?.style.getPropertyValue("--sd-duration")).toBe(
+				"300ms",
+			);
+			expect(words.every((word) => word.style.getPropertyValue("--sd-delay") === "")).toBe(true);
+		});
+	});
+
+	it("does not add streaming reveal wrappers to settled content", async () => {
+		const { container } = render(<LookMarkdown content="Already settled" />);
+		await waitFor(() => expect(container.textContent).toContain("Already settled"));
+		expect(container.querySelector("[data-sd-animate]")).toBeNull();
+	});
+
+	it("keeps animated words in the normal inline formatting context", () => {
+		const rule = APP_CSS.match(/\.look-markdown--streaming \[data-sd-animate\] \{([^}]*)\}/)?.[1];
+		expect(rule).toContain("position: relative");
+		expect(rule).toContain("top: 0");
+		expect(rule).not.toContain("display: inline-block");
+		expect(APP_CSS).toMatch(/@keyframes sd-look-text-reveal[\s\S]*?top: -0\.45em/);
 	});
 
 	it("uses Streamdown incomplete-Markdown handling only while streaming", () => {
 		expect(SRC).toMatch(/parseIncompleteMarkdown=\{isStreaming\}/);
 		expect(SRC).toMatch(/isAnimating=\{isStreaming\}/);
+		expect(SRC).toMatch(/animated=\{STREAMING_TEXT_ANIMATION\}/);
+		expect(SRC).toMatch(/animation:\s*"look-text-reveal"/);
+		expect(SRC).toMatch(/easing:\s*"cubic-bezier\(0, 0, 0\.2, 1\)"/);
+		expect(SRC).toMatch(/stagger:\s*0/);
+		expect(APP_CSS).toMatch(/prefers-reduced-motion:[\s\S]*?animation-delay:\s*0\.01ms/);
 		expect(SRC).toMatch(/mode=\{docs \? "static" : "streaming"\}/);
 	});
 

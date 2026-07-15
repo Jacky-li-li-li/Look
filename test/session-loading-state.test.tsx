@@ -7,9 +7,9 @@ class ResizeObserverMock {
 }
 vi.stubGlobal("ResizeObserver", ResizeObserverMock);
 
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
-import { cleanup, render, screen } from "@testing-library/react";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "jotai";
 import { createRef } from "react";
 import { I18nextProvider } from "react-i18next";
@@ -18,11 +18,11 @@ import ChatMessageList from "../src/renderer/components/chat/ChatMessageList";
 import i18n from "../src/renderer/i18n";
 import { sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore } from "../src/renderer/store/ipcHandler";
+import { emptyRendererSessionState, type RendererSessionPhase } from "../src/renderer/store/sessionTypes";
 import { applySnapshot, markSessionSnapshotLoading } from "../src/renderer/store/snapshot";
-import { emptyRendererSessionState } from "../src/renderer/store/sessionTypes";
 
-function renderList(state = emptyRendererSessionState()) {
-	return render(
+function listUi(state = emptyRendererSessionState(), phase: RendererSessionPhase = "idle", isBusy = false) {
+	return (
 		<I18nextProvider i18n={i18n}>
 			<Provider store={appStore}>
 				<ChatMessageList
@@ -30,14 +30,18 @@ function renderList(state = emptyRendererSessionState()) {
 					agentName="Session A"
 					sessionState={state}
 					autoCollapse
-					phase="idle"
-					isBusy={false}
+					phase={phase}
+					isBusy={isBusy}
 					inputRef={createRef()}
 					onSend={async () => true}
 				/>
 			</Provider>
-		</I18nextProvider>,
+		</I18nextProvider>
 	);
+}
+
+function renderList(state = emptyRendererSessionState()) {
+	return render(listUi(state));
 }
 
 describe("session snapshot loading state", () => {
@@ -141,5 +145,70 @@ describe("session snapshot loading state", () => {
 		// 消息气泡容器应当可见（opacity-0 会移除元素的可视渲染）
 		const bubbles = container.querySelectorAll(".whisper-bubble");
 		expect(bubbles.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it("keeps the assistant row geometry stable across the live-to-persisted handoff", async () => {
+		const text = "stable handoff";
+		const liveState = {
+			...emptyRendererSessionState(),
+			snapshotLoaded: true,
+			uiPhase: "streaming" as const,
+			uiBlocks: [
+				{
+					contentIndex: 0,
+					kind: "text" as const,
+					text,
+					thinking: "",
+					completed: false,
+					uid: 1,
+				},
+			],
+		};
+		const view = render(listUi(liveState, "thinking", true));
+		await waitFor(() => expect(view.container.textContent).toContain(text));
+
+		const liveRow = view.container.querySelector('[data-message-id="streaming-live"]');
+		const liveActions = liveRow?.querySelector("[data-message-actions]");
+		expect(liveRow?.classList.contains("animate-draw-in")).toBe(false);
+		expect(liveActions?.hasAttribute("data-reserved")).toBe(true);
+		expect(liveActions?.classList.contains("min-h-6")).toBe(true);
+
+		const assistantEntry: SessionEntry = {
+			id: "entry-a1",
+			parentId: null,
+			type: "message",
+			timestamp: new Date().toISOString(),
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text }],
+				api: "openai-responses",
+				provider: "openai",
+				model: "gpt-4o",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "stop",
+				timestamp: Date.now(),
+			} as AssistantMessage,
+		};
+		const settledState = {
+			...emptyRendererSessionState(),
+			snapshotLoaded: true,
+			entries: [assistantEntry],
+			leafId: assistantEntry.id,
+		};
+		view.rerender(listUi(settledState));
+		await waitFor(() => expect(view.container.querySelector('[data-message-id="entry-a1"]')).not.toBeNull());
+
+		const settledRow = view.container.querySelector('[data-message-id="entry-a1"]');
+		const settledActions = settledRow?.querySelector("[data-message-actions]");
+		expect(settledRow?.classList.contains("animate-draw-in")).toBe(false);
+		expect(settledActions?.hasAttribute("data-reserved")).toBe(false);
+		expect(settledActions?.classList.contains("min-h-6")).toBe(true);
 	});
 });

@@ -1116,7 +1116,7 @@ export default function ScheduledTasksPage() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<header className="flex items-center justify-between gap-4 border-b border-hairline px-5 py-3">
+			<header className="flex h-12 items-center justify-between gap-4 border-b border-hairline px-5">
 				<div className="flex min-w-0 items-center gap-3">
 					<Button
 						variant="outline"

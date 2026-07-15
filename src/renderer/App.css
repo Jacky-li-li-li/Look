@@ -813,6 +813,25 @@ body {
 		}
 	}
 
+	/* Streamdown wraps only text added by the latest streaming delta. Matching
+		 the tool reveal curve makes each growing line settle into the transcript
+		 without replaying motion on text that is already readable. */
+	@keyframes sd-look-text-reveal {
+		from {
+			opacity: 0;
+			top: -0.45em;
+		}
+		to {
+			opacity: 1;
+			top: 0;
+		}
+	}
+
+	.look-markdown--streaming [data-sd-animate] {
+		position: relative;
+		top: 0;
+	}
+
 	@keyframes roll-in {
 		from {
 			opacity: 0;
@@ -1462,6 +1481,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
 	:root :where(*, *::before, *::after) {
 		animation-duration: 0.01ms;
+		animation-delay: 0.01ms;
 		animation-iteration-count: 1;
 		transition-duration: 0.01ms;
 	}

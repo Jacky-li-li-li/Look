@@ -2,11 +2,12 @@
 // LookMarkdown — stable chat Markdown adapter built on Streamdown
 // ============================================================
 
+import { cn } from "@shared/lib/utils";
 import { cjk } from "@streamdown/cjk";
 import { createCodePlugin } from "@streamdown/code";
 import type { DiagramPlugin, MermaidConfig } from "@streamdown/mermaid";
 import { memo, useEffect, useMemo, useState } from "react";
-import { defaultRemarkPlugins, Streamdown } from "streamdown";
+import { type AnimateOptions, defaultRemarkPlugins, Streamdown } from "streamdown";
 import { useLookTheme } from "../../hooks/useLookTheme";
 import { prepareMessageContent } from "../../lib/messageMarkdown";
 import { remarkLookReferences } from "../../lib/remarkLookReferences";
@@ -26,6 +27,13 @@ const codePlugin = createCodePlugin({
 
 const customRenderers = [{ language: "ascii", component: AsciiDiagram }];
 const basePlugins = { code: codePlugin, cjk, renderers: customRenderers } as const;
+const STREAMING_TEXT_ANIMATION = {
+	animation: "look-text-reveal",
+	duration: 300,
+	easing: "cubic-bezier(0, 0, 0.2, 1)",
+	sep: "word",
+	stagger: 0,
+} satisfies AnimateOptions;
 const MERMAID_FENCE_RE = /(?:^|\n)[\t ]{0,3}(?:`{3,}|~{3,})[\t ]*mermaid\b/i;
 const allowedTags = {
 	"skill-tag": ["data*"],
@@ -70,13 +78,15 @@ const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, 
 
 	return (
 		<Streamdown
-			className={
-				docs ? "look-markdown look-markdown--docs space-y-0" : "look-markdown look-markdown--chat space-y-0"
-			}
+			className={cn(
+				"look-markdown space-y-0",
+				docs ? "look-markdown--docs" : "look-markdown--chat",
+				isStreaming && !docs && "look-markdown--streaming",
+			)}
 			mode={docs ? "static" : "streaming"}
 			parseIncompleteMarkdown={isStreaming}
 			isAnimating={isStreaming}
-			animated={false}
+			animated={STREAMING_TEXT_ANIMATION}
 			plugins={plugins}
 			mermaid={{ config: mermaidConfig }}
 			remarkPlugins={remarkPlugins}
