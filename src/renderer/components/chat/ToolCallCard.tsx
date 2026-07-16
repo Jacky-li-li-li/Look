@@ -1,7 +1,6 @@
 // ============================================================
 // ToolCallCard — Inset Drawer (Ink Wash, shadcn/ui)
-// Auto-expands while a tool is running, auto-collapses on
-// completion. Manual toggle overrides until next status change.
+// Tool details stay collapsed by default and are controlled manually.
 // ============================================================
 
 import { cn } from "@shared/lib/utils";

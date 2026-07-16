@@ -130,7 +130,12 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 						const pendingDelta = thinkingDeltas.get(ev.contentIndex) ?? "";
 						thinkingDeltas.delete(ev.contentIndex);
 						const thinking = ev.thinking || blocks[i]!.thinking + pendingDelta;
-						mutateBlock(i, { ...blocks[i]!, thinking, completed: true });
+						mutateBlock(i, {
+							...blocks[i]!,
+							thinking,
+							thinkingSignature: ev.thinkingSignature,
+							completed: true,
+						});
 						break;
 					}
 				}

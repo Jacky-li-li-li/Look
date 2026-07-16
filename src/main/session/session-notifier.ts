@@ -83,7 +83,7 @@ export class SessionNotifier {
 	emitTodoUpdate(sessionId: string): void {
 		const managed = this.getManagedRuntime(sessionId);
 		if (!managed) return;
-		this.eventBus.emit({ type: "todo:update", sessionId, items: parseTodoFile(managed.runtime.cwd) ?? [] });
+		this.eventBus.emit({ type: "todo:update", sessionId, items: parseTodoFile(managed.cwd) ?? [] });
 	}
 
 	emitSessionUpdated(sessionId: string): void {

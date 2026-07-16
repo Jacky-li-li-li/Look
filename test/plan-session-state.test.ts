@@ -1,13 +1,13 @@
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import fs from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentSession, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { IEventBus, IPermissionService, IPlanService, IRuntimeStore } from "../src/main/core/contracts";
 import { PlanService } from "../src/main/permissions/plan.js";
 import { PermissionService } from "../src/main/permissions/service.js";
-import type { IEventBus, IRuntimeStore, IPermissionService, IPlanService } from "../src/main/core/contracts";
-import type { AgentSession, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 
 const cleanup: string[] = [];
 afterEach(async () => {
@@ -65,7 +65,7 @@ function planServiceForTest(
 		getCwd: (id) => sessions.get(id)?.cwd ?? "/tmp",
 		getProjectRoot: () => "/tmp",
 	};
-	const permissionSvc = new PermissionService(eventBus, runtimeStore, "ask");
+	const permissionSvc = new PermissionService(eventBus, "ask");
 	permissionSvc.setMode("session-a", "plan");
 	const onApproval = vi.fn().mockResolvedValue(undefined);
 	const planSvc = new PlanService(eventBus, runtimeStore, permissionSvc, onApproval);
@@ -84,6 +84,32 @@ const questions = [
 ];
 
 describe("Plan session state", () => {
+	it("persists a dirty tool snapshot to the explicitly supplied session manager", () => {
+		const appendPrevious = vi.fn();
+		const appendCurrent = vi.fn();
+		const previousManager = {
+			isPersisted: () => true,
+			appendCustomEntry: appendPrevious,
+		} as unknown as SessionManager;
+		const currentManager = {
+			isPersisted: () => true,
+			appendCustomEntry: appendCurrent,
+		} as unknown as SessionManager;
+		const { planSvc } = planServiceForTest({
+			"session-a": {
+				cwd: "/tmp",
+				sessionManager: currentManager,
+				session: mockSession({ getActiveToolNames: () => ["read"] }),
+			},
+		});
+
+		planSvc.capturePrePlanTools("session-a");
+		planSvc.persistToolSnapshotIfDirty("session-a", previousManager);
+
+		expect(appendPrevious).toHaveBeenCalledTimes(1);
+		expect(appendCurrent).not.toHaveBeenCalled();
+	});
+
 	it("routes question responses by both request and session ID", async () => {
 		const events: any[] = [];
 		const eb: IEventBus = {
@@ -101,7 +127,7 @@ describe("Plan session state", () => {
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
 		};
-		const ps = new PermissionService(eb, rs, "ask");
+		const ps = new PermissionService(eb, "ask");
 		ps.setMode("session-a", "plan");
 		const svc = new PlanService(eb, rs, ps, async () => {});
 		const pending = svc.requestQuestions("session-a", questions);
@@ -157,7 +183,6 @@ describe("Plan session state", () => {
 					return () => {};
 				},
 			},
-			rs,
 			"ask",
 		);
 		ps.setMode("session-a", "plan");
@@ -205,7 +230,6 @@ describe("Plan session state", () => {
 					return () => {};
 				},
 			},
-			rs,
 			"ask",
 		);
 		ps.setMode("session-a", "plan");
@@ -245,7 +269,7 @@ describe("Plan session state", () => {
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
 		};
-		const ps = new PermissionService(eb, rs, "ask");
+		const ps = new PermissionService(eb, "ask");
 		ps.setMode("session-a", "plan");
 		const planSvc = new PlanService(eb, rs, ps, async () => {});
 
@@ -293,7 +317,7 @@ describe("Plan session state", () => {
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
 		};
-		const ps = new PermissionService(eb, rs, "ask");
+		const ps = new PermissionService(eb, "ask");
 		ps.setMode("session-a", "plan");
 		const onApproval = vi.fn(async () => {
 			ps.setMode("session-a", "always");
@@ -337,7 +361,6 @@ describe("Plan session state", () => {
 					return () => {};
 				},
 			},
-			rs,
 			"ask",
 		);
 		const planSvc = new PlanService(
@@ -378,7 +401,6 @@ describe("Plan session state", () => {
 					return () => {};
 				},
 			},
-			rs,
 			"ask",
 		);
 		const planSvc = new PlanService(

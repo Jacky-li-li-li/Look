@@ -6,12 +6,22 @@
 // disposal behavior, making this module straightforward to test in isolation.
 // ============================================================
 
-import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
+import type { AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+
+/** Stable host-owned identity for the session currently bound to a mutable SDK runtime. */
+export interface RuntimeSessionBinding {
+	readonly sessionId: string;
+	readonly sessionManager: SessionManager;
+}
 
 export interface ManagedRuntime {
 	readonly runtime: AgentSessionRuntime;
 	readonly projectId: string;
+	/** Immutable cwd captured when this live runtime is registered. */
+	readonly cwd: string;
 	readonly createdAt: number;
+	/** Updated only when a replacement session has been accepted by the host. */
+	binding: RuntimeSessionBinding;
 	unsubscribe: () => void;
 }
 
@@ -57,6 +67,12 @@ export class RuntimeRegistry {
 
 	async awaitInitialization(sessionId: string): Promise<void> {
 		await this.initializations.get(sessionId)?.catch(() => undefined);
+	}
+
+	async awaitAllInitializations(): Promise<void> {
+		await Promise.all(
+			Array.from(this.initializations.values()).map((initialization) => initialization.catch(() => undefined)),
+		);
 	}
 
 	async withExclusive<T>(sessionId: string, task: () => Promise<T>): Promise<T> {

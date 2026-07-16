@@ -5,19 +5,31 @@
 import { Button } from "@shared/components/ui/button";
 import SimplePopover from "@shared/components/ui/simple-popover";
 import type { ThinkingLevel } from "@shared/types";
+import type { TFunction } from "i18next";
 import { Brain, Check } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 function buildLevels(t: TFunction): { value: ThinkingLevel; label: string; desc: string }[] {
 	return [
 		{ value: "off", label: t("agent.thinkingOff", "Off"), desc: t("agent.thinkingOffDesc", "No extended thinking") },
-		{ value: "minimal", label: t("agent.thinkingMinimal", "Minimal"), desc: t("agent.thinkingMinimalDesc", "~1K tokens") },
+		{
+			value: "minimal",
+			label: t("agent.thinkingMinimal", "Minimal"),
+			desc: t("agent.thinkingMinimalDesc", "~1K tokens"),
+		},
 		{ value: "low", label: t("agent.thinkingLow", "Low"), desc: t("agent.thinkingLowDesc", "~4K tokens") },
-		{ value: "medium", label: t("agent.thinkingMedium", "Medium"), desc: t("agent.thinkingMediumDesc", "~10K tokens") },
+		{
+			value: "medium",
+			label: t("agent.thinkingMedium", "Medium"),
+			desc: t("agent.thinkingMediumDesc", "~10K tokens"),
+		},
 		{ value: "high", label: t("agent.thinkingHigh", "High"), desc: t("agent.thinkingHighDesc", "~32K tokens") },
-		{ value: "xhigh", label: t("agent.thinkingXHigh", "X-High"), desc: t("agent.thinkingXHighDesc", "Maximum reasoning") },
+		{
+			value: "xhigh",
+			label: t("agent.thinkingXHigh", "X-High"),
+			desc: t("agent.thinkingXHighDesc", "Maximum reasoning"),
+		},
 		{ value: "max", label: t("agent.thinkingMax", "Max"), desc: t("agent.thinkingMaxDesc", "Full reasoning") },
 	];
 }

@@ -83,8 +83,8 @@ export interface IPermissionService {
 	/** Restore the permission mode from persisted JSONL entries. */
 	restoreFromSession(sessionId: string, manager: SessionManager): PermissionMode;
 
-	/** Persist the mode for a session if marked dirty. */
-	persistIfDirty(sessionId: string): void;
+	/** Persist the mode to the explicitly bound session manager if marked dirty. */
+	persistIfDirty(sessionId: string, manager: SessionManager): void;
 
 	/** Clean up per-session state (called on runtime disposal). */
 	disposeSession(sessionId: string): void;
@@ -105,7 +105,7 @@ export interface IPermissionService {
 export interface IPlanService {
 	restoreToolSnapshot(sessionId: string, manager: SessionManager): void;
 	syncToolState(sessionId: string): void;
-	persistToolSnapshotIfDirty(sessionId: string): void;
+	persistToolSnapshotIfDirty(sessionId: string, manager: SessionManager): void;
 	disposeSession(sessionId: string): void;
 
 	capturePrePlanTools(sessionId: string): void;

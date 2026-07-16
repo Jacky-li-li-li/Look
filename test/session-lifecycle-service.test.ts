@@ -22,6 +22,7 @@ describe("SessionLifecycleService", () => {
 		return {
 			runtime: { session: makeSession(sessionId), cwd } as unknown as AgentSessionRuntime,
 			projectId,
+			cwd,
 			createdAt: Date.now(),
 			unsubscribe: vi.fn(),
 		};

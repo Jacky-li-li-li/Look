@@ -618,7 +618,8 @@ export class SchedulerService {
 				const attemptController = new AbortController();
 				const abortAttempt = () =>
 					attemptController.abort(controller.signal.reason ?? new Error("Scheduled task execution was aborted"));
-				controller.signal.addEventListener("abort", abortAttempt, { once: true });
+				if (controller.signal.aborted) abortAttempt();
+				else controller.signal.addEventListener("abort", abortAttempt, { once: true });
 				const timeout = setTimeout(
 					() => attemptController.abort(new Error(`Scheduled task timed out after ${task.executionTimeoutMs}ms`)),
 					task.executionTimeoutMs,

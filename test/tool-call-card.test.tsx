@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
-import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ToolCallCard, { type ToolCallViewModel } from "../src/renderer/components/chat/ToolCallCard";
 import i18n from "../src/renderer/i18n";
@@ -40,11 +40,12 @@ describe("ToolCallCard", () => {
 		expect(getByRole("button").getAttribute("aria-expanded")).toBe("false");
 	});
 
-	it("keeps a running tool open briefly after completion before auto-collapsing", () => {
-		vi.useFakeTimers();
+	it("keeps manual expansion stable when a running tool completes", () => {
 		const { getByRole, rerender } = renderCard(makeTool("running"));
 		const button = getByRole("button");
 
+		expect(button.getAttribute("aria-expanded")).toBe("false");
+		fireEvent.click(button);
 		expect(button.getAttribute("aria-expanded")).toBe("true");
 
 		rerender(
@@ -54,13 +55,7 @@ describe("ToolCallCard", () => {
 		);
 
 		expect(button.getAttribute("aria-expanded")).toBe("true");
-		act(() => {
-			vi.advanceTimersByTime(299);
-		});
-		expect(button.getAttribute("aria-expanded")).toBe("true");
-		act(() => {
-			vi.advanceTimersByTime(1);
-		});
+		fireEvent.click(button);
 		expect(button.getAttribute("aria-expanded")).toBe("false");
 	});
 });

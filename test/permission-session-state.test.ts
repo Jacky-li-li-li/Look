@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
+import type { IEventBus } from "../src/main/core/contracts";
 import { PermissionService } from "../src/main/permissions/service.js";
-import type { IEventBus, IRuntimeStore } from "../src/main/core/contracts";
-import type { AgentSession, AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 
 function mockEventBus(events: any[]): IEventBus {
 	return {
@@ -14,24 +14,28 @@ function mockEventBus(events: any[]): IEventBus {
 	};
 }
 
-function mockRuntimeStore(): IRuntimeStore {
-	return {
-		getRuntime: () => undefined as unknown as AgentSessionRuntime,
-		getSession: () => undefined as unknown as AgentSession,
-		getSessionManager: () => undefined as unknown as SessionManager,
-		getCwd: () => "/tmp",
-		getProjectRoot: () => "/tmp",
-	};
-}
-
 function context(sessionId: string) {
 	return { sessionManager: { getSessionId: () => sessionId } };
 }
 
 describe("session permission state", () => {
+	it("persists dirty state to the explicitly supplied session manager", () => {
+		const appendPrevious = vi.fn();
+		const previousManager = {
+			isPersisted: () => true,
+			appendCustomEntry: appendPrevious,
+		} as unknown as SessionManager;
+		const svc = new PermissionService(mockEventBus([]), "ask");
+
+		svc.setMode("session-a", "always");
+		svc.persistIfDirty("session-a", previousManager);
+
+		expect(appendPrevious).toHaveBeenCalledTimes(1);
+	});
+
 	it("registers a pending request before emitting it", async () => {
 		const events: any[] = [];
-		const svc = new PermissionService(mockEventBus(events), mockRuntimeStore(), "ask");
+		const svc = new PermissionService(mockEventBus(events), "ask");
 		const handler = svc.createToolCallHandler("/tmp/project");
 		const promise = handler({ toolName: "write", input: { path: "file.txt" } }, context("session-a"));
 		// Respond after the permission:ask event has been emitted
@@ -42,7 +46,7 @@ describe("session permission state", () => {
 
 	it("keeps always-allow tool grants scoped to the originating session", async () => {
 		const events: any[] = [];
-		const svc = new PermissionService(mockEventBus(events), mockRuntimeStore(), "ask");
+		const svc = new PermissionService(mockEventBus(events), "ask");
 		const handler = svc.createToolCallHandler("/tmp/project");
 
 		// Session A: first call triggers permission ask

@@ -1,3 +1,4 @@
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { type ManagedRuntime, RuntimeRegistry } from "../src/main/session/runtime-registry.js";
 
@@ -5,7 +6,9 @@ function managed(id: string): ManagedRuntime {
 	return {
 		runtime: { session: { sessionId: id } } as ManagedRuntime["runtime"],
 		projectId: "project-a",
+		cwd: "/project-a",
 		createdAt: 1,
+		binding: { sessionId: id, sessionManager: {} as SessionManager },
 		unsubscribe: () => {},
 	};
 }

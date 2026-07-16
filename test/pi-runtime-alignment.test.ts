@@ -5,7 +5,11 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 const runtime = read("src/main/session/runtime-manager.ts");
-const ipc = read("src/main/ipc/handlers.ts") + read("src/main/ipc/routers/permission-router.ts") + read("src/main/ipc/project-trust.ts");
+const runtimeComposition = read("src/main/session/runtime-manager-composition.ts");
+const ipc =
+	read("src/main/ipc/handlers.ts") +
+	read("src/main/ipc/routers/permission-router.ts") +
+	read("src/main/ipc/project-trust.ts");
 const preload = read("src/main/preload.js");
 const index = read("src/main/index.ts");
 const types = read("packages/shared/src/types.ts");
@@ -15,6 +19,7 @@ const uiBatcher = read("src/main/session/ui-event-batcher.ts");
 const projectService = read("src/main/projects/project-service.ts");
 const runtimeRegistry = read("src/main/session/runtime-registry.ts");
 const runtimeFactory = read("src/main/session/runtime-factory.ts");
+const runtimeLifecycle = read("src/main/session/runtime-lifecycle-coordinator.ts");
 const sessionHistory = read("src/main/session/session-history-service.ts");
 const sessionNotifier = read("src/main/session/session-notifier.ts");
 const sessionLifecycle = read("src/main/session/session-lifecycle-service.ts");
@@ -29,8 +34,8 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("2. gates project resources with pi Project Trust", () => {
-		expect(runtime).toContain("ProjectTrustStore");
-		expect(runtime).toContain("resolveProjectTrust");
+		expect(runtimeComposition).toContain("ProjectTrustStore");
+		expect(runtimeComposition).toContain("resolveProjectTrust");
 		expect(runtimeFactory).toContain("resolveProjectTrust: async () => resolveLatestProjectTrust()");
 		expect(runtimeFactory).not.toContain("resolveProjectTrust: async () => trusted");
 		expect(projectService).toContain("hasTrustRequiringProjectResources");
@@ -39,7 +44,7 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("3. owns one independent AgentSessionRuntime per live session", () => {
-		expect(runtime).toContain("private readonly runtimeRegistry = new RuntimeRegistry()");
+		expect(runtimeComposition).toContain("readonly runtimeRegistry = new RuntimeRegistry()");
 		expect(runtimeRegistry).toContain("private readonly runtimes = new Map<string, ManagedRuntime>()");
 		expect(runtimeRegistry).toContain(
 			"private readonly initializations = new Map<string, Promise<ManagedRuntime>>()",
@@ -91,13 +96,13 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("7. binds extensions after every runtime replacement", () => {
-		expect(runtime).toContain("setRebindSession");
-		expect(runtime).toContain("await session.bindExtensions");
+		expect(runtimeLifecycle).toContain("setRebindSession");
+		expect(runtimeLifecycle).toContain("await this.bindExtensions(session)");
 	});
 
 	it("8. owns one global UI settings store", () => {
-		expect(runtime.match(/new UserSettingsStore/g)).toHaveLength(1);
-		expect(runtime).not.toContain("getProjectSettings(");
+		expect(runtimeComposition.match(/new UserSettingsStore/g)).toHaveLength(1);
+		expect(runtime + runtimeComposition).not.toContain("getProjectSettings(");
 	});
 
 	it("9. persists names through pi and has no custom title LLM call", () => {

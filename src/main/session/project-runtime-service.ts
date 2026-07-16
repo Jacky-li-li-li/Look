@@ -43,7 +43,7 @@ export class ProjectRuntimeService {
 		this.deps.projectService.setTrust(projectId, trusted);
 		const reloadPromises: Promise<void>[] = [];
 		for (const managed of this.deps.runtimeRegistry.values()) {
-			if (managed.runtime.cwd !== project.cwd) continue;
+			if (managed.cwd !== project.cwd) continue;
 			reloadPromises.push(
 				(async () => {
 					managed.runtime.services.settingsManager.setProjectTrusted(trusted);

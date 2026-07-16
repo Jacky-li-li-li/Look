@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectInfo } from "@look/shared/types";
@@ -44,6 +44,7 @@ describe("ProjectRuntimeService", () => {
 				session: { reload: vi.fn().mockResolvedValue(undefined) },
 			},
 			projectId: "project-1",
+			cwd,
 			createdAt: Date.now(),
 			unsubscribe: vi.fn(),
 		} as unknown as ManagedRuntime;
@@ -105,7 +106,7 @@ describe("ProjectRuntimeService", () => {
 
 		const projectService = makeProjectService();
 		const sessionCatalog = makeSessionCatalog();
-		const runtimeA = makeManagedRuntime(dir);
+		const runtimeA = makeManagedRuntime(realpathSync(dir));
 		const runtimeB = makeManagedRuntime("/other/project");
 		const service = new ProjectRuntimeService({
 			projectService,
@@ -116,7 +117,6 @@ describe("ProjectRuntimeService", () => {
 		});
 
 		const { project } = await service.createProject(dir, "Trust Project");
-		runtimeA.runtime.cwd = project.cwd;
 		await service.setProjectTrust(project.id, true);
 
 		expect(projectService.setTrust).toHaveBeenCalledWith(project.id, true);

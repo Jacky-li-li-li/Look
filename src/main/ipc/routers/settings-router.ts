@@ -187,14 +187,14 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 				guardStringArray(settings.enabledSkills, "settings.enabledSkills");
 			}
 		}
-		const updated = await ctx.runtimeManager.updateGeneralSettings(data.settings ?? {});
-
 		if (typeof (data.settings as Record<string, unknown>)?.themeTone === "string") {
 			const tone = (data.settings as Record<string, unknown>).themeTone;
 			if (!ctx.mainWindow.isDestroyed()) {
 				ctx.mainWindow.setBackgroundColor(tone === "light" ? "#fbfbfa" : "#030202");
 			}
 		}
+
+		const updated = await ctx.runtimeManager.updateGeneralSettings(data.settings ?? {});
 
 		return { success: true, settings: updated };
 	});

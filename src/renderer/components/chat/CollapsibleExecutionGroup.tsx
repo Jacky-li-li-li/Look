@@ -10,6 +10,7 @@ import { cn } from "@shared/lib/utils";
 import type { LookUiToolExecState } from "@shared/types";
 import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { hashKey } from "../../lib/stableKey";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
@@ -83,7 +84,13 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	toolResultMap,
 	isStreaming,
 }: CollapsibleExecutionGroupProps) {
+	const { t } = useTranslation();
 	const { kind, thinkingCount, toolCount } = React.useMemo(() => classify(blocks), [blocks]);
+	const summary = React.useMemo(() => {
+		if (kind === "mixed") return t("tool.mixedExecuted", { thinking: thinkingCount, tools: toolCount });
+		if (kind === "thinking") return t("tool.thinkingExecuted", { count: thinkingCount });
+		return t("tool.executed", { count: toolCount });
+	}, [kind, thinkingCount, toolCount, t]);
 
 	const [expanded, setExpanded] = React.useState(false);
 
@@ -127,8 +134,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 			<BadgeTrigger
 				kind={kind}
 				isOpen={isOpen}
-				thinkingCount={thinkingCount}
-				toolCount={toolCount}
+				summary={summary}
 				onClick={handleBadgeClick}
 				onKeyDown={handleBadgeKeyDown}
 			/>
@@ -212,49 +218,12 @@ function renderBlock(
 interface BadgeTriggerProps {
 	kind: GroupKind;
 	isOpen: boolean;
-	thinkingCount: number;
-	toolCount: number;
+	summary: string;
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
 
-function RollingNumber({ value }: { value: number }) {
-	return (
-		<span className="inline-flex overflow-hidden" style={{ height: "1em", lineHeight: 1 }}>
-			<span
-				key={value}
-				className="inline-block animate-[roll-in_220ms_cubic-bezier(0,0,0.2,1)_both]"
-				style={{ animationFillMode: "both" }}
-			>
-				{value}
-			</span>
-		</span>
-	);
-}
-
-function buildLabel(kind: GroupKind, thinkingCount: number, toolCount: number): React.ReactNode {
-	if (kind === "mixed") {
-		return (
-			<span>
-				Thought <RollingNumber value={thinkingCount} /> / <RollingNumber value={toolCount} /> tools
-			</span>
-		);
-	}
-	if (kind === "thinking") {
-		return (
-			<span>
-				Thought <RollingNumber value={thinkingCount} /> time{thinkingCount !== 1 ? "s" : ""}
-			</span>
-		);
-	}
-	return (
-		<span>
-			Executed <RollingNumber value={toolCount} /> tool{toolCount !== 1 ? "s" : ""}
-		</span>
-	);
-}
-
-function BadgeTrigger({ kind, isOpen, thinkingCount, toolCount, onClick, onKeyDown }: BadgeTriggerProps) {
+function BadgeTrigger({ kind, isOpen, summary, onClick, onKeyDown }: BadgeTriggerProps) {
 	const Icon = kind === "thinking" ? Brain : Wrench;
 	const chevron = (
 		<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", isOpen && "rotate-90")} />
@@ -275,7 +244,7 @@ function BadgeTrigger({ kind, isOpen, thinkingCount, toolCount, onClick, onKeyDo
 			{chevron}
 			<Icon className="size-3.5 shrink-0 text-muted-foreground" />
 			<span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] tracking-wide text-muted-foreground">
-				{buildLabel(kind, thinkingCount, toolCount)}
+				{summary}
 			</span>
 		</button>
 	);

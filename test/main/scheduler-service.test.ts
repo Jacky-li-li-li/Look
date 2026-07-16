@@ -451,15 +451,19 @@ describe("SchedulerService", () => {
 	it("aborts an in-flight run when the task is deleted", async () => {
 		const dir = await tempDir();
 		let aborted = false;
+		let started = false;
 		const executor: ScheduledTaskExecutor = {
 			execute: async (_task, context) => {
+				started = true;
 				return new Promise((resolve) => {
 					const timeout = setTimeout(() => resolve({ output: "done" }), 5_000);
-					context.signal.addEventListener("abort", () => {
+					const onAbort = () => {
 						clearTimeout(timeout);
 						aborted = true;
 						resolve({ output: "aborted" });
-					});
+					};
+					context.signal.addEventListener("abort", onAbort, { once: true });
+					if (context.signal.aborted) onAbort();
 				});
 			},
 		};
@@ -468,7 +472,7 @@ describe("SchedulerService", () => {
 		const task = await service.create(INPUT);
 
 		service.runNow(task.id);
-		await waitFor(() => service.listLogs(task.id).some((log) => log.status === "running"));
+		await waitFor(() => started);
 		await service.delete(task.id);
 
 		await waitFor(() => aborted);

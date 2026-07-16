@@ -98,18 +98,17 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		})
 		.catch((err) => console.warn("[Look] Failed to load provider settings:", err));
 
-	// 并行发起所有启动请求
-	const [genSettingsResult, projectResult, agentsResult, agentDefsResult] = await Promise.all([
-		invokeStartup(() => api.getGeneralSettings()),
-		invokeStartup(() => api.listProjects()),
-		invokeStartup(() => api.getAgents()),
-		invokeStartup(() => api.listAgentDefinitions()),
-	]);
+	// Apply the persisted theme as soon as general settings arrive. Previously
+	// this result waited behind projects, sessions and agent definitions in the
+	// Promise.all below, stretching any boot-time mismatch to the slowest request.
+	const generalSettingsPromise = invokeStartup(() => api.getGeneralSettings()).then(async (result) => {
+		if (!result?.success || !result.settings) {
+			console.warn("[initAppData] general settings not available, keeping boot theme");
+			return result;
+		}
 
-	// 应用 general settings（language 需要在写入 store 前准备好）
-	if (genSettingsResult?.success && genSettingsResult.settings) {
-		const settings = genSettingsResult.settings;
-		if (settings.language) await i18n.changeLanguage(settings.language);
+		const settings = result.settings;
+		writeLookThemeToDom(themeFromSettings(settings));
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
 		if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
 		if (settings.rightPanelCollapsed !== undefined)
@@ -118,10 +117,17 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
 		if (Array.isArray(settings.openedSessionIds)) appStore.set(openedSessionIdsAtom, settings.openedSessionIds);
-		writeLookThemeToDom(themeFromSettings(settings));
-	} else {
-		console.warn("[initAppData] general settings not available, using default theme");
-	}
+		if (settings.language) await i18n.changeLanguage(settings.language);
+		return result;
+	});
+
+	// Start all independent startup requests concurrently.
+	const [, projectResult, agentsResult, agentDefsResult] = await Promise.all([
+		generalSettingsPromise,
+		invokeStartup(() => api.listProjects()),
+		invokeStartup(() => api.getAgents()),
+		invokeStartup(() => api.listAgentDefinitions()),
+	]);
 
 	// 批量写入，减少中间态渲染
 	if (projectResult?.success && Array.isArray(projectResult.projects)) {

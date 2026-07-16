@@ -182,7 +182,7 @@ export class SessionSubagentService {
 		const projectId = parentManaged.projectId;
 		const project = this.deps.host.getProjectInfo(projectId);
 		if (!project?.valid) throw new Error(`Project not found or invalid for subagent: ${projectId}`);
-		const cwd = parentManaged.runtime.cwd;
+		const cwd = parentManaged.cwd;
 
 		const subsessionDir = ensureWorkspaceSubsessionsDir(projectId);
 		const sessionManager = SessionManager.create(cwd, subsessionDir);

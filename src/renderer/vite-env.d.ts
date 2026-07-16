@@ -11,6 +11,7 @@ import type {
 	ScheduledTaskInput,
 	ScheduledTaskRunLog,
 	ScheduledTaskTestResult,
+	UserSettings,
 } from "@shared/types";
 import type { ProviderSettingsData } from "./store/atoms";
 import type { UserProfile } from "./types/user-profile";
@@ -300,28 +301,7 @@ interface SkillDiagnostic {
 	path?: string;
 }
 
-interface GeneralSettings {
-	language: "en" | "zh" | "ja";
-	themeTone: "light" | "dark";
-	autoCollapse: boolean;
-	compactionEnabled: boolean;
-	autoTitleModel: string | null;
-	permissionMode: "always" | "ask" | "plan";
-	/** Most recent model the user picked in the bottom-bar ModelSelector.
-	 *  Used by quick-create to seed new chat agents with the user's
-	 *  current pick. null = "no preference" (main picks first available). */
-	preferredModel: string | null;
-	lastActiveSessionId: string;
-	lastActiveProjectId: string;
-	openProjectIds: string[];
-	openedSessionIds: string[];
-	/** SubAgent 功能总开关。关闭后所有会话的 subagent 工具对 LLM 不可见。 */
-	subagentEnabled: boolean;
-	/** 已启用的 SubAgent 定义名称列表。null=全部启用（向后兼容） */
-	enabledAgentDefinitions: string[] | null;
-	/** 已启用的 Skill 名称列表。null=全部启用（向后兼容） */
-	enabledSkills: string[] | null;
-}
+type GeneralSettings = UserSettings;
 
 declare global {
 	const __APP_VERSION__: string;

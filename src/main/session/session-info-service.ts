@@ -11,7 +11,7 @@ import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import type { AgentInfo, ImSessionProvider, ProjectInfo, ThinkingLevel } from "@look/shared/types";
 import { loadBindings } from "../im/im-storage.js";
-import type { RuntimeRegistry } from "./runtime-registry.js";
+import type { ManagedRuntime, RuntimeRegistry } from "./runtime-registry.js";
 import type { SessionScopeRegistry } from "./scope-registry.js";
 import type { SessionCatalog, StoredSession } from "./session-catalog.js";
 import type { SubAgentRegistry } from "./subagent-registry.js";
@@ -42,9 +42,7 @@ export class SessionInfoService {
 		return this.imBindingsCache;
 	}
 
-	getManagedRuntime(
-		sessionId: string,
-	): { runtime: AgentSessionRuntime; projectId: string; createdAt: number; unsubscribe: () => void } | undefined {
+	getManagedRuntime(sessionId: string): ManagedRuntime | undefined {
 		return this.deps.runtimeRegistry.get(sessionId);
 	}
 

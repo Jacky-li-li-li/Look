@@ -34,6 +34,7 @@ function makeManagedRuntime(session: AgentSession, projectId = "p1"): ManagedRun
 	return {
 		runtime: { session, cwd: "/tmp" },
 		projectId,
+		cwd: "/tmp",
 		createdAt: 1,
 		unsubscribe: () => {},
 	} as unknown as ManagedRuntime;

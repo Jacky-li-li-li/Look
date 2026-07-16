@@ -16,7 +16,9 @@ interface TestManagerInternals {
 			runtime: {
 				runtime: { session: Record<string, unknown> };
 				projectId: string;
+				cwd: string;
 				createdAt: number;
+				binding: { sessionId: string; sessionManager: Record<string, unknown> };
 				unsubscribe: () => void;
 			},
 		): void;
@@ -24,7 +26,12 @@ interface TestManagerInternals {
 	};
 }
 
-function installFakeRuntime(manager: import("../src/main/session/runtime-manager.js").SessionRuntimeManager, sessionId: string, projectId: string) {
+function installFakeRuntime(
+	manager: import("../src/main/session/runtime-manager.js").SessionRuntimeManager,
+	sessionId: string,
+	projectId: string,
+) {
+	const sessionManager = { getSessionName: () => "fake", isPersisted: () => false };
 	const session = {
 		getSessionStats: () => ({ totalMessages: 0 }),
 		model: null,
@@ -36,12 +43,14 @@ function installFakeRuntime(manager: import("../src/main/session/runtime-manager
 		isCompacting: false,
 		getContextUsage: () => undefined,
 		dispose: () => Promise.resolve(),
-		sessionManager: { getSessionName: () => "fake", isPersisted: () => false },
+		sessionManager,
 	};
 	(manager as unknown as TestManagerInternals).runtimeRegistry.set(sessionId, {
 		runtime: { session, dispose: () => Promise.resolve() } as unknown as Record<string, unknown>,
 		projectId,
+		cwd: "/project",
 		createdAt: Date.now(),
+		binding: { sessionId, sessionManager },
 		unsubscribe: () => {},
 	});
 }

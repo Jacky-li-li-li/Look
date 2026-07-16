@@ -83,15 +83,15 @@ export class PlanService implements IPlanService {
 		if (this.permissions.getMode(sessionId) !== "plan") return;
 		this.capturePrePlanTools(sessionId);
 		this.restrictToolsForPlan(sessionId);
-		this.persistToolSnapshotIfDirty(sessionId);
+		const manager = this.runtimeStore.getSessionManager(sessionId);
+		if (manager) this.persistToolSnapshotIfDirty(sessionId, manager);
 	}
 
-	persistToolSnapshotIfDirty(sessionId: string): void {
+	persistToolSnapshotIfDirty(sessionId: string, manager: SessionManager): void {
 		if (!this.dirtyToolSnapshots.has(sessionId)) return;
-		const session = this.runtimeStore.getSession(sessionId);
 		const tools = this.prePlanTools.get(sessionId);
-		if (!session || !tools || !session.sessionManager.isPersisted()) return;
-		session.sessionManager.appendCustomEntry(PLAN_STATE_ENTRY_TYPE, { prePlanActiveTools: tools });
+		if (!tools || !manager.isPersisted()) return;
+		manager.appendCustomEntry(PLAN_STATE_ENTRY_TYPE, { prePlanActiveTools: tools });
 		this.dirtyToolSnapshots.delete(sessionId);
 	}
 
@@ -186,7 +186,8 @@ export class PlanService implements IPlanService {
 		const requestId = uuidv4();
 		const planId = uuidv4();
 		const cwd = this.runtimeStore.getCwd(sessionId);
-		this.persistToolSnapshotIfDirty(sessionId);
+		const manager = this.runtimeStore.getSessionManager(sessionId);
+		if (manager) this.persistToolSnapshotIfDirty(sessionId, manager);
 		this.reserveInteraction(sessionId, "approval", requestId);
 		let filePath: string;
 		try {

@@ -17,7 +17,7 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload, ToolCallHandler } from "@look/shared/types";
 import { v4 as uuidv4 } from "uuid";
-import type { IEventBus, IPermissionService, IRuntimeStore } from "../core/contracts.js";
+import type { IEventBus, IPermissionService } from "../core/contracts.js";
 import { createPlanModeHandler } from "../extensions/permission-extension.js";
 
 // ── Constants ──
@@ -51,7 +51,6 @@ export class PermissionService implements IPermissionService {
 
 	constructor(
 		private readonly eventBus: IEventBus,
-		private readonly runtimeStore: IRuntimeStore,
 		initialDefaultMode: PermissionMode = "ask",
 	) {
 		this.defaultMode = initialDefaultMode;
@@ -99,13 +98,12 @@ export class PermissionService implements IPermissionService {
 		return mode;
 	}
 
-	persistIfDirty(sessionId: string): void {
+	persistIfDirty(sessionId: string, manager: SessionManager): void {
 		if (!this.dirty.has(sessionId)) return;
-		const session = this.runtimeStore.getSession(sessionId);
-		if (!session || !session.sessionManager.isPersisted()) return;
+		if (!manager.isPersisted()) return;
 		const mode = this.modes.get(sessionId);
 		if (!mode) return;
-		session.sessionManager.appendCustomEntry(PERMISSION_MODE_ENTRY_TYPE, { mode });
+		manager.appendCustomEntry(PERMISSION_MODE_ENTRY_TYPE, { mode });
 		this.dirty.delete(sessionId);
 	}
 

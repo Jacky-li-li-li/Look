@@ -14,7 +14,9 @@ interface TestManagerInternals {
 			runtime: {
 				runtime: { session: Record<string, unknown> };
 				projectId: string;
+				cwd: string;
 				createdAt: number;
+				binding: { sessionId: string; sessionManager: Record<string, unknown> };
 				unsubscribe: () => void;
 			},
 		): void;
@@ -32,19 +34,22 @@ function installFakeRuntime(
 	allTools: string[],
 ) {
 	let active = [...activeTools];
+	const sessionManager = { isPersisted: () => false };
 	const session = {
 		getActiveToolNames: () => [...active],
 		setActiveToolsByName: (tools: string[]) => {
 			active = [...tools];
 		},
 		getAllTools: () => allTools.map((name) => ({ name })),
-		sessionManager: { isPersisted: () => false },
+		sessionManager,
 	};
 	const internal = manager as unknown as TestManagerInternals;
 	internal.runtimeRegistry.set(sessionId, {
 		runtime: { session },
 		projectId: "test-project",
+		cwd: "/project",
 		createdAt: Date.now(),
+		binding: { sessionId, sessionManager },
 		unsubscribe: () => {},
 	});
 	internal.permissionService.setMode(sessionId, "ask");

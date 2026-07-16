@@ -22,49 +22,11 @@
 // callers see a single `UserSettings` object.
 // ============================================================
 
-import type { PermissionMode } from "@look/shared/types";
+import type { LookTone, PermissionMode, UILanguage, UserSettings } from "@look/shared/types";
 import fs from "fs";
 import { writeJsonFile } from "../utils/atomic-writer.js";
 
-export type UILanguage = "en" | "zh" | "ja";
-export type LookTone = "light" | "dark";
-
-export interface UserSettings {
-	language: UILanguage;
-	autoCollapse: boolean;
-	compactionEnabled: boolean;
-	/** Permission mode for tool call authorization. */
-	permissionMode: PermissionMode;
-	/** The global pi default model. */
-	preferredModel: string | null;
-	/** Last active pi session ID to restore on restart. */
-	lastActiveSessionId: string;
-	/** Last active project ID to restore on restart. */
-	lastActiveProjectId: string;
-	/** Expanded workspace groups in the renderer sidebar. */
-	openProjectIds: string[];
-	/** Session IDs opened as sheets in the top bar. */
-	openedSessionIds: string[];
-	/** Active tone variant (light / dark). */
-	themeTone: LookTone;
-	/**
-	 * Model used to auto-generate the first session title.
-	 * Format: "provider/model-id". `null` means "inherit the session's
-	 * current model at generation time". UI surface is the Behavior
-	 * tab's "Title generation model" Select.
-	 */
-	autoTitleModel: string | null;
-	/** SubAgent 功能总开关。关闭后所有会话的 subagent 工具对 LLM 不可见。 */
-	subagentEnabled: boolean;
-	/** 已启用的 SubAgent 定义名称列表。null=全部启用（向后兼容） */
-	enabledAgentDefinitions: string[] | null;
-	/** 已启用的 Skill 名称列表。null=全部启用（向后兼容） */
-	enabledSkills: string[] | null;
-	/** 侧边栏是否折叠 */
-	sidebarCollapsed: boolean;
-	/** 右侧面板是否折叠 */
-	rightPanelCollapsed: boolean;
-}
+export type { LookTone, UILanguage, UserSettings } from "@look/shared/types";
 
 const DEFAULTS: UserSettings = {
 	language: "en",

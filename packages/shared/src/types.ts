@@ -9,6 +9,11 @@ import type {
 	ToolCallEvent,
 	ToolCallEventResult,
 } from "@earendil-works/pi-coding-agent";
+import type { PermissionMode } from "./contracts/permission.js";
+import type { UserSettings } from "./contracts/settings.js";
+
+export type { PermissionMode } from "./contracts/permission.js";
+export type { LookTone, UILanguage, UserSettings } from "./contracts/settings.js";
 
 // Shared transport types. Message/session payloads remain SDK-native.
 
@@ -43,9 +48,6 @@ export type ThinkingLevel = ModelThinkingLevel;
 export type { AgentMessage, ImageContent, SessionEntry };
 
 export type ImSessionProvider = "feishu";
-
-/** Permission mode — controls how tool calls are authorized */
-export type PermissionMode = "always" | "ask" | "plan";
 
 /** Permission ask event — sent from main to renderer when a tool needs approval */
 export interface PermissionAskEvent {
@@ -228,6 +230,7 @@ export type LookUiEvent =
 			type: "thinking_end";
 			contentIndex: number;
 			thinking: string;
+			thinkingSignature?: string;
 			timestamp: number;
 	  }
 
@@ -347,6 +350,8 @@ export interface LookUiStreamBlock {
 	kind: "text" | "thinking" | "toolcall" | "image";
 	text: string;
 	thinking: string;
+	/** Provider-specific signature required when replaying a thinking block. */
+	thinkingSignature?: string;
 	toolCallId?: string;
 	toolName?: string;
 	args?: Record<string, unknown>;
@@ -750,21 +755,7 @@ export type RendererToMainEvent =
 	| { type: "agent:abort"; agentId: string }
 	| {
 			type: "settings:general:set";
-			settings: Partial<{
-				language: "en" | "zh" | "ja";
-				autoCollapse: boolean;
-				compactionEnabled: boolean;
-				permissionMode: PermissionMode;
-				preferredModel: string | null;
-				lastActiveSessionId: string;
-				lastActiveProjectId: string;
-				openProjectIds: string[];
-				openedSessionIds: string[];
-				themeTone: "light" | "dark";
-				subagentEnabled: boolean;
-				enabledAgentDefinitions: string[] | null;
-				enabledSkills: string[] | null;
-			}>;
+			settings: Partial<UserSettings>;
 	  }
 	| { type: "settings:general:reset" }
 	// ---- v0.3 skills IPC ----

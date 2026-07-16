@@ -2,14 +2,16 @@
 // SessionPermissionOrchestrator unit tests
 // ============================================================
 
-import { describe, expect, it, vi } from "vitest";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "@look/shared/types";
-import { SessionPermissionOrchestrator } from "../src/main/session/session-permission-orchestrator.js";
+import { describe, expect, it, vi } from "vitest";
 import type { IPermissionService, IPlanService } from "../src/main/core/contracts.js";
-import type { UserSettingsStore } from "../src/main/settings/store.js";
 import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
+import { SessionPermissionOrchestrator } from "../src/main/session/session-permission-orchestrator.js";
+import type { UserSettingsStore } from "../src/main/settings/store.js";
 
 function makeManagedRuntime(isStreaming = false): ManagedRuntime {
+	const sessionManager = {} as SessionManager;
 	return {
 		runtime: {
 			session: {
@@ -18,6 +20,7 @@ function makeManagedRuntime(isStreaming = false): ManagedRuntime {
 			},
 		},
 		projectId: "p1",
+		binding: { sessionId: "s1", sessionManager },
 		createdAt: 1,
 		unsubscribe: () => {},
 	} as unknown as ManagedRuntime;
@@ -72,5 +75,7 @@ describe("SessionPermissionOrchestrator", () => {
 		expect(planService.capturePrePlanTools).toHaveBeenCalledWith("s1");
 		expect(planService.restrictToolsForPlan).toHaveBeenCalledWith("s1");
 		expect(permissionService.setMode).toHaveBeenCalledWith("s1", "plan");
+		expect(permissionService.persistIfDirty).toHaveBeenCalledWith("s1", expect.anything());
+		expect(planService.persistToolSnapshotIfDirty).toHaveBeenCalledWith("s1", expect.anything());
 	});
 });

@@ -1,12 +1,12 @@
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 
 describe("DeepSeek thinking capability", () => {
-	it("built-in deepseek-v4-flash advertises reasoning and maps high/xhigh", () => {
+	it("built-in deepseek-v4-flash advertises reasoning and maps high/max", () => {
 		const registry = ModelRegistry.inMemory(AuthStorage.inMemory());
 		const model = registry.find("deepseek", "deepseek-v4-flash");
 		expect(model).toBeDefined();
@@ -16,10 +16,10 @@ describe("DeepSeek thinking capability", () => {
 			low: null,
 			medium: null,
 			high: "high",
-			xhigh: "max",
+			max: "max",
 		});
 		const available = getSupportedThinkingLevels(model!);
-		expect(available).toEqual(["off", "high", "xhigh"]);
+		expect(available).toEqual(["off", "high", "max"]);
 	});
 
 	it("built-in deepseek-v4-pro advertises reasoning", () => {
@@ -28,7 +28,7 @@ describe("DeepSeek thinking capability", () => {
 		expect(model).toBeDefined();
 		expect(model?.reasoning).toBe(true);
 		const available = getSupportedThinkingLevels(model!);
-		expect(available).toEqual(["off", "high", "xhigh"]);
+		expect(available).toEqual(["off", "high", "max"]);
 	});
 
 	it("ModelRegistry.create with missing models.json still exposes deepseek-v4-flash", () => {

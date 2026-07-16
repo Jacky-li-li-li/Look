@@ -27,7 +27,11 @@ export default function AgentAvatarPicker({ value, onChange }: AgentAvatarPicker
 
 	return (
 		<div className="space-y-2">
-			<div className="grid grid-cols-5 gap-2" role="group" aria-label={t("agentAvatar.title", "Open Peeps 头像选择")}>
+			<div
+				className="grid grid-cols-5 gap-2"
+				role="group"
+				aria-label={t("agentAvatar.title", "Open Peeps 头像选择")}
+			>
 				{OPEN_PEEPS.map((preset) => {
 					const icon = makeOpenPeepIcon(preset.id);
 					const selected = selectedId === preset.id;

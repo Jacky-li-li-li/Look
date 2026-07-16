@@ -8,9 +8,7 @@
 			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://*.supabase.co; media-src 'self' data: blob: file:; frame-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
 		/>
 		<title>Look</title>
-		<script>
-			(()=>{var p=new URLSearchParams(window.location.search);var t="light"===p.get("theme")?"light":"dark";document.documentElement.classList.add(`tone-${t}`);document.documentElement.style.colorScheme=t})()
-		</script>
+		<script vite-ignore src="./theme-bootstrap.js"></script>
 		<!-- Critical inline theme: prevents white flash on reload by defining
 		     the CSS variable chain before App.css loads asynchronously.
 		     Matches BrowserWindow backgroundColor and App.css .tone-dark values. -->

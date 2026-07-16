@@ -43,8 +43,8 @@ export class SessionPermissionOrchestrator {
 		this.deps.permissionService.setMode(sessionId, mode);
 		if (mode === "plan") this.deps.planService.restrictToolsForPlan(sessionId);
 		else if (previousMode === "plan") this.deps.planService.restorePrePlanTools(sessionId);
-		this.deps.permissionService.persistIfDirty(sessionId);
-		this.deps.planService.persistToolSnapshotIfDirty(sessionId);
+		this.deps.permissionService.persistIfDirty(sessionId, managed.binding.sessionManager);
+		this.deps.planService.persistToolSnapshotIfDirty(sessionId, managed.binding.sessionManager);
 
 		if (options.updateDefault) {
 			this.deps.permissionService.setDefaultMode(mode);

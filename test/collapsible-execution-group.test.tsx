@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { I18nextProvider } from "react-i18next";
+import type { LookUiToolExecState } from "@shared/types";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CollapsibleExecutionGroup from "../src/renderer/components/chat/CollapsibleExecutionGroup";
 import i18n from "../src/renderer/i18n";
-import type { LookUiToolExecState } from "@shared/types";
 
 afterEach(() => {
 	cleanup();
@@ -127,7 +127,7 @@ describe("CollapsibleExecutionGroup", () => {
 		expect(text).toMatch(/2 thoughts, 3 tool calls/i);
 	});
 
-	it("forces expanded state when any block is running (badge stays aria-expanded=true, cards visible)", () => {
+	it("keeps a running group collapsed until the user expands it", () => {
 		const blocks = [
 			makeToolCall("t1", "bash", { command: "ls" }),
 			makeToolCall("t2", "read", { path: "/a" }),
@@ -139,13 +139,14 @@ describe("CollapsibleExecutionGroup", () => {
 			t3: completedExec("t3"),
 		};
 		const { container, getByText } = renderGroup({ blocks, toolExecutions });
-		const text = container.textContent ?? "";
-		// Cards must be visible (we want to see live progress).
-		expect(text).toContain("read");
-		// Badge stays in the open state — users can still collapse manually
-		// after the run finishes; the badge click toggles open ↔ closed.
 		const badgeBtn = getByText(/Executed 3 tools/i).closest("button")!;
+		const body = container.querySelector("[data-execution-group-body]")!;
+		expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
+		expect(body.getAttribute("aria-hidden")).toBe("true");
+
+		fireEvent.click(badgeBtn);
 		expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
+		expect(body.getAttribute("aria-hidden")).toBe("false");
 	});
 
 	it("toggles badge into underlying cards when clicked, then collapses again on second click", () => {
@@ -181,8 +182,8 @@ describe("CollapsibleExecutionGroup", () => {
 			vi.advanceTimersByTime(220);
 		});
 		text = container.textContent ?? "";
-		// No standalone "Collapse" text below the badge
-		expect(container.querySelectorAll("button").length).toBe(1);
+		// No standalone group-level "Collapse" control below the badge.
+		expect(container.querySelectorAll(":scope > [data-execution-group] > button").length).toBe(1);
 	});
 
 	it("uses singular form for 1 tool (default behaviour)", () => {
@@ -246,7 +247,7 @@ describe("CollapsibleExecutionGroup", () => {
 		expect(text).toContain("read");
 	});
 
-	it("does not show inlineTexts when collapsed as badge (badge alone)", () => {
+	it("marks the mounted group body hidden while collapsed", () => {
 		const blocks = [makeToolCall("t1"), makeToolCall("t2"), makeToolCall("t3")];
 		const toolExecutions = {
 			t1: completedExec("t1"),
@@ -255,21 +256,21 @@ describe("CollapsibleExecutionGroup", () => {
 		};
 		const inlineTexts = ["看核心执行部分："];
 		const { container } = renderGroup({ blocks, inlineTexts, toolExecutions });
-		const text = container.textContent ?? "";
-		// Collapsed badge state: only summary visible, inline text is hidden
-		expect(text).toMatch(/Executed 3 tools/i);
-		expect(text).not.toContain("看核心执行部分：");
+		expect(container.textContent ?? "").toMatch(/Executed 3 tools/i);
+		const body = container.querySelector("[data-execution-group-body]")!;
+		expect(body.getAttribute("aria-hidden")).toBe("true");
+		expect(body.getAttribute("data-open")).toBe("false");
 	});
 
-	it("keeps an active streaming group expanded, then auto-collapses after the batched delay", () => {
-		vi.useFakeTimers();
+	it("preserves the user's manual expansion when streaming ends", () => {
 		const blocks = [makeToolCall("t1", "bash", { command: "ls" })];
 		const toolExecutions = { t1: completedExec("t1") };
 		const { getByText, rerender } = renderGroup({ blocks, toolExecutions, isStreaming: true });
 		const badgeBtn = getByText(/Executed 1 tool/i).closest("button")!;
 
+		expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
+		fireEvent.click(badgeBtn);
 		expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
-		expect(document.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("true");
 
 		rerender(
 			<I18nextProvider i18n={i18n}>
@@ -284,10 +285,6 @@ describe("CollapsibleExecutionGroup", () => {
 		);
 
 		expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
-		act(() => {
-			vi.advanceTimersByTime(300);
-		});
-		expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
-		expect(document.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("false");
+		expect(document.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("true");
 	});
 });

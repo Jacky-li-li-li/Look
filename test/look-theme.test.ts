@@ -1,23 +1,58 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
-import { themeFromSettings, writeLookThemeToDom } from "../src/renderer/lib/look-theme";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	readLookThemeFromDom,
+	syncLookThemeToLocation,
+	themeFromSettings,
+	writeLookThemeToDom,
+} from "../src/renderer/lib/look-theme";
 
-describe("Look tone", () => {
-	it("keeps only the active tone class and removes legacy style classes", () => {
-		document.documentElement.className = "theme-swiss tone-light unrelated";
-
-		writeLookThemeToDom("dark");
-
-		expect(document.documentElement.classList.contains("tone-dark")).toBe(true);
-		expect(document.documentElement.classList.contains("tone-light")).toBe(false);
-		expect([...document.documentElement.classList].some((name) => name.startsWith("theme-"))).toBe(false);
-		expect(document.documentElement.classList.contains("unrelated")).toBe(true);
+describe("Look theme boot state", () => {
+	beforeEach(() => {
+		window.history.replaceState(null, "", "/?theme=dark&react-scan");
+		document.documentElement.className = "theme-swiss tone-dark unrelated";
+		document.documentElement.style.cssText = "color-scheme: dark";
+		vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+			callback(0);
+			return 1;
+		});
 	});
 
-	it("uses a valid legacy tone and defaults malformed settings to dark", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it("updates the live DOM and the URL used by the next reload", () => {
+		writeLookThemeToDom("light");
+
+		expect(readLookThemeFromDom()).toBe("light");
+		expect(document.documentElement.style.colorScheme).toBe("light");
+		expect([...document.documentElement.classList].some((name) => name.startsWith("theme-"))).toBe(false);
+		expect(document.documentElement.classList.contains("unrelated")).toBe(true);
+		expect(new URL(window.location.href).searchParams.get("theme")).toBe("light");
+		expect(new URL(window.location.href).searchParams.has("react-scan")).toBe(true);
+	});
+
+	it("repairs a stale boot URL even when the DOM already has the target tone", () => {
+		document.documentElement.className = "tone-light";
+		document.documentElement.style.colorScheme = "light";
+
+		writeLookThemeToDom("light");
+
+		expect(new URL(window.location.href).searchParams.get("theme")).toBe("light");
+	});
+
+	it("does not rewrite history when the handoff already matches", () => {
+		const replaceState = vi.spyOn(window.history, "replaceState");
+
+		syncLookThemeToLocation("dark");
+
+		expect(replaceState).not.toHaveBeenCalled();
+	});
+
+	it("accepts only persisted light and dark values", () => {
 		expect(themeFromSettings({ themeStyle: "bauhaus", themeTone: "light" })).toBe("light");
-		expect(themeFromSettings({ themeStyle: "ink-wash", themeTone: "violet" })).toBe("dark");
+		expect(themeFromSettings({ themeTone: "dark" })).toBe("dark");
+		expect(themeFromSettings({ themeStyle: "ink-wash", themeTone: "system" })).toBe("dark");
 		expect(themeFromSettings(undefined)).toBe("dark");
 	});
 });

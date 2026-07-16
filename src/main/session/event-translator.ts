@@ -173,15 +173,18 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 						timestamp: now,
 					});
 					break;
-				case "thinking_end":
+				case "thinking_end": {
 					tracker.activeThinkingIndices.delete(sub.contentIndex);
+					const thinkingBlock = sub.partial?.content?.[sub.contentIndex];
 					events.push({
 						type: "thinking_end",
 						contentIndex: sub.contentIndex,
 						thinking: sub.content,
+						thinkingSignature: thinkingBlock?.type === "thinking" ? thinkingBlock.thinkingSignature : undefined,
 						timestamp: now,
 					});
 					break;
+				}
 
 				case "toolcall_start": {
 					const block = sub.partial?.content?.[sub.contentIndex];
