@@ -3,7 +3,7 @@
 // 不需真实 LLM，直接测试 SessionRuntimeManager 的开关逻辑。
 // ============================================================
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
 
 /** Test-only access to SessionRuntimeManager internals. */
@@ -59,7 +59,9 @@ function installFakeRuntime(
 			internal.runtimeRegistry.delete(sessionId);
 			internal.permissionService.disposeSession(sessionId);
 			internal.planService.disposeSession(sessionId);
-			internal.sessionSubagentService.clearSession(sessionId);
+			try {
+				internal.sessionSubagentService?.clearSession(sessionId);
+			} catch { /* ignore if subagent service not fully initialized */ }
 		},
 	};
 }
@@ -67,6 +69,18 @@ function installFakeRuntime(
 describe("SubAgent toggle — API-level behavior", () => {
 	const manager = new SessionRuntimeManager();
 	let savedDefault: boolean;
+
+	beforeAll(async () => {
+		try {
+			await manager.initAsync();
+		} catch (err) {
+			console.error("[test] initAsync failed:", err);
+			throw err;
+		}
+		// 确保从干净的默认状态开始（避免前序测试残留影响）
+		const clean = await manager.resetGeneralSettings();
+		savedDefault = clean.subagentEnabled;
+	});
 
 	afterAll(async () => {
 		// 恢复默认

@@ -3,7 +3,7 @@
 //
 // Persists Look-managed custom providers to
 // ~/.look/custom-providers.json and syncs them into the SDK's
-// ModelRegistry via registerProvider/unregisterProvider.
+// ModelRuntime via registerProvider/unregisterProvider.
 //
 // Design invariant (see plan §6.5):
 //   Any provider that enters this store has ALREADY passed the
@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { decryptApiKey, encryptApiKey } from "../security/secrets.js";
 
 // ProviderConfigInput is exported from the SDK's model-registry module but not
@@ -145,7 +145,7 @@ export function toProviderConfig(p: CustomProviderInput): ProviderConfigInput {
 
 export class CustomProvidersStore {
 	constructor(
-		private readonly registry: ModelRegistry,
+		private readonly registry: ModelRuntime,
 		private readonly filePath: string,
 		private readonly onChange?: () => void,
 	) {}

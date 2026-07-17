@@ -313,6 +313,7 @@ async function initSessionRuntime(): Promise<void> {
 	// 工作区文件树服务:服务项目 cwd 的 lazy-load 浏览
 	workspaceTreeService = new WorkspaceTreeService();
 	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
+	await runtimeManager.initAsync();
 	const schedulerOwnerId = `${process.pid}:${Date.now()}`;
 	schedulerService = new SchedulerService({
 		store: new ScheduledTaskStore(getScheduledTasksPath()),

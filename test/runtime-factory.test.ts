@@ -1,7 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AuthStorage, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRuntime, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionRuntimeFactory } from "../src/main/session/runtime-factory.js";
 
@@ -17,13 +18,11 @@ describe("SessionRuntimeFactory", () => {
 		cleanup.push(root);
 		const cwd = join(root, "project");
 		await (await import("node:fs/promises")).mkdir(cwd);
-		const authStorage = AuthStorage.create(join(root, "auth.json"));
-		const modelRegistry = ModelRegistry.create(authStorage, join(root, "models.json"));
+		const modelRuntime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore() });
 		const buildExtensionFactories = vi.fn(async () => []);
 		const factory = new SessionRuntimeFactory({
 			agentDir: root,
-			authStorage,
-			modelRegistry,
+			modelRuntime,
 			findProjectIdByCwd: () => undefined,
 			resolveProjectTrust: () => false,
 			buildExtensionFactories,

@@ -95,8 +95,9 @@ export function registerIpcHandlers(
 	const ctx: InvokeContext = {
 		runtimeManager,
 		mainWindow,
+		modelRuntime: runtimeManager.modelRuntime,
 		modelRegistry: runtimeManager.modelRegistry,
-		authStorage: runtimeManager.authStorage,
+		credentialStore: runtimeManager.credentialStore,
 		customProviders: runtimeManager.customProviders,
 		workspaceFileService,
 		workspaceTreeService,

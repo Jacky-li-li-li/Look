@@ -15,7 +15,8 @@ vi.mock("@earendil-works/pi-ai/compat", async (importOriginal) => {
 	};
 });
 
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { testApiKey, testConfiguredProvider } from "../src/main/models/validator.js";
 
 function writeModelsConfig(config: unknown): string {
@@ -61,30 +62,34 @@ describe("pi SDK provider alignment", () => {
 		sdkMocks.completeSimple.mockReset();
 	});
 
-	it("uses ModelRegistry custom providers as available SDK models", () => {
+	it("uses ModelRegistry custom providers as available SDK models", async () => {
 		const modelsPath = writeModelsConfig(customProviderConfig());
-		const registry = ModelRegistry.create(AuthStorage.inMemory(), modelsPath);
+		const mr = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath });
+		const registry = new ModelRegistry(mr);
 
 		expect(registry.getAvailable().map((m) => `${m.provider}/${m.id}`)).toContain("sdk-test/sdk-test-model");
 	});
 
-	it("uses the SDK provider display name", () => {
-		const registry = ModelRegistry.inMemory(AuthStorage.inMemory());
+	it("uses the SDK provider display name", async () => {
+		const mr = await ModelRuntime.create({ credentials: new InMemoryCredentialStore() });
+		const registry = new ModelRegistry(mr);
 
 		expect(registry.getProviderDisplayName("openai")).toBe("OpenAI");
 	});
 
-	it("uses the SDK MiniMax China model catalog", () => {
-		const registry = ModelRegistry.inMemory(
-			AuthStorage.inMemory({ "minimax-cn": { type: "api_key", key: "test-key" } }),
-		);
+	it("uses the SDK MiniMax China model catalog", async () => {
+		const creds = new InMemoryCredentialStore();
+		await creds.modify("minimax-cn", async () => ({ type: "api_key", key: "test-key" }));
+		const mr = await ModelRuntime.create({ credentials: creds });
+		const registry = new ModelRegistry(mr);
 
 		expect(registry.getAvailable().map((m) => `${m.provider}/${m.id}`)).toContain("minimax-cn/MiniMax-M3");
 	});
 
 	it("passes SDK-resolved provider and model headers to completeSimple", async () => {
 		const modelsPath = writeModelsConfig(customProviderConfig());
-		const registry = ModelRegistry.create(AuthStorage.inMemory(), modelsPath);
+		const mr = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath });
+		const registry = new ModelRegistry(mr);
 		sdkMocks.completeSimple.mockImplementation(async (_model, _context, options) => {
 			options?.onResponse?.({ status: 200, headers: {} });
 			return {

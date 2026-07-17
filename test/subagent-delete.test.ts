@@ -31,6 +31,7 @@ describe("SubAgent deletion cleanup", () => {
 		await writeFile(childPath, "", "utf8");
 
 		const manager = new SessionRuntimeManager();
+		await manager.initAsync();
 		const events: string[] = [];
 		const unsubscribe = manager.onEvent((event) => {
 			if (event.type === "agent:destroyed") events.push(event.agentId);
@@ -77,6 +78,7 @@ describe("SubAgent deletion cleanup", () => {
 		await writeFile(sessionPath, "", "utf8");
 
 		const manager = new SessionRuntimeManager();
+		await manager.initAsync();
 		try {
 			const created = (manager as unknown as TestManagerInternals).projectService.createProjectRecord(
 				root,

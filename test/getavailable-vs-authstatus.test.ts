@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { CustomProvidersStore, type CustomProviderInput } from "../src/main/settings/custom-providers.js";
 
 function tmpDir(): string {
@@ -55,18 +56,17 @@ describe("getAvailable model discovery consistency", () => {
 		fs.rmSync(dir, { recursive: true, force: true });
 	});
 
-	it("agrees with SessionRuntimeManager's sync helper for built-in and custom providers", () => {
-		const authPath = path.join(dir, "auth.json");
+	it("agrees with SessionRuntimeManager's sync helper for built-in and custom providers", async () => {
 		const modelsPath = path.join(dir, "models.json");
 		const customProvidersPath = path.join(dir, "custom-providers.json");
 
 		fs.writeFileSync(modelsPath, JSON.stringify({ providers: {} }, null, 2));
 
-		const authStorage = AuthStorage.create(authPath);
-		authStorage.setRuntimeApiKey("openai", "sk-runtime");
-
-		const registry = ModelRegistry.create(authStorage, modelsPath);
-		const store = new CustomProvidersStore(registry, customProvidersPath);
+		const creds = new InMemoryCredentialStore();
+		const mr = await ModelRuntime.create({ credentials: creds, modelsPath });
+		mr.setRuntimeApiKey("openai", "sk-runtime");
+		const registry = new ModelRegistry(mr);
+		const store = new CustomProvidersStore(mr, customProvidersPath);
 
 		store.add(sampleProvider("custom-one"));
 

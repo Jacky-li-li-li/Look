@@ -5,7 +5,8 @@
 // receives only a narrow lifecycle/query port, never the full façade.
 // ============================================================
 
-import type { ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@look/shared/types";
 import type { ManagedRuntime } from "./runtime-registry.js";
 

@@ -57,12 +57,21 @@ export class SessionRuntimeManager implements IEventBus, IRuntimeLifecycle, ISes
 		);
 	}
 
-	get authStorage() {
-		return this.composition.authStorage;
+	/** Initialize async services (ModelRuntime). Must be called once before any session operations. */
+	async initAsync(): Promise<void> {
+		await this.composition.initAsync();
+	}
+
+	get modelRuntime() {
+		return this.composition.modelRuntime;
 	}
 
 	get modelRegistry() {
 		return this.composition.modelRegistry;
+	}
+
+	get credentialStore() {
+		return this.composition.credentialStore;
 	}
 
 	get customProviders() {

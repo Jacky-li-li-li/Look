@@ -5,7 +5,8 @@
 // on the monolithic registration file.
 // ============================================================
 
-import type { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { CredentialStore } from "@earendil-works/pi-ai";
+import type { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
@@ -21,8 +22,9 @@ type InvokeHandler<T extends RendererToMainEvent["type"] = RendererToMainEvent["
 export interface InvokeContext {
 	runtimeManager: SessionRuntimeManager;
 	mainWindow: BrowserWindow;
+	modelRuntime: ModelRuntime;
 	modelRegistry: ModelRegistry;
-	authStorage: AuthStorage;
+	credentialStore: CredentialStore;
 	customProviders: CustomProvidersStore;
 	workspaceFileService: WorkspaceFileService;
 	workspaceTreeService: WorkspaceTreeService;

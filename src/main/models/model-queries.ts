@@ -3,12 +3,14 @@
 // provider listing, and API key management.
 //
 // These replace the ModelProviderService class. Callers pass pi SDK's
-// ModelRegistry / AuthStorage / CustomProvidersStore directly instead
+// ModelRegistry / ModelRuntime / CustomProvidersStore directly instead
 // of going through a stateful service layer.
 // ============================================================
 
-import type { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { CredentialStore } from "@earendil-works/pi-ai";
+import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { CustomProvidersStore } from "../settings/custom-providers.js";
+import { getCredentialApiKey, setCredentialApiKey } from "../security/secrets.js";
 
 export interface AvailableModel {
 	provider: string;
@@ -118,15 +120,12 @@ export function getProviderSettings(
 	};
 }
 
-/** Set or remove an API key for a provider. */
-export function setApiKey(authStorage: AuthStorage, provider: string, key: string): void {
-	const trimmed = key.trim();
-	if (trimmed) authStorage.set(provider, { type: "api_key", key: trimmed });
-	else authStorage.remove(provider);
+/** Set or remove an API key for a provider via CredentialStore. */
+export function setApiKey(credentialStore: CredentialStore, provider: string, key: string): Promise<void> {
+	return setCredentialApiKey(credentialStore, provider, key);
 }
 
-/** Get the stored API key for a provider. */
-export function getApiKey(authStorage: AuthStorage, provider: string): string | undefined {
-	const credential = authStorage.get(provider);
-	return credential?.type === "api_key" ? credential.key : undefined;
+/** Get the stored API key for a provider from CredentialStore. */
+export function getApiKey(credentialStore: CredentialStore, provider: string): Promise<string | undefined> {
+	return getCredentialApiKey(credentialStore, provider);
 }

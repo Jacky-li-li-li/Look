@@ -7,7 +7,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { CustomProvidersStore, type CustomProviderInput } from "../src/main/settings/custom-providers.js";
 
 function tmpDir(): string {
@@ -101,14 +102,14 @@ describe("Custom provider + built-in provider settings coexistence", () => {
 		fs.rmSync(dir, { recursive: true, force: true });
 	});
 
-	it("keeps built-in provider models after adding a custom provider", () => {
+	it("keeps built-in provider models after adding a custom provider", async () => {
 		fs.writeFileSync(modelsPath, JSON.stringify({ providers: {} }, null, 2));
 
-		const authStorage = AuthStorage.create(authPath);
-		const registry = ModelRegistry.create(authStorage, modelsPath);
-		const store = new CustomProvidersStore(registry, customProvidersPath);
-
-		authStorage.set("openai", { type: "api_key", key: "sk-openai" });
+		const creds = new InMemoryCredentialStore();
+		await creds.modify("openai", async () => ({ type: "api_key", key: "sk-openai" }));
+		const mr = await ModelRuntime.create({ credentials: creds, modelsPath });
+		const registry = new ModelRegistry(mr);
+		const store = new CustomProvidersStore(mr, customProvidersPath);
 
 		const before = getProviderSettings(registry);
 		const openaiBefore = before.find((p) => p.id === "openai");
@@ -141,7 +142,7 @@ describe("Custom provider + built-in provider settings coexistence", () => {
 		expect(persisted.providers.map((p: CustomProviderInput) => p.name)).toEqual(["custom-one", "custom-two"]);
 	});
 
-	it("keeps previously loaded custom providers after adding a new one", () => {
+	it("keeps previously loaded custom providers after adding a new one", async () => {
 		fs.writeFileSync(modelsPath, JSON.stringify({ providers: {} }, null, 2));
 
 		// Simulate a previous session that persisted two custom providers.
@@ -150,9 +151,9 @@ describe("Custom provider + built-in provider settings coexistence", () => {
 			JSON.stringify({ providers: [sampleProvider("custom-one"), sampleProvider("custom-two")] }, null, 2),
 		);
 
-		const authStorage = AuthStorage.create(authPath);
-		const registry = ModelRegistry.create(authStorage, modelsPath);
-		const store = new CustomProvidersStore(registry, customProvidersPath);
+		const mr = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath });
+		const registry = new ModelRegistry(mr);
+		const store = new CustomProvidersStore(mr, customProvidersPath);
 
 		// Boot: load persisted custom providers.
 		store.load();

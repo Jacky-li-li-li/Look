@@ -65,6 +65,7 @@ describe("Settings session/project reference validation", () => {
 		vi.resetModules();
 		const { SessionRuntimeManager } = await import("../src/main/session/runtime-manager.js");
 		manager = new SessionRuntimeManager();
+		await manager.initAsync();
 	});
 
 	afterEach(async () => {

@@ -9,13 +9,12 @@
 import { existsSync } from "node:fs";
 import {
 	type AgentSessionRuntime,
-	type AuthStorage,
 	type CreateAgentSessionRuntimeFactory,
 	createAgentSessionFromServices,
 	createAgentSessionRuntime,
 	createAgentSessionServices,
 	type ExtensionFactory,
-	type ModelRegistry,
+	type ModelRuntime,
 	type SessionManager,
 	type SessionStartEvent,
 	SettingsManager,
@@ -28,8 +27,7 @@ export interface RuntimeFactoryOptions {
 
 export interface SessionRuntimeFactoryDependencies {
 	agentDir: string;
-	authStorage: AuthStorage;
-	modelRegistry: ModelRegistry;
+	modelRuntime: ModelRuntime;
 	findProjectIdByCwd(cwd: string): string | undefined;
 	resolveProjectTrust(cwd: string): boolean;
 	buildExtensionFactories(cwd: string, sessionId: string, projectId: string | undefined): Promise<ExtensionFactory[]>;
@@ -79,8 +77,7 @@ export class SessionRuntimeFactory {
 				const services = await createAgentSessionServices({
 					cwd,
 					agentDir: this.dependencies.agentDir,
-					authStorage: this.dependencies.authStorage,
-					modelRegistry: this.dependencies.modelRegistry,
+					modelRuntime: this.dependencies.modelRuntime,
 					settingsManager,
 					resourceLoaderOptions: {
 						extensionFactories: await this.dependencies.buildExtensionFactories(

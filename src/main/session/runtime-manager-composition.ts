@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import {
-	AuthStorage,
 	ModelRegistry,
+	ModelRuntime,
 	ProjectTrustStore,
 	SessionManager,
 	SettingsManager,
@@ -31,7 +31,7 @@ import { PermissionService } from "../permissions/service.js";
 import { ProjectDeletionService } from "../projects/project-deletion-service.js";
 import { ProjectService } from "../projects/project-service.js";
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
-import { wrapAuthStorage } from "../security/secrets.js";
+import { EncryptedCredentialStore } from "../security/secrets.js";
 import { AutoTitleService } from "../services/auto-title.js";
 import { SubAgentRuntimeService } from "../services/subagent-runtime.js";
 import { CustomProvidersStore } from "../settings/custom-providers.js";
@@ -73,19 +73,20 @@ export interface RuntimeManagerCompositionHost extends IRuntimeLifecycle, ISessi
 /** The process composition root for SessionRuntimeManager's domain services. */
 export class RuntimeManagerComposition {
 	readonly eventBus = new SessionEventBus();
-	readonly authStorage: AuthStorage;
-	readonly modelRegistry: ModelRegistry;
-	readonly customProviders: CustomProvidersStore;
+	readonly modelRuntime!: ModelRuntime;
+	readonly modelRegistry!: ModelRegistry;
+	readonly credentialStore!: EncryptedCredentialStore;
+	readonly customProviders!: CustomProvidersStore;
 	readonly trustStore: ProjectTrustStore;
 	readonly globalSettingsManager: SettingsManager;
 	readonly projectService: ProjectService;
 	readonly userSettings: UserSettingsStore;
 	readonly permissionService: PermissionService;
-	readonly autoTitleService: AutoTitleService;
+	readonly autoTitleService!: AutoTitleService;
 	readonly promptStore: PromptStore;
-	readonly planService: PlanService;
+	readonly planService!: PlanService;
 	readonly mcpManager: MCPManager;
-	readonly runtimeFactory: SessionRuntimeFactory;
+	readonly runtimeFactory!: SessionRuntimeFactory;
 	readonly sessionCatalog: SessionCatalog;
 	readonly runtimeRegistry = new RuntimeRegistry();
 	readonly scopeRegistry = new SessionScopeRegistry();
@@ -94,20 +95,21 @@ export class RuntimeManagerComposition {
 	readonly projectRuntimeService: ProjectRuntimeService;
 	readonly sessionInfoService: SessionInfoService;
 	readonly sessionNotifier: SessionNotifier;
-	readonly sessionHistoryService: SessionHistoryService;
-	readonly sessionControlService: SessionControlService;
-	readonly projectDeletionService: ProjectDeletionService;
+	readonly sessionHistoryService!: SessionHistoryService;
+	readonly sessionControlService!: SessionControlService;
+	readonly projectDeletionService!: ProjectDeletionService;
 	readonly eventProcessor: SessionEventProcessor;
 	readonly subAgentRuntimeService: SubAgentRuntimeService;
-	readonly agentDefinitionService: AgentDefinitionService;
-	readonly sessionSubagentService: SessionSubagentService;
-	readonly sessionLifecycleService: SessionLifecycleService;
-	readonly sessionMessagingService: SessionMessagingService;
-	readonly sessionPermissionOrchestrator: SessionPermissionOrchestrator;
-	readonly runtimeLifecycle: RuntimeLifecycleCoordinator;
-	readonly sessionEventEffects: SessionEventEffects;
-	readonly sessionSettingsService: SessionSettingsService;
-	readonly skillManagementService: SkillManagementService;
+	readonly agentDefinitionService!: AgentDefinitionService;
+	readonly sessionSubagentService!: SessionSubagentService;
+	readonly sessionLifecycleService!: SessionLifecycleService;
+	readonly sessionMessagingService!: SessionMessagingService;
+	readonly sessionPermissionOrchestrator!: SessionPermissionOrchestrator;
+	readonly runtimeLifecycle!: RuntimeLifecycleCoordinator;
+	readonly sessionEventEffects!: SessionEventEffects;
+	readonly sessionSettingsService!: SessionSettingsService;
+	readonly skillManagementService!: SkillManagementService;
+	private readonly host: RuntimeManagerCompositionHost;
 	private schedulerService?: SchedulerService;
 
 	constructor(
@@ -115,6 +117,7 @@ export class RuntimeManagerComposition {
 		readonly workspaceFileService: WorkspaceFileService | null,
 		readonly workspaceTreeService: WorkspaceTreeService | null,
 	) {
+		this.host = host;
 		ensureLookDir();
 		resetLegacySessionsOnce();
 		const migration = migrateLegacySettings();
@@ -122,38 +125,94 @@ export class RuntimeManagerComposition {
 			console.log(`[Look] Migrated settings: ${migration.keys.join(", ")}`);
 		}
 
-		this.authStorage = wrapAuthStorage(AuthStorage.create(getAuthPath()));
-		this.modelRegistry = ModelRegistry.create(this.authStorage, getModelsPath());
-		this.customProviders = new CustomProvidersStore(this.modelRegistry, getCustomProvidersPath());
-		this.customProviders.load();
 		this.trustStore = new ProjectTrustStore(getLookDir());
 		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
 		this.projectService = new ProjectService(this.trustStore, this.globalSettingsManager);
 		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
 		this.permissionService = new PermissionService(host, this.userSettings.getAll().permissionMode);
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
-		this.autoTitleService = new AutoTitleService({
-			modelRegistry: this.modelRegistry,
-			getUserSettings: () => this.userSettings.getAll(),
-		});
 		this.promptStore = new PromptStore();
 
-		this.agentDefinitionService = new AgentDefinitionService(() =>
-			this.sessionSubagentService.reloadAllSessionsForAgents(),
-		);
-		this.planService = new PlanService(host, host, this.permissionService, async (sessionId) => {
-			await this.sessionPermissionOrchestrator.applyMode(sessionId, "always", {
-				internal: true,
-				updateDefault: false,
-			});
-		});
+		// All services that depend on modelRuntime/modelRegistry are created
+		// in initAsync(). Fields are !-asserted and assigned there.
+		//
+		// Services that don't depend on modelRuntime: created eagerly here.
 		this.mcpManager = new MCPManager();
 		this.mcpManager.setOnChange(() => host.emit({ type: "mcp:status-changed" }));
 
-		this.runtimeFactory = new SessionRuntimeFactory({
+		this.sessionCatalog = new SessionCatalog((metadata) => {
+			if (metadata.parentSessionId) {
+				this.subAgentRegistry.register(metadata.parentSessionId, metadata.sessionId, metadata.agentName ?? "");
+			}
+		});
+		this.projectRuntimeService = new ProjectRuntimeService({
+			projectService: this.projectService,
+			sessionCatalog: this.sessionCatalog,
+			runtimeRegistry: this.runtimeRegistry,
+		});
+		this.sessionInfoService = new SessionInfoService({
+			runtimeRegistry: this.runtimeRegistry,
+			sessionCatalog: this.sessionCatalog,
+			subAgentRegistry: this.subAgentRegistry,
+			scopeRegistry: this.scopeRegistry,
+			maxNameLength: MAX_NAME_LENGTH,
+			listProjects: () => host.listProjects(),
+		});
+		this.sessionNotifier = new SessionNotifier(this.eventBus, {
+			sessionInfoService: this.sessionInfoService,
+			listProjects: () => host.listProjects(),
+			getActiveProjectId: () => this.projectService.activeId,
+		});
+
+		this.eventProcessor = new SessionEventProcessor(host, this.scopeRegistry, host);
+		this.subAgentRuntimeService = new SubAgentRuntimeService(host, this.subAgentRegistry);
+
+	}
+
+	/** Initialize all async-dependent and modelRegistry-dependent services. */
+	async initAsync(): Promise<void> {
+		const host = this.host;
+		const self = this as {
+			modelRuntime: ModelRuntime;
+			modelRegistry: ModelRegistry;
+			credentialStore: EncryptedCredentialStore;
+			customProviders: CustomProvidersStore;
+			autoTitleService: AutoTitleService;
+			runtimeFactory: SessionRuntimeFactory;
+			sessionSubagentService: SessionSubagentService;
+			runtimeLifecycle: RuntimeLifecycleCoordinator;
+			sessionHistoryService: SessionHistoryService;
+			sessionControlService: SessionControlService;
+			sessionLifecycleService: SessionLifecycleService;
+			sessionEventEffects: SessionEventEffects;
+			sessionSettingsService: SessionSettingsService;
+			agentDefinitionService: AgentDefinitionService;
+			planService: PlanService;
+			projectDeletionService: ProjectDeletionService;
+			sessionMessagingService: SessionMessagingService;
+			sessionPermissionOrchestrator: SessionPermissionOrchestrator;
+			skillManagementService: SkillManagementService;
+		};
+
+		const credentials = new EncryptedCredentialStore(getAuthPath());
+		self.credentialStore = credentials;
+		self.modelRuntime = await ModelRuntime.create({
+			credentials,
+			modelsPath: getModelsPath(),
+		});
+		self.modelRegistry = new ModelRegistry(self.modelRuntime);
+
+		self.customProviders = new CustomProvidersStore(self.modelRuntime, getCustomProvidersPath());
+		self.customProviders.load();
+
+		self.autoTitleService = new AutoTitleService({
+			modelRegistry: self.modelRegistry,
+			getUserSettings: () => this.userSettings.getAll(),
+		});
+
+		self.runtimeFactory = new SessionRuntimeFactory({
 			agentDir: getLookDir(),
-			authStorage: this.authStorage,
-			modelRegistry: this.modelRegistry,
+			modelRuntime: self.modelRuntime,
 			findProjectIdByCwd: (cwd) => this.findProjectIdByCwd(cwd),
 			resolveProjectTrust: (cwd) => this.projectService.resolveProjectTrust(cwd),
 			buildExtensionFactories: async (cwd, sessionId, projectId) => {
@@ -188,33 +247,15 @@ export class RuntimeManagerComposition {
 			},
 		});
 
-		this.sessionCatalog = new SessionCatalog((metadata) => {
-			if (metadata.parentSessionId) {
-				this.subAgentRegistry.register(metadata.parentSessionId, metadata.sessionId, metadata.agentName ?? "");
-			}
-		});
-		this.projectRuntimeService = new ProjectRuntimeService({
-			projectService: this.projectService,
-			sessionCatalog: this.sessionCatalog,
-			runtimeRegistry: this.runtimeRegistry,
-		});
-		this.sessionInfoService = new SessionInfoService({
-			runtimeRegistry: this.runtimeRegistry,
-			sessionCatalog: this.sessionCatalog,
-			subAgentRegistry: this.subAgentRegistry,
-			scopeRegistry: this.scopeRegistry,
-			maxNameLength: MAX_NAME_LENGTH,
-			listProjects: () => host.listProjects(),
-		});
-		this.sessionNotifier = new SessionNotifier(this.eventBus, {
-			sessionInfoService: this.sessionInfoService,
-			listProjects: () => host.listProjects(),
-			getActiveProjectId: () => this.projectService.activeId,
+		// Create planService first — sessionSubagentService depends on it
+		self.planService = new PlanService(host, host, this.permissionService, async (sessionId) => {
+			await this.sessionPermissionOrchestrator.applyMode(sessionId, "always", {
+				internal: true,
+				updateDefault: false,
+			});
 		});
 
-		this.eventProcessor = new SessionEventProcessor(host, this.scopeRegistry, host);
-		this.subAgentRuntimeService = new SubAgentRuntimeService(host, this.subAgentRegistry);
-		this.sessionSubagentService = new SessionSubagentService({
+		self.sessionSubagentService = new SessionSubagentService({
 			host: {
 				createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
 					this.runtimeLifecycle.createManagedRuntime(cwd, manager, projectId, createdAt, startEvent, options),
@@ -231,7 +272,7 @@ export class RuntimeManagerComposition {
 				acquireScope: (sessionId, projectId) => this.scopeRegistry.acquire(sessionId, projectId),
 				runtimeInfo: (sessionId) => this.sessionInfoService.getAgentInfo(sessionId),
 			},
-			modelRegistry: this.modelRegistry,
+			modelRegistry: self.modelRegistry,
 			subAgentRegistry: this.subAgentRegistry,
 			subAgentRuntimeService: this.subAgentRuntimeService,
 			permissionService: this.permissionService,
@@ -243,8 +284,8 @@ export class RuntimeManagerComposition {
 		});
 		this.sessionSubagentService.loadDefaultFromSettings();
 
-		this.runtimeLifecycle = new RuntimeLifecycleCoordinator({
-			runtimeFactory: this.runtimeFactory,
+		self.runtimeLifecycle = new RuntimeLifecycleCoordinator({
+			runtimeFactory: self.runtimeFactory,
 			runtimeRegistry: this.runtimeRegistry,
 			scopeRegistry: this.scopeRegistry,
 			permissionService: this.permissionService,
@@ -268,7 +309,7 @@ export class RuntimeManagerComposition {
 			},
 		});
 
-		this.sessionHistoryService = new SessionHistoryService({
+		self.sessionHistoryService = new SessionHistoryService({
 			ensureRuntime: (sessionId) => this.runtimeLifecycle.ensureRuntime(sessionId),
 			createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent) =>
 				this.runtimeLifecycle.createManagedRuntime(cwd, manager, projectId, createdAt, startEvent),
@@ -287,7 +328,7 @@ export class RuntimeManagerComposition {
 			},
 			emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason),
 		});
-		this.sessionControlService = new SessionControlService(
+		self.sessionControlService = new SessionControlService(
 			{
 				ensureRuntime: (sessionId) => this.runtimeLifecycle.ensureRuntime(sessionId),
 				getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
@@ -304,25 +345,11 @@ export class RuntimeManagerComposition {
 				emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
 				emitSessionList: (projectId) => this.sessionNotifier.emitSessionList(projectId),
 			},
-			this.modelRegistry,
+			self.modelRegistry,
 			MAX_NAME_LENGTH,
 		);
 
-		this.projectDeletionService = new ProjectDeletionService({
-			projectService: this.projectService,
-			sessionCatalog: this.sessionCatalog,
-			runtimeRegistry: this.runtimeRegistry,
-			disposeRuntime: (sessionId, abort) => this.runtimeLifecycle.disposeRuntime(sessionId, abort),
-			workspaceFileService,
-			workspaceTreeService,
-			emitSessionList: (projectId) => this.sessionNotifier.emitSessionList(projectId),
-			emitProjectList: () => this.sessionNotifier.emitProjectList(),
-			getActiveSessionId: () => this.activeSessionSelection.currentId,
-			setActiveSessionId: (sessionId) => this.activeSessionSelection.setCurrent(sessionId),
-			deleteScheduledTasksByProject: async (projectId) => this.schedulerService?.deleteTasksByProject(projectId),
-		});
-
-		this.sessionLifecycleService = new SessionLifecycleService({
+		self.sessionLifecycleService = new SessionLifecycleService({
 			host: {
 				createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
 					this.runtimeLifecycle.createManagedRuntime(cwd, manager, projectId, createdAt, startEvent, options),
@@ -344,20 +371,41 @@ export class RuntimeManagerComposition {
 			permissionService: this.permissionService,
 			planService: this.planService,
 			userSettings: this.userSettings,
-			modelRegistry: this.modelRegistry,
-			getAvailableModelsSync: () => getAvailableModels(this.modelRegistry),
+			modelRegistry: self.modelRegistry,
+			getAvailableModelsSync: () => getAvailableModels(self.modelRegistry),
 		});
-		this.sessionMessagingService = new SessionMessagingService({
+
+		self.agentDefinitionService = new AgentDefinitionService(() =>
+			this.sessionSubagentService.reloadAllSessionsForAgents(),
+		);
+
+		self.projectDeletionService = new ProjectDeletionService({
+			projectService: this.projectService,
+			sessionCatalog: this.sessionCatalog,
+			runtimeRegistry: this.runtimeRegistry,
+			disposeRuntime: (sessionId, abort) => this.runtimeLifecycle.disposeRuntime(sessionId, abort),
+			workspaceFileService: this.workspaceFileService,
+			workspaceTreeService: this.workspaceTreeService,
+			emitSessionList: (projectId) => this.sessionNotifier.emitSessionList(projectId),
+			emitProjectList: () => this.sessionNotifier.emitProjectList(),
+			getActiveSessionId: () => this.activeSessionSelection.currentId,
+			setActiveSessionId: (sessionId) => this.activeSessionSelection.setCurrent(sessionId),
+			deleteScheduledTasksByProject: async (projectId) => this.schedulerService?.deleteTasksByProject(projectId),
+		});
+
+		self.sessionMessagingService = new SessionMessagingService({
 			ensureRuntime: (sessionId) => this.runtimeLifecycle.ensureRuntime(sessionId),
 			emitError: (error, sessionId) => this.sessionNotifier.emitError(error, sessionId),
 		});
-		this.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({
+
+		self.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({
 			host: { ensureRuntime: (sessionId) => this.runtimeLifecycle.ensureRuntime(sessionId) },
 			permissionService: this.permissionService,
 			planService: this.planService,
 			userSettings: this.userSettings,
 		});
-		this.sessionEventEffects = new SessionEventEffects({
+
+		self.sessionEventEffects = new SessionEventEffects({
 			runtimeRegistry: this.runtimeRegistry,
 			scopeRegistry: this.scopeRegistry,
 			permissionService: this.permissionService,
@@ -372,7 +420,8 @@ export class RuntimeManagerComposition {
 			emitSessionList: (projectId) => this.sessionNotifier.emitSessionList(projectId),
 			emitError: (error, sessionId) => this.sessionNotifier.emitError(error, sessionId),
 		});
-		this.sessionSettingsService = new SessionSettingsService({
+
+		self.sessionSettingsService = new SessionSettingsService({
 			userSettings: this.userSettings,
 			listProjects: () => this.projectService.listProjects(),
 			getActiveProject: () => this.projectService.getActiveProject(),
@@ -383,7 +432,8 @@ export class RuntimeManagerComposition {
 			sessionSubagentService: this.sessionSubagentService,
 			projectTrustDefaults: this.globalSettingsManager,
 		});
-		this.skillManagementService = new SkillManagementService({
+
+		self.skillManagementService = new SkillManagementService({
 			runtimeRegistry: this.runtimeRegistry,
 			selection: this.activeSessionSelection,
 			globalSettingsManager: this.globalSettingsManager,

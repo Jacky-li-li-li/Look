@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 function tmpDir(): string {
 	const dir = path.join(os.tmpdir(), `look-auth-source-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -26,17 +27,17 @@ describe("Model discovery auth source consistency", () => {
 		fs.rmSync(dir, { recursive: true, force: true });
 	});
 
-	it("runtime override makes models available through getAvailable", () => {
-		const authStorage = AuthStorage.create(authPath);
-		authStorage.setRuntimeApiKey("openai", "sk-runtime");
-
-		const registry = ModelRegistry.create(authStorage, modelsPath);
+	it("runtime override makes models available through getAvailable", async () => {
+		const creds = new InMemoryCredentialStore();
+		const mr = await ModelRuntime.create({ credentials: creds, modelsPath });
+		mr.setRuntimeApiKey("openai", "sk-runtime");
+		const registry = new ModelRegistry(mr);
 
 		// getAvailable() considers runtime overrides as configured.
 		const available = registry.getAvailable().filter((m) => m.provider === "openai");
 		expect(available.length).toBeGreaterThan(0);
 
-		// getProviderAuthStatus().configured is false for runtime overrides.
-		expect(registry.getProviderAuthStatus("openai").configured).toBe(false);
+		// Note: with ModelRuntime, runtime overrides also report as configured.
+		expect(registry.getProviderAuthStatus("openai").configured).toBe(true);
 	});
 });

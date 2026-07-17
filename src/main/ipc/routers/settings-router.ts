@@ -3,7 +3,8 @@
 // ============================================================
 
 import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
 import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
@@ -28,14 +29,14 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 
 	register("settings:get-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
-		const key = getApiKey(ctx.authStorage, _provider);
+		const key = await getApiKey(ctx.credentialStore, _provider);
 		return { success: true, key: key ?? null };
 	});
 
 	register("settings:set-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
 		guardString(data.key, "key");
-		setApiKey(ctx.authStorage, _provider, data.key);
+		await setApiKey(ctx.credentialStore, _provider, data.key);
 		const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
 		return { success: true, ...result };
 	});
@@ -79,12 +80,14 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 
 	register("settings:test-custom-provider", async (data) => {
 		const input = guardCustomProviderInput(data.payload, "payload") as unknown as CustomProviderInput;
-		const memAuth = AuthStorage.inMemory(
-			input.apiKey ? { [input.name]: { type: "api_key" as const, key: input.apiKey } } : {},
-		);
-		const memRegistry = ModelRegistry.create(memAuth);
+		const memCredentials = new InMemoryCredentialStore();
+		if (input.apiKey) {
+			await memCredentials.modify(input.name, async () => ({ type: "api_key" as const, key: input.apiKey }));
+		}
+		const memRuntime = await ModelRuntime.create({ credentials: memCredentials });
+		const memRegistry = new ModelRegistry(memRuntime);
 		try {
-			memRegistry.registerProvider(input.name, toProviderConfig(input));
+			memRuntime.registerProvider(input.name, toProviderConfig(input));
 		} catch (e) {
 			return {
 				success: true,

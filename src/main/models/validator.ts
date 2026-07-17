@@ -15,8 +15,8 @@ import {
 	type Model,
 	type ProviderResponse,
 } from "@earendil-works/pi-ai/compat";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { getModelsPath } from "@look/shared/look-storage";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 export type TestResult =
 	| { ok: true; status: number; skipped?: false }
@@ -97,8 +97,10 @@ export async function testApiKey(provider: string, key: string): Promise<TestRes
 		return { ok: false, status: 0, error: "Empty key" };
 	}
 
-	const authStorage = AuthStorage.inMemory({ [provider]: { type: "api_key", key: trimmed } });
-	const modelRegistry = ModelRegistry.create(authStorage, getModelsPath());
+	const credentials = new InMemoryCredentialStore();
+	await credentials.modify(provider, async () => ({ type: "api_key" as const, key: trimmed }));
+	const modelRuntime = await ModelRuntime.create({ credentials });
+	const modelRegistry = new ModelRegistry(modelRuntime);
 	return runSdkSelfTest(modelRegistry, provider);
 }
 
