@@ -1,7 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { syncLookDefaultAgents } from "../src/main/agents/defaults";
 import { serializeAgentDefinition } from "../src/main/extensions/subagent/agent-definition-serializer";
 import { discoverAgents, parseAgentFile } from "../src/main/extensions/subagent/agent-discovery";
 import { createSubagentExtensionFactory } from "../src/main/extensions/subagent/subagent-extension";
@@ -47,6 +48,12 @@ describe("SubAgent extension — runtime dispatch", () => {
 	const cwd = process.cwd();
 	const captured = { calls: [] as Array<{ agent: string; task: string }> };
 	let tool: { name: string; execute: (...args: unknown[]) => Promise<unknown> };
+	beforeAll(() => {
+		// 内置 Agent 平时由应用启动时从 default-agents/ 同步到
+		// <LOOK_HOME>/agents/marketplace/；测试的 LOOK_HOME 是每文件临时目录
+		// （见 test/setup-look-home.ts），需要显式播种。
+		syncLookDefaultAgents(cwd);
+	});
 	beforeEach(async () => {
 		captured.calls = [];
 		const host = createMockHost(captured);

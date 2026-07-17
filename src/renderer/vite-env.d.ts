@@ -52,7 +52,7 @@ interface LookAPI {
 	resumeScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;
 	deleteScheduledTask(taskId: string): Promise<IpcResult>;
 	runScheduledTaskNow(taskId: string): Promise<IpcResult<{ accepted: true }>>;
-	testScheduledTask(task: ScheduledTaskInput): Promise<IpcResult<ScheduledTaskTestResult>>;
+	testScheduledTask(task: ScheduledTaskInput, taskId?: string): Promise<IpcResult<ScheduledTaskTestResult>>;
 	listScheduledTaskLogs(taskId?: string, limit?: number): Promise<IpcResult<{ logs: ScheduledTaskRunLog[] }>>;
 	validateCron(
 		cron: string,
@@ -227,7 +227,16 @@ interface LookAPI {
 	}>;
 	getImBindings(): Promise<{
 		success: boolean;
-		bindings?: Array<{ chatId: string; sessionId: string; projectId: string; createdAt: number }>;
+		bindings?: Array<{
+			chatId: string;
+			sessionId: string;
+			projectId: string;
+			createdAt: number;
+			appId?: string;
+			chatType?: "p2p" | "group";
+			senderOpenId?: string;
+			peerName?: string;
+		}>;
 		error?: string;
 	}>;
 	connectFeishuChannel(options?: {

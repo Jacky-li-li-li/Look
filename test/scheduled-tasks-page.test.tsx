@@ -133,6 +133,7 @@ describe("ScheduledTasksPage", () => {
 				model: "openai/gpt-test",
 				prompt: "Check the repository",
 			}),
+			undefined,
 		);
 		await waitFor(() => expect(screen.getByText("Test completed successfully")).toBeTruthy());
 		expect(screen.getByText("Draft completed")).toBeTruthy();

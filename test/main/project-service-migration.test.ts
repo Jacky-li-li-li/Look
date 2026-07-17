@@ -125,4 +125,29 @@ describe("ProjectService workspace migration", () => {
 		expect(recovered).toBeDefined();
 		expect(fs.existsSync(lookStorage.getWorkspaceDir(recovered!.id))).toBe(true);
 	});
+
+	it("recovers an id-named orphan workspace using the cwd basename as project name", async () => {
+		const [{ ProjectService }, lookStorage] = await Promise.all([
+			import("../../src/main/projects/project-service.js"),
+			import("@look/shared/look-storage"),
+		]);
+		const service = new ProjectService(makeTrustStore(), makeSettingsManager());
+		const cwd = path.join(tempDir, "my-readable-project");
+		fs.mkdirSync(cwd, { recursive: true });
+
+		// Simulates a workspace dir already migrated to a projectId-style name
+		// whose projects.json entry was lost: the dir name must not become the
+		// display name, the cwd basename should be used instead.
+		const orphanDir = path.join(tempDir, "workspaces", "8277014e");
+		writeSessionJsonl(path.join(orphanDir, "sessions", "orphan.jsonl"), "orphan", cwd);
+
+		const migrated = await service.recoverOrphanedProjects();
+		expect(migrated).toBe(true);
+
+		const realCwd = await fsp.realpath(cwd);
+		const recovered = service.listProjects().find((p) => p.cwd === realCwd);
+		expect(recovered).toBeDefined();
+		expect(recovered!.name).toBe("my-readable-project");
+		expect(fs.existsSync(lookStorage.getWorkspaceDir(recovered!.id))).toBe(true);
+	});
 });

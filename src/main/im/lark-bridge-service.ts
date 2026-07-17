@@ -1,9 +1,12 @@
 // ============================================================
 // LarkBridgeService — 飞书消息 → Agent 会话双向桥接
-// ============================================================
 //
 // 消费 createLarkChannel() 的 NormalizedMessage，
 // 自动创建/复用 Agent Session，利用 channel.stream() 实现流式卡片回复。
+//
+// 多 bot 模型：每条入站消息携带接收它的 appId，回复固定走该 bot 的
+// 连接；chat 绑定以 `appId::chatId` 为键，两个 bot 在同一个群/同一
+// 个用户的私聊里各自拥有独立的 Agent 会话，互不影响。
 // ============================================================
 
 import type * as lark from "@larksuiteoapi/node-sdk";
@@ -19,33 +22,33 @@ export class LarkBridgeService {
 	private readonly replyPresenter = new LarkReplyPresenter();
 	private runtimeManager!: SessionRuntimeManager;
 	private channelManager?: LarkChannelManager;
-	private channel?: lark.LarkChannel;
-	/** chatId → sessionId */
+	/** `appId::chatId` → ChatBinding（无 appId 的 legacy 绑定以裸 chatId 为键） */
 	private bindings = new Map<string, ChatBinding>();
-	/** chatId → in-flight binding creation */
+	/** 绑定键 → in-flight binding creation */
 	private pendingBindings = new Map<string, Promise<ChatBinding>>();
 	/** sessionId → 回复累积器 */
 	private replyAccumulators = new Map<string, ReplyAccumulator>();
+	/** sessionId → 该回复所属的 bot appId（用于按 bot 释放在途回复） */
+	private accumulatorAppIds = new Map<string, string>();
 	/** 运行时事件取消订阅 */
 	private unsubscribeEvents?: () => void;
+	private initialized = false;
 
 	// ============================================================
-	// 初始化：绑定消息回调 + 监听 Agent 事件
+	// 初始化：绑定消息回调 + 监听 Agent 事件（幂等，可在无连接时调用）
+	// 返回 true 表示本次调用真正完成了初始化。
 	// ============================================================
-	init(runtimeManager: SessionRuntimeManager, channelManager: LarkChannelManager): void {
+	init(runtimeManager: SessionRuntimeManager, channelManager: LarkChannelManager): boolean {
 		this.runtimeManager = runtimeManager;
 		this.channelManager = channelManager;
-
-		const larkChannel = channelManager.getLarkChannel();
-		if (!larkChannel) throw new Error("LarkChannel is not connected");
-
-		this.channel = larkChannel;
+		if (this.initialized) return false;
+		this.initialized = true;
 
 		// 恢复持久化的 ChatBinding
-		this.bindings = new Map(loadBindings().map((b) => [b.chatId, b]));
+		this.bindings = new Map(loadBindings().map((b) => [this.keyFor(b.appId, b.chatId), b]));
 
-		// 注册飞书归一化消息 → 桥接
-		channelManager.onMessage((msg) => this.handleMessage(msg));
+		// 注册飞书归一化消息 → 桥接（appId 标识接收消息的 bot）
+		channelManager.onMessage((appId, msg) => this.handleMessage(appId, msg));
 
 		// Agent 事件 → 累积回复文本
 		this.unsubscribeEvents?.();
@@ -64,25 +67,33 @@ export class LarkBridgeService {
 			"project:",
 			activeProject?.name ?? "(none)",
 		);
+		return true;
 	}
 
 	dispose(): void {
 		this.unsubscribeEvents?.();
 		this.unsubscribeEvents = undefined;
 		this.channelManager?.onMessage(undefined);
-		this.channel = undefined;
+		this.initialized = false;
 		this.bindings.clear();
 		this.pendingBindings.clear();
+		this.accumulatorAppIds.clear();
 		this.releaseAllAccumulators("飞书连接已关闭");
 	}
 
-	detachChannel(): void {
-		this.unsubscribeEvents?.();
-		this.unsubscribeEvents = undefined;
-		this.channelManager?.onMessage(undefined);
-		this.channel = undefined;
-		this.pendingBindings.clear();
-		this.releaseAllAccumulators("飞书连接已断开");
+	/**
+	 * 某个 bot 断开连接：只释放该 bot 的在途回复，其他 bot 的会话与回复
+	 * 不受影响。省略 appId 时释放全部（兼容旧的全量断开语义）。
+	 */
+	detachChannel(appId?: string): void {
+		if (!appId) {
+			this.pendingBindings.clear();
+			this.releaseAllAccumulators("飞书连接已断开");
+			return;
+		}
+		for (const [sessionId, owner] of Array.from(this.accumulatorAppIds.entries())) {
+			if (owner === appId) this.releaseAccumulator(sessionId, "飞书连接已断开");
+		}
 	}
 
 	// ============================================================
@@ -94,14 +105,42 @@ export class LarkBridgeService {
 		return Array.from(this.bindings.values());
 	}
 
-	/** 手动解绑 chatId */
-	removeBinding(chatId: string): void {
-		const binding = this.bindings.get(chatId);
-		if (binding) {
-			this.releaseAccumulator(binding.sessionId, "飞书会话已解绑");
-			this.bindings.delete(chatId);
-			saveBindings(Array.from(this.bindings.values()));
+	/**
+	 * Resolve the private (p2p) conversation through which a bot channel can
+	 * reach this desktop user. Bindings saved before the chat type was captured
+	 * are probed once via chat.get and the result is persisted (self-healing).
+	 * Returns null when no private conversation with this bot is known — the
+	 * user must message the bot privately at least once.
+	 */
+	async resolveP2pBinding(appId: string): Promise<ChatBinding | null> {
+		const candidates = Array.from(this.bindings.values()).filter((b) => !b.appId || b.appId === appId);
+		if (candidates.length === 0) return null;
+		let healed = false;
+		for (const binding of candidates) {
+			if (binding.chatType) continue;
+			const info = await this.channelManager?.getChatInfo(binding.chatId, appId).catch(() => null);
+			if (!info?.chatType) continue;
+			binding.chatType = info.chatType;
+			binding.appId = binding.appId ?? appId;
+			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
+			healed = true;
 		}
+		if (healed) saveBindings(Array.from(this.bindings.values()));
+		const p2p = candidates.filter((b) => b.chatType === "p2p").sort((a, b) => b.createdAt - a.createdAt);
+		return p2p[0] ?? null;
+	}
+
+	/** 手动解绑 chatId；指定 appId 时只解该 bot 的绑定，否则解该 chatId 的全部绑定。 */
+	removeBinding(chatId: string, appId?: string): void {
+		let changed = false;
+		for (const [key, binding] of Array.from(this.bindings.entries())) {
+			if (binding.chatId !== chatId) continue;
+			if (appId && binding.appId && binding.appId !== appId) continue;
+			this.releaseAccumulator(binding.sessionId, "飞书会话已解绑");
+			this.bindings.delete(key);
+			changed = true;
+		}
+		if (changed) saveBindings(Array.from(this.bindings.values()));
 	}
 
 	/** 获取桥接运行状态 */
@@ -113,20 +152,66 @@ export class LarkBridgeService {
 		return {
 			bindings: this.bindings.size,
 			runningSessions,
-			status: this.channel ? "running" : "stopped",
+			status: (this.channelManager?.getConnectedAppIds().length ?? 0) > 0 ? "running" : "stopped",
 		};
 	}
 
-	private getConnectedChannel(): lark.LarkChannel | undefined {
-		const latest = this.channelManager?.getLarkChannel();
-		if (latest) this.channel = latest;
-		return this.channel;
+	/** 绑定键：`appId::chatId`；无 appId 的 legacy 绑定保持裸 chatId 键以便认领。 */
+	private keyFor(appId: string | undefined, chatId: string): string {
+		return appId ? `${appId}::${chatId}` : chatId;
+	}
+
+	/**
+	 * 按 bot + chatId 查绑定。查不到时尝试认领一条无主的 legacy 绑定
+	 * （键为裸 chatId、未记录 appId）——首个在该 chatId 收到消息的 bot 认领它。
+	 */
+	private findBinding(appId: string, chatId: string): ChatBinding | undefined {
+		const direct = this.bindings.get(this.keyFor(appId, chatId));
+		if (direct) return direct;
+		const legacy = this.bindings.get(chatId);
+		if (legacy && !legacy.appId) {
+			legacy.appId = appId;
+			this.bindings.delete(chatId);
+			this.bindings.set(this.keyFor(appId, chatId), legacy);
+			saveBindings(Array.from(this.bindings.values()));
+			return legacy;
+		}
+		return undefined;
 	}
 
 	private releaseAccumulator(sessionId: string, reason: string): void {
 		const acc = this.replyAccumulators.get(sessionId);
 		if (acc) this.replyPresenter.disposeAccumulator(acc, reason);
 		this.replyAccumulators.delete(sessionId);
+		this.accumulatorAppIds.delete(sessionId);
+	}
+
+	/**
+	 * Backfill chat metadata (chatType/sender) on bindings saved before these
+	 * fields were captured, using the current inbound message.
+	 */
+	private backfillBindingMetadata(binding: ChatBinding, appId: string, msg: NormalizedMessage): void {
+		let changed = false;
+		if (!binding.appId) {
+			binding.appId = appId;
+			changed = true;
+		}
+		if (!binding.chatType && msg.chatType) {
+			binding.chatType = msg.chatType;
+			changed = true;
+		}
+		if (!binding.senderOpenId && msg.senderId) {
+			binding.senderOpenId = msg.senderId;
+			changed = true;
+		}
+		if (!binding.peerName && msg.senderName) {
+			binding.peerName = msg.senderName;
+			changed = true;
+		}
+		if (changed) {
+			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
+			saveBindings(Array.from(this.bindings.values()));
+		}
 	}
 
 	private releaseAllAccumulators(reason: string): void {
@@ -134,18 +219,20 @@ export class LarkBridgeService {
 			this.replyPresenter.disposeAccumulator(acc, reason);
 		}
 		this.replyAccumulators.clear();
+		this.accumulatorAppIds.clear();
 	}
 
 	// ============================================================
 	// 消息入口
 	// ============================================================
-	private async handleMessage(msg: NormalizedMessage): Promise<void> {
-		// 忽略 Bot 自身的消息
-		if (!this.channelManager || !this.getConnectedChannel()) {
+	private async handleMessage(appId: string, msg: NormalizedMessage): Promise<void> {
+		const channel = this.channelManager?.getLarkChannel(appId);
+		if (!this.channelManager || !channel) {
 			console.warn("[LarkBridgeService] Dropping message because Lark channel is not connected:", msg.messageId);
 			return;
 		}
-		if (this.channelManager.isSelfMessage(msg)) {
+		// 忽略 Bot 自身的消息
+		if (this.channelManager.isSelfMessage(appId, msg)) {
 			console.log("[LarkBridgeService] Ignoring self message:", msg.messageId);
 			return;
 		}
@@ -154,6 +241,8 @@ export class LarkBridgeService {
 		console.log(
 			"[LarkBridgeService] Incoming:",
 			msg.messageId,
+			"appId:",
+			appId,
 			"chat:",
 			msg.chatId,
 			"chatType:",
@@ -173,17 +262,22 @@ export class LarkBridgeService {
 
 		if (text.startsWith("/")) {
 			console.log("[LarkBridgeService] Dispatching command:", text.split(/\s+/)[0]);
-			await this.handleCommand(msg, text);
+			await this.handleCommand(appId, channel, msg, text);
 		} else {
 			console.log("[LarkBridgeService] Dispatching user message to agent");
-			await this.handleUserMessage(msg, text);
+			await this.handleUserMessage(appId, channel, msg, text);
 		}
 	}
 
 	// ============================================================
 	// 命令处理
 	// ============================================================
-	private async handleCommand(msg: NormalizedMessage, rawText: string): Promise<void> {
+	private async handleCommand(
+		appId: string,
+		channel: lark.LarkChannel,
+		msg: NormalizedMessage,
+		rawText: string,
+	): Promise<void> {
 		const parts = this.tokenizeCommand(rawText);
 		const cmd = parts[0].toLowerCase();
 
@@ -193,37 +287,35 @@ export class LarkBridgeService {
 			switch (cmd) {
 				case "/new":
 					if (parts[1]?.toLowerCase() === "project") {
-						await this.cmdNewProject(chatId, parts.slice(2));
+						await this.cmdNewProject(appId, channel, chatId, parts.slice(2));
 					} else {
-						await this.cmdNewSession(chatId);
+						await this.cmdNewSession(appId, channel, chatId);
 					}
 					break;
 				case "/project":
-					await this.cmdProject(chatId, parts.slice(1));
+					await this.cmdProject(appId, channel, chatId, parts.slice(1));
 					break;
 				case "/list":
-					await this.cmdListSessions(chatId);
+					await this.cmdListSessions(appId, channel, chatId);
 					break;
 				case "/stop":
-					await this.cmdStopSession(chatId);
+					await this.cmdStopSession(appId, channel, chatId);
 					break;
 				case "/model":
-					await this.cmdModel(chatId, parts.slice(1));
+					await this.cmdModel(appId, channel, chatId, parts.slice(1));
 					break;
 				case "/help":
-					await this.cmdHelp(chatId);
+					await this.cmdHelp(channel, chatId);
 					break;
 				default:
 					// 未知命令当普通消息处理
-					await this.handleUserMessage(msg, rawText);
+					await this.handleUserMessage(appId, channel, msg, rawText);
 			}
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
-			await this.getConnectedChannel()
-				?.send(chatId, { text: `❌ 命令执行失败: ${errorMsg}` })
-				.catch((sendErr) => {
-					console.error("[LarkBridgeService] Failed to notify command error:", sendErr);
-				});
+			await channel.send(chatId, { text: `❌ 命令执行失败: ${errorMsg}` }).catch((sendErr) => {
+				console.error("[LarkBridgeService] Failed to notify command error:", sendErr);
+			});
 		}
 	}
 
@@ -237,26 +329,26 @@ export class LarkBridgeService {
 		return tokens;
 	}
 
-	private async cmdNewSession(chatId: string): Promise<void> {
-		const oldBinding = this.bindings.get(chatId);
+	private async cmdNewSession(appId: string, channel: lark.LarkChannel, chatId: string): Promise<void> {
+		const oldBinding = this.findBinding(appId, chatId);
 		if (oldBinding) {
 			// 清理旧绑定
-			this.bindings.delete(chatId);
+			this.bindings.delete(this.keyFor(appId, chatId));
 			this.releaseAccumulator(oldBinding.sessionId, "已创建新的飞书会话");
 		}
 
 		const projectId = oldBinding?.projectId || this.runtimeManager.getActiveProject()?.id || "";
-		const binding = await this.createAndStoreBinding(chatId, projectId);
+		const binding = await this.createAndStoreBinding(appId, chatId, projectId, oldBinding);
 
-		await this.getConnectedChannel()?.send(chatId, {
+		await channel.send(chatId, {
 			text: `✅ 已创建新的 Agent 会话 (ID: ${binding.sessionId.slice(0, 8)})`,
 		});
 	}
 
-	private async cmdListSessions(chatId: string): Promise<void> {
-		const binding = this.bindings.get(chatId);
+	private async cmdListSessions(appId: string, channel: lark.LarkChannel, chatId: string): Promise<void> {
+		const binding = this.findBinding(appId, chatId);
 		if (!binding) {
-			await this.getConnectedChannel()?.send(chatId, {
+			await channel.send(chatId, {
 				text: "📭 当前没有绑定的 Agent 会话，发送任意消息自动创建。",
 			});
 			return;
@@ -266,42 +358,47 @@ export class LarkBridgeService {
 		const name = info?.name ?? binding.sessionId.slice(0, 8);
 		const msgCount = info?.messageCount ?? 0;
 
-		await this.getConnectedChannel()?.send(chatId, {
+		await channel.send(chatId, {
 			text: `📋 当前会话: **${name}**\n会话 ID: \`${binding.sessionId.slice(0, 8)}\`\n消息数: ${msgCount}\n绑定时间: ${new Date(binding.createdAt).toLocaleString("zh-CN")}`,
 		});
 	}
 
-	private async cmdProject(chatId: string, args: string[]): Promise<void> {
+	private async cmdProject(appId: string, channel: lark.LarkChannel, chatId: string, args: string[]): Promise<void> {
 		if (args.length === 0) {
-			await this.sendProjectList(chatId);
+			await this.sendProjectList(channel, chatId);
 			return;
 		}
 
 		const projects = this.runtimeManager.listProjects();
 		const selected = this.resolveProject(projects, args.join(" "));
 		if (!selected) {
-			await this.getConnectedChannel()?.send(chatId, {
+			await channel.send(chatId, {
 				text: `❌ 未找到项目：${args.join(" ")}\n\n${this.formatProjectList(projects)}`,
 			});
 			return;
 		}
 		if (!selected.valid) {
-			await this.getConnectedChannel()?.send(chatId, {
+			await channel.send(chatId, {
 				text: `❌ 项目路径不可用，无法切换：${selected.name}\n${selected.cwd}`,
 			});
 			return;
 		}
 
-		await this.bindNewSessionToProject(chatId, selected);
-		await this.getConnectedChannel()?.send(chatId, {
+		await this.bindNewSessionToProject(appId, chatId, selected);
+		await channel.send(chatId, {
 			text: `✅ 已切换到项目 **${selected.name}**\n路径：\`${selected.cwd}\``,
 		});
 	}
 
-	private async cmdNewProject(chatId: string, args: string[]): Promise<void> {
+	private async cmdNewProject(
+		appId: string,
+		channel: lark.LarkChannel,
+		chatId: string,
+		args: string[],
+	): Promise<void> {
 		const cwd = args[0]?.trim();
 		if (!cwd) {
-			await this.getConnectedChannel()?.send(chatId, {
+			await channel.send(chatId, {
 				text: [
 					"用法：`/new project <绝对路径> [名称]`",
 					"",
@@ -315,8 +412,8 @@ export class LarkBridgeService {
 
 		const name = args.slice(1).join(" ").trim() || undefined;
 		const result = await this.runtimeManager.createProject(cwd, name);
-		await this.bindNewSessionToProject(chatId, result.project);
-		await this.getConnectedChannel()?.send(chatId, {
+		await this.bindNewSessionToProject(appId, chatId, result.project);
+		await channel.send(chatId, {
 			text: [
 				result.isDuplicate ? "✅ 项目已存在，已切换。" : "✅ 已新建项目并切换。",
 				`项目：**${result.project.name}**`,
@@ -325,8 +422,8 @@ export class LarkBridgeService {
 		});
 	}
 
-	private async sendProjectList(chatId: string): Promise<void> {
-		await this.getConnectedChannel()?.send(chatId, {
+	private async sendProjectList(channel: lark.LarkChannel, chatId: string): Promise<void> {
+		await channel.send(chatId, {
 			text: this.formatProjectList(this.runtimeManager.listProjects()),
 		});
 	}
@@ -372,17 +469,23 @@ export class LarkBridgeService {
 		);
 	}
 
-	private async bindNewSessionToProject(chatId: string, project: ProjectInfo): Promise<string> {
-		const oldBinding = this.bindings.get(chatId);
+	private async bindNewSessionToProject(appId: string, chatId: string, project: ProjectInfo): Promise<string> {
+		const oldBinding = this.findBinding(appId, chatId);
 		if (oldBinding) {
 			this.releaseAccumulator(oldBinding.sessionId, "飞书会话已切换项目");
 		}
-		const binding = await this.createAndStoreBinding(chatId, project.id);
+		const binding = await this.createAndStoreBinding(appId, chatId, project.id);
 		return binding.sessionId;
 	}
 
-	private async createAndStoreBinding(chatId: string, projectId: string): Promise<ChatBinding> {
-		const existingPending = this.pendingBindings.get(chatId);
+	private async createAndStoreBinding(
+		appId: string,
+		chatId: string,
+		projectId: string,
+		context?: Pick<ChatBinding, "chatType" | "senderOpenId" | "peerName">,
+	): Promise<ChatBinding> {
+		const key = this.keyFor(appId, chatId);
+		const existingPending = this.pendingBindings.get(key);
 		if (existingPending) return existingPending;
 
 		const pending = (async () => {
@@ -390,42 +493,52 @@ export class LarkBridgeService {
 				...(projectId ? { projectId } : {}),
 				imProvider: "feishu",
 			});
-			const binding: ChatBinding = { chatId, sessionId, projectId, createdAt: Date.now() };
-			this.bindings.set(chatId, binding);
+			// Re-created bindings (e.g. /new) inherit the chat metadata captured earlier.
+			const previous = this.bindings.get(key);
+			const binding: ChatBinding = {
+				chatId,
+				sessionId,
+				projectId,
+				createdAt: Date.now(),
+				appId,
+				chatType: context?.chatType ?? previous?.chatType,
+				senderOpenId: context?.senderOpenId ?? previous?.senderOpenId,
+				peerName: context?.peerName ?? previous?.peerName,
+			};
+			this.bindings.set(key, binding);
 			saveBindings(Array.from(this.bindings.values()));
 			return binding;
 		})();
 
-		this.pendingBindings.set(chatId, pending);
+		this.pendingBindings.set(key, pending);
 		try {
 			return await pending;
 		} finally {
-			if (this.pendingBindings.get(chatId) === pending) {
-				this.pendingBindings.delete(chatId);
+			if (this.pendingBindings.get(key) === pending) {
+				this.pendingBindings.delete(key);
 			}
 		}
 	}
 
-	private async cmdStopSession(chatId: string): Promise<void> {
-		const binding = this.bindings.get(chatId);
+	private async cmdStopSession(appId: string, channel: lark.LarkChannel, chatId: string): Promise<void> {
+		const binding = this.findBinding(appId, chatId);
 		if (!binding) {
-			await this.getConnectedChannel()?.send(chatId, { text: "📭 当前没有正在运行的 Agent 会话。" });
+			await channel.send(chatId, { text: "📭 当前没有正在运行的 Agent 会话。" });
 			return;
 		}
 
 		try {
 			await this.runtimeManager.abortAgent(binding.sessionId);
-			await this.getConnectedChannel()?.send(chatId, { text: "⏹️ 已停止当前 Agent 会话。" });
+			await channel.send(chatId, { text: "⏹️ 已停止当前 Agent 会话。" });
 		} catch {
-			await this.getConnectedChannel()?.send(chatId, { text: "⚠️ 停止会话时出错（可能已经处于空闲状态）。" });
+			await channel.send(chatId, { text: "⚠️ 停止会话时出错（可能已经处于空闲状态）。" });
 		}
 	}
 
-	private async cmdModel(chatId: string, args: string[]): Promise<void> {
-		const channel = this.getConnectedChannel();
-		const binding = this.bindings.get(chatId);
+	private async cmdModel(appId: string, channel: lark.LarkChannel, chatId: string, args: string[]): Promise<void> {
+		const binding = this.findBinding(appId, chatId);
 		if (!binding) {
-			await channel?.send(chatId, { text: "📭 当前没有绑定的 Agent 会话，发送任意消息自动创建。" });
+			await channel.send(chatId, { text: "📭 当前没有绑定的 Agent 会话，发送任意消息自动创建。" });
 			return;
 		}
 
@@ -433,7 +546,7 @@ export class LarkBridgeService {
 			// 列出所有可用模型
 			const models = getAvailableModels(this.runtimeManager.modelRegistry);
 			if (models.length === 0) {
-				await channel?.send(chatId, { text: "📭 没有可用的模型。" });
+				await channel.send(chatId, { text: "📭 没有可用的模型。" });
 				return;
 			}
 			const current = this.runtimeManager.getAgentInfo(binding.sessionId)?.model || "未知";
@@ -443,23 +556,23 @@ export class LarkBridgeService {
 			});
 			lines.unshift(`**可用模型**（当前: ${current}）`, "");
 			lines.push("", "切换: `/model <provider/model-id>`");
-			await channel?.send(chatId, { text: lines.join("\n") });
+			await channel.send(chatId, { text: lines.join("\n") });
 			return;
 		}
 
 		const modelKey = args[0];
 		try {
 			await this.runtimeManager.setModel(binding.sessionId, modelKey);
-			await channel?.send(chatId, { text: `✅ 已切换模型为: ${modelKey}` });
+			await channel.send(chatId, { text: `✅ 已切换模型为: ${modelKey}` });
 		} catch (e) {
-			await channel?.send(chatId, {
+			await channel.send(chatId, {
 				text: `❌ 切换模型失败: ${e instanceof Error ? e.message : String(e)}`,
 			});
 		}
 	}
 
-	private async cmdHelp(chatId: string): Promise<void> {
-		await this.getConnectedChannel()?.send(chatId, {
+	private async cmdHelp(channel: lark.LarkChannel, chatId: string): Promise<void> {
+		await channel.send(chatId, {
 			card: this.replyPresenter.buildHelpCard(),
 		});
 	}
@@ -467,21 +580,28 @@ export class LarkBridgeService {
 	// ============================================================
 	// 普通用户消息 → Agent 桥接
 	// ============================================================
-	private async handleUserMessage(msg: NormalizedMessage, text: string): Promise<void> {
+	private async handleUserMessage(
+		appId: string,
+		channel: lark.LarkChannel,
+		msg: NormalizedMessage,
+		text: string,
+	): Promise<void> {
 		const chatId = msg.chatId;
-		const channel = this.getConnectedChannel();
-		if (!channel) {
-			console.warn("[LarkBridgeService] Cannot handle user message without a connected Lark channel");
-			return;
-		}
-		let binding = this.bindings.get(chatId);
+		const key = this.keyFor(appId, chatId);
+		let binding = this.findBinding(appId, chatId);
 		if (!binding) {
-			binding = await this.pendingBindings.get(chatId)?.catch(() => undefined);
+			binding = await this.pendingBindings.get(key)?.catch(() => undefined);
 		}
 
 		// 自动创建 Session
 		if (!binding) {
-			console.log("[LarkBridgeService] No binding for chat", chatId, "- creating new agent session");
+			console.log(
+				"[LarkBridgeService] No binding for chat",
+				chatId,
+				"appId:",
+				appId,
+				"- creating new agent session",
+			);
 			try {
 				const activeProject = this.runtimeManager.getActiveProject();
 				if (!activeProject) {
@@ -491,8 +611,12 @@ export class LarkBridgeService {
 					return;
 				}
 				const projectId = activeProject.id;
-				binding = await this.createAndStoreBinding(chatId, projectId);
-				console.log("[LarkBridgeService] Created session", binding.sessionId, "for chat", chatId);
+				binding = await this.createAndStoreBinding(appId, chatId, projectId, {
+					chatType: msg.chatType,
+					senderOpenId: msg.senderId,
+					peerName: msg.senderName,
+				});
+				console.log("[LarkBridgeService] Created session", binding.sessionId, "for chat", chatId, "appId:", appId);
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				console.error("[LarkBridgeService] Failed to create agent:", errorMsg);
@@ -501,6 +625,8 @@ export class LarkBridgeService {
 				});
 				return;
 			}
+		} else {
+			this.backfillBindingMetadata(binding, appId, msg);
 		}
 
 		const sessionId = binding.sessionId;
@@ -510,11 +636,12 @@ export class LarkBridgeService {
 		if (!acc || acc.done) {
 			acc = this.replyPresenter.createAccumulator(sessionId, text);
 			this.replyAccumulators.set(sessionId, acc);
+			this.accumulatorAppIds.set(sessionId, appId);
 		} else {
 			acc.userText = text;
 		}
 
-		// 使用 channel.stream() 发送流式卡片
+		// 使用 channel.stream() 发送流式卡片（固定走接收到消息的 bot 的连接）
 		try {
 			await channel.stream(chatId, {
 				card: {

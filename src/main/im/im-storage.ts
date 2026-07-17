@@ -17,6 +17,14 @@ export interface ChatBinding {
 	sessionId: string;
 	projectId: string;
 	createdAt: number;
+	/** 产生该绑定的渠道（机器人）。旧数据可能缺失，解析时会自愈回填。 */
+	appId?: string;
+	/** p2p = 与某个用户的私聊；group = 群聊。 */
+	chatType?: "p2p" | "group";
+	/** 私聊对端的 open_id（消息发送者）。 */
+	senderOpenId?: string;
+	/** 私聊对端姓名（消息发送者）。 */
+	peerName?: string;
 }
 
 const BINDINGS_FILE = path.join(getLookDir(), "im-bindings.json");

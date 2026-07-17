@@ -19,12 +19,12 @@ Select **Scheduled Tasks** near the bottom of the left sidebar, directly above *
 1. Select **New task**.
 2. Choose **Run once**, **Every day**, **Every week**, or **Every month**, then select the date/day and time shown for that frequency.
 3. Choose one of the models currently connected in Look.
-4. Optionally enable **IM notification** and select a conversation that has already messaged the connected bot.
+4. Optionally enable **IM notification** and select a bot channel. The result is pushed through that bot's private (p2p) conversation with you, so message the bot privately once in Feishu/Lark first.
 5. Enter the agent prompt. Use `{{name}}` placeholders for values in the Parameters JSON object.
 6. Set retry attempts and initial retry delay.
-7. Select **Test task** to execute the current draft immediately without saving or enabling its schedule. The result appears in the editor and is also retained in the execution log. A test performs one attempt; it does not consume the configured retry budget or trigger the final-failure system alert. If IM notification is enabled, the test also verifies delivery.
+7. Select **Test task** to execute the current draft immediately without saving or enabling its schedule. The result appears in the editor and is also retained in the execution log — when testing from an existing task's editor, the log is filed under that task's history. A test performs one attempt; it does not consume the configured retry budget or trigger the final-failure system alert. If IM notification is enabled, the test also verifies delivery.
 8. Save. New tasks are deliberately created in `paused` state so they can be reviewed.
-9. Select **Start** to enable the plan. **Run now** executes an already saved task immediately with its normal retry policy.
+9. Select **Start** to enable the plan. **Run now** executes an already saved task immediately with its normal retry policy; for a one-time plan this consumes the plan, so its scheduled time will not fire again.
 
 Editing an active task replaces its cron schedule immediately; Look does not need to restart. Pausing prevents future cron triggers but lets an already running attempt finish. Deleting a task cancels an active run and removes the definition. Historical logs remain until they age out of the retained log window.
 
@@ -40,7 +40,7 @@ Editing an active task replaces its cron schedule immediately; Look does not nee
 | `prompt` | yes | Agent instruction. `{{key}}` is replaced from `parameters`. |
 | `parameters` | no | String-to-string JSON object. Unknown placeholders are left unchanged. |
 | `model` | yes in the UI | Connected model key in `provider/model-id` form. |
-| `notification` | no | Feishu/Lark target chat and enabled state for final success/failure messages. |
+| `notification` | no | Feishu/Lark notification config. `channelAppId` selects the bot channel; the result is delivered through that bot's private conversation with the user, resolved from the IM bindings at validation and send time. `targetChatId` is the legacy raw-chat target kept for tasks saved before the channel model. Saving is rejected when the selected bot has no private conversation with the user (skipped while IM is unavailable). |
 | `retry.maxAttempts` | no | Total attempts including the first, 1–20; default `3`. |
 | `retry.initialDelayMs` | no | Delay before the first retry; default `5000`. |
 | `retry.backoffMultiplier` | no | Exponential backoff multiplier; default `2`. |
@@ -72,7 +72,7 @@ const created = await window.look.createScheduledTask({
   notification: {
     enabled: true,
     provider: "feishu",
-    targetChatId: "oc_example",
+    channelAppId: "cli_example",
   },
   retry: { maxAttempts: 3, initialDelayMs: 5000 },
 });
@@ -93,7 +93,7 @@ pauseScheduledTask(taskId)
 resumeScheduledTask(taskId)
 deleteScheduledTask(taskId)
 runScheduledTaskNow(taskId)
-testScheduledTask(input)
+testScheduledTask(input, taskId?)
 listScheduledTaskLogs(taskId?, limit?)
 validateCron(expression, timezone?)
 ```
@@ -123,7 +123,7 @@ The newest 2,000 logs are retained, and an individual query is capped at 1,000 r
 ## Restart and scale behavior
 
 - On startup, saved `scheduled` tasks are reinstalled automatically.
-- A run left as `running` or `retrying` is checked against its coordination lock. If the lock still has a live owner, Look leaves it alone. If the owner is gone, the run becomes `interrupted` and resumes at the next remaining attempt. Recurring schedules are reinstalled before that recovery starts, so future triggers continue. If no retry remains, Look alerts immediately; a consumed one-time plan is paused instead of remaining stuck as active.
+- A run left as `running` or `retrying` is checked against its coordination lock. If the lock still has a live owner, Look leaves it alone. If the owner is gone, the run becomes `interrupted` and resumes at the next remaining attempt; when several interrupted runs exist for one task, only the newest resumes so attempts are not consumed twice. Runs whose task no longer exists (deleted tasks, unsaved test drafts) are marked `interrupted` so they do not stay listed as running. Recurring schedules are reinstalled before that recovery starts, so future triggers continue. If no retry remains, Look alerts immediately; a consumed one-time plan is paused instead of remaining stuck as active.
 - Two Look processes using the same `LOOK_HOME` cannot execute the same task concurrently. Task/log writes use a separate cross-process storage lock so the losing `skipped` record cannot overwrite the winner's result.
 - For multiple machines, point every process at storage on a filesystem that provides atomic directory creation and atomic same-filesystem rename. If machines do not share `LOOK_HOME`, use a network/distributed lock and shared database implementation before treating the scheduler as a multi-host deployment.
 
@@ -135,7 +135,7 @@ Confirm that its status is Active, review its displayed next-run time, and check
 
 **IM notification cannot be enabled**
 
-Connect Feishu/Lark under Settings → IM Channels, then send the bot a message once. This creates a conversation binding that can be selected as the notification destination.
+Add the bot under Settings → IM Channels, then send it a private message once in Feishu/Lark. The private conversation created that way is what the scheduler pushes results to; saving a task is rejected until the bot has one.
 
 **The run is `skipped`**
 

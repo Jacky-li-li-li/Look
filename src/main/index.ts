@@ -3,7 +3,7 @@
 // ============================================================
 
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
-import type { MainToRendererEvent } from "@look/shared/types";
+import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
 import { app, BrowserWindow, Notification, session, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -67,19 +67,23 @@ if (process.env.SANDBOX_GPU_WORKAROUND === "1") {
 }
 
 function bootstrapLarkBridge(): void {
-	if (!runtimeManager || !larkChannelManager || !larkBridgeService || !larkChannelManager.getLarkChannel()) {
+	if (!runtimeManager || !larkChannelManager || !larkBridgeService) {
 		return;
 	}
 	try {
-		larkBridgeService.init(runtimeManager, larkChannelManager);
-		console.log("[Look] LarkBridgeService initialized");
+		// init 是幂等的，且不再要求已有活跃连接：启动时即加载绑定，
+		// 之后每个 bot 连接就绪时重复调用都是安全的。
+		if (larkBridgeService.init(runtimeManager, larkChannelManager)) {
+			console.log("[Look] LarkBridgeService initialized");
+		}
 	} catch (err) {
 		console.warn("[Look] Failed to initialize LarkBridgeService:", err);
 	}
 }
 
-function detachLarkBridge(): void {
-	larkBridgeService?.detachChannel();
+function detachLarkBridge(appId: string): void {
+	// 多连接模型：某个 bot 断开只影响该 bot 的在途回复
+	larkBridgeService?.detachChannel(appId);
 }
 
 // ============================================================
@@ -315,12 +319,29 @@ async function initSessionRuntime(): Promise<void> {
 	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
 	await runtimeManager.initAsync();
 	const schedulerOwnerId = `${process.pid}:${Date.now()}`;
+	// 通知目标解析：渠道（机器人）→ 该机器人与用户的私聊会话；
+	// legacy targetChatId 直接透传，并尽量补上所属渠道以便选择正确的发送凭据。
+	const resolveImNotificationTarget = async (
+		notification: ScheduledTaskNotification,
+	): Promise<{ chatId: string; channelAppId?: string } | null | undefined> => {
+		if (!larkBridgeService) return undefined;
+		if (notification.channelAppId) {
+			const binding = await larkBridgeService.resolveP2pBinding(notification.channelAppId);
+			return binding ? { chatId: binding.chatId, channelAppId: notification.channelAppId } : null;
+		}
+		if (notification.targetChatId) {
+			const appId = larkBridgeService.getBindings().find((b) => b.chatId === notification.targetChatId)?.appId;
+			return { chatId: notification.targetChatId, channelAppId: appId };
+		}
+		return null;
+	};
 	schedulerService = new SchedulerService({
 		store: new ScheduledTaskStore(getScheduledTasksPath()),
 		lock: new FileTaskLock(getScheduledTaskLocksDir(), schedulerOwnerId),
 		executor: new AgentScheduledTaskExecutor(runtimeManager),
 		ownerId: schedulerOwnerId,
 		getProjectInfo: (projectId) => runtimeManager!.getProjectInfo(projectId),
+		resolveNotificationTarget: resolveImNotificationTarget,
 		onAlert: ({ task, log }) => {
 			const body = `${task.name}: ${log.errorMessage ?? "Task failed after all retry attempts"}`;
 			safeSendEvent({ type: "error", message: body });
@@ -368,9 +389,12 @@ async function initSessionRuntime(): Promise<void> {
 					{ tag: "markdown" as const, content: resultContent },
 				],
 			};
-			const result = await larkChannelManager.sendTestMessage({
-				receiveIdType: "chat_id",
-				receiveId: notification.targetChatId,
+			const target = await resolveImNotificationTarget(notification);
+			if (target === undefined) throw new Error("IM bridge is not available");
+			if (!target) {
+				throw new Error("The selected bot has no private conversation with you yet; message it once in Feishu");
+			}
+			const result = await larkChannelManager.sendToChat(target.channelAppId, target.chatId, {
 				text,
 				card,
 			});
@@ -400,6 +424,10 @@ async function initSessionRuntime(): Promise<void> {
 		// 先注册 IPC handler，让 renderer 的 pull / push 都能被处理，
 		// 避免 restoreWorkspace 推送的 agent:list 在 renderer 还没准备好时丢失。
 		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager, larkBridgeService, schedulerService);
+
+		// 启动即初始化桥接（加载持久化绑定，供定时任务 IM 通知解析私聊会话），
+		// 不必等待某个 bot 连接就绪。
+		bootstrapLarkBridge();
 
 		// 2) 注册完 handler 后立即推送项目列表，让侧边栏先渲染。
 		const allProjects = runtimeManager.listProjects();

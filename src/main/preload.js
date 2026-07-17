@@ -57,7 +57,8 @@ const api = {
 	resumeScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:resume", taskId }),
 	deleteScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:delete", taskId }),
 	runScheduledTaskNow: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:run-now", taskId }),
-	testScheduledTask: (task) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:test", task }),
+	testScheduledTask: (task, taskId) =>
+		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:test", task, taskId }),
 	listScheduledTaskLogs: (taskId, limit) =>
 		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:logs", taskId, limit }),
 	validateCron: (cron, timezone) =>

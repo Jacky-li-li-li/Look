@@ -39,7 +39,8 @@ import { toast } from "sonner";
 import { activeAgentIdAtom, showScheduledTasksAtom } from "../../store/atoms";
 
 type ModelChoice = { provider: string; id: string; name: string };
-type ImBinding = { chatId: string; sessionId: string; projectId: string; createdAt: number };
+type ImChannel = { appId: string; name?: string; connected: boolean; enabled: boolean };
+type ImBinding = { chatId: string; sessionId: string; projectId: string; createdAt: number; appId?: string };
 
 type FormState = {
 	name: string;
@@ -53,7 +54,7 @@ type FormState = {
 	parameters: string;
 	model: string;
 	notifyIm: boolean;
-	notificationTarget: string;
+	notificationChannel: string;
 	maxAttempts: string;
 	initialDelaySeconds: string;
 };
@@ -80,7 +81,7 @@ function createEmptyForm(): FormState {
 		parameters: "{}",
 		model: "",
 		notifyIm: false,
-		notificationTarget: "",
+		notificationChannel: "",
 		maxAttempts: "3",
 		initialDelaySeconds: "5",
 	};
@@ -124,6 +125,11 @@ function statusBadgeStyle(status: ScheduledTaskRunLog["status"]): string {
 	if (status === "failed" || status === "interrupted") return "bg-destructive/10 text-destructive";
 	if (status === "running" || status === "retrying") return "bg-amber-500/10 text-amber-600 dark:text-amber-400";
 	return "bg-muted-foreground/10 text-muted-foreground";
+}
+
+function maskAppId(appId: string): string {
+	if (appId.length <= 8) return "****";
+	return `${appId.slice(0, 4)}****${appId.slice(-4)}`;
 }
 
 function EmptyTaskList() {
@@ -205,15 +211,26 @@ function TaskListItem({ task, selectedId, projects, describeSchedule, selectTask
 type TaskDetailProps = {
 	task: ScheduledTask;
 	projects: ProjectInfo[];
+	imChannels: ImChannel[];
 	describeSchedule: (task: ScheduledTask) => string;
 	busy: boolean;
 	openEdit: (task: ScheduledTask) => void;
 	act: (action: "start" | "pause" | "run" | "delete", task: ScheduledTask) => void;
 };
 
-function TaskDetail({ task, projects, describeSchedule, busy, openEdit, act }: TaskDetailProps) {
+function TaskDetail({ task, projects, imChannels, describeSchedule, busy, openEdit, act }: TaskDetailProps) {
 	const { t } = useTranslation();
 	const projectName = projects.find((p) => p.id === task.projectId)?.name ?? task.projectId;
+	const notificationTarget = (() => {
+		const notification = task.notification;
+		if (!notification?.enabled) return null;
+		if (notification.channelAppId) {
+			const channel = imChannels.find((c) => c.appId === notification.channelAppId);
+			return `${channel?.name || maskAppId(notification.channelAppId)} · ${t("scheduledTasks.imPrivateChat")}`;
+		}
+		// Legacy target: a raw chatId.
+		return notification.targetChatId ? `…${notification.targetChatId.slice(-8)}` : null;
+	})();
 	return (
 		<div className="mx-auto max-w-3xl space-y-6">
 			<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
@@ -318,11 +335,11 @@ function TaskDetail({ task, projects, describeSchedule, busy, openEdit, act }: T
 				)}
 			</div>
 
-			{task.notification?.enabled && (
+			{notificationTarget && (
 				<div className="flex items-center gap-2 rounded-lg border border-hairline bg-muted/15 px-3 py-2">
 					<BellRing className="size-3.5 shrink-0 text-muted-foreground" />
 					<span className="truncate text-[11px] text-muted-foreground">
-						{t("scheduledTasks.imEnabled")} · …{task.notification.targetChatId.slice(-8)}
+						{t("scheduledTasks.imEnabled")} · {notificationTarget}
 					</span>
 				</div>
 			)}
@@ -336,8 +353,7 @@ type TaskEditorProps = {
 	setForm: React.Dispatch<React.SetStateAction<FormState>>;
 	projects: ProjectInfo[];
 	models: ModelChoice[];
-	imBindings: ImBinding[];
-	imConnected: boolean;
+	imChannels: ImChannel[];
 	busy: boolean;
 	testing: boolean;
 	testResult: ScheduledTaskRunLog | null;
@@ -373,8 +389,7 @@ function TaskEditor({
 	setForm,
 	projects,
 	models,
-	imBindings,
-	imConnected,
+	imChannels,
 	busy,
 	testing,
 	testResult,
@@ -416,8 +431,8 @@ function TaskEditor({
 		(notifyIm: boolean) => setForm((prev) => ({ ...prev, notifyIm })),
 		[setForm],
 	);
-	const handleNotificationTargetChange = useCallback(
-		(notificationTarget: string) => setForm((prev) => ({ ...prev, notificationTarget })),
+	const handleNotificationChannelChange = useCallback(
+		(notificationChannel: string) => setForm((prev) => ({ ...prev, notificationChannel })),
 		[setForm],
 	);
 	const handlePromptChange = useCallback(
@@ -437,7 +452,7 @@ function TaskEditor({
 		[setForm],
 	);
 
-	const imDisabled = !form.notifyIm && (!imConnected || imBindings.length === 0);
+	const imDisabled = !form.notifyIm && imChannels.length === 0;
 
 	return (
 		<div className="mx-auto max-w-3xl space-y-6">
@@ -617,22 +632,24 @@ function TaskEditor({
 						/>
 					</div>
 					{form.notifyIm && (
-						<Select value={form.notificationTarget} onValueChange={handleNotificationTargetChange}>
-							<SelectTrigger className="mt-2">
-								<SelectValue placeholder={t("scheduledTasks.selectNotificationTarget")} />
-							</SelectTrigger>
-							<SelectContent>
-								{imBindings.map((binding) => (
-									<SelectItem key={binding.chatId} value={binding.chatId}>
-										{projects.find((project) => project.id === binding.projectId)?.name ??
-											t("scheduledTasks.imConversation")}{" "}
-										· …{binding.chatId.slice(-8)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						<>
+							<Select value={form.notificationChannel} onValueChange={handleNotificationChannelChange}>
+								<SelectTrigger className="mt-2">
+									<SelectValue placeholder={t("scheduledTasks.selectNotificationTarget")} />
+								</SelectTrigger>
+								<SelectContent>
+									{imChannels.map((channel) => (
+										<SelectItem key={channel.appId} value={channel.appId}>
+											{channel.name || maskAppId(channel.appId)}
+											{channel.connected ? "" : ` · ${t("scheduledTasks.imDisconnected")}`}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<p className="mt-2 text-[10px] text-muted-foreground">{t("scheduledTasks.imP2pHint")}</p>
+						</>
 					)}
-					{(!imConnected || imBindings.length === 0) && (
+					{imChannels.length === 0 && (
 						<p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400">
 							{t("scheduledTasks.imUnavailable")}
 						</p>
@@ -809,8 +826,8 @@ export default function ScheduledTasksPage() {
 	const [tasks, setTasks] = useState<ScheduledTask[]>([]);
 	const [projects, setProjects] = useState<ProjectInfo[]>([]);
 	const [models, setModels] = useState<ModelChoice[]>([]);
+	const [imChannels, setImChannels] = useState<ImChannel[]>([]);
 	const [imBindings, setImBindings] = useState<ImBinding[]>([]);
-	const [imConnected, setImConnected] = useState(false);
 	const [logs, setLogs] = useState<ScheduledTaskRunLog[]>([]);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [editingId, setEditingId] = useState<string | null>(null);
@@ -851,17 +868,17 @@ export default function ScheduledTasksPage() {
 		]);
 		if (taskResult.success) setTasks(taskResult.tasks);
 		const nextModels = modelResult.success ? modelResult.models : [];
-		const nextBindings = bindingResult.success ? (bindingResult.bindings ?? []) : [];
+		const nextChannels = channelResult.success ? (channelResult.channels ?? []) : [];
 		setModels(nextModels);
-		setImBindings(nextBindings);
-		setImConnected(channelResult.success && Boolean(channelResult.channels?.some((channel) => channel.connected)));
+		setImChannels(nextChannels);
+		setImBindings(bindingResult.success ? (bindingResult.bindings ?? []) : []);
 		if (projectResult.success) {
 			setProjects(projectResult.projects);
 			setForm((current) => ({
 				...current,
 				projectId: current.projectId || projectResult.projects[0]?.id || "",
 				model: current.model || (nextModels[0] ? `${nextModels[0].provider}/${nextModels[0].id}` : ""),
-				notificationTarget: current.notificationTarget || nextBindings[0]?.chatId || "",
+				notificationChannel: current.notificationChannel || nextChannels[0]?.appId || "",
 			}));
 		}
 	}, []);
@@ -887,7 +904,7 @@ export default function ScheduledTasksPage() {
 			...createEmptyForm(),
 			projectId: projects[0]?.id ?? "",
 			model: models[0] ? `${models[0].provider}/${models[0].id}` : "",
-			notificationTarget: imBindings[0]?.chatId ?? "",
+			notificationChannel: imChannels[0]?.appId ?? "",
 		});
 		setSelectedId(null);
 		setShowEditor(true);
@@ -897,6 +914,11 @@ export default function ScheduledTasksPage() {
 		setTestResult(null);
 		const schedule = scheduleForTask(task);
 		const runAt = schedule.kind === "once" ? new Date(schedule.runAt) : null;
+		// Channel-based notifications prefill directly; legacy chatId targets are
+		// mapped back to their channel via the binding metadata when possible.
+		const legacyChannel = task.notification?.targetChatId
+			? imBindings.find((binding) => binding.chatId === task.notification?.targetChatId)?.appId
+			: undefined;
 		setEditingId(task.id);
 		setForm({
 			name: task.name,
@@ -913,7 +935,7 @@ export default function ScheduledTasksPage() {
 			parameters: JSON.stringify(task.parameters, null, 2),
 			model: task.model ?? "",
 			notifyIm: task.notification?.enabled ?? false,
-			notificationTarget: task.notification?.targetChatId ?? "",
+			notificationChannel: task.notification?.channelAppId ?? legacyChannel ?? imChannels[0]?.appId ?? "",
 			maxAttempts: String(task.retry.maxAttempts),
 			initialDelaySeconds: String(task.retry.initialDelayMs / 1_000),
 		});
@@ -992,7 +1014,7 @@ export default function ScheduledTasksPage() {
 			toast.error(t("scheduledTasks.modelRequired"));
 			return null;
 		}
-		if (form.notifyIm && !form.notificationTarget) {
+		if (form.notifyIm && !form.notificationChannel) {
 			toast.error(t("scheduledTasks.notificationTargetRequired"));
 			return null;
 		}
@@ -1019,7 +1041,7 @@ export default function ScheduledTasksPage() {
 			notification: {
 				enabled: form.notifyIm,
 				provider: "feishu",
-				targetChatId: form.notificationTarget,
+				channelAppId: form.notificationChannel || undefined,
 			},
 			retry: {
 				maxAttempts,
@@ -1053,7 +1075,7 @@ export default function ScheduledTasksPage() {
 		setTesting(true);
 		setTestResult(null);
 		try {
-			const result = await window.look.testScheduledTask(input);
+			const result = await window.look.testScheduledTask(input, editingId ?? undefined);
 			if (!result.success) throw new Error(result.error);
 			setTestResult(result.log);
 			if (result.log.status === "success") toast.success(t("scheduledTasks.testSuccess"));
@@ -1224,8 +1246,7 @@ export default function ScheduledTasksPage() {
 								setForm={updateForm}
 								projects={projects}
 								models={models}
-								imBindings={imBindings}
-								imConnected={imConnected}
+								imChannels={imChannels}
 								busy={busy}
 								testing={testing}
 								testResult={testResult}
@@ -1238,6 +1259,7 @@ export default function ScheduledTasksPage() {
 								<TaskDetail
 									task={selected}
 									projects={projects}
+									imChannels={imChannels}
 									describeSchedule={describeSchedule}
 									busy={busy}
 									openEdit={openEdit}

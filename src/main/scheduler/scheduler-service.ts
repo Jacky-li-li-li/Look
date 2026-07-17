@@ -3,6 +3,7 @@ import type {
 	ProjectInfo,
 	ScheduledTask,
 	ScheduledTaskInput,
+	ScheduledTaskNotification,
 	ScheduledTaskRetryPolicy,
 	ScheduledTaskRunLog,
 	ScheduledTaskSchedule,
@@ -37,6 +38,17 @@ export interface SchedulerServiceOptions {
 	ownerId?: string;
 	/** Project lookup used to validate task projectIds and pause tasks whose project was removed. */
 	getProjectInfo: (projectId: string) => ProjectInfo | null | undefined;
+	/**
+	 * Resolve the deliverable chat target for a notification config: a
+	 * channel-based notification is mapped to the bot's p2p conversation with
+	 * the user, a legacy targetChatId passes through. Return null when the
+	 * target cannot be resolved (e.g. the user never messaged the bot
+	 * privately); return undefined when IM is unavailable and validation must
+	 * be skipped instead of blocking the save.
+	 */
+	resolveNotificationTarget?: (
+		notification: ScheduledTaskNotification,
+	) => Promise<{ chatId: string; channelAppId?: string } | null | undefined>;
 	onAlert?: (alert: ScheduledTaskAlert) => void | Promise<void>;
 	onFinished?: (event: ScheduledTaskAlert) => void | Promise<void>;
 }
@@ -146,14 +158,29 @@ export class SchedulerService {
 				const recoverable = new Map<string, ScheduledTaskRunLog>();
 				for (const unfinished of this.options.store.listUnfinishedLogs()) {
 					const task = this.options.store.getTask(unfinished.taskId);
-					if (!task) continue;
-					const leaseMs = task.executionTimeoutMs + task.retry.maxAttempts * task.retry.maxDelayMs + 60_000;
-					const recoveryLock = await this.options.lock.acquire(task.id, leaseMs);
+					if (!task) {
+						// Orphaned run (task deleted, or a test draft that was never saved):
+						// close it out so it does not stay "running" in the log forever.
+						await this.options.store.markInterrupted(unfinished.id);
+						continue;
+					}
+					const recoveryLock = await this.options.lock.acquire(task.id, this.leaseMsFor(task));
 					// A live owner means another expanded node is still executing this run.
 					if (!recoveryLock) continue;
 					const interrupted = await this.options.store.markInterrupted(unfinished.id);
 					await recoveryLock.release();
-					if (interrupted) recoverable.set(interrupted.taskId, interrupted);
+					if (!interrupted) continue;
+					// Several crashes in a row can leave multiple unfinished logs for one
+					// task. Only the newest one resumes the retry chain; older ones stay
+					// interrupted so attempts are not consumed twice.
+					const previous = recoverable.get(interrupted.taskId);
+					if (
+						!previous ||
+						interrupted.attempt > previous.attempt ||
+						(interrupted.attempt === previous.attempt && interrupted.scheduledAt > previous.scheduledAt)
+					) {
+						recoverable.set(interrupted.taskId, interrupted);
+					}
 				}
 
 				for (const task of this.options.store.listTasks()) {
@@ -180,8 +207,9 @@ export class SchedulerService {
 						} else if (interrupted && isDue) {
 							// Recovery is started below. Do not also launch the overdue plan.
 						} else if (isDue) {
-							void this.startExecution(task.id, new Date(task.schedule.runAt)).finally(() =>
-								this.completeOneTime(task.id),
+							const runAt = task.schedule.runAt;
+							void this.startExecution(task.id, new Date(runAt)).finally(() =>
+								this.completeOneTime(task.id, runAt),
 							);
 						} else {
 							await this.installSchedule(task);
@@ -199,7 +227,9 @@ export class SchedulerService {
 					if (task?.status !== "scheduled") continue;
 					if (log.attempt < task.retry.maxAttempts) {
 						const recovery = this.startExecution(task.id, new Date(log.scheduledAt), log.attempt + 1);
-						if (task.schedule?.kind === "once") void recovery.finally(() => this.completeOneTime(task.id));
+						if (task.schedule?.kind === "once") {
+							void recovery.finally(() => this.completeOneTime(task.id, log.scheduledAt));
+						}
 					} else {
 						await this.alertFailure(task, log);
 						await this.notifyFinished(task, log);
@@ -245,6 +275,7 @@ export class SchedulerService {
 
 	async create(input: ScheduledTaskInput): Promise<ScheduledTask> {
 		const task = this.buildTask(input);
+		await this.assertNotificationTarget(input);
 		await this.options.store.upsertTask(task);
 		return task;
 	}
@@ -266,6 +297,7 @@ export class SchedulerService {
 		};
 		const cronExpression = this.resolveCron(mergedInput);
 		this.assertInput(mergedInput, cronExpression);
+		await this.assertNotificationTarget(mergedInput);
 		const updated: ScheduledTask = {
 			...current,
 			...mergedInput,
@@ -288,8 +320,9 @@ export class SchedulerService {
 		if (updated.status === "scheduled") {
 			if (updated.schedule?.kind === "once" && new Date(updated.schedule.runAt).getTime() <= Date.now()) {
 				await this.removeSchedule(updated.id);
-				void this.startExecution(updated.id, new Date(updated.schedule.runAt)).finally(() =>
-					this.completeOneTime(updated.id),
+				const runAt = updated.schedule.runAt;
+				void this.startExecution(updated.id, new Date(runAt)).finally(() =>
+					this.completeOneTime(updated.id, runAt),
 				);
 			} else {
 				await this.installSchedule(updated);
@@ -306,9 +339,8 @@ export class SchedulerService {
 		const updated = { ...task, status: "scheduled" as const, updatedAt: new Date().toISOString() };
 		if (updated.schedule?.kind === "once" && new Date(updated.schedule.runAt).getTime() <= Date.now()) {
 			await this.options.store.upsertTask(updated);
-			void this.startExecution(updated.id, new Date(updated.schedule.runAt)).finally(() =>
-				this.completeOneTime(updated.id),
-			);
+			const runAt = updated.schedule.runAt;
+			void this.startExecution(updated.id, new Date(runAt)).finally(() => this.completeOneTime(updated.id, runAt));
 		} else {
 			await this.installSchedule(updated);
 			await this.options.store.upsertTask(this.withNextRun(updated));
@@ -371,13 +403,18 @@ export class SchedulerService {
 				);
 			}
 		}
-		void this.startExecution(taskId, new Date());
+		const execution = this.startExecution(taskId, new Date());
+		// A manual run of a one-time plan consumes it; the timer must not fire again later.
+		if (task.schedule?.kind === "once") {
+			const runAt = task.schedule.runAt;
+			void execution.finally(() => this.completeOneTime(taskId, runAt));
+		}
 		return { accepted: true };
 	}
 
 	/** Execute an unsaved draft once and return its final persisted test log. */
-	async test(input: ScheduledTaskInput): Promise<ScheduledTaskTestResult> {
-		const execution = this.executeTest(input);
+	async test(input: ScheduledTaskInput, taskId?: string): Promise<ScheduledTaskTestResult> {
+		const execution = this.executeTest(input, taskId);
 		this.runPromises.add(execution);
 		try {
 			return await execution;
@@ -386,9 +423,12 @@ export class SchedulerService {
 		}
 	}
 
-	private async executeTest(input: ScheduledTaskInput): Promise<ScheduledTaskTestResult> {
+	private async executeTest(input: ScheduledTaskInput, taskId?: string): Promise<ScheduledTaskTestResult> {
 		if (this.disposed) throw new Error("Scheduler service has been disposed");
 		const task = this.buildTask(input);
+		await this.assertNotificationTarget(input);
+		// File the test run under the existing task so it appears in that task's history.
+		if (taskId && this.options.store.getTask(taskId)) task.id = taskId;
 		const controller = new AbortController();
 		const startedAt = new Date().toISOString();
 		const log: ScheduledTaskRunLog = {
@@ -495,7 +535,7 @@ export class SchedulerService {
 				}
 				const current = this.options.store.getTask(task.id);
 				if (current?.status !== "scheduled") return;
-				void this.startExecution(task.id, new Date(runAt)).finally(() => this.completeOneTime(task.id));
+				void this.startExecution(task.id, new Date(runAt)).finally(() => this.completeOneTime(task.id, runAt));
 			},
 			Math.max(0, Math.min(remaining, MAX_TIMER_DELAY_MS)),
 		);
@@ -503,15 +543,23 @@ export class SchedulerService {
 		this.oneTimeTimers.set(task.id, timer);
 	}
 
-	private async completeOneTime(taskId: string): Promise<void> {
+	private async completeOneTime(taskId: string, expectedRunAt?: string): Promise<void> {
 		const task = this.options.store.getTask(taskId);
 		if (!task || task.schedule?.kind !== "once") return;
+		// The plan changed while this run was in flight (e.g. the user edited runAt);
+		// completing now would silently discard the new schedule and its timer.
+		if (expectedRunAt && new Date(task.schedule.runAt).getTime() !== new Date(expectedRunAt).getTime()) return;
 		task.status = "paused";
 		task.scheduleCompletedAt = new Date().toISOString();
 		task.nextRunAt = undefined;
 		task.updatedAt = new Date().toISOString();
 		await this.options.store.upsertTask(task);
 		await this.removeSchedule(taskId);
+	}
+
+	/** Worst-case duration of one full run: one timeout per attempt plus retry delays. */
+	private leaseMsFor(task: ScheduledTask): number {
+		return task.retry.maxAttempts * (task.executionTimeoutMs + task.retry.maxDelayMs) + 60_000;
 	}
 
 	private startExecution(taskId: string, scheduledAt: Date, startAttempt = 1): Promise<void> {
@@ -571,7 +619,7 @@ export class SchedulerService {
 				return;
 			}
 		}
-		const leaseMs = task.executionTimeoutMs + task.retry.maxAttempts * task.retry.maxDelayMs + 60_000;
+		const leaseMs = this.leaseMsFor(task);
 		const lock = await this.options.lock.acquire(taskId, leaseMs);
 		if (!lock) {
 			const now = new Date().toISOString();
@@ -772,7 +820,11 @@ export class SchedulerService {
 			throw new Error("Task parameters must be a string-to-string object");
 		}
 		if (input.model !== undefined && !input.model.trim()) throw new Error("Task model cannot be empty");
-		if (input.notification?.enabled && !input.notification.targetChatId.trim()) {
+		if (
+			input.notification?.enabled &&
+			!input.notification.channelAppId?.trim() &&
+			!input.notification.targetChatId?.trim()
+		) {
 			throw new Error("IM notification target is required");
 		}
 		if (input.notification && input.notification.provider !== "feishu") {
@@ -782,6 +834,23 @@ export class SchedulerService {
 		if (!validation.valid) throw new Error(validation.error ?? "Invalid cron expression");
 		if (input.executionTimeoutMs !== undefined && !Number.isFinite(input.executionTimeoutMs)) {
 			throw new Error("Execution timeout must be a finite number");
+		}
+	}
+
+	/**
+	 * Verify an enabled notification can actually be delivered: the selected bot
+	 * must have a private conversation with the user. Legacy chatId targets and
+	 * an unavailable IM bridge pass through.
+	 */
+	private async assertNotificationTarget(input: ScheduledTaskInput): Promise<void> {
+		const notification = input.notification;
+		if (!notification?.enabled || !this.options.resolveNotificationTarget) return;
+		const resolved = await this.options.resolveNotificationTarget(notification);
+		if (resolved === null) {
+			throw new Error(
+				"The selected bot has no private conversation with you yet; " +
+					"message it once in Feishu, then enable IM notification",
+			);
 		}
 	}
 }

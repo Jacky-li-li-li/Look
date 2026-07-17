@@ -137,9 +137,13 @@ export class ProjectService {
 			let project = projectByCwd.get(canonicalCwd);
 			let isOrphan = false;
 			if (!project) {
+				// A migrated workspace dir is named after its projectId (8-hex),
+				// which is meaningless as a display name — fall back to the
+				// cwd basename so a lost projects.json recovers readable names.
+				const recoveredName = /^[0-9a-f]{8}$/.test(name) ? path.basename(canonicalCwd) || name : name;
 				project = {
 					id: uuidv4().slice(0, 8),
-					name,
+					name: recoveredName,
 					cwd: canonicalCwd,
 					createdAt: Date.now(),
 					valid: true,
@@ -148,7 +152,7 @@ export class ProjectService {
 				projectByCwd.set(canonicalCwd, project);
 				isOrphan = true;
 				changed = true;
-				console.log(`[Look] Recovered orphaned project "${name}" (cwd: ${canonicalCwd})`);
+				console.log(`[Look] Recovered orphaned project "${recoveredName}" (cwd: ${canonicalCwd})`);
 			}
 
 			const targetDir = getWorkspaceDir(project.id);

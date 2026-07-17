@@ -53,6 +53,19 @@ function statusBadgeVariant(status: ImChannelInfo["status"]): "default" | "secon
 	}
 }
 
+function statusBadgeKey(status: ImChannelInfo["status"]): string {
+	switch (status) {
+		case "connected":
+			return "settings.feishuConnected";
+		case "connecting":
+			return "settings.feishuConnecting";
+		case "error":
+			return "settings.imConnectionError";
+		default:
+			return "settings.imDisconnected";
+	}
+}
+
 function _parseQrSvg(svg: string): { viewBox?: string; nodes: ReactNode[] } | null {
 	try {
 		const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
@@ -305,11 +318,7 @@ function ChannelCard({
 					<div className="flex items-center gap-2">
 						<span className="text-sm font-medium">{channel.name || t("settings.feishu")}</span>
 						<Badge variant={statusBadgeVariant(channel.status)} className="h-4 px-1.5 text-[9px]">
-							{channel.status === "connected"
-								? t("settings.feishuConnected")
-								: channel.status === "connecting"
-									? t("settings.feishuConnecting")
-									: t("settings.imConnectionError")}
+							{t(statusBadgeKey(channel.status))}
 						</Badge>
 					</div>
 					<div className="mt-0.5 font-mono text-[10px] text-muted-foreground">{maskAppId(channel.appId)}</div>
@@ -417,11 +426,7 @@ function ChannelDetailPanel({
 				<div className="flex justify-between">
 					<span className="text-muted-foreground">{t("settings.status")}</span>
 					<Badge variant={statusBadgeVariant(channel.status)} className="h-4 px-1.5 text-[9px]">
-						{channel.status === "connected"
-							? t("settings.feishuConnected")
-							: channel.status === "connecting"
-								? t("settings.feishuConnecting")
-								: t("settings.imConnectionError")}
+						{t(statusBadgeKey(channel.status))}
 					</Badge>
 				</div>
 				{channel.error && (

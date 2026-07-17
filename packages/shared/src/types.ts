@@ -643,7 +643,17 @@ export type ScheduledTaskSchedule =
 export interface ScheduledTaskNotification {
 	enabled: boolean;
 	provider: "feishu";
-	targetChatId: string;
+	/**
+	 * Target bot channel (appId). The result is pushed through this bot's
+	 * private (p2p) conversation with the user, resolved at send time from the
+	 * IM bindings. New tasks should always set this.
+	 */
+	channelAppId?: string;
+	/**
+	 * Legacy target: a raw chatId chosen from bound conversations. Kept so
+	 * tasks saved before the channel-based model keep working.
+	 */
+	targetChatId?: string;
 }
 
 export interface ScheduledTask {
@@ -730,7 +740,7 @@ export type RendererToMainEvent =
 	| { type: "scheduled-task:resume"; taskId: string }
 	| { type: "scheduled-task:delete"; taskId: string }
 	| { type: "scheduled-task:run-now"; taskId: string }
-	| { type: "scheduled-task:test"; task: ScheduledTaskInput }
+	| { type: "scheduled-task:test"; task: ScheduledTaskInput; taskId?: string }
 	| { type: "scheduled-task:logs"; taskId?: string; limit?: number }
 	| { type: "scheduled-task:validate-cron"; cron: string; timezone?: string }
 	| { type: "settings:get" }
@@ -876,6 +886,8 @@ export type RendererToMainEvent =
 	| { type: "workspace:stat"; projectId: string; relativePath: string }
 	| { type: "workspace:watch"; projectId: string; relativePath: string }
 	| { type: "workspace:unwatch"; projectId: string; relativePath: string }
+	// ---- File content reading (renderer → main) ----
+	| { type: "file:read"; path: string }
 	// ---- Permission events (renderer → main) ----
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
 	| { type: "permission:get-mode"; agentId: string }

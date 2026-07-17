@@ -43,3 +43,10 @@ Type: trap
 - pi `AgentMessage` objects do not have persisted entry IDs. JSONL entry IDs come from `SessionManager` entries.
 - Streaming IPC IDs are explicitly transport-only and must be replaced by rebuilt SessionManager history after the turn.
 - Copy readonly queue arrays with spread before storing them in mutable renderer state.
+
+## Testing isolation
+Type: rule
+
+- vitest runs every test file with a per-file throwaway `LOOK_HOME` (`test/setup-look-home.ts`). Tests must never read or write the real `~/.look`; a static import chain alone is enough to bind `look-storage.ts`'s module-cached `LOOK_DIR` to the real home and wipe `projects.json`.
+- Tests needing a specific home must `vi.stubEnv("LOOK_HOME", dir)` + `vi.resetModules()` in `beforeEach`, then dynamic-import the modules under test (reference: `test/main/project-service-migration.test.ts`).
+- Built-in agents exist in `<LOOK_HOME>/agents/marketplace/` only after `syncLookDefaultAgents(projectDir)` runs; tests that call `discoverAgents` must seed them first.

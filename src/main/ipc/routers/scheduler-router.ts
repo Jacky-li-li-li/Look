@@ -48,7 +48,8 @@ export const schedulerRouter: IpcRouter = (ctx, register) => {
 
 	register("scheduled-task:test", async (data) => {
 		await ctx.schedulerService.waitUntilInitialized();
-		return { success: true, ...(await ctx.schedulerService.test(data.task)) };
+		const taskId = data.taskId === undefined ? undefined : guardString(data.taskId, "taskId");
+		return { success: true, ...(await ctx.schedulerService.test(data.task, taskId)) };
 	});
 
 	register("scheduled-task:logs", async (data) => {

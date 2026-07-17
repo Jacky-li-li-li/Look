@@ -50,6 +50,11 @@ const larkMocks = vi.hoisted(() => {
 				message: {
 					create: vi.fn().mockResolvedValue({ data: { message_id: "sent_message" } }),
 				},
+				chat: {
+					// Tests override per scenario; default behaves like a bot that
+					// cannot read the chat (Feishu rejects with an error).
+					get: vi.fn().mockRejectedValue(new Error("chat not found")),
+				},
 			},
 		},
 	}));
@@ -144,14 +149,18 @@ function writeChannels(channels: unknown): void {
 	writeFileSync(join(mocks.lookDir, "im-channels.json"), JSON.stringify(channels));
 }
 
+function writeBindings(bindings: unknown): void {
+	writeFileSync(join(mocks.lookDir, "im-bindings.json"), JSON.stringify(bindings));
+}
+
 function readChannels(): unknown {
 	return JSON.parse(readFileSync(join(mocks.lookDir, "im-channels.json"), "utf8"));
 }
 
-function sampleMessage(content = "hello"): NormalizedMessage {
+function sampleMessage(content = "hello", chatId = "chat_1"): NormalizedMessage {
 	return {
 		messageId: `msg_${Math.random().toString(36).slice(2)}`,
-		chatId: "chat_1",
+		chatId,
 		chatType: "p2p" as any,
 		senderId: "user_open_id",
 		senderName: "User",
@@ -413,15 +422,22 @@ describe("LarkChannelManager", () => {
 		expect(updated[0].enabled).toBe(true);
 	});
 
-	it("prevents duplicate channel clients when connect is called twice", async () => {
+	it("reconnects the same appId cleanly and keeps different channels connected at the same time", async () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		await manager.connect({ appId: "cli_first", appSecret: "secret" });
-		const firstDisconnect = larkMocks.channels[0].disconnect;
-		await manager.connect({ appId: "cli_second", appSecret: "secret" });
-
+		// Same appId again: the old connection is closed before the new one —
+		// never two clients for one appId.
+		await manager.connect({ appId: "cli_first", appSecret: "secret" });
 		expect(larkMocks.createLarkChannel).toHaveBeenCalledTimes(2);
-		expect(firstDisconnect).toHaveBeenCalledTimes(1);
-		expect(larkMocks.channels[1].connect).toHaveBeenCalledTimes(1);
+		expect(larkMocks.channels[0].disconnect).toHaveBeenCalledTimes(1);
+		expect(manager.getConnectedAppIds()).toEqual(["cli_first"]);
+
+		// A different appId gets its own connection; the first one stays alive.
+		await manager.connect({ appId: "cli_second", appSecret: "secret" });
+		expect(larkMocks.createLarkChannel).toHaveBeenCalledTimes(3);
+		expect(larkMocks.channels[1].disconnect).not.toHaveBeenCalled();
+		expect(larkMocks.channels[2].connect).toHaveBeenCalledTimes(1);
+		expect(manager.getConnectedAppIds().sort()).toEqual(["cli_first", "cli_second"]);
 	});
 
 	it("uses Lark domain when tenantBrand is lark", async () => {
@@ -746,5 +762,360 @@ describe("LarkChannelManager", () => {
 		const sentText = larkMocks.channels[0].send.mock.calls[0]?.[1]?.text;
 		expect(sentText).toContain("已新建项目并切换");
 		expect(sentText).toContain("New App");
+	});
+
+	it("keeps other channels enabled when a manual connect succeeds", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		writeChannels([
+			{
+				provider: "feishu" as const,
+				appId: "cli_old",
+				appSecretEncrypted: Buffer.from("enc:old").toString("base64"),
+				name: "Old",
+				enabled: true,
+				createdAt: Date.now(),
+			},
+		]);
+
+		await manager.connectManual({ appId: "cli_new", appSecret: "secret" });
+
+		const channels = readChannels() as Array<{ appId: string; enabled: boolean }>;
+		expect(channels.find((c) => c.appId === "cli_new")?.enabled).toBe(true);
+		expect(channels.find((c) => c.appId === "cli_old")?.enabled).toBe(true);
+	});
+
+	it("reconnect keeps the other saved channels' enabled state", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		writeChannels([
+			{
+				provider: "feishu" as const,
+				appId: "cli_a",
+				appSecretEncrypted: Buffer.from("enc:a").toString("base64"),
+				name: "A",
+				enabled: true,
+				createdAt: Date.now(),
+			},
+			{
+				provider: "feishu" as const,
+				appId: "cli_b",
+				appSecretEncrypted: Buffer.from("enc:b").toString("base64"),
+				name: "B",
+				enabled: false,
+				createdAt: Date.now(),
+			},
+		]);
+
+		await manager.reconnect("feishu", "cli_b");
+
+		const channels = readChannels() as Array<{ appId: string; enabled: boolean }>;
+		expect(channels.find((c) => c.appId === "cli_a")?.enabled).toBe(true);
+		expect(channels.find((c) => c.appId === "cli_b")?.enabled).toBe(true);
+	});
+
+	it("tracks connection status per channel when multiple bots connect", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		writeChannels([
+			{
+				provider: "feishu" as const,
+				appId: "cli_live",
+				appSecretEncrypted: Buffer.from("enc:live").toString("base64"),
+				name: "Live",
+				enabled: true,
+				createdAt: Date.now(),
+			},
+			{
+				provider: "feishu" as const,
+				appId: "cli_idle",
+				appSecretEncrypted: Buffer.from("enc:idle").toString("base64"),
+				name: "Idle",
+				enabled: false,
+				createdAt: Date.now(),
+			},
+		]);
+
+		await manager.reconnect("feishu", "cli_live");
+
+		let items = manager.getChannels();
+		expect(items.find((c) => c.appId === "cli_live")).toMatchObject({ status: "connected", connected: true });
+		expect(items.find((c) => c.appId === "cli_idle")).toMatchObject({ status: "disconnected", connected: false });
+
+		// The second channel connects independently; both stay online.
+		await manager.reconnect("feishu", "cli_idle");
+
+		items = manager.getChannels();
+		expect(items.find((c) => c.appId === "cli_live")).toMatchObject({ status: "connected", connected: true });
+		expect(items.find((c) => c.appId === "cli_idle")).toMatchObject({ status: "connected", connected: true });
+	});
+
+	it("sends to a chat through an ad-hoc client for a channel that is not connected", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		writeChannels([
+			{
+				provider: "feishu" as const,
+				appId: "cli_sender",
+				appSecretEncrypted: Buffer.from("enc:sender").toString("base64"),
+				name: "Sender",
+				enabled: false,
+				tenantBrand: "lark" as const,
+				createdAt: Date.now(),
+			},
+		]);
+
+		const result = await manager.sendToChat("cli_sender", "oc_chat", { text: "hello" });
+
+		expect(result.success).toBe(true);
+		// A new ad-hoc Client was constructed from the stored credentials.
+		const clientCalls = larkMocks.Client.mock.calls.filter((call: any[]) => call[0]?.appId === "cli_sender");
+		expect(clientCalls.length).toBeGreaterThan(0);
+		expect(clientCalls[0][0].domain).toBe(larkMocks.Domain.Lark);
+		const adHocClient = manager.getClient("cli_sender") as ReturnType<typeof larkMocks.Client>;
+		expect(adHocClient.im.v1.message.create).toHaveBeenCalledTimes(1);
+	});
+
+	it("sendToChat fails cleanly for an unknown channel", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const result = await manager.sendToChat("cli_missing", "oc_chat", { text: "hello" });
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("not available");
+	});
+
+	it("captures chat metadata on new bindings and resolves the p2p conversation for a channel", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock();
+		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+
+		await manager.connectManual({ appId: "cli_bot", appSecret: "secret" });
+		await larkMocks.channels[0].emit("message", sampleMessage("hello agent"));
+		await flushAsync();
+
+		const binding = bridge.getBindings()[0];
+		expect(binding).toMatchObject({
+			chatId: "chat_1",
+			appId: "cli_bot",
+			chatType: "p2p",
+			senderOpenId: "user_open_id",
+			peerName: "User",
+		});
+
+		const resolved = await bridge.resolveP2pBinding("cli_bot");
+		expect(resolved?.chatId).toBe("chat_1");
+		// A different channel has no conversation yet.
+		expect(await bridge.resolveP2pBinding("cli_other")).toBeNull();
+	});
+
+	it("keeps chat metadata when the session is recreated with /new", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock();
+		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+
+		await manager.connectManual({ appId: "cli_bot", appSecret: "secret" });
+		await larkMocks.channels[0].emit("message", sampleMessage("hello agent"));
+		await flushAsync();
+		await larkMocks.channels[0].emit("message", sampleMessage("/new"));
+		await flushAsync();
+
+		expect(runtime.createAgent).toHaveBeenCalledTimes(2);
+		const binding = bridge.getBindings()[0];
+		expect(binding.sessionId).toBe("session_2");
+		expect(binding).toMatchObject({ appId: "cli_bot", chatType: "p2p", senderOpenId: "user_open_id" });
+	});
+
+	it("keeps separate p2p bindings per bot with concurrent connections", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock();
+		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionClosed = (appId) => bridge.detachChannel(appId);
+
+		// Bot A goes live first and the user messages it.
+		await manager.connectManual({ appId: "cli_bot_a", appSecret: "secret_a", name: "Bot A" });
+		await larkMocks.channels[0].emit("message", sampleMessage("hi bot a", "oc_p2p_a"));
+		await flushAsync();
+
+		// Bot B goes live as well (both stay connected), user messages it.
+		await manager.connectManual({ appId: "cli_bot_b", appSecret: "secret_b", name: "Bot B" });
+		await larkMocks.channels[1].emit("message", sampleMessage("hi bot b", "oc_p2p_b"));
+		await flushAsync();
+
+		const bindings = bridge.getBindings();
+		expect(bindings).toHaveLength(2);
+		expect(bindings.find((b) => b.chatId === "oc_p2p_a")).toMatchObject({ appId: "cli_bot_a", chatType: "p2p" });
+		expect(bindings.find((b) => b.chatId === "oc_p2p_b")).toMatchObject({ appId: "cli_bot_b", chatType: "p2p" });
+
+		// Each channel resolves to its own private conversation only.
+		expect((await bridge.resolveP2pBinding("cli_bot_a"))?.chatId).toBe("oc_p2p_a");
+		expect((await bridge.resolveP2pBinding("cli_bot_b"))?.chatId).toBe("oc_p2p_b");
+
+		// Both channels stay enabled and connected.
+		const channels = readChannels() as Array<{ appId: string; enabled: boolean }>;
+		expect(channels.find((c) => c.appId === "cli_bot_a")?.enabled).toBe(true);
+		expect(channels.find((c) => c.appId === "cli_bot_b")?.enabled).toBe(true);
+		expect(manager.getConnectedAppIds().sort()).toEqual(["cli_bot_a", "cli_bot_b"]);
+	});
+
+	it("self-heals a legacy binding only for the bot that can actually read it", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		writeBindings([
+			{ chatId: "oc_legacy", sessionId: "session_x", projectId: "project_1", createdAt: Date.now() },
+			{ chatId: "oc_stray", sessionId: "session_y", projectId: "project_1", createdAt: Date.now() },
+		]);
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock();
+		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+
+		await manager.connectManual({ appId: "cli_bot_a", appSecret: "secret_a" });
+		// Bot A can read oc_legacy (it is its own p2p chat); it has no access to oc_stray.
+		const liveClient = larkMocks.channels[0].rawClient as ReturnType<typeof larkMocks.Client>;
+		liveClient.im.v1.chat.get.mockImplementation(async ({ path }: any) =>
+			path.chat_id === "oc_legacy" ? { code: 0, data: { chat_mode: "p2p", name: "" } } : { code: 230002, data: undefined },
+		);
+
+		// Probing for A heals the legacy binding and returns it.
+		expect((await bridge.resolveP2pBinding("cli_bot_a"))?.chatId).toBe("oc_legacy");
+		const healed = bridge.getBindings().find((b) => b.chatId === "oc_legacy");
+		expect(healed).toMatchObject({ appId: "cli_bot_a", chatType: "p2p" });
+		// oc_stray could not be read: it stays untyped and unclaimed.
+		const stray = bridge.getBindings().find((b) => b.chatId === "oc_stray");
+		expect(stray?.appId).toBeUndefined();
+		expect(stray?.chatType).toBeUndefined();
+		// A different bot never resolves these bindings as its own p2p channel.
+		expect(await bridge.resolveP2pBinding("cli_bot_b")).toBeNull();
+	});
+
+	it("routes sends through per-channel credentials with cached ad-hoc clients", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		writeChannels([
+			{
+				provider: "feishu" as const,
+				appId: "cli_alpha",
+				appSecretEncrypted: Buffer.from("enc:secret_alpha").toString("base64"),
+				name: "Alpha",
+				enabled: false,
+				createdAt: Date.now(),
+			},
+			{
+				provider: "feishu" as const,
+				appId: "cli_beta",
+				appSecretEncrypted: Buffer.from("enc:secret_beta").toString("base64"),
+				name: "Beta",
+				enabled: false,
+				tenantBrand: "lark" as const,
+				createdAt: Date.now(),
+			},
+		]);
+
+		expect((await manager.sendToChat("cli_alpha", "oc_1", { text: "from alpha" })).success).toBe(true);
+		expect((await manager.sendToChat("cli_beta", "oc_2", { text: "from beta" })).success).toBe(true);
+
+		const clientFor = (appId: string) =>
+			(larkMocks.Client.mock.results as any[])
+				.map((result) => result.value)
+				.find((value) => value?.params?.appId === appId);
+		const alphaClient = clientFor("cli_alpha");
+		const betaClient = clientFor("cli_beta");
+		expect(alphaClient).toBeTruthy();
+		expect(betaClient).toBeTruthy();
+		// Each client was built from its own secret and tenant domain.
+		expect(alphaClient.params.appSecret).toBe("secret_alpha");
+		expect(betaClient.params.appSecret).toBe("secret_beta");
+		expect(betaClient.params.domain).toBe(larkMocks.Domain.Lark);
+		// Each message went out through the matching client exactly once.
+		expect(alphaClient.im.v1.message.create).toHaveBeenCalledTimes(1);
+		expect(betaClient.im.v1.message.create).toHaveBeenCalledTimes(1);
+		expect(alphaClient.im.v1.message.create.mock.calls[0][0].data.receive_id).toBe("oc_1");
+		expect(betaClient.im.v1.message.create.mock.calls[0][0].data.receive_id).toBe("oc_2");
+		// Ad-hoc clients are cached per appId.
+		expect(manager.getClient("cli_alpha")).toBe(alphaClient);
+	});
+
+	it("connects every enabled channel on initialize", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		writeChannels([
+			{
+				provider: "feishu" as const,
+				appId: "cli_one",
+				appSecretEncrypted: Buffer.from("enc:one").toString("base64"),
+				name: "One",
+				enabled: true,
+				createdAt: Date.now(),
+			},
+			{
+				provider: "feishu" as const,
+				appId: "cli_two",
+				appSecretEncrypted: Buffer.from("enc:two").toString("base64"),
+				name: "Two",
+				enabled: true,
+				createdAt: Date.now(),
+			},
+			{
+				provider: "feishu" as const,
+				appId: "cli_off",
+				appSecretEncrypted: Buffer.from("enc:off").toString("base64"),
+				name: "Off",
+				enabled: false,
+				createdAt: Date.now(),
+			},
+		]);
+
+		await manager.initialize();
+
+		expect(larkMocks.createLarkChannel).toHaveBeenCalledTimes(2);
+		expect(manager.getConnectedAppIds().sort()).toEqual(["cli_one", "cli_two"]);
+		const items = manager.getChannels();
+		expect(items.find((c) => c.appId === "cli_one")?.connected).toBe(true);
+		expect(items.find((c) => c.appId === "cli_two")?.connected).toBe(true);
+		expect(items.find((c) => c.appId === "cli_off")?.connected).toBe(false);
+	});
+
+	it("keeps other bots online and replying when one bot is disconnected", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock();
+		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionClosed = (appId) => bridge.detachChannel(appId);
+
+		await manager.connectManual({ appId: "cli_bot_a", appSecret: "secret_a", name: "Bot A" });
+		await manager.connectManual({ appId: "cli_bot_b", appSecret: "secret_b", name: "Bot B" });
+		await larkMocks.channels[0].emit("message", sampleMessage("hi a", "oc_chat_a"));
+		await larkMocks.channels[1].emit("message", sampleMessage("hi b", "oc_chat_b"));
+		await flushAsync();
+		expect(larkMocks.channels[0].stream).toHaveBeenCalledTimes(1);
+		expect(larkMocks.channels[1].stream).toHaveBeenCalledTimes(1);
+
+		await manager.disconnect("feishu", "cli_bot_a");
+		expect(manager.getConnectedAppIds()).toEqual(["cli_bot_b"]);
+		expect(manager.getChannels().find((c) => c.appId === "cli_bot_a")?.enabled).toBe(false);
+
+		// Bot B still receives and replies through its own channel.
+		await larkMocks.channels[1].emit("message", sampleMessage("again b", "oc_chat_b"));
+		await flushAsync();
+		expect(larkMocks.channels[1].stream).toHaveBeenCalledTimes(2);
+		expect(larkMocks.channels[0].stream).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps independent sessions for the same chatId on two different bots", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock();
+		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+
+		await manager.connectManual({ appId: "cli_bot_a", appSecret: "secret_a", name: "Bot A" });
+		await manager.connectManual({ appId: "cli_bot_b", appSecret: "secret_b", name: "Bot B" });
+		// 同一个群（同一 chatId）里两个 bot 都在：各自拥有独立会话，回复各走各的连接。
+		await larkMocks.channels[0].emit("message", sampleMessage("hello from a", "oc_shared"));
+		await larkMocks.channels[1].emit("message", sampleMessage("hello from b", "oc_shared"));
+		await flushAsync();
+
+		expect(runtime.createAgent).toHaveBeenCalledTimes(2);
+		expect(runtime.sendMessage).toHaveBeenCalledWith("session_1", "hello from a");
+		expect(runtime.sendMessage).toHaveBeenCalledWith("session_2", "hello from b");
+		expect(larkMocks.channels[0].stream).toHaveBeenCalledTimes(1);
+		expect(larkMocks.channels[1].stream).toHaveBeenCalledTimes(1);
+		const bindings = bridge.getBindings().filter((b) => b.chatId === "oc_shared");
+		expect(bindings).toHaveLength(2);
+		expect(bindings.find((b) => b.appId === "cli_bot_a")?.sessionId).toBe("session_1");
+		expect(bindings.find((b) => b.appId === "cli_bot_b")?.sessionId).toBe("session_2");
 	});
 });

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ScheduledTask, ScheduledTaskInput } from "@look/shared/types";
+import type { ScheduledTask, ScheduledTaskInput, ScheduledTaskNotification } from "@look/shared/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
 	ScheduledTaskExecutionContext,
@@ -47,6 +47,9 @@ function createService(
 		store?: ScheduledTaskStore;
 		ownerId?: string;
 		getProjectInfo?: (projectId: string) => { valid: boolean; cwd: string } | null;
+		resolveNotificationTarget?: (
+			notification: ScheduledTaskNotification,
+		) => Promise<{ chatId: string; channelAppId?: string } | null | undefined>;
 		onAlert?: () => void;
 		onFinished?: (event: unknown) => void | Promise<void>;
 	},
@@ -58,6 +61,7 @@ function createService(
 		executor,
 		ownerId,
 		getProjectInfo: options?.getProjectInfo ?? (() => defaultProjectInfo),
+		resolveNotificationTarget: options?.resolveNotificationTarget,
 		onAlert: options?.onAlert,
 		onFinished: options?.onFinished,
 	});
@@ -548,6 +552,51 @@ describe("SchedulerService", () => {
 		expect(executor.execute).not.toHaveBeenCalled();
 	});
 
+	it("rejects a notification channel whose bot has no private conversation", async () => {
+		const dir = await tempDir();
+		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "ok" })) };
+		const resolveNotificationTarget = vi.fn(async (notification: ScheduledTaskNotification) => {
+			if (notification.channelAppId === "cli_nochat") return null;
+			if (notification.channelAppId) return { chatId: "oc_p2p", channelAppId: notification.channelAppId };
+			if (notification.targetChatId) return { chatId: notification.targetChatId };
+			return null;
+		});
+		const service = createService(dir, executor, { resolveNotificationTarget });
+		await service.initialize();
+
+		const noChat = { enabled: true, provider: "feishu" as const, channelAppId: "cli_nochat" };
+		await expect(service.create({ ...INPUT, notification: noChat })).rejects.toThrow("no private conversation");
+
+		const task = await service.create({
+			...INPUT,
+			notification: { enabled: true, provider: "feishu", channelAppId: "cli_bot" },
+		});
+		expect(task.notification?.channelAppId).toBe("cli_bot");
+
+		await expect(service.update(task.id, { notification: noChat })).rejects.toThrow("no private conversation");
+
+		// Legacy chatId targets pass through resolution.
+		await service.update(task.id, {
+			notification: { enabled: true, provider: "feishu", targetChatId: "oc_legacy" },
+		});
+		// Disabled notifications skip target validation entirely.
+		await service.update(task.id, {
+			notification: { enabled: false, provider: "feishu", channelAppId: "cli_nochat" },
+		});
+	});
+
+	it("skips notification target validation when IM is unavailable", async () => {
+		const dir = await tempDir();
+		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "ok" })) };
+		const service = createService(dir, executor, { resolveNotificationTarget: async () => undefined });
+		await service.initialize();
+		const task = await service.create({
+			...INPUT,
+			notification: { enabled: true, provider: "feishu", channelAppId: "cli_anything" },
+		});
+		expect(task.notification?.enabled).toBe(true);
+	});
+
 	it("deletes all tasks bound to a project", async () => {
 		const dir = await tempDir();
 		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "ok" })) };
@@ -559,5 +608,185 @@ describe("SchedulerService", () => {
 		await service.deleteTasksByProject("project-remove");
 
 		expect(service.listTasks().map((t) => t.id)).toEqual([keep.id]);
+	});
+
+	it("marks orphaned unfinished logs as interrupted on initialize", async () => {
+		const dir = await tempDir();
+		const seedStore = new ScheduledTaskStore(path.join(dir, "tasks.json"));
+		seedStore.load();
+		const now = new Date().toISOString();
+		await seedStore.upsertLog({
+			id: "orphan-run",
+			taskId: "deleted-task",
+			taskName: "Deleted task",
+			scheduledAt: now,
+			startedAt: now,
+			status: "running",
+			attempt: 1,
+			maxAttempts: 3,
+			ownerId: "dead-process",
+		});
+
+		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "ok" })) };
+		const service = createService(dir, executor);
+		await service.initialize();
+
+		expect(service.listLogs().find((log) => log.id === "orphan-run")?.status).toBe("interrupted");
+		expect(executor.execute).not.toHaveBeenCalled();
+	});
+
+	it("recovers only the newest interrupted run when a task has several", async () => {
+		const dir = await tempDir();
+		const seedStore = new ScheduledTaskStore(path.join(dir, "tasks.json"));
+		seedStore.load();
+		const older = new Date(Date.now() - 60_000).toISOString();
+		const now = new Date().toISOString();
+		const task: ScheduledTask = {
+			id: "multi-crash-task",
+			name: "Multi crash recovery",
+			projectId: "project-1",
+			cron: "0 0 1 1 *",
+			prompt: "recover",
+			parameters: {},
+			status: "scheduled",
+			retry: { maxAttempts: 3, initialDelayMs: 1, backoffMultiplier: 2, maxDelayMs: 2 },
+			executionTimeoutMs: 5_000,
+			createdAt: now,
+			updatedAt: now,
+		};
+		await seedStore.upsertTask(task);
+		await seedStore.upsertLog({
+			id: "older-run",
+			taskId: task.id,
+			taskName: task.name,
+			scheduledAt: older,
+			startedAt: older,
+			status: "running",
+			attempt: 1,
+			maxAttempts: 3,
+			ownerId: "dead-process",
+		});
+		await seedStore.upsertLog({
+			id: "newer-run",
+			taskId: task.id,
+			taskName: task.name,
+			scheduledAt: now,
+			startedAt: now,
+			status: "running",
+			attempt: 2,
+			maxAttempts: 3,
+			ownerId: "dead-process",
+		});
+
+		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "recovered" })) };
+		const service = createService(dir, executor);
+		await service.initialize();
+		await waitFor(() => service.listLogs(task.id).some((log) => log.status === "success"));
+
+		const logs = service.listLogs(task.id);
+		expect(logs.find((log) => log.id === "older-run")?.status).toBe("interrupted");
+		expect(logs.find((log) => log.id === "newer-run")?.status).toBe("interrupted");
+		// The retry chain resumes from the newest run, so already-consumed attempts
+		// are not spent twice.
+		expect(logs.find((log) => log.status === "success")?.attempt).toBe(3);
+		expect(executor.execute).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not discard a one-time plan that was edited while its run was in flight", async () => {
+		const dir = await tempDir();
+		let started = false;
+		let releaseRun!: () => void;
+		const runGate = new Promise<void>((resolve) => {
+			releaseRun = resolve;
+		});
+		const executor: ScheduledTaskExecutor = {
+			execute: vi.fn(async () => {
+				started = true;
+				await runGate;
+				return { output: "once" };
+			}),
+		};
+		const service = createService(dir, executor);
+		await service.initialize();
+		const task = await service.create({
+			...INPUT,
+			cron: undefined,
+			schedule: { kind: "once", runAt: new Date(Date.now() - 1_000).toISOString() },
+		});
+
+		await service.start(task.id);
+		await waitFor(() => started);
+
+		// Move the plan to a future date while the overdue run is still executing.
+		const futureRunAt = new Date(Date.now() + 60 * 60_000).toISOString();
+		await service.update(task.id, { schedule: { kind: "once", runAt: futureRunAt } });
+
+		releaseRun();
+		await waitFor(() => service.listLogs(task.id)[0]?.status === "success");
+		// Give the completion handler a chance to (incorrectly) consume the new plan.
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		const current = service.listTasks().find((item) => item.id === task.id);
+		expect(current).toMatchObject({ status: "scheduled", schedule: { kind: "once", runAt: futureRunAt } });
+		expect(current?.scheduleCompletedAt).toBeUndefined();
+		expect(current?.nextRunAt).toBe(futureRunAt);
+	});
+
+	it("consumes a one-time plan when run now so it does not fire again", async () => {
+		const dir = await tempDir();
+		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "ran now" })) };
+		const service = createService(dir, executor);
+		await service.initialize();
+		const task = await service.create({
+			...INPUT,
+			cron: undefined,
+			schedule: { kind: "once", runAt: new Date(Date.now() + 250).toISOString() },
+		});
+		await service.start(task.id);
+
+		service.runNow(task.id);
+		await waitFor(() => service.listLogs(task.id)[0]?.status === "success");
+		await waitFor(() => service.listTasks().find((item) => item.id === task.id)?.status === "paused");
+
+		// The original timestamp must not trigger a second execution.
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		expect(executor.execute).toHaveBeenCalledTimes(1);
+		expect(service.listTasks().find((item) => item.id === task.id)?.scheduleCompletedAt).toBeTruthy();
+	});
+
+	it("files a test run under the given task so it appears in that task's history", async () => {
+		const dir = await tempDir();
+		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "tested" })) };
+		const service = createService(dir, executor);
+		await service.initialize();
+		const task = await service.create(INPUT);
+
+		const result = await service.test({ ...INPUT, prompt: "draft edit" }, task.id);
+
+		expect(result.log.taskId).toBe(task.id);
+		expect(service.listLogs(task.id).some((log) => log.id === result.log.id)).toBe(true);
+		expect(service.listTasks()).toHaveLength(1);
+
+		// An unknown task id still produces an unattached test log instead of failing.
+		const orphan = await service.test(INPUT, "missing-task");
+		expect(orphan.log.taskId).not.toBe("missing-task");
+	});
+
+	it("sizes the coordination lock lease for the worst-case run duration", async () => {
+		const dir = await tempDir();
+		const acquire = vi.spyOn(FileTaskLock.prototype, "acquire");
+		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "ok" })) };
+		const service = createService(dir, executor);
+		await service.initialize();
+		const task = await service.create({
+			...INPUT,
+			retry: { maxAttempts: 4, initialDelayMs: 1, backoffMultiplier: 1, maxDelayMs: 2_000 },
+			executionTimeoutMs: 10_000,
+		});
+
+		service.runNow(task.id);
+		await waitFor(() => service.listLogs(task.id)[0]?.status === "success");
+
+		expect(acquire).toHaveBeenCalledWith(task.id, 4 * (10_000 + 2_000) + 60_000);
 	});
 });

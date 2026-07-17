@@ -31,6 +31,9 @@ export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
 
 export const showHiddenFilesAtom = atom(false);
 
+/** 文件查看器当前目标；非 null 时 FileViewerDialog 打开。全局同时只查看一个文件。 */
+export const viewingFileAtom = atom<{ absolutePath: string } | null>(null);
+
 export const expandedWorkspacePathsAtomFamily = atomFamily((projectId: string) => atom<Set<string>>(new Set<string>()));
 
 export const loadedWorkspaceChildrenAtomFamily = atomFamily((projectId: string) =>
