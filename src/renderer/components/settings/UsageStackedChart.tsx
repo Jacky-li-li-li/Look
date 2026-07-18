@@ -46,61 +46,100 @@ interface ChartDataPoint {
 	[key: string]: number | string;
 }
 
-export default function UsageStackedChart({ modelCost, selectedYear }: UsageStackedChartProps) {
-	const { chartData, modelNames } = useMemo(() => {
-		const yearPrefix = `${selectedYear}-`;
-		const dayModelMap: Map<string, Map<string, number>> = new Map();
-		const allModels = new Set<string>();
+export interface StackedChartData {
+	chartData: ChartDataPoint[];
+	modelNames: string[];
+	/**
+	 * Model name → safe recharts dataKey. Model names are never used as dataKeys
+	 * directly: recharts resolves string dataKeys as lodash-style paths, so a name
+	 * containing "." (e.g. "gemini-2.5-pro") would resolve to nothing and its bar
+	 * would silently never render.
+	 */
+	modelKeys: Record<string, string>;
+}
 
-		for (const [dateKey, models] of Object.entries(modelCost)) {
-			if (!dateKey.startsWith(yearPrefix)) continue;
-			const mmdd = dateKey.slice(5); // "MM-DD"
-			if (!dayModelMap.has(mmdd)) dayModelMap.set(mmdd, new Map());
-			const dayMap = dayModelMap.get(mmdd)!;
-			for (const [model, entry] of Object.entries(models)) {
-				allModels.add(model);
-				dayMap.set(model, (dayMap.get(model) ?? 0) + entry.cost);
-			}
+/** Aggregate per-day per-model cost into chart points keyed by safe dataKeys. */
+export function buildChartData(
+	modelCost: Record<string, Record<string, ModelCostEntry>>,
+	selectedYear: number,
+): StackedChartData {
+	const yearPrefix = `${selectedYear}-`;
+	const dayModelMap: Map<string, Map<string, number>> = new Map();
+	const allModels = new Set<string>();
+
+	for (const [dateKey, models] of Object.entries(modelCost)) {
+		if (!dateKey.startsWith(yearPrefix)) continue;
+		const mmdd = dateKey.slice(5); // "MM-DD"
+		if (!dayModelMap.has(mmdd)) dayModelMap.set(mmdd, new Map());
+		const dayMap = dayModelMap.get(mmdd)!;
+		for (const [model, entry] of Object.entries(models)) {
+			allModels.add(model);
+			dayMap.set(model, (dayMap.get(model) ?? 0) + entry.cost);
 		}
+	}
 
-		const modelNames = Array.from(allModels).sort((a, b) => {
-			// known models first, then alphabetically
-			const aKnown = a in KNOWN_MODEL_COLORS ? 0 : 1;
-			const bKnown = b in KNOWN_MODEL_COLORS ? 0 : 1;
-			if (aKnown !== bKnown) return aKnown - bKnown;
-			if (aKnown === 0) return a.localeCompare(b);
-			return a.localeCompare(b);
-		});
+	const modelNames = Array.from(allModels).sort((a, b) => {
+		// known models first, then alphabetically
+		const aKnown = a in KNOWN_MODEL_COLORS ? 0 : 1;
+		const bKnown = b in KNOWN_MODEL_COLORS ? 0 : 1;
+		if (aKnown !== bKnown) return aKnown - bKnown;
+		return a.localeCompare(b);
+	});
 
-		const dates = Array.from(dayModelMap.keys()).sort();
-		const chartData: ChartDataPoint[] = dates.map((mmdd) => {
-			const dayMap = dayModelMap.get(mmdd)!;
-			const point: ChartDataPoint = { day: mmdd, label: mmdd };
-			for (const model of modelNames) {
-				point[model] = dayMap.get(model) ?? 0;
-			}
-			return point;
-		});
+	const modelKeys: Record<string, string> = {};
+	for (const [index, model] of modelNames.entries()) {
+		modelKeys[model] = `model_${index}`;
+	}
 
-		return { chartData, modelNames };
-	}, [modelCost, selectedYear]);
-
-	const modelColorMap = useMemo(() => {
-		const map: Record<string, string> = {};
+	const dates = Array.from(dayModelMap.keys()).sort();
+	const chartData: ChartDataPoint[] = dates.map((mmdd) => {
+		const dayMap = dayModelMap.get(mmdd)!;
+		const point: ChartDataPoint = { day: mmdd, label: mmdd };
 		for (const model of modelNames) {
-			if (model in KNOWN_MODEL_COLORS) {
-				map[model] = KNOWN_MODEL_COLORS[model];
-			}
+			point[modelKeys[model]] = dayMap.get(model) ?? 0;
 		}
-		// Assign remaining models from the palette
-		let colorIdx = 0;
-		for (const model of modelNames) {
-			if (model in map) continue;
-			map[model] = MODEL_COLORS[colorIdx % MODEL_COLORS.length];
+		return point;
+	});
+
+	return { chartData, modelNames, modelKeys };
+}
+
+/**
+ * Assign each model a distinct color: known models use their fixed mapping;
+ * other models take the first palette color not already in use (wrapping only
+ * once the palette is exhausted).
+ */
+export function buildModelColorMap(modelNames: string[]): Record<string, string> {
+	const map: Record<string, string> = {};
+	const usedColors = new Set<string>();
+	for (const model of modelNames) {
+		const known = KNOWN_MODEL_COLORS[model];
+		if (known) {
+			map[model] = known;
+			usedColors.add(known);
+		}
+	}
+	let colorIdx = 0;
+	for (const model of modelNames) {
+		if (model in map) continue;
+		while (colorIdx < MODEL_COLORS.length && usedColors.has(MODEL_COLORS[colorIdx])) {
 			colorIdx++;
 		}
-		return map;
-	}, [modelNames]);
+		const color = MODEL_COLORS[colorIdx % MODEL_COLORS.length];
+		map[model] = color;
+		usedColors.add(color);
+		colorIdx++;
+	}
+	return map;
+}
+
+export default function UsageStackedChart({ modelCost, selectedYear }: UsageStackedChartProps) {
+	const { chartData, modelNames, modelKeys } = useMemo(
+		() => buildChartData(modelCost, selectedYear),
+		[modelCost, selectedYear],
+	);
+
+	const modelColorMap = useMemo(() => buildModelColorMap(modelNames), [modelNames]);
 
 	if (chartData.length === 0) {
 		return <div className="text-muted-foreground py-4 text-[11px]">No usage data for this year.</div>;
@@ -147,7 +186,8 @@ export default function UsageStackedChart({ modelCost, selectedYear }: UsageStac
 						{modelNames.map((model) => (
 							<Bar
 								key={model}
-								dataKey={model}
+								dataKey={modelKeys[model]}
+								name={model}
 								stackId="cost"
 								fill={modelColorMap[model]}
 								radius={[3, 3, 0, 0]}
