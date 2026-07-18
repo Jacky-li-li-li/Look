@@ -9,6 +9,7 @@ import "./mockApi";
 import App from "./App";
 import "./App.css";
 import { ErrorBoundary } from "@shared/components/ErrorBoundary";
+import FileViewerApp from "./FileViewerApp";
 import { useLookTheme } from "./hooks/useLookTheme";
 import i18n from "./i18n";
 import { appStore, initAppData, initIpcHandlers } from "./store/ipcHandler";
@@ -139,14 +140,17 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("reac
 
 const api = window.look;
 
+// 独立文件查看器窗口(?mode=file-viewer):不加载会话/项目数据,不注册主应用 IPC 路由
+const isFileViewerMode = new URLSearchParams(window.location.search).get("mode") === "file-viewer";
+
 // IPC event handlers run outside React lifecycle via vanilla Jotai store.
 // This decouples high-frequency SDK events from the component tree.
 // Register IPC handlers outside React lifecycle.
-if (api) initIpcHandlers(api);
+if (api && !isFileViewerMode) initIpcHandlers(api);
 
 // Start loading session summaries and settings immediately.
 // This was previously split across multiple useEffect hooks in App.tsx.
-if (api) {
+if (api && !isFileViewerMode) {
 	initAppData(api);
 }
 
@@ -161,9 +165,7 @@ root.render(
 		<I18nextProvider i18n={i18n}>
 			<TooltipProvider>
 				<Provider store={appStore}>
-					<ErrorBoundary>
-						<App />
-					</ErrorBoundary>
+					<ErrorBoundary>{isFileViewerMode ? <FileViewerApp /> : <App />}</ErrorBoundary>
 					<ThemedToaster />
 				</Provider>
 			</TooltipProvider>

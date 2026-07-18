@@ -22,6 +22,7 @@ import { readThemeToneSync } from "./settings/store.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { checkForUpdates, initUpdater } from "./system/updater.js";
 import { initializeUsageService } from "./system/usage.js";
+import { closeViewerWindow } from "./viewer/viewer-window-manager.js";
 import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
@@ -261,6 +262,8 @@ function createWindow(): void {
 
 	mainWindow.on("closed", () => {
 		mainWindow = null;
+		// 主窗口关闭时联动关闭独立文件查看器窗口
+		closeViewerWindow();
 	});
 
 	// 阻止 renderer 内嵌窗口/外链导航，只允许经过校验的 https/http 链接走系统浏览器

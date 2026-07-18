@@ -787,6 +787,8 @@
 		"viewFile": "ファイルを表示",
 		"contents": "目次",
 		"back": "戻る",
+		"windowTitle": "ファイルビューア",
+		"emptyHint": "Look メインウィンドウでファイルをクリックすると表示します",
 		"close": "閉じる"
 	}
 }

@@ -78,7 +78,12 @@ type LoadState =
 	| { status: "binary"; sizeBytes: number }
 	| { status: "text"; content: string; truncated: boolean; sizeBytes: number };
 
-export default function FileViewerDialog() {
+interface FileViewerDialogProps {
+	/** 独立原生窗口模式:铺满整个窗口,禁用拖动/缩放,关闭即关窗。 */
+	windowMode?: boolean;
+}
+
+export default function FileViewerDialog({ windowMode = false }: FileViewerDialogProps) {
 	const { t } = useTranslation();
 	const [viewingFile, setViewingFile] = useAtom(viewingFileAtom);
 	const absolutePath = viewingFile?.absolutePath ?? null;
@@ -347,11 +352,21 @@ export default function FileViewerDialog() {
 		};
 	}, [textData, isMarkdown, language]);
 
-	// 关闭(含 Escape / 关闭按钮):有未保存修改时先确认
+	// 关闭(含 Escape / 关闭按钮):有未保存修改时先确认;独立窗口模式直接关窗
 	const requestClose = useCallback(() => {
 		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
+		if (windowMode) {
+			window.close();
+			return;
+		}
 		setViewingFile(null);
-	}, [dirty, setViewingFile, t]);
+	}, [dirty, windowMode, setViewingFile, t]);
+
+	// 独立窗口模式:原生标题栏同步当前文件名
+	useEffect(() => {
+		if (!windowMode) return;
+		document.title = absolutePath ? `${basename} — Look` : t("fileViewer.windowTitle");
+	}, [windowMode, absolutePath, basename, t]);
 
 	// 脏状态镜像到全局 atom:非模态下外部入口(requestViewFileAtom)据此决定先确认
 	const setFileViewerDirty = useSetAtom(fileViewerDirtyAtom);
@@ -419,20 +434,40 @@ export default function FileViewerDialog() {
 		}
 	};
 
-	if (!viewingFile) return null;
+	if (!viewingFile) {
+		if (!windowMode) return null;
+		// 独立窗口模式的空态:等待主窗口发来第一个文件
+		return (
+			<div className="fixed inset-0 flex items-center justify-center bg-popover text-sm text-muted-foreground">
+				{t("fileViewer.emptyHint")}
+			</div>
+		);
+	}
 
 	return (
 		<div
 			ref={panelRef}
 			role="dialog"
 			aria-label={basename}
-			className="fixed z-50 flex flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10"
-			style={{ left: panelPos.x, top: panelPos.y, width: panelSize.width, height: panelSize.height }}
+			className={
+				windowMode
+					? "fixed inset-0 flex flex-col overflow-hidden bg-popover text-sm text-popover-foreground"
+					: "fixed z-50 flex flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+			}
+			style={
+				windowMode
+					? undefined
+					: { left: panelPos.x, top: panelPos.y, width: panelSize.width, height: panelSize.height }
+			}
 		>
-			{/* 标题栏:整体为拖动把手(按钮等交互元素除外) */}
+			{/* 标题栏:浮窗模式为拖动把手(按钮等交互元素除外);独立窗口模式由原生标题栏负责拖动 */}
 			<div
-				className="flex shrink-0 cursor-move touch-none select-none flex-col gap-1 border-b px-4 py-3"
-				onPointerDown={handleDragStart}
+				className={
+					windowMode
+						? "flex shrink-0 select-none flex-col gap-1 border-b px-4 py-3"
+						: "flex shrink-0 cursor-move touch-none select-none flex-col gap-1 border-b px-4 py-3"
+				}
+				onPointerDown={windowMode ? undefined : handleDragStart}
 			>
 				<div className="flex items-center gap-2">
 					<Button
@@ -626,12 +661,14 @@ export default function FileViewerDialog() {
 					</div>
 				)}
 			</div>
-			{/* 右下角缩放把手 */}
-			<div
-				className="absolute right-0 bottom-0 size-4 cursor-nwse-resize touch-none"
-				onPointerDown={handleResizeStart}
-				aria-hidden="true"
-			/>
+			{/* 右下角缩放把手(仅浮窗模式;独立窗口由原生窗口边框缩放) */}
+			{!windowMode && (
+				<div
+					className="absolute right-0 bottom-0 size-4 cursor-nwse-resize touch-none"
+					onPointerDown={handleResizeStart}
+					aria-hidden="true"
+				/>
+			)}
 		</div>
 	);
 }

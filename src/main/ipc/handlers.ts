@@ -14,6 +14,7 @@ import type { InvokeContext, InvokeRouteMap } from "./invoke-context.js";
 import {
 	agentRouter,
 	fileRouter,
+	fileViewerRouter,
 	historyRouter,
 	imRouter,
 	mcpRouter,
@@ -32,6 +33,7 @@ import {
 const domainRouters = [
 	agentRouter,
 	fileRouter,
+	fileViewerRouter,
 	historyRouter,
 	modelRouter,
 	settingsRouter,

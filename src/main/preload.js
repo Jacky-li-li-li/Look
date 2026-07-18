@@ -220,6 +220,10 @@ const api = {
 	readFileContent: (path) => ipcRenderer.invoke("look:invoke", { type: "file:read", path }),
 	writeFileContent: (path, content) => ipcRenderer.invoke("look:invoke", { type: "file:write", path, content }),
 
+	// ---- File viewer window ----
+	openFileViewer: (path) => ipcRenderer.invoke("look:invoke", { type: "fileViewer:open", path }),
+	fileViewerReady: () => ipcRenderer.invoke("look:invoke", { type: "fileViewer:ready" }),
+
 	// ---- Auto Updater ----
 	checkForUpdates: () => ipcRenderer.invoke("look:invoke", { type: "update:check" }),
 	downloadUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:download" }),

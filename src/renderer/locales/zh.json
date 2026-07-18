@@ -787,6 +787,8 @@
     "viewFile": "查看文件",
     "contents": "目录",
     "back": "返回",
+    "windowTitle": "文件查看器",
+    "emptyHint": "在 Look 主窗口中点击文件以查看",
     "close": "关闭"
   }
 }

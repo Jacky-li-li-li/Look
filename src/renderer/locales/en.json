@@ -787,6 +787,8 @@
     "viewFile": "View file",
     "contents": "Contents",
     "back": "Back",
+    "windowTitle": "File viewer",
+    "emptyHint": "Click a file in the main Look window to view it",
     "close": "Close"
   }
 }

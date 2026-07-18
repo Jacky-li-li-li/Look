@@ -468,6 +468,9 @@ export type MainToRendererEvent =
 			request: PlanApprovalRequest;
 	  }
 	| { type: "plan:approval-resolved"; agentId: string; requestId: string }
+	// ---- 文件查看器窗口 ----
+	// 主进程 → 查看器窗口:打开/切换到指定文件
+	| { type: "fileViewer:open-path"; path: string }
 	// ---- SubAgent 事件 ----
 	// Agent 定义变更通知（Stage 3 广场刷新）
 	| { type: "subagent:definitions-updated" }
@@ -889,6 +892,11 @@ export type RendererToMainEvent =
 	// ---- File content reading (renderer → main) ----
 	| { type: "file:read"; path: string }
 	| { type: "file:write"; path: string; content: string }
+	// ---- 文件查看器窗口(renderer → main) ----
+	// 主窗口入口:请求在独立窗口中打开文件
+	| { type: "fileViewer:open"; path: string }
+	// 查看器窗口就绪:取回待打开路径(一次性消费)
+	| { type: "fileViewer:ready" }
 	// ---- Permission events (renderer → main) ----
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
 	| { type: "permission:get-mode"; agentId: string }

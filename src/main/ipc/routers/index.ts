@@ -1,5 +1,6 @@
 export { agentRouter } from "./agent-router.js";
 export { fileRouter } from "./file-router.js";
+export { fileViewerRouter } from "./file-viewer-router.js";
 export { historyRouter } from "./history-router.js";
 export { imRouter } from "./im-router.js";
 export { mcpRouter } from "./mcp-router.js";
