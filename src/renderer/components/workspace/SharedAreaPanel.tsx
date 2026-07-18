@@ -26,7 +26,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
-import { selectedSharedPathAtomFamily, viewingFileAtom } from "../../store/atoms";
+import { requestViewFileAtom, selectedSharedPathAtomFamily } from "../../store/atoms";
 
 interface SharedAreaPanelProps {
 	projectId: string;
@@ -572,7 +572,7 @@ interface SharedAreaNodeProps {
 
 function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: SharedAreaNodeProps) {
 	const { t } = useTranslation();
-	const setViewingFile = useSetAtom(viewingFileAtom);
+	const requestViewFile = useSetAtom(requestViewFileAtom);
 	const Icon = node.type === "directory" ? Folder : File;
 	const revealInFinder = async () => {
 		const result = await window.look.revealInFinder(node.absolutePath);
@@ -589,7 +589,7 @@ function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: Shared
 	// 单击文件行 → 打开文件查看器;目录只选中(双击文件仍在 Finder 中打开)
 	const handleSelect = () => {
 		onSelect(node.path);
-		if (node.type === "file") setViewingFile({ absolutePath: node.absolutePath });
+		if (node.type === "file") requestViewFile(node.absolutePath);
 	};
 	return (
 		<div

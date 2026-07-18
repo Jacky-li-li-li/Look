@@ -7,10 +7,9 @@
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@shared/components/ui/dialog";
 import { cn } from "@shared/lib/utils";
 import type { FileTreeNode } from "@shared/types";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { ArrowLeft, Copy, Eye, FileWarning, FolderOpen, Pencil, RefreshCw, Save, X } from "lucide-react";
 import {
 	type KeyboardEvent,
@@ -29,7 +28,7 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { toast } from "sonner";
 import { resolveFileLanguage } from "../../lib/fileLanguage";
 import { extractHeadings, type TocHeading } from "../../lib/markdownToc";
-import { viewingFileAtom } from "../../store/atoms";
+import { fileViewerDirtyAtom, viewingFileAtom } from "../../store/atoms";
 import { FileIcon } from "../workspace/FileIcon";
 
 const LookMarkdown = lazy(() => import("../markdown/LookMarkdown"));
@@ -98,6 +97,71 @@ export default function FileViewerDialog() {
 	const [backStack, setBackStack] = useState<string[]>([]);
 	const backNavRef = useRef(false);
 	const prevPathRef = useRef<string | null>(null);
+
+	// 非模态浮窗:位置与尺寸(组件常驻 AppLayout 不会卸载,跨文件打开自动保持)
+	const [panelPos, setPanelPos] = useState(() => ({
+		x: Math.max(16, Math.round(((typeof window !== "undefined" ? window.innerWidth : 1280) - 896) / 2)),
+		y: Math.max(16, Math.round((typeof window !== "undefined" ? window.innerHeight : 800) * 0.08)),
+	}));
+	const [panelSize, setPanelSize] = useState(() => ({
+		width: Math.min(896, (typeof window !== "undefined" ? window.innerWidth : 1280) - 32),
+		height: Math.round((typeof window !== "undefined" ? window.innerHeight : 800) * 0.8),
+	}));
+	const panelRef = useRef<HTMLDivElement>(null);
+
+	// 标题栏拖动:命中按钮等交互元素时不触发;钳制保证至少 80px 可见可拖回
+	const handleDragStart = useCallback(
+		(event: ReactPointerEvent<HTMLDivElement>) => {
+			if ((event.target as HTMLElement).closest("button, a, textarea, input, [role='separator']")) return;
+			event.preventDefault();
+			const startX = event.clientX;
+			const startY = event.clientY;
+			const origin = panelPos;
+			const size = panelSize;
+			const onMove = (ev: PointerEvent) => {
+				setPanelPos({
+					x: Math.min(window.innerWidth - 80, Math.max(80 - size.width, origin.x + ev.clientX - startX)),
+					y: Math.min(window.innerHeight - 48, Math.max(0, origin.y + ev.clientY - startY)),
+				});
+			};
+			const onUp = () => {
+				window.removeEventListener("pointermove", onMove);
+				window.removeEventListener("pointerup", onUp);
+				document.body.style.userSelect = "";
+			};
+			document.body.style.userSelect = "none";
+			window.addEventListener("pointermove", onMove);
+			window.addEventListener("pointerup", onUp);
+		},
+		[panelPos, panelSize],
+	);
+
+	// 右下角缩放:最小 420×300,最大受视口约束
+	const handleResizeStart = useCallback(
+		(event: ReactPointerEvent<HTMLDivElement>) => {
+			event.preventDefault();
+			event.stopPropagation();
+			const startX = event.clientX;
+			const startY = event.clientY;
+			const origin = panelSize;
+			const pos = panelPos;
+			const onMove = (ev: PointerEvent) => {
+				setPanelSize({
+					width: Math.min(window.innerWidth - pos.x - 8, Math.max(420, origin.width + ev.clientX - startX)),
+					height: Math.min(window.innerHeight - pos.y - 8, Math.max(300, origin.height + ev.clientY - startY)),
+				});
+			};
+			const onUp = () => {
+				window.removeEventListener("pointermove", onMove);
+				window.removeEventListener("pointerup", onUp);
+				document.body.style.userSelect = "";
+			};
+			document.body.style.userSelect = "none";
+			window.addEventListener("pointermove", onMove);
+			window.addEventListener("pointerup", onUp);
+		},
+		[panelPos, panelSize],
+	);
 
 	const basename = useMemo(() => absolutePath?.split(/[\\/]/).pop() ?? "", [absolutePath]);
 	const isMarkdown = /\.(md|markdown)$/i.test(basename);
@@ -289,19 +353,38 @@ export default function FileViewerDialog() {
 		setViewingFile(null);
 	}, [dirty, setViewingFile, t]);
 
+	// 脏状态镜像到全局 atom:非模态下外部入口(requestViewFileAtom)据此决定先确认
+	const setFileViewerDirty = useSetAtom(fileViewerDirtyAtom);
+	useEffect(() => {
+		setFileViewerDirty(dirty);
+	}, [dirty, setFileViewerDirty]);
+
+	// Esc:仅当焦点在浮窗内时关闭,不劫持聊天输入的 Esc
+	useEffect(() => {
+		if (!viewingFile) return;
+		const onKeyDown = (event: globalThis.KeyboardEvent) => {
+			if (event.key === "Escape" && panelRef.current?.contains(document.activeElement)) {
+				requestClose();
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [viewingFile, requestClose]);
+
 	const handleRefresh = useCallback(() => {
 		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
 		setReloadTick((n) => n + 1);
 	}, [dirty, t]);
 
-	// 返回上一个文件:出栈并导航,导航本身不再入栈(backNavRef 标记)
+	// 返回上一个文件:出栈并导航,导航本身不再入栈(backNavRef 标记);脏状态先确认
 	const handleBack = useCallback(() => {
 		const target = backStack[backStack.length - 1];
 		if (!target) return;
+		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
 		backNavRef.current = true;
 		setBackStack((s) => s.slice(0, -1));
 		setViewingFile({ absolutePath: target });
-	}, [backStack, setViewingFile]);
+	}, [backStack, dirty, setViewingFile, t]);
 
 	const handleCopyPath = useCallback(() => {
 		if (!absolutePath) return;
@@ -336,211 +419,219 @@ export default function FileViewerDialog() {
 		}
 	};
 
+	if (!viewingFile) return null;
+
 	return (
-		<Dialog
-			open={viewingFile !== null}
-			onOpenChange={(open) => {
-				if (!open) requestClose();
-			}}
+		<div
+			ref={panelRef}
+			role="dialog"
+			aria-label={basename}
+			className="fixed z-50 flex flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+			style={{ left: panelPos.x, top: panelPos.y, width: panelSize.width, height: panelSize.height }}
 		>
-			<DialogContent
-				className="flex h-[80vh] w-[85vw] max-w-4xl flex-col gap-0 overflow-hidden p-0"
-				showCloseButton={false}
+			{/* 标题栏:整体为拖动把手(按钮等交互元素除外) */}
+			<div
+				className="flex shrink-0 cursor-move touch-none select-none flex-col gap-1 border-b px-4 py-3"
+				onPointerDown={handleDragStart}
 			>
-				<DialogHeader className="shrink-0 gap-1 border-b px-4 py-3">
-					<div className="flex items-center gap-2">
+				<div className="flex items-center gap-2">
+					<Button
+						variant="ghost"
+						size="icon-xs"
+						onClick={handleBack}
+						disabled={backStack.length === 0}
+						aria-label={t("fileViewer.back")}
+						title={t("fileViewer.back")}
+					>
+						<ArrowLeft className="size-3.5" />
+					</Button>
+					<FileIcon node={iconNode} className="size-4 shrink-0" />
+					<h2 className="truncate font-heading text-sm leading-none font-medium">{basename}</h2>
+					{dirty && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />}
+					<div className="ml-auto flex shrink-0 items-center gap-1">
+						{canEdit && (
+							<>
+								<Button
+									variant="outline"
+									size="xs"
+									onClick={() => setEditMode((v) => !v)}
+									aria-pressed={editMode}
+									title={editMode ? t("fileViewer.preview") : t("fileViewer.edit")}
+								>
+									{editMode ? <Eye className="size-3" /> : <Pencil className="size-3" />}
+									{editMode ? t("fileViewer.preview") : t("fileViewer.edit")}
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={() => void handleSave()}
+									disabled={!dirty || saving}
+									aria-label={t("fileViewer.save")}
+									title={t("fileViewer.save")}
+								>
+									<Save className="size-3.5" />
+								</Button>
+							</>
+						)}
 						<Button
 							variant="ghost"
 							size="icon-xs"
-							onClick={handleBack}
-							disabled={backStack.length === 0}
-							aria-label={t("fileViewer.back")}
-							title={t("fileViewer.back")}
+							onClick={handleCopyPath}
+							aria-label={t("fileViewer.copyPath")}
+							title={t("fileViewer.copyPath")}
 						>
-							<ArrowLeft className="size-3.5" />
+							<Copy className="size-3.5" />
 						</Button>
-						<FileIcon node={iconNode} className="size-4 shrink-0" />
-						<DialogTitle className="truncate text-sm">{basename}</DialogTitle>
-						{dirty && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />}
-						<div className="ml-auto flex shrink-0 items-center gap-1">
-							{canEdit && (
-								<>
-									<Button
-										variant="outline"
-										size="xs"
-										onClick={() => setEditMode((v) => !v)}
-										aria-pressed={editMode}
-										title={editMode ? t("fileViewer.preview") : t("fileViewer.edit")}
-									>
-										{editMode ? <Eye className="size-3" /> : <Pencil className="size-3" />}
-										{editMode ? t("fileViewer.preview") : t("fileViewer.edit")}
-									</Button>
-									<Button
-										variant="ghost"
-										size="icon-xs"
-										onClick={() => void handleSave()}
-										disabled={!dirty || saving}
-										aria-label={t("fileViewer.save")}
-										title={t("fileViewer.save")}
-									>
-										<Save className="size-3.5" />
-									</Button>
-								</>
-							)}
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								onClick={handleCopyPath}
-								aria-label={t("fileViewer.copyPath")}
-								title={t("fileViewer.copyPath")}
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							onClick={handleReveal}
+							aria-label={t("fileViewer.revealInFinder")}
+							title={t("fileViewer.revealInFinder")}
+						>
+							<FolderOpen className="size-3.5" />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							onClick={handleRefresh}
+							aria-label={t("fileViewer.refresh")}
+							title={t("fileViewer.refresh")}
+						>
+							<RefreshCw className="size-3.5" />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							onClick={requestClose}
+							aria-label={t("fileViewer.close")}
+							title={t("fileViewer.close")}
+						>
+							<X className="size-3.5" />
+						</Button>
+					</div>
+				</div>
+				<p className="truncate font-mono text-[11px] text-muted-foreground" title={absolutePath ?? undefined}>
+					{displayPath}
+				</p>
+			</div>
+
+			<div className="flex min-h-0 flex-1 flex-col" aria-label={t("fileViewer.viewFile")}>
+				{loadState.status === "loading" ? (
+					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
+						<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+						<span className="text-xs text-muted-foreground">{t("fileViewer.loading")}</span>
+					</div>
+				) : loadState.status === "error" ? (
+					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+						<FileWarning className="size-6 text-destructive" />
+						<p className="text-xs text-destructive">
+							{t("fileViewer.loadFailed")}: {loadState.error}
+						</p>
+					</div>
+				) : loadState.status === "binary" ? (
+					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+						<FileWarning className="size-6 text-muted-foreground" />
+						<p className="text-xs text-muted-foreground">{t("fileViewer.binaryNotSupported")}</p>
+						<Button variant="outline" size="sm" onClick={handleReveal}>
+							<FolderOpen className="size-3.5" />
+							{t("fileViewer.revealInFinder")}
+						</Button>
+					</div>
+				) : textData && isMarkdown && !editMode ? (
+					<div className="flex min-h-0 flex-1">
+						{showToc && (
+							<>
+								<nav
+									className="shrink-0 overflow-y-auto py-3 pl-3 pr-1"
+									style={{ width: tocWidth }}
+									aria-label={t("fileViewer.contents")}
+								>
+									<p className="px-2 pb-2 text-[11px] font-medium text-muted-foreground">
+										{t("fileViewer.contents")}
+									</p>
+									<ul className="space-y-0.5">
+										{tocHeadings.map((h) => (
+											<li key={h.slug}>
+												<button
+													type="button"
+													onClick={() => scrollToHeading(h)}
+													className={cn(
+														"block w-full truncate rounded px-2 py-1 text-left text-xs transition-colors",
+														activeSlug === h.slug
+															? "bg-muted font-medium text-foreground"
+															: "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+													)}
+													style={{ paddingLeft: `${(h.level - minTocLevel) * 12 + 8}px` }}
+													title={h.text}
+												>
+													{h.text}
+												</button>
+											</li>
+										))}
+									</ul>
+								</nav>
+								{/* 拖拽调宽把手:1px 分隔线,4px 命中区,hover/拖拽时变亮 */}
+								<div
+									className="group flex w-1 shrink-0 cursor-col-resize touch-none items-stretch justify-center"
+									onPointerDown={handleTocResizeStart}
+									role="separator"
+									aria-orientation="vertical"
+								>
+									<div className="w-px bg-border transition-colors group-hover:bg-foreground/30 group-active:bg-foreground/50" />
+								</div>
+							</>
+						)}
+						<div ref={previewRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+							<Suspense
+								fallback={
+									<div className="flex h-full items-center justify-center">
+										<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+									</div>
+								}
 							>
-								<Copy className="size-3.5" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								onClick={handleReveal}
-								aria-label={t("fileViewer.revealInFinder")}
-								title={t("fileViewer.revealInFinder")}
-							>
-								<FolderOpen className="size-3.5" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								onClick={handleRefresh}
-								aria-label={t("fileViewer.refresh")}
-								title={t("fileViewer.refresh")}
-							>
-								<RefreshCw className="size-3.5" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								onClick={requestClose}
-								aria-label={t("fileViewer.close")}
-								title={t("fileViewer.close")}
-							>
-								<X className="size-3.5" />
-							</Button>
+								<LookMarkdown content={textData.content} docs />
+							</Suspense>
 						</div>
 					</div>
-					<p className="truncate font-mono text-[11px] text-muted-foreground" title={absolutePath ?? undefined}>
-						{displayPath}
-					</p>
-				</DialogHeader>
-
-				<div className="flex min-h-0 flex-1 flex-col" aria-label={t("fileViewer.viewFile")}>
-					{loadState.status === "loading" ? (
+				) : textData && isMarkdown && editMode ? (
+					<textarea
+						className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 font-mono text-xs leading-relaxed outline-none"
+						value={draft}
+						onChange={(event) => setDraft(event.target.value)}
+						onKeyDown={handleEditorKeyDown}
+						spellCheck={false}
+					/>
+				) : textData && language && !highlightFailed ? (
+					highlightedHtml ? (
+						<div className="file-viewer-code min-h-0 flex-1 overflow-auto text-xs">
+							{/* biome-ignore lint/security/noDangerouslySetInnerHtml: shiki 高亮输出为本地生成的可信 HTML */}
+							<div dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+						</div>
+					) : (
 						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
 							<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-							<span className="text-xs text-muted-foreground">{t("fileViewer.loading")}</span>
 						</div>
-					) : loadState.status === "error" ? (
-						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-							<FileWarning className="size-6 text-destructive" />
-							<p className="text-xs text-destructive">
-								{t("fileViewer.loadFailed")}: {loadState.error}
-							</p>
-						</div>
-					) : loadState.status === "binary" ? (
-						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-							<FileWarning className="size-6 text-muted-foreground" />
-							<p className="text-xs text-muted-foreground">{t("fileViewer.binaryNotSupported")}</p>
-							<Button variant="outline" size="sm" onClick={handleReveal}>
-								<FolderOpen className="size-3.5" />
-								{t("fileViewer.revealInFinder")}
-							</Button>
-						</div>
-					) : textData && isMarkdown && !editMode ? (
-						<div className="flex min-h-0 flex-1">
-							{showToc && (
-								<>
-									<nav
-										className="shrink-0 overflow-y-auto py-3 pl-3 pr-1"
-										style={{ width: tocWidth }}
-										aria-label={t("fileViewer.contents")}
-									>
-										<p className="px-2 pb-2 text-[11px] font-medium text-muted-foreground">
-											{t("fileViewer.contents")}
-										</p>
-										<ul className="space-y-0.5">
-											{tocHeadings.map((h) => (
-												<li key={h.slug}>
-													<button
-														type="button"
-														onClick={() => scrollToHeading(h)}
-														className={cn(
-															"block w-full truncate rounded px-2 py-1 text-left text-xs transition-colors",
-															activeSlug === h.slug
-																? "bg-muted font-medium text-foreground"
-																: "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-														)}
-														style={{ paddingLeft: `${(h.level - minTocLevel) * 12 + 8}px` }}
-														title={h.text}
-													>
-														{h.text}
-													</button>
-												</li>
-											))}
-										</ul>
-									</nav>
-									{/* 拖拽调宽把手:1px 分隔线,4px 命中区,hover/拖拽时变亮 */}
-									<div
-										className="group flex w-1 shrink-0 cursor-col-resize touch-none items-stretch justify-center"
-										onPointerDown={handleTocResizeStart}
-										role="separator"
-										aria-orientation="vertical"
-									>
-										<div className="w-px bg-border transition-colors group-hover:bg-foreground/30 group-active:bg-foreground/50" />
-									</div>
-								</>
-							)}
-							<div ref={previewRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-								<Suspense
-									fallback={
-										<div className="flex h-full items-center justify-center">
-											<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-										</div>
-									}
-								>
-									<LookMarkdown content={textData.content} docs />
-								</Suspense>
-							</div>
-						</div>
-					) : textData && isMarkdown && editMode ? (
-						<textarea
-							className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 font-mono text-xs leading-relaxed outline-none"
-							value={draft}
-							onChange={(event) => setDraft(event.target.value)}
-							onKeyDown={handleEditorKeyDown}
-							spellCheck={false}
-						/>
-					) : textData && language && !highlightFailed ? (
-						highlightedHtml ? (
-							<div className="file-viewer-code min-h-0 flex-1 overflow-auto text-xs">
-								{/* biome-ignore lint/security/noDangerouslySetInnerHtml: shiki 高亮输出为本地生成的可信 HTML */}
-								<div dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
-							</div>
-						) : (
-							<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
-								<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-							</div>
-						)
-					) : textData ? (
-						<div className="min-h-0 flex-1 overflow-auto">
-							<pre className="m-0 min-h-full whitespace-pre p-4 font-mono text-xs leading-relaxed">
-								{textData.content}
-							</pre>
-						</div>
-					) : null}
-					{truncated && (
-						<div className="shrink-0 border-t bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
-							{t("fileViewer.truncatedNotice")}
-						</div>
-					)}
-				</div>
-			</DialogContent>
-		</Dialog>
+					)
+				) : textData ? (
+					<div className="min-h-0 flex-1 overflow-auto">
+						<pre className="m-0 min-h-full whitespace-pre p-4 font-mono text-xs leading-relaxed">
+							{textData.content}
+						</pre>
+					</div>
+				) : null}
+				{truncated && (
+					<div className="shrink-0 border-t bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
+						{t("fileViewer.truncatedNotice")}
+					</div>
+				)}
+			</div>
+			{/* 右下角缩放把手 */}
+			<div
+				className="absolute right-0 bottom-0 size-4 cursor-nwse-resize touch-none"
+				onPointerDown={handleResizeStart}
+				aria-hidden="true"
+			/>
+		</div>
 	);
 }

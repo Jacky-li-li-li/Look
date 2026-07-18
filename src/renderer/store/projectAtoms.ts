@@ -1,6 +1,7 @@
 import type { FileTreeNode, ProjectInfo } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
+import i18n from "../i18n";
 
 export const projectsAtom = atom<ProjectInfo[]>([]);
 
@@ -33,6 +34,21 @@ export const showHiddenFilesAtom = atom(false);
 
 /** 文件查看器当前目标；非 null 时 FileViewerDialog 打开。全局同时只查看一个文件。 */
 export const viewingFileAtom = atom<{ absolutePath: string } | null>(null);
+
+/** 查看器内 md 编辑的脏状态镜像（由 FileViewerDialog 写入）。 */
+export const fileViewerDirtyAtom = atom(false);
+
+/**
+ * 打开文件的统一入口。查看器浮窗非模态后,查看中从树/消息跳转另一文件是可达路径,
+ * 有未保存修改时先确认再跳转。
+ */
+export const requestViewFileAtom = atom(null, (get, set, absolutePath: string) => {
+	if (get(fileViewerDirtyAtom)) {
+		if (!window.confirm(i18n.t("fileViewer.unsavedConfirm"))) return;
+		set(fileViewerDirtyAtom, false);
+	}
+	set(viewingFileAtom, { absolutePath });
+});
 
 export const expandedWorkspacePathsAtomFamily = atomFamily((projectId: string) => atom<Set<string>>(new Set<string>()));
 

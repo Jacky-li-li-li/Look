@@ -7,7 +7,7 @@ import { type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "r
 import type { Components } from "streamdown";
 import { coalesceChildren, looksLikeFilePath, resolveToAbsolutePath } from "../../lib/filePathDetection";
 import { slugifyHeading } from "../../lib/markdownToc";
-import { activeProjectAtom, viewingFileAtom } from "../../store/atoms";
+import { activeProjectAtom, requestViewFileAtom } from "../../store/atoms";
 import { DocPathChip } from "./DocPathChip";
 
 type ElementProps<T extends keyof React.JSX.IntrinsicElements> = ComponentPropsWithoutRef<T> & { node?: unknown };
@@ -86,26 +86,26 @@ function McpReference(props: Record<string, unknown>) {
 }
 
 function FileReference(props: Record<string, unknown>) {
-	const setViewingFile = useSetAtom(viewingFileAtom);
+	const requestViewFile = useSetAtom(requestViewFileAtom);
 	const activeProject = useAtomValue(activeProjectAtom);
 	const path = stringProp(props["data-look-path"]);
 	if (!path) return null;
 	// data-look-path 可能是绝对路径或相对路径,相对时按项目 cwd 解析
 	const handleClick = () => {
 		const absolutePath = resolveToAbsolutePath(path, window.look?.homedir ?? "", activeProject?.cwd ?? null);
-		setViewingFile({ absolutePath });
+		requestViewFile(absolutePath);
 	};
 	return <DocPathChip rawPath={path} onOpen={handleClick} atMention />;
 }
 
 function InlineCode({ className, children, ...props }: ElementProps<"code">) {
-	const setViewingFile = useSetAtom(viewingFileAtom);
+	const requestViewFile = useSetAtom(requestViewFileAtom);
 	const text = coalesceChildren(children);
 	if (looksLikeFilePath(text)) {
 		// 点击时才解析绝对路径(~/ 需要 homedir),渲染保持无副作用
 		const handleClick = () => {
 			const absolutePath = resolveToAbsolutePath(text, window.look?.homedir ?? "");
-			setViewingFile({ absolutePath });
+			requestViewFile(absolutePath);
 		};
 		return <DocPathChip rawPath={text} onOpen={handleClick} />;
 	}

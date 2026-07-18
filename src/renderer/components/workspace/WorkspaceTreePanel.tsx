@@ -33,8 +33,8 @@ import {
 	chatInputInsertRequestAtom,
 	expandedWorkspacePathsAtomFamily,
 	loadedWorkspaceChildrenAtomFamily,
+	requestViewFileAtom,
 	showHiddenFilesAtom,
-	viewingFileAtom,
 	workspaceTreeErrorAtomFamily,
 	workspaceTreeLoadingAtomFamily,
 } from "../../store/atoms";
@@ -408,7 +408,7 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 	const { node, depth } = row;
 	const isDir = node.type === "directory";
 	const setInsertRequest = useSetAtom(chatInputInsertRequestAtom);
-	const setViewingFile = useSetAtom(viewingFileAtom);
+	const requestViewFile = useSetAtom(requestViewFileAtom);
 	const store = useStore();
 
 	const handleClickToggle = () => {
@@ -417,7 +417,7 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 
 	// 单击文件行 → 打开文件查看器(目录保持双击展开/折叠)
 	const handleViewFile = () => {
-		setViewingFile({ absolutePath: node.absolutePath });
+		requestViewFile(node.absolutePath);
 	};
 
 	const handleCopyPath = () => {
