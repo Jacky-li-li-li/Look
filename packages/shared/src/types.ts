@@ -644,14 +644,14 @@ export interface ScheduledTaskNotification {
 	enabled: boolean;
 	provider: "feishu";
 	/**
-	 * Target bot channel (appId). The result is pushed through this bot's
-	 * private (p2p) conversation with the user, resolved at send time from the
-	 * IM bindings. New tasks should always set this.
+	 * Bot channel (appId) that owns the selected private conversation. New tasks
+	 * must pair this with targetChatId; appId alone is intentionally not enough
+	 * to infer a recipient from other people who have messaged the same bot.
 	 */
 	channelAppId?: string;
 	/**
-	 * Legacy target: a raw chatId chosen from bound conversations. Kept so
-	 * tasks saved before the channel-based model keep working.
+	 * Explicit recipient conversation. New tasks persist the user-selected p2p
+	 * binding here; legacy tasks may contain a raw chatId without channelAppId.
 	 */
 	targetChatId?: string;
 }

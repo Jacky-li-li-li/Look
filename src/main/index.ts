@@ -319,19 +319,27 @@ async function initSessionRuntime(): Promise<void> {
 	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
 	await runtimeManager.initAsync();
 	const schedulerOwnerId = `${process.pid}:${Date.now()}`;
-	// 通知目标解析：渠道（机器人）→ 该机器人与用户的私聊会话；
-	// legacy targetChatId 直接透传，并尽量补上所属渠道以便选择正确的发送凭据。
+	// 通知目标解析：显式选择的私聊会话（channelAppId + targetChatId）精确匹配，
+	// 收件人固定为保存任务时选定的那一个，绝不按“最近私聊”重新推断；
+	// legacy 原始 targetChatId 直接透传；仅带 channelAppId 的旧任务回退推断（重存即迁移）。
 	const resolveImNotificationTarget = async (
 		notification: ScheduledTaskNotification,
 	): Promise<{ chatId: string; channelAppId?: string } | null | undefined> => {
 		if (!larkBridgeService) return undefined;
-		if (notification.channelAppId) {
-			const binding = await larkBridgeService.resolveP2pBinding(notification.channelAppId);
-			return binding ? { chatId: binding.chatId, channelAppId: notification.channelAppId } : null;
+		if (notification.targetChatId && notification.channelAppId) {
+			const binding = await larkBridgeService.resolveExplicitTarget(
+				notification.channelAppId,
+				notification.targetChatId,
+			);
+			return binding ? { chatId: binding.chatId, channelAppId: binding.appId ?? notification.channelAppId } : null;
 		}
 		if (notification.targetChatId) {
 			const appId = larkBridgeService.getBindings().find((b) => b.chatId === notification.targetChatId)?.appId;
 			return { chatId: notification.targetChatId, channelAppId: appId };
+		}
+		if (notification.channelAppId) {
+			const binding = await larkBridgeService.resolveP2pBinding(notification.channelAppId);
+			return binding ? { chatId: binding.chatId, channelAppId: notification.channelAppId } : null;
 		}
 		return null;
 	};

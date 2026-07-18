@@ -130,6 +130,28 @@ export class LarkBridgeService {
 		return p2p[0] ?? null;
 	}
 
+	/**
+	 * Resolve an explicitly selected private conversation for task notifications.
+	 * Unlike resolveP2pBinding this never infers a recipient: the stored binding
+	 * must match the exact (appId, chatId) pair and turn out to be a p2p chat,
+	 * so results can only go to the conversation the user picked. chatType is
+	 * self-healed via chat.get when missing (bindings saved before the field was
+	 * captured). Returns null when the pair is unknown or not a private chat.
+	 */
+	async resolveExplicitTarget(appId: string, chatId: string): Promise<ChatBinding | null> {
+		const binding = this.findBinding(appId, chatId);
+		if (!binding) return null;
+		if (!binding.chatType) {
+			const info = await this.channelManager?.getChatInfo(binding.chatId, binding.appId ?? appId).catch(() => null);
+			if (info?.chatType) {
+				binding.chatType = info.chatType;
+				this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
+				saveBindings(Array.from(this.bindings.values()));
+			}
+		}
+		return binding.chatType === "p2p" ? binding : null;
+	}
+
 	/** 手动解绑 chatId；指定 appId 时只解该 bot 的绑定，否则解该 chatId 的全部绑定。 */
 	removeBinding(chatId: string, appId?: string): void {
 		let changed = false;

@@ -170,7 +170,7 @@ describe("SchedulerService", () => {
 		await service.initialize();
 		const task = await service.create(INPUT);
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => service.listLogs(task.id)[0]?.status === "success");
 		const log = service.listLogs(task.id)[0];
 		expect(attempts).toBe(3);
@@ -246,7 +246,7 @@ describe("SchedulerService", () => {
 			notification: { enabled: true, provider: "feishu", targetChatId: "chat-1" },
 		});
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => service.listLogs(task.id)[0]?.notificationStatus === "sent");
 		expect(onFinished).toHaveBeenCalledTimes(1);
 		expect(onFinished).toHaveBeenCalledWith(
@@ -271,7 +271,7 @@ describe("SchedulerService", () => {
 			notification: { enabled: true, provider: "feishu", targetChatId: "chat-1" },
 		});
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => service.listLogs(task.id)[0]?.notificationStatus === "failed");
 		expect(service.listLogs(task.id)[0]).toMatchObject({
 			status: "success",
@@ -292,7 +292,7 @@ describe("SchedulerService", () => {
 		await service.initialize();
 		const task = await service.create({ ...INPUT, retry: { ...INPUT.retry, maxAttempts: 2 } });
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => service.listLogs(task.id)[0]?.status === "failed");
 		const log = service.listLogs(task.id)[0];
 		expect(executor.execute).toHaveBeenCalledTimes(2);
@@ -319,7 +319,7 @@ describe("SchedulerService", () => {
 			retry: { ...INPUT.retry, maxAttempts: 2, initialDelayMs: 1 },
 		});
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => service.listLogs(task.id)[0]?.status === "failed", 3_000);
 		const log = service.listLogs(task.id)[0];
 		expect(executor.execute).toHaveBeenCalledTimes(2);
@@ -344,8 +344,8 @@ describe("SchedulerService", () => {
 		await second.initialize();
 		const task = await first.create(INPUT);
 
-		first.runNow(task.id);
-		second.runNow(task.id);
+		await first.runNow(task.id);
+		await second.runNow(task.id);
 		await waitFor(() => firstStore.listLogs(task.id).some((log) => log.status === "success"));
 		expect(executions).toBe(1);
 		expect(firstStore.listLogs(task.id).some((log) => log.status === "skipped")).toBe(true);
@@ -475,7 +475,7 @@ describe("SchedulerService", () => {
 		await service.initialize();
 		const task = await service.create(INPUT);
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => started);
 		await service.delete(task.id);
 
@@ -557,23 +557,38 @@ describe("SchedulerService", () => {
 		const executor: ScheduledTaskExecutor = { execute: vi.fn(async () => ({ output: "ok" })) };
 		const resolveNotificationTarget = vi.fn(async (notification: ScheduledTaskNotification) => {
 			if (notification.channelAppId === "cli_nochat") return null;
-			if (notification.channelAppId) return { chatId: "oc_p2p", channelAppId: notification.channelAppId };
+			if (notification.channelAppId && notification.targetChatId) {
+				return { chatId: notification.targetChatId, channelAppId: notification.channelAppId };
+			}
 			if (notification.targetChatId) return { chatId: notification.targetChatId };
 			return null;
 		});
 		const service = createService(dir, executor, { resolveNotificationTarget });
 		await service.initialize();
 
-		const noChat = { enabled: true, provider: "feishu" as const, channelAppId: "cli_nochat" };
+		const noChat = {
+			enabled: true,
+			provider: "feishu" as const,
+			channelAppId: "cli_nochat",
+			targetChatId: "oc_missing",
+		};
 		await expect(service.create({ ...INPUT, notification: noChat })).rejects.toThrow("no private conversation");
 
 		const task = await service.create({
 			...INPUT,
-			notification: { enabled: true, provider: "feishu", channelAppId: "cli_bot" },
+			notification: { enabled: true, provider: "feishu", channelAppId: "cli_bot", targetChatId: "oc_p2p" },
 		});
 		expect(task.notification?.channelAppId).toBe("cli_bot");
+		expect(task.notification?.targetChatId).toBe("oc_p2p");
 
 		await expect(service.update(task.id, { notification: noChat })).rejects.toThrow("no private conversation");
+
+		// Channel-only targets no longer satisfy input validation; the explicit chat is required.
+		await expect(
+			service.update(task.id, {
+				notification: { enabled: true, provider: "feishu", channelAppId: "cli_bot" },
+			}),
+		).rejects.toThrow("IM notification target is required");
 
 		// Legacy chatId targets pass through resolution.
 		await service.update(task.id, {
@@ -592,7 +607,7 @@ describe("SchedulerService", () => {
 		await service.initialize();
 		const task = await service.create({
 			...INPUT,
-			notification: { enabled: true, provider: "feishu", channelAppId: "cli_anything" },
+			notification: { enabled: true, provider: "feishu", channelAppId: "cli_anything", targetChatId: "oc_p2p" },
 		});
 		expect(task.notification?.enabled).toBe(true);
 	});
@@ -744,7 +759,7 @@ describe("SchedulerService", () => {
 		});
 		await service.start(task.id);
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => service.listLogs(task.id)[0]?.status === "success");
 		await waitFor(() => service.listTasks().find((item) => item.id === task.id)?.status === "paused");
 
@@ -752,6 +767,45 @@ describe("SchedulerService", () => {
 		await new Promise((resolve) => setTimeout(resolve, 400));
 		expect(executor.execute).toHaveBeenCalledTimes(1);
 		expect(service.listTasks().find((item) => item.id === task.id)?.scheduleCompletedAt).toBeTruthy();
+	});
+
+	it("does not fire the original one-time timer while a manual run outlasts it", async () => {
+		const dir = await tempDir();
+		let started = false;
+		let releaseRun!: () => void;
+		const runGate = new Promise<void>((resolve) => {
+			releaseRun = resolve;
+		});
+		const executor: ScheduledTaskExecutor = {
+			execute: vi.fn(async () => {
+				started = true;
+				await runGate;
+				return { output: "ran now" };
+			}),
+		};
+		const service = createService(dir, executor);
+		await service.initialize();
+		const task = await service.create({
+			...INPUT,
+			cron: undefined,
+			schedule: { kind: "once", runAt: new Date(Date.now() + 150).toISOString() },
+		});
+		await service.start(task.id);
+
+		await service.runNow(task.id);
+		await waitFor(() => started);
+
+		// The original timestamp passes while the manual run is still in flight:
+		// no competing execution, no skipped log, and the task is not paused early.
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		expect(executor.execute).toHaveBeenCalledTimes(1);
+		expect(service.listLogs(task.id).some((log) => log.status === "skipped")).toBe(false);
+		expect(service.listTasks().find((item) => item.id === task.id)?.status).toBe("scheduled");
+
+		releaseRun();
+		await waitFor(() => service.listLogs(task.id)[0]?.status === "success");
+		await waitFor(() => service.listTasks().find((item) => item.id === task.id)?.status === "paused");
+		expect(executor.execute).toHaveBeenCalledTimes(1);
 	});
 
 	it("files a test run under the given task so it appears in that task's history", async () => {
@@ -784,7 +838,7 @@ describe("SchedulerService", () => {
 			executionTimeoutMs: 10_000,
 		});
 
-		service.runNow(task.id);
+		await service.runNow(task.id);
 		await waitFor(() => service.listLogs(task.id)[0]?.status === "success");
 
 		expect(acquire).toHaveBeenCalledWith(task.id, 4 * (10_000 + 2_000) + 60_000);

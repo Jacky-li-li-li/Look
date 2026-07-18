@@ -43,7 +43,7 @@ export const schedulerRouter: IpcRouter = (ctx, register) => {
 
 	register("scheduled-task:run-now", async (data) => {
 		await ctx.schedulerService.waitUntilInitialized();
-		return { success: true, ...ctx.schedulerService.runNow(guardString(data.taskId, "taskId")) };
+		return { success: true, ...(await ctx.schedulerService.runNow(guardString(data.taskId, "taskId"))) };
 	});
 
 	register("scheduled-task:test", async (data) => {

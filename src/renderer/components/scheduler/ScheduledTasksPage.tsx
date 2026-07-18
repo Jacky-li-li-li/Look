@@ -40,7 +40,15 @@ import { activeAgentIdAtom, showScheduledTasksAtom } from "../../store/atoms";
 
 type ModelChoice = { provider: string; id: string; name: string };
 type ImChannel = { appId: string; name?: string; connected: boolean; enabled: boolean };
-type ImBinding = { chatId: string; sessionId: string; projectId: string; createdAt: number; appId?: string };
+type ImBinding = {
+	chatId: string;
+	sessionId: string;
+	projectId: string;
+	createdAt: number;
+	appId?: string;
+	chatType?: "p2p" | "group";
+	peerName?: string;
+};
 
 type FormState = {
 	name: string;
@@ -55,6 +63,7 @@ type FormState = {
 	model: string;
 	notifyIm: boolean;
 	notificationChannel: string;
+	notificationChatId: string;
 	maxAttempts: string;
 	initialDelaySeconds: string;
 };
@@ -82,6 +91,7 @@ function createEmptyForm(): FormState {
 		model: "",
 		notifyIm: false,
 		notificationChannel: "",
+		notificationChatId: "",
 		maxAttempts: "3",
 		initialDelaySeconds: "5",
 	};
@@ -130,6 +140,18 @@ function statusBadgeStyle(status: ScheduledTaskRunLog["status"]): string {
 function maskAppId(appId: string): string {
 	if (appId.length <= 8) return "****";
 	return `${appId.slice(0, 4)}****${appId.slice(-4)}`;
+}
+
+/** 指定渠道可推送的私聊会话候选（含 chatType 未回填的旧绑定），最新创建优先。 */
+function p2pCandidatesFor(imBindings: ImBinding[], appId: string): ImBinding[] {
+	return imBindings
+		.filter((b) => (!b.appId || b.appId === appId) && b.chatType !== "group")
+		.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** 选中的会话不在候选列表（如刚切换渠道）时回退到最新一条。 */
+function effectiveChatId(candidates: ImBinding[], selectedChatId: string): string {
+	return candidates.some((b) => b.chatId === selectedChatId) ? selectedChatId : (candidates[0]?.chatId ?? "");
 }
 
 function EmptyTaskList() {
@@ -212,24 +234,39 @@ type TaskDetailProps = {
 	task: ScheduledTask;
 	projects: ProjectInfo[];
 	imChannels: ImChannel[];
+	imBindings: ImBinding[];
 	describeSchedule: (task: ScheduledTask) => string;
 	busy: boolean;
 	openEdit: (task: ScheduledTask) => void;
 	act: (action: "start" | "pause" | "run" | "delete", task: ScheduledTask) => void;
 };
 
-function TaskDetail({ task, projects, imChannels, describeSchedule, busy, openEdit, act }: TaskDetailProps) {
+function TaskDetail({
+	task,
+	projects,
+	imChannels,
+	imBindings,
+	describeSchedule,
+	busy,
+	openEdit,
+	act,
+}: TaskDetailProps) {
 	const { t } = useTranslation();
 	const projectName = projects.find((p) => p.id === task.projectId)?.name ?? task.projectId;
 	const notificationTarget = (() => {
 		const notification = task.notification;
 		if (!notification?.enabled) return null;
-		if (notification.channelAppId) {
-			const channel = imChannels.find((c) => c.appId === notification.channelAppId);
-			return `${channel?.name || maskAppId(notification.channelAppId)} · ${t("scheduledTasks.imPrivateChat")}`;
+		const channelLabel = notification.channelAppId
+			? imChannels.find((c) => c.appId === notification.channelAppId)?.name || maskAppId(notification.channelAppId)
+			: null;
+		// 显式会话目标：优先显示私聊对端姓名
+		if (notification.targetChatId) {
+			const peer = imBindings.find((b) => b.chatId === notification.targetChatId)?.peerName;
+			const chatLabel = peer || `…${notification.targetChatId.slice(-8)}`;
+			return channelLabel ? `${channelLabel} · ${chatLabel}` : chatLabel;
 		}
-		// Legacy target: a raw chatId.
-		return notification.targetChatId ? `…${notification.targetChatId.slice(-8)}` : null;
+		// channel-only 旧任务：发送时解析为该 bot 的私聊
+		return channelLabel ? `${channelLabel} · ${t("scheduledTasks.imPrivateChat")}` : null;
 	})();
 	return (
 		<div className="mx-auto max-w-3xl space-y-6">
@@ -354,6 +391,7 @@ type TaskEditorProps = {
 	projects: ProjectInfo[];
 	models: ModelChoice[];
 	imChannels: ImChannel[];
+	imBindings: ImBinding[];
 	busy: boolean;
 	testing: boolean;
 	testResult: ScheduledTaskRunLog | null;
@@ -390,6 +428,7 @@ function TaskEditor({
 	projects,
 	models,
 	imChannels,
+	imBindings,
 	busy,
 	testing,
 	testResult,
@@ -435,6 +474,10 @@ function TaskEditor({
 		(notificationChannel: string) => setForm((prev) => ({ ...prev, notificationChannel })),
 		[setForm],
 	);
+	const handleNotificationChatChange = useCallback(
+		(notificationChatId: string) => setForm((prev) => ({ ...prev, notificationChatId })),
+		[setForm],
+	);
 	const handlePromptChange = useCallback(
 		(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, prompt: e.target.value })),
 		[setForm],
@@ -453,6 +496,9 @@ function TaskEditor({
 	);
 
 	const imDisabled = !form.notifyIm && imChannels.length === 0;
+	// 所选渠道下可推送的私聊会话；收件人由用户显式选择并随任务持久化
+	const chatCandidates = p2pCandidatesFor(imBindings, form.notificationChannel);
+	const selectedChatId = effectiveChatId(chatCandidates, form.notificationChatId);
 
 	return (
 		<div className="mx-auto max-w-3xl space-y-6">
@@ -646,7 +692,27 @@ function TaskEditor({
 									))}
 								</SelectContent>
 							</Select>
-							<p className="mt-2 text-[10px] text-muted-foreground">{t("scheduledTasks.imP2pHint")}</p>
+							{chatCandidates.length > 0 ? (
+								<>
+									<Select value={selectedChatId} onValueChange={handleNotificationChatChange}>
+										<SelectTrigger className="mt-2">
+											<SelectValue placeholder={t("scheduledTasks.selectNotificationConversation")} />
+										</SelectTrigger>
+										<SelectContent>
+											{chatCandidates.map((binding) => (
+												<SelectItem key={binding.chatId} value={binding.chatId}>
+													{binding.peerName || `…${binding.chatId.slice(-8)}`}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<p className="mt-2 text-[10px] text-muted-foreground">{t("scheduledTasks.imP2pHint")}</p>
+								</>
+							) : (
+								<p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400">
+									{t("scheduledTasks.imNoP2p")}
+								</p>
+							)}
 						</>
 					)}
 					{imChannels.length === 0 && (
@@ -936,6 +1002,7 @@ export default function ScheduledTasksPage() {
 			model: task.model ?? "",
 			notifyIm: task.notification?.enabled ?? false,
 			notificationChannel: task.notification?.channelAppId ?? legacyChannel ?? imChannels[0]?.appId ?? "",
+			notificationChatId: task.notification?.targetChatId ?? "",
 			maxAttempts: String(task.retry.maxAttempts),
 			initialDelaySeconds: String(task.retry.initialDelayMs / 1_000),
 		});
@@ -1014,7 +1081,10 @@ export default function ScheduledTasksPage() {
 			toast.error(t("scheduledTasks.modelRequired"));
 			return null;
 		}
-		if (form.notifyIm && !form.notificationChannel) {
+		const targetChatId = form.notifyIm
+			? effectiveChatId(p2pCandidatesFor(imBindings, form.notificationChannel), form.notificationChatId)
+			: "";
+		if (form.notifyIm && (!form.notificationChannel || !targetChatId)) {
 			toast.error(t("scheduledTasks.notificationTargetRequired"));
 			return null;
 		}
@@ -1042,6 +1112,7 @@ export default function ScheduledTasksPage() {
 				enabled: form.notifyIm,
 				provider: "feishu",
 				channelAppId: form.notificationChannel || undefined,
+				targetChatId: targetChatId || undefined,
 			},
 			retry: {
 				maxAttempts,
@@ -1247,6 +1318,7 @@ export default function ScheduledTasksPage() {
 								projects={projects}
 								models={models}
 								imChannels={imChannels}
+								imBindings={imBindings}
 								busy={busy}
 								testing={testing}
 								testResult={testResult}
@@ -1260,6 +1332,7 @@ export default function ScheduledTasksPage() {
 									task={selected}
 									projects={projects}
 									imChannels={imChannels}
+									imBindings={imBindings}
 									describeSchedule={describeSchedule}
 									busy={busy}
 									openEdit={openEdit}

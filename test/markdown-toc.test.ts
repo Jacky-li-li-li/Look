@@ -19,31 +19,55 @@ describe("extractHeadings", () => {
 	it("提取多级标题并保留层级", () => {
 		const md = "# 标题一\n\n正文\n\n## 小节 A\n\n### 细节\n\n## 小节 B\n";
 		expect(extractHeadings(md)).toEqual([
-			{ level: 1, text: "标题一", slug: "标题一" },
-			{ level: 2, text: "小节 A", slug: "小节-a" },
-			{ level: 3, text: "细节", slug: "细节" },
-			{ level: 2, text: "小节 B", slug: "小节-b" },
+			{ level: 1, text: "标题一", slug: "标题一", baseSlug: "标题一", occurrence: 0 },
+			{ level: 2, text: "小节 A", slug: "小节-a", baseSlug: "小节-a", occurrence: 0 },
+			{ level: 3, text: "细节", slug: "细节", baseSlug: "细节", occurrence: 0 },
+			{ level: 2, text: "小节 B", slug: "小节-b", baseSlug: "小节-b", occurrence: 0 },
 		]);
 	});
 
-	it("同名标题追加序号后缀", () => {
-		const md = "## 重复\n\n## 重复\n";
-		expect(extractHeadings(md).map((h) => h.slug)).toEqual(["重复", "重复-1"]);
+	it("同名标题追加序号后缀并记录出现序号", () => {
+		const md = "## 重复\n\n## 重复\n\n## 重复\n";
+		expect(extractHeadings(md)).toEqual([
+			{ level: 2, text: "重复", slug: "重复", baseSlug: "重复", occurrence: 0 },
+			{ level: 2, text: "重复", slug: "重复-1", baseSlug: "重复", occurrence: 1 },
+			{ level: 2, text: "重复", slug: "重复-2", baseSlug: "重复", occurrence: 2 },
+		]);
+	});
+
+	it("自身以 -数字 结尾的标题重复时后缀基于 baseSlug 递增", () => {
+		const md = "## 版本-1\n\n## 版本-1\n";
+		expect(extractHeadings(md)).toEqual([
+			{ level: 2, text: "版本-1", slug: "版本-1", baseSlug: "版本-1", occurrence: 0 },
+			{ level: 2, text: "版本-1", slug: "版本-1-1", baseSlug: "版本-1", occurrence: 1 },
+		]);
 	});
 
 	it("围栏代码块中的 # 行不算标题", () => {
 		const md = "## 真标题\n\n```py\n# 这是注释\nprint(1)\n```\n\n正文\n";
-		expect(extractHeadings(md)).toEqual([{ level: 2, text: "真标题", slug: "真标题" }]);
+		expect(extractHeadings(md)).toEqual([
+			{ level: 2, text: "真标题", slug: "真标题", baseSlug: "真标题", occurrence: 0 },
+		]);
 	});
 
 	it("剥掉行内标记与闭合 #", () => {
 		const md = "## 配置 `config.json` 说明 ##\n";
-		expect(extractHeadings(md)).toEqual([{ level: 2, text: "配置 config.json 说明", slug: "配置-configjson-说明" }]);
+		expect(extractHeadings(md)).toEqual([
+			{
+				level: 2,
+				text: "配置 config.json 说明",
+				slug: "配置-configjson-说明",
+				baseSlug: "配置-configjson-说明",
+				occurrence: 0,
+			},
+		]);
 	});
 
 	it("链接文本保留为标题文字", () => {
 		const md = "## 参见 [文档](https://example.com)\n";
-		expect(extractHeadings(md)).toEqual([{ level: 2, text: "参见 文档", slug: "参见-文档" }]);
+		expect(extractHeadings(md)).toEqual([
+			{ level: 2, text: "参见 文档", slug: "参见-文档", baseSlug: "参见-文档", occurrence: 0 },
+		]);
 	});
 
 	it("无标题与空输入返回空数组", () => {

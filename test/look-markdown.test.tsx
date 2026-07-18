@@ -24,6 +24,22 @@ describe("LookMarkdown", () => {
 	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/markdown/LookMarkdown.tsx"), "utf8");
 	const APP_CSS = readFileSync(resolve(__dirname, "../src/renderer/App.css"), "utf8");
 
+	it("matches TOC slugs for headings with inline formatting and duplicates", async () => {
+		const content = [
+			"## 参见 [文档](https://example.com)",
+			"",
+			"## 配置 `config.json` 说明",
+			"",
+			"## 重复",
+			"",
+			"## 重复",
+		].join("\n");
+		const { container } = render(<LookMarkdown content={content} docs />);
+		await waitFor(() => expect(container.querySelectorAll("h2").length).toBe(4));
+		const slugs = [...container.querySelectorAll("h2")].map((h) => h.getAttribute("data-toc-slug"));
+		expect(slugs).toEqual(["参见-文档", "配置-configjson-说明", "重复", "重复"]);
+	});
+
 	it("renders basic markdown", async () => {
 		const content = `# Hello
 

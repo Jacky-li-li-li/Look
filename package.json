@@ -39,7 +39,6 @@
     "@earendil-works/pi-coding-agent": "^0.80.10",
     "@fontsource-variable/geist": "^5.2.9",
     "@larksuiteoapi/node-sdk": "^1.68.0",
-    "@milkdown/crepe": "^7.21.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",

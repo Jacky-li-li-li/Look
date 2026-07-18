@@ -3,7 +3,7 @@ import { McpTag } from "@shared/components/McpTag";
 import { SkillTag } from "@shared/components/SkillTag";
 import { cn } from "@shared/lib/utils";
 import { useAtomValue, useSetAtom } from "jotai";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "react";
 import type { Components } from "streamdown";
 import { coalesceChildren, looksLikeFilePath, resolveToAbsolutePath } from "../../lib/filePathDetection";
 import { slugifyHeading } from "../../lib/markdownToc";
@@ -16,14 +16,35 @@ function withoutNode<T extends { node?: unknown }>({ node: _node, ...props }: T)
 	return props;
 }
 
+/**
+ * 递归提取标题的纯文本内容:React 元素取其子文本(img 取 alt),
+ * 与 markdownToc.plainText 处理原始 markdown 的结果对齐,保证
+ * 含粗体/链接/代码等行内格式的标题得到相同的 slug。
+ * 注意与 filePathDetection.coalesceChildren 语义不同——那里有意忽略元素节点。
+ */
+function extractTextContent(children: ReactNode): string {
+	if (children == null || typeof children === "boolean") return "";
+	if (typeof children === "string") return children;
+	if (typeof children === "number") return String(children);
+	if (Array.isArray(children)) return children.map(extractTextContent).join("");
+	if (isValidElement(children)) {
+		const props = children.props as { children?: ReactNode; alt?: unknown };
+		const text = extractTextContent(props.children);
+		return text || (typeof props.alt === "string" ? props.alt : "");
+	}
+	return "";
+}
+
 function Heading({ level, className, children, ...props }: ElementProps<"h1"> & { level: 1 | 2 | 3 | 4 | 5 | 6 }) {
 	const Tag = `h${level}` as const;
-	// 与 markdownToc.slugifyHeading 一致,供文件预览的目录导航定位
-	const id = slugifyHeading(coalesceChildren(children));
+	// 与 markdownToc.slugifyHeading 一致,供文件预览的目录导航定位;
+	// data-toc-slug 配合 TocHeading.occurrence 让重复/富文本标题也能精确定位
+	const slug = slugifyHeading(extractTextContent(children));
 	return (
 		<Tag
 			{...withoutNode(props)}
-			id={id || undefined}
+			id={slug || undefined}
+			data-toc-slug={slug || undefined}
 			className={cn("look-md-heading", `look-md-h${level}`, className)}
 		>
 			{children}

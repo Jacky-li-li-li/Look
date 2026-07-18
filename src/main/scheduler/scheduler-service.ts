@@ -39,12 +39,13 @@ export interface SchedulerServiceOptions {
 	/** Project lookup used to validate task projectIds and pause tasks whose project was removed. */
 	getProjectInfo: (projectId: string) => ProjectInfo | null | undefined;
 	/**
-	 * Resolve the deliverable chat target for a notification config: a
-	 * channel-based notification is mapped to the bot's p2p conversation with
-	 * the user, a legacy targetChatId passes through. Return null when the
-	 * target cannot be resolved (e.g. the user never messaged the bot
-	 * privately); return undefined when IM is unavailable and validation must
-	 * be skipped instead of blocking the save.
+	 * Resolve the deliverable chat target for a notification config: an explicit
+	 * targetChatId paired with channelAppId is matched against the bot's known
+	 * p2p bindings (never re-inferred), a legacy raw targetChatId passes
+	 * through, and a channel-only legacy config falls back to the bot's most
+	 * recent p2p conversation. Return null when the target cannot be resolved
+	 * (e.g. the user never messaged the bot privately); return undefined when
+	 * IM is unavailable and validation must be skipped instead of blocking the save.
 	 */
 	resolveNotificationTarget?: (
 		notification: ScheduledTaskNotification,
@@ -385,7 +386,7 @@ export class SchedulerService {
 		}
 	}
 
-	runNow(taskId: string): { accepted: true } {
+	async runNow(taskId: string): Promise<{ accepted: true }> {
 		const task = this.requireTask(taskId);
 		// 同步校验 project 是否仍然存在：避免前端显示"已接受执行"后立即失败
 		if (this.options.getProjectInfo) {
@@ -403,8 +404,13 @@ export class SchedulerService {
 				);
 			}
 		}
+		// A manual run consumes a one-time plan before execution starts. Clearing the
+		// timer first prevents the original due time from producing a competing
+		// skipped run (and prematurely marking the task complete) while this run is
+		// still in flight.
+		if (task.schedule?.kind === "once") await this.removeSchedule(taskId);
+
 		const execution = this.startExecution(taskId, new Date());
-		// A manual run of a one-time plan consumes it; the timer must not fire again later.
 		if (task.schedule?.kind === "once") {
 			const runAt = task.schedule.runAt;
 			void execution.finally(() => this.completeOneTime(taskId, runAt));
@@ -820,11 +826,7 @@ export class SchedulerService {
 			throw new Error("Task parameters must be a string-to-string object");
 		}
 		if (input.model !== undefined && !input.model.trim()) throw new Error("Task model cannot be empty");
-		if (
-			input.notification?.enabled &&
-			!input.notification.channelAppId?.trim() &&
-			!input.notification.targetChatId?.trim()
-		) {
+		if (input.notification?.enabled && !input.notification.targetChatId?.trim()) {
 			throw new Error("IM notification target is required");
 		}
 		if (input.notification && input.notification.provider !== "feishu") {

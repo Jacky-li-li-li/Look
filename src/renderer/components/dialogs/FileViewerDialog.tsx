@@ -28,7 +28,7 @@ import { createHighlighter, type HighlighterGeneric } from "shiki";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { toast } from "sonner";
 import { resolveFileLanguage } from "../../lib/fileLanguage";
-import { extractHeadings } from "../../lib/markdownToc";
+import { extractHeadings, type TocHeading } from "../../lib/markdownToc";
 import { viewingFileAtom } from "../../store/atoms";
 import { FileIcon } from "../workspace/FileIcon";
 
@@ -148,13 +148,26 @@ export default function FileViewerDialog() {
 		[tocWidth],
 	);
 
-	const scrollToHeading = useCallback((slug: string) => {
-		const target = previewRef.current?.querySelector(`#${CSS.escape(slug)}`);
-		if (!target) return;
-		const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-		target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-		setActiveSlug(slug);
+	// 目录定位:重复标题共享同一 data-toc-slug,用出现序号挑选目标,
+	// 与 markdownToc.extractHeadings 的 baseSlug/occurrence 一一对应
+	const findHeadingElement = useCallback((heading: TocHeading): HTMLElement | null => {
+		const container = previewRef.current;
+		if (!container) return null;
+		const matches = container.querySelectorAll(`[data-toc-slug="${CSS.escape(heading.baseSlug)}"]`);
+		const target = matches.item(heading.occurrence);
+		return target instanceof HTMLElement ? target : null;
 	}, []);
+
+	const scrollToHeading = useCallback(
+		(heading: TocHeading) => {
+			const target = findHeadingElement(heading);
+			if (!target) return;
+			const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+			target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+			setActiveSlug(heading.slug);
+		},
+		[findHeadingElement],
+	);
 
 	// 滚动高亮:当前标题 = 顶部 30% 线上方最后一个标题;滚到底部时锁定最后一个。
 	// LookMarkdown 懒加载,延迟建立;scroll 事件经 rAF 节流。
@@ -165,21 +178,21 @@ export default function FileViewerDialog() {
 		const timer = setTimeout(() => {
 			const container = previewRef.current;
 			if (!container) return;
-			const elements = tocHeadings
-				.map((h) => container.querySelector(`#${CSS.escape(h.slug)}`))
-				.filter((el): el is HTMLElement => el instanceof HTMLElement);
-			if (elements.length === 0) return;
+			const entries = tocHeadings
+				.map((h) => ({ slug: h.slug, el: findHeadingElement(h) }))
+				.filter((entry): entry is { slug: string; el: HTMLElement } => entry.el instanceof HTMLElement);
+			if (entries.length === 0) return;
 			const update = () => {
 				const zoneTop = container.getBoundingClientRect().top + container.clientHeight * 0.3;
-				let current = elements[0].id;
-				for (const el of elements) {
-					if (el.getBoundingClientRect().top <= zoneTop) current = el.id;
+				let currentIndex = 0;
+				for (let i = 0; i < entries.length; i += 1) {
+					if (entries[i].el.getBoundingClientRect().top <= zoneTop) currentIndex = i;
 					else break;
 				}
 				if (container.scrollTop + container.clientHeight >= container.scrollHeight - 4) {
-					current = elements[elements.length - 1].id;
+					currentIndex = entries.length - 1;
 				}
-				setActiveSlug(current);
+				setActiveSlug(entries[currentIndex].slug);
 			};
 			const onScroll = () => {
 				cancelAnimationFrame(raf);
@@ -194,7 +207,7 @@ export default function FileViewerDialog() {
 			cancelAnimationFrame(raf);
 			cleanup?.();
 		};
-	}, [showToc, tocHeadings]);
+	}, [showToc, tocHeadings, findHeadingElement]);
 
 	// 加载流程:absolutePath 变化(或手动刷新)时重新读取,带竞态保护
 	useEffect(() => {
@@ -456,7 +469,7 @@ export default function FileViewerDialog() {
 												<li key={h.slug}>
 													<button
 														type="button"
-														onClick={() => scrollToHeading(h.slug)}
+														onClick={() => scrollToHeading(h)}
 														className={cn(
 															"block w-full truncate rounded px-2 py-1 text-left text-xs transition-colors",
 															activeSlug === h.slug

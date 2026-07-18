@@ -18,6 +18,7 @@ describe("ScheduledTasksPage", () => {
 	const getImBindings = vi.fn();
 	const getImChannels = vi.fn();
 	const testScheduledTask = vi.fn();
+	const createScheduledTask = vi.fn();
 
 	beforeEach(async () => {
 		await i18n.changeLanguage("en");
@@ -35,7 +36,17 @@ describe("ScheduledTasksPage", () => {
 		});
 		getImBindings.mockReset().mockResolvedValue({
 			success: true,
-			bindings: [{ chatId: "chat-12345678", sessionId: "session-1", projectId: "project-1", createdAt: 1 }],
+			bindings: [
+				{
+					chatId: "chat-12345678",
+					sessionId: "session-1",
+					projectId: "project-1",
+					createdAt: 1,
+					appId: "app-1",
+					chatType: "p2p",
+					peerName: "Desktop User",
+				},
+			],
 		});
 		getImChannels.mockReset().mockResolvedValue({
 			success: true,
@@ -57,6 +68,7 @@ describe("ScheduledTasksPage", () => {
 				ownerId: "test",
 			},
 		});
+		createScheduledTask.mockReset().mockResolvedValue({ success: true });
 		Object.defineProperty(window, "look", {
 			configurable: true,
 			value: {
@@ -68,6 +80,7 @@ describe("ScheduledTasksPage", () => {
 				getImBindings,
 				getImChannels,
 				testScheduledTask,
+				createScheduledTask,
 			},
 		});
 	});
@@ -137,6 +150,38 @@ describe("ScheduledTasksPage", () => {
 		);
 		await waitFor(() => expect(screen.getByText("Test completed successfully")).toBeTruthy());
 		expect(screen.getByText("Draft completed")).toBeTruthy();
+	});
+
+	it("persists the explicitly selected private chat as the notification target", async () => {
+		render(
+			<I18nextProvider i18n={i18n}>
+				<Provider store={appStore}>
+					<ScheduledTasksPage />
+				</Provider>
+			</I18nextProvider>,
+		);
+		await waitFor(() => expect(getModels).toHaveBeenCalledOnce());
+		fireEvent.click(screen.getByRole("button", { name: "New task" }));
+		fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Notify me" } });
+		fireEvent.change(screen.getByLabelText("Agent prompt"), { target: { value: "Check the repository" } });
+
+		fireEvent.click(screen.getByRole("switch", { name: "IM notification" }));
+
+		// 私聊会话选择器默认选中该渠道最新的 p2p 绑定
+		await waitFor(() => expect(screen.getByText("Desktop User")).toBeTruthy());
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+		await waitFor(() => expect(createScheduledTask).toHaveBeenCalledOnce());
+		expect(createScheduledTask).toHaveBeenCalledWith(
+			expect.objectContaining({
+				notification: {
+					enabled: true,
+					provider: "feishu",
+					channelAppId: "app-1",
+					targetChatId: "chat-12345678",
+				},
+			}),
+		);
 	});
 
 	it("clears the selected task after deletion", async () => {
