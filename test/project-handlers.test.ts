@@ -10,6 +10,7 @@ import {
 	projectsAtom,
 	removeProjectAtoms,
 	sharedFilesAtomFamily,
+	showHiddenFilesAtom,
 } from "../src/renderer/store/atoms";
 
 const projectId = "project-a";
@@ -37,6 +38,7 @@ describe("handleProjectEvent", () => {
 		appStore.set(openProjectIdsAtom, []);
 		appStore.set(pendingDeleteProjectAtom, null);
 		appStore.set(appReadyPhaseAtom, 0);
+		appStore.set(showHiddenFilesAtom, false);
 		removeProjectAtoms(projectId);
 		removeProjectAtoms(otherProjectId);
 	});
@@ -144,10 +146,26 @@ describe("handleProjectEvent", () => {
 		);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
-		expect(listWorkspaceChildren).toHaveBeenCalledWith(projectId, "src");
+		expect(listWorkspaceChildren).toHaveBeenCalledWith(projectId, "src", false);
 		expect(appStore.get(loadedWorkspaceChildrenAtomFamily(projectId)).get("src")).toEqual([
 			{ name: "b", path: "b", type: "file" },
 		]);
+		vi.unstubAllGlobals();
+	});
+
+	it("workspace:updated refetch passes current showHiddenFilesAtom value", async () => {
+		appStore.set(showHiddenFilesAtom, true);
+		appStore.set(loadedWorkspaceChildrenAtomFamily(projectId), new Map([["src", []]]));
+		const listWorkspaceChildren = vi.fn().mockResolvedValue({ success: true, nodes: [] });
+		vi.stubGlobal("window", { look: { listWorkspaceChildren } });
+
+		handleProjectEvent(
+			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<typeof handleProjectEvent>[0],
+			sharedRefreshTimers,
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(listWorkspaceChildren).toHaveBeenCalledWith(projectId, "src", true);
 		vi.unstubAllGlobals();
 	});
 

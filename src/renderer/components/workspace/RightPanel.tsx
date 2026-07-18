@@ -38,11 +38,12 @@ export function RightPanel() {
 	const setIsLoading = useSetAtom(loadingAtom);
 
 	// 切换项目时拉取新文件树(占位 projectId 时跳过)。
-	// 缓存非空时跳过主动拉取,完全依赖 shared:updated 事件刷新(M-1)。
+	// 缓存非空时跳过主动拉取;watcher 按项目常驻,shared:updated 事件会持续刷新缓存(M-1)。
 	useEffect(() => {
 		if (projectId === PLACEHOLDER_PROJECT_ID) return;
 		const pid = projectId;
 		// 缓存非空时跳过 — 切回已加载过的项目不会重复 fetch
+		// (常驻 watcher 保证离开期间的改动也会通过 shared:updated 写入缓存,不会过期)
 		if (appStore.get(sharedFilesAtomFamily(pid)).length > 0) return;
 		let cancelled = false;
 		setIsLoading(true);
@@ -69,7 +70,9 @@ export function RightPanel() {
 		};
 	}, [projectId, setIsLoading, t]);
 
-	// 启动 watcher;切项目或卸载时显式 stop,避免 chokidar 句柄累积(H-2)。
+	// 启动共享区 watcher。watcher 按项目常驻,切项目时不在此处 stop:
+	// 主进程 startWatching 幂等,离开期间的改动仍会通过 shared:updated 刷新缓存,
+	// 项目删除时由主进程 project-deletion-service 统一 stopWatching(H-2)。
 	useEffect(() => {
 		if (projectId === PLACEHOLDER_PROJECT_ID) return;
 		const pid = projectId;
@@ -82,11 +85,6 @@ export function RightPanel() {
 				const message = error instanceof Error ? error.message : t("rightPanel.watchFailed");
 				toast.error(message);
 			});
-		return () => {
-			window.look.stopSharedWatch(pid).catch(() => {
-				// best-effort:切换/卸载时旧 watcher 的停止失败不打扰用户
-			});
-		};
 	}, [projectId, t]);
 
 	if (!activeProject) return null;

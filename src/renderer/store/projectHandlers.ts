@@ -10,6 +10,7 @@ import {
 	projectsAtom,
 	removeProjectAtoms,
 	sharedFilesAtomFamily,
+	showHiddenFilesAtom,
 } from "./atoms";
 
 export function handleProjectEvent(
@@ -88,7 +89,7 @@ export function handleProjectEvent(
 			const loadedAtom = loadedWorkspaceChildrenAtomFamily(projectId);
 			if (!appStore.get(loadedAtom).has(relativePath)) return true;
 			void window.look
-				.listWorkspaceChildren(projectId, relativePath)
+				.listWorkspaceChildren(projectId, relativePath, appStore.get(showHiddenFilesAtom))
 				.then((result) => {
 					if (result?.success && result.nodes) {
 						appStore.set(loadedAtom, (prev) => {

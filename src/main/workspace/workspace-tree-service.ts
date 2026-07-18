@@ -173,9 +173,10 @@ export class WorkspaceTreeService {
 		}
 
 		const watcher = chokidar.watch(target, {
+			// 只按名称忽略噪音目录/系统文件;隐藏文件过滤交给渲染端 refetch 时的 showHiddenFiles 参数
 			ignored: (watchPath: string) => {
 				const base = path.basename(watchPath);
-				return shouldIgnore(base, true);
+				return NOISE_DIRS.has(base) || SYSTEM_FILES.has(base);
 			},
 			ignoreInitial: true,
 			persistent: true,

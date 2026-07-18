@@ -384,7 +384,7 @@ const mockApi = {
 	writeSharedContent: () => ok,
 
 	// ---- Workspace tree ----
-	listWorkspaceChildren: () => success({ children: [] }),
+	listWorkspaceChildren: () => success({ nodes: [] }),
 	statWorkspaceNode: () => success({ node: null }),
 	startWorkspaceWatch: () => ok,
 	stopWorkspaceWatch: () => ok,

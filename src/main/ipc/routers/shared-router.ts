@@ -3,7 +3,7 @@
 // ============================================================
 
 import { SHARED_MAX_CONTENT_BYTES } from "../../workspace/workspace-file-service.js";
-import { guardEnum, guardString, guardStringArray } from "../guards.js";
+import { guardEnum, guardOptionalString, guardString, guardStringArray } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
 export const sharedRouter: IpcRouter = (ctx, register) => {
@@ -53,7 +53,8 @@ export const sharedRouter: IpcRouter = (ctx, register) => {
 	register("shared:import", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const sources = guardStringArray(data.sources, "sources");
-		await ctx.workspaceFileService.importToShared(projectId, sources, data.targetDir);
+		const targetDir = guardOptionalString(data.targetDir, "targetDir");
+		await ctx.workspaceFileService.importToShared(projectId, sources, targetDir);
 		return { success: true };
 	});
 
