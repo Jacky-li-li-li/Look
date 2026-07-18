@@ -767,5 +767,24 @@
     "pirate": "海盗",
     "cozy": "温暖",
     "rebel": "叛逆"
+  },
+  "fileViewer": {
+    "preview": "预览",
+    "edit": "编辑",
+    "save": "保存",
+    "saved": "文件已保存",
+    "copyPath": "复制路径",
+    "copied": "已复制路径",
+    "revealInFinder": "在 Finder 中显示",
+    "refresh": "刷新",
+    "loading": "正在加载文件...",
+    "loadFailed": "文件加载失败",
+    "binaryNotSupported": "二进制文件无法预览。",
+    "truncatedNotice": "文件过大，仅显示前 4 MB 内容。",
+    "unsavedConfirm": "有未保存的修改，确定关闭吗？",
+    "viewFile": "查看文件",
+    "contents": "目录",
+    "back": "返回",
+    "close": "关闭"
   }
 }

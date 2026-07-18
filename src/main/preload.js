@@ -216,6 +216,10 @@ const api = {
 	stopWorkspaceWatch: (projectId, relativePath) =>
 		ipcRenderer.invoke("look:invoke", { type: "workspace:unwatch", projectId, relativePath }),
 
+	// ---- File read/write ----
+	readFileContent: (path) => ipcRenderer.invoke("look:invoke", { type: "file:read", path }),
+	writeFileContent: (path, content) => ipcRenderer.invoke("look:invoke", { type: "file:write", path, content }),
+
 	// ---- Auto Updater ----
 	checkForUpdates: () => ipcRenderer.invoke("look:invoke", { type: "update:check" }),
 	downloadUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:download" }),

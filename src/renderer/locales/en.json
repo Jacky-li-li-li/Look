@@ -767,5 +767,24 @@
     "pirate": "Pirate",
     "cozy": "Cozy",
     "rebel": "Rebel"
+  },
+  "fileViewer": {
+    "preview": "Preview",
+    "edit": "Edit",
+    "save": "Save",
+    "saved": "File saved",
+    "copyPath": "Copy path",
+    "copied": "Path copied",
+    "revealInFinder": "Reveal in Finder",
+    "refresh": "Refresh",
+    "loading": "Loading file...",
+    "loadFailed": "Failed to load file",
+    "binaryNotSupported": "Binary files cannot be previewed.",
+    "truncatedNotice": "File too large — showing the first 4 MB only.",
+    "unsavedConfirm": "You have unsaved changes. Close anyway?",
+    "viewFile": "View file",
+    "contents": "Contents",
+    "back": "Back",
+    "close": "Close"
   }
 }

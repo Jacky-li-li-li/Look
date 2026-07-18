@@ -767,5 +767,24 @@
 		"pirate": "海賊",
 		"cozy": "温かみ",
 		"rebel": "反逆者"
+	},
+	"fileViewer": {
+		"preview": "プレビュー",
+		"edit": "編集",
+		"save": "保存",
+		"saved": "ファイルを保存しました",
+		"copyPath": "パスをコピー",
+		"copied": "パスをコピーしました",
+		"revealInFinder": "Finder で表示",
+		"refresh": "再読み込み",
+		"loading": "ファイルを読み込み中...",
+		"loadFailed": "ファイルの読み込みに失敗しました",
+		"binaryNotSupported": "バイナリファイルはプレビューできません。",
+		"truncatedNotice": "ファイルが大きすぎるため、先頭 4 MB のみ表示しています。",
+		"unsavedConfirm": "保存されていない変更があります。閉じますか？",
+		"viewFile": "ファイルを表示",
+		"contents": "目次",
+		"back": "戻る",
+		"close": "閉じる"
 	}
 }

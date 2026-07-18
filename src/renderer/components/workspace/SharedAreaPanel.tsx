@@ -20,13 +20,13 @@ import {
 } from "@shared/components/ui/dropdown-menu";
 import { Input } from "@shared/components/ui/input";
 import type { FileTreeNode } from "@shared/types";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { File, Folder, FolderOpen, Import, MoreHorizontal, Plus, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
-import { selectedSharedPathAtomFamily } from "../../store/atoms";
+import { selectedSharedPathAtomFamily, viewingFileAtom } from "../../store/atoms";
 
 interface SharedAreaPanelProps {
 	projectId: string;
@@ -572,6 +572,7 @@ interface SharedAreaNodeProps {
 
 function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: SharedAreaNodeProps) {
 	const { t } = useTranslation();
+	const setViewingFile = useSetAtom(viewingFileAtom);
 	const Icon = node.type === "directory" ? Folder : File;
 	const revealInFinder = async () => {
 		const result = await window.look.revealInFinder(node.absolutePath);
@@ -585,6 +586,11 @@ function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: Shared
 			toast.error(t("sharedArea.copyFailed"));
 		}
 	};
+	// 单击文件行 → 打开文件查看器;目录只选中(双击文件仍在 Finder 中打开)
+	const handleSelect = () => {
+		onSelect(node.path);
+		if (node.type === "file") setViewingFile({ absolutePath: node.absolutePath });
+	};
 	return (
 		<div
 			className={`group flex h-7 w-full items-center rounded-md text-sm ${
@@ -597,7 +603,7 @@ function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: Shared
 					name: node.name,
 				})}
 				className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				onClick={() => onSelect(node.path)}
+				onClick={handleSelect}
 				onDoubleClick={() => node.type === "file" && void revealInFinder()}
 			>
 				<Icon className="size-4 shrink-0 text-muted-foreground" />

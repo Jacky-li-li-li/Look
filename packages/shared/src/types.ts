@@ -888,6 +888,7 @@ export type RendererToMainEvent =
 	| { type: "workspace:unwatch"; projectId: string; relativePath: string }
 	// ---- File content reading (renderer → main) ----
 	| { type: "file:read"; path: string }
+	| { type: "file:write"; path: string; content: string }
 	// ---- Permission events (renderer → main) ----
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
 	| { type: "permission:get-mode"; agentId: string }

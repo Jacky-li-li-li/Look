@@ -19,6 +19,7 @@ import ChatPanel from "./chat/ChatPanel";
 import EmptySessionState from "./chat/EmptySessionState";
 import WelcomeScreen from "./chat/WelcomeScreen";
 import DeleteProjectDialog from "./dialogs/DeleteProjectDialog";
+import FileViewerDialog from "./dialogs/FileViewerDialog";
 import NewProjectDialog from "./dialogs/NewProjectDialog";
 import PermissionDialog from "./dialogs/PermissionDialog";
 import PlanApprovalDialog from "./dialogs/PlanApprovalDialog";
@@ -272,6 +273,7 @@ function AppLayout({
 				<PermissionDialog />
 				<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 				<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
+				<FileViewerDialog />
 			</div>
 			<UpdateNotification />
 		</>

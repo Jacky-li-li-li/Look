@@ -211,6 +211,16 @@ interface LookAPI {
 	): Promise<{ success: boolean; node?: FileTreeNode | null; error?: string }>;
 	startWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
 	stopWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
+	// ---- File content ----
+	readFileContent(
+		path: string,
+	): Promise<
+		IpcResult<
+			| { kind: "text"; content: string; truncated: boolean; sizeBytes: number }
+			| { kind: "binary"; sizeBytes: number }
+		>
+	>;
+	writeFileContent(path: string, content: string): Promise<IpcResult<{ sizeBytes: number }>>;
 	// ---- IM Channels ----
 	getImChannels(): Promise<{
 		success: boolean;

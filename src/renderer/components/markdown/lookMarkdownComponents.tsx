@@ -1,10 +1,14 @@
 import { AgentTag } from "@shared/components/AgentTag";
-import { FileTag } from "@shared/components/FileTag";
 import { McpTag } from "@shared/components/McpTag";
 import { SkillTag } from "@shared/components/SkillTag";
 import { cn } from "@shared/lib/utils";
+import { useAtomValue, useSetAtom } from "jotai";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import type { Components } from "streamdown";
+import { coalesceChildren, looksLikeFilePath, resolveToAbsolutePath } from "../../lib/filePathDetection";
+import { slugifyHeading } from "../../lib/markdownToc";
+import { activeProjectAtom, viewingFileAtom } from "../../store/atoms";
+import { DocPathChip } from "./DocPathChip";
 
 type ElementProps<T extends keyof React.JSX.IntrinsicElements> = ComponentPropsWithoutRef<T> & { node?: unknown };
 
@@ -12,9 +16,19 @@ function withoutNode<T extends { node?: unknown }>({ node: _node, ...props }: T)
 	return props;
 }
 
-function Heading({ level, className, ...props }: ElementProps<"h1"> & { level: 1 | 2 | 3 | 4 | 5 | 6 }) {
+function Heading({ level, className, children, ...props }: ElementProps<"h1"> & { level: 1 | 2 | 3 | 4 | 5 | 6 }) {
 	const Tag = `h${level}` as const;
-	return <Tag {...withoutNode(props)} className={cn("look-md-heading", `look-md-h${level}`, className)} />;
+	// 与 markdownToc.slugifyHeading 一致,供文件预览的目录导航定位
+	const id = slugifyHeading(coalesceChildren(children));
+	return (
+		<Tag
+			{...withoutNode(props)}
+			id={id || undefined}
+			className={cn("look-md-heading", `look-md-h${level}`, className)}
+		>
+			{children}
+		</Tag>
+	);
 }
 
 function LookTable({ className, ...props }: ElementProps<"table">) {
@@ -51,13 +65,33 @@ function McpReference(props: Record<string, unknown>) {
 }
 
 function FileReference(props: Record<string, unknown>) {
+	const setViewingFile = useSetAtom(viewingFileAtom);
+	const activeProject = useAtomValue(activeProjectAtom);
 	const path = stringProp(props["data-look-path"]);
-	return path ? <FileTag path={path} /> : null;
+	if (!path) return null;
+	// data-look-path 可能是绝对路径或相对路径,相对时按项目 cwd 解析
+	const handleClick = () => {
+		const absolutePath = resolveToAbsolutePath(path, window.look?.homedir ?? "", activeProject?.cwd ?? null);
+		setViewingFile({ absolutePath });
+	};
+	return <DocPathChip rawPath={path} onOpen={handleClick} atMention />;
 }
 
-function InlineCode({ className, ...props }: ElementProps<"code">) {
+function InlineCode({ className, children, ...props }: ElementProps<"code">) {
+	const setViewingFile = useSetAtom(viewingFileAtom);
+	const text = coalesceChildren(children);
+	if (looksLikeFilePath(text)) {
+		// 点击时才解析绝对路径(~/ 需要 homedir),渲染保持无副作用
+		const handleClick = () => {
+			const absolutePath = resolveToAbsolutePath(text, window.look?.homedir ?? "");
+			setViewingFile({ absolutePath });
+		};
+		return <DocPathChip rawPath={text} onOpen={handleClick} />;
+	}
 	return (
-		<code {...withoutNode(props)} className={cn("look-md-inline-code", className)} data-streamdown="inline-code" />
+		<code {...withoutNode(props)} className={cn("look-md-inline-code", className)} data-streamdown="inline-code">
+			{children}
+		</code>
 	);
 }
 

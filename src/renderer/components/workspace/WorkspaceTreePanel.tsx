@@ -34,6 +34,7 @@ import {
 	expandedWorkspacePathsAtomFamily,
 	loadedWorkspaceChildrenAtomFamily,
 	showHiddenFilesAtom,
+	viewingFileAtom,
 	workspaceTreeErrorAtomFamily,
 	workspaceTreeLoadingAtomFamily,
 } from "../../store/atoms";
@@ -407,10 +408,16 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 	const { node, depth } = row;
 	const isDir = node.type === "directory";
 	const setInsertRequest = useSetAtom(chatInputInsertRequestAtom);
+	const setViewingFile = useSetAtom(viewingFileAtom);
 	const store = useStore();
 
 	const handleClickToggle = () => {
 		onToggle(row);
+	};
+
+	// 单击文件行 → 打开文件查看器(目录保持双击展开/折叠)
+	const handleViewFile = () => {
+		setViewingFile({ absolutePath: node.absolutePath });
 	};
 
 	const handleCopyPath = () => {
@@ -450,6 +457,9 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 			onDragStart={handleDragStart}
 			style={{ paddingLeft: depth * INDENT_PX + 8 }}
 			className="group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+			onClick={() => {
+				if (!isDir) handleViewFile();
+			}}
 			onDoubleClick={() => {
 				if (isDir) handleClickToggle();
 			}}
@@ -481,6 +491,7 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
+					{!isDir && <DropdownMenuItem onClick={handleViewFile}>查看文件</DropdownMenuItem>}
 					<DropdownMenuItem onClick={handleCopyPath}>复制绝对路径</DropdownMenuItem>
 					<DropdownMenuItem onClick={handleCopyAsReference} className="font-medium">
 						复制 @ 引用

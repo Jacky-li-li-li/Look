@@ -13,6 +13,7 @@ import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.j
 import type { InvokeContext, InvokeRouteMap } from "./invoke-context.js";
 import {
 	agentRouter,
+	fileRouter,
 	historyRouter,
 	imRouter,
 	mcpRouter,
@@ -30,6 +31,7 @@ import {
 
 const domainRouters = [
 	agentRouter,
+	fileRouter,
 	historyRouter,
 	modelRouter,
 	settingsRouter,
