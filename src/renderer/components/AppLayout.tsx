@@ -264,6 +264,7 @@ function AppLayout({
 					<SettingsDialog
 						open={showSettings}
 						providers={providerSettings.providers}
+						customProviders={providerSettings.customProviders}
 						customStats={providerSettings.customStats}
 						onProvidersChange={onProvidersChange}
 						onClose={handleCloseSettings}

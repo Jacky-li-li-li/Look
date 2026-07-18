@@ -16,15 +16,20 @@ import ImChannelsTab from "./ImChannelsTab";
 import McpServersTab from "./McpServersTab";
 import ProfileTab from "./ProfileTab";
 import PromptTab from "./PromptTab";
-import type { CustomProviderStats, ProviderInfo } from "./types";
+import type { CustomProviderInput, CustomProviderStats, ProviderInfo } from "./types";
 
 const _api = window.look;
 
 interface SettingsDialogProps {
 	open: boolean;
 	providers: ProviderInfo[];
+	customProviders: CustomProviderInput[];
 	customStats: CustomProviderStats;
-	onProvidersChange: (data: { providers: ProviderInfo[]; customStats: CustomProviderStats }) => void;
+	onProvidersChange: (data: {
+		providers: ProviderInfo[];
+		customProviders: CustomProviderInput[];
+		customStats: CustomProviderStats;
+	}) => void;
 	onClose: () => void;
 	defaultTab?: SettingsTab;
 }
@@ -32,6 +37,7 @@ interface SettingsDialogProps {
 const SettingsDialog = memo(function SettingsDialog({
 	open,
 	providers,
+	customProviders,
 	customStats,
 	onProvidersChange,
 	onClose,
@@ -139,7 +145,12 @@ const SettingsDialog = memo(function SettingsDialog({
 						value="api-keys"
 						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
 					>
-						<ApiKeysTab providers={providers} customStats={customStats} onProvidersChange={onProvidersChange} />
+						<ApiKeysTab
+							providers={providers}
+							customProviders={customProviders}
+							customStats={customStats}
+							onProvidersChange={onProvidersChange}
+						/>
 					</TabsContent>
 
 					<TabsContent

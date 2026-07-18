@@ -299,6 +299,7 @@ const mockApi = {
 	getSettings: () =>
 		success({
 			providers: [],
+			customProviders: [],
 			customStats: { configured: 0, totalModels: 0 },
 		}),
 	getApiKey: () => Promise.resolve({ success: true, key: "" }),

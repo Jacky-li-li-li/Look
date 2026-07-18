@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import type { CustomProviderInput } from "../components/settings/types";
 
 export interface CustomProviderStats {
 	configured: number;
@@ -24,6 +25,7 @@ interface SettingsProviderInfo {
 
 export interface ProviderSettingsData {
 	providers: SettingsProviderInfo[];
+	customProviders: CustomProviderInput[];
 	customStats: CustomProviderStats;
 }
 
@@ -39,6 +41,7 @@ export const enabledSkillsAtom = atom<string[] | null>(null);
 
 export const providerSettingsAtom = atom<ProviderSettingsData>({
 	providers: [],
+	customProviders: [],
 	customStats: { configured: 0, totalModels: 0 },
 });
 

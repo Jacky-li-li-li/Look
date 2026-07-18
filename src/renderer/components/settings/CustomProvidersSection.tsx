@@ -90,7 +90,7 @@ function CustomProviderRow({
 					<div className="mt-0.5 truncate text-[10px] text-muted-foreground">{cp.api}</div>
 				</button>
 				<div
-					className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/custom-provider:opacity-100 group-focus-within/custom-provider:opacity-100"
+					className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/custom-provider:opacity-100"
 					onClick={(e) => e.stopPropagation()}
 				>
 					<Button variant="line" size="xs" className="h-6 text-[10px]" onClick={onEdit}>
@@ -145,7 +145,7 @@ export default function CustomProvidersSection({
 	const { t } = useTranslation();
 
 	return (
-		<section className="rounded-lg border border-hairline bg-muted/20 p-2.5">
+		<section>
 			<div className="flex items-center justify-between gap-3">
 				<div className="min-w-0">
 					<div className="flex items-center gap-2">

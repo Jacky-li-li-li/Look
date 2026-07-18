@@ -110,8 +110,13 @@ function ModelList({ models, t }: { models: ProviderModelInfo[]; t: (key: string
 
 interface ApiKeysTabProps {
 	providers: ProviderInfo[];
+	customProviders: CustomProviderInput[];
 	customStats: CustomProviderStats;
-	onProvidersChange: (data: { providers: ProviderInfo[]; customStats: CustomProviderStats }) => void;
+	onProvidersChange: (data: {
+		providers: ProviderInfo[];
+		customProviders: CustomProviderInput[];
+		customStats: CustomProviderStats;
+	}) => void;
 }
 
 function canClearProviderKey(provider: ProviderInfo): boolean {
@@ -366,16 +371,20 @@ function BuiltInProviderRow({
 // main component
 // ═══════════════════════════════════════════
 
-export default function ApiKeysTab({ providers, customStats, onProvidersChange }: ApiKeysTabProps) {
+export default function ApiKeysTab({ providers, customProviders, customStats, onProvidersChange }: ApiKeysTabProps) {
 	const { t } = useTranslation();
 
 	// ── grouped state (13 → 4 useState) ──
 	const [keyEdit, setKeyEdit] = useState<KeyEditState>({ editing: null, input: "", showKey: false });
 	const [ui, setUi] = useState<UiState>({ saving: false, loadingKey: false, testStatus: {}, forceSave: null });
 	const [accordion, setAccordion] = useState<AccordionState>({ providers: {}, customProviders: {} });
+	// customProviders prop seeds the list from the startup-loaded settings, so the
+	// section renders its rows on first paint instead of flashing the empty state
+	// while listCustomProviders() is in flight. The effect below still re-fetches
+	// to pick up any changes made after startup.
 	const [custom, setCustom] = useState<CustomPanelState>({
 		view: { type: "list" },
-		list: [],
+		list: customProviders,
 		confirmRemove: null,
 		confirmClear: null,
 	});
@@ -429,7 +438,11 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 		try {
 			const result = await api.setApiKey(providerId, key);
 			if (result?.success) {
-				onProvidersChange({ providers: result.providers, customStats: result.customStats });
+				onProvidersChange({
+					providers: result.providers,
+					customProviders: result.customProviders,
+					customStats: result.customStats,
+				});
 				toast.success(
 					key
 						? t("settings.keyUpdated", { provider: providerId })
@@ -561,7 +574,11 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 				try {
 					const providersRes = await api.getSettings();
 					if (providersRes?.success)
-						onProvidersChange({ providers: providersRes.providers, customStats: providersRes.customStats });
+						onProvidersChange({
+							providers: providersRes.providers,
+							customProviders: providersRes.customProviders,
+							customStats: providersRes.customStats,
+						});
 				} catch {}
 			}
 		} catch (e) {
@@ -585,7 +602,12 @@ export default function ApiKeysTab({ providers, customStats, onProvidersChange }
 					patchCustom("view", { type: "list" });
 					api?.getSettings?.()
 						.then((r) => {
-							if (r?.success) onProvidersChange({ providers: r.providers, customStats: r.customStats });
+							if (r?.success)
+								onProvidersChange({
+									providers: r.providers,
+									customProviders: r.customProviders,
+									customStats: r.customStats,
+								});
 						})
 						.catch((err) => console.warn("[ApiKeysTab] refresh settings failed:", err));
 				}}

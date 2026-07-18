@@ -1,8 +1,8 @@
 // ============================================================
 // ThinkingPanel — Inset Drawer (Ink Wash, shadcn/ui)
-// Auto-expands while streaming, auto-collapses when text starts
-// (controlled by autoCollapse setting). User manual toggle
-// overrides auto-behavior for the lifetime of this panel.
+// Collapsed by default (same as single tool-call cards), unless
+// the autoCollapse setting is off. User manual toggle overrides
+// the default for the lifetime of this panel.
 //
 // NOTE: Uses pure CSS collapse instead of Radix Collapsible to
 // avoid expensive hook overhead (Presence/useLayoutEffect) during
@@ -22,14 +22,14 @@ interface ThinkingPanelProps {
 
 const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming, autoCollapse }: ThinkingPanelProps) {
 	const { t } = useTranslation();
-	// Derive open state from streaming, but allow manual toggle to override.
-	// null means "follow isStreaming"; boolean means user has taken control.
+	// Collapsed by default (like tool-call cards); a boolean manualOpen
+	// means the user has taken control, null means "follow autoCollapse".
 	const [manualOpen, setManualOpen] = React.useState<boolean | null>(null);
-	const open = manualOpen ?? (isStreaming || !autoCollapse);
+	const open = manualOpen ?? !autoCollapse;
 
 	const handleToggle = React.useCallback(() => {
-		setManualOpen((prev) => !(prev ?? (isStreaming || !autoCollapse)));
-	}, [isStreaming, autoCollapse]);
+		setManualOpen((prev) => !(prev ?? !autoCollapse));
+	}, [autoCollapse]);
 
 	// When streaming but no thinking content has arrived yet, show a loading
 	// skeleton with a pulse indicator so the user knows reasoning is in progress.

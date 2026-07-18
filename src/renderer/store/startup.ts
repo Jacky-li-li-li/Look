@@ -92,6 +92,7 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 			if (r?.success) {
 				appStore.set(providerSettingsAtom, {
 					providers: r.providers ?? [],
+					customProviders: r.customProviders ?? [],
 					customStats: r.customStats ?? { configured: 0, totalModels: 0 },
 				});
 			}

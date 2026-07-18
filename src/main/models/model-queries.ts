@@ -9,8 +9,8 @@
 
 import type { CredentialStore } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import type { CustomProvidersStore } from "../settings/custom-providers.js";
 import { getCredentialApiKey, setCredentialApiKey } from "../security/secrets.js";
+import type { CustomProviderInput, CustomProvidersStore } from "../settings/custom-providers.js";
 
 export interface AvailableModel {
 	provider: string;
@@ -42,6 +42,7 @@ export interface ProviderSetting {
 
 export interface ProviderSettingsResult {
 	providers: ProviderSetting[];
+	customProviders: CustomProviderInput[];
 	customStats: {
 		configured: number;
 		totalModels: number;
@@ -113,6 +114,7 @@ export function getProviderSettings(
 
 	return {
 		providers: filtered,
+		customProviders: customList,
 		customStats: {
 			configured: customConfigured,
 			totalModels: customTotalModels,

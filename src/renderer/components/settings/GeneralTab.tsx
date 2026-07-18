@@ -15,6 +15,7 @@ import { Switch } from "@shared/components/ui/switch";
 import { Cpu, Sun, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { SUPPORTED_LOCALES } from "../../i18n";
 import { ThemePicker } from "./ThemePicker";
 
 const api = window.look;
@@ -69,8 +70,11 @@ interface GeneralSettingsState {
 
 export default function GeneralTab() {
 	const { t, i18n } = useTranslation();
+	// Seed the language from the live i18n instance: startup already applied
+	// the persisted setting, so this avoids the dropdown flashing "en" while
+	// the async getGeneralSettings() round-trip is in flight.
 	const [state, setState] = useState<GeneralSettingsState>({
-		language: "en",
+		language: (SUPPORTED_LOCALES as string[]).includes(i18n.language) ? i18n.language : "en",
 		autoCollapse: true,
 		compactionEnabled: true,
 		autoTitleModel: null,
