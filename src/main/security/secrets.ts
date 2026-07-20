@@ -8,8 +8,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { safeStorage } from "electron";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
+import { safeStorage } from "electron";
 
 const ENCRYPTED_PREFIX = "enc:";
 
@@ -146,11 +146,7 @@ export class EncryptedCredentialStore implements CredentialStore {
 /**
  * Convenience: set or remove an API key in a CredentialStore.
  */
-export async function setCredentialApiKey(
-	store: CredentialStore,
-	provider: string,
-	key: string,
-): Promise<void> {
+export async function setCredentialApiKey(store: CredentialStore, provider: string, key: string): Promise<void> {
 	const trimmed = key.trim();
 	if (trimmed) {
 		await store.modify(provider, async () => ({ type: "api_key", key: trimmed }));
@@ -162,10 +158,7 @@ export async function setCredentialApiKey(
 /**
  * Convenience: get the stored API key from a CredentialStore.
  */
-export async function getCredentialApiKey(
-	store: CredentialStore,
-	provider: string,
-): Promise<string | undefined> {
+export async function getCredentialApiKey(store: CredentialStore, provider: string): Promise<string | undefined> {
 	const credential = await store.read(provider);
 	return credential?.type === "api_key" ? credential.key : undefined;
 }

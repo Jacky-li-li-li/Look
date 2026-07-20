@@ -8,6 +8,7 @@
 //   ModelRegistry -> getApiKeyAndHeaders(model) -> completeSimple()
 // ============================================================
 
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import {
 	type Api,
 	type AssistantMessage,
@@ -15,7 +16,6 @@ import {
 	type Model,
 	type ProviderResponse,
 } from "@earendil-works/pi-ai/compat";
-import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 export type TestResult =

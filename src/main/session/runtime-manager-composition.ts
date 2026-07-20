@@ -166,7 +166,6 @@ export class RuntimeManagerComposition {
 
 		this.eventProcessor = new SessionEventProcessor(host, this.scopeRegistry, host);
 		this.subAgentRuntimeService = new SubAgentRuntimeService(host, this.subAgentRegistry);
-
 	}
 
 	/** Initialize all async-dependent and modelRegistry-dependent services. */

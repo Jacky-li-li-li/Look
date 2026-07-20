@@ -2,8 +2,8 @@
 // Settings router — API keys, custom providers, general settings, prompts
 // ============================================================
 
-import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
 import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
