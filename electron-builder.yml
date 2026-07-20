@@ -1,5 +1,6 @@
 appId: com.agent-harness.app
 productName: Look
+electronVersion: 42.5.1
 
 publish:
   provider: github
@@ -10,9 +11,53 @@ directories:
   output: release
   buildResources: build
 
+# 不重新编译原生模块（CI runner 架构 = 目标架构）
+npmRebuild: false
+
+# ASAR 归档 + 原生模块解包
+asar: true
+asarUnpack:
+  - "node_modules/lightningcss-darwin-arm64/**"
+  - "node_modules/@tailwindcss/oxide-darwin-arm64/**"
+  - "node_modules/@rollup/rollup-darwin-arm64/**"
+  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/native/**"
+  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-*/**"
+  - "node_modules/fsevents/**"
+
 files:
   - dist/**/*
   - package.json
+  - node_modules/**/*
+  # 排除 workspace symlink（代码已打包到 dist/）
+  - "!node_modules/@look/**"
+  - "!node_modules/@lark/**"
+  # 排除开发/构建工具（运行时不需要）
+  - "!node_modules/electron/**"
+  - "!node_modules/electron-builder/**"
+  - "!node_modules/electronmon/**"
+  - "!node_modules/vite/**"
+  - "!node_modules/esbuild/**"
+  - "!node_modules/typescript/**"
+  - "!node_modules/@types/**"
+  - "!node_modules/@vitejs/**"
+  - "!node_modules/@electron/**"
+  - "!node_modules/@electron-builder/**"
+  - "!node_modules/@esbuild/**"
+  - "!node_modules/@rollup/**"
+  - "!node_modules/concurrently/**"
+  - "!node_modules/happy-dom/**"
+  - "!node_modules/jsdom/**"
+  - "!node_modules/vitest/**"
+  - "!node_modules/vitest-*/**"
+  - "!node_modules/patch-package/**"
+  - "!node_modules/react-scan/**"
+  # 排除示例/文档/源码映射
+  - "!node_modules/@earendil-works/*/examples/**"
+  - "!node_modules/@earendil-works/*/docs/**"
+  - "!node_modules/@earendil-works/**/*.map"
+  - "!node_modules/**/*.ts"
+  - "!node_modules/**/*.tsx"
+  - "!node_modules/**/*.map"
 
 mac:
   category: public.app-category.developer-tools

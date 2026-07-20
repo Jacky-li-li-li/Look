@@ -45,21 +45,30 @@ jobs:
           security set-key-partition-list -S "apple-tool:,apple:,codesign:" -s -k "$MAC_CERT_PASSWORD" build.keychain
           rm /tmp/cert.p12
 
-      - name: Build (TypeScript + Vite)
+      - name: Build
         run: npm run build
 
-      - name: Package & Sign & Notarize
+      - name: Package, Sign & Notarize (with retry)
         env:
           CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder --mac --publish never 2>&1
+        run: |
+          for i in 1 2 3; do
+            echo "=== electron-builder attempt $i ==="
+            npx electron-builder --mac --publish never && break
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
+          done
 
       - name: Upload to GitHub Release
-        run: |
-          ls -lh release/
-          npx electron-builder --mac --publish always -p github
+        run: npx electron-builder --mac --publish always -p github
         env:
           GH_TOKEN: ${{ github.token }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
