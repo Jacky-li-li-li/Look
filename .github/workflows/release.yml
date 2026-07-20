@@ -71,7 +71,7 @@ jobs:
           done
 
       - name: Upload to GitHub Release
-        run: npx electron-builder --mac --publish always -p github
+        run: npx electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ github.token }}
           CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
