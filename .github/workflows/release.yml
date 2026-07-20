@@ -12,6 +12,7 @@ jobs:
   release:
     name: Build, Sign & Notarize
     runs-on: macos-latest
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -44,17 +45,21 @@ jobs:
           security set-key-partition-list -S "apple-tool:,apple:,codesign:" -s -k "$MAC_CERT_PASSWORD" build.keychain
           rm /tmp/cert.p12
 
-      - name: Package (electron-builder)
+      - name: Build (TypeScript + Vite)
+        run: npm run build
+
+      - name: Package & Sign & Notarize
         env:
           CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run package
+        run: npx electron-builder --mac --publish never 2>&1
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/*
-          generate_release_notes: true
+        run: |
+          ls -lh release/
+          npx electron-builder --mac --publish always -p github
+        env:
+          GH_TOKEN: ${{ github.token }}
