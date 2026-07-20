@@ -11,53 +11,60 @@ directories:
   output: release
   buildResources: build
 
-# 不重新编译原生模块（CI runner 架构 = 目标架构）
+# CI runner 架构 = 目标架构，无需重编译
 npmRebuild: false
 
-# ASAR 归档 + 原生模块解包
 asar: true
 asarUnpack:
-  - "node_modules/lightningcss-darwin-arm64/**"
-  - "node_modules/@tailwindcss/oxide-darwin-arm64/**"
-  - "node_modules/@rollup/rollup-darwin-arm64/**"
+  # Pi SDK 原生模块（pi-coding-agent 内部加载）
   - "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/native/**"
-  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-*/**"
+  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-arm64/**"
+  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-universal/**"
+  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-x64/**"
+  # macOS 文件监听原生模块
   - "node_modules/fsevents/**"
 
 files:
   - dist/**/*
   - package.json
   - node_modules/**/*
-  # 排除 workspace symlink（代码已打包到 dist/）
+
+  # 排除 workspace 包（代码已打包到 dist/，不在 release 里手动 rescan）
   - "!node_modules/@look/**"
-  - "!node_modules/@lark/**"
-  # 排除开发/构建工具（运行时不需要）
-  - "!node_modules/electron/**"
+
+  # 构建工具（运行时不需要）
+  - "!node_modules/electron{,mon}*/**"
   - "!node_modules/electron-builder/**"
-  - "!node_modules/electronmon/**"
-  - "!node_modules/vite/**"
-  - "!node_modules/esbuild/**"
-  - "!node_modules/typescript/**"
+  - "!node_modules/vite{, plugins*}*/**"
+  - "!node_modules/esbuild{, plugin*}*/**"
+  - "!node_modules/typescript{, lib*/**}*/**"
   - "!node_modules/@types/**"
   - "!node_modules/@vitejs/**"
-  - "!node_modules/@electron/**"
-  - "!node_modules/@electron-builder/**"
+  - "!node_modules/@electron{, -builder}/**"
   - "!node_modules/@esbuild/**"
   - "!node_modules/@rollup/**"
   - "!node_modules/concurrently/**"
-  - "!node_modules/happy-dom/**"
-  - "!node_modules/jsdom/**"
-  - "!node_modules/vitest/**"
-  - "!node_modules/vitest-*/**"
   - "!node_modules/patch-package/**"
   - "!node_modules/react-scan/**"
-  # 排除示例/文档/源码映射
-  - "!node_modules/@earendil-works/*/examples/**"
-  - "!node_modules/@earendil-works/*/docs/**"
-  - "!node_modules/@earendil-works/**/*.map"
-  - "!node_modules/**/*.ts"
-  - "!node_modules/**/*.tsx"
-  - "!node_modules/**/*.map"
+
+  # 测试工具
+  - "!node_modules/vitest{, -data-driven}*/**"
+  - "!node_modules/happy-dom/**"
+  - "!node_modules/jsdom/**"
+
+  # 构建时原生模块（不需要打包到应用中）
+  - "!node_modules/lightningcss-darwin-arm64/**"
+  - "!node_modules/@tailwindcss/oxide-darwin-arm64/**"
+  - "!node_modules/@electron-internal/**"
+
+  # 非 darwin 平台原生模块（macOS 应用不需要）
+  - "!node_modules/@mariozechner/clipboard-{linux,win32}*/**"
+  - "!node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/native/{linux,win32}/**"
+  - "!node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-{linux,win32}*/**"
+
+  # 文档/示例/源码映射
+  - "!node_modules/@earendil-works/*/{examples,docs,test,test-fixtures}/**"
+  - "!node_modules/**/*.{ts,tsx,map,md,markdown}"
 
 mac:
   category: public.app-category.developer-tools
