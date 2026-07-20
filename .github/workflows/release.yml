@@ -31,7 +31,6 @@ jobs:
           MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
         run: |
           echo "$MAC_CERT_P12" | base64 -d > /tmp/cert.p12
-          # 创建临时 keychain 避免污染系统 keychain
           security create-keychain -p "$MAC_CERT_PASSWORD" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "$MAC_CERT_PASSWORD" build.keychain
@@ -43,7 +42,7 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-          # Notarization via notarytool
+          CSC_NAME: "Developer ID Application: Jackyli Li (R2RCTK2PM3)"
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
