@@ -3,17 +3,18 @@
 //
 // 搜索 + 内置/我的 Segment 切换 + Agent 卡片网格。
 // 每张卡片带 Switch 开关，支持逐项启用/禁用。
-// "我的"模块显示新建按钮和编辑/删除操作。
+// "我的"模块显示 AI 创建按钮（跳转默认工作区新会话并预填创建 Skill）和编辑/删除操作。
 // ============================================================
 
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
-import type { AgentDefinitionInfo } from "@shared/types";
+import { type AgentDefinitionInfo, DEFAULT_PROJECT_ID } from "@shared/types";
 import { useAtom } from "jotai";
-import { Bot, Plus, Search, User, X } from "lucide-react";
+import { Bot, Search, Sparkles, User, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useAgentActions } from "../../hooks/useAgentActions";
 import {
 	agentDefinitionsAtom,
 	agentDefinitionsLoadingAtom,
@@ -21,7 +22,13 @@ import {
 	agentSearchTextAtom,
 	subagentSourceTabAtom,
 } from "../../store/agentDefinitionsAtoms";
-import { enabledAgentDefinitionsAtom } from "../../store/atoms";
+import {
+	chatInputInsertRequestAtom,
+	enabledAgentDefinitionsAtom,
+	showAgentSquareAtom,
+	showScheduledTasksAtom,
+} from "../../store/atoms";
+import { appStore } from "../../store/ipcHandler";
 import AgentCard from "./AgentCard";
 import AgentEditor from "./AgentEditor";
 import { useToggleEnabled } from "./useToggleEnabled";
@@ -113,9 +120,32 @@ export default function SubAgentPanel() {
 		[setAgents],
 	);
 
+	const { handleCreateClick } = useAgentActions();
+
+	// AI 创建：退出广场 → 切到默认工作区 → 新建会话 → 输入框预填 Agent 创建 Skill
+	const handleAiCreate = useCallback(async () => {
+		appStore.set(showAgentSquareAtom, false);
+		appStore.set(showScheduledTasksAtom, false);
+		try {
+			await window.look.switchProject(DEFAULT_PROJECT_ID);
+			const agentId = await handleCreateClick(DEFAULT_PROJECT_ID);
+			if (!agentId) {
+				toast.error(t("marketplace.aiCreateFailed"));
+				return;
+			}
+			appStore.set(chatInputInsertRequestAtom, {
+				id: Date.now(),
+				agentId,
+				text: "/skill:look-agent-builder",
+			});
+		} catch {
+			toast.error(t("marketplace.aiCreateFailed"));
+		}
+	}, [handleCreateClick, t]);
+
 	return (
 		<div className="flex h-full flex-col gap-3">
-			{/* 顶栏：搜索 + 新建（仅"我的"模块） */}
+			{/* 顶栏：搜索 + AI 创建（仅"我的"模块） */}
 			<div className="flex items-center gap-2">
 				<div className="relative flex-1">
 					<Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -136,14 +166,9 @@ export default function SubAgentPanel() {
 					)}
 				</div>
 				{sourceTab === "mine" && (
-					<Button
-						variant="line-filled"
-						size="sm"
-						className="h-7 gap-1 text-[11px]"
-						onClick={() => setEditorTarget("create")}
-					>
-						<Plus className="size-3.5" />
-						{t("marketplace.create")}
+					<Button variant="line-filled" size="sm" className="h-7 gap-1 text-[11px]" onClick={handleAiCreate}>
+						<Sparkles className="size-3.5" />
+						{t("marketplace.aiCreate")}
 					</Button>
 				)}
 			</div>

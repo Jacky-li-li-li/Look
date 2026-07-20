@@ -60,6 +60,23 @@ export async function writeFileContent(filePath: string, content: string): Promi
 	return { success: true, sizeBytes };
 }
 
+/** 路径类型探测:点击文件路径芯片前先 stat,目录改走 Finder 展示,不打开查看器。 */
+export type PathKind = "file" | "directory" | "other" | "missing";
+
+export interface PathStatResult {
+	success: true;
+	kind: PathKind;
+}
+
+export async function statPathKind(filePath: string): Promise<PathStatResult> {
+	// 使用 stat(而非 lstat)跟随符号链接:指向目录的软链也按目录分类,以便在 Finder 中展示。
+	const stat = await fs.promises.stat(filePath).catch(() => null);
+	if (!stat) return { success: true, kind: "missing" };
+	if (stat.isDirectory()) return { success: true, kind: "directory" };
+	if (!stat.isFile()) return { success: true, kind: "other" };
+	return { success: true, kind: "file" };
+}
+
 export const fileRouter: IpcRouter = (_ctx, register) => {
 	register("file:read", async (data) => readFileContent(guardPath(data.path, "path")));
 
@@ -71,4 +88,6 @@ export const fileRouter: IpcRouter = (_ctx, register) => {
 		}
 		return writeFileContent(filePath, content);
 	});
+
+	register("file:stat", async (data) => statPathKind(guardPath(data.path, "path")));
 };

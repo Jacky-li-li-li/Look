@@ -19,12 +19,12 @@ import {
 } from "../../store/atoms";
 import { appStore } from "../../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
+import { AiAvatar } from "../AiAvatar";
 import {
 	BranchConfirmDialog,
 	type BranchConfirmRequest,
 	type BranchConfirmResult,
 } from "../dialogs/BranchConfirmDialog";
-import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
 import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
@@ -465,7 +465,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				{showLoading ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center py-8">
 						<div className="relative">
-							<PixelAgentAvatar status={phase} size="lg" />
+							<AiAvatar status={phase} size="lg" />
 							<Loader2 className="absolute -right-2 -bottom-2 size-5 animate-spin rounded-md border border-hairline bg-background p-1 text-foreground" />
 						</div>
 						<h3 className="text-[13px] font-semibold text-foreground">{t("common.loading")}</h3>
@@ -473,7 +473,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				) : timeline.length === 0 && !isBusy ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center py-8">
 						<div className="relative">
-							<PixelAgentAvatar status={phase} size="lg" />
+							<AiAvatar status={phase} size="lg" />
 							<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
 						</div>
 						<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>

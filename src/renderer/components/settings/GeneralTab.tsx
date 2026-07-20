@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@shared/components/ui/popover";
 import {
 	Select,
 	SelectContent,
@@ -12,10 +13,15 @@ import {
 	SelectValue,
 } from "@shared/components/ui/select";
 import { Switch } from "@shared/components/ui/switch";
-import { Cpu, Sun, Zap } from "lucide-react";
+import { cn } from "@shared/lib/utils";
+import { useSetAtom } from "jotai";
+import { Check, Cpu, Sun, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LOCALES } from "../../i18n";
+import { AI_AVATARS, getAiAvatarUrl } from "../../lib/aiAvatars";
+import { aiAvatarAtom } from "../../store/settingsAtoms";
+import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import { ThemePicker } from "./ThemePicker";
 
 const api = window.look;
@@ -31,6 +37,7 @@ function persistSettings(partial: {
 	autoCollapse?: boolean;
 	compactionEnabled?: boolean;
 	autoTitleModel?: string | null;
+	aiAvatar?: string | null;
 }) {
 	if (!api) return;
 	api.setGeneralSettings(partial).catch((err) => console.warn("[GeneralTab] setGeneralSettings failed:", err));
@@ -60,11 +67,52 @@ function SettingRow({
 	);
 }
 
+/** 头像选择网格中的单个磁贴：radio 语义，选中带 accent 对勾徽章。 */
+function AvatarTile({
+	selected,
+	label,
+	onSelect,
+	onHover,
+	children,
+}: {
+	selected: boolean;
+	label: string;
+	onSelect: () => void;
+	onHover: () => void;
+	children: React.ReactNode;
+}) {
+	return (
+		<button
+			type="button"
+			role="radio"
+			aria-checked={selected}
+			aria-label={label}
+			title={label}
+			onClick={onSelect}
+			onMouseEnter={onHover}
+			className={cn(
+				"relative flex h-11 items-center justify-center rounded-md border transition-all duration-150",
+				"hover:-translate-y-px hover:bg-accent/5",
+				"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+				selected ? "border-accent bg-accent/10" : "border-hairline bg-card/40",
+			)}
+		>
+			{children}
+			{selected && (
+				<span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-accent text-accent-foreground ring-1 ring-background">
+					<Check className="size-2.5" strokeWidth={3} />
+				</span>
+			)}
+		</button>
+	);
+}
+
 interface GeneralSettingsState {
 	language: string;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
 	autoTitleModel: string | null;
+	aiAvatar: string | null;
 	availableModels: Array<{ provider: string; id: string; name: string }>;
 }
 
@@ -78,9 +126,24 @@ export default function GeneralTab() {
 		autoCollapse: true,
 		compactionEnabled: true,
 		autoTitleModel: null,
+		aiAvatar: null,
 		availableModels: [],
 	});
-	const { language, autoCollapse, compactionEnabled, autoTitleModel, availableModels } = state;
+	const setAiAvatar = useSetAtom(aiAvatarAtom);
+	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+	// 三态：undefined=未悬停（预览跟随已选项），null=悬停在默认像素头像上
+	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
+	const { language, autoCollapse, compactionEnabled, autoTitleModel, aiAvatar, availableModels } = state;
+	// 预览区跟随悬停（试穿），未悬停时跟随已选项
+	const previewAvatar = hoveredAvatar !== undefined ? hoveredAvatar : aiAvatar;
+	const previewUrl = getAiAvatarUrl(previewAvatar);
+
+	// 选择 AI 头像：更新本地 state、持久化到主进程并同步全局 atom
+	const selectAiAvatar = (next: string | null) => {
+		setState((prev) => ({ ...prev, aiAvatar: next }));
+		persistSettings({ aiAvatar: next });
+		setAiAvatar(next);
+	};
 
 	useEffect(() => {
 		if (!api) return;
@@ -96,6 +159,7 @@ export default function GeneralTab() {
 							? { compactionEnabled: settings.compactionEnabled }
 							: {}),
 						...("autoTitleModel" in settings ? { autoTitleModel: settings.autoTitleModel } : {}),
+						...("aiAvatar" in settings ? { aiAvatar: settings.aiAvatar } : {}),
 					}));
 				}
 			})
@@ -129,6 +193,114 @@ export default function GeneralTab() {
 					<div className="py-2.5">
 						<ThemePicker />
 					</div>
+					<SettingRow id="ai-avatar" label={t("settings.aiAvatar")} desc={t("settings.aiAvatarDesc")}>
+						{/* 设置页是 Radix 模态 Dialog：body 会被设为 pointer-events:none，
+							portal 到 body 的自定义浮层点不动，必须用 Radix Popover 才能点击 */}
+						<Popover
+							open={avatarPickerOpen}
+							onOpenChange={(open) => {
+								setAvatarPickerOpen(open);
+								if (!open) setHoveredAvatar(undefined);
+							}}
+						>
+							<PopoverTrigger asChild>
+								<button
+									id="ai-avatar"
+									type="button"
+									className="flex h-8 w-8 items-center justify-center rounded-full border border-hairline bg-card/40 transition-colors hover:bg-accent/10"
+									aria-label={t("settings.aiAvatar")}
+								>
+									{/* getAiAvatarUrl 对未命中的 id 返回 undefined，需先取 url 判断，避免存储失效 id 时渲染破图 */}
+									{(() => {
+										const url = getAiAvatarUrl(aiAvatar);
+										return url ? (
+											<img src={url} alt="" className="h-7 w-7 rounded-full" />
+										) : (
+											<PixelAgentAvatar size="xs" />
+										);
+									})()}
+								</button>
+							</PopoverTrigger>
+							<PopoverContent align="end" sideOffset={6} className="w-72 p-3">
+								{/* 原位预览：头像的意义在消息区，所以选择也在消息行的微缩模型里做。
+									悬停磁贴即可试穿（预览跟随悬停），点击才提交；keyed remount 触发换脸动效。 */}
+								<div className="flex flex-col gap-1.5">
+									<span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+										{t("settings.aiAvatarPreview")}
+									</span>
+									<div className="flex items-start gap-2 rounded-md border border-hairline bg-muted/40 px-2.5 py-2">
+										<span key={previewAvatar ?? "default"} className="avatar-preview-swap mt-0.5 shrink-0">
+											{previewUrl ? (
+												<img
+													src={previewUrl}
+													alt=""
+													className="h-7 w-7 rounded-full border border-hairline object-cover"
+												/>
+											) : (
+												<PixelAgentAvatar size="sm" />
+											)}
+										</span>
+										<div className="flex min-w-0 flex-col gap-1">
+											<span className="text-[10px] font-medium leading-none text-foreground">
+												{t("chat.agent")}
+											</span>
+											<span className="rounded-md rounded-tl-none border border-hairline bg-card px-2 py-1 text-[11px] leading-snug text-muted-foreground">
+												{t("settings.aiAvatarPreviewText")}
+											</span>
+										</div>
+									</div>
+								</div>
+
+								<div className="my-2.5 border-t border-hairline" />
+
+								{/* 选择网格：默认像素头像在第一格，hover 试穿、点击提交并关闭 */}
+								<div
+									className="grid grid-cols-6 gap-1.5"
+									role="radiogroup"
+									aria-label={t("settings.aiAvatar")}
+									onMouseLeave={() => setHoveredAvatar(undefined)}
+								>
+									<AvatarTile
+										selected={aiAvatar === null}
+										label={t("settings.aiAvatarDefault")}
+										onSelect={() => {
+											selectAiAvatar(null);
+											setAvatarPickerOpen(false);
+										}}
+										onHover={() => setHoveredAvatar(null)}
+									>
+										<span className="flex flex-col items-center gap-0.5">
+											<PixelAgentAvatar size="xs" />
+											<span className="text-[8px] leading-none text-muted-foreground">
+												{t("settings.aiAvatarDefault")}
+											</span>
+										</span>
+									</AvatarTile>
+									{AI_AVATARS.map((avatar) => (
+										<AvatarTile
+											key={avatar.id}
+											selected={aiAvatar === avatar.id}
+											label={avatar.id}
+											onSelect={() => {
+												selectAiAvatar(avatar.id);
+												setAvatarPickerOpen(false);
+											}}
+											onHover={() => setHoveredAvatar(avatar.id)}
+										>
+											<img src={avatar.url} alt={avatar.id} className="h-7 w-7" />
+										</AvatarTile>
+									))}
+								</div>
+
+								{/* 底部：等宽字体报当前预览的头像 id（试穿时跟随悬停） */}
+								<div className="mt-2.5 flex justify-end border-t border-hairline pt-2">
+									<span className="font-mono text-[10px] text-muted-foreground">
+										{previewAvatar ?? t("settings.aiAvatarDefault")}
+									</span>
+								</div>
+							</PopoverContent>
+						</Popover>
+					</SettingRow>
 					<SettingRow id="language" label={t("settings.language")} desc={t("settings.interfaceLanguage")}>
 						<Select
 							value={language}

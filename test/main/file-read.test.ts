@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readFileContent, writeFileContent } from "../../src/main/ipc/routers/file-router.js";
+import { readFileContent, statPathKind, writeFileContent } from "../../src/main/ipc/routers/file-router.js";
 
 const READ_CAP = 4 * 1024 * 1024;
 const WRITE_CAP = 10 * 1024 * 1024;
@@ -84,5 +84,46 @@ describe("file content read/write", () => {
 		const filePath = path.join(dir, "too-big.txt");
 		await expect(writeFileContent(filePath, "x".repeat(WRITE_CAP + 1))).rejects.toThrow(/exceeds max size/);
 		expect(fs.existsSync(filePath)).toBe(false);
+	});
+});
+
+describe("statPathKind", () => {
+	let dir: string;
+
+	beforeEach(() => {
+		dir = fs.mkdtempSync(path.join(os.tmpdir(), "look-file-stat-test-"));
+	});
+
+	afterEach(() => {
+		fs.rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("classifies regular files as file", async () => {
+		const filePath = path.join(dir, "a.txt");
+		fs.writeFileSync(filePath, "x");
+		await expect(statPathKind(filePath)).resolves.toEqual({ success: true, kind: "file" });
+	});
+
+	it("classifies directories as directory", async () => {
+		await expect(statPathKind(dir)).resolves.toEqual({ success: true, kind: "directory" });
+	});
+
+	it("classifies missing paths as missing", async () => {
+		await expect(statPathKind(path.join(dir, "no-such-file.md"))).resolves.toEqual({
+			success: true,
+			kind: "missing",
+		});
+	});
+
+	it("classifies symlinks pointing to directories as directory", async (ctx) => {
+		const target = path.join(dir, "real-dir");
+		const link = path.join(dir, "dir-link");
+		fs.mkdirSync(target);
+		try {
+			fs.symlinkSync(target, link, "dir");
+		} catch {
+			ctx.skip();
+		}
+		await expect(statPathKind(link)).resolves.toEqual({ success: true, kind: "directory" });
 	});
 });

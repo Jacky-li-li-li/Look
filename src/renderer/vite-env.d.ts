@@ -221,6 +221,7 @@ interface LookAPI {
 		>
 	>;
 	writeFileContent(path: string, content: string): Promise<IpcResult<{ sizeBytes: number }>>;
+	statFilePath(path: string): Promise<IpcResult<{ kind: "file" | "directory" | "other" | "missing" }>>;
 	// ---- File viewer window ----
 	openFileViewer(path: string): Promise<{ success: boolean; error?: string }>;
 	fileViewerReady(): Promise<{ success: boolean; path?: string | null; error?: string }>;

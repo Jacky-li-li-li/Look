@@ -39,6 +39,8 @@ export const enabledAgentDefinitionsAtom = atom<string[] | null>(null);
 
 export const enabledSkillsAtom = atom<string[] | null>(null);
 
+export const aiAvatarAtom = atom<string | null>(null);
+
 export const providerSettingsAtom = atom<ProviderSettingsData>({
 	providers: [],
 	customProviders: [],

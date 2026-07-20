@@ -12,3 +12,5 @@ release/
 .trae/
 # Throwaway probes — kept locally for debugging, not part of the codebase
 _probe.ts
+# Generated tool intermediates — final assets live under src/renderer/assets/
+tools/*/output/

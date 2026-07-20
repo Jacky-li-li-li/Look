@@ -59,10 +59,15 @@ const AgentCard = memo(function AgentCard({
 					: "border-hairline bg-card/40 hover:border-hairline hover:bg-accent/5"
 			} ${!enabled ? "opacity-50 hover:opacity-70" : ""}`}
 		>
-			{/* 头像 + 名称 + Switch */}
+			{/* 头像 + 名称 + 标签 + Switch */}
 			<div className="flex w-full items-center gap-2">
 				<AgentAvatar icon={agent.icon} />
 				<span className="min-w-0 flex-1 truncate text-[13px] font-medium">{agent.title || agent.name}</span>
+				{agent.tags?.slice(0, 2).map((tag) => (
+					<Badge key={tag} variant="secondary" className="h-4 shrink-0 px-1.5 text-[8px]">
+						{tag}
+					</Badge>
+				))}
 				{onToggle && (
 					<Switch
 						checked={enabled}
@@ -85,18 +90,13 @@ const AgentCard = memo(function AgentCard({
 				</span>
 			)}
 
-			{/* 模型 + 标签 + 操作 */}
+			{/* 模型 + 操作 */}
 			<div className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground">
 				{agent.model && (
 					<span className="mr-auto truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[9px]">
 						{agent.model}
 					</span>
 				)}
-				{agent.tags?.slice(0, 2).map((tag) => (
-					<Badge key={tag} variant="secondary" className="h-4 px-1.5 text-[8px]">
-						{tag}
-					</Badge>
-				))}
 				{/* 编辑/删除（仅 user 来源） */}
 				{agent.source === "user" && (
 					<div className="ml-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">

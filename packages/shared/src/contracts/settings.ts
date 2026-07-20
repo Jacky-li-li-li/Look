@@ -21,4 +21,5 @@ export interface UserSettings {
 	enabledSkills: string[] | null;
 	sidebarCollapsed: boolean;
 	rightPanelCollapsed: boolean;
+	aiAvatar: string | null;
 }

@@ -37,8 +37,16 @@ export const viewingFileAtom = atom<{ absolutePath: string } | null>(null);
 /** 查看器内 md 编辑的脏状态镜像（由 FileViewerDialog 写入）。 */
 export const fileViewerDirtyAtom = atom(false);
 
-/** 打开文件的统一入口:在独立的原生查看器窗口中打开(脏确认由查看器窗口自理)。 */
-export const requestViewFileAtom = atom(null, (_get, _set, absolutePath: string) => {
+/**
+ * 打开文件的统一入口:先 stat 再分流——目录在 Finder 中展示(不打开查看器),
+ * 文件才在独立的原生查看器窗口中打开;脏确认由查看器窗口自理。
+ */
+export const requestViewFileAtom = atom(null, async (_get, _set, absolutePath: string) => {
+	const stat = await window.look.statFilePath(absolutePath).catch(() => null);
+	if (stat?.success && stat.kind === "directory") {
+		void window.look.revealInFinder(absolutePath);
+		return;
+	}
 	void window.look.openFileViewer(absolutePath);
 });
 

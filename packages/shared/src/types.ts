@@ -892,6 +892,7 @@ export type RendererToMainEvent =
 	// ---- File content reading (renderer → main) ----
 	| { type: "file:read"; path: string }
 	| { type: "file:write"; path: string; content: string }
+	| { type: "file:stat"; path: string }
 	// ---- 文件查看器窗口(renderer → main) ----
 	// 主窗口入口:请求在独立窗口中打开文件
 	| { type: "fileViewer:open"; path: string }

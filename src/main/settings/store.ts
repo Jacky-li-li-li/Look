@@ -45,6 +45,7 @@ const DEFAULTS: UserSettings = {
 	enabledSkills: null,
 	sidebarCollapsed: false,
 	rightPanelCollapsed: false,
+	aiAvatar: null,
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -80,6 +81,8 @@ interface UiSettings {
 	sidebarCollapsed: boolean;
 	/** 右侧面板是否折叠 */
 	rightPanelCollapsed: boolean;
+	/** AI 消息头像 ID（avatar-01…avatar-24）。null=使用默认像素头像。 */
+	aiAvatar: string | null;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -98,6 +101,7 @@ const UI_DEFAULTS: UiSettings = {
 	enabledSkills: null,
 	sidebarCollapsed: false,
 	rightPanelCollapsed: false,
+	aiAvatar: null,
 };
 
 /** Synchronously read the persisted tone from disk without instantiating the
@@ -239,6 +243,7 @@ export class UserSettingsStore {
 			uiPartial.enabledSkills = partial.enabledSkills === null ? null : [...partial.enabledSkills];
 		if (partial.sidebarCollapsed !== undefined) uiPartial.sidebarCollapsed = partial.sidebarCollapsed;
 		if (partial.rightPanelCollapsed !== undefined) uiPartial.rightPanelCollapsed = partial.rightPanelCollapsed;
+		if (partial.aiAvatar !== undefined) uiPartial.aiAvatar = partial.aiAvatar;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

@@ -1071,6 +1071,35 @@ body {
 		opacity: 0.45;
 	}
 
+	/* AI 头像图片：填满 pixel-agent-avatar 容器并继承圆角 */
+	.ai-avatar-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		border-radius: inherit;
+	}
+
+	/* 头像选择弹窗：预览区换脸时的小幅缩放淡入（keyed remount 触发） */
+	.avatar-preview-swap {
+		display: inline-flex;
+		animation: avatar-preview-in 180ms cubic-bezier(0, 0, 0.2, 1) both;
+	}
+	@keyframes avatar-preview-in {
+		from {
+			opacity: 0;
+			transform: scale(0.9);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.avatar-preview-swap {
+			animation: none;
+		}
+	}
+
 	/* ============================================================
 		 Status Mark — agent status indicator
 		 ============================================================ */

@@ -1,0 +1,15 @@
+{
+  "name": "open-peeps-avatars",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generate a set of Open Peeps style avatars (SVG + PNG) via DiceBear. Isolated from the app dependencies.",
+  "scripts": {
+    "generate": "node generate.mjs"
+  },
+  "dependencies": {
+    "@dicebear/core": "^9.0.0",
+    "@dicebear/open-peeps": "^9.3.2",
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

@@ -65,6 +65,12 @@ function renderGroup(props: Partial<React.ComponentProps<typeof CollapsibleExecu
 	);
 }
 
+function getBadgeBtn(container: HTMLElement) {
+	// The count digits live in nested rolling spans, so text-based queries
+	// can't match the whole label — grab the trigger by structure instead.
+	return container.querySelector("[data-execution-group] > button") as HTMLButtonElement;
+}
+
 describe("CollapsibleExecutionGroup", () => {
 	it("collapses a single completed tool into a singular badge", () => {
 		const { container } = renderGroup({
@@ -138,8 +144,8 @@ describe("CollapsibleExecutionGroup", () => {
 			t2: runningExec("t2"), // ← still running
 			t3: completedExec("t3"),
 		};
-		const { container, getByText } = renderGroup({ blocks, toolExecutions });
-		const badgeBtn = getByText(/Executed 3 tools/i).closest("button")!;
+		const { container } = renderGroup({ blocks, toolExecutions });
+		const badgeBtn = getBadgeBtn(container);
 		const body = container.querySelector("[data-execution-group-body]")!;
 		expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
 		expect(body.getAttribute("aria-hidden")).toBe("true");
@@ -161,10 +167,10 @@ describe("CollapsibleExecutionGroup", () => {
 			t2: completedExec("t2"),
 			t3: completedExec("t3"),
 		};
-		const { container, getByText } = renderGroup({ blocks, toolExecutions });
+		const { container } = renderGroup({ blocks, toolExecutions });
 
 		// First click → expanded: tool names visible, badge still present
-		const badgeBtn = getByText(/Executed 3 tools/i).closest("button")!;
+		const badgeBtn = getBadgeBtn(container);
 		fireEvent.click(badgeBtn);
 		let text = container.textContent ?? "";
 		expect(text).toContain("bash");
@@ -228,14 +234,14 @@ describe("CollapsibleExecutionGroup", () => {
 			t3: completedExec("t3"),
 		};
 		const inlineTexts = ["看核心执行部分：", "看子进程启动的关键函数："];
-		const { container, getByText } = renderGroup({
+		const { container } = renderGroup({
 			blocks,
 			inlineTexts,
 			toolExecutions,
 		});
 
 		// Click to expand
-		const badgeBtn = getByText(/Executed 3 tools/i).closest("button")!;
+		const badgeBtn = getBadgeBtn(container);
 		fireEvent.click(badgeBtn);
 
 		const text = container.textContent ?? "";
@@ -265,8 +271,8 @@ describe("CollapsibleExecutionGroup", () => {
 	it("preserves the user's manual expansion when streaming ends", () => {
 		const blocks = [makeToolCall("t1", "bash", { command: "ls" })];
 		const toolExecutions = { t1: completedExec("t1") };
-		const { getByText, rerender } = renderGroup({ blocks, toolExecutions, isStreaming: true });
-		const badgeBtn = getByText(/Executed 1 tool/i).closest("button")!;
+		const { container, rerender } = renderGroup({ blocks, toolExecutions, isStreaming: true });
+		const badgeBtn = getBadgeBtn(container);
 
 		expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
 		fireEvent.click(badgeBtn);
@@ -286,5 +292,32 @@ describe("CollapsibleExecutionGroup", () => {
 
 		expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
 		expect(document.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("true");
+	});
+
+	it("rolls the badge number when the tool count changes", () => {
+		const rollingSpan = (container: HTMLElement) =>
+			container.querySelector('[data-execution-group] > button span[class*="roll-in"]');
+
+		const blocks3 = [makeToolCall("t1"), makeToolCall("t2"), makeToolCall("t3")];
+		const exec3 = Object.fromEntries(blocks3.map((b) => [b.id, completedExec(b.id)]));
+		const { container, rerender } = renderGroup({ blocks: blocks3, toolExecutions: exec3 });
+		expect(container.textContent ?? "").toMatch(/Executed 3 tools/i);
+		expect(rollingSpan(container)?.textContent).toBe("3");
+
+		const blocks4 = [...blocks3, makeToolCall("t4")];
+		const exec4 = { ...exec3, t4: completedExec("t4") };
+		rerender(
+			<I18nextProvider i18n={i18n}>
+				<CollapsibleExecutionGroup
+					blocks={blocks4}
+					inlineTexts={[]}
+					toolExecutions={exec4}
+					toolResultMap={{}}
+					isStreaming={false}
+				/>
+			</I18nextProvider>,
+		);
+		expect(container.textContent ?? "").toMatch(/Executed 4 tools/i);
+		expect(rollingSpan(container)?.textContent).toBe("4");
 	});
 });

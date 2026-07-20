@@ -15,7 +15,7 @@ import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { hashKey } from "../../lib/stableKey";
 import { userProfileAtom } from "../../store/authAtoms";
-import { PixelAgentAvatar } from "../PixelAgentAvatar";
+import { AiAvatar } from "../AiAvatar";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
@@ -336,7 +336,7 @@ const MessageBubble = memo(function MessageBubble({
 			{isUser ? (
 				<UserAvatar avatar={userProfile.avatar} size="sm" className="mt-msg-avatar" />
 			) : (
-				<PixelAgentAvatar size="sm" className="mt-msg-avatar shrink-0" />
+				<AiAvatar size="sm" className="mt-msg-avatar shrink-0" />
 			)}
 			<div className="min-w-0 flex-1">
 				<MessageHeader sender={sender} isStreaming={isStreaming} isActiveLeaf={isActiveLeaf} isUser={isUser} />
@@ -598,7 +598,7 @@ export const StreamingMessageBubble = memo(function StreamingMessageBubble({
 
 	return (
 		<div className="flex gap-msg-bubble" style={{ maxWidth: "98%" }}>
-			<PixelAgentAvatar size="sm" className="mt-msg-avatar shrink-0" />
+			<AiAvatar size="sm" className="mt-msg-avatar shrink-0" />
 			<div className="min-w-0 flex-1">
 				<MessageHeader
 					sender={agentName ?? t("chat.agent")}

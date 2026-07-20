@@ -190,6 +190,9 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 				guardStringArray(settings.enabledSkills, "settings.enabledSkills");
 			}
 		}
+		if ("aiAvatar" in settings) {
+			guardNullableString(settings.aiAvatar, "settings.aiAvatar");
+		}
 		if (typeof (data.settings as Record<string, unknown>)?.themeTone === "string") {
 			const tone = (data.settings as Record<string, unknown>).themeTone;
 			if (!ctx.mainWindow.isDestroyed()) {

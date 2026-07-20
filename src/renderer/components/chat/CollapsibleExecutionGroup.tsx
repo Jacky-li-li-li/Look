@@ -91,6 +91,9 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 		if (kind === "thinking") return t("tool.thinkingExecuted", { count: thinkingCount });
 		return t("tool.executed", { count: toolCount });
 	}, [kind, thinkingCount, toolCount, t]);
+	// Badge numbers roll on change (keyed re-mount replays roll-in); splitting
+	// the translated string keeps every locale's wording and word order intact.
+	const label = React.useMemo(() => renderRollingLabel(summary), [summary]);
 
 	const [expanded, setExpanded] = React.useState(false);
 
@@ -134,7 +137,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 			<BadgeTrigger
 				kind={kind}
 				isOpen={isOpen}
-				summary={summary}
+				label={label}
 				onClick={handleBadgeClick}
 				onKeyDown={handleBadgeKeyDown}
 			/>
@@ -215,15 +218,45 @@ function renderBlock(
 	);
 }
 
+function RollingNumber({ value }: { value: number }) {
+	return (
+		<span className="inline-flex overflow-hidden" style={{ height: "1em", lineHeight: 1 }}>
+			<span
+				key={value}
+				className="inline-block animate-[roll-in_220ms_cubic-bezier(0,0,0.2,1)_both]"
+				style={{ animationFillMode: "both" }}
+			>
+				{value}
+			</span>
+		</span>
+	);
+}
+
+// Splits the translated badge text on digit runs and renders each number as
+// a RollingNumber, so live count changes replay the roll-in animation without
+// touching any locale string. Locales that spell numbers as words just get
+// static text.
+function renderRollingLabel(summary: string): React.ReactNode {
+	return summary
+		.split(/(\d+)/)
+		.map((part, i) =>
+			/^\d+$/.test(part) ? (
+				<RollingNumber key={`n-${i}`} value={Number(part)} />
+			) : (
+				<React.Fragment key={`t-${i}`}>{part}</React.Fragment>
+			),
+		);
+}
+
 interface BadgeTriggerProps {
 	kind: GroupKind;
 	isOpen: boolean;
-	summary: string;
+	label: React.ReactNode;
 	onClick: () => void;
 	onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
 
-function BadgeTrigger({ kind, isOpen, summary, onClick, onKeyDown }: BadgeTriggerProps) {
+function BadgeTrigger({ kind, isOpen, label, onClick, onKeyDown }: BadgeTriggerProps) {
 	const Icon = kind === "thinking" ? Brain : Wrench;
 	const chevron = (
 		<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", isOpen && "rotate-90")} />
@@ -244,7 +277,7 @@ function BadgeTrigger({ kind, isOpen, summary, onClick, onKeyDown }: BadgeTrigge
 			{chevron}
 			<Icon className="size-3.5 shrink-0 text-muted-foreground" />
 			<span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] tracking-wide text-muted-foreground">
-				{summary}
+				{label}
 			</span>
 		</button>
 	);

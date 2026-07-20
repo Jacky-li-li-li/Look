@@ -142,8 +142,8 @@ export function useAgentActions() {
 			);
 	}, []);
 
-	const handleCreateClick = useCallback(async (projectId: string) => {
-		if (!api) return;
+	const handleCreateClick = useCallback(async (projectId: string): Promise<string | null> => {
+		if (!api) return null;
 		const result = await api.createAgent({ projectId });
 		if (result?.success && result.agentId) {
 			appStore.set(activeAgentIdAtom, result.agentId);
@@ -155,7 +155,9 @@ export function useAgentActions() {
 				result.agentId,
 				...previous.filter((id) => id !== result.agentId),
 			]);
+			return result.agentId;
 		}
+		return null;
 	}, []);
 
 	return {

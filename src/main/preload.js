@@ -219,6 +219,7 @@ const api = {
 	// ---- File read/write ----
 	readFileContent: (path) => ipcRenderer.invoke("look:invoke", { type: "file:read", path }),
 	writeFileContent: (path, content) => ipcRenderer.invoke("look:invoke", { type: "file:write", path, content }),
+	statFilePath: (path) => ipcRenderer.invoke("look:invoke", { type: "file:stat", path }),
 
 	// ---- File viewer window ----
 	openFileViewer: (path) => ipcRenderer.invoke("look:invoke", { type: "fileViewer:open", path }),
