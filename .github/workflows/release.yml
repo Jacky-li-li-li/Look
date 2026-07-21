@@ -32,22 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Import Developer ID Certificate
-        if: ${{ secrets.MAC_CERT_P12 != '' }}
-        env:
-          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
-          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-        run: |
-          echo "$MAC_CERT_P12" | base64 -d > /tmp/cert.p12
-          security create-keychain -p "$MAC_CERT_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security list-keychains -d system -s build.keychain login.keychain
-          security unlock-keychain -p "$MAC_CERT_PASSWORD" build.keychain
-          security import /tmp/cert.p12 -k build.keychain -P "$MAC_CERT_PASSWORD" -A -T /usr/bin/codesign -T /usr/bin/productsign -T /usr/bin/security
-          security set-key-partition-list -S "apple-tool:,apple:,codesign:,productsign:" -s -k "$MAC_CERT_PASSWORD" build.keychain
-          security set-keychain-settings -lut 21600 build.keychain
-          rm /tmp/cert.p12
-
       - name: Build
         run: npm run build
 
