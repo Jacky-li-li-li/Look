@@ -67,11 +67,11 @@ jobs:
           done
 
       - name: Upload to GitHub Release
-        run: npx electron-builder --mac --publish always
+        run: |
+          gh release create "${{ github.ref_name }}" --generate-notes --draft
+          # Upload dmg and zip; *.blockmap files are also published for auto-update support.
+          for f in release/*.dmg release/*.zip release/*.blockmap; do
+            [ -f "$f" ] && gh release upload "${{ github.ref_name }}" "$f" --clobber
+          done
         env:
           GH_TOKEN: ${{ github.token }}
-          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
