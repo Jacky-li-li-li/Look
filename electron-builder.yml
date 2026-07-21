@@ -29,8 +29,11 @@ files:
   - package.json
   - node_modules/**/*
 
-  # 排除 workspace 包（代码已打包到 dist/，不在 release 里手动 rescan）
-  - "!node_modules/@look/**"
+  # workspace 包：保留编译产物 node_modules/@look/*/dist/，排除源码
+  - "!packages/shared/src/**"
+  - "!packages/core/src/**"
+  - "!packages/shared/node_modules/**"
+  - "!packages/core/node_modules/**"
 
   # 构建工具（运行时不需要）
   - "!node_modules/electron{,mon}*/**"
