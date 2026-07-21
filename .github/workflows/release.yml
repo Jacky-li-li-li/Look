@@ -44,13 +44,14 @@ jobs:
           security unlock-keychain -p "$MAC_CERT_PASSWORD" build.keychain
           security import /tmp/cert.p12 -k build.keychain -P "$MAC_CERT_PASSWORD" -A -T /usr/bin/codesign -T /usr/bin/productsign -T /usr/bin/security
           security set-key-partition-list -S "apple-tool:,apple:,codesign:,productsign:" -s -k "$MAC_CERT_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
           rm /tmp/cert.p12
 
       - name: Build
         run: npm run build
 
       - name: Package, Sign & Notarize (with retry)
-        timeout-minutes: 40
+        timeout-minutes: 45
         env:
           CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
@@ -60,14 +61,9 @@ jobs:
         run: |
           for i in 1 2 3; do
             echo "=== electron-builder attempt $i ==="
-            timeout 900 npx electron-builder --mac --publish never && break
-            ec=$?
-            if [ $ec -eq 124 ]; then
-              echo "Attempt $i timed out (15 min), retrying..."
-            else
-              echo "Attempt $i failed (exit $ec), retrying in 15s..."
-              sleep 15
-            fi
+            npx electron-builder --mac --publish never && break
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
           done
 
       - name: Upload to GitHub Release
