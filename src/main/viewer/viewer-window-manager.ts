@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { getUiSettingsPath } from "@look/shared/look-storage";
 import { app, type BrowserWindow, BrowserWindow as ElectronBrowserWindow } from "electron";
 import { readThemeToneSync } from "../settings/store.js";
+import { getPackagedRendererIndexPath } from "../system/renderer-paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,7 +60,7 @@ export function openViewerWindow(absolutePath: string): void {
 	if (isDev) {
 		viewerWindow.loadURL(`http://localhost:5174?theme=${tone}&mode=file-viewer`);
 	} else {
-		viewerWindow.loadFile(path.join(__dirname, "../renderer/index.html"), {
+		viewerWindow.loadFile(getPackagedRendererIndexPath(path.join(__dirname, "..")), {
 			query: { theme: tone, mode: "file-viewer" },
 		});
 	}

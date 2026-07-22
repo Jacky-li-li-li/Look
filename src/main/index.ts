@@ -20,6 +20,7 @@ import { ScheduledTaskStore } from "./scheduler/task-store.js";
 import { SessionRuntimeManager } from "./session/runtime-manager.js";
 import { readThemeToneSync } from "./settings/store.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
+import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { checkForUpdates, initUpdater } from "./system/updater.js";
 import { initializeUsageService } from "./system/usage.js";
@@ -256,7 +257,7 @@ function createWindow(): void {
 		mainWindow.loadURL(`http://localhost:5174?theme=${initialTone}`);
 		mainWindow.webContents.openDevTools();
 	} else {
-		mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"), {
+		mainWindow.loadFile(getPackagedRendererIndexPath(__dirname), {
 			query: { theme: initialTone },
 		});
 	}
