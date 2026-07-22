@@ -19,6 +19,7 @@ import { FileTaskLock } from "./scheduler/task-lock.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
 import { SessionRuntimeManager } from "./session/runtime-manager.js";
 import { readThemeToneSync } from "./settings/store.js";
+import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { checkForUpdates, initUpdater } from "./system/updater.js";
 import { initializeUsageService } from "./system/usage.js";
@@ -472,10 +473,15 @@ async function initSessionRuntime(): Promise<void> {
 
 		console.log("[Look] IPC handlers registered");
 
+		const bundledResourceRoot = getBundledResourceRoot({
+			isPackaged: app.isPackaged,
+			resourcesPath: process.resourcesPath,
+			developmentRoot: path.resolve(__dirname, "../.."),
+		});
+
 		// 同步 Look 内置 Skills 到 ~/.look/builtin-skills/ 并注册路径
 		try {
-			const projectDir = path.resolve(__dirname, "../..");
-			const builtinPath = syncLookDefaultSkills(projectDir);
+			const builtinPath = syncLookDefaultSkills(bundledResourceRoot);
 			if (builtinPath) {
 				await runtimeManager.importSkillPaths([builtinPath]);
 			}
@@ -485,8 +491,7 @@ async function initSessionRuntime(): Promise<void> {
 
 		// 同步 Look 内置 Agent 到 ~/.look/agents/marketplace/
 		try {
-			const projectDir = path.resolve(__dirname, "../..");
-			syncLookDefaultAgents(projectDir);
+			syncLookDefaultAgents(bundledResourceRoot);
 		} catch (err) {
 			console.warn("[Look] 同步内置 Agent 失败:", err);
 		}

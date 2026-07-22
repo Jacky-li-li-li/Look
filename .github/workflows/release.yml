@@ -35,6 +35,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Stage production app
+        run: npm run stage:production
+
       - name: Package & Sign
         timeout-minutes: 45
         env:
@@ -84,6 +87,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Stage production app
+        run: npm run stage:production
+
       - name: Package
         timeout-minutes: 45
         run: npx electron-builder --win --publish never
@@ -128,6 +134,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Stage production app
+        run: npm run stage:production
 
       - name: Package
         timeout-minutes: 45

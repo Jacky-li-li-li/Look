@@ -12,11 +12,10 @@
     "jsx": "react-jsx",
     "paths": {
       "@shared/*": ["packages/shared/src/*"],
-      "@look/shared/*": ["packages/shared/src/*"],
-      "@look/core/*": ["packages/core/src/*"]
+      "@look/shared/*": ["packages/shared/src/*"]
     },
     "baseUrl": "."
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "packages/shared/**/*.ts", "packages/shared/**/*.tsx", "packages/core/**/*.ts"],
-  "exclude": ["node_modules", "dist", "packages/shared/dist", "packages/core/dist"]
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "packages/shared/**/*.ts", "packages/shared/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "packages/shared/dist"]
 }

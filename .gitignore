@@ -1,6 +1,7 @@
 node_modules/
 dist/
 release/
+.release-staging/
 .DS_Store
 *.log
 .env

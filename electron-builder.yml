@@ -8,6 +8,9 @@ publish:
   repo: Look
 
 directories:
+  # electron-builder only sees the generated production app, never the full
+  # development repository or its root node_modules tree.
+  app: .release-staging
   output: release
   buildResources: build
 
@@ -15,59 +18,42 @@ directories:
 npmRebuild: false
 
 asar: true
+
+# Run before packaging to clean extended attributes that can break codesign
+beforePack: scripts/clean-xattrs.mjs
+# Verify resources required during startup exist before signing artifacts.
+afterPack: scripts/verify-packaged-app.mjs
+# Local notarization activates only when LOOK_NOTARY_PROFILE is set. CI keeps
+# using electron-builder's APPLE_* credential integration.
+afterSign: scripts/notarize.mjs
 asarUnpack:
-  # Pi SDK 原生模块（pi-coding-agent 内部加载）
+  # Pi SDK native modules and the current platform clipboard package must stay
+  # outside ASAR. staging removes other-platform binaries before this phase.
   - "node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/native/**"
-  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-arm64/**"
-  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-universal/**"
-  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-darwin-x64/**"
-  # macOS 文件监听原生模块
+  - "node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-*/**"
+  - "node_modules/@mariozechner/clipboard-*/**"
   - "node_modules/fsevents/**"
+
+extraResources:
+  # Startup copies these versioned templates into ~/.look/.
+  - from: default-skills
+    to: default-skills
+    filter:
+      - "**/*"
+  - from: default-agents
+    to: default-agents
+    filter:
+      - "**/*"
 
 files:
   - dist/**/*
   - package.json
   - node_modules/**/*
-
-  # workspace 包：保留编译产物 node_modules/@look/*/dist/，排除源码
-  - "!packages/shared/src/**"
-  - "!packages/core/src/**"
-  - "!packages/shared/node_modules/**"
-  - "!packages/core/node_modules/**"
-
-  # 构建工具（运行时不需要）
-  - "!node_modules/electron{,mon}*/**"
-  - "!node_modules/electron-builder/**"
-  - "!node_modules/vite{, plugins*}*/**"
-  - "!node_modules/esbuild{, plugin*}*/**"
-  - "!node_modules/typescript{, lib*/**}*/**"
-  - "!node_modules/@types/**"
-  - "!node_modules/@vitejs/**"
-  - "!node_modules/@electron{, -builder}/**"
-  - "!node_modules/@esbuild/**"
-  - "!node_modules/@rollup/**"
-  - "!node_modules/concurrently/**"
-  - "!node_modules/patch-package/**"
-  - "!node_modules/react-scan/**"
-
-  # 测试工具
-  - "!node_modules/vitest{, -data-driven}*/**"
-  - "!node_modules/happy-dom/**"
-  - "!node_modules/jsdom/**"
-
-  # 构建时原生模块（不需要打包到应用中）
-  - "!node_modules/lightningcss-darwin-arm64/**"
-  - "!node_modules/@tailwindcss/oxide-darwin-arm64/**"
-  - "!node_modules/@electron-internal/**"
-
-  # 非 darwin 平台原生模块（macOS 应用不需要）
-  - "!node_modules/@mariozechner/clipboard-{linux,win32}*/**"
-  - "!node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui/native/{linux,win32}/**"
-  - "!node_modules/@earendil-works/pi-coding-agent/node_modules/@mariozechner/clipboard-{linux,win32}*/**"
-
-  # 文档/示例/源码映射
-  - "!node_modules/@earendil-works/*/{examples,docs,test,test-fixtures}/**"
+  - "!dist/**/*.d.ts"
+  - "!dist/**/*.map"
+  - "!dist/.tsbuildinfo"
   - "!node_modules/**/*.{ts,tsx,map,md,markdown}"
+  - "!node_modules/@earendil-works/*/{examples,docs,test,test-fixtures}/**"
 
 mac:
   category: public.app-category.developer-tools
