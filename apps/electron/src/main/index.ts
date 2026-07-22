@@ -477,7 +477,7 @@ async function initSessionRuntime(): Promise<void> {
 		const bundledResourceRoot = getBundledResourceRoot({
 			isPackaged: app.isPackaged,
 			resourcesPath: process.resourcesPath,
-			developmentRoot: path.resolve(__dirname, "../.."),
+			developmentRoot: path.resolve(__dirname, "../../.."),
 		});
 
 		// 同步 Look 内置 Skills 到 ~/.look/builtin-skills/ 并注册路径

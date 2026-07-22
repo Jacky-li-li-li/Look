@@ -5,10 +5,10 @@
 @import "@fontsource-variable/geist";
 @plugin "@tailwindcss/typography";
 
-@source "../../packages/shared/src/**/*.{ts,tsx}";
-@source "../../node_modules/streamdown/dist/*.js";
-@source "../../node_modules/@streamdown/code/dist/*.js";
-@source "../../node_modules/@streamdown/mermaid/dist/*.js";
+@source "../../../../packages/shared/src/**/*.{ts,tsx}";
+@source "../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../node_modules/@streamdown/code/dist/*.js";
+@source "../../../../node_modules/@streamdown/mermaid/dist/*.js";
 
 @custom-variant dark (&:is(.tone-dark *));
 

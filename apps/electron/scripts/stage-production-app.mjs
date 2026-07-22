@@ -15,9 +15,10 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(import.meta.dirname, "..");
-const sourceNodeModules = join(root, "node_modules");
-const stagingRoot = join(root, ".release-staging");
+const appRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = resolve(appRoot, "../..");
+const sourceNodeModules = join(repositoryRoot, "node_modules");
+const stagingRoot = join(appRoot, ".release-staging");
 const stagingNodeModules = join(stagingRoot, "node_modules");
 
 const RUNTIME_ROOTS = [
@@ -78,7 +79,7 @@ function copyRuntimePackageFilter(source) {
 }
 
 function copyWorkspaceShared() {
-	const source = join(root, "packages", "shared");
+	const source = join(repositoryRoot, "packages", "shared");
 	const target = packagePath(stagingNodeModules, "@look/shared");
 	mkdirSync(target, { recursive: true });
 	cpSync(join(source, "package.json"), join(target, "package.json"));
@@ -157,13 +158,16 @@ function copyDependencyClosure() {
 	// traversing SDK closures. A dependency such as Pi's nested typebox may use
 	// another version; that copy belongs below the SDK package, not at root.
 	for (const packageName of RUNTIME_ROOTS) {
-		const source = packageName === "@look/shared" ? join(root, "packages", "shared") : findPackage(packageName, root);
+		const source =
+			packageName === "@look/shared"
+				? join(repositoryRoot, "packages", "shared")
+				: findPackage(packageName, appRoot);
 		topLevelSources.set(packageName, source);
 		packageVersion(source);
 	}
 
 	for (const packageName of RUNTIME_ROOTS) {
-		copyPackage(packageName, root, stagingNodeModules);
+		copyPackage(packageName, appRoot, stagingNodeModules);
 	}
 
 	return {
@@ -200,8 +204,8 @@ function pruneOtherPlatformNatives(directory) {
 }
 
 function writeStagedManifest() {
-	const source = readManifest(root);
-	const workspaceSharedVersion = readManifest(join(root, "packages", "shared")).version;
+	const source = readManifest(appRoot);
+	const workspaceSharedVersion = readManifest(join(repositoryRoot, "packages", "shared")).version;
 	const versions = Object.fromEntries(
 		RUNTIME_ROOTS.map((packageName) => {
 			if (packageName === "@look/shared") return [packageName, workspaceSharedVersion];
@@ -235,16 +239,16 @@ function countFiles(directory) {
 }
 
 export function stageProductionApp() {
-	if (!existsSync(join(root, "dist", "src", "main", "index.js"))) {
-		throw new Error("Missing dist/src/main/index.js. Run npm run build first.");
+	if (!existsSync(join(appRoot, "dist", "src", "main", "index.js"))) {
+		throw new Error("Missing apps/electron/dist/src/main/index.js. Run npm run build first.");
 	}
-	if (!existsSync(join(root, "packages", "shared", "dist"))) {
+	if (!existsSync(join(repositoryRoot, "packages", "shared", "dist"))) {
 		throw new Error("Missing packages/shared/dist. Run npm run build:shared first.");
 	}
 
 	rmSync(stagingRoot, { recursive: true, force: true });
 	mkdirSync(stagingNodeModules, { recursive: true });
-	cpSync(join(root, "dist"), join(stagingRoot, "dist"), { recursive: true, dereference: true });
+	cpSync(join(appRoot, "dist"), join(stagingRoot, "dist"), { recursive: true, dereference: true });
 	writeStagedManifest();
 	const closure = copyDependencyClosure();
 	pruneOtherPlatformNatives(stagingNodeModules);

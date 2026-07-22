@@ -1,5 +1,5 @@
-import type { LookAPI } from "../../packages/shared/src/contracts/ipc.js" with { "resolution-mode": "import" };
-import type { MainToRendererEvent } from "../../packages/shared/src/types.js" with { "resolution-mode": "import" };
+import type { LookAPI } from "@look/shared/contracts/ipc" with { "resolution-mode": "import" };
+import type { MainToRendererEvent } from "@look/shared/types" with { "resolution-mode": "import" };
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 // ============================================================

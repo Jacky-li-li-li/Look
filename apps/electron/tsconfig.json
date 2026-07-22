@@ -11,11 +11,10 @@
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "paths": {
-      "@shared/*": ["packages/shared/src/*"],
-      "@look/shared/*": ["packages/shared/src/*"]
+      "@shared/*": ["../../packages/shared/src/*"]
     },
     "baseUrl": "."
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "packages/shared/**/*.ts", "packages/shared/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "packages/shared/dist"]
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"],
+  "exclude": ["node_modules", "dist"]
 }

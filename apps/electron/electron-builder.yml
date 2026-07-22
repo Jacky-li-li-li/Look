@@ -11,7 +11,7 @@ directories:
   # electron-builder only sees the generated production app, never the full
   # development repository or its root node_modules tree.
   app: .release-staging
-  output: release
+  output: ../../release
   buildResources: build
 
 # CI runner 架构 = 目标架构，无需重编译

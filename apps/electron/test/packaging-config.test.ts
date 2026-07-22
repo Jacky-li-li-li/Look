@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const root = resolve(import.meta.dirname, "..");
-const builderConfig = readFileSync(resolve(root, "electron-builder.yml"), "utf8");
-const stagingScript = readFileSync(resolve(root, "scripts/stage-production-app.mjs"), "utf8");
-const localMacPackagingScript = readFileSync(resolve(root, "scripts/package-macos-notarized.mjs"), "utf8");
+const appRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = resolve(appRoot, "../..");
+const builderConfig = readFileSync(resolve(appRoot, "electron-builder.yml"), "utf8");
+const stagingScript = readFileSync(resolve(appRoot, "scripts/stage-production-app.mjs"), "utf8");
+const localMacPackagingScript = readFileSync(resolve(appRoot, "scripts/package-macos-notarized.mjs"), "utf8");
 
 describe("production packaging configuration", () => {
 	it("ships startup templates as extra resources", () => {
@@ -29,9 +30,14 @@ describe("production packaging configuration", () => {
 
 	it("packages only the production staging directory", () => {
 		expect(builderConfig).toContain("app: .release-staging");
+		expect(builderConfig).toContain("output: ../../release");
 		expect(builderConfig).not.toContain('"!node_modules/vite');
 		expect(stagingScript).toContain("RUNTIME_ROOTS");
 		expect(stagingScript).toContain('"@earendil-works/pi-coding-agent"');
+		expect(stagingScript).toContain('const appRoot = resolve(import.meta.dirname, "..");');
+		expect(stagingScript).toContain('const repositoryRoot = resolve(appRoot, "../..");');
+		expect(stagingScript).toContain('join(repositoryRoot, "packages", "shared")');
+		expect(repositoryRoot).toContain("pi");
 	});
 
 	it("does not put TypeScript build artifacts into the application", () => {

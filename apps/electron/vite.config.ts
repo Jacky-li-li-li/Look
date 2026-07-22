@@ -18,7 +18,7 @@ function gitCommitCount(): string {
 
 const appVersion = `${baseVersion}.${gitCommitCount()}`;
 export default defineConfig({
-	publicDir: "../../public",
+	publicDir: path.resolve(__dirname, "public"),
 	plugins: [
 		tailwindcss(),
 		react(),
@@ -34,7 +34,7 @@ export default defineConfig({
 	],
 	root: "src/renderer",
 	base: "./",
-	envDir: path.resolve(__dirname),
+	envDir: path.resolve(__dirname, "../.."),
 	define: {
 		__APP_VERSION__: JSON.stringify(appVersion),
 	},
@@ -54,7 +54,7 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
-			"@shared": path.resolve(__dirname, "packages/shared/src"),
+			"@shared": path.resolve(__dirname, "../../packages/shared/src"),
 		},
 	},
 	server: {

@@ -1,16 +1,20 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getBundledResourceRoot } from "../src/main/system/bundled-resource-paths.js";
 import { getPackagedRendererIndexPath } from "../src/main/system/renderer-paths.js";
 
+const indexSource = readFileSync(resolve(import.meta.dirname, "../src/main/index.ts"), "utf8");
+
 describe("bundled resource paths", () => {
-	it("uses the repository root during development", () => {
+	it("uses the Electron app root during development", () => {
 		expect(
 			getBundledResourceRoot({
 				isPackaged: false,
 				resourcesPath: "/Applications/Look.app/Contents/Resources",
-				developmentRoot: "/work/look",
+				developmentRoot: "/work/look/apps/electron",
 			}),
-		).toBe("/work/look");
+		).toBe("/work/look/apps/electron");
 	});
 
 	it("uses Electron resourcesPath in packaged applications", () => {
@@ -18,9 +22,13 @@ describe("bundled resource paths", () => {
 			getBundledResourceRoot({
 				isPackaged: true,
 				resourcesPath: "/Applications/Look.app/Contents/Resources",
-				developmentRoot: "/work/look",
+				developmentRoot: "/work/look/apps/electron",
 			}),
 		).toBe("/Applications/Look.app/Contents/Resources");
+	});
+
+	it("resolves bundled resources from the compiled app root", () => {
+		expect(indexSource).toContain('developmentRoot: path.resolve(__dirname, "../../..")');
 	});
 
 	it("resolves Vite output from compiled main-process modules", () => {

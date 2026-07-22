@@ -7,13 +7,14 @@ import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const projectRoot = resolve(import.meta.dirname, "..");
+const appRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = resolve(appRoot, "../..");
 const outputDir = mkdtempSync(join(tmpdir(), "look-macos-release-"));
-const releaseDir = join(projectRoot, "release");
+const releaseDir = join(repositoryRoot, "release");
 const profile = process.env.LOOK_NOTARY_PROFILE ?? "look-notary";
 
 function run(command, args, options = {}) {
-	execFileSync(command, args, { cwd: projectRoot, stdio: "inherit", ...options });
+	execFileSync(command, args, { cwd: appRoot, stdio: "inherit", ...options });
 }
 
 try {
