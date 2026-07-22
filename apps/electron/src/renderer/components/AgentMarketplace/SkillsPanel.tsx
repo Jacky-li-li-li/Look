@@ -2,13 +2,12 @@
 // SkillsPanel — Agent Skill 管理页面
 //
 // 搜索 + 内置/我的 Segment 切换 + Skill 卡片网格。
-// 进入"我的"tab 时自动检测并导入常见工具目录下的 Skill。
 // ============================================================
 
 import { Input } from "@shared/components/ui/input";
 import { useAtom } from "jotai";
 import { FolderOpen, Loader2, Search, Sparkles, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { agentSkillsAtom, agentSkillsLoadingAtom, skillSourceTabAtom } from "../../store/agentDefinitionsAtoms";
@@ -23,7 +22,6 @@ export default function SkillsPanel() {
 	const [sourceTab, setSourceTab] = useAtom(skillSourceTabAtom);
 	const [searchText, setSearchText] = useState("");
 	const [, setEnabledSkills] = useAtom(enabledSkillsAtom);
-	const autoImported = useRef(false);
 
 	const {
 		isEnabled,
@@ -56,24 +54,6 @@ export default function SkillsPanel() {
 		loadSkills();
 		loadEnabled();
 	}, [loadSkills, loadEnabled]);
-
-	// 自动检测并导入常见工具目录下的 Skill（仅首次进入"我的"tab 时执行）
-	useEffect(() => {
-		if (sourceTab !== "mine" || autoImported.current) return;
-		autoImported.current = true;
-
-		window.look.detectCommonSkillPaths().then((detected) => {
-			if (!detected?.success || !detected.detected) return;
-			const paths = detected.detected.flatMap((d) => (d.exists && d.skillCount > 0 ? [d.path] : []));
-			if (paths.length > 0) {
-				window.look.importSkillPaths(paths).then((result) => {
-					if (result?.success && result.importedCount > 0) {
-						loadSkills();
-					}
-				});
-			}
-		});
-	}, [sourceTab, loadSkills]);
 
 	const filteredSkills = useMemo(() => {
 		let list = skills;

@@ -61,20 +61,28 @@ export class SkillManagementService {
 				? this.options.runtimeRegistry.get(this.options.selection.currentId)?.runtime
 				: undefined;
 			const settingsManager = activeRuntime?.services.settingsManager ?? this.options.globalSettingsManager;
+			const currentPaths = new Set(
+				settingsManager.getSkillPaths().flatMap((item) => {
+					const resolved = item.startsWith("~") ? join(homedir(), item.slice(1)) : item;
+					return existsSync(resolved) ? [resolved] : [];
+				}),
+			);
 			const merged = Array.from(
 				new Set(
-					[...settingsManager.getSkillPaths(), ...paths].flatMap((item) => {
+					[...currentPaths, ...paths].flatMap((item) => {
 						const resolved = item.startsWith("~") ? join(homedir(), item.slice(1)) : item;
 						return existsSync(resolved) ? [resolved] : [];
 					}),
 				),
 			);
+			const importedCount = merged.filter((path) => !currentPaths.has(path)).length;
+			if (importedCount === 0) return { success: true, importedCount: 0 };
 			settingsManager.setSkillPaths(merged);
 			await settingsManager.flush();
 			await Promise.all(
 				Array.from(this.options.runtimeRegistry.values()).map((managed) => managed.runtime.session.reload()),
 			);
-			return { success: true, importedCount: merged.length };
+			return { success: true, importedCount };
 		} catch (error) {
 			return {
 				success: false,
