@@ -19,7 +19,7 @@ import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload, Tool
 import { v4 as uuidv4 } from "uuid";
 import type { IEventBus, IPermissionService } from "../core/contracts.js";
 import { createPlanModeHandler } from "../extensions/permission-extension.js";
-import { defaultCapabilityRegistry, type CapabilityRegistry } from "./capability-registry.js";
+import { type CapabilityRegistry, defaultCapabilityRegistry } from "./capability-registry.js";
 
 // ── Constants ──
 

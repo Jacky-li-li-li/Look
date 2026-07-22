@@ -347,4 +347,3 @@ interface SkillDiagnostic {
 }
 
 type GeneralSettings = UserSettings;
-

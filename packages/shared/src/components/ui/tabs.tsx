@@ -1,9 +1,9 @@
 "use client";
 
-import { cn } from "../../lib/utils.js";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Tabs as TabsPrimitive } from "radix-ui";
 import type * as React from "react";
+import { cn } from "../../lib/utils.js";
 
 function Tabs({ className, orientation = "horizontal", ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
 	return (

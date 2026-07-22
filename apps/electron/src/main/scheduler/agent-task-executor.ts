@@ -1,7 +1,7 @@
 import type { ScheduledTask } from "@look/shared/types";
 import {
-	HeadlessAgentRunner,
 	type ExecutionProfile,
+	HeadlessAgentRunner,
 	type HeadlessAgentRunResult,
 	type HeadlessRunSource,
 } from "../execution/headless-agent-runner.js";

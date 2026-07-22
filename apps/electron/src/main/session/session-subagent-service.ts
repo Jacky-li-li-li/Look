@@ -7,9 +7,9 @@
 // the permission/plan services for tool-state changes.
 // ============================================================
 
+import { randomUUID } from "node:crypto";
 import type { AgentSession, ModelRegistry, SessionStartEvent } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { randomUUID } from "node:crypto";
 import { ensureWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { AgentInfo, MainToRendererEvent } from "@look/shared/types";
 import type { AgentDefinitionService } from "../agents/definition-service.js";

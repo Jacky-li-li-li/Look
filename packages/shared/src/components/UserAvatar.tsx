@@ -1,5 +1,5 @@
-import { cn } from "../lib/utils.js";
 import { UserRound } from "lucide-react";
+import { cn } from "../lib/utils.js";
 
 interface UserAvatarProps {
 	avatar: string;

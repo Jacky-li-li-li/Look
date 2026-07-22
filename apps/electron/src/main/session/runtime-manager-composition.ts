@@ -378,7 +378,6 @@ export class RuntimeManagerComposition {
 			getAvailableModelsSync: () => getAvailableModels(self.modelRegistry),
 		});
 
-
 		self.projectDeletionService = new ProjectDeletionService({
 			projectService: this.projectService,
 			sessionCatalog: this.sessionCatalog,

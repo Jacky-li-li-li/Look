@@ -84,12 +84,14 @@ export class HeadlessAgentRunner {
 						const text = messageText(event.message);
 						if (text) output = text;
 						const detail = event.message as { stopReason?: string; errorMessage?: string };
-						terminalError = detail.stopReason === "error" ? new Error(detail.errorMessage || "Agent task failed") : null;
+						terminalError =
+							detail.stopReason === "error" ? new Error(detail.errorMessage || "Agent task failed") : null;
 					}
 					if (event.type === "agent_end" && !event.willRetry) {
 						finish(input.signal.aborted ? input.signal.reason : (terminalError ?? undefined));
 					}
-					if (event.type === "auto_retry_end" && !event.success) finish(terminalError ?? new Error("Agent retry failed"));
+					if (event.type === "auto_retry_end" && !event.success)
+						finish(terminalError ?? new Error("Agent retry failed"));
 				});
 
 				input.signal.addEventListener("abort", onAbort, { once: true });

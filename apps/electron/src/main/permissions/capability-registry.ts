@@ -7,16 +7,7 @@ export interface Capability {
 	requiresExplicitApproval: boolean;
 }
 
-const BUILTIN_CAPABILITIES = new Set([
-	"bash",
-	"read",
-	"write",
-	"edit",
-	"grep",
-	"find",
-	"ls",
-	"web_search",
-]);
+const BUILTIN_CAPABILITIES = new Set(["bash", "read", "write", "edit", "grep", "find", "ls", "web_search"]);
 
 /**
  * The registry is intentionally conservative: integrations not explicitly

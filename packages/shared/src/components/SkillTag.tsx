@@ -1,5 +1,5 @@
-import { Badge } from "./ui/badge.js";
 import { Sparkles } from "lucide-react";
+import { Badge } from "./ui/badge.js";
 
 interface SkillTagProps {
 	name: string;

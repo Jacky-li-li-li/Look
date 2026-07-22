@@ -1,5 +1,5 @@
-import { Badge } from "./ui/badge.js";
 import { Wrench } from "lucide-react";
+import { Badge } from "./ui/badge.js";
 
 interface McpTagProps {
 	server: string;

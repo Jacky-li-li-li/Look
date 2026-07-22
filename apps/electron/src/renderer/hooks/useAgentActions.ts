@@ -110,7 +110,6 @@ export function useAgentActions() {
 		}
 	}, []);
 
-
 	const handleThinkingChange = useCallback(async (level: string) => {
 		const id = appStore.get(activeAgentIdAtom);
 		if (!id || !api) return;

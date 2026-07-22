@@ -1,5 +1,5 @@
-import { Badge } from "./ui/badge.js";
 import { Bot } from "lucide-react";
+import { Badge } from "./ui/badge.js";
 
 interface AgentTagProps {
 	name: string;

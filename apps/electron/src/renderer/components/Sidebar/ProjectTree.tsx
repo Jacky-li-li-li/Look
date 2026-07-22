@@ -231,7 +231,6 @@ export default function ProjectTree({
 		[t],
 	);
 
-
 	if (projects.length === 0) return null;
 
 	return (

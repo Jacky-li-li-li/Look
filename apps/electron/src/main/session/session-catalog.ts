@@ -87,7 +87,10 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 						data.childSessionId &&
 						data.agentName &&
 						data.createdAt &&
-						(data.status === "running" || data.status === "completed" || data.status === "failed" || data.status === "cancelled")
+						(data.status === "running" ||
+							data.status === "completed" ||
+							data.status === "failed" ||
+							data.status === "cancelled")
 					) {
 						delegation = data as DelegationLifecycleEntry;
 					}

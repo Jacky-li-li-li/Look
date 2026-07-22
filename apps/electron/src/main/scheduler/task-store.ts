@@ -33,10 +33,10 @@ export class ScheduledTaskStore {
 			tasks: Array.isArray(loaded.tasks) ? loaded.tasks : [],
 			logs: Array.isArray(loaded.logs)
 				? loaded.logs.map((log) => ({
-					...log,
-					source: log.source ?? "scheduled-task",
-					executionProfile: log.executionProfile ?? "unattended-scheduled-task",
-				}))
+						...log,
+						source: log.source ?? "scheduled-task",
+						executionProfile: log.executionProfile ?? "unattended-scheduled-task",
+					}))
 				: [],
 		};
 	}

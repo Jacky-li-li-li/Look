@@ -1,5 +1,5 @@
-import { Badge } from "./ui/badge.js";
 import { File } from "lucide-react";
+import { Badge } from "./ui/badge.js";
 
 interface FileTagProps {
 	path: string;
