@@ -113,28 +113,21 @@ npm run package
 ## 项目结构
 
 ```
-src/
-├── main/                 # Electron 主进程
-│   ├── index.ts          # 入口
-│   ├── session/          # 会话管理（目录、运行时注册与事件处理）
-│   ├── extensions/       # pi 扩展工厂
-│   ├── im/               # 飞书 IM 桥接
-│   ├── workspace/        # 工作区文件/树服务
-│   └── preload.js        # 预加载脚本
-└── renderer/             # React 渲染进程
-    ├── App.tsx           # 主应用
-    ├── components/       # UI 组件
-    ├── providers/        # AI 提供商图标
-    ├── hooks/            # 自定义 hooks
-    ├── store/            # Jotai 状态
-    ├── locales/          # 国际化文案 (zh/en/ja)
-    └── lib/              # 工具库
+apps/
+└── electron/             # Electron 应用边界
+    ├── src/
+    │   ├── main/         # 主进程、preload 与 pi runtime 集成
+    │   └── renderer/     # React 渲染进程
+    ├── test/             # Vitest 应用测试
+    ├── default-agents/   # 随安装包分发的 Agent 模板
+    ├── default-skills/   # 随安装包分发的 Skill 模板
+    ├── build/            # 图标和平台打包资源
+    └── scripts/          # 构建、staging、签名辅助脚本
 packages/
-├── shared/               # 共享类型、工具与 UI 组件
-└── core/                 # 核心领域逻辑与合约
+└── shared/               # 共享类型、工具与 UI 组件
 ```
 
-所有用户数据统一存储在 `~/.look/` 下，不写入项目目录的 `.pi/` 文件夹。
+根 `package.json` 负责 workspace 编排并保留所有常用命令；Electron 专属构建配置与产物位于 `apps/electron/`。所有用户数据统一存储在 `~/.look/` 下，不写入项目目录的 `.pi/` 文件夹。
 
 ## 命令参考
 

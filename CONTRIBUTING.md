@@ -66,6 +66,8 @@ docs(readme): add troubleshooting section for M1 macs
 
 ## Development Setup
 
+Run commands from the repository root. The root npm scripts coordinate the `@look/electron` and `@look/shared` workspaces.
+
 ```bash
 # Install dependencies
 npm install
@@ -86,12 +88,14 @@ npm run package
 ## Project Structure
 
 ```
-src/
-├── main/          # Electron main process (TypeScript, Node.js)
-├── renderer/      # React renderer process (TypeScript, Vite)
+apps/
+└── electron/
+    ├── src/main/      # Electron main process (TypeScript, Node.js)
+    ├── src/renderer/  # React renderer process (TypeScript, Vite)
+    ├── test/          # Application tests
+    └── scripts/       # Build and packaging helpers
 packages/
-├── shared/        # Shared types, utilities and UI components
-├── core/          # Core domain logic and contracts
+└── shared/            # Shared types, utilities and UI components
 ```
 
 ## Code Conventions

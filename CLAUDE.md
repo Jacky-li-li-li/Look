@@ -12,14 +12,14 @@ npm run dev:main                     # Compile main process + launch Electron
 npm run build                        # Full production build
 npm run build:main                   # tsc for main process only
 npm run build:renderer               # Vite build for renderer only
-npm run start                        # Launch Electron from dist/ (must build first)
+npm run start                        # Launch Electron from apps/electron/dist/ (must build first)
 npm run package                      # Build + package with electron-builder
 ```
 
 ### Linting & formatting
 
 ```bash
-npm run lint                         # biome check (no fix) on src/ + vitest test files
+npm run lint                         # biome check (no fix) on apps/electron/src/ + packages/
 npm run lint:fix                     # biome check --write --unsafe
 npm run format                       # biome format --write
 npm run check                        # Full CI check: lint + both tsc --noEmit + tests
@@ -27,7 +27,7 @@ npm run check                        # Full CI check: lint + both tsc --noEmit +
 
 ### Tests
 
-Vitest 3 with `environment: "node"`. Config in `vitest.config.ts`.
+Vitest 3 with `environment: "node"`. App config lives in `apps/electron/vitest.config.ts`.
 
 ```bash
 npm test                             # Run all vitest-managed tests (vitest --run)
@@ -39,9 +39,9 @@ npx vitest --run <name-fragment>     # Run a single test file by name fragment
 
 2026-06-11 provider/CSP update follow-up:
 
-- Dev mode intentionally skips main-process CSP injection because Vite injects React Fast Refresh and HMR scripts. Packaged builds still use the strict CSP in `src/renderer/index.html` plus the main-process `onHeadersReceived` CSP. To keep the dev console clean without weakening packaged security, `src/main/index.ts` sets `ELECTRON_DISABLE_SECURITY_WARNINGS=true` only when `app.isPackaged === false`.
-- `screen -S look-runtime -X quit` can remove the detached screen session while leaving child processes alive (`npm run dev`, `concurrently`, `vite`, `electron dist/main/index.js`, Electron helpers, and esbuild). After quitting the screen session, always verify and clean the remaining Look runtime process tree before restarting.
-- The renderer dev server is fixed at port `5174` (`vite.config.ts`), and the Electron main process loads `http://localhost:5174` in dev. If startup behaves oddly, check `lsof -nP -iTCP:5174 -sTCP:LISTEN` before launching another runtime.
+- Dev mode intentionally skips main-process CSP injection because Vite injects React Fast Refresh and HMR scripts. Packaged builds still use the strict CSP in `apps/electron/src/renderer/index.html` plus the main-process `onHeadersReceived` CSP. To keep the dev console clean without weakening packaged security, `apps/electron/src/main/index.ts` sets `ELECTRON_DISABLE_SECURITY_WARNINGS=true` only when `app.isPackaged === false`.
+- `screen -S look-runtime -X quit` can remove the detached screen session while leaving child processes alive (`npm run dev`, `concurrently`, `vite`, `electron apps/electron/dist/src/main/index.js`, Electron helpers, and esbuild). After quitting the screen session, always verify and clean the remaining Look runtime process tree before restarting.
+- The renderer dev server is fixed at port `5174` (`apps/electron/vite.config.ts`), and the Electron main process loads `http://localhost:5174` in dev. If startup behaves oddly, check `lsof -nP -iTCP:5174 -sTCP:LISTEN` before launching another runtime.
 - Cleanup should target the Look dev runtime only. Do not kill the active Claude/Proma agent process just because it has `/Users/jacky/Desktop/pi` in its command line; that process is the current coding session, not the app runtime.
 
 Useful cleanup/restart sequence:
@@ -61,25 +61,29 @@ This is **Look** — an Electron + React desktop app built on the [pi SDK](https
 
 The pi SDK (`@earendil-works/pi-*`) provides the agent runtime: model registry, session management, tool execution, retry, project trust, resources, and event streaming. Look provides the desktop shell, project bookmarks, UI settings, and chat experience.
 
+### Workspace Layout
+
+The root is an npm workspace coordinator. `apps/electron/` owns all Electron-specific code, tests, templates, static assets, build configuration, and staging scripts. `packages/shared/` is the reusable shared package. Run contributor commands from the repository root; root scripts delegate to `@look/electron` and build `@look/shared` in dependency order.
+
 ### Dual TypeScript Setup
 
 Two separate `tsconfig.json` files because Electron's main and renderer processes have different module systems:
 
 | Config | Target | Module System | Includes |
 |---|---|---|---|
-| `tsconfig.json` | Renderer (Vite/browser) | `ESNext` + `bundler` resolution | `src/renderer/`, `src/shared/` |
-| `tsconfig.main.json` | Main process (Node.js) | `Node16` | `src/main/` |
+| `apps/electron/tsconfig.json` | Renderer (Vite/browser) | `ESNext` + `bundler` resolution | `apps/electron/src/renderer/` |
+| `apps/electron/tsconfig.main.json` | Main process (Node.js) | `Node16` | `apps/electron/src/main/` |
 
-**Important**: `preload.js` is CommonJS (Electron sandbox requirement), not TypeScript. It's copied verbatim during build: `cp src/main/preload.js dist/main/preload.js`.
+**Important**: `preload.cts` is compiled as CommonJS for Electron's sandbox requirement and emits `apps/electron/dist/src/main/preload.cjs`.
 
-The `@shared/*` path alias resolves to `packages/shared/src/*` in both tsconfigs, in Vite, and in vitest — this is the code shared between main and renderer. Components under `@shared/components/ui/` are shadcn/ui (Radix Nova style), generated by the `shadcn` CLI and shared between both processes.
+The renderer `@shared/*` alias resolves to `packages/shared/src/*` in TypeScript, Vite, and Vitest. Main-process code consumes the built `@look/shared` workspace package, so its compiler does not emit a duplicate shared source tree. Components under `@shared/components/ui/` are shadcn/ui (Radix Nova style), generated by the `shadcn` CLI and shared between both processes.
 
 ### Process Architecture
 
 ```
 Renderer (React 19, Vite, Tailwind v4, shadcn/ui)
   │
-  │  contextBridge (preload.js) — "look" API
+  │  contextBridge (preload.cjs) — "look" API
   │    - send(event)       → ipcRenderer.send("look:event", ...)
   │    - invoke(event)     → ipcRenderer.invoke("look:invoke", ...)  (returns Promise)
   │    - onEvent(callback) → ipcRenderer.on("look:event", ...)
@@ -92,11 +96,11 @@ Main Process (Electron)
         └── ResourceLoader-native extensions, skills and project trust
 ```
 
-### SessionRuntimeManager (`src/main/session-runtime-manager.ts`)
+### SessionRuntimeManager (`apps/electron/src/main/session/runtime-manager.ts`)
 
 The core singleton hosts a deduplicated `AgentSessionRuntime` registry keyed by pi session ID. Each runtime owns one pi session and its cwd-bound services; different sessions may stream concurrently. Persisted rows remain native pi session files, while unsent drafts exist only for the current process. Look delegates model, thinking, compaction, naming, fork/tree, extension binding, and persistence to pi SDK APIs.
 
-### IPC Pattern (`src/main/ipc-handlers.ts`)
+### IPC Pattern (`apps/electron/src/main/ipc/handlers.ts`)
 
 - **Main → Renderer**: `look:event` carries the active pi session lifecycle, streaming message snapshots, tool state, usage, history, and tree updates.
 - **Renderer → Main**: `look:invoke` (request-response) for commands (send message, create/destroy agent, switch model, get settings) and `look:event` (fire-and-forget) for `app:ready`
@@ -143,7 +147,7 @@ All Look-managed user data lives under `~/.look/`. No project files are written 
 | `~/.look/workspaces/<name>/sessions/` | pi SessionManager JSONL files |
 | `~/.look/workspaces/<name>/subsessions/` | SubAgent child sessions |
 
-### Renderer (`src/renderer/`)
+### Renderer (`apps/electron/src/renderer/`)
 
 React 19 single-page app. `App.tsx` subscribes to `agent:event` IPC events and manages state (agents list, messages per agent, active agent). Key components:
 
@@ -168,12 +172,13 @@ React 19 single-page app. `App.tsx` subscribes to `agent:event` IPC events and m
 ## Key Conventions
 
 - **pi SDK first**: Any change or new feature must first align with pi SDK (`@earendil-works/pi-*`) conventions and APIs. Look is a consumer of the SDK — do not re-implement or deviate from SDK patterns (tool registration, session lifecycle, event streaming, skill loading, etc.). When the SDK already provides a capability, wrap it; don't replace it.
-- **Path alias**: `@shared/*` → `packages/shared/src/*` (components, types, utils shared between main and renderer); workspace package `@look/shared` is available for future migration
+- **Path alias**: renderer `@shared/*` -> `packages/shared/src/*`; main-process and packaged runtime code use the `@look/shared` workspace package
 - **Formatting**: biome with tabs (indent: 3), 120-char line width. Prefer `npm run format` before committing.
 - **Styling**: Tailwind v4 + custom "Ink Wash" design tokens (hairline borders, frosted glass, `--accent`, `--sidebar`), dark theme via `next-themes`
 - **Context isolation**: strict — `nodeIntegration: false`, `contextIsolation: true`, all IPC through preload
 - **Model format**: `"provider/model-id"` (e.g., `"anthropic/claude-sonnet-4-20250514"`)
 - **Thinking levels**: `"off" | "minimal" | "low" | "medium" | "high" | "xhigh"` — matches pi SDK's built-in levels
+- **Built-in templates**: application-owned Agent and Skill templates live in `apps/electron/default-agents/` and `apps/electron/default-skills/`; packaging preserves these names under Electron resources
 - **Skills paths**: use `SettingsManager.getSkillPaths()` and pi ResourceLoader defaults
 - **Linter rules**: a11y is off; `noNonNullAssertion` and `noUnusedFunctionParameters` are off; `noExplicitAny` is `"warn"` (enforcing zero explicit `any` project-wide)
 
