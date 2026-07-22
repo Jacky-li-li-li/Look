@@ -50,8 +50,8 @@
 			"apps/electron/scripts/**/*.mjs",
 			"apps/electron/vite.config.ts",
 			"apps/electron/vitest.config.ts",
-			"packages/**/*.ts",
-			"packages/**/*.tsx"
+			"packages/*/src/**/*.ts",
+			"packages/*/src/**/*.tsx"
 		],
 		"ignoreUnknown": true
 	}
