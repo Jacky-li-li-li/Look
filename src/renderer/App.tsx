@@ -152,7 +152,6 @@ export default function App() {
 			handleReorderSessionSheets={agentActions.handleReorderSessionSheets}
 			handleDestroyAgent={agentActions.handleDestroyAgent}
 			handleAbortAgent={agentActions.handleAbortAgent}
-			handleDequeueAll={agentActions.handleDequeueAll}
 			handleThinkingChange={agentActions.handleThinkingChange}
 			handleModelChanged={agentActions.handleModelChanged}
 			handleCreateClick={agentActions.handleCreateClick}

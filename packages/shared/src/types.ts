@@ -629,6 +629,8 @@ export interface TestCustomProviderResult {
 
 export type ScheduledTaskStatus = "paused" | "scheduled";
 export type ScheduledTaskRunStatus = "running" | "retrying" | "success" | "failed" | "skipped" | "interrupted";
+export type TaskRunSource = "scheduled-task" | "manual-task-run" | "manual-task-test";
+export type TaskExecutionProfile = "unattended-scheduled-task" | "interactive-test";
 
 export interface ScheduledTaskRetryPolicy {
 	maxAttempts: number;
@@ -696,7 +698,7 @@ export interface ScheduledTaskInput {
 	executionTimeoutMs?: number;
 }
 
-export interface ScheduledTaskRunLog {
+export interface TaskRun {
 	id: string;
 	taskId: string;
 	taskName: string;
@@ -713,10 +715,16 @@ export interface ScheduledTaskRunLog {
 	notificationStatus?: "sent" | "failed";
 	notificationError?: string;
 	ownerId: string;
+	/** Defaults are applied while reading legacy logs written before execution provenance existed. */
+	source?: TaskRunSource;
+	executionProfile?: TaskExecutionProfile;
 }
 
+/** Backward-compatible name for scheduler-owned task runs. */
+export type ScheduledTaskRunLog = TaskRun;
+
 export interface ScheduledTaskTestResult {
-	log: ScheduledTaskRunLog;
+	log: TaskRun;
 }
 
 /** Events sent from renderer to main process */

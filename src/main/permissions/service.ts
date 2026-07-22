@@ -19,6 +19,7 @@ import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload, Tool
 import { v4 as uuidv4 } from "uuid";
 import type { IEventBus, IPermissionService } from "../core/contracts.js";
 import { createPlanModeHandler } from "../extensions/permission-extension.js";
+import { defaultCapabilityRegistry, type CapabilityRegistry } from "./capability-registry.js";
 
 // ── Constants ──
 
@@ -52,6 +53,7 @@ export class PermissionService implements IPermissionService {
 	constructor(
 		private readonly eventBus: IEventBus,
 		initialDefaultMode: PermissionMode = "ask",
+		private readonly capabilities: CapabilityRegistry = defaultCapabilityRegistry,
 	) {
 		this.defaultMode = initialDefaultMode;
 	}
@@ -123,9 +125,15 @@ export class PermissionService implements IPermissionService {
 			const mode = this.getMode(sessionId);
 
 			if (mode === "always") return {};
-			if (mode === "plan") return planHandler(event, _ctx);
-
 			const toolName = event.toolName;
+			const capability = this.capabilities.resolve(toolName);
+			if (mode === "plan") {
+				if (capability.requiresExplicitApproval) {
+					return { block: true, reason: `Plan mode does not allow ${capability.kind} capability: ${toolName}` };
+				}
+				return planHandler(event, _ctx);
+			}
+
 			const allowedTools = this.allowedTools.get(sessionId);
 			if (allowedTools?.has(toolName)) return {};
 
@@ -134,7 +142,7 @@ export class PermissionService implements IPermissionService {
 			const askEvent: PermissionAskEvent = {
 				toolName,
 				toolInput: (event.input ?? {}) as Record<string, unknown>,
-				toolDescription: `Tool: ${toolName}`,
+				toolDescription: capability.description,
 				requestId,
 				expiresAt,
 			};

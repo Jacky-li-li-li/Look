@@ -31,7 +31,13 @@ export class ScheduledTaskStore {
 		this.database = {
 			version: 1,
 			tasks: Array.isArray(loaded.tasks) ? loaded.tasks : [],
-			logs: Array.isArray(loaded.logs) ? loaded.logs : [],
+			logs: Array.isArray(loaded.logs)
+				? loaded.logs.map((log) => ({
+					...log,
+					source: log.source ?? "scheduled-task",
+					executionProfile: log.executionProfile ?? "unattended-scheduled-task",
+				}))
+				: [],
 		};
 	}
 
@@ -73,10 +79,15 @@ export class ScheduledTaskStore {
 	}
 
 	async upsertLog(log: ScheduledTaskRunLog): Promise<void> {
+		const normalized: ScheduledTaskRunLog = {
+			...log,
+			source: log.source ?? "scheduled-task",
+			executionProfile: log.executionProfile ?? "unattended-scheduled-task",
+		};
 		await this.mutate((database) => {
-			const index = database.logs.findIndex((item) => item.id === log.id);
-			if (index >= 0) database.logs[index] = structuredClone(log);
-			else database.logs.push(structuredClone(log));
+			const index = database.logs.findIndex((item) => item.id === normalized.id);
+			if (index >= 0) database.logs[index] = structuredClone(normalized);
+			else database.logs.push(structuredClone(normalized));
 			database.logs = database.logs.sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, this.maxLogs);
 		});
 	}

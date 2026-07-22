@@ -9,6 +9,7 @@
 
 import type { AgentSession, ModelRegistry, SessionStartEvent } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { randomUUID } from "node:crypto";
 import { ensureWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { AgentInfo, MainToRendererEvent } from "@look/shared/types";
 import type { AgentDefinitionService } from "../agents/definition-service.js";
@@ -18,7 +19,7 @@ import type { ProjectService } from "../projects/project-service.js";
 import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../settings/store.js";
 import type { ManagedRuntime } from "./runtime-registry.js";
-import { SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
+import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
 import type { SubAgentRegistry } from "./subagent-registry.js";
 
 export interface SessionSubagentHost {
@@ -241,6 +242,15 @@ export class SessionSubagentService {
 			parentSessionId,
 			agentName: displayName,
 		});
+		const delegation = {
+			delegationId: randomUUID(),
+			parentSessionId,
+			childSessionId,
+			agentName: displayName,
+			status: "running" as const,
+			createdAt: new Date().toISOString(),
+		};
+		session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, delegation);
 		this.deps.subAgentRegistry.register(parentSessionId, childSessionId, displayName);
 
 		const childInfo = this.deps.host.runtimeInfo(childSessionId);
@@ -288,6 +298,24 @@ export class SessionSubagentService {
 			throw error;
 		});
 
-		return resultPromise;
+		return resultPromise.then(
+			(result) => {
+				session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
+					...delegation,
+					status: "completed",
+					finishedAt: new Date().toISOString(),
+				});
+				return result;
+			},
+			(error) => {
+				session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
+					...delegation,
+					status: signal?.aborted ? "cancelled" : "failed",
+					finishedAt: new Date().toISOString(),
+					error: error instanceof Error ? error.message : String(error),
+				});
+				throw error;
+			},
+		);
 	}
 }

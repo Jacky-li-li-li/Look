@@ -1,3 +1,7 @@
+import type { LookAPI } from "../../packages/shared/src/contracts/ipc.js" with { "resolution-mode": "import" };
+import type { MainToRendererEvent } from "../../packages/shared/src/types.js" with { "resolution-mode": "import" };
+import { contextBridge, ipcRenderer, webUtils } from "electron";
+
 // ============================================================
 // Preload Script — contextBridge API (CommonJS for Electron sandbox)
 //
@@ -6,9 +10,7 @@
 // must consume the API through `window.look`.
 // ============================================================
 
-const { contextBridge, ipcRenderer, webUtils } = require("electron");
-
-const api = {
+const api: LookAPI = {
 	// User home directory, exposed as a sync constant so the renderer can
 	// shorten absolute paths to ~/… (matches pi sdk's path display). In a
 	// sandboxed preload we can't require("os"), but process.env is available.
@@ -18,7 +20,7 @@ const api = {
 	invoke: (event) => ipcRenderer.invoke("look:invoke", event),
 
 	onEvent: (callback) => {
-		const handler = (_event, data) => callback(data);
+		const handler = (_event: Electron.IpcRendererEvent, data: MainToRendererEvent) => callback(data);
 		ipcRenderer.on("look:event", handler);
 		return () => {
 			ipcRenderer.removeListener("look:event", handler);
@@ -131,7 +133,7 @@ const api = {
 	// (e.g. dragged directory — browsers don't expose directory paths).
 	getPathForFile: (file) => {
 		try {
-			return webUtils.getPathForFile(file) || null;
+			return webUtils.getPathForFile(file as Parameters<typeof webUtils.getPathForFile>[0]) || null;
 		} catch {
 			return null;
 		}

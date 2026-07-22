@@ -410,7 +410,7 @@ export class SchedulerService {
 		// still in flight.
 		if (task.schedule?.kind === "once") await this.removeSchedule(taskId);
 
-		const execution = this.startExecution(taskId, new Date());
+		const execution = this.startExecution(taskId, new Date(), 1, "manual-task-run");
 		if (task.schedule?.kind === "once") {
 			const runAt = task.schedule.runAt;
 			void execution.finally(() => this.completeOneTime(taskId, runAt));
@@ -447,6 +447,8 @@ export class SchedulerService {
 			attempt: 1,
 			maxAttempts: 1,
 			ownerId: this.ownerId,
+			source: "manual-task-test",
+			executionProfile: "interactive-test",
 		};
 		this.activeRuns.set(log.id, controller);
 		const taskRunSet = this.taskRuns.get(task.id) ?? new Set<string>();
@@ -464,6 +466,8 @@ export class SchedulerService {
 				runId: log.id,
 				attempt: 1,
 				signal: controller.signal,
+				source: "manual-task-test",
+				executionProfile: "interactive-test",
 			});
 			log.status = "success";
 			log.output = truncateLogValue(result.output, MAX_LOG_OUTPUT_CHARS);
@@ -568,8 +572,13 @@ export class SchedulerService {
 		return task.retry.maxAttempts * (task.executionTimeoutMs + task.retry.maxDelayMs) + 60_000;
 	}
 
-	private startExecution(taskId: string, scheduledAt: Date, startAttempt = 1): Promise<void> {
-		const execution = this.execute(taskId, scheduledAt, startAttempt).catch((error) => {
+	private startExecution(
+		taskId: string,
+		scheduledAt: Date,
+		startAttempt = 1,
+		source: "scheduled-task" | "manual-task-run" = "scheduled-task",
+	): Promise<void> {
+		const execution = this.execute(taskId, scheduledAt, startAttempt, source).catch((error) => {
 			console.error(`[SchedulerService] Task ${taskId} execution infrastructure failed:`, error);
 		});
 		this.runPromises.add(execution);
@@ -589,7 +598,12 @@ export class SchedulerService {
 		await existing.destroy();
 	}
 
-	private async execute(taskId: string, scheduledAt: Date, startAttempt = 1): Promise<void> {
+	private async execute(
+		taskId: string,
+		scheduledAt: Date,
+		startAttempt = 1,
+		source: "scheduled-task" | "manual-task-run" = "scheduled-task",
+	): Promise<void> {
 		if (this.disposed) return;
 		const task = this.options.store.getTask(taskId);
 		if (!task) return;
@@ -621,6 +635,8 @@ export class SchedulerService {
 						? `Project path does not exist: ${project.cwd}`
 						: `Project ${task.projectId} no longer exists`,
 					ownerId: this.ownerId,
+					source,
+					executionProfile: "unattended-scheduled-task",
 				});
 				return;
 			}
@@ -641,6 +657,8 @@ export class SchedulerService {
 				maxAttempts: task.retry.maxAttempts,
 				errorMessage: "Skipped because another process or node owns this task lock",
 				ownerId: this.ownerId,
+				source,
+				executionProfile: "unattended-scheduled-task",
 			});
 			return;
 		}
@@ -657,6 +675,8 @@ export class SchedulerService {
 			attempt: startAttempt,
 			maxAttempts: task.retry.maxAttempts,
 			ownerId: this.ownerId,
+			source,
+			executionProfile: "unattended-scheduled-task",
 		};
 		this.activeRuns.set(log.id, controller);
 		const taskRunSet = this.taskRuns.get(taskId) ?? new Set();
@@ -684,6 +704,8 @@ export class SchedulerService {
 						runId: log.id,
 						attempt,
 						signal: attemptController.signal,
+						source,
+						executionProfile: "unattended-scheduled-task",
 					});
 					clearTimeout(timeout);
 					controller.signal.removeEventListener("abort", abortAttempt);

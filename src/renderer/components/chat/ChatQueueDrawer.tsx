@@ -6,9 +6,7 @@
 // 视觉隐喻："热介入 / 冷排队" — steer 用左侧暖色条，followUp 用冷灰条。
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
-import { RotateCcw } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -21,14 +19,9 @@ interface QueueEntry {
 interface ChatQueueDrawerProps {
 	steerMessages: readonly string[];
 	followUpMessages: readonly string[];
-	onDequeueAll: () => void;
 }
 
-const ChatQueueDrawer = memo(function ChatQueueDrawer({
-	steerMessages,
-	followUpMessages,
-	onDequeueAll,
-}: ChatQueueDrawerProps) {
+const ChatQueueDrawer = memo(function ChatQueueDrawer({ steerMessages, followUpMessages }: ChatQueueDrawerProps) {
 	const { t } = useTranslation();
 	const total = steerMessages.length + followUpMessages.length;
 
@@ -78,15 +71,6 @@ const ChatQueueDrawer = memo(function ChatQueueDrawer({
 				<span className="text-[10px] tabular-nums text-muted-foreground/50">
 					{total} {t("chat.queuedCount")}
 				</span>
-				<Button
-					variant="ghost"
-					size="sm"
-					onClick={onDequeueAll}
-					className="h-auto gap-1 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-				>
-					<RotateCcw className="size-2.5" />
-					{t("chat.queuedDequeue")}
-				</Button>
 			</div>
 		</div>
 	);

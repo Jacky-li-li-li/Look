@@ -50,7 +50,6 @@ export interface SessionRowProps {
 	/** 子会话列表，已预计算 phase 和 running 状态，避免 SessionRow 订阅全局 atom */
 	childrenList: ChildSessionInfo[];
 	copySessionId: (id: string) => Promise<void>;
-	exportSession: (id: string) => Promise<void>;
 	onDestroy: (id: string) => void;
 }
 

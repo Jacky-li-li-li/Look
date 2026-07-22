@@ -254,6 +254,10 @@ export class RuntimeManagerComposition {
 			});
 		});
 
+		self.agentDefinitionService = new AgentDefinitionService(() =>
+			this.sessionSubagentService.reloadAllSessionsForAgents(),
+		);
+
 		self.sessionSubagentService = new SessionSubagentService({
 			host: {
 				createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
@@ -374,9 +378,6 @@ export class RuntimeManagerComposition {
 			getAvailableModelsSync: () => getAvailableModels(self.modelRegistry),
 		});
 
-		self.agentDefinitionService = new AgentDefinitionService(() =>
-			this.sessionSubagentService.reloadAllSessionsForAgents(),
-		);
 
 		self.projectDeletionService = new ProjectDeletionService({
 			projectService: this.projectService,

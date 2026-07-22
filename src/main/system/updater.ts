@@ -14,6 +14,15 @@ import type { AppUpdater } from "electron-updater";
 let autoUpdater: AppUpdater | null = null;
 let loadFailed = false;
 
+/**
+ * GitHub's update feed requires anonymous release access. This project is
+ * private, so keep checks disabled unless a distributable update source is
+ * explicitly configured at launch.
+ */
+export function areAutoUpdatesEnabled(environment: Record<string, string | undefined> = process.env): boolean {
+	return environment.LOOK_ENABLE_AUTO_UPDATES === "true";
+}
+
 async function loadAutoUpdater(): Promise<AppUpdater | null> {
 	if (autoUpdater) return autoUpdater;
 	if (loadFailed) return null;
@@ -46,6 +55,10 @@ function resolveAutoUpdater(mod: Record<string, unknown>): AppUpdater | null {
 
 export function initUpdater(mainWindow: BrowserWindow): void {
 	if (!mainWindow || mainWindow.isDestroyed()) return;
+	if (!areAutoUpdatesEnabled()) {
+		console.info("[updater] automatic checks are disabled for the private release source");
+		return;
+	}
 
 	// Lazy-load on first event so a missing/optional dep never crashes app start.
 	void loadAutoUpdater().then((updater) => {
@@ -107,12 +120,14 @@ function emit(mainWindow: BrowserWindow, event: MainToRendererEvent): void {
 }
 
 export async function checkForUpdates(): Promise<void> {
+	if (!areAutoUpdatesEnabled()) return;
 	const updater = await loadAutoUpdater();
 	if (!updater) throw new Error("electron-updater not installed");
 	await updater.checkForUpdates();
 }
 
 export async function downloadUpdate(): Promise<void> {
+	if (!areAutoUpdatesEnabled()) return;
 	const updater = await loadAutoUpdater();
 	if (!updater) throw new Error("electron-updater not installed");
 	await updater.downloadUpdate();

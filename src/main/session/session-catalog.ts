@@ -24,12 +24,25 @@ export interface SubsessionMetadata {
 	displayName?: string;
 	parentSessionId?: string;
 	agentName?: string;
+	delegation?: DelegationLifecycleEntry;
 	firstMessage?: string;
 	messageCount: number;
 	created: number;
 }
 
 export const SUBAGENT_PARENT_ENTRY_TYPE = "look.subagent-parent.v1";
+export const DELEGATION_ENTRY_TYPE = "look.delegation.v1";
+
+export interface DelegationLifecycleEntry {
+	delegationId: string;
+	parentSessionId: string;
+	childSessionId: string;
+	agentName: string;
+	status: "running" | "completed" | "failed" | "cancelled";
+	createdAt: string;
+	finishedAt?: string;
+	error?: string;
+}
 
 /**
  * Reads only the small set of JSONL fields needed to recover a sub-session.
@@ -43,6 +56,7 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 		let displayName: string | undefined;
 		let parentSessionId: string | undefined;
 		let agentName: string | undefined;
+		let delegation: DelegationLifecycleEntry | undefined;
 		let firstMessage: string | undefined;
 		let messageCount = 0;
 		let created = Date.now();
@@ -65,6 +79,18 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 					const data = entry.data as { parentSessionId?: string; agentName?: string } | undefined;
 					if (data?.parentSessionId) parentSessionId = data.parentSessionId;
 					if (data?.agentName) agentName = data.agentName;
+				} else if (entry.type === "custom" && entry.customType === DELEGATION_ENTRY_TYPE) {
+					const data = entry.data as Partial<DelegationLifecycleEntry> | undefined;
+					if (
+						data?.delegationId &&
+						data.parentSessionId &&
+						data.childSessionId &&
+						data.agentName &&
+						data.createdAt &&
+						(data.status === "running" || data.status === "completed" || data.status === "failed" || data.status === "cancelled")
+					) {
+						delegation = data as DelegationLifecycleEntry;
+					}
 				} else if (entry.type === "message") {
 					messageCount++;
 					if (!firstMessage) {
@@ -82,7 +108,7 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 			}
 		}
 		if (!hasSessionEntry || !sessionId) return null;
-		return { sessionId, displayName, parentSessionId, agentName, firstMessage, messageCount, created };
+		return { sessionId, displayName, parentSessionId, agentName, delegation, firstMessage, messageCount, created };
 	} catch {
 		return null;
 	} finally {

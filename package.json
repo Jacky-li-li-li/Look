@@ -1,6 +1,6 @@
 {
   "name": "look",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Electron desktop agent app — Look",
   "type": "module",
   "main": "dist/src/main/index.js",
@@ -18,7 +18,7 @@
     "dev:main": "npm run build:main && electron dist/src/main/index.js",
     "build": "npm run build:shared && npm run build:main && npm run build:renderer",
     "build:shared": "cd packages/shared && npm run build",
-    "build:main": "rm -rf dist && tsc -p tsconfig.main.build.json && cp src/main/preload.js dist/src/main/preload.js && mkdir -p dist/src/main/assets && cp -f build/icon.png dist/src/main/assets/icon-1024.png",
+    "build:main": "rm -rf dist && tsc -p tsconfig.main.build.json && mkdir -p dist/src/main/assets && cp -f build/icon.png dist/src/main/assets/icon-1024.png",
     "build:renderer": "vite build",
     "stage:production": "node scripts/stage-production-app.mjs",
     "package:prepare": "npm run build && npm run stage:production",

@@ -231,14 +231,6 @@ export default function ProjectTree({
 		[t],
 	);
 
-	const exportSession = useCallback(
-		async (sessionId: string) => {
-			const result = await api?.exportChat?.(sessionId).catch(() => null);
-			if (result?.success) toast.success(t("sidebar.exportSuccess", "Session exported"));
-			else toast.error(result?.error ?? t("sidebar.exportFailed", "Export failed"));
-		},
-		[t],
-	);
 
 	if (projects.length === 0) return null;
 
@@ -269,7 +261,6 @@ export default function ProjectTree({
 					collapsedSubSessions={collapsedSubSessions}
 					toggleSubSessions={toggleSubSessions}
 					copySessionId={copySessionId}
-					exportSession={exportSession}
 					onDestroy={onDestroy}
 					onCreateClick={onCreateClick}
 					onOpenProject={onOpenProject}
@@ -306,7 +297,6 @@ interface ProjectTreeItemProps {
 	collapsedSubSessions: Set<string>;
 	toggleSubSessions: (parentId: string, event: React.MouseEvent) => void;
 	copySessionId: (sessionId: string) => Promise<void>;
-	exportSession: (sessionId: string) => Promise<void>;
 	onDestroy: (sessionId: string) => void;
 	onCreateClick: (projectId: string) => void;
 	onOpenProject: (projectId: string) => void;
@@ -339,7 +329,6 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 	collapsedSubSessions,
 	toggleSubSessions,
 	copySessionId,
-	exportSession,
 	onDestroy,
 	onCreateClick,
 	onOpenProject,
@@ -428,7 +417,6 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 								toggleSubSessions={toggleSubSessions}
 								childrenList={childrenList}
 								copySessionId={copySessionId}
-								exportSession={exportSession}
 								onDestroy={onDestroy}
 							/>
 						);

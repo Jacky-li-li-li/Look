@@ -10,7 +10,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@shared/components/ui/dropdown-menu";
-import { Bot, ChevronDown, ChevronRight, Copy, Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChildSessionInfo, SessionRowProps } from "./types";
@@ -34,7 +34,6 @@ function SessionRowImpl({
 	toggleSubSessions,
 	childrenList,
 	copySessionId,
-	exportSession,
 	onDestroy,
 }: SessionRowProps) {
 	const { t } = useTranslation();
@@ -134,9 +133,6 @@ function SessionRowImpl({
 						</DropdownMenuItem>
 						<DropdownMenuItem onSelect={() => copySessionId(agent.id)} className="gap-2 text-[12px]">
 							<Copy className="size-3.5" /> {t("sidebar.copyId", "Copy session ID")}
-						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => exportSession(agent.id)} className="gap-2 text-[12px]">
-							<Download className="size-3.5" /> {t("sidebar.exportChat", "Export session")}
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem

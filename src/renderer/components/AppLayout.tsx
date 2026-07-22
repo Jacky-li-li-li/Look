@@ -60,7 +60,6 @@ interface AppLayoutProps {
 	handleReorderSessionSheets: (nextIds: string[]) => void;
 	handleDestroyAgent: (agentId: string) => void;
 	handleAbortAgent: () => void;
-	handleDequeueAll: () => void;
 	handleThinkingChange: (level: string) => void;
 	handleModelChanged: (model: string) => void;
 	handleCreateClick: (projectId: string) => void;
@@ -107,7 +106,6 @@ function AppLayout({
 	handleReorderSessionSheets,
 	handleDestroyAgent,
 	handleAbortAgent,
-	handleDequeueAll,
 	handleThinkingChange,
 	handleModelChanged,
 	handleCreateClick,
@@ -225,7 +223,6 @@ function AppLayout({
 									onModelChange={handleModelChanged}
 									onRequestApiKeys={handleRequestApiKeys}
 									onAbort={handleAbortAgent}
-									onDequeueAll={handleDequeueAll}
 								/>
 							) : agents.length > 0 ? (
 								<div className="flex h-full items-center justify-center text-sm text-muted-foreground">

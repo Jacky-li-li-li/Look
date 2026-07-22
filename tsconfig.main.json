@@ -21,6 +21,6 @@
     },
     "baseUrl": "."
   },
-  "include": ["src/main/**/*.ts", "packages/shared/**/*.ts"],
+  "include": ["src/main/**/*.ts", "src/main/**/*.cts", "packages/shared/**/*.ts"],
   "exclude": ["node_modules", "dist", "src/renderer", "packages/shared/dist"]
 }

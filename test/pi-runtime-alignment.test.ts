@@ -10,7 +10,7 @@ const ipc =
 	read("src/main/ipc/handlers.ts") +
 	read("src/main/ipc/routers/permission-router.ts") +
 	read("src/main/ipc/project-trust.ts");
-const preload = read("src/main/preload.js");
+const preload = read("src/main/preload.cts");
 const index = read("src/main/index.ts");
 const types = read("packages/shared/src/types.ts");
 const tsconfig = read("tsconfig.main.json");

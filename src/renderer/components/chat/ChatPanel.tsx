@@ -30,7 +30,6 @@ interface ChatPanelProps {
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
 	onAbort?: () => void;
-	onDequeueAll?: () => void;
 }
 
 const ChatPanel = memo(function ChatPanel({
@@ -48,7 +47,6 @@ const ChatPanel = memo(function ChatPanel({
 	onModelChange,
 	onRequestApiKeys,
 	onAbort,
-	onDequeueAll,
 }: ChatPanelProps) {
 	const inputRef = useRef<ChatInputHandle>(null);
 
@@ -72,11 +70,7 @@ const ChatPanel = memo(function ChatPanel({
 			/>
 			{/* TODO 进度条 — 替代原 SubAgent 进度卡片 */}
 			<TodoPanel />
-			<ChatQueueDrawer
-				steerMessages={queue.steering}
-				followUpMessages={queue.followUp}
-				onDequeueAll={() => onDequeueAll?.()}
-			/>
+			<ChatQueueDrawer steerMessages={queue.steering} followUpMessages={queue.followUp} />
 			<ChatInput
 				ref={inputRef}
 				agentId={agentId}
