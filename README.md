@@ -72,6 +72,12 @@ VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
+首次创建 Supabase 项目后，应用数据库迁移 [`supabase/migrations/20260609000000_create_user_profiles.sql`](supabase/migrations/20260609000000_create_user_profiles.sql)。可在 Supabase SQL Editor 中执行该文件，或在配置并关联 Supabase CLI 项目后运行：
+
+```bash
+npx supabase db push
+```
+
 > 不配置 Supabase 不影响核心功能的使用。
 
 ### 4. 启动开发模式
