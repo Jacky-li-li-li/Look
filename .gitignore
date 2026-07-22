@@ -11,7 +11,9 @@ release/
 .claude/
 # Trae local settings — not part of the project
 .trae/
+# Hermes local planning and report artifacts — not part of the project
+.hermes/
 # Throwaway probes — kept locally for debugging, not part of the codebase
 _probe.ts
-# Generated tool intermediates — final assets live under src/renderer/assets/
-tools/*/output/
+# Generated application-tool intermediates — final assets live under apps/electron/src/renderer/assets/
+apps/electron/tools/*/output/

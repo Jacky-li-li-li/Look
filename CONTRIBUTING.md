@@ -93,9 +93,20 @@ apps/
     ├── src/main/      # Electron main process (TypeScript, Node.js)
     ├── src/renderer/  # React renderer process (TypeScript, Vite)
     ├── test/          # Application tests
-    └── scripts/       # Build and packaging helpers
+    ├── scripts/       # Build and packaging helpers
+    └── tools/         # Application asset-generation utilities
 packages/
 └── shared/            # Shared types, utilities and UI components
+```
+
+## Asset Generation
+
+The Open Peeps avatar generator is isolated at `apps/electron/tools/open-peeps-avatars/` so its design-time dependencies do not affect the application workspace. Its ignored `output/` directory contains generated candidates and previews; review and copy only the intended SVG assets into `apps/electron/src/renderer/assets/ai-avatars/`.
+
+```bash
+cd apps/electron/tools/open-peeps-avatars
+npm ci
+npm run generate
 ```
 
 ## Code Conventions
