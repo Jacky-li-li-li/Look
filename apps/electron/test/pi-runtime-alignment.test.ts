@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const root = resolve(import.meta.dirname, "..");
-const read = (file: string) => readFileSync(resolve(root, file), "utf8");
+const appRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = resolve(appRoot, "../..");
+const read = (file: string) => readFileSync(resolve(appRoot, file), "utf8");
+const readRepositoryFile = (file: string) => readFileSync(resolve(repositoryRoot, file), "utf8");
 const runtime = read("src/main/session/runtime-manager.ts");
 const runtimeComposition = read("src/main/session/runtime-manager-composition.ts");
 const ipc =
@@ -12,7 +14,7 @@ const ipc =
 	read("src/main/ipc/project-trust.ts");
 const preload = read("src/main/preload.cts");
 const index = read("src/main/index.ts");
-const types = read("packages/shared/src/types.ts");
+const types = readRepositoryFile("packages/shared/src/types.ts");
 const tsconfig = read("tsconfig.main.json");
 const eventProcessor = read("src/main/session/event-processor.ts");
 const uiBatcher = read("src/main/session/ui-event-batcher.ts");
@@ -51,7 +53,7 @@ describe("pi runtime architecture regressions", () => {
 		);
 		expect(runtimeRegistry).toContain("getOrCreate(sessionId");
 		expect(runtime).not.toContain("private runtime: AgentSessionRuntime | null");
-		expect(existsSync(resolve(root, "src/main/agents/roles.ts"))).toBe(false);
+		expect(existsSync(resolve(appRoot, "src/main/agents/roles.ts"))).toBe(false);
 	});
 
 	it("4. transports SDK events and SessionManager entries without a message mirror", () => {
@@ -62,17 +64,17 @@ describe("pi runtime architecture regressions", () => {
 		expect(sessionNotifier).toContain("entries,");
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
-		expect(existsSync(resolve(root, "packages/shared/src/message-convert.ts"))).toBe(false);
+		expect(existsSync(resolve(repositoryRoot, "packages/shared/src/message-convert.ts"))).toBe(false);
 	});
 
 	it("5. has pi SDK-aligned permission extension (no old gate)", () => {
 		// Old gate must not exist
-		expect(existsSync(resolve(root, "src/main/permissions/permission-gate.ts"))).toBe(false);
+		expect(existsSync(resolve(appRoot, "src/main/permissions/permission-gate.ts"))).toBe(false);
 		// New permission extension must exist
-		expect(existsSync(resolve(root, "src/main/extensions/permission-extension.ts"))).toBe(true);
+		expect(existsSync(resolve(appRoot, "src/main/extensions/permission-extension.ts"))).toBe(true);
 		// New permission UI components must exist
-		expect(existsSync(resolve(root, "src/renderer/components/dialogs/PermissionDialog.tsx"))).toBe(true);
-		expect(existsSync(resolve(root, "src/renderer/components/chat/PermissionModeSelector.tsx"))).toBe(true);
+		expect(existsSync(resolve(appRoot, "src/renderer/components/dialogs/PermissionDialog.tsx"))).toBe(true);
+		expect(existsSync(resolve(appRoot, "src/renderer/components/chat/PermissionModeSelector.tsx"))).toBe(true);
 		// Permission IPC and preload must exist
 		expect(ipc).toContain("permission:set-mode");
 		expect(ipc).toContain("permission:get-mode");
@@ -112,7 +114,7 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("10. uses AgentSession native skill command expansion only", () => {
-		expect(existsSync(resolve(root, "src/main/skills/skill-loader.ts"))).toBe(false);
+		expect(existsSync(resolve(appRoot, "src/main/skills/skill-loader.ts"))).toBe(false);
 		expect(ipc).not.toContain("skills:invoke");
 		expect(preload).not.toContain("invokeSkill");
 		expect(types).not.toContain("skills:invoke");
@@ -124,9 +126,9 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("12. removes subagent orchestration from source and TypeScript exclusions", () => {
-		expect(existsSync(resolve(root, "src/main/tools/orchestration.ts"))).toBe(false);
-		expect(existsSync(resolve(root, ".harness/agent.md"))).toBe(false);
-		expect(existsSync(resolve(root, ".harness/reins/pi-expert/agent.md"))).toBe(false);
+		expect(existsSync(resolve(appRoot, "src/main/tools/orchestration.ts"))).toBe(false);
+		expect(existsSync(resolve(repositoryRoot, ".harness/agent.md"))).toBe(false);
+		expect(existsSync(resolve(repositoryRoot, ".harness/reins/pi-expert/agent.md"))).toBe(false);
 		expect(tsconfig).not.toContain("orchestration.ts");
 	});
 });

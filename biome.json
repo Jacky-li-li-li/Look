@@ -39,17 +39,19 @@
 	},
 	"files": {
 		"includes": [
-			"src/**/*.ts",
-			"src/**/*.tsx",
-			"src/**/*.css",
-			"src/**/*.html",
-			"src/**/*.d.ts",
-			"src/main/preload.js",
-			"test/**/*.ts",
-			"test/**/*.tsx",
-			"scripts/**/*.mjs",
-			"vite.config.ts",
-			"vitest.config.ts"
+			"apps/electron/src/**/*.ts",
+			"apps/electron/src/**/*.tsx",
+			"apps/electron/src/**/*.css",
+			"apps/electron/src/**/*.html",
+			"apps/electron/src/**/*.d.ts",
+			"apps/electron/src/main/preload.cts",
+			"apps/electron/test/**/*.ts",
+			"apps/electron/test/**/*.tsx",
+			"apps/electron/scripts/**/*.mjs",
+			"apps/electron/vite.config.ts",
+			"apps/electron/vitest.config.ts",
+			"packages/**/*.ts",
+			"packages/**/*.tsx"
 		],
 		"ignoreUnknown": true
 	}

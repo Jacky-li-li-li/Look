@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const root = resolve(import.meta.dirname, "..");
-const read = (path: string) => readFileSync(resolve(root, path), "utf8");
+const appRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = resolve(appRoot, "../..");
+const read = (path: string) => readFileSync(resolve(appRoot, path), "utf8");
 
 describe("preload contract", () => {
 	it("uses the shared LookAPI contract in both process boundaries", () => {
@@ -14,7 +15,7 @@ describe("preload contract", () => {
 	});
 
 	it("keeps every shared contract method reachable from the preload surface", () => {
-		const contract = read("packages/shared/src/contracts/ipc.ts");
+		const contract = readFileSync(resolve(repositoryRoot, "packages/shared/src/contracts/ipc.ts"), "utf8");
 		const preload = read("src/main/preload.cts");
 		const lookApi = contract.match(/export interface LookAPI \{([\s\S]*?)\n\}/)?.[1] ?? "";
 		const methods = [...lookApi.matchAll(/^\t([a-z][A-Za-z0-9]*)\(/gm)].map((match) => match[1]);
