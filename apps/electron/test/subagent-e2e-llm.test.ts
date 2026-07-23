@@ -9,10 +9,9 @@
 // ============================================================
 
 import { existsSync, readdirSync } from "node:fs";
-import path from "node:path";
+import { getWorkspaceSubsessionsDir } from "@shared/look-storage";
 import { describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
-import { getWorkspaceSubsessionsDir } from "@shared/look-storage";
 
 const RUN = process.env.LOOK_E2E_LLM === "1";
 const TIMEOUT = 240_000; // 父+子 LLM 调用，给足 4 分钟
@@ -21,7 +20,7 @@ describe.skipIf(!RUN)("SubAgent real-LLM E2E", () => {
 	it(
 		"LLM 调用 subagent 工具 → 创建真实子会话并落盘",
 		async () => {
-			const manager = new SessionRuntimeManager();
+			const manager = await SessionRuntimeManager.create();
 			await manager.loadProjects();
 
 			// 选一个有效的项目（优先 pi，含认证代码便于 scout 测试）

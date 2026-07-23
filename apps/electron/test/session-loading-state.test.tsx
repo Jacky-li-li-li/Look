@@ -91,7 +91,7 @@ describe("session snapshot loading state", () => {
 				followUp: [],
 				stats: { totalMessages: 1 },
 			},
-		} as any);
+		} as unknown as Parameters<typeof applySnapshot>[0]);
 		const state = appStore.get(sessionStateAtomFamily("session-a"));
 		expect(state.snapshotLoaded).toBe(true);
 		expect(state.loadingSnapshot).toBe(false);

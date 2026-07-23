@@ -1,6 +1,5 @@
 import fs from "node:fs";
-import fsp from "node:fs/promises";
-import { mkdtemp, rm } from "node:fs/promises";
+import fsp, { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,31 +9,31 @@ const makeSettingsManager = () =>
 		getDefaultProjectTrust: () => "ask",
 		get: () => undefined,
 		set: () => {},
-	} as unknown as import("@earendil-works/pi-coding-agent").SettingsManager);
+	}) as unknown as import("@earendil-works/pi-coding-agent").SettingsManager;
 
 const makeTrustStore = () =>
 	({
 		get: () => null,
 		set: () => {},
-	} as unknown as import("@earendil-works/pi-coding-agent").ProjectTrustStore);
+	}) as unknown as import("@earendil-works/pi-coding-agent").ProjectTrustStore;
 
 function writeSessionJsonl(filePath: string, sessionId: string, cwd: string) {
 	fs.mkdirSync(path.dirname(filePath), { recursive: true });
 	fs.writeFileSync(
 		filePath,
-		JSON.stringify({
+		`${JSON.stringify({
 			type: "session",
 			version: 3,
 			id: sessionId,
 			timestamp: new Date().toISOString(),
 			cwd,
-		}) + "\n",
+		})}\n`,
 	);
 }
 
 describe("ProjectService workspace migration", () => {
 	let tempDir: string;
-	let cleanup: string[] = [];
+	const cleanup: string[] = [];
 
 	beforeEach(async () => {
 		tempDir = await mkdtemp(path.join(tmpdir(), "look-project-service-"));
@@ -66,7 +65,9 @@ describe("ProjectService workspace migration", () => {
 		const cwd = path.join(tempDir, "my-cwd");
 		fs.mkdirSync(cwd, { recursive: true });
 
-		const project = (service as unknown as { createProjectRecord(cwd: string, name: string): { id: string } }).createProjectRecord(cwd, "legacy/name");
+		const project = (
+			service as unknown as { createProjectRecord(cwd: string, name: string): { id: string } }
+		).createProjectRecord(cwd, "legacy/name");
 
 		const legacyDir = path.join(tempDir, "workspaces", "legacy-name");
 		writeSessionJsonl(path.join(legacyDir, "sessions", "session-a.jsonl"), "session-a", cwd);
@@ -89,7 +90,9 @@ describe("ProjectService workspace migration", () => {
 		const cwd = path.join(tempDir, "my-cwd");
 		fs.mkdirSync(cwd, { recursive: true });
 
-		const project = (service as unknown as { createProjectRecord(cwd: string, name: string): { id: string } }).createProjectRecord(cwd, "collide");
+		const project = (
+			service as unknown as { createProjectRecord(cwd: string, name: string): { id: string } }
+		).createProjectRecord(cwd, "collide");
 
 		const legacyDir = path.join(tempDir, "workspaces", "collide");
 		const newDir = lookStorage.getWorkspaceDir(project.id);

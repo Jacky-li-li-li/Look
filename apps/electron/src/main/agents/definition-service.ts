@@ -106,7 +106,7 @@ export class AgentDefinitionService {
 		// Parse source, inject install metadata, write once (avoid double write)
 		const parsed = await parseAgentFile(sourcePath, "builtin");
 		if (!parsed) throw new Error(`Failed to parse builtin agent "${safeName}"`);
-		const agentDef: Record<string, unknown> = {
+		const agentDef: AgentDefinitionInput = {
 			name: parsed.name,
 			title: parsed.title,
 			description: parsed.description,
@@ -121,7 +121,7 @@ export class AgentDefinitionService {
 			installedAt: Date.now(),
 		};
 		if (parsed.tools) agentDef.tools = parsed.tools;
-		fs.writeFileSync(destPath, serializeAgentDefinition(agentDef as unknown as AgentDefinitionInput), {
+		fs.writeFileSync(destPath, serializeAgentDefinition(agentDef), {
 			encoding: "utf-8",
 			mode: 0o644,
 		});

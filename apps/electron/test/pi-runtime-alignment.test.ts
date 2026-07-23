@@ -8,6 +8,7 @@ const read = (file: string) => readFileSync(resolve(appRoot, file), "utf8");
 const readRepositoryFile = (file: string) => readFileSync(resolve(repositoryRoot, file), "utf8");
 const runtime = read("src/main/session/runtime-manager.ts");
 const runtimeComposition = read("src/main/session/runtime-manager-composition.ts");
+const compositionBuilder = read("src/main/session/composition/builder.ts");
 const ipc =
 	read("src/main/ipc/handlers.ts") +
 	read("src/main/ipc/routers/permission-router.ts") +
@@ -36,8 +37,8 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("2. gates project resources with pi Project Trust", () => {
-		expect(runtimeComposition).toContain("ProjectTrustStore");
-		expect(runtimeComposition).toContain("resolveProjectTrust");
+		expect(compositionBuilder).toContain("ProjectTrustStore");
+		expect(compositionBuilder).toContain("resolveProjectTrust");
 		expect(runtimeFactory).toContain("resolveProjectTrust: async () => resolveLatestProjectTrust()");
 		expect(runtimeFactory).not.toContain("resolveProjectTrust: async () => trusted");
 		expect(projectService).toContain("hasTrustRequiringProjectResources");
@@ -46,7 +47,7 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("3. owns one independent AgentSessionRuntime per live session", () => {
-		expect(runtimeComposition).toContain("readonly runtimeRegistry = new RuntimeRegistry()");
+		expect(compositionBuilder).toContain("readonly runtimeRegistry = new RuntimeRegistry()");
 		expect(runtimeRegistry).toContain("private readonly runtimes = new Map<string, ManagedRuntime>()");
 		expect(runtimeRegistry).toContain(
 			"private readonly initializations = new Map<string, Promise<ManagedRuntime>>()",
@@ -103,8 +104,8 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("8. owns one global UI settings store", () => {
-		expect(runtimeComposition.match(/new UserSettingsStore/g)).toHaveLength(1);
-		expect(runtime + runtimeComposition).not.toContain("getProjectSettings(");
+		expect(compositionBuilder.match(/new UserSettingsStore/g)).toHaveLength(1);
+		expect(runtime + runtimeComposition + compositionBuilder).not.toContain("getProjectSettings(");
 	});
 
 	it("9. persists names through pi and has no custom title LLM call", () => {

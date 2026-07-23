@@ -23,7 +23,7 @@ describe("pi multi-runtime host constraints", () => {
 			mkdtemp(join(tmpdir(), "look-runtime-b-")),
 		]);
 		cleanup.push(...roots);
-		const factory = async ({ cwd, sessionManager, sessionStartEvent }: any) => {
+		const factory = async ({ cwd, sessionManager, sessionStartEvent }: { cwd: string; sessionManager: SessionManager; sessionStartEvent: unknown }) => {
 			const services = await createAgentSessionServices({ cwd, agentDir: cwd });
 			return {
 				...(await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent })),
@@ -79,7 +79,7 @@ describe("pi multi-runtime host constraints", () => {
 					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 				},
 				stopReason: "stop",
-			} as any);
+			} as unknown as Parameters<SessionManager["appendMessage"]>[0]);
 		}
 
 		const listed = await SessionManager.list(cwd, sessionDir);
@@ -113,7 +113,7 @@ describe("pi multi-runtime host constraints", () => {
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
 			stopReason: "stop",
-		} as any);
+		} as unknown as Parameters<SessionManager["appendMessage"]>[0]);
 		const sourceId = source.getSessionId();
 		const sourceFile = source.getSessionFile()!;
 		const sourceLeaf = source.getLeafId();

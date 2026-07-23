@@ -2,19 +2,18 @@
 // SessionSubagentService unit tests
 // ============================================================
 
-import { describe, expect, it, vi } from "vitest";
-import type { AgentSession, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AgentConfig } from "../src/main/extensions/subagent/types.js";
-import { SessionSubagentService } from "../src/main/session/session-subagent-service.js";
-import type { SessionSubagentHost } from "../src/main/session/session-subagent-service.js";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import type { ProjectService } from "../src/main/projects/project-service.js";
-import type { IPermissionService, IPlanService, ISessionScope } from "../src/main/core/contracts.js";
-import type { SubAgentRegistry } from "../src/main/session/subagent-registry.js";
-import type { SubAgentRuntimeService } from "../src/main/services/subagent-runtime.js";
-import type { UserSettingsStore } from "../src/main/settings/store.js";
-import type { AgentDefinitionService } from "../src/main/agents/definition-service.js";
+import type { AgentSession, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { ProjectInfo } from "@look/shared/types";
+import { describe, expect, it, vi } from "vitest";
+import type { AgentDefinitionService } from "../src/main/agents/definition-service.js";
+import type { IPermissionService, IPlanService, ISessionScope } from "../src/main/core/contracts.js";
+import type { AgentConfig } from "../src/main/extensions/subagent/types.js";
+import type { SubAgentRuntimeService } from "../src/main/services/subagent-runtime.js";
+import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
+import type { SessionSubagentHost } from "../src/main/session/session-subagent-service.js";
+import { SessionSubagentService } from "../src/main/session/session-subagent-service.js";
+import type { SubAgentRegistry } from "../src/main/session/subagent-registry.js";
+import type { UserSettingsStore } from "../src/main/settings/store.js";
 
 function makeSession(sessionId: string, activeTools: string[] = [], allTools: string[] = []): AgentSession {
 	return {

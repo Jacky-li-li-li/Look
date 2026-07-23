@@ -9,29 +9,10 @@
 //      sub-session finalize, state updates) to the host via ISessionEventHost
 // ============================================================
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { SessionSnapshotEnvelope } from "@look/shared/types";
-import type { IEventBus, ISessionScopeRegistry } from "../core/contracts.js";
+import type { IEventBus, ISessionEventHost, ISessionScopeRegistry } from "../core/contracts.js";
 import { translateAgentSessionEvent } from "./event-translator.js";
 import { UIEventBatcher } from "./ui-event-batcher.js";
-
-/**
- * Callbacks that the event processor needs from its host (SRT).
- * Each callback corresponds to a side-effect that was previously
- * inlined in the giant handleSessionEvent switch.
- */
-export interface ISessionEventHost {
-	onAgentEnd(sessionId: string, willRetry: boolean): Promise<void>;
-	onMessageEnd(sessionId: string, message: AgentMessage): Promise<void>;
-	onSubSessionAgentEnd(sessionId: string): void;
-	emitSessionUpdated(sessionId: string): void;
-	emitSessionState(sessionId: string, reason: SessionSnapshotEnvelope["reason"], willRetry?: boolean): void;
-	/** 每次 tool_execution_end 时检查 TODO.md 是否需要更新 */
-	emitTodoUpdate(sessionId: string): void;
-	/** 流式输出期间轻量推送上下文使用量（带内部节流） */
-	emitContextUsage(sessionId: string): void;
-}
 
 export class SessionEventProcessor {
 	private readonly uiBatcher: UIEventBatcher;

@@ -15,18 +15,18 @@ describe("permission extension", () => {
 	});
 
 	it("delegates intercepted calls to the runtime permission handler", async () => {
-		let listener: ((event: any, context: any) => Promise<any>) | undefined;
+		let listener: ((event: Record<string, unknown>, context: Record<string, unknown>) => Record<string, unknown>) | undefined;
 		const handler = vi.fn().mockResolvedValue({ block: true, reason: "approval required" });
 		const factory = createPermissionExtensionFactory(handler);
 		factory({
 			on: (eventName: string, callback: typeof listener) => {
 				if (eventName === "tool_call") listener = callback;
 			},
-		} as any);
+		} as Parameters<typeof factory>[0]);
 
 		expect(listener).toBeTypeOf("function");
 		const context = { sessionManager: { getSessionId: () => "session-a" } };
-		const result = await listener?.({ toolName: "write", input: { path: "foo.txt", content: "x" } }, context);
+		const result = await listener!({ toolName: "write", input: { path: "foo.txt", content: "x" } }, context);
 		expect(handler).toHaveBeenCalledOnce();
 		expect(result).toEqual({ block: true, reason: "approval required" });
 	});
@@ -57,13 +57,15 @@ describe("permission extension", () => {
 	it("blocks writes in Plan mode while allowing rewritten safe bash", async () => {
 		const handler = createPlanModeHandler("/tmp/project");
 		await expect(
-			handler({ toolName: "write", input: { path: ".context/plan/test.md" } } as any, {} as any),
+			handler({ toolName: "write", input: { path: ".context/plan/test.md" } } as Parameters<typeof handler>[0], {}),
 		).resolves.toMatchObject({ block: true });
-		await expect(handler({ toolName: "read", input: { path: "foo.txt" } } as any, {} as any)).resolves.toMatchObject({
+		await expect(
+			handler({ toolName: "read", input: { path: "foo.txt" } } as Parameters<typeof handler>[0], {}),
+		).resolves.toMatchObject({
 			block: true,
 		});
-		const event = { toolName: "bash", input: { command: "git log --oneline -n5" } } as any;
-		await expect(handler(event, {} as any)).resolves.toEqual({});
-		expect(event.input.command).toContain("--no-pager");
+		const event = { toolName: "bash", input: { command: "git log --oneline -n5" } } as Parameters<typeof handler>[0];
+		await expect(handler(event, {})).resolves.toEqual({});
+		expect((event as unknown as { input: { command: string } }).input.command).toContain("--no-pager");
 	});
 });

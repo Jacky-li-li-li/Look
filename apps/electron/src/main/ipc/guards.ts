@@ -7,6 +7,8 @@
 
 import path from "node:path";
 import type { AgentDefinitionInput } from "@look/shared/types";
+import type { McpServerConfig } from "../mcp/types.js";
+import type { CustomProviderInput } from "../settings/custom-providers.js";
 
 export const VALID_AGENT_ID = /^[a-zA-Z0-9_-]{6,64}$/;
 export const VALID_PROVIDER = /^[a-zA-Z][a-zA-Z0-9_-]{1,63}$/;
@@ -106,24 +108,26 @@ export function guardProvider(provider: unknown): string {
  * 校验自定义 Provider 输入的基本结构。
  * 详细校验由 CustomProvidersStore.add/update 内部的 assertValid 完成。
  */
-export function guardCustomProviderInput(x: unknown, label: string): Record<string, unknown> {
+export function guardCustomProviderInput(x: unknown, label: string): CustomProviderInput {
 	const obj = guardObject(x, label);
 	guardString(obj.name, `${label}.name`);
 	guardString(obj.baseUrl, `${label}.baseUrl`);
 	if (!Array.isArray(obj.models)) throw new Error(`Invalid ${label}.models: expected array`);
-	return obj;
+	// Detailed validation deferred to CustomProvidersStore.add/update (assertValid).
+	return obj as unknown as CustomProviderInput;
 }
 
 /**
  * 校验 MCP Server 配置的基本结构。
  * 详细校验由 MCPManager 内部完成。
  */
-export function guardMcpServerConfig(x: unknown, label: string): Record<string, unknown> {
+export function guardMcpServerConfig(x: unknown, label: string): McpServerConfig {
 	const obj = guardObject(x, label);
 	guardString(obj.name, `${label}.name`);
 	guardEnum(obj.type, `${label}.type`, ["stdio", "http", "sse"] as const);
 	if (obj.enabled !== undefined) guardBoolean(obj.enabled, `${label}.enabled`);
-	return obj;
+	// Detailed validation deferred to MCPManager.
+	return obj as unknown as McpServerConfig;
 }
 
 /** 校验 Agent 定义输入（Stage 3 广场创建/编辑） */

@@ -25,9 +25,9 @@ describe("rAF batching — renderer IPC coalescing", () => {
 	 * into a single appStore.set when flushAllUiEvents is called.
 	 */
 	it("coalesces multiple deltas into a single store write", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -62,9 +62,9 @@ describe("rAF batching — renderer IPC coalescing", () => {
 	 * even when there are pending events in the queue.
 	 */
 	it("flushes immediately on terminal run_status idle", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -98,9 +98,9 @@ describe("rAF batching — renderer IPC coalescing", () => {
 	it("reduces appStore.set calls vs per-event dispatch", () => {
 		const setSpy = vi.spyOn(appStore, "set");
 
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -109,7 +109,7 @@ describe("rAF batching — renderer IPC coalescing", () => {
 		// Fire 20 deltas without intermediate flushes
 		receive(uiEvent({ type: "run_status", status: "streaming", timestamp: 1 }));
 		flushAllUiEvents();
-		const afterStreaming = setSpy.mock.calls.length;
+		const _afterStreaming = setSpy.mock.calls.length;
 
 		receive(uiEvent({ type: "assistant_text_start", contentIndex: 0, timestamp: 2 }));
 		flushAllUiEvents();
@@ -146,9 +146,9 @@ describe("rAF batching — renderer IPC coalescing", () => {
 	 * on an already-drained queue.
 	 */
 	it("flushAllUiEvents is idempotent on empty queue", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},

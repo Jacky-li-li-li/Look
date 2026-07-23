@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleSystemEvent } from "../src/renderer/store/systemHandlers";
 import { appStore } from "../src/renderer/store/appStore";
 import { mcpStatusVersionAtom, updateStatusAtom, usageDataAtom, usageVersionAtom } from "../src/renderer/store/atoms";
+import { handleSystemEvent } from "../src/renderer/store/systemHandlers";
 
 describe("handleSystemEvent", () => {
 	beforeEach(() => {
@@ -16,7 +16,9 @@ describe("handleSystemEvent", () => {
 	});
 
 	it("returns false for unhandled event types", () => {
-		const result = handleSystemEvent({ type: "session:snapshot" } as unknown as Parameters<typeof handleSystemEvent>[0]);
+		const result = handleSystemEvent({ type: "session:snapshot" } as unknown as Parameters<
+			typeof handleSystemEvent
+		>[0]);
 		expect(result).toBe(false);
 	});
 

@@ -1,6 +1,6 @@
+import type { AvailableModel } from "@shared/types";
 import { describe, expect, it, vi } from "vitest";
 import { createModelListExtensionFactory } from "../src/main/extensions/model-extension";
-import type { AvailableModel } from "@shared/types";
 
 function captureRegisteredTool() {
 	let registered: { name: string; execute: (...args: unknown[]) => Promise<unknown> } | null = null;

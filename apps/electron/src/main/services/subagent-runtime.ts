@@ -5,14 +5,16 @@
 // and enable independent testing of sub-session tracking,
 // finalization, cleanup, and cascading abort/destroy logic.
 //
-// Depends only on IRuntimeLifecycle + SubAgentRegistry — no
-// direct coupling to SRT's 30+ fields.
+// Depends on ISubAgentRuntimeHost (7 methods) + SubAgentRegistry.
+// ISP: uses getRuntime, getSession, emit, disposeRuntime,
+// getStoredSessionPath, getSessionCwd, hasCleanupTimer — not the
+// full IRuntimeLifecycle (11 methods).
 // ============================================================
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
-import type { IRuntimeLifecycle } from "../core/contracts.js";
+import type { ISubAgentRuntimeHost } from "../core/contracts.js";
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
 import type { PendingSubSession, SubAgentRegistry } from "../session/subagent-registry.js";
 
@@ -31,7 +33,7 @@ export class SubAgentRuntimeService {
 	private readonly cleanupTimers = new Map<string, NodeJS.Timeout>();
 
 	constructor(
-		private readonly host: IRuntimeLifecycle,
+		private readonly host: ISubAgentRuntimeHost,
 		private readonly registry: SubAgentRegistry,
 	) {}
 

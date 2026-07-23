@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 function tmpDir(): string {
 	const dir = path.join(os.tmpdir(), `look-auth-source-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -13,12 +13,12 @@ function tmpDir(): string {
 
 describe("Model discovery auth source consistency", () => {
 	let dir: string;
-	let authPath: string;
+	let _authPath: string;
 	let modelsPath: string;
 
 	beforeEach(() => {
 		dir = tmpDir();
-		authPath = path.join(dir, "auth.json");
+		_authPath = path.join(dir, "auth.json");
 		modelsPath = path.join(dir, "models.json");
 		fs.writeFileSync(modelsPath, JSON.stringify({ providers: {} }, null, 2));
 	});

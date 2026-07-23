@@ -2,16 +2,15 @@
 // ProjectDeletionService unit tests
 // ============================================================
 
+import type { ProjectInfo } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
+import type { IEventBus } from "../src/main/core/contracts.js";
 import { ProjectDeletionService } from "../src/main/projects/project-deletion-service.js";
 import type { ProjectService } from "../src/main/projects/project-service.js";
 import type { RuntimeRegistry } from "../src/main/session/runtime-registry.js";
-import type { SessionCatalog } from "../src/main/session/session-catalog.js";
-import type { IEventBus } from "../src/main/core/contracts.js";
-import type { StoredSession } from "../src/main/session/session-catalog.js";
+import type { SessionCatalog, StoredSession } from "../src/main/session/session-catalog.js";
 import type { WorkspaceFileService } from "../src/main/workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../src/main/workspace/workspace-tree-service.js";
-import type { ProjectInfo } from "@look/shared/types";
 
 function makeStoredSession(id: string, projectId: string): StoredSession {
 	return {
@@ -56,7 +55,7 @@ describe("ProjectDeletionService", () => {
 			entries: vi.fn(() => new Map<string, unknown>().entries()),
 		} as unknown as Pick<RuntimeRegistry, "entries">;
 
-		const eventBus = { emit: vi.fn((e: unknown) => events.push(e)) } as unknown as IEventBus;
+		const _eventBus = { emit: vi.fn((e: unknown) => events.push(e)) } as unknown as IEventBus;
 
 		const workspaceFileService = {
 			stopWatching: vi.fn(),

@@ -1,11 +1,10 @@
-import fs from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentSession, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
+import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { IEventBus, IPermissionService, IPlanService, IRuntimeStore } from "../src/main/core/contracts";
+import type { IEventBus, IRuntimeStore } from "../src/main/core/contracts";
 import { PlanService } from "../src/main/permissions/plan.js";
 import { PermissionService } from "../src/main/permissions/service.js";
 
@@ -13,6 +12,18 @@ const cleanup: string[] = [];
 afterEach(async () => {
 	await Promise.all(cleanup.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
+
+interface MockAgentSession {
+	getActiveToolNames: () => string[];
+	getAllTools: () => { name: string }[];
+	setActiveToolsByName: ReturnType<typeof vi.fn>;
+	sessionManager: SessionManager & {
+		isPersisted: () => boolean;
+		appendCustomEntry: ReturnType<typeof vi.fn>;
+	};
+	abort: ReturnType<typeof vi.fn>;
+	isStreaming: boolean;
+}
 
 type MockSessionOpts = {
 	setActiveToolsByName?: ReturnType<typeof vi.fn>;
@@ -24,27 +35,30 @@ type MockSessionOpts = {
 	abort?: ReturnType<typeof vi.fn>;
 };
 
-function mockSession(opts: MockSessionOpts = {}): any {
+function mockSession(opts: MockSessionOpts = {}): MockAgentSession {
 	return {
 		getActiveToolNames: opts.getActiveToolNames ?? (() => []),
 		getAllTools: opts.getAllTools ?? (() => []),
 		setActiveToolsByName: opts.setActiveToolsByName ?? vi.fn(),
-		sessionManager: opts.sessionManager ?? { isPersisted: () => false, appendCustomEntry: () => {} },
+		sessionManager: opts.sessionManager ?? {
+			isPersisted: () => false,
+			appendCustomEntry: () => {},
+		} as MockAgentSession["sessionManager"],
 		abort: opts.abort ?? vi.fn(),
 		isStreaming: opts.isStreaming ?? false,
-	};
+	} as MockAgentSession;
 }
 
 function planServiceForTest(
-	extraSessions?: Record<string, { cwd: string; sessionManager?: SessionManager; session?: any }>,
+	extraSessions?: Record<string, { cwd: string; sessionManager?: SessionManager; session?: MockAgentSession }>,
 ): {
 	runtimeStore: IRuntimeStore;
 	permissionSvc: PermissionService;
 	planSvc: PlanService;
-	events: any[];
+	events: unknown[];
 	onApproval: ReturnType<typeof vi.fn>;
 } {
-	const events: any[] = [];
+	const events: unknown[] = [];
 	const eventBus: IEventBus = {
 		emit(event) {
 			events.push(event);
@@ -53,14 +67,14 @@ function planServiceForTest(
 			return () => {};
 		},
 	};
-	const sessions = new Map<string, { cwd: string; sessionManager?: SessionManager; session: any }>();
+	const sessions = new Map<string, { cwd: string; sessionManager?: SessionManager; session: MockAgentSession }>();
 	for (const [id, s] of Object.entries(extraSessions ?? {})) {
-		sessions.set(id, s);
+		sessions.set(id, s as { cwd: string; sessionManager?: SessionManager; session: MockAgentSession });
 	}
 	const runtimeStore: IRuntimeStore = {
 		getRuntime: () => undefined as unknown as AgentSessionRuntime,
 		getSession: (id) =>
-			sessions.get(id)?.session ?? mockSession({ sessionManager: sessions.get(id)?.sessionManager }),
+			(sessions.get(id)?.session ?? mockSession({ sessionManager: sessions.get(id)?.sessionManager })) as AgentSessionRuntime,
 		getSessionManager: (id) => sessions.get(id)?.sessionManager,
 		getCwd: (id) => sessions.get(id)?.cwd ?? "/tmp",
 		getProjectRoot: () => "/tmp",
@@ -111,7 +125,7 @@ describe("Plan session state", () => {
 	});
 
 	it("routes question responses by both request and session ID", async () => {
-		const events: any[] = [];
+		const events: unknown[] = [];
 		const eb: IEventBus = {
 			emit(e) {
 				events.push(e);
@@ -121,8 +135,8 @@ describe("Plan session state", () => {
 			},
 		};
 		const rs: IRuntimeStore = {
-			getRuntime: () => undefined as any,
-			getSession: () => mockSession(),
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => mockSession() as AgentSessionRuntime,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
@@ -131,7 +145,9 @@ describe("Plan session state", () => {
 		ps.setMode("session-a", "plan");
 		const svc = new PlanService(eb, rs, ps, async () => {});
 		const pending = svc.requestQuestions("session-a", questions);
-		const request = events.find((e: any) => e.type === "plan:question-requested").request;
+		const request = (events.find(
+			(e) => (e as Record<string, { request: { requestId: string } }>)?.type === "plan:question-requested",
+		) as Record<string, { request: { requestId: string } }>).request;
 
 		expect(
 			svc.handleQuestionResponse({
@@ -170,8 +186,8 @@ describe("Plan session state", () => {
 			isStreaming: true,
 		});
 		const rs: IRuntimeStore = {
-			getRuntime: () => undefined as any,
-			getSession: (id) => (id === "session-a" ? session : mockSession()),
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: (id) => ((id === "session-a" ? session : mockSession())) as AgentSessionRuntime,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
@@ -217,8 +233,8 @@ describe("Plan session state", () => {
 		await symlink(outside, join(cwd, ".context"));
 
 		const rs: IRuntimeStore = {
-			getRuntime: () => undefined as any,
-			getSession: () => mockSession(),
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => mockSession() as AgentSessionRuntime,
 			getSessionManager: () => undefined,
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
@@ -253,7 +269,7 @@ describe("Plan session state", () => {
 		const sessionManager = SessionManager.inMemory(cwd);
 		const session = mockSession({ sessionManager });
 
-		const events: any[] = [];
+		const events: unknown[] = [];
 		const eb: IEventBus = {
 			emit(e) {
 				events.push(e);
@@ -263,8 +279,8 @@ describe("Plan session state", () => {
 			},
 		};
 		const rs: IRuntimeStore = {
-			getRuntime: () => undefined as any,
-			getSession: () => session,
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => session as AgentSessionRuntime,
 			getSessionManager: () => sessionManager,
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
@@ -274,8 +290,12 @@ describe("Plan session state", () => {
 		const planSvc = new PlanService(eb, rs, ps, async () => {});
 
 		const outcome = planSvc.requestApproval("session-a", "# Plan\n\n1. Test");
-		await vi.waitFor(() => expect(events.some((e: any) => e.type === "plan:approval-requested")).toBe(true));
-		const request = events.find((e: any) => e.type === "plan:approval-requested").request;
+		await vi.waitFor(() =>
+			expect(events.some((e) => (e as Record<string, unknown>)?.type === "plan:approval-requested")).toBe(true),
+		);
+		const request = (events.find(
+			(e) => (e as Record<string, { request: Record<string, unknown> }>)?.type === "plan:approval-requested",
+		) as Record<string, { request: Record<string, unknown> }>).request;
 
 		// Wrong session
 		await expect(
@@ -289,8 +309,12 @@ describe("Plan session state", () => {
 
 		const records = sessionManager
 			.getEntries()
-			.filter((entry: any) => entry.type === "custom" && entry.customType === "look.plan.v1")
-			.map((entry: any) => entry.data.status);
+			.filter(
+				(entry) =>
+					(entry as Record<string, unknown>).type === "custom" &&
+					(entry as Record<string, { customType: string }>).customType === "look.plan.v1",
+			)
+			.map((entry) => (entry as Record<string, { data: { status: string } }>).data.status);
 		expect(records).toEqual(["submitted", "rejected"]);
 		expect(ps.getMode("session-a")).toBe("plan");
 	});
@@ -301,7 +325,7 @@ describe("Plan session state", () => {
 		const sessionManager = SessionManager.inMemory(cwd);
 		const session = mockSession({ sessionManager });
 
-		const events: any[] = [];
+		const events: unknown[] = [];
 		const eb: IEventBus = {
 			emit(e) {
 				events.push(e);
@@ -311,8 +335,8 @@ describe("Plan session state", () => {
 			},
 		};
 		const rs: IRuntimeStore = {
-			getRuntime: () => undefined as any,
-			getSession: () => session,
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => session as AgentSessionRuntime,
 			getSessionManager: () => sessionManager,
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
@@ -325,8 +349,12 @@ describe("Plan session state", () => {
 		const planSvc = new PlanService(eb, rs, ps, onApproval);
 
 		const outcome = planSvc.requestApproval("session-a", "# Plan");
-		await vi.waitFor(() => expect(events.some((e: any) => e.type === "plan:approval-requested")).toBe(true));
-		const request = events.find((e: any) => e.type === "plan:approval-requested").request;
+		await vi.waitFor(() =>
+			expect(events.some((e) => (e as Record<string, unknown>)?.type === "plan:approval-requested")).toBe(true),
+		);
+		const request = (events.find(
+			(e) => (e as Record<string, { request: Record<string, unknown> }>)?.type === "plan:approval-requested",
+		) as Record<string, { request: Record<string, unknown> }>).request;
 
 		await expect(
 			planSvc.handleApprovalResponse({ requestId: request.requestId, sessionId: "session-a", action: "approve" }),
@@ -336,8 +364,12 @@ describe("Plan session state", () => {
 
 		const statuses = sessionManager
 			.getEntries()
-			.filter((entry: any) => entry.type === "custom" && entry.customType === "look.plan.v1")
-			.map((entry: any) => entry.data.status);
+			.filter(
+				(entry) =>
+					(entry as Record<string, unknown>).type === "custom" &&
+					(entry as Record<string, { customType: string }>).customType === "look.plan.v1",
+			)
+			.map((entry) => (entry as Record<string, { data: { status: string } }>).data.status);
 		expect(statuses).toEqual(["submitted", "approved"]);
 	});
 
@@ -348,8 +380,8 @@ describe("Plan session state", () => {
 			setActiveToolsByName,
 		});
 		const rs: IRuntimeStore = {
-			getRuntime: () => undefined as any,
-			getSession: () => session,
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => session as AgentSessionRuntime,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
@@ -375,7 +407,11 @@ describe("Plan session state", () => {
 			async () => {},
 		);
 		planSvc.capturePrePlanTools("session-a");
-		(planSvc as any).prePlanTools.set("session-a", ["read", "write", "removed-tool"]);
+		(planSvc as unknown as { prePlanTools: Map<string, string[]> }).prePlanTools.set("session-a", [
+			"read",
+			"write",
+			"removed-tool",
+		]);
 		planSvc.restorePrePlanTools("session-a");
 		expect(setActiveToolsByName).toHaveBeenCalledWith(["read", "write"]);
 	});
@@ -388,8 +424,8 @@ describe("Plan session state", () => {
 			setActiveToolsByName,
 		});
 		const rs: IRuntimeStore = {
-			getRuntime: () => undefined as any,
-			getSession: () => session,
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => session as AgentSessionRuntime,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",

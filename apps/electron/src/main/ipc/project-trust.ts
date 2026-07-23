@@ -1,13 +1,18 @@
 // ============================================================
 // Project trust prompt — shared by IPC routers without depending
 // on the monolithic handlers.ts registration file.
+//
+// Depends on the narrow IProjectTrustManager interface rather than
+// the concrete SessionRuntimeManager class. This follows ISP/DIP:
+// the trust prompt only needs three methods, not the ~50-method
+// SRT public API.
 // ============================================================
 
 import { type BrowserWindow, dialog } from "electron";
-import type { SessionRuntimeManager } from "../session/runtime-manager.js";
+import type { IProjectTrustManager } from "../core/contracts.js";
 
 export async function promptForProjectTrust(
-	manager: SessionRuntimeManager,
+	manager: IProjectTrustManager,
 	projectId: string,
 	mainWindow: BrowserWindow,
 ): Promise<void> {

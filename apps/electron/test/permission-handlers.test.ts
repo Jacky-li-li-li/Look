@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { handlePermissionEvent } from "../src/renderer/store/permissionHandlers";
 import { appStore } from "../src/renderer/store/appStore";
 import {
 	permissionAskQueueAtom,
@@ -8,6 +7,7 @@ import {
 	planQuestionRequestAtomFamily,
 	todoItemsAtomFamily,
 } from "../src/renderer/store/atoms";
+import { handlePermissionEvent } from "../src/renderer/store/permissionHandlers";
 
 const agentId = "agent-a";
 
@@ -19,13 +19,20 @@ describe("handlePermissionEvent", () => {
 	afterEach(() => {
 		appStore.set(permissionAskQueueAtom, []);
 		appStore.set(planQuestionRequestAtomFamily(agentId), null);
-		appStore.set(planQuestionDraftAtomFamily(agentId), { requestId: null, selections: {}, otherEnabled: {}, otherValues: {} });
+		appStore.set(planQuestionDraftAtomFamily(agentId), {
+			requestId: null,
+			selections: {},
+			otherEnabled: {},
+			otherValues: {},
+		});
 		appStore.set(planApprovalRequestAtomFamily(agentId), null);
 		appStore.set(todoItemsAtomFamily(agentId), []);
 	});
 
 	it("returns false for unhandled event types", () => {
-		const result = handlePermissionEvent({ type: "session:snapshot" } as unknown as Parameters<typeof handlePermissionEvent>[0]);
+		const result = handlePermissionEvent({ type: "session:snapshot" } as unknown as Parameters<
+			typeof handlePermissionEvent
+		>[0]);
 		expect(result).toBe(false);
 	});
 

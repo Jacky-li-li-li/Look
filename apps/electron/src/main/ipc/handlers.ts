@@ -8,8 +8,6 @@
 import type { RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
-import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
-import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 import type { InvokeContext, InvokeRouteMap } from "./invoke-context.js";
 import {
 	agentRouter,
@@ -96,6 +94,11 @@ export function registerIpcHandlers(
 	// Build the route map once. All ctx properties are stable references to the
 	// same underlying objects (runtimeManager, mainWindow, etc.) so closures
 	// capturing ctx remain valid across invocations.
+
+	// Temporary bridge: access composition services until routers migrate to
+	// direct service references on ctx.
+	const comp = runtimeManager._getComposition();
+
 	const ctx: InvokeContext = {
 		runtimeManager,
 		mainWindow,
@@ -109,6 +112,36 @@ export function registerIpcHandlers(
 		larkBridgeService,
 		mcpManager: runtimeManager.mcpManager,
 		schedulerService,
+
+		// Session domain services (migrated from ctx.runtimeManager.*)
+		sessionMessaging: comp.sessionMessagingService,
+		sessionControl: comp.sessionControlService,
+		sessionHistory: comp.sessionHistoryService,
+		sessionLifecycle: comp.sessionLifecycleService,
+		sessionSettings: comp.sessionSettingsService,
+		sessionInfo: comp.sessionInfoService,
+		sessionPermission: comp.sessionPermissionOrchestrator,
+		sessionNotifier: comp.sessionNotifier,
+
+		// Agent domain services
+		agentDefinitions: comp.agentDefinitionService,
+		subagentService: comp.sessionSubagentService,
+		subAgentRegistry: comp.subAgentRegistry,
+
+		// Project domain services
+		projectService: comp.projectService,
+		projectDeletion: comp.projectDeletionService,
+		projectRuntime: comp.projectRuntimeService,
+
+		// Permission / Plan
+		permissionService: comp.permissionService,
+		planService: comp.planService,
+
+		// Settings
+		promptStore: runtimeManager.promptStore,
+
+		// Skills
+		skillService: comp.skillManagementService,
 	};
 	invokeRouteMap = {};
 	for (const router of domainRouters) {
@@ -125,15 +158,7 @@ export function registerIpcHandlers(
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
 		try {
-			return await handleRendererInvoke(
-				data,
-				runtimeManager,
-				mainWindow,
-				workspaceFileService,
-				workspaceTreeService,
-				larkChannelManager,
-				larkBridgeService,
-			);
+			return await handleRendererInvoke(data);
 		} catch (err) {
 			return {
 				success: false,
@@ -153,15 +178,7 @@ function handleRendererEvent(data: RendererToMainEvent): void {
 	}
 }
 
-async function handleRendererInvoke(
-	data: RendererToMainEvent,
-	_runtimeManager: SessionRuntimeManager,
-	_mainWindow: BrowserWindow,
-	_workspaceFileService: WorkspaceFileService,
-	_workspaceTreeService: WorkspaceTreeService,
-	_larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager,
-	_larkBridgeService?: import("../im/lark-bridge-service.js").LarkBridgeService,
-): Promise<unknown> {
+async function handleRendererInvoke(data: RendererToMainEvent): Promise<unknown> {
 	const handler = invokeRouteMap[data.type];
 	if (handler) {
 		try {

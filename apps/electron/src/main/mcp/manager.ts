@@ -127,12 +127,7 @@ export class MCPManager {
 		for (const [key, config] of this.configs) {
 			if (!key.startsWith(prefix)) continue;
 			if (config._source !== "user") continue;
-			const {
-				name: _name,
-				_source: _src,
-				_discoveredFrom: _disc,
-				...rest
-			} = config as unknown as Record<string, unknown>;
+			const { name: _name, _source: _src, _discoveredFrom: _disc, ...rest } = config;
 			servers[config.name] = rest;
 		}
 
@@ -154,12 +149,7 @@ export class MCPManager {
 		for (const [key, config] of this.configs) {
 			if (!key.startsWith(prefix)) continue;
 			if (config._source !== "project") continue;
-			const {
-				name: _name,
-				_source: _src,
-				_discoveredFrom: _disc,
-				...rest
-			} = config as unknown as Record<string, unknown>;
+			const { name: _name, _source: _src, _discoveredFrom: _disc, ...rest } = config;
 			servers[config.name] = rest;
 		}
 

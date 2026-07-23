@@ -10,9 +10,9 @@ describe("CapabilityRegistry", () => {
 
 	it("requires explicit approval for external MCP and unregistered capabilities", () => {
 		expect(registry.resolve("mcp__github__create_issue")).toMatchObject({
-		kind: "external-mcp",
-		requiresExplicitApproval: true,
-	});
+			kind: "external-mcp",
+			requiresExplicitApproval: true,
+		});
 		expect(registry.resolve("unregistered-tool")).toMatchObject({ kind: "unknown", requiresExplicitApproval: true });
 	});
 });

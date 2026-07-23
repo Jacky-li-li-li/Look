@@ -107,7 +107,7 @@ describe("jsonSchemaToTypeBox", () => {
 		const schema = {
 			type: "object" as const,
 			properties: {
-				data: {} as any,
+				data: {} as Record<string, never>,
 			},
 		};
 		const result = jsonSchemaToTypeBox(schema);

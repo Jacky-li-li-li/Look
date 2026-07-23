@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleProjectEvent } from "../src/renderer/store/projectHandlers";
 import { appStore } from "../src/renderer/store/appStore";
 import {
 	activeProjectIdAtom,
@@ -12,6 +11,7 @@ import {
 	sharedFilesAtomFamily,
 	showHiddenFilesAtom,
 } from "../src/renderer/store/atoms";
+import { handleProjectEvent } from "../src/renderer/store/projectHandlers";
 
 const projectId = "project-a";
 const otherProjectId = "project-b";
@@ -136,12 +136,19 @@ describe("handleProjectEvent", () => {
 	});
 
 	it("workspace:updated refetches children when path is expanded", async () => {
-		appStore.set(loadedWorkspaceChildrenAtomFamily(projectId), new Map([["src", [{ name: "a", path: "a", type: "file" }]]]));
-		const listWorkspaceChildren = vi.fn().mockResolvedValue({ success: true, nodes: [{ name: "b", path: "b", type: "file" }] });
+		appStore.set(
+			loadedWorkspaceChildrenAtomFamily(projectId),
+			new Map([["src", [{ name: "a", path: "a", type: "file" }]]]),
+		);
+		const listWorkspaceChildren = vi
+			.fn()
+			.mockResolvedValue({ success: true, nodes: [{ name: "b", path: "b", type: "file" }] });
 		vi.stubGlobal("window", { look: { listWorkspaceChildren } });
 
 		handleProjectEvent(
-			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<typeof handleProjectEvent>[0],
+			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<
+				typeof handleProjectEvent
+			>[0],
 			sharedRefreshTimers,
 		);
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -160,7 +167,9 @@ describe("handleProjectEvent", () => {
 		vi.stubGlobal("window", { look: { listWorkspaceChildren } });
 
 		handleProjectEvent(
-			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<typeof handleProjectEvent>[0],
+			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<
+				typeof handleProjectEvent
+			>[0],
 			sharedRefreshTimers,
 		);
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -174,7 +183,9 @@ describe("handleProjectEvent", () => {
 		vi.stubGlobal("window", { look: { listWorkspaceChildren } });
 
 		handleProjectEvent(
-			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<typeof handleProjectEvent>[0],
+			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<
+				typeof handleProjectEvent
+			>[0],
 			sharedRefreshTimers,
 		);
 		expect(listWorkspaceChildren).not.toHaveBeenCalled();

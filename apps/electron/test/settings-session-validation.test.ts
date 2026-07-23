@@ -45,7 +45,7 @@ function installFakeRuntime(
 		dispose: () => Promise.resolve(),
 		sessionManager,
 	};
-	(manager as unknown as TestManagerInternals).runtimeRegistry.set(sessionId, {
+	(manager._getComposition() as unknown as TestManagerInternals).runtimeRegistry.set(sessionId, {
 		runtime: { session, dispose: () => Promise.resolve() } as unknown as Record<string, unknown>,
 		projectId,
 		cwd: "/project",
@@ -64,15 +64,14 @@ describe("Settings session/project reference validation", () => {
 		vi.stubEnv("LOOK_HOME", lookDir);
 		vi.resetModules();
 		const { SessionRuntimeManager } = await import("../src/main/session/runtime-manager.js");
-		manager = new SessionRuntimeManager();
-		await manager.initAsync();
-	});
+		manager = await SessionRuntimeManager.create();
+	}, 30_000);
 
 	afterEach(async () => {
-		await manager.dispose();
+		if (manager) await manager.dispose();
 		vi.unstubAllEnvs();
 		rmSync(lookDir, { recursive: true, force: true });
-	});
+	}, 30_000);
 
 	it("filters stale openedSessionIds and lastActiveSessionId from persisted settings", async () => {
 		// Simulate stale persisted settings.

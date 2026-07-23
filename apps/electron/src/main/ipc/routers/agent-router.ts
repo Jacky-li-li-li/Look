@@ -11,13 +11,13 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:send-message", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		guardString(data.message, "message");
-		await ctx.runtimeManager.sendMessage(_agentId, data.message, data.images);
+		await ctx.sessionMessaging.sendMessage(_agentId, data.message, data.images);
 		return { success: true };
 	});
 
 	register("agent:activate", async (data) => {
 		const sessionId = guardAgentId(data.agentId, "agentId");
-		const projectId = ctx.runtimeManager.getAgentInfo(sessionId)?.projectId;
+		const projectId = ctx.sessionInfo.getAgentInfo(sessionId)?.projectId;
 		if (projectId) await promptForProjectTrust(ctx.runtimeManager, projectId, ctx.mainWindow);
 		await ctx.runtimeManager.activateSession(sessionId);
 		return { success: true };
@@ -26,21 +26,21 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:create", async (data) => {
 		guardOptionalString(data.name, "name");
 		guardOptionalString(data.projectId, "projectId");
-		const projectId = data.projectId ?? ctx.runtimeManager.getActiveProject()?.id;
+		const projectId = data.projectId ?? ctx.projectService.getActiveProject()?.id;
 		if (projectId) await promptForProjectTrust(ctx.runtimeManager, projectId, ctx.mainWindow);
-		const id = await ctx.runtimeManager.createAgent({ name: data.name, projectId: data.projectId });
+		const id = await ctx.sessionLifecycle.createAgent({ name: data.name, projectId: data.projectId });
 		return { success: true, agentId: id };
 	});
 
 	register("agent:destroy", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
-		await ctx.runtimeManager.destroyAgent(_agentId);
+		await ctx.sessionLifecycle.destroyAgent(_agentId);
 		return { success: true };
 	});
 
 	register("agent:abort", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
-		await ctx.runtimeManager.abortAgent(_agentId);
+		await ctx.sessionLifecycle.abortAgent(_agentId);
 		return { success: true };
 	});
 
@@ -48,7 +48,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		guardString(data.model, "model");
 		try {
-			await ctx.runtimeManager.setModel(_agentId, data.model);
+			await ctx.sessionControl.setModel(_agentId, data.model);
 			return { success: true };
 		} catch (e) {
 			return { success: false, error: e instanceof Error ? e.message : "Failed to switch model" };
@@ -58,24 +58,24 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:update-thinking", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		const _level = guardEnum(data.level, "level", ["off", "minimal", "low", "medium", "high", "xhigh"] as const);
-		await ctx.runtimeManager.setThinkingLevel(_agentId, _level as ThinkingLevel);
+		await ctx.sessionControl.setThinkingLevel(_agentId, _level as ThinkingLevel);
 		return { success: true };
 	});
 
 	register("session:compress", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
-		await ctx.runtimeManager.compressSession(_agentId);
+		await ctx.sessionControl.compress(_agentId);
 		return { success: true };
 	});
 
 	register("agent:rename", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		guardOptionalString(data.name, "name");
-		ctx.runtimeManager.renameAgent(_agentId, data.name);
+		ctx.sessionControl.rename(_agentId, data.name);
 		return { success: true };
 	});
 
 	register("agents:list", async () => {
-		return { success: true, agents: ctx.runtimeManager.listAgents() };
+		return { success: true, agents: ctx.sessionInfo.listAgents() };
 	});
 };

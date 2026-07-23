@@ -12,15 +12,21 @@
 import type * as lark from "@larksuiteoapi/node-sdk";
 import type { NormalizedMessage } from "@larksuiteoapi/node-sdk";
 import type { MainToRendererEvent, ProjectInfo } from "@look/shared/types";
+import type { IImAgentHost } from "../core/contracts.js";
 import { getAvailableModels } from "../models/model-queries.js";
-import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import { type ChatBinding, loadBindings, saveBindings } from "./im-storage.js";
 import type { LarkChannelManager } from "./lark-channel-manager.js";
 import { LarkReplyPresenter, type ReplyAccumulator } from "./lark-reply-presenter.js";
 
 export class LarkBridgeService {
 	private readonly replyPresenter = new LarkReplyPresenter();
-	private runtimeManager!: SessionRuntimeManager;
+	/**
+	 * Agent host for session lifecycle. Depends on the narrow IImAgentHost
+	 * interface rather than the concrete SessionRuntimeManager class, so the
+	 * bridge only sees the 10 methods it actually needs (not SRT's ~50-method
+	 * public API). This keeps the IM module decoupled from the session core.
+	 */
+	private runtimeManager!: IImAgentHost;
 	private channelManager?: LarkChannelManager;
 	/** `appId::chatId` → ChatBinding（无 appId 的 legacy 绑定以裸 chatId 为键） */
 	private bindings = new Map<string, ChatBinding>();
@@ -38,7 +44,7 @@ export class LarkBridgeService {
 	// 初始化：绑定消息回调 + 监听 Agent 事件（幂等，可在无连接时调用）
 	// 返回 true 表示本次调用真正完成了初始化。
 	// ============================================================
-	init(runtimeManager: SessionRuntimeManager, channelManager: LarkChannelManager): boolean {
+	init(runtimeManager: IImAgentHost, channelManager: LarkChannelManager): boolean {
 		this.runtimeManager = runtimeManager;
 		this.channelManager = channelManager;
 		if (this.initialized) return false;

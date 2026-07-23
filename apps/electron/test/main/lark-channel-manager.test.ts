@@ -38,7 +38,7 @@ vi.mock("electron", () => ({
 }));
 
 const larkMocks = vi.hoisted(() => {
-	const makeClient = vi.fn().mockImplementation((params: any) => ({
+	const makeClient = vi.fn().mockImplementation((params: Record<string, unknown>) => ({
 		params,
 		auth: {
 			tenantAccessToken: {
@@ -59,10 +59,10 @@ const larkMocks = vi.hoisted(() => {
 		},
 	}));
 
-	const channels: any[] = [];
-	const createLarkChannel = vi.fn().mockImplementation((params: any) => {
-		const handlers: Record<string, any> = {};
-		const streamControllers: any[] = [];
+	const channels: Array<Record<string, unknown>> = [];
+	const createLarkChannel = vi.fn().mockImplementation((params: Record<string, unknown>) => {
+		const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+		const streamControllers: Array<Record<string, unknown>> = [];
 		const channel = {
 			params,
 			rawClient: makeClient(params),
@@ -70,7 +70,7 @@ const larkMocks = vi.hoisted(() => {
 			streamControllers,
 			connect: vi.fn().mockResolvedValue(undefined),
 			disconnect: vi.fn().mockResolvedValue(undefined),
-			on: vi.fn().mockImplementation((nameOrHandlers: string | Record<string, any>, handler?: any) => {
+			on: vi.fn().mockImplementation((nameOrHandlers: string | Record<string, (...args: unknown[]) => unknown>, handler?: (...args: unknown[]) => unknown) => {
 				if (typeof nameOrHandlers === "string") {
 					handlers[nameOrHandlers] = handler;
 					return () => {
@@ -87,7 +87,7 @@ const larkMocks = vi.hoisted(() => {
 				};
 			}),
 			send: vi.fn().mockResolvedValue({ messageId: "sent_message" }),
-			stream: vi.fn().mockImplementation(async (_to: string, input: any) => {
+			stream: vi.fn().mockImplementation(async (_to: string, input: Record<string, unknown>) => {
 				const controller = {
 					messageId: "stream_message",
 					current: input.card.initial,
@@ -127,13 +127,15 @@ vi.mock("@larksuiteoapi/node-sdk", () => ({
 	registerApp: larkMocks.registerApp,
 }));
 
+import type { IImAgentHost } from "../../src/main/core/contracts.js";
+import type { RegisterAppOptions } from "@larksuiteoapi/node-sdk";
 import type { MainToRendererEvent } from "@shared/types.js";
 import { BrowserWindow } from "electron";
 import { LarkBridgeService } from "../../src/main/im/lark-bridge-service.js";
 import { LarkChannelManager } from "../../src/main/im/lark-channel-manager.js";
 
 function createMainWindow(): BrowserWindow {
-	return new BrowserWindow({} as any);
+	return new BrowserWindow({} as unknown as Electron.BrowserWindowConstructorOptions);
 }
 
 function clearStorage(): void {
@@ -161,7 +163,7 @@ function sampleMessage(content = "hello", chatId = "chat_1"): NormalizedMessage 
 	return {
 		messageId: `msg_${Math.random().toString(36).slice(2)}`,
 		chatId,
-		chatType: "p2p" as any,
+		chatType: "p2p",
 		senderId: "user_open_id",
 		senderName: "User",
 		content,
@@ -242,7 +244,7 @@ function createRuntimeMock(
 						retryAttempt: 0,
 						steering: [],
 						followUp: [],
-						stats: {} as any,
+						stats: {} as Record<string, never>,
 					},
 				});
 			}
@@ -268,9 +270,9 @@ async function nextTick(): Promise<void> {
 	await Promise.resolve();
 }
 
-function findCollapsiblePanels(card: any): any[] {
-	const found: any[] = [];
-	const visit = (node: any) => {
+function findCollapsiblePanels(card: Record<string, unknown>): Array<Record<string, unknown>> {
+	const found: Array<Record<string, unknown>> = [];
+	const visit = (node: Record<string, unknown> | null) => {
 		if (!node || typeof node !== "object") return;
 		if (node.tag === "collapsible_panel") found.push(node);
 		for (const value of Object.values(node)) {
@@ -518,7 +520,7 @@ describe("LarkChannelManager", () => {
 
 	it("does not overwrite the QR phase with SDK polling updates", async () => {
 		const manager = new LarkChannelManager(createMainWindow());
-		larkMocks.registerApp.mockImplementationOnce(async (options: any) => {
+		larkMocks.registerApp.mockImplementationOnce(async (options: RegisterAppOptions) => {
 			options.onQRCodeReady({ url: "https://example.com/qr", expireIn: 600 });
 			options.onStatusChange?.({ status: "polling" });
 			return {
@@ -547,7 +549,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 		manager.onConnectionClosed = () => bridge.detachChannel();
 
 		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
@@ -615,7 +617,7 @@ describe("LarkChannelManager", () => {
 			});
 			return originalCreateAgent(opts);
 		});
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
 		const newCommand = larkMocks.channels[0].emit("message", sampleMessage("/new"));
@@ -685,18 +687,18 @@ describe("LarkChannelManager", () => {
 					retryAttempt: 0,
 					steering: [],
 					followUp: [],
-					stats: {} as any,
+					stats: {} as Record<string, never>,
 				},
 			});
 		});
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
 		await larkMocks.channels[0].emit("message", sampleMessage("run pwd"));
 		await flushAsync();
 
 		const controller = larkMocks.channels[0].streamControllers[0];
-		const updatedCards = controller.update.mock.calls.map((call: any[]) => call[0]);
+		const updatedCards = (controller.update.mock.calls as Array<Array<Record<string, unknown>>>).map((call) => call[0]);
 		const panels = updatedCards.flatMap(findCollapsiblePanels);
 		expect(
 			panels.some((panel) => panel.header?.title?.content === "工具 · bash · 运行中" && panel.expanded === true),
@@ -711,7 +713,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 		manager.onConnectionClosed = () => bridge.detachChannel();
 
 		await manager.connectManual({ appId: "cli_reconnect", appSecret: "secret" });
@@ -732,7 +734,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
 		await larkMocks.channels[0].emit("message", sampleMessage("/project"));
@@ -749,7 +751,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
 		await larkMocks.channels[0].emit("message", sampleMessage("/help"));
@@ -775,7 +777,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
 		await larkMocks.channels[0].emit("message", sampleMessage("/project 2"));
@@ -792,7 +794,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
 		await larkMocks.channels[0].emit("message", sampleMessage('/new project "/tmp/new app" "New App"'));
@@ -907,7 +909,7 @@ describe("LarkChannelManager", () => {
 
 		expect(result.success).toBe(true);
 		// A new ad-hoc Client was constructed from the stored credentials.
-		const clientCalls = larkMocks.Client.mock.calls.filter((call: any[]) => call[0]?.appId === "cli_sender");
+		const clientCalls = (larkMocks.Client.mock.calls as Array<Array<Record<string, unknown>>>).filter((call) => (call[0] as Record<string, unknown>)?.appId === "cli_sender");
 		expect(clientCalls.length).toBeGreaterThan(0);
 		expect(clientCalls[0][0].domain).toBe(larkMocks.Domain.Lark);
 		const adHocClient = manager.getClient("cli_sender") as ReturnType<typeof larkMocks.Client>;
@@ -925,7 +927,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_bot", appSecret: "secret" });
 		await larkMocks.channels[0].emit("message", sampleMessage("hello agent"));
@@ -950,7 +952,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_bot", appSecret: "secret" });
 		await larkMocks.channels[0].emit("message", sampleMessage("hello agent"));
@@ -968,7 +970,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 		manager.onConnectionClosed = (appId) => bridge.detachChannel(appId);
 
 		// Bot A goes live first and the user messages it.
@@ -1005,13 +1007,15 @@ describe("LarkChannelManager", () => {
 		]);
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_bot_a", appSecret: "secret_a" });
 		// Bot A can read oc_legacy (it is its own p2p chat); it has no access to oc_stray.
 		const liveClient = larkMocks.channels[0].rawClient as ReturnType<typeof larkMocks.Client>;
-		liveClient.im.v1.chat.get.mockImplementation(async ({ path }: any) =>
-			path.chat_id === "oc_legacy" ? { code: 0, data: { chat_mode: "p2p", name: "" } } : { code: 230002, data: undefined },
+		liveClient.im.v1.chat.get.mockImplementation(async ({ path }: { path: string }) =>
+			path.chat_id === "oc_legacy"
+				? { code: 0, data: { chat_mode: "p2p", name: "" } }
+				: { code: 230002, data: undefined },
 		);
 
 		// Probing for A heals the legacy binding and returns it.
@@ -1052,7 +1056,7 @@ describe("LarkChannelManager", () => {
 		expect((await manager.sendToChat("cli_beta", "oc_2", { text: "from beta" })).success).toBe(true);
 
 		const clientFor = (appId: string) =>
-			(larkMocks.Client.mock.results as any[])
+			(larkMocks.Client.mock.results as Array<Record<string, unknown>>)
 				.map((result) => result.value)
 				.find((value) => value?.params?.appId === appId);
 		const alphaClient = clientFor("cli_alpha");
@@ -1115,7 +1119,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 		manager.onConnectionClosed = (appId) => bridge.detachChannel(appId);
 
 		await manager.connectManual({ appId: "cli_bot_a", appSecret: "secret_a", name: "Bot A" });
@@ -1141,7 +1145,7 @@ describe("LarkChannelManager", () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
 		const runtime = createRuntimeMock();
-		manager.onConnectionReady = () => bridge.init(runtime as any, manager);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
 
 		await manager.connectManual({ appId: "cli_bot_a", appSecret: "secret_a", name: "Bot A" });
 		await manager.connectManual({ appId: "cli_bot_b", appSecret: "secret_b", name: "Bot B" });

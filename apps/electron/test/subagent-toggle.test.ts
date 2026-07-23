@@ -43,7 +43,7 @@ function installFakeRuntime(
 		getAllTools: () => allTools.map((name) => ({ name })),
 		sessionManager,
 	};
-	const internal = manager as unknown as TestManagerInternals;
+	const internal = manager._getComposition() as unknown as TestManagerInternals;
 	internal.runtimeRegistry.set(sessionId, {
 		runtime: { session },
 		projectId: "test-project",
@@ -61,31 +61,28 @@ function installFakeRuntime(
 			internal.planService.disposeSession(sessionId);
 			try {
 				internal.sessionSubagentService?.clearSession(sessionId);
-			} catch { /* ignore if subagent service not fully initialized */ }
+			} catch {
+				/* ignore if subagent service not fully initialized */
+			}
 		},
 	};
 }
 
 describe("SubAgent toggle — API-level behavior", () => {
-	const manager = new SessionRuntimeManager();
+	let manager: SessionRuntimeManager;
 	let savedDefault: boolean;
 
 	beforeAll(async () => {
-		try {
-			await manager.initAsync();
-		} catch (err) {
-			console.error("[test] initAsync failed:", err);
-			throw err;
-		}
+		manager = await SessionRuntimeManager.create();
 		// 确保从干净的默认状态开始（避免前序测试残留影响）
 		const clean = await manager.resetGeneralSettings();
 		savedDefault = clean.subagentEnabled;
-	});
+	}, 30_000);
 
 	afterAll(async () => {
 		// 恢复默认
-		await manager.setSubagentEnabledGlobal(savedDefault);
-	});
+		if (manager) await manager.setSubagentEnabledGlobal(savedDefault);
+	}, 30_000);
 
 	it("1. default is true (new sessions have subagent enabled)", async () => {
 		const settings = manager.getGeneralSettings();
@@ -154,7 +151,10 @@ describe("SubAgent toggle — API-level behavior", () => {
 			["read", "write", "bash", "subagent", "AskUserQuestion", "ExitPlanMode"],
 		);
 		try {
-			(manager as unknown as TestManagerInternals).permissionService.setMode("fake-plan-session", "plan");
+			(manager._getComposition() as unknown as TestManagerInternals).permissionService.setMode(
+				"fake-plan-session",
+				"plan",
+			);
 			await manager.setSubagentEnabled("fake-plan-session", true);
 			expect(fake.getActiveTools()).toEqual(["read", "bash", "AskUserQuestion", "ExitPlanMode"]);
 		} finally {

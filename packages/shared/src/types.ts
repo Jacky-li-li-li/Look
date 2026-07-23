@@ -1028,16 +1028,6 @@ export interface ProviderInfo {
 }
 
 // ============================================================
-// Usage heatmap persistence
-// ============================================================
-
-export interface UsageData {
-	usage: Record<string, number>;
-	modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
-	years: number[];
-}
-
-// ============================================================
 // Per-message turn duration persistence
 // ============================================================
 

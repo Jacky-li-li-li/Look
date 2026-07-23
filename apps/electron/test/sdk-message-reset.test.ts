@@ -2,8 +2,8 @@ import fs from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetLegacySessionsOnce } from "@shared/look-storage";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const cleanup: string[] = [];
 

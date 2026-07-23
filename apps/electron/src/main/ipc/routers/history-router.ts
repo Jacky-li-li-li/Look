@@ -13,7 +13,7 @@ export const historyRouter: IpcRouter = (ctx, register) => {
 		guardOptionalString(data.customInstructions, "customInstructions");
 		guardOptionalString(data.label, "label");
 		try {
-			const result = await ctx.runtimeManager.navigateTreeSession(_agentId, _entryId, {
+			const result = await ctx.sessionHistory.navigate(_agentId, _entryId, {
 				summarize: data.summarize,
 				customInstructions: data.customInstructions,
 				label: data.label,
@@ -29,7 +29,7 @@ export const historyRouter: IpcRouter = (ctx, register) => {
 		const _entryId = guardString(data.entryId, "entryId");
 		guardOptionalString(data.name, "name");
 		try {
-			const result = await ctx.runtimeManager.createForkedSession(_agentId, _entryId, {
+			const result = await ctx.sessionHistory.fork(_agentId, _entryId, {
 				name: data.name,
 			});
 			return { success: true, ...result };
@@ -44,7 +44,7 @@ export const historyRouter: IpcRouter = (ctx, register) => {
 		if (data.label !== null) {
 			guardString(data.label, "label");
 		}
-		ctx.runtimeManager.setEntryLabel(_agentId, _entryId, data.label);
+		ctx.sessionHistory.setEntryLabel(_agentId, _entryId, data.label);
 		return { success: true };
 	});
 };

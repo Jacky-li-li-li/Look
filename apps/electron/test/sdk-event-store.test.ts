@@ -2,8 +2,8 @@ import type { LookUiEvent } from "@shared/types";
 import { afterEach, describe, expect, it } from "vitest";
 import { agentsAtom, removeAgentAtoms, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore, initIpcHandlers } from "../src/renderer/store/ipcHandler";
-import { flushAllUiEvents } from "../src/renderer/store/ui-event-processor";
 import { deriveSessionPhase } from "../src/renderer/store/sessionTypes";
+import { flushAllUiEvents } from "../src/renderer/store/ui-event-processor";
 
 const sessionId = "ui-store-a";
 
@@ -26,15 +26,15 @@ afterEach(() => {
 
 describe("UI event canonical store (session:ui-event)", () => {
 	/** 帧批处理版：receive 后立即 flush 以便同步断言 */
-	function flushReceive(receive: (event: any) => void, event: any) {
+	function flushReceive(receive: (event: MainToRendererEvent) => void, event: MainToRendererEvent) {
 		receive(event);
 		flushAllUiEvents();
 	}
 
 	it("tracks run_status transitions in uiPhase", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -51,9 +51,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("accumulates text deltas into uiBlocks", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -76,9 +76,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("preserves text deltas that arrive in the same batch as text_end", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -101,9 +101,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("accumulates thinking deltas and marks completed", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -132,9 +132,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("preserves thinking deltas that arrive in the same batch as thinking_end", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -157,9 +157,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("tracks tool_call lifecycle in uiBlocks", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -188,9 +188,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("updates an existing completed tool_call instead of appending a duplicate", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -234,9 +234,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("tracks tool execution states in uiTools", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -277,9 +277,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("preserves completed blocks until the snapshot and resets them on a new run", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -308,9 +308,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("tracks queue_updates", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -323,9 +323,9 @@ describe("UI event canonical store (session:ui-event)", () => {
 	});
 
 	it("tracks compacting and retry phases", () => {
-		let receive!: (event: any) => void;
+		let receive!: (event: MainToRendererEvent) => void;
 		dispose = initIpcHandlers({
-			onEvent(callback: (event: any) => void) {
+			onEvent(callback: (event: MainToRendererEvent) => void) {
 				receive = callback;
 				return () => {};
 			},
@@ -354,20 +354,20 @@ describe("UI event canonical store (session:ui-event)", () => {
 
 describe("deriveSessionPhase", () => {
 	it("maps uiPhase streaming to thinking, and working when tools are running", () => {
-		expect(deriveSessionPhase({ uiPhase: "streaming", uiTools: {}, runtime: null } as any)).toBe("thinking");
+		expect(deriveSessionPhase({ uiPhase: "streaming", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("thinking");
 		expect(
 			deriveSessionPhase({
 				uiPhase: "streaming",
-				uiTools: { t1: { phase: "running" } as any },
+				uiTools: { t1: { phase: "running" } as Record<string, { phase: string }> },
 				runtime: null,
-			} as any),
+			} as unknown as Parameters<typeof deriveSessionPhase>[0]),
 		).toBe("working");
 	});
 
 	it("maps uiPhase working/retrying/compacting directly", () => {
-		expect(deriveSessionPhase({ uiPhase: "working", uiTools: {}, runtime: null } as any)).toBe("working");
-		expect(deriveSessionPhase({ uiPhase: "retrying", uiTools: {}, runtime: null } as any)).toBe("retrying");
-		expect(deriveSessionPhase({ uiPhase: "compacting", uiTools: {}, runtime: null } as any)).toBe("compacting");
+		expect(deriveSessionPhase({ uiPhase: "working", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("working");
+		expect(deriveSessionPhase({ uiPhase: "retrying", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("retrying");
+		expect(deriveSessionPhase({ uiPhase: "compacting", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("compacting");
 	});
 
 	it("falls back to runtime flags when uiPhase is idle", () => {
@@ -375,27 +375,27 @@ describe("deriveSessionPhase", () => {
 			deriveSessionPhase({
 				uiPhase: "idle",
 				uiTools: {},
-				runtime: { isStreaming: true } as any,
-			} as any),
+				runtime: { isStreaming: true } as Record<string, boolean>,
+			} as unknown as Parameters<typeof deriveSessionPhase>[0]),
 		).toBe("thinking");
 		expect(
 			deriveSessionPhase({
 				uiPhase: "idle",
 				uiTools: {},
-				runtime: { isRetrying: true } as any,
-			} as any),
+				runtime: { isRetrying: true } as Record<string, boolean>,
+			} as unknown as Parameters<typeof deriveSessionPhase>[0]),
 		).toBe("retrying");
 		expect(
 			deriveSessionPhase({
 				uiPhase: "idle",
 				uiTools: {},
-				runtime: { isCompacting: true } as any,
-			} as any),
+				runtime: { isCompacting: true } as Record<string, boolean>,
+			} as unknown as Parameters<typeof deriveSessionPhase>[0]),
 		).toBe("compacting");
 	});
 
 	it("returns idle by default", () => {
-		expect(deriveSessionPhase({ uiPhase: "idle", uiTools: {}, runtime: null } as any)).toBe("idle");
+		expect(deriveSessionPhase({ uiPhase: "idle", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("idle");
 		expect(deriveSessionPhase(null)).toBe("idle");
 	});
 });

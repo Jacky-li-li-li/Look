@@ -3,11 +3,11 @@
 // ============================================================
 
 import fs from "node:fs";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
+import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { CustomProvidersStore, type CustomProviderInput } from "../../src/main/settings/custom-providers.js";
+import { type CustomProviderInput, CustomProvidersStore } from "../../src/main/settings/custom-providers.js";
 
 // ── Helpers ──
 

@@ -41,7 +41,7 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 	it(
 		"关闭开关 → LLM 看不到 subagent 工具 → 不创建子会话",
 		async () => {
-			const manager = new SessionRuntimeManager();
+			const manager = await SessionRuntimeManager.create();
 			await manager.loadProjects();
 			const projects = manager.listProjects();
 			const project = projects.find((p) => p.valid && p.name === "pi") ?? projects.find((p) => p.valid);
@@ -53,9 +53,9 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 
 			// ── 验证：新会话没有 subagent 工具 ──
 			const diagId = await manager.createAgent({ name: "toggle-diag" });
-			const managed = Array.from((manager as unknown as TestManagerInternals).runtimeRegistry.entries()).find(
-				([sid]: [string, unknown]) => sid === diagId,
-			)?.[1];
+			const managed = Array.from(
+				(manager._getComposition() as unknown as TestManagerInternals).runtimeRegistry.entries(),
+			).find(([sid]: [string, unknown]) => sid === diagId)?.[1];
 			const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : "unknown";
 			expect(hasSubagent, "toggle OFF 时 subagent 不应在活动工具中").toBe(false);
 			await manager.destroyAgent(diagId).catch(() => {});
@@ -89,7 +89,7 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 
 	it("Stage 1 验证回顾：开关打开时 LLM 可以调用 subagent（API 级确认）", async () => {
 		// 仅做 API 级确认，LLM 实际调用已在 Stage 1 E2E 验证。
-		const manager = new SessionRuntimeManager();
+		const manager = await SessionRuntimeManager.create();
 		await manager.loadProjects();
 		const project = manager.listProjects().find((p) => p.valid);
 		expect(project).toBeTruthy();
@@ -97,9 +97,9 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 		await manager.setSubagentEnabledGlobal(true);
 
 		const id = await manager.createAgent({ name: "toggle-on-api" });
-		const managed = Array.from((manager as unknown as TestManagerInternals).runtimeRegistry.entries()).find(
-			([sid]: [string, unknown]) => sid === id,
-		)?.[1];
+		const managed = Array.from(
+			(manager._getComposition() as unknown as TestManagerInternals).runtimeRegistry.entries(),
+		).find(([sid]: [string, unknown]) => sid === id)?.[1];
 		const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : false;
 		expect(hasSubagent, "toggle ON 时 subagent 应在活动工具中").toBe(true);
 

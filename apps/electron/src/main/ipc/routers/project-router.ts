@@ -9,8 +9,8 @@ import { promptForProjectTrust } from "../project-trust.js";
 
 export const projectRouter: IpcRouter = (ctx, register) => {
 	register("project:list", async () => {
-		const projects = ctx.runtimeManager.listProjects();
-		const activeProject = ctx.runtimeManager.getActiveProject();
+		const projects = ctx.projectService.listProjects();
+		const activeProject = ctx.projectService.getActiveProject();
 		return { success: true, projects, activeProjectId: activeProject?.id ?? null };
 	});
 
@@ -30,7 +30,7 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 		guardString(data.projectId, "projectId");
 		await promptForProjectTrust(ctx.runtimeManager, data.projectId, ctx.mainWindow);
 		await ctx.runtimeManager.setActiveProject(data.projectId);
-		const agents = ctx.runtimeManager.listAgentsInProject(data.projectId);
+		const agents = ctx.sessionInfo.listAgentsInProject(data.projectId);
 		return { success: true, agents };
 	});
 
@@ -57,13 +57,13 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 		guardString(data.projectId, "projectId");
 		guardBoolean(data.confirmed, "confirmed");
 		if (data.confirmed) {
-			await ctx.runtimeManager.executeDeleteProject(data.projectId);
+			await ctx.projectDeletion.executeDelete(data.projectId);
 		}
 		return { success: true };
 	});
 
 	register("project:get-active", async () => {
-		const active = ctx.runtimeManager.getActiveProject();
+		const active = ctx.projectService.getActiveProject();
 		return { success: true, project: active };
 	});
 };

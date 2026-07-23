@@ -10,6 +10,7 @@ const root = resolve(import.meta.dirname, "..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 const handlers = read("src/main/ipc/handlers.ts");
 const projectTrust = read("src/main/ipc/project-trust.ts");
+const projectRouter = read("src/main/ipc/routers/project-router.ts");
 const guards = read("src/main/ipc/guards.ts");
 
 describe("IPC router structure", () => {
@@ -39,6 +40,11 @@ describe("IPC router structure", () => {
 		expect(handlers).not.toContain('"agent:send-message"');
 		expect(handlers).not.toContain('"project:create"');
 		expect(handlers).not.toContain('"permission:set-mode"');
+	});
+
+	it("keeps project lifecycle side effects in the runtime manager", () => {
+		expect(projectRouter).toContain("ctx.runtimeManager.createProject(_cwd, data.name)");
+		expect(projectRouter).toContain("ctx.runtimeManager.renameProject(data.projectId, data.name)");
 	});
 
 	it("exports promptForProjectTrust from project-trust.ts and guardAgentDefinitionInput from guards.ts", () => {

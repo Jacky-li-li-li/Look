@@ -35,7 +35,10 @@ describe("DeepSeek thinking capability", () => {
 
 	it("ModelRuntime.create with missing models.json still exposes deepseek-v4-flash", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "look-models-"));
-		const mr = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: join(dir, "nonexistent.json") });
+		const mr = await ModelRuntime.create({
+			credentials: new InMemoryCredentialStore(),
+			modelsPath: join(dir, "nonexistent.json"),
+		});
 		const registry = new ModelRegistry(mr);
 		const model = registry.find("deepseek", "deepseek-v4-flash");
 		expect(model).toBeDefined();

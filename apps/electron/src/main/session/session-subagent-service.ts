@@ -163,6 +163,12 @@ export class SessionSubagentService {
 		onUpdate?: (progress: SubagentProgress) => void,
 		title?: string,
 	): Promise<SubagentResult> {
+		// Fail fast if the signal was already aborted before we start.
+		if (signal?.aborted) {
+			const reason = signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason ?? "Aborted"));
+			throw reason;
+		}
+
 		const parentManaged = this.deps.host.getManagedRuntime(parentSessionId);
 		if (!parentManaged) throw new Error(`Parent session ${parentSessionId} is not live`);
 
@@ -261,6 +267,10 @@ export class SessionSubagentService {
 			agent: childInfo,
 		});
 
+		// AbortSignal delegation: signal is passed to setupSubSessionTracking which
+		// registers an abort listener that calls session.abort() on the child session.
+		// This is the canonical abort path — we do not pass signal directly to
+		// session.prompt() because pi SDK's prompt() has no native AbortSignal support.
 		const resultPromise = this.deps.subAgentRuntimeService.setupSubSessionTracking(
 			childSessionId,
 			parentSessionId,

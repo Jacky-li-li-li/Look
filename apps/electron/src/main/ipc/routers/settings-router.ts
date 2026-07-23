@@ -55,7 +55,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("settings:add-custom-provider", async (data) => {
-		const input = guardCustomProviderInput(data.payload, "payload") as unknown as CustomProviderInput;
+		const input = guardCustomProviderInput(data.payload, "payload");
 		ctx.customProviders.add(input);
 		return { success: true };
 	});
@@ -79,7 +79,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("settings:test-custom-provider", async (data) => {
-		const input = guardCustomProviderInput(data.payload, "payload") as unknown as CustomProviderInput;
+		const input = guardCustomProviderInput(data.payload, "payload");
 		const memCredentials = new InMemoryCredentialStore();
 		if (input.apiKey) {
 			await memCredentials.modify(input.name, async () => ({ type: "api_key" as const, key: input.apiKey }));
@@ -139,7 +139,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("settings:general:get", async () => {
-		return { success: true, settings: ctx.runtimeManager.getGeneralSettings() };
+		return { success: true, settings: ctx.sessionSettings.get() };
 	});
 
 	register("settings:general:set", async (data) => {
@@ -173,6 +173,9 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		}
 		if ("themeTone" in settings) {
 			guardEnum(settings.themeTone, "settings.themeTone", ["light", "dark"] as const);
+			if (!ctx.mainWindow.isDestroyed()) {
+				ctx.mainWindow.setBackgroundColor(settings.themeTone === "light" ? "#fbfbfa" : "#030202");
+			}
 		}
 		if ("autoTitleModel" in settings) {
 			guardNullableString(settings.autoTitleModel, "settings.autoTitleModel");
@@ -193,30 +196,23 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		if ("aiAvatar" in settings) {
 			guardNullableString(settings.aiAvatar, "settings.aiAvatar");
 		}
-		if (typeof (data.settings as Record<string, unknown>)?.themeTone === "string") {
-			const tone = (data.settings as Record<string, unknown>).themeTone;
-			if (!ctx.mainWindow.isDestroyed()) {
-				ctx.mainWindow.setBackgroundColor(tone === "light" ? "#fbfbfa" : "#030202");
-			}
-		}
-
-		const updated = await ctx.runtimeManager.updateGeneralSettings(data.settings ?? {});
+		const updated = await ctx.sessionSettings.update(settings);
 
 		return { success: true, settings: updated };
 	});
 
 	register("settings:general:reset", async () => {
-		return { success: true, settings: await ctx.runtimeManager.resetGeneralSettings() };
+		return { success: true, settings: await ctx.sessionSettings.reset() };
 	});
 
 	register("settings:prompts:list", async () => {
-		return { success: true, ...ctx.runtimeManager.promptStore.list() };
+		return { success: true, ...ctx.promptStore.list() };
 	});
 
 	register("settings:prompts:create", async (data) => {
 		const name = guardString(data.name, "name");
 		const content = guardString(data.content, "content");
-		const prompt = ctx.runtimeManager.promptStore.create(name, content);
+		const prompt = ctx.promptStore.create(name, content);
 		return { success: true, prompt };
 	});
 
@@ -225,39 +221,39 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const patch: { name?: string; content?: string } = {};
 		if ("name" in data) patch.name = guardString(data.name, "name");
 		if ("content" in data) patch.content = guardString(data.content, "content");
-		const prompt = ctx.runtimeManager.promptStore.update(id, patch);
+		const prompt = ctx.promptStore.update(id, patch);
 		if (!prompt) return { success: false, error: "Prompt not found" };
 		if (patch.content) {
-			ctx.runtimeManager.promptStore.syncProjectOverridesForPrompt(id);
+			ctx.promptStore.syncProjectOverridesForPrompt(id);
 		}
 		return { success: true, prompt };
 	});
 
 	register("settings:prompts:delete", async (data) => {
 		const id = guardString(data.id, "id");
-		const deleted = ctx.runtimeManager.promptStore.delete(id);
+		const deleted = ctx.promptStore.delete(id);
 		if (!deleted) return { success: false, error: "Cannot delete this prompt" };
 		return { success: true };
 	});
 
 	register("settings:prompts:set-active", async (data) => {
 		const id = guardString(data.id, "id");
-		const ok = ctx.runtimeManager.promptStore.setActive(id);
+		const ok = ctx.promptStore.setActive(id);
 		if (!ok) return { success: false, error: "Prompt not found" };
 		return { success: true };
 	});
 
 	register("settings:project-prompts:list", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
-		return { success: true, ...ctx.runtimeManager.promptStore.listProjectPrompts(projectId) };
+		return { success: true, ...ctx.promptStore.listProjectPrompts(projectId) };
 	});
 
 	register("settings:project-prompts:create", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const name = guardString(data.name, "name");
 		const content = guardString(data.content, "content");
-		const prompt = ctx.runtimeManager.promptStore.createProjectPrompt(projectId, name, content);
-		ctx.runtimeManager.promptStore.syncProjectSystemFile(projectId);
+		const prompt = ctx.promptStore.createProjectPrompt(projectId, name, content);
+		ctx.promptStore.syncProjectSystemFile(projectId);
 		return { success: true, prompt };
 	});
 
@@ -267,27 +263,27 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const patch: { name?: string; content?: string } = {};
 		if ("name" in data) patch.name = guardString(data.name, "name");
 		if ("content" in data) patch.content = guardString(data.content, "content");
-		const prompt = ctx.runtimeManager.promptStore.updateProjectPrompt(projectId, id, patch);
+		const prompt = ctx.promptStore.updateProjectPrompt(projectId, id, patch);
 		if (!prompt) return { success: false, error: "Prompt not found" };
-		ctx.runtimeManager.promptStore.syncProjectSystemFile(projectId);
+		ctx.promptStore.syncProjectSystemFile(projectId);
 		return { success: true, prompt };
 	});
 
 	register("settings:project-prompts:delete", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const id = guardString(data.id, "id");
-		const deleted = ctx.runtimeManager.promptStore.deleteProjectPrompt(projectId, id);
+		const deleted = ctx.promptStore.deleteProjectPrompt(projectId, id);
 		if (!deleted) return { success: false, error: "Cannot delete this prompt" };
-		ctx.runtimeManager.promptStore.syncProjectSystemFile(projectId);
+		ctx.promptStore.syncProjectSystemFile(projectId);
 		return { success: true };
 	});
 
 	register("settings:project-prompts:set-active", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const id = guardString(data.id, "id");
-		const ok = ctx.runtimeManager.promptStore.setProjectActive(projectId, id);
+		const ok = ctx.promptStore.setProjectActive(projectId, id);
 		if (!ok) return { success: false, error: "Prompt not found" };
-		ctx.runtimeManager.promptStore.syncProjectSystemFile(projectId);
+		ctx.promptStore.syncProjectSystemFile(projectId);
 		return { success: true };
 	});
 };

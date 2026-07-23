@@ -122,14 +122,14 @@ export function toProviderConfig(p: CustomProviderInput): ProviderConfigInput {
 	return {
 		name: p.name,
 		baseUrl: p.baseUrl,
-		api: p.api as unknown as Api,
+		api: p.api,
 		apiKey: p.apiKey,
 		headers: p.headers,
 		authHeader: p.authHeader,
 		models: p.models.map((m) => ({
 			id: m.id,
 			name: m.name ?? m.id,
-			api: p.api as unknown as Api,
+			api: p.api,
 			reasoning: m.reasoning ?? false,
 			input: m.input ?? ["text"],
 			contextWindow: m.contextWindow ?? 128000,

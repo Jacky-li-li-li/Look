@@ -14,6 +14,7 @@ import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
 import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
+import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { FileTaskLock } from "./scheduler/task-lock.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
@@ -23,7 +24,7 @@ import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { checkForUpdates, initUpdater } from "./system/updater.js";
-import { initializeUsageService } from "./system/usage.js";
+
 import { closeViewerWindow } from "./viewer/viewer-window-manager.js";
 import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
@@ -310,24 +311,71 @@ function isAllowedNavigationUrl(raw: string): boolean {
 }
 
 // ============================================================
-// Agent Initialization
-// Uses pi's retry settings for Layer 1 protection
+// Bootstrap — phased app initialization
+//
+// Each phase depends only on phases before it. Extracted from the
+// former initSessionRuntime() monolith into named functions.
 // ============================================================
 
-async function initSessionRuntime(): Promise<void> {
+async function bootstrapApp(): Promise<void> {
 	loadShellEnv();
 
-	// 共享区服务单例:由 SessionRuntimeManager 持有,以便项目生命周期能驱动 watcher 启停
+	// Phase 1: Core runtime
+	await bootstrapCoreRuntime();
+
+	// Phase 2: Scheduler (depends on runtimeManager)
+	schedulerService = createSchedulerService();
+	runtimeManager!.setSchedulerService(schedulerService);
+
+	// Phase 3: Load persisted data
+	await runtimeManager!.loadProjects();
+	await runtimeManager!.recoverOrphanedProjects().catch((error) => {
+		console.error("[Look] Orphaned project recovery failed:", error);
+	});
+
+	if (!mainWindow) return;
+
+	// Phase 4: IM channels (depends on mainWindow + runtimeManager)
+	bootstrapIM();
+
+	// Phase 5: IPC + restore workspace + push initial state
+	await bootstrapStartupSequence();
+
+	// Phase 6: Sync built-in skills and agents
+	await syncBuiltinResources();
+
+	// Phase 7: Auto-updater
+	bootstrapUpdater();
+}
+
+// ── Phase 1: Core runtime ──
+
+async function bootstrapCoreRuntime(): Promise<void> {
 	workspaceFileService = new WorkspaceFileService();
-	// 工作区文件树服务:服务项目 cwd 的 lazy-load 浏览
 	workspaceTreeService = new WorkspaceTreeService();
-	runtimeManager = new SessionRuntimeManager(workspaceFileService, workspaceTreeService);
-	await runtimeManager.initAsync();
+	runtimeManager = await SessionRuntimeManager.create(workspaceFileService, workspaceTreeService);
+}
+
+// ── Phase 2: Scheduler ──
+
+function createSchedulerService(): SchedulerService {
 	const schedulerOwnerId = `${process.pid}:${Date.now()}`;
-	// 通知目标解析：显式选择的私聊会话（channelAppId + targetChatId）精确匹配，
-	// 收件人固定为保存任务时选定的那一个，绝不按“最近私聊”重新推断；
-	// legacy 原始 targetChatId 直接透传；仅带 channelAppId 的旧任务回退推断（重存即迁移）。
-	const resolveImNotificationTarget = async (
+
+	const callbacks = createSchedulerCallbacks();
+	return new SchedulerService({
+		store: new ScheduledTaskStore(getScheduledTasksPath()),
+		lock: new FileTaskLock(getScheduledTaskLocksDir(), schedulerOwnerId),
+		executor: new AgentScheduledTaskExecutor(runtimeManager!),
+		ownerId: schedulerOwnerId,
+		getProjectInfo: (projectId) => runtimeManager!.getProjectInfo(projectId),
+		resolveNotificationTarget: createImNotificationResolver(),
+		onAlert: callbacks.onAlert,
+		onFinished: callbacks.onFinished,
+	});
+}
+
+function createImNotificationResolver() {
+	return async (
 		notification: ScheduledTaskNotification,
 	): Promise<{ chatId: string; channelAppId?: string } | null | undefined> => {
 		if (!larkBridgeService) return undefined;
@@ -348,161 +396,123 @@ async function initSessionRuntime(): Promise<void> {
 		}
 		return null;
 	};
-	schedulerService = new SchedulerService({
-		store: new ScheduledTaskStore(getScheduledTasksPath()),
-		lock: new FileTaskLock(getScheduledTaskLocksDir(), schedulerOwnerId),
-		executor: new AgentScheduledTaskExecutor(runtimeManager),
-		ownerId: schedulerOwnerId,
-		getProjectInfo: (projectId) => runtimeManager!.getProjectInfo(projectId),
-		resolveNotificationTarget: resolveImNotificationTarget,
-		onAlert: ({ task, log }) => {
+}
+
+/** Scheduler notification callbacks, created once at startup. */
+function createSchedulerCallbacks() {
+	const imResolver = createImNotificationResolver();
+
+	return {
+		onAlert: ({ task, log }: { task: { name: string }; log: { errorMessage?: string } }) => {
 			const body = `${task.name}: ${log.errorMessage ?? "Task failed after all retry attempts"}`;
 			safeSendEvent({ type: "error", message: body });
 			if (Notification.isSupported()) new Notification({ title: "Look scheduled task failed", body }).show();
 		},
-		onFinished: async ({ task, log }) => {
+		onFinished: async ({
+			task,
+			log,
+		}: {
+			task: { name: string; model?: string; notification?: ScheduledTaskNotification };
+			log: { status: string; output?: string; errorMessage?: string; finishedAt?: string };
+		}) => {
 			const notification = task.notification;
 			if (!notification?.enabled) return;
 			if (!larkChannelManager) throw new Error("IM channel manager is not available");
+
 			const succeeded = log.status === "success";
 			const rawDetail = succeeded ? log.output || "" : log.errorMessage || "";
 			const finishedAt = log.finishedAt ?? new Date().toISOString();
-			const text = [
-				`${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
-				`时间：${finishedAt}`,
-				task.model ? `模型：${task.model}` : undefined,
-				rawDetail ? `结果：${rawDetail.slice(0, 1_500)}` : undefined,
-			]
-				.filter(Boolean)
-				.join("\n");
-			// 先截断再转义：避免转义膨胀（*→\*）导致有效内容被额外压缩
-			// Feishu 卡片 markdown 元素支持大段文本，20K 字符远在安全范围内
-			const MAX_RESULT = 20_000;
-			const snippet =
-				rawDetail.length > MAX_RESULT ? `${rawDetail.slice(0, MAX_RESULT)}…[内容过长已截断]` : rawDetail;
-			const escaped = snippet.replace(/\*/g, "\\*").replace(/_/g, "\\_").replace(/`/g, "\\`");
-			const resultContent = rawDetail
-				? `**执行结果：**\n${escaped}`
-				: succeeded
-					? "**执行结果：** （无输出内容）"
-					: "**执行结果：** （无错误信息）";
-			const card = {
-				config: { wide_screen_mode: true },
-				header: {
-					title: {
-						tag: "plain_text" as const,
-						content: `${succeeded ? "✅" : "❌"} 定时任务「${task.name}」${succeeded ? "执行成功" : "执行失败"}`,
-					},
-					template: succeeded ? ("green" as const) : ("red" as const),
-				},
-				elements: [
-					{ tag: "markdown" as const, content: `**任务状态：** ${succeeded ? "成功" : "失败"}` },
-					{ tag: "markdown" as const, content: `**执行时间：** ${finishedAt}` },
-					...(task.model ? [{ tag: "markdown" as const, content: `**执行模型：** ${task.model}` }] : []),
-					{ tag: "markdown" as const, content: resultContent },
-				],
-			};
-			const target = await resolveImNotificationTarget(notification);
+
+			const { text, card } = buildTaskFinishedNotification(task.name, succeeded, finishedAt, task.model, rawDetail);
+
+			const target = await imResolver(notification);
 			if (target === undefined) throw new Error("IM bridge is not available");
 			if (!target) {
 				throw new Error("The selected bot has no private conversation with you yet; message it once in Feishu");
 			}
-			const result = await larkChannelManager.sendToChat(target.channelAppId, target.chatId, {
-				text,
-				card,
-			});
+			const result = await larkChannelManager.sendToChat(target.channelAppId, target.chatId, { text, card });
 			if (!result.success) throw new Error(result.error ?? "Failed to send IM notification");
 		},
+	};
+}
+
+// ── Phase 4: IM channels ──
+
+function bootstrapIM(): void {
+	larkChannelManager = new LarkChannelManager(mainWindow!);
+	larkBridgeService = new LarkBridgeService();
+	larkChannelManager.onConnectionReady = bootstrapLarkBridge;
+	larkChannelManager.onConnectionClosed = detachLarkBridge;
+}
+
+// ── Phase 5: IPC registration + workspace restore ──
+
+async function bootstrapStartupSequence(): Promise<void> {
+	registerIpcHandlers(runtimeManager!, mainWindow!, larkChannelManager!, larkBridgeService!, schedulerService!);
+
+	// 启动即初始化桥接（加载持久化绑定，供定时任务 IM 通知解析私聊会话）
+	bootstrapLarkBridge();
+
+	// 推送项目列表，让侧边栏先渲染
+	const allProjects = runtimeManager!.listProjects();
+	const activeProject = runtimeManager!.getActiveProject();
+	safeSendEvent({
+		type: "project:list" as const,
+		projects: allProjects,
+		activeProjectId: activeProject?.id ?? null,
 	});
-	runtimeManager.setSchedulerService(schedulerService);
 
-	// 1) 加载项目书签（快：只读 projects.json）。
-	await runtimeManager.loadProjects();
+	// 扫描所有项目的会话并逐项目推送 agent:list
+	await runtimeManager!.restoreWorkspace();
 
-	// 对从 workspaces 目录恢复出来的 orphan project，必须在 restoreWorkspace 之前完成，
-	// 否则这些项目在启动时不会被扫描，导致侧边栏只显示项目而没有会话。
-	await runtimeManager.recoverOrphanedProjects().catch((error) => {
-		console.error("[Look] Orphaned project recovery failed:", error);
-	});
-
-	// The app requires the user to select a project folder first
-	// before any agent can be created. Builtin agents are synced below.
-
-	if (mainWindow) {
-		larkChannelManager = new LarkChannelManager(mainWindow);
-		larkBridgeService = new LarkBridgeService();
-		larkChannelManager.onConnectionReady = bootstrapLarkBridge;
-		larkChannelManager.onConnectionClosed = detachLarkBridge;
-
-		// 先注册 IPC handler，让 renderer 的 pull / push 都能被处理，
-		// 避免 restoreWorkspace 推送的 agent:list 在 renderer 还没准备好时丢失。
-		registerIpcHandlers(runtimeManager, mainWindow, larkChannelManager, larkBridgeService, schedulerService);
-
-		// 启动即初始化桥接（加载持久化绑定，供定时任务 IM 通知解析私聊会话），
-		// 不必等待某个 bot 连接就绪。
-		bootstrapLarkBridge();
-
-		// 2) 注册完 handler 后立即推送项目列表，让侧边栏先渲染。
-		const allProjects = runtimeManager.listProjects();
-		const activeProject = runtimeManager.getActiveProject();
-		safeSendEvent({
-			type: "project:list" as const,
-			projects: allProjects,
-			activeProjectId: activeProject?.id ?? null,
-		});
-
-		// 3) 扫描所有项目的会话并逐项目推送 agent:list。
-		await runtimeManager.restoreWorkspace();
-
-		// 初始化用量统计服务：一次性从历史会话中回算每日轮数。
-		initializeUsageService(runtimeManager.listProjects()).catch((error) => {
-			console.error("[Look] Failed to initialize usage service:", error);
-		});
-
-		const restoredProject = runtimeManager.getActiveProject();
-		if (restoredProject) {
-			await promptForProjectTrust(runtimeManager, restoredProject.id, mainWindow);
-		}
-
-		await larkChannelManager.initialize().catch((err) => {
-			console.warn("[Look] Failed to initialize Feishu channel manager:", err);
-		});
-		bootstrapLarkBridge();
-		await schedulerService.initialize().catch((error) => {
-			console.error("[Look] Failed to initialize scheduled tasks:", error);
-		});
-
-		console.log("[Look] IPC handlers registered");
-
-		const bundledResourceRoot = getBundledResourceRoot({
-			isPackaged: app.isPackaged,
-			resourcesPath: process.resourcesPath,
-			developmentRoot: path.resolve(__dirname, "../../.."),
-		});
-
-		// 同步 Look 内置 Skills 到 ~/.look/builtin-skills/ 并注册路径
-		try {
-			const builtinPath = syncLookDefaultSkills(bundledResourceRoot);
-			if (builtinPath) {
-				await runtimeManager.importSkillPaths([builtinPath]);
-			}
-		} catch (err) {
-			console.warn("[Look] 同步内置 Skills 失败:", err);
-		}
-
-		// 同步 Look 内置 Agent 到 ~/.look/agents/marketplace/
-		try {
-			syncLookDefaultAgents(bundledResourceRoot);
-		} catch (err) {
-			console.warn("[Look] 同步内置 Agent 失败:", err);
-		}
-
-		// Auto-updater: check for updates 3s after startup
-		initUpdater(mainWindow);
-		setTimeout(() => {
-			checkForUpdates().catch((err) => console.warn("[Look] Update check failed:", err));
-		}, 3000);
+	const restoredProject = runtimeManager!.getActiveProject();
+	if (restoredProject) {
+		await promptForProjectTrust(runtimeManager!, restoredProject.id, mainWindow!);
 	}
+
+	await larkChannelManager!.initialize().catch((err) => {
+		console.warn("[Look] Failed to initialize Feishu channel manager:", err);
+	});
+	bootstrapLarkBridge();
+	await schedulerService!.initialize().catch((error) => {
+		console.error("[Look] Failed to initialize scheduled tasks:", error);
+	});
+
+	console.log("[Look] IPC handlers registered");
+}
+
+// ── Phase 6: Built-in resources ──
+
+async function syncBuiltinResources(): Promise<void> {
+	const bundledResourceRoot = getBundledResourceRoot({
+		isPackaged: app.isPackaged,
+		resourcesPath: process.resourcesPath,
+		developmentRoot: path.resolve(__dirname, "../../.."),
+	});
+
+	try {
+		const builtinPath = syncLookDefaultSkills(bundledResourceRoot);
+		if (builtinPath) {
+			await runtimeManager!.importSkillPaths([builtinPath]);
+		}
+	} catch (err) {
+		console.warn("[Look] 同步内置 Skills 失败:", err);
+	}
+
+	try {
+		syncLookDefaultAgents(bundledResourceRoot);
+	} catch (err) {
+		console.warn("[Look] 同步内置 Agent 失败:", err);
+	}
+}
+
+// ── Phase 7: Auto-updater ──
+
+function bootstrapUpdater(): void {
+	initUpdater(mainWindow!);
+	setTimeout(() => {
+		checkForUpdates().catch((err) => console.warn("[Look] Update check failed:", err));
+	}, 3000);
 }
 
 app.whenReady().then(async () => {
@@ -516,7 +526,7 @@ app.whenReady().then(async () => {
 	}
 
 	createWindow();
-	await initSessionRuntime();
+	await bootstrapApp();
 
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
@@ -565,30 +575,34 @@ async function disposeApplicationServices(): Promise<void> {
 	if (schedulerService) {
 		try {
 			await schedulerService.dispose();
-		} catch {
-			// best-effort cleanup
+		} catch (err) {
+			console.error("[Look] schedulerService dispose failed:", err);
 		}
+		schedulerService = null;
 	}
 	if (larkBridgeService) {
 		try {
 			larkBridgeService.dispose();
-		} catch {
-			// best-effort cleanup
+		} catch (err) {
+			console.error("[Look] larkBridgeService dispose failed:", err);
 		}
+		larkBridgeService = null;
 	}
 	if (larkChannelManager) {
 		try {
 			await larkChannelManager.dispose();
-		} catch {
-			// best-effort cleanup
+		} catch (err) {
+			console.error("[Look] larkChannelManager dispose failed:", err);
 		}
+		larkChannelManager = null;
 	}
 	if (runtimeManager) {
 		try {
 			await runtimeManager.dispose();
-		} catch {
-			// best-effort cleanup
+		} catch (err) {
+			console.error("[Look] runtimeManager dispose failed:", err);
 		}
+		runtimeManager = null;
 	}
 }
 

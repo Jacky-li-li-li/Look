@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { CustomProvidersStore, type CustomProviderInput } from "../src/main/settings/custom-providers.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type CustomProviderInput, CustomProvidersStore } from "../src/main/settings/custom-providers.js";
 
 function tmpDir(): string {
 	const dir = path.join(os.tmpdir(), `look-avail-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);

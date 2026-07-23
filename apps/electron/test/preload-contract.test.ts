@@ -8,7 +8,7 @@ const read = (path: string) => readFileSync(resolve(appRoot, path), "utf8");
 
 describe("preload contract", () => {
 	it("uses the shared LookAPI contract in both process boundaries", () => {
-		expect(read("src/main/preload.cts")).toContain('import type { LookAPI }');
+		expect(read("src/main/preload.cts")).toContain("import type { LookAPI }");
 		expect(read("src/main/preload.cts")).toContain("const api: LookAPI");
 		expect(read("src/renderer/vite-env.d.ts")).toContain('import type { LookAPI } from "@shared/contracts/ipc"');
 		expect(read("src/renderer/vite-env.d.ts")).not.toContain("interface LookAPI");

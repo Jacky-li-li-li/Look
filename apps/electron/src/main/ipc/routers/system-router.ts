@@ -4,7 +4,7 @@
 
 import { dialog } from "electron";
 import { checkForUpdates, downloadUpdate, quitAndInstall } from "../../system/updater.js";
-import { getUsage } from "../../system/usage.js";
+import { getUsage } from "../../system/usage-service.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "../../system/user-profile.js";
 import { guardObject, guardOptionalBoolean, guardOptionalString, guardPath } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
@@ -55,8 +55,8 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 	register("shell:open-project-folder", async (data) => {
 		const { shell } = await import("electron");
 		const project = data.projectId
-			? ctx.runtimeManager.listProjects().find((item) => item.id === data.projectId)
-			: ctx.runtimeManager.getActiveProject();
+			? ctx.projectService.listProjects().find((item) => item.id === data.projectId)
+			: ctx.projectService.getActiveProject();
 		if (!project?.valid) throw new Error("Project folder is unavailable");
 		await shell.openPath(project.cwd);
 		return { success: true, path: project.cwd };
@@ -98,7 +98,7 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("usage:get", async () => {
-		const usage = await getUsage(ctx.runtimeManager.listProjects());
+		const usage = await getUsage(ctx.projectService.listProjects());
 		return { success: true, usage };
 	});
 };

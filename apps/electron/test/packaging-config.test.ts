@@ -25,7 +25,8 @@ describe("production packaging configuration", () => {
 		expect(builderConfig).toContain("afterSign: scripts/notarize.mjs");
 		expect(stagingScript).toContain("RUNTIME_ROOTS");
 		expect(localMacPackagingScript).toContain("mkdtempSync");
-		expect(localMacPackagingScript).toContain("--config.directories.output=${outputDir}");
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: test assertion with literal shell argument
+expect(localMacPackagingScript).toContain("--config.directories.output=${outputDir}");
 	});
 
 	it("packages only the production staging directory", () => {

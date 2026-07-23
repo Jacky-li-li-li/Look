@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SubAgentRegistry } from "../src/main/session/subagent-registry";
 import type { PendingSubSession } from "../src/main/session/subagent-registry";
+import { SubAgentRegistry } from "../src/main/session/subagent-registry";
 
 function makePending(overrides: Partial<PendingSubSession> = {}): PendingSubSession {
 	return {
@@ -106,14 +106,24 @@ describe("SubAgentRegistry", () => {
 			// Must register parent-child first (abortPendingForParent iterates registered children)
 			registry.register("parent-1", "child-1", "Agent：a");
 			registry.register("parent-1", "child-2", "Agent：b");
-			registry.addPending(makePending({
-				childSessionId: "child-1", parentSessionId: "parent-1",
-				resolve: (r) => { resolved1 = r; },
-			}));
-			registry.addPending(makePending({
-				childSessionId: "child-2", parentSessionId: "parent-1",
-				resolve: (r) => { resolved2 = r; },
-			}));
+			registry.addPending(
+				makePending({
+					childSessionId: "child-1",
+					parentSessionId: "parent-1",
+					resolve: (r) => {
+						resolved1 = r;
+					},
+				}),
+			);
+			registry.addPending(
+				makePending({
+					childSessionId: "child-2",
+					parentSessionId: "parent-1",
+					resolve: (r) => {
+						resolved2 = r;
+					},
+				}),
+			);
 
 			registry.abortPendingForParent("parent-1");
 			expect(registry.hasPending("child-1")).toBe(false);
@@ -126,12 +136,18 @@ describe("SubAgentRegistry", () => {
 			const registry = new SubAgentRegistry();
 			registry.register("parent-1", "child-1", "Agent：a");
 			registry.register("parent-2", "child-2", "Agent：b");
-			registry.addPending(makePending({
-				childSessionId: "child-1", parentSessionId: "parent-1",
-			}));
-			registry.addPending(makePending({
-				childSessionId: "child-2", parentSessionId: "parent-2",
-			}));
+			registry.addPending(
+				makePending({
+					childSessionId: "child-1",
+					parentSessionId: "parent-1",
+				}),
+			);
+			registry.addPending(
+				makePending({
+					childSessionId: "child-2",
+					parentSessionId: "parent-2",
+				}),
+			);
 
 			registry.abortPendingForParent("parent-1");
 			expect(registry.hasPending("child-1")).toBe(false);

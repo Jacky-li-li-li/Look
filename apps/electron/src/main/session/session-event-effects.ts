@@ -4,9 +4,9 @@ import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "..
 import type { AutoTitleService } from "../services/auto-title.js";
 import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
 import { persistTurnDuration } from "../services/turn-metrics.js";
+import { markUsageDirty } from "../system/usage-service.js";
 import type { RuntimeRegistry } from "./runtime-registry.js";
 import type { SubAgentRegistry } from "./subagent-registry.js";
-import type { UsageTrackingService } from "./usage-tracking-service.js";
 
 export interface SessionEventEffectsOptions {
 	runtimeRegistry: Pick<RuntimeRegistry, "get">;
@@ -16,7 +16,7 @@ export interface SessionEventEffectsOptions {
 	subAgentRuntimeService: Pick<SubAgentRuntimeService, "trackSubSessionMessageEnd" | "finalizeSubSession">;
 	subAgentRegistry: Pick<SubAgentRegistry, "hasPending">;
 	autoTitleService: Pick<AutoTitleService, "generateForFirstUserMessage">;
-	usageTrackingService: Pick<UsageTrackingService, "recordMessageEnd" | "dispose">;
+	emitUsageUpdated(): void;
 	getStoredProjectId(sessionId: string): string | undefined;
 	refreshProjectSessions(projectId: string): Promise<unknown>;
 	emitSessionUpdated(sessionId: string): void;
@@ -41,7 +41,8 @@ export class SessionEventEffects {
 	async onMessageEnd(sessionId: string, message: AgentMessage): Promise<void> {
 		if (message.role === "assistant") {
 			this.options.subAgentRuntimeService.trackSubSessionMessageEnd(sessionId, message);
-			this.options.usageTrackingService.recordMessageEnd(message);
+			markUsageDirty();
+			this.options.emitUsageUpdated();
 			return;
 		}
 		if (message.role === "user") {
@@ -60,7 +61,7 @@ export class SessionEventEffects {
 	}
 
 	dispose(): void {
-		this.options.usageTrackingService.dispose();
+		// no-op — usage data is computed on demand
 	}
 
 	private async generateTitle(sessionId: string, userMessage: AgentMessage): Promise<void> {
