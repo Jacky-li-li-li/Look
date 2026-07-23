@@ -88,6 +88,18 @@ export class LarkReplyPresenter {
 		}
 	}
 
+	/**
+	 * Fill a reply from the terminal session snapshot when a provider did not
+	 * emit fine-grained text events. The desktop renderer rebuilds from that
+	 * snapshot, while the IM bridge otherwise only observes streaming deltas.
+	 */
+	applyFinalTextFallback(acc: ReplyAccumulator, text: string): void {
+		if (acc.text.trim() || !text.trim()) return;
+		const contentIndex = acc.textBlocks.size === 0 ? 0 : Math.max(...Array.from(acc.textBlocks.keys())) + 1;
+		acc.textBlocks.set(contentIndex, { contentIndex, text, completed: true });
+		acc.text = this.combineBlocks(acc.textBlocks);
+	}
+
 	applyUiEvent(acc: ReplyAccumulator, event: LookUiEvent): void {
 		switch (event.type) {
 			case "run_status":

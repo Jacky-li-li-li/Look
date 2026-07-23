@@ -244,6 +244,35 @@ export class LarkBridgeService {
 		this.accumulatorAppIds.clear();
 	}
 
+	/**
+	 * Extract the final assistant text from a completed branch snapshot.
+	 *
+	 * Some providers persist a complete assistant message but omit the
+	 * fine-grained message_update text events consumed by the IM stream. Only
+	 * inspect the final message entry: walking farther back could resend an
+	 * answer from an earlier turn when the current turn intentionally has none.
+	 */
+	private extractTerminalAssistantText(entries: readonly unknown[]): string {
+		for (let index = entries.length - 1; index >= 0; index--) {
+			const entry = entries[index];
+			if (!entry || typeof entry !== "object" || (entry as { type?: unknown }).type !== "message") continue;
+			const message = (entry as { message?: unknown }).message;
+			if (!message || typeof message !== "object") return "";
+			const assistant = message as { role?: unknown; content?: unknown };
+			if (assistant.role !== "assistant") return "";
+			if (typeof assistant.content === "string") return assistant.content;
+			if (!Array.isArray(assistant.content)) return "";
+			return assistant.content
+				.flatMap((part) => {
+					if (!part || typeof part !== "object") return [];
+					const textPart = part as { type?: unknown; text?: unknown };
+					return textPart.type === "text" && typeof textPart.text === "string" ? [textPart.text] : [];
+				})
+				.join("\n");
+		}
+		return "";
+	}
+
 	// ============================================================
 	// 消息入口
 	// ============================================================
@@ -759,6 +788,7 @@ export class LarkBridgeService {
 		if (event.type === "session:snapshot" && event.reason === "agent_end") {
 			const acc = this.replyAccumulators.get(event.sessionId);
 			if (acc && !acc.done) {
+				this.replyPresenter.applyFinalTextFallback(acc, this.extractTerminalAssistantText(event.entries));
 				console.log(
 					"[LarkBridgeService] Agent turn ended for session",
 					event.sessionId,

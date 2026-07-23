@@ -561,6 +561,48 @@ describe("LarkChannelManager", () => {
 		expect(larkMocks.channels[0].stream).toHaveBeenCalledTimes(1);
 	});
 
+	it("recovers a persisted final reply when a provider omits text delta events", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock(async (sessionId, emit) => {
+			emit({
+				type: "session:snapshot",
+				sessionId,
+				reason: "agent_end",
+				leafId: null,
+				entries: [
+					{ type: "message", message: { role: "user", content: "hello agent" } },
+					{
+						type: "message",
+						message: {
+							role: "assistant",
+							content: [{ type: "text", text: "persisted final reply" }],
+						},
+					},
+				] as unknown as Extract<MainToRendererEvent, { type: "session:snapshot" }>["entries"],
+				runtime: {
+					thinkingLevel: "off",
+					isStreaming: false,
+					isRetrying: false,
+					isCompacting: false,
+					retryAttempt: 0,
+					steering: [],
+					followUp: [],
+					stats: {} as never,
+				},
+			});
+		});
+		manager.onConnectionReady = () => bridge.init(runtime as never, manager);
+
+		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
+		await larkMocks.channels[0].emit("message", sampleMessage("hello agent"));
+		await flushAsync();
+
+		const controller = larkMocks.channels[0].streamControllers[0];
+		expect(JSON.stringify(controller.current)).toContain("persisted final reply");
+		expect(JSON.stringify(controller.current)).not.toContain("Agent 未返回文本回复");
+	});
+
 	it("reuses the /new session when the next chat message arrives before binding creation finishes", async () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
