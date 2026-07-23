@@ -11,7 +11,7 @@
 // Or via npm postinstall.
 // ============================================================
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 

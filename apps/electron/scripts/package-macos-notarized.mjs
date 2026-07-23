@@ -18,17 +18,9 @@ function run(command, args, options = {}) {
 }
 
 try {
-	run(
-		"npx",
-		[
-			"electron-builder",
-			"--mac",
-			"--publish",
-			"never",
-			`--config.directories.output=${outputDir}`,
-		],
-		{ env: { ...process.env, LOOK_NOTARY_PROFILE: profile } },
-	);
+	run("npx", ["electron-builder", "--mac", "--publish", "never", `--config.directories.output=${outputDir}`], {
+		env: { ...process.env, LOOK_NOTARY_PROFILE: profile },
+	});
 
 	const dmg = readdirSync(outputDir).find((file) => file.endsWith(".dmg"));
 	if (!dmg) throw new Error(`No DMG was produced in ${outputDir}`);

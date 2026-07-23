@@ -354,7 +354,11 @@ describe("UI event canonical store (session:ui-event)", () => {
 
 describe("deriveSessionPhase", () => {
 	it("maps uiPhase streaming to thinking, and working when tools are running", () => {
-		expect(deriveSessionPhase({ uiPhase: "streaming", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("thinking");
+		expect(
+			deriveSessionPhase({ uiPhase: "streaming", uiTools: {}, runtime: null } as unknown as Parameters<
+				typeof deriveSessionPhase
+			>[0]),
+		).toBe("thinking");
 		expect(
 			deriveSessionPhase({
 				uiPhase: "streaming",
@@ -365,9 +369,21 @@ describe("deriveSessionPhase", () => {
 	});
 
 	it("maps uiPhase working/retrying/compacting directly", () => {
-		expect(deriveSessionPhase({ uiPhase: "working", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("working");
-		expect(deriveSessionPhase({ uiPhase: "retrying", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("retrying");
-		expect(deriveSessionPhase({ uiPhase: "compacting", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("compacting");
+		expect(
+			deriveSessionPhase({ uiPhase: "working", uiTools: {}, runtime: null } as unknown as Parameters<
+				typeof deriveSessionPhase
+			>[0]),
+		).toBe("working");
+		expect(
+			deriveSessionPhase({ uiPhase: "retrying", uiTools: {}, runtime: null } as unknown as Parameters<
+				typeof deriveSessionPhase
+			>[0]),
+		).toBe("retrying");
+		expect(
+			deriveSessionPhase({ uiPhase: "compacting", uiTools: {}, runtime: null } as unknown as Parameters<
+				typeof deriveSessionPhase
+			>[0]),
+		).toBe("compacting");
 	});
 
 	it("falls back to runtime flags when uiPhase is idle", () => {
@@ -395,7 +411,11 @@ describe("deriveSessionPhase", () => {
 	});
 
 	it("returns idle by default", () => {
-		expect(deriveSessionPhase({ uiPhase: "idle", uiTools: {}, runtime: null } as unknown as Parameters<typeof deriveSessionPhase>[0])).toBe("idle");
+		expect(
+			deriveSessionPhase({ uiPhase: "idle", uiTools: {}, runtime: null } as unknown as Parameters<
+				typeof deriveSessionPhase
+			>[0]),
+		).toBe("idle");
 		expect(deriveSessionPhase(null)).toBe("idle");
 	});
 });

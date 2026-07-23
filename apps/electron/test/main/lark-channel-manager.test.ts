@@ -70,22 +70,29 @@ const larkMocks = vi.hoisted(() => {
 			streamControllers,
 			connect: vi.fn().mockResolvedValue(undefined),
 			disconnect: vi.fn().mockResolvedValue(undefined),
-			on: vi.fn().mockImplementation((nameOrHandlers: string | Record<string, (...args: unknown[]) => unknown>, handler?: (...args: unknown[]) => unknown) => {
-				if (typeof nameOrHandlers === "string") {
-					handlers[nameOrHandlers] = handler;
-					return () => {
-						if (handlers[nameOrHandlers] === handler) delete handlers[nameOrHandlers];
-					};
-				}
-				for (const [name, fn] of Object.entries(nameOrHandlers)) {
-					if (fn) handlers[name] = fn;
-				}
-				return () => {
-					for (const [name, fn] of Object.entries(nameOrHandlers)) {
-						if (handlers[name] === fn) delete handlers[name];
-					}
-				};
-			}),
+			on: vi
+				.fn()
+				.mockImplementation(
+					(
+						nameOrHandlers: string | Record<string, (...args: unknown[]) => unknown>,
+						handler?: (...args: unknown[]) => unknown,
+					) => {
+						if (typeof nameOrHandlers === "string") {
+							handlers[nameOrHandlers] = handler;
+							return () => {
+								if (handlers[nameOrHandlers] === handler) delete handlers[nameOrHandlers];
+							};
+						}
+						for (const [name, fn] of Object.entries(nameOrHandlers)) {
+							if (fn) handlers[name] = fn;
+						}
+						return () => {
+							for (const [name, fn] of Object.entries(nameOrHandlers)) {
+								if (handlers[name] === fn) delete handlers[name];
+							}
+						};
+					},
+				),
 			send: vi.fn().mockResolvedValue({ messageId: "sent_message" }),
 			stream: vi.fn().mockImplementation(async (_to: string, input: Record<string, unknown>) => {
 				const controller = {
@@ -127,10 +134,10 @@ vi.mock("@larksuiteoapi/node-sdk", () => ({
 	registerApp: larkMocks.registerApp,
 }));
 
-import type { IImAgentHost } from "../../src/main/core/contracts.js";
 import type { RegisterAppOptions } from "@larksuiteoapi/node-sdk";
 import type { MainToRendererEvent } from "@shared/types.js";
 import { BrowserWindow } from "electron";
+import type { IImAgentHost } from "../../src/main/core/contracts.js";
 import { LarkBridgeService } from "../../src/main/im/lark-bridge-service.js";
 import { LarkChannelManager } from "../../src/main/im/lark-channel-manager.js";
 
@@ -698,7 +705,9 @@ describe("LarkChannelManager", () => {
 		await flushAsync();
 
 		const controller = larkMocks.channels[0].streamControllers[0];
-		const updatedCards = (controller.update.mock.calls as Array<Array<Record<string, unknown>>>).map((call) => call[0]);
+		const updatedCards = (controller.update.mock.calls as Array<Array<Record<string, unknown>>>).map(
+			(call) => call[0],
+		);
 		const panels = updatedCards.flatMap(findCollapsiblePanels);
 		expect(
 			panels.some((panel) => panel.header?.title?.content === "工具 · bash · 运行中" && panel.expanded === true),
@@ -909,7 +918,9 @@ describe("LarkChannelManager", () => {
 
 		expect(result.success).toBe(true);
 		// A new ad-hoc Client was constructed from the stored credentials.
-		const clientCalls = (larkMocks.Client.mock.calls as Array<Array<Record<string, unknown>>>).filter((call) => (call[0] as Record<string, unknown>)?.appId === "cli_sender");
+		const clientCalls = (larkMocks.Client.mock.calls as Array<Array<Record<string, unknown>>>).filter(
+			(call) => (call[0] as Record<string, unknown>)?.appId === "cli_sender",
+		);
 		expect(clientCalls.length).toBeGreaterThan(0);
 		expect(clientCalls[0][0].domain).toBe(larkMocks.Domain.Lark);
 		const adHocClient = manager.getClient("cli_sender") as ReturnType<typeof larkMocks.Client>;

@@ -29,6 +29,7 @@ import {
 	resetLegacySessionsOnce,
 } from "@look/shared/look-storage";
 import { AgentDefinitionService } from "../../agents/definition-service.js";
+import type { RuntimeManagerCompositionHost } from "../../core/contracts.js";
 import { createMcpExtensionFactory } from "../../extensions/mcp-extension.js";
 import { createModelListExtensionFactory } from "../../extensions/model-extension.js";
 import { createPermissionExtensionFactory } from "../../extensions/permission-extension.js";
@@ -56,7 +57,6 @@ import { SessionEventProcessor } from "../event-processor.js";
 import { ProjectRuntimeService } from "../project-runtime-service.js";
 import { SessionRuntimeFactory } from "../runtime-factory.js";
 import { RuntimeLifecycleCoordinator } from "../runtime-lifecycle-coordinator.js";
-import type { RuntimeManagerCompositionHost } from "../runtime-manager-composition.js";
 import { RuntimeRegistry } from "../runtime-registry.js";
 import { SessionScopeRegistry } from "../scope-registry.js";
 import { SessionCatalog } from "../session-catalog.js";

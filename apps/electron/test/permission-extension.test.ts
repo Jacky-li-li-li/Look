@@ -15,7 +15,9 @@ describe("permission extension", () => {
 	});
 
 	it("delegates intercepted calls to the runtime permission handler", async () => {
-		let listener: ((event: Record<string, unknown>, context: Record<string, unknown>) => Record<string, unknown>) | undefined;
+		let listener:
+			| ((event: Record<string, unknown>, context: Record<string, unknown>) => Record<string, unknown>)
+			| undefined;
 		const handler = vi.fn().mockResolvedValue({ block: true, reason: "approval required" });
 		const factory = createPermissionExtensionFactory(handler);
 		factory({

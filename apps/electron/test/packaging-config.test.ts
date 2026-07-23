@@ -26,7 +26,7 @@ describe("production packaging configuration", () => {
 		expect(stagingScript).toContain("RUNTIME_ROOTS");
 		expect(localMacPackagingScript).toContain("mkdtempSync");
 		// biome-ignore lint/suspicious/noTemplateCurlyInString: test assertion with literal shell argument
-expect(localMacPackagingScript).toContain("--config.directories.output=${outputDir}");
+		expect(localMacPackagingScript).toContain("--config.directories.output=${outputDir}");
 	});
 
 	it("packages only the production staging directory", () => {

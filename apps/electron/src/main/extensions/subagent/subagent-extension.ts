@@ -123,7 +123,7 @@ export async function createSubagentExtensionFactory(
 					});
 
 				const makeProgress =
-					(parentSessionId: string): ((p: SubagentProgress) => void) =>
+					(_parentSessionId: string): ((p: SubagentProgress) => void) =>
 					(p) => {
 						onUpdate?.({
 							content: [

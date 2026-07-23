@@ -9,6 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
 import { syncLookDefaultAgents } from "./agents/defaults.js";
+import { HeadlessAgentRunner } from "./execution/headless-agent-runner.js";
 import { LarkBridgeService } from "./im/lark-bridge-service.js";
 import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
@@ -365,7 +366,7 @@ function createSchedulerService(): SchedulerService {
 	return new SchedulerService({
 		store: new ScheduledTaskStore(getScheduledTasksPath()),
 		lock: new FileTaskLock(getScheduledTaskLocksDir(), schedulerOwnerId),
-		executor: new AgentScheduledTaskExecutor(runtimeManager!),
+		executor: new AgentScheduledTaskExecutor(new HeadlessAgentRunner(runtimeManager!)),
 		ownerId: schedulerOwnerId,
 		getProjectInfo: (projectId) => runtimeManager!.getProjectInfo(projectId),
 		resolveNotificationTarget: createImNotificationResolver(),

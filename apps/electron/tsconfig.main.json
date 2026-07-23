@@ -16,7 +16,9 @@
     "jsx": "preserve",
     "incremental": true,
     "tsBuildInfoFile": "dist/.tsbuildinfo",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": ["src/main/**/*.ts", "src/main/**/*.cts"],
   "exclude": ["node_modules", "dist", "src/renderer"]

@@ -39,7 +39,10 @@ describe("session permission state", () => {
 		const handler = svc.createToolCallHandler("/tmp/project");
 		const promise = handler({ toolName: "write", input: { path: "file.txt" } }, context("session-a"));
 		// Respond after the permission:ask event has been emitted
-		const askEvent = events.find((e) => (e as Record<string, unknown>)?.type === "permission:ask") as Record<string, { requestId: string }>;
+		const askEvent = events.find((e) => (e as Record<string, unknown>)?.type === "permission:ask") as Record<
+			string,
+			{ requestId: string }
+		>;
 		svc.handleResponse({ requestId: askEvent.event.requestId, action: "allow" });
 		await expect(promise).resolves.toEqual({});
 	});
@@ -51,9 +54,10 @@ describe("session permission state", () => {
 
 		// Session A: first call triggers permission ask
 		const first = handler({ toolName: "write", input: { path: "file.txt" } }, context("session-a"));
-		const firstAsk = events.find(
-			(ev) => (ev as Record<string, unknown>)?.type === "permission:ask",
-		) as Record<string, { requestId: string; agentId: string }>;
+		const firstAsk = events.find((ev) => (ev as Record<string, unknown>)?.type === "permission:ask") as Record<
+			string,
+			{ requestId: string; agentId: string }
+		>;
 		expect(firstAsk.agentId).toBe("session-a");
 		svc.handleResponse({ requestId: firstAsk.event.requestId, action: "allow_always" });
 		await expect(first).resolves.toEqual({});

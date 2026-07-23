@@ -271,7 +271,9 @@ describe("buildTimeline", () => {
 		expect(timeline[0]?.id).toBe("pending-user");
 		expect(timeline[0]?.isLive).toBe(false);
 		expect(timeline[0]?.message?.role).toBe("user");
-		expect((timeline[0]?.message as unknown as { content: { text: string }[] })?.content[0]?.text).toBe("hello world");
+		expect((timeline[0]?.message as unknown as { content: { text: string }[] })?.content[0]?.text).toBe(
+			"hello world",
+		);
 		expect(timeline[1]?.id).toBe("streaming-live");
 		expect(timeline[1]?.isLive).toBe(true);
 	});

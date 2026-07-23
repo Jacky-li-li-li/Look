@@ -1,7 +1,39 @@
 import type { ScheduledTask } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
+import type { IHeadlessExecutionHost } from "../../src/main/core/contracts.js";
+import { HeadlessAgentRunner } from "../../src/main/execution/headless-agent-runner.js";
 import { AgentScheduledTaskExecutor, renderScheduledPrompt } from "../../src/main/scheduler/agent-task-executor.js";
-import type { SessionRuntimeManager } from "../../src/main/session/runtime-manager.js";
+
+function _makeRuntimeManager(sendMessageFn: () => void) {
+	type TestEvent = { type: string; message?: unknown; willRetry?: boolean; success?: boolean };
+	let subscriber: ((event: TestEvent) => void) | undefined;
+	const rm = {
+		createAgent: vi.fn(async () => "session-1"),
+		getProjectInfo: vi.fn(() => ({
+			id: "project-1",
+			name: "Project",
+			cwd: "/tmp/project",
+			createdAt: 0,
+			valid: true,
+		})),
+		setModel: vi.fn(async () => {}),
+		setInternalPermissionMode: vi.fn(async () => {}),
+		getSession: vi.fn(() => ({
+			subscribe: (callback: (event: TestEvent) => void) => {
+				subscriber = callback;
+				return vi.fn();
+			},
+		})),
+		sendMessage: vi.fn(async (_sessionId: string, prompt: string) => {
+			sendMessageFn();
+		}),
+		abortAgent: vi.fn(async () => {}),
+		disposeRuntime: vi.fn(async () => {}),
+	} as unknown as IHeadlessExecutionHost;
+	// Expose subscriber so tests can trigger agent events
+	(rm as { _subscriber?: (event: TestEvent) => void })._subscriber = subscriber as (event: TestEvent) => void;
+	return rm as IHeadlessExecutionHost & { _subscriber: (event: TestEvent) => void };
+}
 
 describe("AgentScheduledTaskExecutor", () => {
 	it("renders parameters and returns the final assistant output from a background session", async () => {
@@ -9,7 +41,13 @@ describe("AgentScheduledTaskExecutor", () => {
 		let subscriber: ((event: TestEvent) => void) | undefined;
 		const runtimeManager = {
 			createAgent: vi.fn(async () => "session-1"),
-			getProjectInfo: vi.fn(() => ({ id: "project-1", name: "Project", cwd: "/tmp/project", valid: true })),
+			getProjectInfo: vi.fn(() => ({
+				id: "project-1",
+				name: "Project",
+				cwd: "/tmp/project",
+				createdAt: 0,
+				valid: true,
+			})),
 			setModel: vi.fn(async () => {}),
 			setInternalPermissionMode: vi.fn(async () => {}),
 			getSession: vi.fn(() => ({
@@ -31,10 +69,9 @@ describe("AgentScheduledTaskExecutor", () => {
 				subscriber?.({ type: "agent_end", willRetry: false });
 			}),
 			abortAgent: vi.fn(async () => {}),
-			destroyAgent: vi.fn(async () => {}),
 			disposeRuntime: vi.fn(async () => {}),
-		} as unknown as SessionRuntimeManager;
-		const executor = new AgentScheduledTaskExecutor(runtimeManager);
+		} as unknown as IHeadlessExecutionHost;
+		const executor = new AgentScheduledTaskExecutor(new HeadlessAgentRunner(runtimeManager));
 		const task: ScheduledTask = {
 			id: "task-1",
 			name: "Summary",
@@ -77,7 +114,13 @@ describe("AgentScheduledTaskExecutor", () => {
 		let subscriber: ((event: TestEvent) => void) | undefined;
 		const runtimeManager = {
 			createAgent: vi.fn(async () => "session-1"),
-			getProjectInfo: vi.fn(() => ({ id: "project-1", name: "Project", cwd: "/tmp/project", valid: true })),
+			getProjectInfo: vi.fn(() => ({
+				id: "project-1",
+				name: "Project",
+				cwd: "/tmp/project",
+				createdAt: 0,
+				valid: true,
+			})),
 			setModel: vi.fn(async () => {}),
 			setInternalPermissionMode: vi.fn(async () => {}),
 			getSession: vi.fn(() => ({
@@ -94,10 +137,9 @@ describe("AgentScheduledTaskExecutor", () => {
 				subscriber?.({ type: "agent_end", willRetry: false });
 			}),
 			abortAgent: vi.fn(async () => {}),
-			destroyAgent: vi.fn(async () => {}),
 			disposeRuntime: vi.fn(async () => {}),
-		} as unknown as SessionRuntimeManager;
-		const executor = new AgentScheduledTaskExecutor(runtimeManager);
+		} as unknown as IHeadlessExecutionHost;
+		const executor = new AgentScheduledTaskExecutor(new HeadlessAgentRunner(runtimeManager));
 		const task: ScheduledTask = {
 			id: "task-1",
 			name: "Summary",
@@ -114,7 +156,6 @@ describe("AgentScheduledTaskExecutor", () => {
 
 		await executor.execute(task, { runId: "run-1", attempt: 1, signal: new AbortController().signal });
 		expect(runtimeManager.disposeRuntime).toHaveBeenCalledWith("session-1", true);
-		expect(runtimeManager.destroyAgent).not.toHaveBeenCalled();
 	});
 
 	it("resets terminal error when a retry succeeds", async () => {
@@ -122,7 +163,13 @@ describe("AgentScheduledTaskExecutor", () => {
 		let subscriber: ((event: TestEvent) => void) | undefined;
 		const runtimeManager = {
 			createAgent: vi.fn(async () => "session-1"),
-			getProjectInfo: vi.fn(() => ({ id: "project-1", name: "Project", cwd: "/tmp/project", valid: true })),
+			getProjectInfo: vi.fn(() => ({
+				id: "project-1",
+				name: "Project",
+				cwd: "/tmp/project",
+				createdAt: 0,
+				valid: true,
+			})),
 			setModel: vi.fn(async () => {}),
 			setInternalPermissionMode: vi.fn(async () => {}),
 			getSession: vi.fn(() => ({
@@ -144,10 +191,9 @@ describe("AgentScheduledTaskExecutor", () => {
 				subscriber?.({ type: "agent_end", willRetry: false });
 			}),
 			abortAgent: vi.fn(async () => {}),
-			destroyAgent: vi.fn(async () => {}),
 			disposeRuntime: vi.fn(async () => {}),
-		} as unknown as SessionRuntimeManager;
-		const executor = new AgentScheduledTaskExecutor(runtimeManager);
+		} as unknown as IHeadlessExecutionHost;
+		const executor = new AgentScheduledTaskExecutor(new HeadlessAgentRunner(runtimeManager));
 		const task: ScheduledTask = {
 			id: "task-1",
 			name: "Summary",

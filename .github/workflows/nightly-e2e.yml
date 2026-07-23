@@ -1,0 +1,43 @@
+# Nightly LLM E2E tests
+#
+# Runs the LLM-backed end-to-end tests (subagent creation via real LLM calls).
+# These consume real API tokens and are gated by LOOK_E2E_LLM=1.
+#
+# Secrets required:
+#   OPENAI_API_KEY — provider key used by the tests
+#
+# Schedule: daily at 06:00 UTC
+
+name: Nightly E2E (LLM)
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  e2e-llm:
+    name: LLM E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up mock look home
+        run: mkdir -p /tmp/look-e2e-home && echo '{"version":1,"projects":[]}' > /tmp/look-e2e-home/projects.json
+
+      - name: Run LLM E2E tests
+        env:
+          LOOK_E2E_LLM: "1"
+          LOOK_HOME: /tmp/look-e2e-home
+        run: npm run test:e2e:llm --workspace=@look/electron

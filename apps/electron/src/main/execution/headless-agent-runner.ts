@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { PermissionMode } from "@look/shared/types";
-import type { SessionRuntimeManager } from "../session/runtime-manager.js";
+import type { IHeadlessExecutionHost } from "../core/contracts.js";
 
 export type HeadlessRunSource = "scheduled-task" | "manual-task-run" | "manual-task-test";
 export type ExecutionProfile = "unattended-scheduled-task" | "interactive-test";
@@ -40,7 +40,7 @@ function permissionModeFor(profile: ExecutionProfile): PermissionMode {
 
 /** Runs an independent pi session while preserving its JSONL history for later inspection. */
 export class HeadlessAgentRunner {
-	constructor(private readonly runtimeManager: SessionRuntimeManager) {}
+	constructor(private readonly runtimeManager: IHeadlessExecutionHost) {}
 
 	async run(input: HeadlessAgentRunInput): Promise<HeadlessAgentRunResult> {
 		if (input.signal.aborted) throw input.signal.reason ?? new Error("Headless agent run aborted");

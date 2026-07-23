@@ -208,3 +208,36 @@ export interface IImAgentHost {
 	onEvent(callback: import("@look/shared/types").EventCallback): () => void;
 	readonly modelRegistry: import("@earendil-works/pi-coding-agent").ModelRegistry;
 }
+
+/**
+ * Host contract for headless agent execution (scheduled tasks, manual runs).
+ * Extracted from SessionRuntimeManager so headless-agent-runner doesn't
+ * depend on the concrete class.
+ */
+export interface IHeadlessExecutionHost {
+	getProjectInfo(projectId: string): import("@look/shared/types").ProjectInfo | null;
+	createAgent(
+		opts?:
+			| {
+					name?: string;
+					projectId?: string;
+					imProvider?: import("@look/shared/types").ImSessionProvider;
+					background?: boolean;
+			  }
+			| string,
+	): Promise<string>;
+	setModel(sessionId: string, modelKey: string): Promise<void>;
+	setInternalPermissionMode(sessionId: string, mode: import("@look/shared/types").PermissionMode): void;
+	getSession(sessionId: string): import("@earendil-works/pi-coding-agent").AgentSession | undefined;
+	abortAgent(sessionId: string): Promise<void>;
+	sendMessage(sessionId: string, text: string, images?: import("@earendil-works/pi-ai").ImageContent[]): Promise<void>;
+	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
+}
+
+/**
+ * Narrow host contract for CompositionBuilder, much smaller than
+ * SessionRuntimeManager's full public API.
+ */
+export interface RuntimeManagerCompositionHost extends IRuntimeLifecycle, ISessionEventHost {
+	listProjects(): import("@look/shared/types").ProjectInfo[];
+}

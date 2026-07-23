@@ -12,10 +12,7 @@ import { join } from "node:path";
 async function defaultFunction(context) {
 	const appDir = context.packager?.info?.appDir ?? context.appDir ?? process.cwd();
 	console.log(`  • Cleaning xattrs in staged app directory: ${appDir}`);
-	const dirs = [
-		join(appDir, "dist"),
-		join(appDir, "node_modules/@earendil-works/pi-coding-agent"),
-	];
+	const dirs = [join(appDir, "dist"), join(appDir, "node_modules/@earendil-works/pi-coding-agent")];
 
 	for (const dir of dirs) {
 		if (!existsSync(dir)) continue;

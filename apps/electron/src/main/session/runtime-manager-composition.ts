@@ -8,26 +8,11 @@
 // Use `RuntimeManagerComposition.create()` instead of `new`.
 // ============================================================
 
-import type { ProjectInfo } from "@look/shared/types";
-import type { IRuntimeLifecycle, ISessionEventHost } from "../core/contracts.js";
+import type { RuntimeManagerCompositionHost } from "../core/contracts.js";
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 import { CompositionBuilder } from "./composition/builder.js";
-
-/**
- * Host interface that RuntimeManagerComposition depends on.
- *
- * This is an explicit Dependency Inversion: the composition depends on this
- * host interface (abstraction), not on the concrete SessionRuntimeManager
- * class. SRT implements this interface and passes itself as the host.
- *
- * Composition never calls back to SRT directly — it always goes through the
- * narrow host contract, which is much smaller than SRT's full public API.
- */
-export interface RuntimeManagerCompositionHost extends IRuntimeLifecycle, ISessionEventHost {
-	listProjects(): ProjectInfo[];
-}
 
 /**
  * Immutable holder of all domain services for the session runtime.

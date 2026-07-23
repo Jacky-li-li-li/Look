@@ -2,8 +2,8 @@
 // MCP Extension — 集成测试
 // ============================================================
 
+import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { createMcpExtensionFactory } from "../src/main/extensions/mcp-extension.js";
 import type { MCPManager } from "../src/main/mcp/manager.js";
 
@@ -205,11 +205,17 @@ describe("createMcpExtensionFactory", () => {
 		const connectTool = api.tools.find((t) => t.name === "mcp_connect");
 		expect(connectTool).toBeDefined();
 
-		const result = connectTool!.execute("call-1", {
-			name: "new-server",
-			command: "npx",
-			args: "-y @modelcontextprotocol/server-filesystem /tmp",
-		}, undefined, undefined, {});
+		const result = connectTool!.execute(
+			"call-1",
+			{
+				name: "new-server",
+				command: "npx",
+				args: "-y @modelcontextprotocol/server-filesystem /tmp",
+			},
+			undefined,
+			undefined,
+			{},
+		);
 		await expect(result).rejects.toThrow("add failed");
 	});
 });

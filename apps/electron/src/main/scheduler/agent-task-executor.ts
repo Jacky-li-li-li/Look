@@ -1,12 +1,10 @@
 import type { ScheduledTask } from "@look/shared/types";
-import {
-	type ExecutionProfile,
+import type {
+	ExecutionProfile,
 	HeadlessAgentRunner,
-	type HeadlessAgentRunResult,
-	type HeadlessRunSource,
+	HeadlessAgentRunResult,
+	HeadlessRunSource,
 } from "../execution/headless-agent-runner.js";
-import type { SessionRuntimeManager } from "../session/runtime-manager.js";
-
 export interface ScheduledTaskExecutionContext {
 	runId: string;
 	attempt: number;
@@ -27,11 +25,7 @@ export function renderScheduledPrompt(prompt: string, parameters: Record<string,
 
 /** Adapts durable scheduler tasks to the shared headless Agent execution boundary. */
 export class AgentScheduledTaskExecutor implements ScheduledTaskExecutor {
-	private readonly runner: HeadlessAgentRunner;
-
-	constructor(runtimeManager: SessionRuntimeManager) {
-		this.runner = new HeadlessAgentRunner(runtimeManager);
-	}
+	constructor(private readonly runner: HeadlessAgentRunner) {}
 
 	execute(task: ScheduledTask, context: ScheduledTaskExecutionContext): Promise<ScheduledTaskExecutionResult> {
 		return this.runner.run({

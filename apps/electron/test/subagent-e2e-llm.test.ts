@@ -6,6 +6,9 @@
 // 验证子会话被真实创建并落盘到 subsessions/ 目录。
 //
 // 会消耗真实 LLM token；运行前确保已配置 provider API Key。
+//
+// 通过 `npm run test:e2e:llm --workspace=@look/electron` 运行。
+// CI 中由 .github/workflows/nightly-e2e.yml 每日定时触发。
 // ============================================================
 
 import { existsSync, readdirSync } from "node:fs";

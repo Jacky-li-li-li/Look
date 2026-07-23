@@ -562,7 +562,7 @@ function sortRecord(record: Record<string, string> | undefined): Record<string, 
 }
 
 /** 自动发现兼容的 MCP 配置（Claude Code、Cursor、VS Code 等） */
-async function discoverCompatibleConfigs(cwd?: string): Promise<McpServerConfig[]> {
+async function discoverCompatibleConfigs(_cwd?: string): Promise<McpServerConfig[]> {
 	const home = homedir();
 	const sources = [
 		{ file: path.join(home, ".claude", "mcp.json"), label: "Claude Code" },

@@ -278,7 +278,7 @@ export class PromptStore {
 	}
 
 	/** 获取指定项目最终使用的 prompt 内容（项目级优先，回退全局） */
-	getEffectivePromptContent(projectId: string, projectCwd?: string): string {
+	getEffectivePromptContent(projectId: string, _projectCwd?: string): string {
 		const proj = this.data.projectOverrides[projectId];
 		if (proj?.activePromptId && proj.activePromptId !== FOLLOW_GLOBAL) {
 			const p = proj.prompts.find((pp) => pp.id === proj.activePromptId);

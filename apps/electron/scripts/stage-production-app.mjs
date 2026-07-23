@@ -3,15 +3,7 @@
 // The repository's root node_modules remains a development environment and is
 // never handed to the packager.
 
-import {
-	cpSync,
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,9 +28,7 @@ const RUNTIME_ROOTS = [
 ];
 
 function packagePath(nodeModules, packageName) {
-	return packageName.startsWith("@")
-		? join(nodeModules, ...packageName.split("/"))
-		: join(nodeModules, packageName);
+	return packageName.startsWith("@") ? join(nodeModules, ...packageName.split("/")) : join(nodeModules, packageName);
 }
 
 function readManifest(dir) {
@@ -142,8 +132,7 @@ function copyDependencyClosure() {
 				const resolved = findPackage(dependency.name, source);
 				if (nextAncestors.has(resolved)) continue;
 				const topLevelSource = topLevelSources.get(dependency.name);
-				const canReuseTopLevel =
-					!topLevelSource || packageVersion(topLevelSource) === packageVersion(resolved);
+				const canReuseTopLevel = !topLevelSource || packageVersion(topLevelSource) === packageVersion(resolved);
 				if (!topLevelSource && canReuseTopLevel) topLevelSources.set(dependency.name, resolved);
 				const destination = canReuseTopLevel ? stagingNodeModules : join(target, "node_modules");
 				copyPackage(dependency.name, source, destination, nextAncestors);
@@ -260,7 +249,9 @@ export function stageProductionApp() {
 		packages: closure.packages,
 	};
 	writeFileSync(join(stagingRoot, "runtime-dependencies.json"), `${JSON.stringify(summary, null, "\t")}\n`);
-	console.log(`[Look] Staged ${summary.packageCount} runtime packages and ${summary.fileCount} files in ${stagingRoot}`);
+	console.log(
+		`[Look] Staged ${summary.packageCount} runtime packages and ${summary.fileCount} files in ${stagingRoot}`,
+	);
 	return summary;
 }
 

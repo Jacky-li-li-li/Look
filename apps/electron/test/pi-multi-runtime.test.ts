@@ -23,7 +23,15 @@ describe("pi multi-runtime host constraints", () => {
 			mkdtemp(join(tmpdir(), "look-runtime-b-")),
 		]);
 		cleanup.push(...roots);
-		const factory = async ({ cwd, sessionManager, sessionStartEvent }: { cwd: string; sessionManager: SessionManager; sessionStartEvent: unknown }) => {
+		const factory = async ({
+			cwd,
+			sessionManager,
+			sessionStartEvent,
+		}: {
+			cwd: string;
+			sessionManager: SessionManager;
+			sessionStartEvent: unknown;
+		}) => {
 			const services = await createAgentSessionServices({ cwd, agentDir: cwd });
 			return {
 				...(await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent })),

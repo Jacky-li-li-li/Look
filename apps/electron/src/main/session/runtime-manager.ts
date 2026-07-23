@@ -600,11 +600,4 @@ export class SessionRuntimeManager
 	public emit(event: MainToRendererEvent): void {
 		this.composition.eventBus.emit(event);
 	}
-
-	private emitError(error: unknown, sessionId?: string): void {
-		this.composition.sessionNotifier.emitError(
-			error,
-			sessionId ?? this.composition.activeSessionSelection.currentId ?? undefined,
-		);
-	}
 }

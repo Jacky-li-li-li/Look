@@ -27,7 +27,6 @@ export interface UsageData {
 // ── Internal cache ──
 
 let cachedData: UsageData | null = null;
-let _lastBackfillTime = 0;
 let pendingRefresh: Promise<UsageData> | null = null;
 
 /** Format a timestamp as a local-calendar date key: YYYY-MM-DD. */
@@ -174,13 +173,11 @@ export async function getUsage(projects: ProjectInfo[]): Promise<UsageData> {
 		pendingRefresh = null;
 	});
 	cachedData = await pendingRefresh;
-	_lastBackfillTime = Date.now();
 	return cachedData;
 }
 
 /** Reset internal state for unit tests. */
 export function resetUsageServiceForTesting(): void {
 	cachedData = null;
-	_lastBackfillTime = 0;
 	pendingRefresh = null;
 }
