@@ -257,6 +257,24 @@ export class CustomProvidersStore {
 		return true;
 	}
 
+	// ── Native provider registration (pi 0.81+) ──
+
+	/**
+	 * Register a native pi-ai Provider with full support for `streamSimple`,
+	 * `oauth`, and `refreshModels`. Delegates to `ModelRuntime.registerNativeProvider()`.
+	 *
+	 * This is used by extensions (via `ExtensionAPI.registerProvider()`) and by
+	 * Look-internal code that needs custom streaming or OAuth support.
+	 *
+	 * The `Provider` type is defined in `@earendil-works/pi-ai`. Since it is not
+	 * exported from the package entry point, use the type inferred from
+	 * `ModelRuntime.registerNativeProvider` or the pi-ai subpath
+	 * `@earendil-works/pi-ai/dist/models.d.ts`.
+	 */
+	registerNativeProvider(provider: Parameters<ModelRuntime["registerNativeProvider"]>[0]): void {
+		this.registry.registerNativeProvider(provider);
+	}
+
 	// ── Internals ──
 
 	private applyToRegistry(p: CustomProviderInput): void {

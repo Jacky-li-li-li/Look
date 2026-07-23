@@ -414,6 +414,16 @@ export class RuntimeLifecycleCoordinator {
 		return errors;
 	}
 
+	/**
+	 * Bind all registered extensions to the session.
+	 *
+	 * Each extension receives an `ExtensionAPI` object that includes:
+	 * - `on()` — subscribe to session lifecycle events
+	 * - `registerTool()` — register tools the LLM can call
+	 * - `registerProvider(provider)` / `registerProvider(name, config)` — register
+	 *   custom model providers with full native support (streamSimple, oauth,
+	 *   refreshModels). See pi docs/custom-provider.md for details.
+	 */
 	private bindExtensions(session: AgentSession): Promise<void> {
 		return session.bindExtensions({
 			mode: "rpc",
