@@ -14,6 +14,10 @@
 // home still win: they call vi.stubEnv("LOOK_HOME", ...) +
 // vi.resetModules() and then dynamic-import (see
 // test/main/project-service-migration.test.ts).
+//
+// Exception: when LOOK_HOME is already set externally (e.g. CI's
+// seeded mock home in .github/workflows/nightly-e2e.yml), it is
+// respected as-is — no mkdtemp override, no cleanup.
 // ============================================================
 
 import fs from "node:fs";
@@ -21,9 +25,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll } from "vitest";
 
-const lookHome = fs.mkdtempSync(path.join(os.tmpdir(), "look-test-home-"));
+const externalLookHome = process.env.LOOK_HOME;
+const lookHome = externalLookHome ?? fs.mkdtempSync(path.join(os.tmpdir(), "look-test-home-"));
 process.env.LOOK_HOME = lookHome;
 
-afterAll(() => {
-	fs.rmSync(lookHome, { recursive: true, force: true });
-});
+// Only remove homes we created; an externally provided LOOK_HOME is
+// left untouched.
+if (!externalLookHome) {
+	afterAll(() => {
+		fs.rmSync(lookHome, { recursive: true, force: true });
+	});
+}

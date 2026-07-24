@@ -6,7 +6,19 @@
 # Secrets required:
 #   OPENAI_API_KEY — provider key used by the tests
 #
-# Schedule: daily at 06:00 UTC
+# The mock home below must contain:
+#   - projects.json with a valid project named "pi" pointing at the
+#     checked-out repo (required by test/subagent-e2e-llm.test.ts and
+#     test/subagent-toggle-e2e-llm.test.ts); schema matches
+#     ProjectService.saveProjects: { projects: [{ id, name, cwd, createdAt }] }
+#   - agents/marketplace/*.md seeded from apps/electron/default-agents/
+#     (the tests run SessionRuntimeManager directly, so the Electron
+#     startup sync of built-in agents never happens)
+#   - settings.json with defaultProjectTrust=always (the repo has .pi/,
+#     which requires project trust; the default "ask" policy cannot be
+#     answered in headless CI)
+# setup-look-home.ts respects the externally set LOOK_HOME, so this
+# directory is used as-is instead of a throwaway mkdtemp home.
 
 name: Nightly E2E (LLM)
 
@@ -34,10 +46,15 @@ jobs:
         run: npm ci
 
       - name: Set up mock look home
-        run: mkdir -p /tmp/look-e2e-home && echo '{"version":1,"projects":[]}' > /tmp/look-e2e-home/projects.json
+        run: |
+          mkdir -p /tmp/look-e2e-home/agents/marketplace
+          printf '{"projects":[{"id":"e2e00001","name":"pi","cwd":"%s","createdAt":0}]}' "$GITHUB_WORKSPACE" > /tmp/look-e2e-home/projects.json
+          echo '{"defaultProjectTrust":"always"}' > /tmp/look-e2e-home/settings.json
+          cp apps/electron/default-agents/*.md /tmp/look-e2e-home/agents/marketplace/
 
       - name: Run LLM E2E tests
         env:
           LOOK_E2E_LLM: "1"
           LOOK_HOME: /tmp/look-e2e-home
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npm run test:e2e:llm --workspace=@look/electron
