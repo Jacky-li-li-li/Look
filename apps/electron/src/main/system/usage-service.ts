@@ -27,7 +27,7 @@ export interface UsageData {
 // ── Internal cache ──
 
 let cachedData: UsageData | null = null;
-let pendingRefresh: Promise<UsageData> | null = null;
+let pendingRefresh: { epoch: number; promise: Promise<UsageData> } | null = null;
 let dirtyEpoch = 0;
 
 /** Format a timestamp as a local-calendar date key: YYYY-MM-DD. */
@@ -170,14 +170,21 @@ export function markUsageDirty(): void {
 /** Return aggregated daily usage from all project session files. */
 export async function getUsage(projects: ProjectInfo[]): Promise<UsageData> {
 	if (cachedData) return cachedData;
-	if (pendingRefresh) return pendingRefresh;
-	const epochAtStart = dirtyEpoch;
-	pendingRefresh = backfillFromProjects(projects).finally(() => {
-		pendingRefresh = null;
-	});
-	const data = await pendingRefresh;
-	// A scan that started before the latest markUsageDirty is stale; discard and rescan.
-	if (epochAtStart !== dirtyEpoch) return getUsage(projects);
+	if (!pendingRefresh) {
+		const epoch = dirtyEpoch;
+		pendingRefresh = {
+			epoch,
+			promise: backfillFromProjects(projects).finally(() => {
+				pendingRefresh = null;
+			}),
+		};
+	}
+	const { epoch, promise } = pendingRefresh;
+	const data = await promise;
+	// A scan that started before the latest markUsageDirty is stale; discard and
+	// rescan. Callers that joined an in-flight scan validate the scan's epoch too,
+	// so they never resolve to pre-dirty data.
+	if (epoch !== dirtyEpoch) return getUsage(projects);
 	cachedData = data;
 	return cachedData;
 }
@@ -186,4 +193,5 @@ export async function getUsage(projects: ProjectInfo[]): Promise<UsageData> {
 export function resetUsageServiceForTesting(): void {
 	cachedData = null;
 	pendingRefresh = null;
+	dirtyEpoch = 0;
 }

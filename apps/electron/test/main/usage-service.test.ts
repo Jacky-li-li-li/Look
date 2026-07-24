@@ -156,8 +156,11 @@ describe("usage-service", () => {
 			},
 		]);
 
-		// Start a scan, then dirty + append a record before the scan can finish.
+		// Start a scan plus a caller that joins the in-flight scan, then dirty +
+		// append a record before the scan can finish.
+		const readdirSpy = vi.spyOn(fs.promises, "readdir");
 		const inFlight = getUsage([project]);
+		const joining = getUsage([project]);
 		markUsageDirty();
 		writeJsonl(path.join(sessionsDir, "session-race-2.jsonl"), [
 			{
@@ -167,8 +170,12 @@ describe("usage-service", () => {
 			},
 		]);
 
-		const result = await inFlight;
-		expect(result.usage[date]).toBe(2);
+		// Both the initiator and the joining caller must see post-dirty data.
+		expect((await inFlight).usage[date]).toBe(2);
+		expect((await joining).usage[date]).toBe(2);
+		// Two scans (sessions + subsessions dirs each) prove the stale scan was
+		// discarded and a rescan actually happened.
+		expect(readdirSpy.mock.calls.length).toBe(4);
 	});
 
 	it("excludes aborted assistant messages", async () => {

@@ -165,7 +165,12 @@ export class CompositionBuilder {
 		// PermissionService constructor reads userSettings.getAll().permissionMode.
 		// If these lines are reordered, PermissionService will crash on a null ref.
 		this.permissionService = new PermissionService(host, this.userSettings.getAll().permissionMode);
-		this.globalSettingsManager.setDefaultProjectTrust("ask");
+		// Default to "ask" only when the user has not chosen a policy;
+		// setDefaultProjectTrust persists, so an unconditional call would reset
+		// an explicitly configured "always"/"never" on every launch.
+		if (this.globalSettingsManager.getGlobalSettings().defaultProjectTrust === undefined) {
+			this.globalSettingsManager.setDefaultProjectTrust("ask");
+		}
 		this.promptStore = new PromptStore();
 
 		this.mcpManager = new MCPManager();
