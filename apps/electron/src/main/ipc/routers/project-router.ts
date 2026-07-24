@@ -17,8 +17,8 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 	register("project:create", async (data) => {
 		const _cwd = guardPath(data.cwd, "cwd");
 		guardOptionalString(data.name, "name");
-		const result = await ctx.runtimeManager.createProject(_cwd, data.name);
-		await promptForProjectTrust(ctx.runtimeManager, result.project.id, ctx.mainWindow);
+		const result = await ctx.projectApplication.createProject(_cwd, data.name);
+		await promptForProjectTrust(ctx.projectTrust, result.project.id, ctx.mainWindow);
 		return {
 			success: true,
 			project: result.project,
@@ -28,8 +28,8 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 
 	register("project:switch", async (data) => {
 		guardString(data.projectId, "projectId");
-		await promptForProjectTrust(ctx.runtimeManager, data.projectId, ctx.mainWindow);
-		await ctx.runtimeManager.setActiveProject(data.projectId);
+		await promptForProjectTrust(ctx.projectTrust, data.projectId, ctx.mainWindow);
+		await ctx.projectApplication.switchProject(data.projectId);
 		const agents = ctx.sessionInfo.listAgentsInProject(data.projectId);
 		return { success: true, agents };
 	});
@@ -40,7 +40,7 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 		if (data.projectId === DEFAULT_PROJECT_ID) {
 			return { success: false, error: "Cannot rename the default workspace" };
 		}
-		ctx.runtimeManager.renameProject(data.projectId, data.name);
+		ctx.projectApplication.renameProject(data.projectId, data.name);
 		return { success: true };
 	});
 
@@ -49,7 +49,7 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 		if (data.projectId === DEFAULT_PROJECT_ID) {
 			return { success: false, error: "Cannot delete the default workspace" };
 		}
-		await ctx.runtimeManager.deleteProject(data.projectId);
+		ctx.projectApplication.requestDelete(data.projectId);
 		return { success: true };
 	});
 

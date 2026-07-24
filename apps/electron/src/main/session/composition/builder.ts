@@ -29,7 +29,6 @@ import {
 	resetLegacySessionsOnce,
 } from "@look/shared/look-storage";
 import { AgentDefinitionService } from "../../agents/definition-service.js";
-import type { RuntimeManagerCompositionHost } from "../../core/contracts.js";
 import { createMcpExtensionFactory } from "../../extensions/mcp-extension.js";
 import { createModelListExtensionFactory } from "../../extensions/model-extension.js";
 import { createPermissionExtensionFactory } from "../../extensions/permission-extension.js";
@@ -54,6 +53,7 @@ import type { WorkspaceFileService } from "../../workspace/workspace-file-servic
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
 import { ActiveSessionSelection } from "../active-session-selection.js";
 import { SessionEventProcessor } from "../event-processor.js";
+import { ProjectApplicationService } from "../project-application-service.js";
 import { ProjectRuntimeService } from "../project-runtime-service.js";
 import { SessionRuntimeFactory } from "../runtime-factory.js";
 import { RuntimeLifecycleCoordinator } from "../runtime-lifecycle-coordinator.js";
@@ -73,6 +73,7 @@ import { SessionSettingsService } from "../session-settings-service.js";
 import { SessionSubagentService } from "../session-subagent-service.js";
 import { SkillManagementService } from "../skill-management-service.js";
 import { SubAgentRegistry } from "../subagent-registry.js";
+import { CompositionHost } from "./composition-host.js";
 
 const MAX_NAME_LENGTH = 80;
 const MAX_SUBAGENT_DEPTH = 5;
@@ -104,6 +105,7 @@ export class CompositionBuilder {
 	sessionNotifier: SessionNotifier | null = null;
 	eventProcessor: SessionEventProcessor | null = null;
 	subAgentRuntimeService: SubAgentRuntimeService | null = null;
+	projectApplicationService: ProjectApplicationService | null = null;
 
 	// ── Model (async) ──
 	modelRuntime: ModelRuntime | null = null;
@@ -135,18 +137,16 @@ export class CompositionBuilder {
 	// ── Mutable cross-cutting reference (shared with composition after build) ──
 	readonly schedulerRef: { current: SchedulerService | null } = { current: null };
 
-	private host: RuntimeManagerCompositionHost | null = null;
+	private host: CompositionHost | null = null;
 	private workspaceFileServiceRef: WorkspaceFileService | null = null;
 	private workspaceTreeServiceRef: WorkspaceTreeService | null = null;
 
 	// ── Phase 1: Infrastructure (sync) ──
 
 	buildInfra(
-		host: RuntimeManagerCompositionHost,
 		workspaceFileService: WorkspaceFileService | null,
 		workspaceTreeService: WorkspaceTreeService | null,
 	): void {
-		this.host = host;
 		this.workspaceFileServiceRef = workspaceFileService;
 		this.workspaceTreeServiceRef = workspaceTreeService;
 
@@ -164,7 +164,7 @@ export class CompositionBuilder {
 		// NOTE: userSettings MUST be created before permissionService — the
 		// PermissionService constructor reads userSettings.getAll().permissionMode.
 		// If these lines are reordered, PermissionService will crash on a null ref.
-		this.permissionService = new PermissionService(host, this.userSettings.getAll().permissionMode);
+		this.permissionService = new PermissionService(this.eventBus, this.userSettings.getAll().permissionMode);
 		this.globalSettingsManager.setDefaultProjectTrust("ask");
 		this.promptStore = new PromptStore();
 
@@ -178,6 +178,14 @@ export class CompositionBuilder {
 				this.subAgentRegistry.register(metadata.parentSessionId, metadata.sessionId, metadata.agentName ?? "");
 			}
 		});
+		this.host = new CompositionHost(
+			this.eventBus,
+			this.runtimeRegistry,
+			this.sessionCatalog,
+			this.projectService,
+			this.activeSessionSelection,
+		);
+		const host = this.host;
 		this.projectRuntimeService = new ProjectRuntimeService({
 			projectService: this.projectService,
 			sessionCatalog: this.sessionCatalog,
@@ -199,6 +207,15 @@ export class CompositionBuilder {
 
 		this.eventProcessor = new SessionEventProcessor(host, this.scopeRegistry, host);
 		this.subAgentRuntimeService = new SubAgentRuntimeService(host, this.subAgentRegistry);
+
+		this.projectApplicationService = new ProjectApplicationService({
+			projectService: this.projectService,
+			projectRuntimeService: this.projectRuntimeService,
+			sessionCatalog: this.sessionCatalog,
+			runtimeRegistry: this.runtimeRegistry,
+			sessionNotifier: this.sessionNotifier,
+			eventBus: this.eventBus,
+		});
 	}
 
 	// ── Phase 2: Model runtime (async) ──
@@ -461,6 +478,12 @@ export class CompositionBuilder {
 			emitSessionList: (projectId) => this.sessionNotifier!.emitSessionList(projectId),
 			emitError: (error, sessionId) => this.sessionNotifier!.emitError(error, sessionId),
 		});
+		this.host!.bindRuntimeServices({
+			runtimeLifecycle: this.runtimeLifecycle!,
+			sessionNotifier: this.sessionNotifier!,
+			sessionEventEffects: this.sessionEventEffects,
+			subAgentRuntimeService: this.subAgentRuntimeService!,
+		});
 
 		this.sessionSettingsService = new SessionSettingsService({
 			userSettings: this.userSettings!,
@@ -504,6 +527,7 @@ export class CompositionBuilder {
 			sessionNotifier: this.sessionNotifier,
 			eventProcessor: this.eventProcessor,
 			subAgentRuntimeService: this.subAgentRuntimeService,
+			projectApplicationService: this.projectApplicationService,
 			modelRuntime: this.modelRuntime,
 			modelRegistry: this.modelRegistry,
 			credentialStore: this.credentialStore,

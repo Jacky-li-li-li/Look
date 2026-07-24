@@ -11,9 +11,24 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "./contracts/permission.js";
 import type { UserSettings } from "./contracts/settings.js";
+import type { ScheduledTaskInput } from "./domain/scheduler.js";
 
 export type { PermissionMode } from "./contracts/permission.js";
 export type { LookTone, UILanguage, UserSettings } from "./contracts/settings.js";
+export type {
+	ScheduledTask,
+	ScheduledTaskInput,
+	ScheduledTaskNotification,
+	ScheduledTaskRetryPolicy,
+	ScheduledTaskRunLog,
+	ScheduledTaskRunStatus,
+	ScheduledTaskSchedule,
+	ScheduledTaskStatus,
+	ScheduledTaskTestResult,
+	TaskExecutionProfile,
+	TaskRun,
+	TaskRunSource,
+} from "./domain/scheduler.js";
 
 // Shared transport types. Message/session payloads remain SDK-native.
 
@@ -626,106 +641,8 @@ export interface TestCustomProviderResult {
 }
 
 // ---- Scheduled tasks ----
-
-export type ScheduledTaskStatus = "paused" | "scheduled";
-export type ScheduledTaskRunStatus = "running" | "retrying" | "success" | "failed" | "skipped" | "interrupted";
-export type TaskRunSource = "scheduled-task" | "manual-task-run" | "manual-task-test";
-export type TaskExecutionProfile = "unattended-scheduled-task" | "interactive-test";
-
-export interface ScheduledTaskRetryPolicy {
-	maxAttempts: number;
-	initialDelayMs: number;
-	backoffMultiplier: number;
-	maxDelayMs: number;
-}
-
-export type ScheduledTaskSchedule =
-	| { kind: "once"; runAt: string }
-	| { kind: "daily"; time: string }
-	| { kind: "weekly"; weekday: number; time: string }
-	| { kind: "monthly"; day: number; time: string };
-
-export interface ScheduledTaskNotification {
-	enabled: boolean;
-	provider: "feishu";
-	/**
-	 * Bot channel (appId) that owns the selected private conversation. New tasks
-	 * must pair this with targetChatId; appId alone is intentionally not enough
-	 * to infer a recipient from other people who have messaged the same bot.
-	 */
-	channelAppId?: string;
-	/**
-	 * Explicit recipient conversation. New tasks persist the user-selected p2p
-	 * binding here; legacy tasks may contain a raw chatId without channelAppId.
-	 */
-	targetChatId?: string;
-}
-
-export interface ScheduledTask {
-	id: string;
-	name: string;
-	projectId: string;
-	cron: string;
-	schedule?: ScheduledTaskSchedule;
-	timezone?: string;
-	prompt: string;
-	parameters: Record<string, string>;
-	model?: string;
-	notification?: ScheduledTaskNotification;
-	status: ScheduledTaskStatus;
-	retry: ScheduledTaskRetryPolicy;
-	executionTimeoutMs: number;
-	createdAt: string;
-	updatedAt: string;
-	lastRunAt?: string;
-	/** Set only after the configured one-time schedule is consumed (manual Run now does not set it). */
-	scheduleCompletedAt?: string;
-	nextRunAt?: string;
-}
-
-export interface ScheduledTaskInput {
-	name: string;
-	projectId: string;
-	/** Internal/legacy cron input. New UI clients should send `schedule`. */
-	cron?: string;
-	schedule?: ScheduledTaskSchedule;
-	timezone?: string;
-	prompt: string;
-	parameters?: Record<string, string>;
-	model?: string;
-	notification?: ScheduledTaskNotification;
-	retry?: Partial<ScheduledTaskRetryPolicy>;
-	executionTimeoutMs?: number;
-}
-
-export interface TaskRun {
-	id: string;
-	taskId: string;
-	taskName: string;
-	scheduledAt: string;
-	startedAt: string;
-	finishedAt?: string;
-	status: ScheduledTaskRunStatus;
-	attempt: number;
-	maxAttempts: number;
-	output?: string;
-	errorMessage?: string;
-	errorStack?: string;
-	sessionId?: string;
-	notificationStatus?: "sent" | "failed";
-	notificationError?: string;
-	ownerId: string;
-	/** Defaults are applied while reading legacy logs written before execution provenance existed. */
-	source?: TaskRunSource;
-	executionProfile?: TaskExecutionProfile;
-}
-
-/** Backward-compatible name for scheduler-owned task runs. */
-export type ScheduledTaskRunLog = TaskRun;
-
-export interface ScheduledTaskTestResult {
-	log: TaskRun;
-}
+// Scheduler DTOs live in domain/scheduler.ts and are re-exported above to
+// preserve this module as the compatibility import surface.
 
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =
@@ -736,7 +653,7 @@ export type RendererToMainEvent =
 			images?: ImageContent[];
 	  }
 	| { type: "agent:activate"; agentId: string }
-	| { type: "agent:create"; name?: string; projectId?: string }
+	| { type: "agent:create"; name?: string; projectId?: string; imProvider?: ImSessionProvider }
 	| { type: "agent:destroy"; agentId: string }
 	| { type: "agent:switch-model"; agentId: string; model: string }
 	| { type: "agent:update-thinking"; agentId: string; level: ThinkingLevel }

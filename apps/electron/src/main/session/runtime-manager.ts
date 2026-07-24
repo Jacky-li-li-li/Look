@@ -58,7 +58,6 @@ export class SessionRuntimeManager
 	): Promise<SessionRuntimeManager> {
 		const srt = new SessionRuntimeManager();
 		const composition = await RuntimeManagerComposition.create(
-			srt,
 			workspaceFileService ?? null,
 			workspaceTreeService ?? null,
 		);

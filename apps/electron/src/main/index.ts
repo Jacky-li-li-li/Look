@@ -14,6 +14,7 @@ import { LarkBridgeService } from "./im/lark-bridge-service.js";
 import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
+import { BrowserWindowEventTransport } from "./ipc/renderer-event-transport.js";
 import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
 import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
@@ -43,16 +44,10 @@ let larkBridgeService: LarkBridgeService | null = null;
 let quitCleanupStarted = false;
 let quitCleanupComplete = false;
 
-/** 安全向渲染进程推送事件，避免 TOCTOU 窗口销毁竞态导致主进程崩溃。 */
+const rendererEvents = new BrowserWindowEventTransport(() => mainWindow);
+
 function safeSendEvent(event: MainToRendererEvent): void {
-	if (!mainWindow) return;
-	try {
-		if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-			mainWindow.webContents.send("look:event", event);
-		}
-	} catch {
-		/* window destroyed between check and send */
-	}
+	rendererEvents.send(event);
 }
 
 const isDev = !app.isPackaged;
@@ -440,7 +435,7 @@ function createSchedulerCallbacks() {
 // ── Phase 4: IM channels ──
 
 function bootstrapIM(): void {
-	larkChannelManager = new LarkChannelManager(mainWindow!);
+	larkChannelManager = new LarkChannelManager(rendererEvents);
 	larkBridgeService = new LarkBridgeService();
 	larkChannelManager.onConnectionReady = bootstrapLarkBridge;
 	larkChannelManager.onConnectionClosed = detachLarkBridge;
@@ -449,7 +444,14 @@ function bootstrapIM(): void {
 // ── Phase 5: IPC registration + workspace restore ──
 
 async function bootstrapStartupSequence(): Promise<void> {
-	registerIpcHandlers(runtimeManager!, mainWindow!, larkChannelManager!, larkBridgeService!, schedulerService!);
+	registerIpcHandlers(
+		runtimeManager!,
+		mainWindow!,
+		rendererEvents,
+		larkChannelManager!,
+		larkBridgeService!,
+		schedulerService!,
+	);
 
 	// 启动即初始化桥接（加载持久化绑定，供定时任务 IM 通知解析私聊会话）
 	bootstrapLarkBridge();
@@ -510,7 +512,7 @@ async function syncBuiltinResources(): Promise<void> {
 // ── Phase 7: Auto-updater ──
 
 function bootstrapUpdater(): void {
-	initUpdater(mainWindow!);
+	initUpdater(rendererEvents);
 	setTimeout(() => {
 		checkForUpdates().catch((err) => console.warn("[Look] Update check failed:", err));
 	}, 3000);
@@ -536,6 +538,7 @@ app.whenReady().then(async () => {
 				registerIpcHandlers(
 					runtimeManager,
 					mainWindow,
+					rendererEvents,
 					larkChannelManager ?? undefined,
 					larkBridgeService ?? undefined,
 					schedulerService ?? undefined,

@@ -18,17 +18,24 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:activate", async (data) => {
 		const sessionId = guardAgentId(data.agentId, "agentId");
 		const projectId = ctx.sessionInfo.getAgentInfo(sessionId)?.projectId;
-		if (projectId) await promptForProjectTrust(ctx.runtimeManager, projectId, ctx.mainWindow);
-		await ctx.runtimeManager.activateSession(sessionId);
+		if (projectId) await promptForProjectTrust(ctx.projectTrust, projectId, ctx.mainWindow);
+		await ctx.runtimeLifecycle.activateSession(sessionId);
 		return { success: true };
 	});
 
 	register("agent:create", async (data) => {
 		guardOptionalString(data.name, "name");
 		guardOptionalString(data.projectId, "projectId");
+		if (data.imProvider && data.imProvider !== "feishu") {
+			throw new Error("Unsupported IM provider");
+		}
 		const projectId = data.projectId ?? ctx.projectService.getActiveProject()?.id;
-		if (projectId) await promptForProjectTrust(ctx.runtimeManager, projectId, ctx.mainWindow);
-		const id = await ctx.sessionLifecycle.createAgent({ name: data.name, projectId: data.projectId });
+		if (projectId) await promptForProjectTrust(ctx.projectTrust, projectId, ctx.mainWindow);
+		const id = await ctx.sessionLifecycle.createAgent({
+			name: data.name,
+			projectId: data.projectId,
+			imProvider: data.imProvider,
+		});
 		return { success: true, agentId: id };
 	});
 

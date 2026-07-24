@@ -8,7 +8,6 @@
 // Use `RuntimeManagerComposition.create()` instead of `new`.
 // ============================================================
 
-import type { RuntimeManagerCompositionHost } from "../core/contracts.js";
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
@@ -42,6 +41,7 @@ export class RuntimeManagerComposition {
 	readonly sessionNotifier;
 	readonly eventProcessor;
 	readonly subAgentRuntimeService;
+	readonly projectApplicationService;
 
 	readonly modelRuntime;
 	readonly modelRegistry;
@@ -100,6 +100,7 @@ export class RuntimeManagerComposition {
 		this.sessionNotifier = builder.sessionNotifier!;
 		this.eventProcessor = builder.eventProcessor!;
 		this.subAgentRuntimeService = builder.subAgentRuntimeService!;
+		this.projectApplicationService = builder.projectApplicationService!;
 
 		this.modelRuntime = builder.modelRuntime!;
 		this.modelRegistry = builder.modelRegistry!;
@@ -128,13 +129,12 @@ export class RuntimeManagerComposition {
 	// ── Static async factory ──
 
 	static async create(
-		host: RuntimeManagerCompositionHost,
 		workspaceFileService: WorkspaceFileService | null,
 		workspaceTreeService: WorkspaceTreeService | null,
 	): Promise<RuntimeManagerComposition> {
 		const builder = new CompositionBuilder();
 
-		builder.buildInfra(host, workspaceFileService, workspaceTreeService);
+		builder.buildInfra(workspaceFileService, workspaceTreeService);
 		await builder.buildModel();
 		builder.buildExtensions();
 		builder.buildCore();

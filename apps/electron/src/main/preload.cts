@@ -37,6 +37,7 @@ const api: LookAPI = {
 			type: "agent:create",
 			name: typeof input === "string" ? input : input?.name,
 			projectId: typeof input === "object" ? input?.projectId : undefined,
+			imProvider: typeof input === "object" ? input?.imProvider : undefined,
 		}),
 
 	destroyAgent: (agentId) => ipcRenderer.invoke("look:invoke", { type: "agent:destroy", agentId }),

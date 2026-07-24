@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
 	};
 });
 
-vi.mock("@shared/look-storage.js", () => ({
+vi.mock("@look/shared/look-storage", () => ({
 	getLookDir: () => mocks.lookDir,
 }));
 
@@ -25,6 +25,7 @@ vi.mock("electron", () => ({
 	BrowserWindow: vi.fn().mockImplementation(() => ({
 		isDestroyed: () => false,
 		webContents: {
+			isDestroyed: () => false,
 			send: vi.fn().mockImplementation((channel: string, event: unknown) => {
 				mocks.sentEvents.push({ channel, event });
 			}),
