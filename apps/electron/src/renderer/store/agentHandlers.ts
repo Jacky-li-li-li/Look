@@ -20,15 +20,10 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 		case "agent:list": {
 			const previous = appStore.get(agentsAtom);
 			const otherProjects = previous.filter((agent) => agent.projectId !== event.projectId);
-			const sameLength =
-				otherProjects.length + event.agents.length === previous.length &&
-				event.agents.every((a) => previous.some((p) => p.id === a.id));
-			if (!sameLength) {
-				const next = [...otherProjects, ...event.agents];
-				appStore.set(agentsAtom, next);
-				const activeId = appStore.get(activeAgentIdAtom);
-				if (activeId && !next.some((agent) => agent.id === activeId)) appStore.set(activeAgentIdAtom, null);
-			}
+			const next = [...otherProjects, ...event.agents];
+			appStore.set(agentsAtom, next);
+			const activeId = appStore.get(activeAgentIdAtom);
+			if (activeId && !next.some((agent) => agent.id === activeId)) appStore.set(activeAgentIdAtom, null);
 			return true;
 		}
 

@@ -32,6 +32,8 @@ export class LarkBridgeService {
 	private bindings = new Map<string, ChatBinding>();
 	/** 绑定键 → in-flight binding creation */
 	private pendingBindings = new Map<string, Promise<ChatBinding>>();
+	/** Newly created bindings that must not outlive an unflushed pi session. */
+	private pendingDurableBindingSessionIds = new Set<string>();
 	/** sessionId → 回复累积器 */
 	private replyAccumulators = new Map<string, ReplyAccumulator>();
 	/** sessionId → 该回复所属的 bot appId（用于按 bot 释放在途回复） */
@@ -83,6 +85,7 @@ export class LarkBridgeService {
 		this.initialized = false;
 		this.bindings.clear();
 		this.pendingBindings.clear();
+		this.pendingDurableBindingSessionIds.clear();
 		this.accumulatorAppIds.clear();
 		this.releaseAllAccumulators("飞书连接已关闭");
 	}
@@ -131,7 +134,7 @@ export class LarkBridgeService {
 			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
 			healed = true;
 		}
-		if (healed) saveBindings(Array.from(this.bindings.values()));
+		if (healed) this.saveDurableBindings();
 		const p2p = candidates.filter((b) => b.chatType === "p2p").sort((a, b) => b.createdAt - a.createdAt);
 		return p2p[0] ?? null;
 	}
@@ -152,7 +155,7 @@ export class LarkBridgeService {
 			if (info?.chatType) {
 				binding.chatType = info.chatType;
 				this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
-				saveBindings(Array.from(this.bindings.values()));
+				this.saveDurableBindings();
 			}
 		}
 		return binding.chatType === "p2p" ? binding : null;
@@ -165,10 +168,11 @@ export class LarkBridgeService {
 			if (binding.chatId !== chatId) continue;
 			if (appId && binding.appId && binding.appId !== appId) continue;
 			this.releaseAccumulator(binding.sessionId, "飞书会话已解绑");
+			this.pendingDurableBindingSessionIds.delete(binding.sessionId);
 			this.bindings.delete(key);
 			changed = true;
 		}
-		if (changed) saveBindings(Array.from(this.bindings.values()));
+		if (changed) this.saveDurableBindings();
 	}
 
 	/** 获取桥接运行状态 */
@@ -201,7 +205,7 @@ export class LarkBridgeService {
 			legacy.appId = appId;
 			this.bindings.delete(chatId);
 			this.bindings.set(this.keyFor(appId, chatId), legacy);
-			saveBindings(Array.from(this.bindings.values()));
+			this.saveDurableBindings();
 			return legacy;
 		}
 		return undefined;
@@ -212,6 +216,55 @@ export class LarkBridgeService {
 		if (acc) this.replyPresenter.disposeAccumulator(acc, reason);
 		this.replyAccumulators.delete(sessionId);
 		this.accumulatorAppIds.delete(sessionId);
+	}
+
+	/** Persist only bindings whose native pi session file can be recovered after a restart. */
+	private saveDurableBindings(): void {
+		saveBindings(
+			Array.from(this.bindings.values()).filter(
+				(binding) => !this.pendingDurableBindingSessionIds.has(binding.sessionId),
+			),
+		);
+	}
+
+	private removeBindingRecord(binding: ChatBinding): void {
+		for (const [key, candidate] of this.bindings.entries()) {
+			if (candidate !== binding) continue;
+			this.bindings.delete(key);
+			break;
+		}
+		this.pendingDurableBindingSessionIds.delete(binding.sessionId);
+		this.releaseAccumulator(binding.sessionId, "飞书会话绑定已失效");
+		this.saveDurableBindings();
+	}
+
+	private validateBinding(binding: ChatBinding): boolean {
+		const session = this.runtimeManager.getAgentInfo(binding.sessionId);
+		if (!session) {
+			console.warn("[LarkBridgeService] Discarding stale binding for missing session:", binding.sessionId);
+			this.removeBindingRecord(binding);
+			return false;
+		}
+		if (binding.projectId !== session.projectId) {
+			binding.projectId = session.projectId;
+			this.saveDurableBindings();
+		}
+		return true;
+	}
+
+	private persistBindingIfRecoverable(sessionId: string): void {
+		if (!this.pendingDurableBindingSessionIds.has(sessionId)) return;
+		const session = this.runtimeManager.getAgentInfo(sessionId);
+		if (!session?.sessionFilePath) return;
+
+		const binding = Array.from(this.bindings.values()).find((candidate) => candidate.sessionId === sessionId);
+		if (!binding) {
+			this.pendingDurableBindingSessionIds.delete(sessionId);
+			return;
+		}
+		binding.projectId = session.projectId;
+		this.pendingDurableBindingSessionIds.delete(sessionId);
+		this.saveDurableBindings();
 	}
 
 	/**
@@ -238,7 +291,7 @@ export class LarkBridgeService {
 		}
 		if (changed) {
 			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
-			saveBindings(Array.from(this.bindings.values()));
+			this.saveDurableBindings();
 		}
 	}
 
@@ -549,6 +602,7 @@ export class LarkBridgeService {
 			const sessionId = await this.runtimeManager.createAgent({
 				...(projectId ? { projectId } : {}),
 				imProvider: "feishu",
+				background: true,
 			});
 			// Re-created bindings (e.g. /new) inherit the chat metadata captured earlier.
 			const previous = this.bindings.get(key);
@@ -563,7 +617,8 @@ export class LarkBridgeService {
 				peerName: context?.peerName ?? previous?.peerName,
 			};
 			this.bindings.set(key, binding);
-			saveBindings(Array.from(this.bindings.values()));
+			this.pendingDurableBindingSessionIds.add(sessionId);
+			this.persistBindingIfRecoverable(sessionId);
 			return binding;
 		})();
 
@@ -648,6 +703,9 @@ export class LarkBridgeService {
 		let binding = this.findBinding(appId, chatId);
 		if (!binding) {
 			binding = await this.pendingBindings.get(key)?.catch(() => undefined);
+		}
+		if (binding && !this.validateBinding(binding)) {
+			binding = undefined;
 		}
 
 		// 自动创建 Session
@@ -792,9 +850,10 @@ export class LarkBridgeService {
 
 		// agent_end 时标记回复就绪
 		if (event.type === "session:snapshot" && event.reason === "agent_end") {
-			const acc = this.replyAccumulators.get(event.sessionId);
+			this.persistBindingIfRecoverable(event.sessionId);
 			// willRetry 的自动重试也会发出 agent_end，此时 runtime.isStreaming 仍为 true。
 			// 跳过终结与 fallback，等待真正的最终 agent_end，否则重试后的文本事件找不到 accumulator。
+			const acc = this.replyAccumulators.get(event.sessionId);
 			if (acc && !acc.done && !event.runtime.isStreaming) {
 				this.replyPresenter.applyFinalTextFallback(acc, this.extractTerminalAssistantText(event.entries));
 				console.log(

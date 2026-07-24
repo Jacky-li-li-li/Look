@@ -79,6 +79,23 @@ describe("handleAgentEvent", () => {
 		expect(appStore.get(activeAgentIdAtom)).toBeNull();
 	});
 
+	it("agent:list replaces metadata when the project has the same session IDs", () => {
+		const updated = {
+			...makeAgent(sessionId),
+			name: "Feishu session",
+			imProvider: "feishu" as const,
+			messageCount: 6,
+			sessionFilePath: "/tmp/session.jsonl",
+		};
+		handleAgentEvent({
+			type: "agent:list",
+			projectId: "project-1",
+			agents: [updated, makeAgent(otherSessionId)],
+		} as unknown as Parameters<typeof handleAgentEvent>[0]);
+
+		expect(appStore.get(agentsAtom).find((agent) => agent.id === sessionId)).toMatchObject(updated);
+	});
+
 	it("agent:created adds or replaces the agent", () => {
 		const created = makeAgent("agent-c");
 		handleAgentEvent({ type: "agent:created", agent: created } as unknown as Parameters<typeof handleAgentEvent>[0]);

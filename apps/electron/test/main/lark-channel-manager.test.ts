@@ -167,6 +167,11 @@ function readChannels(): unknown {
 	return JSON.parse(readFileSync(join(mocks.lookDir, "im-channels.json"), "utf8"));
 }
 
+function readBindings(): unknown[] {
+	const filePath = join(mocks.lookDir, "im-bindings.json");
+	return existsSync(filePath) ? JSON.parse(readFileSync(filePath, "utf8")) : [];
+}
+
 function sampleMessage(content = "hello", chatId = "chat_1"): NormalizedMessage {
 	return {
 		messageId: `msg_${Math.random().toString(36).slice(2)}`,
@@ -566,9 +571,85 @@ describe("LarkChannelManager", () => {
 
 		expect(bridge.getStatus().status).toBe("running");
 		expect(runtime.createAgent).toHaveBeenCalledTimes(1);
-		expect(runtime.createAgent).toHaveBeenCalledWith({ projectId: "project_1", imProvider: "feishu" });
+		expect(runtime.createAgent).toHaveBeenCalledWith({
+			projectId: "project_1",
+			imProvider: "feishu",
+			background: true,
+		});
 		expect(runtime.sendMessage).toHaveBeenCalledWith("session_1", "hello agent");
 		expect(larkMocks.channels[0].stream).toHaveBeenCalledTimes(1);
+		expect(readBindings()).toEqual([]);
+	});
+
+	it("persists an IM binding only after the native session file is recoverable", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock(async (sessionId, emit) => {
+			vi.mocked(runtime.getAgentInfo).mockReturnValue({
+				id: sessionId,
+				projectId: "project_1",
+				sessionFilePath: `/tmp/${sessionId}.jsonl`,
+			} as never);
+			emit({
+				type: "session:snapshot",
+				sessionId,
+				reason: "agent_end",
+				leafId: null,
+				entries: [],
+				runtime: {
+					thinkingLevel: "off",
+					isStreaming: false,
+					isRetrying: false,
+					isCompacting: false,
+					retryAttempt: 0,
+					steering: [],
+					followUp: [],
+					stats: {} as never,
+				},
+			});
+		});
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
+
+		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
+		await larkMocks.channels[0].emit("message", sampleMessage("make durable"));
+		await flushAsync();
+
+		expect(readBindings()).toEqual([
+			expect.objectContaining({
+				appId: "cli_manual",
+				chatId: "chat_1",
+				sessionId: "session_1",
+				projectId: "project_1",
+			}),
+		]);
+	});
+
+	it("replaces a stale persisted binding before sending the next IM message", async () => {
+		writeBindings([
+			{
+				appId: "cli_manual",
+				chatId: "chat_1",
+				sessionId: "missing-session",
+				projectId: "project_1",
+				createdAt: Date.now(),
+			},
+		]);
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock();
+		vi.mocked(runtime.getAgentInfo).mockImplementation((sessionId: string) =>
+			sessionId === "missing-session" ? undefined : ({ name: "Session", messageCount: 0 } as never),
+		);
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
+
+		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
+		await larkMocks.channels[0].emit("message", sampleMessage("recover binding"));
+		await flushAsync();
+
+		expect(runtime.createAgent).toHaveBeenCalledTimes(1);
+		expect(runtime.sendMessage).toHaveBeenCalledWith("session_1", "recover binding");
+		expect(bridge.getBindings()).toEqual([expect.objectContaining({ sessionId: "session_1" })]);
+		expect(readBindings()).toEqual([]);
 	});
 
 	it("recovers a persisted final reply when a provider omits text delta events", async () => {
@@ -855,7 +936,11 @@ describe("LarkChannelManager", () => {
 		await larkMocks.channels[0].emit("message", sampleMessage("/project 2"));
 		await larkMocks.channels[0].emit("message", sampleMessage("hello second"));
 
-		expect(runtime.createAgent).toHaveBeenCalledWith({ projectId: "project_2", imProvider: "feishu" });
+		expect(runtime.createAgent).toHaveBeenCalledWith({
+			projectId: "project_2",
+			imProvider: "feishu",
+			background: true,
+		});
 		expect(runtime.sendMessage).toHaveBeenCalledWith("session_1", "hello second");
 		const sentText = larkMocks.channels[0].send.mock.calls[0]?.[1]?.text;
 		expect(sentText).toContain("已切换到项目");
@@ -873,7 +958,11 @@ describe("LarkChannelManager", () => {
 		await larkMocks.channels[0].emit("message", sampleMessage("hello new"));
 
 		expect(runtime.createProject).toHaveBeenCalledWith("/tmp/new app", "New App");
-		expect(runtime.createAgent).toHaveBeenCalledWith({ projectId: "project_new", imProvider: "feishu" });
+		expect(runtime.createAgent).toHaveBeenCalledWith({
+			projectId: "project_new",
+			imProvider: "feishu",
+			background: true,
+		});
 		expect(runtime.sendMessage).toHaveBeenCalledWith("session_1", "hello new");
 		const sentText = larkMocks.channels[0].send.mock.calls[0]?.[1]?.text;
 		expect(sentText).toContain("已新建项目并切换");
