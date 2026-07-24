@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IEventBus, IRuntimeStore } from "../src/main/core/contracts";
@@ -77,7 +77,7 @@ function planServiceForTest(
 		getRuntime: () => undefined as unknown as AgentSessionRuntime,
 		getSession: (id) =>
 			(sessions.get(id)?.session ??
-				mockSession({ sessionManager: sessions.get(id)?.sessionManager })) as AgentSessionRuntime,
+				mockSession({ sessionManager: sessions.get(id)?.sessionManager })) as unknown as AgentSession,
 		getSessionManager: (id) => sessions.get(id)?.sessionManager,
 		getCwd: (id) => sessions.get(id)?.cwd ?? "/tmp",
 		getProjectRoot: () => "/tmp",
@@ -139,7 +139,7 @@ describe("Plan session state", () => {
 		};
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as unknown as AgentSessionRuntime,
-			getSession: () => mockSession() as AgentSessionRuntime,
+			getSession: () => mockSession() as unknown as AgentSession,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
@@ -192,7 +192,7 @@ describe("Plan session state", () => {
 		});
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as unknown as AgentSessionRuntime,
-			getSession: (id) => (id === "session-a" ? session : mockSession()) as AgentSessionRuntime,
+			getSession: (id) => (id === "session-a" ? session : mockSession()) as unknown as AgentSession,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
@@ -239,7 +239,7 @@ describe("Plan session state", () => {
 
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as unknown as AgentSessionRuntime,
-			getSession: () => mockSession() as AgentSessionRuntime,
+			getSession: () => mockSession() as unknown as AgentSession,
 			getSessionManager: () => undefined,
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
@@ -285,7 +285,7 @@ describe("Plan session state", () => {
 		};
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as unknown as AgentSessionRuntime,
-			getSession: () => session as AgentSessionRuntime,
+			getSession: () => session as unknown as AgentSession,
 			getSessionManager: () => sessionManager,
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
@@ -343,7 +343,7 @@ describe("Plan session state", () => {
 		};
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as unknown as AgentSessionRuntime,
-			getSession: () => session as AgentSessionRuntime,
+			getSession: () => session as unknown as AgentSession,
 			getSessionManager: () => sessionManager,
 			getCwd: () => cwd,
 			getProjectRoot: () => cwd,
@@ -390,7 +390,7 @@ describe("Plan session state", () => {
 		});
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as unknown as AgentSessionRuntime,
-			getSession: () => session as AgentSessionRuntime,
+			getSession: () => session as unknown as AgentSession,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",
@@ -434,7 +434,7 @@ describe("Plan session state", () => {
 		});
 		const rs: IRuntimeStore = {
 			getRuntime: () => undefined as unknown as AgentSessionRuntime,
-			getSession: () => session as AgentSessionRuntime,
+			getSession: () => session as unknown as AgentSession,
 			getSessionManager: () => undefined,
 			getCwd: () => "/tmp",
 			getProjectRoot: () => "/tmp",

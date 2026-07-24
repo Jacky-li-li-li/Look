@@ -28,7 +28,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		guardOptionalString(data.projectId, "projectId");
 		const projectId = data.projectId ?? ctx.projectService.getActiveProject()?.id;
 		if (projectId) await promptForProjectTrust(ctx.runtimeManager, projectId, ctx.mainWindow);
-		const id = await ctx.sessionLifecycle.createAgent({ name: data.name, projectId: data.projectId });
+		const id = await ctx.sessionLifecycle.createAgent({ name: data.name, projectId });
 		return { success: true, agentId: id };
 	});
 

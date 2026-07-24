@@ -8,7 +8,7 @@ import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
 import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
-import { toProviderConfig } from "../../settings/custom-providers.js";
+import { assertValid, toProviderConfig } from "../../settings/custom-providers.js";
 import {
 	guardBoolean,
 	guardCustomProviderInput,
@@ -80,6 +80,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 
 	register("settings:test-custom-provider", async (data) => {
 		const input = guardCustomProviderInput(data.payload, "payload");
+		assertValid(input);
 		const memCredentials = new InMemoryCredentialStore();
 		if (input.apiKey) {
 			await memCredentials.modify(input.name, async () => ({ type: "api_key" as const, key: input.apiKey }));
@@ -173,9 +174,6 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		}
 		if ("themeTone" in settings) {
 			guardEnum(settings.themeTone, "settings.themeTone", ["light", "dark"] as const);
-			if (!ctx.mainWindow.isDestroyed()) {
-				ctx.mainWindow.setBackgroundColor(settings.themeTone === "light" ? "#fbfbfa" : "#030202");
-			}
 		}
 		if ("autoTitleModel" in settings) {
 			guardNullableString(settings.autoTitleModel, "settings.autoTitleModel");
@@ -195,6 +193,15 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		}
 		if ("aiAvatar" in settings) {
 			guardNullableString(settings.aiAvatar, "settings.aiAvatar");
+		}
+		if ("sidebarCollapsed" in settings) {
+			guardBoolean(settings.sidebarCollapsed, "settings.sidebarCollapsed");
+		}
+		if ("rightPanelCollapsed" in settings) {
+			guardBoolean(settings.rightPanelCollapsed, "settings.rightPanelCollapsed");
+		}
+		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
+			ctx.mainWindow.setBackgroundColor(settings.themeTone === "light" ? "#fbfbfa" : "#030202");
 		}
 		const updated = await ctx.sessionSettings.update(settings);
 

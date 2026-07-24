@@ -5,10 +5,10 @@
 // and enable independent testing of sub-session tracking,
 // finalization, cleanup, and cascading abort/destroy logic.
 //
-// Depends on ISubAgentRuntimeHost (7 methods) + SubAgentRegistry.
+// Depends on ISubAgentRuntimeHost (5 methods) + SubAgentRegistry.
 // ISP: uses getRuntime, getSession, emit, disposeRuntime,
-// getStoredSessionPath, getSessionCwd, hasCleanupTimer — not the
-// full IRuntimeLifecycle (11 methods).
+// getStoredSessionPath — not the full IRuntimeLifecycle (11 methods).
+// (hasCleanupTimer here is the service's own method, not a host call.)
 // ============================================================
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";

@@ -76,9 +76,13 @@ export class SkillManagementService {
 				),
 			);
 			const importedCount = merged.filter((path) => !currentPaths.has(path)).length;
-			if (importedCount === 0) return { success: true, importedCount: 0 };
-			settingsManager.setSkillPaths(merged);
-			await settingsManager.flush();
+			// No new paths: skip persisting, but still reload every runtime so
+			// skills added to an already-imported directory are picked up
+			// (ResourceLoader has no file watcher).
+			if (importedCount > 0) {
+				settingsManager.setSkillPaths(merged);
+				await settingsManager.flush();
+			}
 			await Promise.all(
 				Array.from(this.options.runtimeRegistry.values()).map((managed) => managed.runtime.session.reload()),
 			);

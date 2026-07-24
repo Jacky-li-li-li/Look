@@ -40,14 +40,14 @@ function createService(initialPaths: string[]) {
 }
 
 describe("SkillManagementService.importPaths", () => {
-	it("does not reload sessions when every requested path is already imported", async () => {
+	it("still reloads sessions without persisting when every requested path is already imported", async () => {
 		const skillDirectory = mkdtempSync(join(tmpdir(), "look-skills-"));
 		temporaryDirectories.push(skillDirectory);
 		const { service, flush, reload, getSkillPaths } = createService([skillDirectory]);
 
 		await expect(service.importPaths([skillDirectory])).resolves.toEqual({ success: true, importedCount: 0 });
 		expect(flush).not.toHaveBeenCalled();
-		expect(reload).not.toHaveBeenCalled();
+		expect(reload).toHaveBeenCalledOnce();
 		expect(getSkillPaths()).toEqual([skillDirectory]);
 	});
 

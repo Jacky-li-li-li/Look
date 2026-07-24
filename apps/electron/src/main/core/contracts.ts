@@ -57,14 +57,12 @@ export interface IRuntimeStore {
  * interface — not the full IRuntimeLifecycle.
  *
  * Methods: getRuntime, getSession, getStoredSessionPath,
- * getSessionCwd, hasCleanupTimer, disposeRuntime, emit.
+ * disposeRuntime, emit.
  */
 export interface ISubAgentRuntimeHost {
 	getRuntime(sessionId: string): AgentSessionRuntime | undefined;
 	getSession(sessionId: string): AgentSession | undefined;
 	getStoredSessionPath(sessionId: string): string | undefined;
-	getSessionCwd(sessionId: string): string;
-	hasCleanupTimer(sessionId: string): boolean;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
 	emit(event: MainToRendererEvent): void;
 }
@@ -227,7 +225,7 @@ export interface IHeadlessExecutionHost {
 			| string,
 	): Promise<string>;
 	setModel(sessionId: string, modelKey: string): Promise<void>;
-	setInternalPermissionMode(sessionId: string, mode: import("@look/shared/types").PermissionMode): void;
+	setInternalPermissionMode(sessionId: string, mode: import("@look/shared/types").PermissionMode): Promise<void>;
 	getSession(sessionId: string): import("@earendil-works/pi-coding-agent").AgentSession | undefined;
 	abortAgent(sessionId: string): Promise<void>;
 	sendMessage(sessionId: string, text: string, images?: import("@earendil-works/pi-ai").ImageContent[]): Promise<void>;
