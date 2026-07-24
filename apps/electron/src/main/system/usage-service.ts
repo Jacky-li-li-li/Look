@@ -28,6 +28,7 @@ export interface UsageData {
 
 let cachedData: UsageData | null = null;
 let pendingRefresh: Promise<UsageData> | null = null;
+let dirtyEpoch = 0;
 
 /** Format a timestamp as a local-calendar date key: YYYY-MM-DD. */
 function formatLocalDate(value: Date | number | string): string {
@@ -163,16 +164,21 @@ async function backfillFromProjects(projects: ProjectInfo[]): Promise<UsageData>
 /** Reset cached data — called when a new turn completes. */
 export function markUsageDirty(): void {
 	cachedData = null;
+	dirtyEpoch++;
 }
 
 /** Return aggregated daily usage from all project session files. */
 export async function getUsage(projects: ProjectInfo[]): Promise<UsageData> {
 	if (cachedData) return cachedData;
 	if (pendingRefresh) return pendingRefresh;
+	const epochAtStart = dirtyEpoch;
 	pendingRefresh = backfillFromProjects(projects).finally(() => {
 		pendingRefresh = null;
 	});
-	cachedData = await pendingRefresh;
+	const data = await pendingRefresh;
+	// A scan that started before the latest markUsageDirty is stale; discard and rescan.
+	if (epochAtStart !== dirtyEpoch) return getUsage(projects);
+	cachedData = data;
 	return cachedData;
 }
 

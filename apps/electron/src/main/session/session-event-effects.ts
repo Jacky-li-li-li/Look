@@ -24,8 +24,13 @@ export interface SessionEventEffectsOptions {
 	emitError(error: unknown, sessionId: string): void;
 }
 
+/** Debounce window for usage:updated emits (assistant message_end can fire dozens of times per turn). */
+const USAGE_EMIT_DEBOUNCE_MS = 300;
+
 /** Owns non-rendering side effects triggered by terminal SDK session events. */
 export class SessionEventEffects {
+	private usageEmitTimer: ReturnType<typeof setTimeout> | null = null;
+
 	constructor(private readonly options: SessionEventEffectsOptions) {}
 
 	async onAgentEnd(sessionId: string): Promise<void> {
@@ -41,8 +46,9 @@ export class SessionEventEffects {
 	async onMessageEnd(sessionId: string, message: AgentMessage): Promise<void> {
 		if (message.role === "assistant") {
 			this.options.subAgentRuntimeService.trackSubSessionMessageEnd(sessionId, message);
+			if (message.stopReason === "aborted") return;
 			markUsageDirty();
-			this.options.emitUsageUpdated();
+			this.scheduleUsageEmit();
 			return;
 		}
 		if (message.role === "user") {
@@ -61,7 +67,18 @@ export class SessionEventEffects {
 	}
 
 	dispose(): void {
-		// no-op — usage data is computed on demand
+		if (this.usageEmitTimer) {
+			clearTimeout(this.usageEmitTimer);
+			this.usageEmitTimer = null;
+		}
+	}
+
+	private scheduleUsageEmit(): void {
+		if (this.usageEmitTimer) clearTimeout(this.usageEmitTimer);
+		this.usageEmitTimer = setTimeout(() => {
+			this.usageEmitTimer = null;
+			this.options.emitUsageUpdated();
+		}, USAGE_EMIT_DEBOUNCE_MS);
 	}
 
 	private async generateTitle(sessionId: string, userMessage: AgentMessage): Promise<void> {

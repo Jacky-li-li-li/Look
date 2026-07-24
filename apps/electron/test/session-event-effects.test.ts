@@ -50,13 +50,16 @@ function makeMockMessage(overrides: Partial<AgentMessage>): AgentMessage {
 
 describe("SessionEventEffects", () => {
 	afterEach(() => {
+		vi.useRealTimers();
 		vi.clearAllMocks();
 	});
 
 	it("marks usage dirty, emits updated, and refreshes project after assistant message", async () => {
+		vi.useFakeTimers();
 		const { effects, options } = makeEffects();
 		const assistant = makeMockMessage({});
 		await effects.onMessageEnd("session-1", assistant);
+		vi.advanceTimersByTime(300);
 		await effects.onAgentEnd("session-1");
 
 		expect(options.subAgentRuntimeService.trackSubSessionMessageEnd).toHaveBeenCalledWith("session-1", assistant);
@@ -67,6 +70,43 @@ describe("SessionEventEffects", () => {
 		expect(options.refreshProjectSessions).toHaveBeenCalledWith("project-1");
 		expect(options.emitSessionUpdated).toHaveBeenCalledWith("session-1");
 		expect(options.emitSessionList).toHaveBeenCalledWith("project-1");
+	});
+
+	it("debounces usage emits across a burst of assistant messages", async () => {
+		vi.useFakeTimers();
+		const { effects, options } = makeEffects();
+		await effects.onMessageEnd("session-1", makeMockMessage({}));
+		await effects.onMessageEnd("session-1", makeMockMessage({ stopReason: "toolUse" }));
+		await effects.onMessageEnd("session-1", makeMockMessage({}));
+
+		expect(markUsageDirty).toHaveBeenCalledTimes(3);
+		vi.advanceTimersByTime(299);
+		expect(options.emitUsageUpdated).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(1);
+		expect(options.emitUsageUpdated).toHaveBeenCalledOnce();
+		effects.dispose();
+	});
+
+	it("skips usage tracking for aborted assistant messages", async () => {
+		vi.useFakeTimers();
+		const { effects, options } = makeEffects();
+		const aborted = makeMockMessage({ stopReason: "aborted" });
+		await effects.onMessageEnd("session-1", aborted);
+		vi.advanceTimersByTime(1000);
+
+		expect(options.subAgentRuntimeService.trackSubSessionMessageEnd).toHaveBeenCalledWith("session-1", aborted);
+		expect(markUsageDirty).not.toHaveBeenCalled();
+		expect(options.emitUsageUpdated).not.toHaveBeenCalled();
+	});
+
+	it("cancels a pending usage emit on dispose", async () => {
+		vi.useFakeTimers();
+		const { effects, options } = makeEffects();
+		await effects.onMessageEnd("session-1", makeMockMessage({}));
+		effects.dispose();
+		vi.advanceTimersByTime(1000);
+
+		expect(options.emitUsageUpdated).not.toHaveBeenCalled();
 	});
 
 	it("ignores user messages for usage tracking", async () => {
