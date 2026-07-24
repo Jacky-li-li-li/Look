@@ -38,6 +38,8 @@ export interface ProviderSetting {
 	models: AvailableModel[];
 	authSource?: string;
 	envLabel?: string;
+	hasLogin: boolean;
+	supportsApiKey: boolean;
 }
 
 export interface ProviderSettingsResult {
@@ -80,10 +82,30 @@ export function getProviders(modelRegistry: ModelRegistry): ProviderInfo[] {
 		name,
 		hasCredentials: modelRegistry.getProviderAuthStatus(id).configured,
 		models: modelRegistry.getAvailable().flatMap((model) => (model.provider === id ? [model.id] : [])),
+		supportsLogin: providerSupportsLogin(id, modelRegistry),
 	}));
 }
 
 /** Get settings-UI provider listing with custom provider stats. */
+/**
+ * Check whether a provider offers an OAuth-based interactive login flow.
+ *
+ * Providers with auth.oauth: anthropic, github-copilot, kimi-coding,
+ * openai-codex, openrouter, radius, xai.
+ */
+function providerSupportsLogin(providerId: string, modelRegistry: ModelRegistry): boolean {
+	// Check extension-registered native providers
+	const nativeProvider = modelRegistry.getRegisteredNativeProvider(providerId);
+	if (nativeProvider?.auth?.oauth) return true;
+	// Check config-registered providers
+	const config = modelRegistry.getRegisteredProviderConfig(providerId);
+	if (config?.oauth) return true;
+	// Check all providers via getProvider() (covers built-in pi providers)
+	const allProvider = modelRegistry.getProvider(providerId);
+	if (allProvider?.auth?.oauth) return true;
+	return false;
+}
+
 export function getProviderSettings(
 	modelRegistry: ModelRegistry,
 	customProvidersStore: CustomProvidersStore,
@@ -105,6 +127,8 @@ export function getProviderSettings(
 				models,
 				authSource: auth.source,
 				envLabel: auth.label,
+				hasLogin: providerSupportsLogin(provider.id, modelRegistry),
+				supportsApiKey: !!modelRegistry.getProvider(provider.id)?.auth?.apiKey,
 			},
 		];
 	});

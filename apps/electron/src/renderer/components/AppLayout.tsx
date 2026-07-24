@@ -20,6 +20,7 @@ import EmptySessionState from "./chat/EmptySessionState";
 import WelcomeScreen from "./chat/WelcomeScreen";
 import DeleteProjectDialog from "./dialogs/DeleteProjectDialog";
 import NewProjectDialog from "./dialogs/NewProjectDialog";
+import OAuthLoginDialog from "./dialogs/OAuthLoginDialog";
 import PermissionDialog from "./dialogs/PermissionDialog";
 import PlanApprovalDialog from "./dialogs/PlanApprovalDialog";
 import PlanQuestionDialog from "./dialogs/PlanQuestionDialog";
@@ -267,6 +268,7 @@ function AppLayout({
 						defaultTab={settingsTab}
 					/>
 				)}
+				<OAuthLoginDialog />
 				<PermissionDialog />
 				<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 				<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />

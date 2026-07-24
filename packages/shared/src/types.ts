@@ -595,7 +595,21 @@ export type MainToRendererEvent =
 	// ---- Usage data updated (after a turn completes) ----
 	// ---- Context usage实时更新（流式输出期间轻量推送） ----
 	| WithAgentId<{ type: "agent:context-usage"; contextUsage: ContextUsage }>
-	| { type: "usage:updated" };
+	| { type: "usage:updated" }
+	// ---- OAuth login prompt (main → renderer) ----
+	| {
+			type: "login:prompt";
+			providerId: string;
+			promptId: string;
+			prompt:
+				| { type: "select"; message: string; options: Array<{ id: string; label: string; description?: string }> }
+				| { type: "manual_code"; message: string; placeholder?: string }
+				| { type: "info"; message: string }
+				| { type: "auth_url"; url: string; instructions?: string }
+				| { type: "device_code"; userCode: string; verificationUri: string }
+				| { type: "progress"; message: string };
+	  }
+	| { type: "login:completed"; providerId: string; success: boolean; error?: string };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
 export interface CustomProviderModelInput {
@@ -676,6 +690,11 @@ export type RendererToMainEvent =
 	| { type: "settings:set-api-key"; provider: string; key: string }
 	| { type: "settings:test-api-key"; provider: string; key: string }
 	| { type: "settings:test-env-key"; provider: string }
+	// Renderer responds to an OAuth login prompt from the main process
+	| { type: "login:prompt-respond"; promptId: string; value: string }
+	| { type: "login:prompt-cancel"; promptId: string }
+	| { type: "settings:provider-login"; provider: string }
+	| { type: "settings:provider-logout"; provider: string }
 	| { type: "settings:general:get" }
 	// ---- Custom provider IPC ----
 	| { type: "settings:add-custom-provider"; payload: CustomProviderInput }
@@ -942,6 +961,7 @@ export interface ProviderInfo {
 	name: string;
 	hasCredentials: boolean;
 	models: string[];
+	supportsLogin: boolean;
 }
 
 // ============================================================

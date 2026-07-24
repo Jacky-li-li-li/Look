@@ -91,6 +91,11 @@ export class SessionNotifier {
 		if (info) this.eventBus.emit({ type: "agent:updated", agentId: info.id, agent: info });
 	}
 
+	/** Emit an arbitrary event to the renderer. Used for OAuth login prompts etc. */
+	emit(event: import("@look/shared/types").MainToRendererEvent): void {
+		this.eventBus.emit(event);
+	}
+
 	emitContextUsage(sessionId: string): void {
 		const now = Date.now();
 		const last = this.contextUsageLastEmit.get(sessionId) ?? 0;

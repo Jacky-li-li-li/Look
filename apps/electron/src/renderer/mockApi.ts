@@ -422,7 +422,7 @@ const mockApi = {
 	logout: () => ok,
 
 	// ---- Usage ----
-	getUsage: () => success({ usage: { usage: {}, modelCost: {}, years: [] } }),
+	getUsage: () => success({ usage: { usage: {}, modelCost: {}, modelUsage: {}, years: [] } }),
 
 	// ---- IM Channels ----
 	getImChannels: () => success({ channels: [] }),

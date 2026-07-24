@@ -39,6 +39,8 @@ export interface ProviderSettingsData {
 		}>;
 		authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
 		envLabel?: string;
+		hasLogin: boolean;
+		supportsApiKey: boolean;
 	}>;
 	customProviders: CustomProviderInput[];
 	customStats: { configured: number; totalModels: number };
@@ -300,6 +302,16 @@ export interface LookAPI {
 		appSecret: string,
 	): Promise<{ success: boolean; message?: string; error?: string }>;
 	updateImChannel(appId: string, updates: { name?: string }): Promise<{ success: boolean; error?: string }>;
+	// ---- Provider OAuth login ----
+	/** Initiate an OAuth login flow for a provider (e.g. OpenRouter, Kimi Code). */
+	providerLogin(provider: string): Promise<IpcResult<ProviderSettingsData>>;
+	/** Respond to an interactive login prompt from the main process. */
+	respondLoginPrompt(promptId: string, value: string): Promise<IpcResult>;
+	/** Cancel an interactive login prompt. */
+	cancelLoginPrompt(promptId: string): Promise<IpcResult>;
+	/** Log out / clear stored credentials for a provider. */
+	providerLogout(provider: string): Promise<IpcResult<ProviderSettingsData>>;
+
 	// ---- MCP tools ----
 	listAllMcpTools(): Promise<{
 		success: boolean;

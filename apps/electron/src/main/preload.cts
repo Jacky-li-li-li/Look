@@ -83,6 +83,17 @@ const api: LookAPI = {
 	// never has to know the variable name).
 	testEnvKey: (provider) => ipcRenderer.invoke("look:invoke", { type: "settings:test-env-key", provider }),
 
+	// ---- Provider OAuth login ----
+	providerLogin: (provider) => ipcRenderer.invoke("look:invoke", { type: "settings:provider-login", provider }),
+
+	providerLogout: (provider) => ipcRenderer.invoke("look:invoke", { type: "settings:provider-logout", provider }),
+
+	respondLoginPrompt: (promptId, value) =>
+		ipcRenderer.invoke("look:invoke", { type: "login:prompt-respond", promptId, value }),
+
+	cancelLoginPrompt: (promptId) =>
+		ipcRenderer.invoke("look:invoke", { type: "login:prompt-cancel", promptId }),
+
 	// ---- Custom providers ----
 	addCustomProvider: (input) =>
 		ipcRenderer.invoke("look:invoke", { type: "settings:add-custom-provider", payload: input }),

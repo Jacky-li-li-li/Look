@@ -19,6 +19,8 @@ export interface ProviderInfo {
 	models?: ProviderModelInfo[];
 	authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
 	envLabel?: string;
+	hasLogin: boolean;
+	supportsApiKey: boolean;
 }
 
 export type TestVerdict = { verdict: "ok" | "error" | "skipped"; reason?: string } | null;

@@ -13,7 +13,10 @@ function writeJsonl(filePath: string, entries: unknown[]): void {
 	fs.writeFileSync(filePath, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
 }
 
-function makeProject(id: string, name: string): { id: string; name: string; cwd: string; createdAt: number; valid: boolean } {
+function makeProject(
+	id: string,
+	name: string,
+): { id: string; name: string; cwd: string; createdAt: number; valid: boolean } {
 	return { id, name, cwd: "/nonexistent", createdAt: Date.now(), valid: true };
 }
 

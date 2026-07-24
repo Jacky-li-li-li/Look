@@ -54,6 +54,134 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		return { success: true, result };
 	});
 
+	// Track pending OAuth prompts that need renderer interaction.
+	const pendingPrompts = new Map<
+		string,
+		{ resolve: (value: string) => void; reject: (err: Error) => void }
+	>();
+
+	register("login:prompt-respond", async (data) => {
+		const promptId = guardString(data.promptId, "promptId");
+		const value = guardString(data.value, "value");
+		const pending = pendingPrompts.get(promptId);
+		if (pending) {
+			pendingPrompts.delete(promptId);
+			pending.resolve(value);
+		}
+		return { success: true };
+	});
+
+	register("login:prompt-cancel", async (data) => {
+		const promptId = guardString(data.promptId, "promptId");
+		const pending = pendingPrompts.get(promptId);
+		if (pending) {
+			pendingPrompts.delete(promptId);
+			pending.reject(new Error("Login cancelled"));
+		}
+		return { success: true };
+	});
+
+	register("settings:provider-login", async (data) => {
+		const _provider = guardProvider(data.provider);
+
+		const providerObj = ctx.modelRuntime.getProvider(_provider);
+		const providerName = providerObj?.name ?? _provider;
+
+		if (!providerObj?.auth?.oauth) {
+			return {
+				success: false,
+				error: `${providerName} does not support OAuth login`,
+			};
+		}
+
+		const interaction: import("@earendil-works/pi-ai").AuthInteraction = {
+			signal: undefined,
+			prompt: async (prompt) => {
+				const promptId = crypto.randomUUID();
+				const promptEvent: import("@look/shared/types").MainToRendererEvent = {
+					type: "login:prompt",
+					providerId: _provider,
+					promptId,
+					prompt:
+						prompt.type === "select"
+							? { type: "select", message: prompt.message, options: [...prompt.options] }
+							: prompt.type === "manual_code"
+								? { type: "manual_code", message: prompt.message, placeholder: prompt.placeholder }
+								: { type: "info", message: prompt.message },
+				};
+				ctx.sessionNotifier.emit(promptEvent);
+
+				return new Promise<string>((resolve, reject) => {
+					pendingPrompts.set(promptId, { resolve, reject });
+				});
+			},
+			notify: (event) => {
+				if (event.type === "auth_url") {
+					ctx.sessionNotifier.emit({
+						type: "login:prompt",
+						providerId: _provider,
+						promptId: crypto.randomUUID(),
+						prompt: { type: "auth_url", url: event.url, instructions: event.instructions },
+					});
+				} else if (event.type === "device_code") {
+					ctx.sessionNotifier.emit({
+						type: "login:prompt",
+						providerId: _provider,
+						promptId: crypto.randomUUID(),
+						prompt: {
+							type: "device_code",
+							userCode: event.userCode,
+							verificationUri: event.verificationUri,
+						},
+					});
+				} else if (event.type === "progress" || event.type === "info") {
+					ctx.sessionNotifier.emit({
+						type: "login:prompt",
+						providerId: _provider,
+						promptId: crypto.randomUUID(),
+						prompt: { type: "progress", message: event.message },
+					});
+				}
+			},
+		};
+
+		try {
+			await ctx.modelRuntime.login(_provider, "oauth", interaction);
+			ctx.sessionNotifier.emit({
+				type: "login:completed",
+				providerId: _provider,
+				success: true,
+			});
+			const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+			return { success: true, ...result };
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			ctx.sessionNotifier.emit({
+				type: "login:completed",
+				providerId: _provider,
+				success: false,
+				error: message,
+			});
+			if (message === "Login cancelled") {
+				const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+				return { success: false, ...result, error: message };
+			}
+			return { success: false, error: message };
+		}
+	});
+
+	register("settings:provider-logout", async (data) => {
+		const _provider = guardProvider(data.provider);
+		try {
+			await ctx.modelRuntime.logout(_provider);
+			const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+			return { success: true, ...result };
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return { success: false, error: message };
+		}
+	});
+
 	register("settings:add-custom-provider", async (data) => {
 		const input = guardCustomProviderInput(data.payload, "payload");
 		ctx.customProviders.add(input);

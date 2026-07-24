@@ -11,7 +11,34 @@ import path from "node:path";
 import { getWorkspaceSessionsDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { ProjectInfo } from "@look/shared/types";
 
-// ── Data model ──
+// ── SDK-aligned data model ──
+//
+// Mirrors the pi SDK's Usage type from session JSONL assistant messages.
+// The SDK persists usage.cost.{input,output,cacheRead,cacheWrite,total}
+// and usage.{input,output,cacheRead,cacheWrite,reasoning,totalTokens}.
+
+export interface SdkUsageCost {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	total: number;
+}
+
+export interface SdkUsage {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	reasoning?: number;
+	totalTokens: number;
+	cost: SdkUsageCost;
+}
+
+/** Aggregated daily usage: sums of raw SdkUsage objects per model. */
+export interface AggregatedUsage extends SdkUsage {
+	turns: number;
+}
 
 export interface ModelCostEntry {
 	turns: number;
@@ -21,6 +48,8 @@ export interface ModelCostEntry {
 export interface UsageData {
 	usage: Record<string, number>;
 	modelCost: Record<string, Record<string, ModelCostEntry>>;
+	/** Per-day per-model aggregated SDK Usage objects */
+	modelUsage: Record<string, Record<string, AggregatedUsage>>;
 	years: number[];
 }
 
@@ -79,23 +108,43 @@ function isCompletedAssistantMessage(entry: unknown): entry is { message: Record
 	return extractStopReason(message as Record<string, unknown>) !== "aborted";
 }
 
-function extractModelAndCost(message: Record<string, unknown>): {
-	model: string | undefined;
-	cost: number | undefined;
-} {
+function extractNumeric(obj: Record<string, unknown> | null | undefined, key: string): number {
+	const val = obj?.[key];
+	return typeof val === "number" ? val : 0;
+}
+
+function extractSdkUsage(message: Record<string, unknown>): { model: string | undefined; usage: SdkUsage } {
 	const model = typeof message.model === "string" && message.model ? message.model : undefined;
 	const usage = message.usage;
 	const usageObj = usage && typeof usage === "object" ? (usage as Record<string, unknown>) : null;
 	const costObj =
 		usageObj?.cost && typeof usageObj.cost === "object" ? (usageObj.cost as Record<string, unknown>) : null;
-	const cost = costObj && typeof costObj.total === "number" ? costObj.total : undefined;
-	return { model, cost };
+
+	return {
+		model,
+		usage: {
+			input: extractNumeric(usageObj, "input"),
+			output: extractNumeric(usageObj, "output"),
+			cacheRead: extractNumeric(usageObj, "cacheRead"),
+			cacheWrite: extractNumeric(usageObj, "cacheWrite"),
+			reasoning: usageObj?.reasoning != null ? (usageObj.reasoning as number) : undefined,
+			totalTokens: extractNumeric(usageObj, "totalTokens"),
+			cost: {
+				total: extractNumeric(costObj, "total"),
+				input: extractNumeric(costObj, "input"),
+				output: extractNumeric(costObj, "output"),
+				cacheRead: extractNumeric(costObj, "cacheRead"),
+				cacheWrite: extractNumeric(costObj, "cacheWrite"),
+			},
+		},
+	};
 }
 
 function aggregateJsonlFile(
 	filePath: string,
 	turns: Record<string, number>,
 	modelCost: Record<string, Record<string, ModelCostEntry>>,
+	modelUsage: Record<string, Record<string, AggregatedUsage>>,
 ): void {
 	let raw: string;
 	try {
@@ -116,16 +165,48 @@ function aggregateJsonlFile(
 		const ts = extractMessageTimestamp(entry.message, typed);
 		if (ts === undefined) continue;
 		const dateKey = formatLocalDate(ts);
-		const { model, cost } = extractModelAndCost(entry.message);
+		const { model, usage } = extractSdkUsage(entry.message);
 
 		turns[dateKey] = (turns[dateKey] ?? 0) + 1;
 		const effectiveModel = model || "unknown";
+
+		// Legacy flat cost entry
 		if (!modelCost[dateKey]) modelCost[dateKey] = {};
 		if (!modelCost[dateKey][effectiveModel]) {
 			modelCost[dateKey][effectiveModel] = { turns: 0, cost: 0 };
 		}
 		modelCost[dateKey][effectiveModel].turns++;
-		modelCost[dateKey][effectiveModel].cost += cost ?? 0;
+		modelCost[dateKey][effectiveModel].cost += usage.cost.total;
+
+		// Aggregate raw SdkUsage per model per day
+		if (!modelUsage[dateKey]) modelUsage[dateKey] = {};
+		if (!modelUsage[dateKey][effectiveModel]) {
+			modelUsage[dateKey][effectiveModel] = {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				reasoning: undefined,
+				turns: 0,
+			};
+		}
+		const agg = modelUsage[dateKey][effectiveModel];
+		agg.turns++;
+		agg.input += usage.input;
+		agg.output += usage.output;
+		agg.cacheRead += usage.cacheRead;
+		agg.cacheWrite += usage.cacheWrite;
+		agg.totalTokens += usage.totalTokens;
+		agg.cost.total += usage.cost.total;
+		agg.cost.input += usage.cost.input;
+		agg.cost.output += usage.cost.output;
+		agg.cost.cacheRead += usage.cost.cacheRead;
+		agg.cost.cacheWrite += usage.cost.cacheWrite;
+		if (usage.reasoning !== undefined) {
+			agg.reasoning = (agg.reasoning ?? 0) + usage.reasoning;
+		}
 	}
 }
 
@@ -133,6 +214,7 @@ async function scanDirectory(
 	dir: string,
 	turns: Record<string, number>,
 	modelCost: Record<string, Record<string, ModelCostEntry>>,
+	modelUsage: Record<string, Record<string, AggregatedUsage>>,
 ): Promise<void> {
 	let files: string[];
 	try {
@@ -143,22 +225,23 @@ async function scanDirectory(
 		return;
 	}
 	for (const file of files) {
-		aggregateJsonlFile(file, turns, modelCost);
+		aggregateJsonlFile(file, turns, modelCost, modelUsage);
 	}
 }
 
 async function backfillFromProjects(projects: ProjectInfo[]): Promise<UsageData> {
 	const turns: Record<string, number> = {};
 	const modelCost: Record<string, Record<string, ModelCostEntry>> = {};
+	const modelUsage: Record<string, Record<string, AggregatedUsage>> = {};
 	const dirsToScan: string[] = [];
 	for (const project of projects) {
 		if (!project.valid) continue;
 		dirsToScan.push(getWorkspaceSessionsDir(project.id));
 		dirsToScan.push(getWorkspaceSubsessionsDir(project.id));
 	}
-	await Promise.all(dirsToScan.map((dir) => scanDirectory(dir, turns, modelCost)));
+	await Promise.all(dirsToScan.map((dir) => scanDirectory(dir, turns, modelCost, modelUsage)));
 	const years = collectYears(turns);
-	return { usage: turns, modelCost, years };
+	return { usage: turns, modelCost, modelUsage, years };
 }
 
 /** Reset cached data — called when a new turn completes. */

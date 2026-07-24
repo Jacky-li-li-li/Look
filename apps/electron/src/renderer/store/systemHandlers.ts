@@ -1,6 +1,13 @@
 import type { MainToRendererEvent } from "@shared/types";
 import { appStore } from "./appStore";
-import { mcpStatusVersionAtom, updateStatusAtom, usageDataAtom, usageVersionAtom } from "./atoms";
+import {
+	loginCompletedAtom,
+	loginPromptAtom,
+	mcpStatusVersionAtom,
+	updateStatusAtom,
+	usageDataAtom,
+	usageVersionAtom,
+} from "./atoms";
 
 export function handleSystemEvent(event: MainToRendererEvent): boolean {
 	switch (event.type) {
@@ -39,11 +46,7 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 				.then((result) => {
 					const r = result as {
 						success: boolean;
-						usage?: {
-							usage: Record<string, number>;
-							modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
-							years: number[];
-						};
+						usage?: import("../store/atoms").UsageAtomData;
 					};
 					if (r?.success && r.usage) {
 						appStore.set(usageDataAtom, r.usage);
@@ -52,6 +55,26 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 				.catch((err: unknown) => {
 					console.error("[ipcHandler] usage:updated refresh failed:", err);
 				});
+			return true;
+		}
+
+		case "login:prompt": {
+			appStore.set(loginPromptAtom, {
+				providerId: event.providerId,
+				promptId: event.promptId,
+				providerName: event.providerId,
+				prompt: event.prompt,
+			});
+			return true;
+		}
+
+		case "login:completed": {
+			appStore.set(loginPromptAtom, null);
+			appStore.set(loginCompletedAtom, {
+				providerId: event.providerId,
+				success: event.success,
+				error: event.error,
+			});
 			return true;
 		}
 

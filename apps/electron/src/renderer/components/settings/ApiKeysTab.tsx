@@ -158,6 +158,8 @@ function BuiltInProviderRow({
 	onSave,
 	onForceSave,
 	onClearClick,
+	onLoginClick,
+	onLogoutClick,
 }: {
 	provider: ProviderInfo;
 	isEditing: boolean;
@@ -179,6 +181,8 @@ function BuiltInProviderRow({
 	onSave: () => void;
 	onForceSave: () => void;
 	onClearClick: () => void;
+	onLoginClick: () => void;
+	onLogoutClick: () => void;
 }) {
 	const { t } = useTranslation();
 	const track = providerTrack(provider, testStatus[provider.id]);
@@ -241,19 +245,43 @@ function BuiltInProviderRow({
 					)}
 					onClick={(e) => e.stopPropagation()}
 				>
-					<Button
-						variant={isEditing ? "line-filled" : "line"}
-						size="xs"
-						className="h-7 text-[10px]"
-						onClick={() => (isEditing ? onCloseEditor() : onOpenEditor())}
-						aria-label={
-							isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")
-						}
-					>
-						<Key data-icon="inline-start" className="size-3" aria-hidden="true" />
-						{isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")}
-					</Button>
-					{clearable && (
+					{provider.hasLogin && provider.hasKey && (
+						<Button
+							variant="line"
+							size="xs"
+							className="h-7 text-[10px]"
+							onClick={onLogoutClick}
+							aria-label={t("settings.logout")}
+						>
+							{t("settings.logout")}
+						</Button>
+					)}
+					{provider.hasLogin && !provider.hasKey && (
+						<Button
+							variant="line-filled"
+							size="xs"
+							className="h-7 text-[10px]"
+							onClick={onLoginClick}
+							aria-label={t("settings.login")}
+						>
+							{t("settings.login")}
+						</Button>
+					)}
+					{provider.supportsApiKey && (
+						<Button
+							variant={isEditing ? "line-filled" : "line"}
+							size="xs"
+							className="h-7 text-[10px]"
+							onClick={() => (isEditing ? onCloseEditor() : onOpenEditor())}
+							aria-label={
+								isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")
+							}
+						>
+							<Key data-icon="inline-start" className="size-3" aria-hidden="true" />
+							{isEditing ? t("common.cancel") : provider.hasKey ? t("settings.editKey") : t("settings.addKey")}
+						</Button>
+					)}
+					{clearable && provider.supportsApiKey && (
 						<Button
 							variant="line-ghost"
 							size="icon-xs"
@@ -587,6 +615,45 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		patchCustom("confirmRemove", null);
 	};
 
+	// ── OAuth login / logout ──
+	const handleLogin = async (provider: ProviderInfo) => {
+		if (!api) return;
+		try {
+			const result = await api.providerLogin(provider.id);
+			if (result?.success) {
+				toast.success(t("settings.loginSuccess", { provider: provider.name }));
+				onProvidersChange({
+					providers: result.providers,
+					customProviders: result.customProviders,
+					customStats: result.customStats,
+				});
+			} else {
+				toast.error(result?.error ?? t("settings.loginFailed"));
+			}
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		}
+	};
+
+	const handleLogout = async (provider: ProviderInfo) => {
+		if (!api) return;
+		try {
+			const result = await api.providerLogout(provider.id);
+			if (result?.success) {
+				toast.success(t("settings.logoutSuccess", { provider: provider.name }));
+				onProvidersChange({
+					providers: result.providers,
+					customProviders: result.customProviders,
+					customStats: result.customStats,
+				});
+			} else {
+				toast.error(result?.error ?? t("settings.logoutFailed"));
+			}
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		}
+	};
+
 	// ── render ──
 	const allProviders = [...providers].sort((a, b) => (b.hasKey ? 1 : 0) - (a.hasKey ? 1 : 0));
 
@@ -671,6 +738,8 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 						handleSave={handleSave}
 						handleForceSave={handleForceSave}
 						onClearClick={(p) => patchCustom("confirmClear", p)}
+						onLoginClick={handleLogin}
+						onLogoutClick={handleLogout}
 					/>
 				</div>
 			</div>
@@ -700,6 +769,8 @@ interface BuiltInProviderListProps {
 	handleSave: () => void;
 	handleForceSave: () => void;
 	onClearClick: (provider: ProviderInfo) => void;
+	onLoginClick: (provider: ProviderInfo) => void;
+	onLogoutClick: (provider: ProviderInfo) => void;
 }
 
 function BuiltInProviderList({
@@ -714,6 +785,8 @@ function BuiltInProviderList({
 	handleSave,
 	handleForceSave,
 	onClearClick,
+	onLoginClick,
+	onLogoutClick,
 }: BuiltInProviderListProps) {
 	return (
 		<>
@@ -743,6 +816,8 @@ function BuiltInProviderList({
 						onSave={handleSave}
 						onForceSave={handleForceSave}
 						onClearClick={() => onClearClick(p)}
+						onLoginClick={() => onLoginClick(p)}
+						onLogoutClick={() => onLogoutClick(p)}
 					/>
 				);
 			})}

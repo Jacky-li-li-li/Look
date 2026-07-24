@@ -49,9 +49,36 @@ export const providerSettingsAtom = atom<ProviderSettingsData>({
 
 export const mcpStatusVersionAtom = atom(0);
 
+// ── SDK-aligned usage types ──
+// Mirrors pi SDK's Usage type (from session JSONL assistant messages).
+
+export interface SdkUsageCost {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	total: number;
+}
+
+export interface SdkUsage {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	reasoning?: number;
+	totalTokens: number;
+	cost: SdkUsageCost;
+}
+
+/** Aggregated daily usage per model with turn count. */
+export interface AggregatedUsage extends SdkUsage {
+	turns: number;
+}
+
 export interface UsageAtomData {
 	usage: Record<string, number>;
 	modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
+	modelUsage: Record<string, Record<string, AggregatedUsage>>;
 	years: number[];
 }
 
@@ -90,3 +117,21 @@ export interface ChatInputInsertRequest {
 }
 
 export const chatInputInsertRequestAtom = atom<ChatInputInsertRequest | null>(null);
+
+// ── OAuth login prompt ──
+
+export interface LoginPromptState {
+	providerId: string;
+	promptId: string;
+	providerName: string;
+	prompt:
+		| { type: "select"; message: string; options: Array<{ id: string; label: string; description?: string }> }
+		| { type: "manual_code"; message: string; placeholder?: string }
+		| { type: "auth_url"; url: string; instructions?: string }
+		| { type: "device_code"; userCode: string; verificationUri: string }
+		| { type: "info"; message: string }
+		| { type: "progress"; message: string };
+}
+
+export const loginPromptAtom = atom<LoginPromptState | null>(null);
+export const loginCompletedAtom = atom<{ providerId: string; success: boolean; error?: string } | null>(null);

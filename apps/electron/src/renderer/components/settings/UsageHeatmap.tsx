@@ -231,7 +231,7 @@ export default function UsageHeatmap() {
 				<span>{t("profile.more")}</span>
 			</div>
 
-			<UsageStackedChart modelCost={data?.modelCost ?? {}} selectedYear={selectedYear} />
+			<UsageStackedChart modelUsage={data?.modelUsage ?? {}} selectedYear={selectedYear} />
 		</div>
 	);
 }
