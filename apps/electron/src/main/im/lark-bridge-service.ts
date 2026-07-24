@@ -793,7 +793,9 @@ export class LarkBridgeService {
 		// agent_end 时标记回复就绪
 		if (event.type === "session:snapshot" && event.reason === "agent_end") {
 			const acc = this.replyAccumulators.get(event.sessionId);
-			if (acc && !acc.done) {
+			// willRetry 的自动重试也会发出 agent_end，此时 runtime.isStreaming 仍为 true。
+			// 跳过终结与 fallback，等待真正的最终 agent_end，否则重试后的文本事件找不到 accumulator。
+			if (acc && !acc.done && !event.runtime.isStreaming) {
 				this.replyPresenter.applyFinalTextFallback(acc, this.extractTerminalAssistantText(event.entries));
 				console.log(
 					"[LarkBridgeService] Agent turn ended for session",

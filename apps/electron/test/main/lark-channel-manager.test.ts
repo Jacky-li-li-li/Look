@@ -612,6 +612,68 @@ describe("LarkChannelManager", () => {
 		expect(JSON.stringify(controller.current)).not.toContain("Agent 未返回文本回复");
 	});
 
+	it("waits for the final agent_end when a retry snapshot still reports isStreaming", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		const runtime = createRuntimeMock(async (sessionId, emit) => {
+			const snapshotRuntime = (isStreaming: boolean) => ({
+				thinkingLevel: "off",
+				isStreaming,
+				isRetrying: isStreaming,
+				isCompacting: false,
+				retryAttempt: isStreaming ? 1 : 0,
+				steering: [],
+				followUp: [],
+				stats: {} as never,
+			});
+			// 自动重试（willRetry）发出的 agent_end：runtime 仍在流式，不能终结回复
+			emit({
+				type: "session:snapshot",
+				sessionId,
+				reason: "agent_end",
+				leafId: null,
+				entries: [
+					{
+						type: "message",
+						message: {
+							role: "assistant",
+							content: [{ type: "text", text: "aborted attempt" }],
+						},
+					},
+				] as unknown as Extract<MainToRendererEvent, { type: "session:snapshot" }>["entries"],
+				runtime: snapshotRuntime(true),
+			});
+			// 重试后真正产生的文本事件
+			emit({
+				type: "session:ui-event",
+				sessionId,
+				events: [
+					{ type: "assistant_text_delta", contentIndex: 0, delta: "retried reply", timestamp: Date.now() },
+					{ type: "assistant_text_end", contentIndex: 0, text: "retried reply", timestamp: Date.now() },
+				],
+			});
+			// 真正的最终 agent_end：正常终结并 fallback
+			emit({
+				type: "session:snapshot",
+				sessionId,
+				reason: "agent_end",
+				leafId: null,
+				entries: [],
+				runtime: snapshotRuntime(false),
+			});
+		});
+		manager.onConnectionReady = () => bridge.init(runtime as never, manager);
+
+		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
+		await larkMocks.channels[0].emit("message", sampleMessage("hello agent"));
+		await flushAsync();
+
+		const controller = larkMocks.channels[0].streamControllers[0];
+		expect(JSON.stringify(controller.current)).toContain("retried reply");
+		expect(JSON.stringify(controller.current)).not.toContain("aborted attempt");
+		expect(JSON.stringify(controller.current)).not.toContain("Agent 未返回文本回复");
+	});
+
 	it("reuses the /new session when the next chat message arrives before binding creation finishes", async () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
