@@ -233,9 +233,10 @@ export interface IHeadlessExecutionHost {
 }
 
 /**
- * Narrow host contract for CompositionBuilder, much smaller than
- * SessionRuntimeManager's full public API.
+ * Minimal event and project-query surface needed while composing services.
+ * Runtime lifecycle methods are supplied separately to consumers that
+ * require them; this contract intentionally does not expose the manager.
  */
-export interface RuntimeManagerCompositionHost extends IRuntimeLifecycle, ISessionEventHost {
+export interface ICompositionHost extends IEventBus, ISessionEventHost {
 	listProjects(): import("@look/shared/types").ProjectInfo[];
 }

@@ -9,6 +9,7 @@ import type { RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import type { InvokeContext, InvokeRouteMap } from "./invoke-context.js";
+import type { RendererEventTransport } from "./renderer-event-transport.js";
 import {
 	agentRouter,
 	fileRouter,
@@ -53,6 +54,7 @@ let invokeRouteMap: InvokeRouteMap = {};
 export function registerIpcHandlers(
 	runtimeManager: SessionRuntimeManager,
 	mainWindow: BrowserWindow,
+	rendererEvents: RendererEventTransport,
 	larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager,
 	larkBridgeService?: import("../im/lark-bridge-service.js").LarkBridgeService,
 	schedulerService?: import("../scheduler/scheduler-service.js").SchedulerService,
@@ -65,26 +67,14 @@ export function registerIpcHandlers(
 	const workspaceFileService = runtimeManager.getWorkspaceFileService();
 	// 重建窗口时先清旧 callback,避免 chokidar emit 同时打到新/旧 window(M-7)。
 	workspaceFileService.clearEmitCallback();
-	workspaceFileService.setEmitCallback((event) => {
-		if (!mainWindow.isDestroyed()) {
-			mainWindow.webContents.send("look:event", event);
-		}
-	});
+	workspaceFileService.setEmitCallback((event) => rendererEvents.send(event));
 
 	const workspaceTreeService = runtimeManager.getWorkspaceTreeService();
 	workspaceTreeService.clearEmitCallback();
-	workspaceTreeService.setEmitCallback((event) => {
-		if (!mainWindow.isDestroyed()) {
-			mainWindow.webContents.send("look:event", event);
-		}
-	});
+	workspaceTreeService.setEmitCallback((event) => rendererEvents.send(event));
 
 	// Forward session-scoped runtime events to the renderer.
-	const unsubscribeEvents = runtimeManager.onEvent((event) => {
-		if (!mainWindow.isDestroyed()) {
-			mainWindow.webContents.send("look:event", event);
-		}
-	});
+	const unsubscribeEvents = runtimeManager.onEvent((event) => rendererEvents.send(event));
 
 	mainWindow.on("closed", () => {
 		unsubscribeEvents();
@@ -122,6 +112,7 @@ export function registerIpcHandlers(
 		sessionInfo: comp.sessionInfoService,
 		sessionPermission: comp.sessionPermissionOrchestrator,
 		sessionNotifier: comp.sessionNotifier,
+		runtimeLifecycle: comp.runtimeLifecycle,
 
 		// Agent domain services
 		agentDefinitions: comp.agentDefinitionService,
@@ -132,6 +123,12 @@ export function registerIpcHandlers(
 		projectService: comp.projectService,
 		projectDeletion: comp.projectDeletionService,
 		projectRuntime: comp.projectRuntimeService,
+		projectApplication: comp.projectApplicationService,
+		projectTrust: {
+			getProjectTrustStatus: (projectId) => comp.projectService.getProjectTrustStatus(projectId),
+			listProjects: () => comp.projectService.listProjects(),
+			setProjectTrust: (projectId, trusted) => comp.projectRuntimeService.setProjectTrust(projectId, trusted),
+		},
 
 		// Permission / Plan
 		permissionService: comp.permissionService,

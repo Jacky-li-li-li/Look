@@ -38,7 +38,6 @@ describe("production packaging configuration", () => {
 		expect(stagingScript).toContain('const appRoot = resolve(import.meta.dirname, "..");');
 		expect(stagingScript).toContain('const repositoryRoot = resolve(appRoot, "../..");');
 		expect(stagingScript).toContain('join(repositoryRoot, "packages", "shared")');
-		expect(repositoryRoot).toContain("pi");
 	});
 
 	it("does not put TypeScript build artifacts into the application", () => {

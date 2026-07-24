@@ -11,13 +11,16 @@ import type { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agen
 import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { AgentDefinitionService } from "../agents/definition-service.js";
+import type { IProjectTrustManager } from "../core/contracts.js";
 import type { MCPManager } from "../mcp/manager.js";
 import type { PlanService } from "../permissions/plan.js";
 import type { PermissionService } from "../permissions/service.js";
 import type { ProjectDeletionService } from "../projects/project-deletion-service.js";
 import type { ProjectService } from "../projects/project-service.js";
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
+import type { ProjectApplicationService } from "../session/project-application-service.js";
 import type { ProjectRuntimeService } from "../session/project-runtime-service.js";
+import type { RuntimeLifecycleCoordinator } from "../session/runtime-lifecycle-coordinator.js";
 import type { SessionRuntimeManager } from "../session/runtime-manager.js";
 import type { SessionControlService } from "../session/session-control-service.js";
 import type { SessionHistoryService } from "../session/session-history-service.js";
@@ -72,6 +75,7 @@ export interface InvokeContext {
 	sessionInfo: SessionInfoService;
 	sessionPermission: SessionPermissionOrchestrator;
 	sessionNotifier: SessionNotifier;
+	runtimeLifecycle: RuntimeLifecycleCoordinator;
 
 	// ── Agent domain services ──
 	agentDefinitions: AgentDefinitionService;
@@ -82,6 +86,8 @@ export interface InvokeContext {
 	projectService: ProjectService;
 	projectDeletion: ProjectDeletionService;
 	projectRuntime: ProjectRuntimeService;
+	projectApplication: ProjectApplicationService;
+	projectTrust: IProjectTrustManager;
 
 	// ── Permission / Plan ──
 	permissionService: PermissionService;

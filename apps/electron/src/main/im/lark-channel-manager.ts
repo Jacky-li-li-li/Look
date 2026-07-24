@@ -10,6 +10,7 @@ import type { NormalizedMessage } from "@larksuiteoapi/node-sdk";
 import * as lark from "@larksuiteoapi/node-sdk";
 import crypto from "crypto";
 import type { BrowserWindow } from "electron";
+import { BrowserWindowEventTransport, type RendererEventTransport } from "../ipc/renderer-event-transport.js";
 import {
 	decryptSecret,
 	encryptSecret,
@@ -138,7 +139,7 @@ export type NormalizedMessageHandler = (appId: string, msg: NormalizedMessage) =
 export type ChannelLifecycleHandler = (appId: string) => void | Promise<void>;
 
 export class LarkChannelManager {
-	private mainWindow: BrowserWindow;
+	private rendererEvents: RendererEventTransport;
 	private channels: ImChannelConfig[] = [];
 	// --- v2: 使用 createLarkChannel() 替代 WSClient + EventDispatcher ---
 	/** appId → 独立连接。多 bot 同时在线，互不干扰。 */
@@ -151,12 +152,12 @@ export class LarkChannelManager {
 	onConnectionReady?: ChannelLifecycleHandler;
 	onConnectionClosed?: ChannelLifecycleHandler;
 
-	constructor(mainWindow: BrowserWindow) {
-		this.mainWindow = mainWindow;
+	constructor(target: BrowserWindow | RendererEventTransport) {
+		this.rendererEvents = "send" in target ? target : new BrowserWindowEventTransport(() => target);
 	}
 
 	setMainWindow(win: BrowserWindow): void {
-		this.mainWindow = win;
+		this.rendererEvents = new BrowserWindowEventTransport(() => win);
 	}
 
 	// ============================================================
@@ -181,9 +182,7 @@ export class LarkChannelManager {
 	}
 
 	private sendRendererEvent(payload: ImRendererEvent): void {
-		if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-			this.mainWindow.webContents.send("look:event", payload);
-		}
+		this.rendererEvents.send(payload);
 	}
 
 	/** 启动时并发恢复所有已启用的渠道，单个失败不影响其他渠道。 */

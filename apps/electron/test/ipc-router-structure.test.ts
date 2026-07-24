@@ -42,9 +42,10 @@ describe("IPC router structure", () => {
 		expect(handlers).not.toContain('"permission:set-mode"');
 	});
 
-	it("keeps project lifecycle side effects in the runtime manager", () => {
-		expect(projectRouter).toContain("ctx.runtimeManager.createProject(_cwd, data.name)");
-		expect(projectRouter).toContain("ctx.runtimeManager.renameProject(data.projectId, data.name)");
+	it("keeps project lifecycle side effects in the ProjectApplicationService", () => {
+		expect(projectRouter).toContain("ctx.projectApplication.createProject(_cwd, data.name)");
+		expect(projectRouter).toContain("ctx.projectApplication.renameProject(data.projectId, data.name)");
+		expect(projectRouter).not.toContain("ctx.runtimeManager");
 	});
 
 	it("exports promptForProjectTrust from project-trust.ts and guardAgentDefinitionInput from guards.ts", () => {

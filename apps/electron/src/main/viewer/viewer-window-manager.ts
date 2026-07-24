@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getUiSettingsPath } from "@look/shared/look-storage";
 import { app, type BrowserWindow, BrowserWindow as ElectronBrowserWindow } from "electron";
+import { BrowserWindowEventTransport } from "../ipc/renderer-event-transport.js";
 import { readThemeToneSync } from "../settings/store.js";
 import { getPackagedRendererIndexPath } from "../system/renderer-paths.js";
 
@@ -18,13 +19,12 @@ const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
 
 let viewerWindow: BrowserWindow | null = null;
+const viewerEvents = new BrowserWindowEventTransport(() => viewerWindow);
 /** 窗口已创建但渲染端尚未就绪时暂存的待打开路径,由 fileViewer:ready 一次性消费。 */
 let pendingPath: string | null = null;
 
 function sendOpenPath(path: string): void {
-	if (viewerWindow && !viewerWindow.isDestroyed()) {
-		viewerWindow.webContents.send("look:event", { type: "fileViewer:open-path", path });
-	}
+	viewerEvents.send({ type: "fileViewer:open-path", path });
 }
 
 /** 主窗口入口:在独立查看器窗口中打开指定文件。 */

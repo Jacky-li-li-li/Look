@@ -24,4 +24,15 @@ describe("preload contract", () => {
 			expect(preload).toMatch(new RegExp(`\\n\\t${method}:`));
 		}
 	});
+
+	it("forwards every declared createAgent option to the IPC command", () => {
+		const preload = read("src/main/preload.cts");
+		const start = preload.indexOf("\tcreateAgent:");
+		const end = preload.indexOf("\t\n\tdestroyAgent:", start);
+		const createAgent = preload.slice(start, end);
+
+		expect(createAgent).toContain("name:");
+		expect(createAgent).toContain("projectId:");
+		expect(createAgent).toContain("imProvider:");
+	});
 });

@@ -8,8 +8,8 @@
 // ============================================================
 
 import type { MainToRendererEvent } from "@look/shared/types";
-import type { BrowserWindow } from "electron";
 import type { AppUpdater } from "electron-updater";
+import type { RendererEventTransport } from "../ipc/renderer-event-transport.js";
 
 let autoUpdater: AppUpdater | null = null;
 let loadFailed = false;
@@ -53,8 +53,7 @@ function resolveAutoUpdater(mod: Record<string, unknown>): AppUpdater | null {
 	);
 }
 
-export function initUpdater(mainWindow: BrowserWindow): void {
-	if (!mainWindow || mainWindow.isDestroyed()) return;
+export function initUpdater(rendererEvents: RendererEventTransport): void {
 	if (!areAutoUpdatesEnabled()) {
 		console.info("[updater] automatic checks are disabled for the private release source");
 		return;
@@ -63,7 +62,7 @@ export function initUpdater(mainWindow: BrowserWindow): void {
 	// Lazy-load on first event so a missing/optional dep never crashes app start.
 	void loadAutoUpdater().then((updater) => {
 		if (!updater) {
-			emit(mainWindow, {
+			emit(rendererEvents, {
 				type: "update:error",
 				message:
 					"Updater not available. Check console logs for details, or run `npm install` to ensure all dependencies are present.",
@@ -75,11 +74,11 @@ export function initUpdater(mainWindow: BrowserWindow): void {
 		updater.autoInstallOnAppQuit = true;
 
 		updater.on("checking-for-update", () => {
-			emit(mainWindow, { type: "update:checking" });
+			emit(rendererEvents, { type: "update:checking" });
 		});
 
 		updater.on("update-available", (info) => {
-			emit(mainWindow, {
+			emit(rendererEvents, {
 				type: "update:available",
 				version: info.version,
 				releaseDate: (info as { releaseDate?: string }).releaseDate,
@@ -87,25 +86,25 @@ export function initUpdater(mainWindow: BrowserWindow): void {
 		});
 
 		updater.on("update-not-available", () => {
-			emit(mainWindow, { type: "update:not-available" });
+			emit(rendererEvents, { type: "update:not-available" });
 		});
 
 		updater.on("download-progress", (progress) => {
-			emit(mainWindow, {
+			emit(rendererEvents, {
 				type: "update:download-progress",
 				percent: progress.percent,
 			});
 		});
 
 		updater.on("update-downloaded", (info) => {
-			emit(mainWindow, {
+			emit(rendererEvents, {
 				type: "update:downloaded",
 				version: info.version,
 			});
 		});
 
 		updater.on("error", (error) => {
-			emit(mainWindow, {
+			emit(rendererEvents, {
 				type: "update:error",
 				message: error.message ?? "Unknown update error",
 			});
@@ -113,10 +112,8 @@ export function initUpdater(mainWindow: BrowserWindow): void {
 	});
 }
 
-function emit(mainWindow: BrowserWindow, event: MainToRendererEvent): void {
-	if (!mainWindow.isDestroyed()) {
-		mainWindow.webContents.send("look:event", event);
-	}
+function emit(rendererEvents: RendererEventTransport, event: MainToRendererEvent): void {
+	rendererEvents.send(event);
 }
 
 export async function checkForUpdates(): Promise<void> {
