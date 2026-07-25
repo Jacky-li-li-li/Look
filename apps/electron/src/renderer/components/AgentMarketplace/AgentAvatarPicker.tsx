@@ -4,7 +4,7 @@
 // 只支持选择预置的 Open Peeps SVG，不再提供 emoji 输入。
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import { useTranslation } from "react-i18next";
 import AgentAvatar from "./AgentAvatar";
 import { getOpenPeepId, getOpenPeepPreset, makeOpenPeepIcon, OPEN_PEEPS } from "./openPeeps";

@@ -22,6 +22,8 @@ export default defineConfig({
 		alias: {
 			"@shared": path.resolve(__dirname, "../../packages/shared/src"),
 			"@look/shared": path.resolve(__dirname, "../../packages/shared/src"),
+			"@look/ui": path.resolve(__dirname, "../../packages/ui/src"),
+			"@look/ui/components": path.resolve(__dirname, "../../packages/ui/src/components"),
 		},
 	},
 });

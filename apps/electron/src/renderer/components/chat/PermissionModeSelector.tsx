@@ -3,8 +3,8 @@
 // Three modes: always (green), ask (amber), plan (blue)
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import SimplePopover from "@shared/components/ui/simple-popover";
+import { Button } from "@look/ui/components/ui/button";
+import SimplePopover from "@look/ui/components/ui/simple-popover";
 import type { PermissionMode } from "@shared/types";
 import { useSetAtom } from "jotai";
 import { Check, Shield } from "lucide-react";

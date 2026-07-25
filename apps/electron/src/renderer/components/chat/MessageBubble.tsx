@@ -7,8 +7,8 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 } from "@earendil-works/pi-ai";
-import { UserAvatar } from "@shared/components/UserAvatar";
-import { cn } from "@shared/lib/utils";
+import { UserAvatar } from "@look/ui/components/UserAvatar";
+import { cn } from "@look/ui";
 import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { memo, useMemo } from "react";

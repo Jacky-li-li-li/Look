@@ -4,7 +4,7 @@
 // 搜索 + 内置/我的 Segment 切换 + Skill 卡片网格。
 // ============================================================
 
-import { Input } from "@shared/components/ui/input";
+import { Input } from "@look/ui/components/ui/input";
 import { useAtom } from "jotai";
 import { FolderOpen, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";

@@ -1,10 +1,10 @@
-import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
-import { Label } from "@shared/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@shared/components/ui/select";
-import { Switch } from "@shared/components/ui/switch";
-import { Textarea } from "@shared/components/ui/textarea";
-import { cn } from "@shared/lib/utils";
+import { Button } from "@look/ui/components/ui/button";
+import { Input } from "@look/ui/components/ui/input";
+import { Label } from "@look/ui/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@look/ui/components/ui/select";
+import { Switch } from "@look/ui/components/ui/switch";
+import { Textarea } from "@look/ui/components/ui/textarea";
+import { cn } from "@look/ui";
 import type { ProjectInfo, ScheduledTaskRunLog, ScheduledTaskSchedule } from "@shared/types";
 import { AlertCircle, BellRing, CalendarDays, CheckCircle2, FlaskConical, LoaderCircle, X } from "lucide-react";
 import { useCallback, useId } from "react";

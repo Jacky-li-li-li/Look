@@ -2,9 +2,9 @@
 // ProviderHeadersSection — custom HTTP headers (collapsible)
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
-import { cn } from "@shared/lib/utils";
+import { Button } from "@look/ui/components/ui/button";
+import { Input } from "@look/ui/components/ui/input";
+import { cn } from "@look/ui";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
 
 interface HeaderItem {

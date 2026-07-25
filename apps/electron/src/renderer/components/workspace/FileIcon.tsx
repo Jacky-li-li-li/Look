@@ -7,7 +7,7 @@
 // renders it inline. Falls back to generic file / folder icons.
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import type { FileTreeNode } from "@shared/types";
 import { useMemo } from "react";
 import {

@@ -6,9 +6,9 @@
 // 禁用状态的卡片整体 opacity-50 以视觉区分。
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
-import { Button } from "@shared/components/ui/button";
-import { Switch } from "@shared/components/ui/switch";
+import { Badge } from "@look/ui/components/ui/badge";
+import { Button } from "@look/ui/components/ui/button";
+import { Switch } from "@look/ui/components/ui/switch";
 import type { AgentDefinitionInfo } from "@shared/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";

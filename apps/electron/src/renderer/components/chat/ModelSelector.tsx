@@ -2,8 +2,8 @@
 // ModelSelector — Centered dialog for picking a model (Ink Wash)
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@shared/components/ui/dialog";
+import { Button } from "@look/ui/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@look/ui/components/ui/dialog";
 import type { AvailableModel } from "@shared/types";
 import { ArrowRight, Check, Search } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";

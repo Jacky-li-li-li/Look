@@ -2,9 +2,9 @@
 // CustomProvidersSection — custom provider list with add/edit/remove
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
-import { Button } from "@shared/components/ui/button";
-import { cn } from "@shared/lib/utils";
+import { Badge } from "@look/ui/components/ui/badge";
+import { Button } from "@look/ui/components/ui/button";
+import { cn } from "@look/ui";
 import { ChevronRight, Cpu, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { CustomProviderInput, CustomProviderStats, ProviderModelInfo } from "./types";

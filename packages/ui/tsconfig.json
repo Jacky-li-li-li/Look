@@ -4,19 +4,18 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "jsx": "react-jsx",
-    "paths": {
-      "@shared/*": ["../../packages/shared/src/*"],
-      "@look/ui/*": ["../../packages/ui/src/*"],
-      "@look/ui": ["../../packages/ui/src/index.ts"]
-    },
-    "baseUrl": "."
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]
 }

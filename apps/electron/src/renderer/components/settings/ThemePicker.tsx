@@ -2,7 +2,7 @@
 // ThemePicker — one neutral palette with a light / dark switch
 // ============================================================
 
-import { Switch } from "@shared/components/ui/switch";
+import { Switch } from "@look/ui/components/ui/switch";
 import { Moon, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../../hooks/useLookTheme";

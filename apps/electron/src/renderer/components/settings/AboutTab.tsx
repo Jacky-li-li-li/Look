@@ -2,7 +2,7 @@
 // AboutTab — App info
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
+import { Badge } from "@look/ui/components/ui/badge";
 import { Palette, Settings } from "lucide-react";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import type { CustomProviderStats, ProviderInfo } from "./types";

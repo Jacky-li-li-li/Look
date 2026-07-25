@@ -2,7 +2,7 @@
 // LookMarkdown — stable chat Markdown adapter built on Streamdown
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import { cjk } from "@streamdown/cjk";
 import { createCodePlugin } from "@streamdown/code";
 import type { DiagramPlugin, MermaidConfig } from "@streamdown/mermaid";

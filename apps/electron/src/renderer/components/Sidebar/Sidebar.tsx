@@ -3,9 +3,9 @@
 // 外层只读 collapsed 用于 CSS 动画；内层 memo 避免过渡期重渲染
 // ============================================================
 
-import { UserAvatar } from "@shared/components/UserAvatar";
-import { Button } from "@shared/components/ui/button";
-import { ScrollArea } from "@shared/components/ui/scroll-area";
+import { UserAvatar } from "@look/ui/components/UserAvatar";
+import { Button } from "@look/ui/components/ui/button";
+import { ScrollArea } from "@look/ui/components/ui/scroll-area";
 import { useAtomValue } from "jotai";
 import { Bot, Clock3, FolderOpen, PanelLeftClose, Plus } from "lucide-react";
 import { memo } from "react";

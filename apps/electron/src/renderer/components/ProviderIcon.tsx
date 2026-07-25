@@ -12,7 +12,7 @@
 // Source: see ./src/renderer/providers/SOURCES.md
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import { useMemo } from "react";
 
 // Load every provider SVG as a raw string at build time. Vite's

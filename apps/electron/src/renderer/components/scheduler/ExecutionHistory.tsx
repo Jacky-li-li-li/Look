@@ -1,4 +1,4 @@
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import type { ScheduledTask, ScheduledTaskRunLog } from "@shared/types";
 import { AlertCircle, Clock3, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";

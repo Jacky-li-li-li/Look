@@ -2,7 +2,7 @@
 // SharedAreaPanel — 共享区文件列表面板
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -10,15 +10,15 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
+} from "@look/ui/components/ui/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@shared/components/ui/dropdown-menu";
-import { Input } from "@shared/components/ui/input";
+} from "@look/ui/components/ui/dropdown-menu";
+import { Input } from "@look/ui/components/ui/input";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom } from "jotai";
 import { File, Folder, FolderOpen, Import, MoreHorizontal, Plus, RefreshCw, Trash2, UploadCloud } from "lucide-react";

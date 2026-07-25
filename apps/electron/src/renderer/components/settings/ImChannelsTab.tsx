@@ -2,10 +2,10 @@
 // ImChannelsTab — Feishu IM channel management
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
-import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
-import { Label } from "@shared/components/ui/label";
+import { Badge } from "@look/ui/components/ui/badge";
+import { Button } from "@look/ui/components/ui/button";
+import { Input } from "@look/ui/components/ui/input";
+import { Label } from "@look/ui/components/ui/label";
 import { Check, Eye, EyeOff, KeyRound, Loader2, QrCode, Save, Send, ToggleLeft, ToggleRight, X } from "lucide-react";
 import QRCode from "qrcode";
 import { createElement, type ReactNode, useCallback, useEffect, useRef, useState } from "react";

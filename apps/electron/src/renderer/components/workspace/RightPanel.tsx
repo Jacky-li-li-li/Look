@@ -2,7 +2,7 @@
 // RightPanel — 右侧边栏容器(v0.6:共享区 + 工作区 双 tab)
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { PanelRightClose } from "lucide-react";
 import { useEffect } from "react";

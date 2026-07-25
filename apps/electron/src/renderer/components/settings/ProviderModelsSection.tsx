@@ -2,9 +2,9 @@
 // ProviderModelsSection — model list with add / edit / remove
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
-import { Switch } from "@shared/components/ui/switch";
+import { Button } from "@look/ui/components/ui/button";
+import { Input } from "@look/ui/components/ui/input";
+import { Switch } from "@look/ui/components/ui/switch";
 import { Plus, Trash2 } from "lucide-react";
 import type { CustomProviderModelInput } from "./types";
 

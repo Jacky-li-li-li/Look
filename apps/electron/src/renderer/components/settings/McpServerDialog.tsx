@@ -1,4 +1,4 @@
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -6,8 +6,8 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
-import { Input } from "@shared/components/ui/input";
+} from "@look/ui/components/ui/dialog";
+import { Input } from "@look/ui/components/ui/input";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";

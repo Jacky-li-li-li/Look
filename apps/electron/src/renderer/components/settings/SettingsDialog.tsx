@@ -2,9 +2,9 @@
 // SettingsDialog — Tabs framework + footer (Ink Wash)
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@shared/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
+import { Badge } from "@look/ui/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@look/ui/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@look/ui/components/ui/tabs";
 import { FileText, Key, MessageCircle, Palette, Server, UserRound, Zap } from "lucide-react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";

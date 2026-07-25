@@ -3,7 +3,7 @@
 // Tool details stay collapsed by default and are controlled manually.
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import type { ImageContent } from "@shared/types";
 import {
 	Bot,

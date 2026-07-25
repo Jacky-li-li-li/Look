@@ -1,6 +1,6 @@
-import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
-import { cn } from "@shared/lib/utils";
+import { Button } from "@look/ui/components/ui/button";
+import { Input } from "@look/ui/components/ui/input";
+import { cn } from "@look/ui";
 import { useAtom } from "jotai";
 import { Check, CircleHelp, ListChecks, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

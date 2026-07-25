@@ -5,8 +5,8 @@
 // 未选择（null）或 id 未命中时回退到 PixelAgentAvatar 像素头像。
 // ============================================================
 
-import { Avatar } from "@shared/components/ui/avatar";
-import { cn } from "@shared/lib/utils";
+import { Avatar } from "@look/ui/components/ui/avatar";
+import { cn } from "@look/ui";
 import { useAtomValue } from "jotai";
 import React from "react";
 import { getAiAvatarUrl } from "../lib/aiAvatars";

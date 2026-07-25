@@ -2,8 +2,8 @@
 // DeleteProjectDialog — confirmation before deleting a project
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@shared/components/ui/dialog";
+import { Button } from "@look/ui/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@look/ui/components/ui/dialog";
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 

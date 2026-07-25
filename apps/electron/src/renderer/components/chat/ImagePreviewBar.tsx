@@ -2,7 +2,7 @@
 // ImagePreviewBar — 待发送图片缩略图 + 点击放大
 // ============================================================
 
-import { Dialog, DialogContent, DialogTitle } from "@shared/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@look/ui/components/ui/dialog";
 import type { ImageContent } from "@shared/types";
 import { X } from "lucide-react";
 import { useCallback, useState } from "react";

@@ -2,7 +2,7 @@
 // Sidebar/ProjectTree — 项目+会话树渲染
 // ============================================================
 
-import { Collapsible, CollapsibleContent } from "@shared/components/ui/collapsible";
+import { Collapsible, CollapsibleContent } from "@look/ui/components/ui/collapsible";
 import { type AgentInfo, DEFAULT_PROJECT_ID, type ProjectInfo } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { ChevronsDownUp, ChevronsUpDown, Plus } from "lucide-react";

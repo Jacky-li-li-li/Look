@@ -8,7 +8,7 @@
 //（应用到所有活动会话 + 持久化为默认）。
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import { useAtom } from "jotai";
 import { Bot } from "lucide-react";
 import { useCallback, useState } from "react";

@@ -2,8 +2,8 @@
 // ProviderCompatSection — compat toggle switches per API protocol
 // ============================================================
 
-import { Switch } from "@shared/components/ui/switch";
-import { cn } from "@shared/lib/utils";
+import { Switch } from "@look/ui/components/ui/switch";
+import { cn } from "@look/ui";
 import { Info } from "lucide-react";
 import type { ApiProtocol, ProviderCompatState } from "./provider-form-state";
 

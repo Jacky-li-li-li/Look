@@ -2,8 +2,8 @@
 // PromptTab — 自定义 System Prompt 管理界面（全局 + 项目级）
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui/card";
+import { Button } from "@look/ui/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@look/ui/components/ui/card";
 import {
 	Dialog,
 	DialogContent,
@@ -11,15 +11,15 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
+} from "@look/ui/components/ui/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@shared/components/ui/dropdown-menu";
-import { Input } from "@shared/components/ui/input";
-import { Textarea } from "@shared/components/ui/textarea";
+} from "@look/ui/components/ui/dropdown-menu";
+import { Input } from "@look/ui/components/ui/input";
+import { Textarea } from "@look/ui/components/ui/textarea";
 import { Check, ChevronDown, Edit, Eye, Folder, Globe, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

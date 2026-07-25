@@ -1,4 +1,4 @@
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -6,8 +6,8 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
-import { Switch } from "@shared/components/ui/switch";
+} from "@look/ui/components/ui/dialog";
+import { Switch } from "@look/ui/components/ui/switch";
 import { useAtomValue } from "jotai";
 import { ChevronDown, Package, Pencil, Plus, RefreshCw, Trash, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

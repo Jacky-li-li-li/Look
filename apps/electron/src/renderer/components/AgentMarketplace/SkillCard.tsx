@@ -5,7 +5,7 @@
 // 充分利用卡片纵向空间，与 AgentCard 视觉密度对齐。
 // ============================================================
 
-import { Switch } from "@shared/components/ui/switch";
+import { Switch } from "@look/ui/components/ui/switch";
 import { Sparkles } from "lucide-react";
 import { memo } from "react";
 

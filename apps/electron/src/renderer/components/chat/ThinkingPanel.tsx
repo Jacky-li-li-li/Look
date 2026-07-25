@@ -9,7 +9,7 @@
 // agent switches where many panels mount simultaneously.
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import { Brain, ChevronRight } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";

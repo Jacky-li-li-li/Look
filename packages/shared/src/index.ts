@@ -1,14 +1,5 @@
-// Shared package entry point — re-exports non-React modules.
-// UI components remain available via subpath imports (e.g. @look/shared/components/ui/button).
-
-export { AgentTag } from "./components/AgentTag.js";
-export { ErrorBoundary } from "./components/ErrorBoundary.js";
-export { FileTag } from "./components/FileTag.js";
-export { McpTag } from "./components/McpTag.js";
-export { SkillTag } from "./components/SkillTag.js";
-// Generic UI components
-export { default as UserAvatar } from "./components/UserAvatar.js";
-export { cn } from "./lib/utils.js";
+// Shared package entry point — types, storage helpers, and domain contracts.
+// UI components have moved to @look/ui.
 export {
 	ensureLookDir,
 	ensureProjectDir,

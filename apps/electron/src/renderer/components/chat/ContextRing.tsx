@@ -1,5 +1,5 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from "@shared/components/ui/tooltip";
-import { cn } from "@shared/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
+import { cn } from "@look/ui";
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";

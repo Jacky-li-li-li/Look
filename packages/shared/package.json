@@ -2,7 +2,7 @@
   "name": "@look/shared",
   "version": "0.0.1",
   "private": true,
-  "description": "Shared types, storage helpers, utilities, and UI components for Look",
+  "description": "Shared types, storage helpers, and domain contracts for Look",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -26,14 +26,6 @@
     "./session-defaults": {
       "types": "./dist/session-defaults.d.ts",
       "default": "./dist/session-defaults.js"
-    },
-    "./lib/*": {
-      "types": "./dist/lib/*.d.ts",
-      "default": "./dist/lib/*.js"
-    },
-    "./components/*": {
-      "types": "./dist/components/*.d.ts",
-      "default": "./dist/components/*.js"
     }
   },
   "scripts": {
@@ -41,26 +33,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest --run"
   },
-  "dependencies": {
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.6.0"
-  },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "^0.82.0",
     "@earendil-works/pi-ai": "^0.82.0",
     "@earendil-works/pi-coding-agent": "^0.82.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "class-variance-authority": "^0.7.1",
-    "lucide-react": "^1.17.0",
-    "radix-ui": "^1.4.3",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.6"
-  },
-  "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
   }
 }

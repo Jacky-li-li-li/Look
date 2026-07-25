@@ -5,7 +5,7 @@
 // 无效/空值回退到默认 Open Peeps；不再使用 emoji。
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import { useState } from "react";
 import { DEFAULT_PEEP_ID, getOpenPeepId, getOpenPeepPreset, makeOpenPeepIcon, OPEN_PEEPS } from "./openPeeps";
 

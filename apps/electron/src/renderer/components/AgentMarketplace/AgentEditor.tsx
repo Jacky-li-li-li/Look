@@ -2,7 +2,7 @@
 // AgentEditor — Agent 创建 / 编辑表单对话框（Stage 3）
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -10,10 +10,10 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
-import { Input } from "@shared/components/ui/input";
-import { Label } from "@shared/components/ui/label";
-import { Textarea } from "@shared/components/ui/textarea";
+} from "@look/ui/components/ui/dialog";
+import { Input } from "@look/ui/components/ui/input";
+import { Label } from "@look/ui/components/ui/label";
+import { Textarea } from "@look/ui/components/ui/textarea";
 import type { AgentDefinitionInfo, AgentDefinitionInput } from "@shared/types";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";

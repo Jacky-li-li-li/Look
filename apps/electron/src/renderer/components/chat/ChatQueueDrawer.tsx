@@ -6,7 +6,7 @@
 // 视觉隐喻："热介入 / 冷排队" — steer 用左侧暖色条，followUp 用冷灰条。
 // ============================================================
 
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 

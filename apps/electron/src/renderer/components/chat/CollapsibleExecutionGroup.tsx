@@ -6,7 +6,7 @@
 // ============================================================
 
 import type { ThinkingContent, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
-import { cn } from "@shared/lib/utils";
+import { cn } from "@look/ui";
 import type { LookUiToolExecState } from "@shared/types";
 import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";

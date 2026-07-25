@@ -4,7 +4,7 @@
 // prompt, device_code, auth_url, and progress events.
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -12,7 +12,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
+} from "@look/ui/components/ui/dialog";
 import { useAtom } from "jotai";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { useCallback } from "react";

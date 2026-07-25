@@ -2,11 +2,11 @@
 // ProviderConnectionFields — API protocol / name / baseUrl / apiKey
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
-import { Label } from "@shared/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@shared/components/ui/select";
-import { cn } from "@shared/lib/utils";
+import { Button } from "@look/ui/components/ui/button";
+import { Input } from "@look/ui/components/ui/input";
+import { Label } from "@look/ui/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@look/ui/components/ui/select";
+import { cn } from "@look/ui";
 import type { TFunction } from "i18next";
 import { Eye, EyeOff } from "lucide-react";
 import {

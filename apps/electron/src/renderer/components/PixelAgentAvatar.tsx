@@ -2,8 +2,8 @@
 // PixelAgentAvatar — 5×5 pixel patterns (Ink Wash, shadcn)
 // ============================================================
 
-import { Avatar, AvatarFallback } from "@shared/components/ui/avatar";
-import { cn } from "@shared/lib/utils";
+import { Avatar, AvatarFallback } from "@look/ui/components/ui/avatar";
+import { cn } from "@look/ui";
 import React from "react";
 import type { RendererSessionPhase } from "../store/sessionTypes";
 

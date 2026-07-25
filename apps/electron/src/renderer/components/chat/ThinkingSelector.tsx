@@ -2,8 +2,8 @@
 // ThinkingSelector — Simple Popover (Ink Wash, no Radix DropdownMenu)
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import SimplePopover from "@shared/components/ui/simple-popover";
+import { Button } from "@look/ui/components/ui/button";
+import SimplePopover from "@look/ui/components/ui/simple-popover";
 import type { ThinkingLevel } from "@shared/types";
 import type { TFunction } from "i18next";
 import { Brain, Check } from "lucide-react";

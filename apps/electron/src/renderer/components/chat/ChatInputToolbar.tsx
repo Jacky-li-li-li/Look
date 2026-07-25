@@ -2,7 +2,7 @@
 // ChatInputToolbar — 底部选择器行 + 发送/停止按钮
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import type { PermissionMode, ThinkingLevel } from "@shared/types";
 import { Send, Square } from "lucide-react";
 import { memo } from "react";

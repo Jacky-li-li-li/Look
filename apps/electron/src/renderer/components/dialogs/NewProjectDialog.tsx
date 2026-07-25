@@ -2,10 +2,10 @@
 // NewProjectDialog — shown after user picks a folder
 // ============================================================
 
-import { Badge } from "@shared/components/ui/badge";
-import { Button } from "@shared/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@shared/components/ui/dialog";
-import { Input } from "@shared/components/ui/input";
+import { Badge } from "@look/ui/components/ui/badge";
+import { Button } from "@look/ui/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@look/ui/components/ui/dialog";
+import { Input } from "@look/ui/components/ui/input";
 import { FolderOpen } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

@@ -1,5 +1,5 @@
-import { Badge } from "@shared/components/ui/badge";
-import { Button } from "@shared/components/ui/button";
+import { Badge } from "@look/ui/components/ui/badge";
+import { Button } from "@look/ui/components/ui/button";
 import type { ProjectInfo, ScheduledTask } from "@shared/types";
 import { BellRing, CirclePause, CirclePlay, Pencil, Play, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";

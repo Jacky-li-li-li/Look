@@ -14,13 +14,13 @@
 //   - 渲染时 flattenTree 把展开的树压平为虚拟列表行
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@shared/components/ui/dropdown-menu";
+} from "@look/ui/components/ui/dropdown-menu";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom, useStore } from "jotai";
 import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";

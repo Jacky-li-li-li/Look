@@ -1,4 +1,4 @@
-import { Badge } from "@shared/components/ui/badge";
+import { Badge } from "@look/ui/components/ui/badge";
 import type { ProjectInfo, ScheduledTask } from "@shared/types";
 import { BellRing, CalendarDays, Clock3 } from "lucide-react";
 import { useTranslation } from "react-i18next";

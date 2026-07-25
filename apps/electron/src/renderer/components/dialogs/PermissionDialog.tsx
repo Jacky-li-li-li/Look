@@ -4,7 +4,7 @@
 // 30-second timeout auto-denies.
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -12,7 +12,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
+} from "@look/ui/components/ui/dialog";
 import type { PermissionRespondPayload } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { AlertTriangle, Check, Shield, X } from "lucide-react";

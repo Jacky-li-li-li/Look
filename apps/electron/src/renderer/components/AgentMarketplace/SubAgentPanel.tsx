@@ -6,8 +6,8 @@
 // "我的"模块显示 AI 创建按钮（跳转默认工作区新会话并预填创建 Skill）和编辑/删除操作。
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
+import { Button } from "@look/ui/components/ui/button";
+import { Input } from "@look/ui/components/ui/input";
 import { type AgentDefinitionInfo, DEFAULT_PROJECT_ID } from "@shared/types";
 import { useAtom } from "jotai";
 import { Bot, Search, Sparkles, User, X } from "lucide-react";

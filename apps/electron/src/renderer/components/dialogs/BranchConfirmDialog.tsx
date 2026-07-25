@@ -14,7 +14,7 @@
 // is enough — no need for separate dialog components.
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -22,7 +22,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@shared/components/ui/dialog";
+} from "@look/ui/components/ui/dialog";
 import { useTranslation } from "react-i18next";
 
 export type BranchConfirmKind = "summary" | "input-not-empty";

@@ -1,5 +1,5 @@
-import { Toaster } from "@shared/components/ui/sonner";
-import { TooltipProvider } from "@shared/components/ui/tooltip";
+import { Toaster } from "@look/ui/components/ui/sonner";
+import { TooltipProvider } from "@look/ui/components/ui/tooltip";
 import { Provider } from "jotai";
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -8,7 +8,7 @@ import { I18nextProvider } from "react-i18next";
 import "./mockApi";
 import App from "./App";
 import "./App.css";
-import { ErrorBoundary } from "@shared/components/ErrorBoundary";
+import { ErrorBoundary } from "@look/ui/components/ErrorBoundary";
 import FileViewerApp from "./FileViewerApp";
 import { useLookTheme } from "./hooks/useLookTheme";
 import i18n from "./i18n";

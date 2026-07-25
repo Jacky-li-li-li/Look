@@ -2,7 +2,7 @@
 // AppLayout — 主应用布局（Sidebar + 主内容区 + RightPanel + Dialogs）
 // ============================================================
 
-import { Separator } from "@shared/components/ui/separator";
+import { Separator } from "@look/ui/components/ui/separator";
 import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { lazy, memo, Suspense, useEffect } from "react";

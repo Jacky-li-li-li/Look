@@ -2,14 +2,14 @@
 // Sidebar/SessionRow — 会话行（状态标记/编辑/子会话/右键菜单）
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@shared/components/ui/dropdown-menu";
+} from "@look/ui/components/ui/dropdown-menu";
 import { Bot, ChevronDown, ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";

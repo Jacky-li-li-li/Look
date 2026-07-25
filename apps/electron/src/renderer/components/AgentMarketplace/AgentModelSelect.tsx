@@ -6,8 +6,8 @@
 // provider/model-id。
 // ============================================================
 
-import { Input } from "@shared/components/ui/input";
-import { Label } from "@shared/components/ui/label";
+import { Input } from "@look/ui/components/ui/input";
+import { Label } from "@look/ui/components/ui/label";
 import {
 	Select,
 	SelectContent,
@@ -16,7 +16,7 @@ import {
 	SelectLabel,
 	SelectTrigger,
 	SelectValue,
-} from "@shared/components/ui/select";
+} from "@look/ui/components/ui/select";
 import type { AvailableModel } from "@shared/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 

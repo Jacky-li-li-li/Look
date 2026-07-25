@@ -2,7 +2,7 @@
 // EmptySessionState — 无会话选中时的空状态
 // ============================================================
 
-import { Button } from "@shared/components/ui/button";
+import { Button } from "@look/ui/components/ui/button";
 import { FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 

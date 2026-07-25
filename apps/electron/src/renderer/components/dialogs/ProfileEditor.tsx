@@ -3,7 +3,7 @@
 // Used inside SettingsDialog
 // ============================================================
 
-import { UserAvatar } from "@shared/components/UserAvatar";
+import { UserAvatar } from "@look/ui/components/UserAvatar";
 import { useAtom } from "jotai";
 import { Camera, LogOut } from "lucide-react";
 import { useRef, useState } from "react";
