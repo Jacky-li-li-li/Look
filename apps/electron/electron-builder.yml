@@ -2,6 +2,10 @@ appId: com.look.app
 productName: Look
 copyright: Copyright © 2026 Look
 
+# package.json 里 electron 是 ^42.4.0 范围版本，electron-builder 需要确切版本
+# （CI 环境下无法从 range 解析）。升级 electron 时同步更新这里。
+electronVersion: 42.5.1
+
 directories:
   output: release
   buildResources: build

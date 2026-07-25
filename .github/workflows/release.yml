@@ -80,7 +80,11 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           for i in 1 2 3; do
-            npx electron-builder --mac --arm64 --publish always && break
+            if npx electron-builder --mac --arm64 --publish always; then
+              exit 0
+            fi
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
+          echo "electron-builder failed after 3 attempts"
+          exit 1
