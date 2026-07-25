@@ -8,7 +8,7 @@
 # - MAC_CERTS: Base64 编码的 Developer ID Application 证书 (.p12)
 #   导出方法：Keychain Access → 选中证书和私钥 → 导出 .p12 →
 #   base64 -i LookCert.p12 | pbcopy 后粘贴为 Secret
-- MAC_CERT_PASSWORD: 导出 .p12 时设置的密码
+# - MAC_CERTS_PASSWORD: 导出 .p12 时设置的密码
 # - APPLE_ID: Apple ID（公证用）
 # - APPLE_APP_SPECIFIC_PASSWORD: App-Specific 密码（appleid.apple.com 生成）
 # - APPLE_TEAM_ID: Apple Developer Team ID（10 位，developer.apple.com 会员页可见）
