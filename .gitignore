@@ -7,12 +7,13 @@ release/
 .env
 .pi/
 .alma-snapshots
-# Claude / Codex local settings — not part of the project
+# AI editor local context — not part of the project
 .claude/
-# Trae local settings — not part of the project
-.trae/
+.context/
 # Hermes local planning and report artifacts — not part of the project
 .hermes/
+# Trae local settings — not part of the project
+.trae/
 # Throwaway probes — kept locally for debugging, not part of the codebase
 _probe.ts
 # Generated application-tool intermediates — final assets live under apps/electron/src/renderer/assets/

@@ -7,15 +7,15 @@ import type { IpcRouter } from "../invoke-context.js";
 
 export const skillRouter: IpcRouter = (ctx, register) => {
 	register("skills:list", async () => {
-		return { success: true, ...ctx.skillService.listForUI() };
+		return { success: true, ...ctx.skill.listForUI() };
 	});
 
 	register("skills:import-paths", async (data) => {
 		guardStringArray(data.paths, "paths");
-		return await ctx.skillService.importPaths(data.paths);
+		return await ctx.skill.importPaths(data.paths);
 	});
 
 	register("skills:detect-common", async () => {
-		return { success: true, detected: ctx.skillService.detectCommonPaths() };
+		return { success: true, detected: ctx.skill.detectCommonPaths() };
 	});
 };

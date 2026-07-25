@@ -337,6 +337,11 @@ export interface LookAPI {
 	testMcpServer(name: string): Promise<IpcResult<{ tools: unknown[]; error?: string }>>;
 	toggleMcpServer(name: string, enabled: boolean): Promise<IpcResult>;
 	updateMcpServer(name: string, config: unknown): Promise<IpcResult>;
+
+	// ---- Auto Updater (reserved — not implemented yet) ----
+	checkForUpdates(): Promise<{ success: boolean; error: string }>;
+	downloadUpdate(): Promise<{ success: boolean; error: string }>;
+	installUpdate(): Promise<{ success: boolean; error: string }>;
 }
 
 interface SkillEntry {

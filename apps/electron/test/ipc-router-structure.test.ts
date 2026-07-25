@@ -43,8 +43,8 @@ describe("IPC router structure", () => {
 	});
 
 	it("keeps project lifecycle side effects in the ProjectApplicationService", () => {
-		expect(projectRouter).toContain("ctx.projectApplication.createProject(_cwd, data.name)");
-		expect(projectRouter).toContain("ctx.projectApplication.renameProject(data.projectId, data.name)");
+		expect(projectRouter).toContain("ctx.project.application.createProject(_cwd, data.name)");
+		expect(projectRouter).toContain("ctx.project.application.renameProject(data.projectId, data.name)");
 		expect(projectRouter).not.toContain("ctx.runtimeManager");
 	});
 

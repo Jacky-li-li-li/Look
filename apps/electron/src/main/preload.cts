@@ -239,10 +239,10 @@ const api: LookAPI = {
 	openFileViewer: (path) => ipcRenderer.invoke("look:invoke", { type: "fileViewer:open", path }),
 	fileViewerReady: () => ipcRenderer.invoke("look:invoke", { type: "fileViewer:ready" }),
 
-	// ---- Auto Updater ----
-	checkForUpdates: () => ipcRenderer.invoke("look:invoke", { type: "update:check" }),
-	downloadUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:download" }),
-	installUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:install" }),
+	// ---- Auto Updater (reserved — no router wired yet) ----
+	checkForUpdates: () => Promise.resolve({ success: false, error: "Not implemented" }),
+	downloadUpdate: () => Promise.resolve({ success: false, error: "Not implemented" }),
+	installUpdate: () => Promise.resolve({ success: false, error: "Not implemented" }),
 
 	// ---- Permission management ----
 	setPermissionMode: (agentId, mode) =>
@@ -358,7 +358,13 @@ const api: LookAPI = {
 	createProjectPrompt: (projectId, name, content) =>
 		ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:create", projectId, name, content }),
 	updateProjectPrompt: (projectId, id, patch) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:update", projectId, id, ...patch }),
+		ipcRenderer.invoke("look:invoke", {
+			type: "settings:project-prompts:update",
+			projectId,
+			id,
+			name: "name" in patch ? (patch as Record<string, unknown>).name : undefined,
+			content: "content" in patch ? (patch as Record<string, unknown>).content : undefined,
+		}),
 	deleteProjectPrompt: (projectId, id) =>
 		ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:delete", projectId, id }),
 	setProjectActivePrompt: (projectId, id) =>

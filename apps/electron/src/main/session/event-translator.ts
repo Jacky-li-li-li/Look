@@ -65,7 +65,11 @@ export function extractUserMessageImages(message: AgentMessage): ImageContent[] 
 /**
  * Guard against non-serializable values reaching the structured-clone IPC boundary.
  * Returns the original value if it round-trips through structuredClone, or a safe
- * fallback string when serialization fails (e.g. functions, Symbols, DOM nodes). */
+ * fallback empty object when serialization fails (e.g. functions, Symbols, DOM nodes).
+ *
+ * NOTE: All call sites pass objects (Record / unknown). Returning `{}` prevents
+ * downstream property-access crashes; a string would type-assert silently and
+ * produce `undefined` on every property access later. */
 function safeClone<T>(value: T, context?: string): T {
 	try {
 		structuredClone(value);
@@ -75,7 +79,7 @@ function safeClone<T>(value: T, context?: string): T {
 			`[Look][EventTranslator] Value failed structuredClone${context ? ` [${context}]` : ""} — replacing with placeholder.`,
 			err instanceof Error ? err.message : String(err),
 		);
-		return "[non-serializable value]" as unknown as T;
+		return {} as unknown as T;
 	}
 }
 

@@ -7,7 +7,7 @@ import type { IpcRouter } from "../invoke-context.js";
 
 export const mcpRouter: IpcRouter = (ctx, register) => {
 	const getProjectContext = () => {
-		const project = ctx.projectService.getActiveProject();
+		const project = ctx.project.service.getActiveProject();
 		return {
 			projectId: project?.id ?? "global",
 			cwd: project?.cwd,
@@ -16,14 +16,14 @@ export const mcpRouter: IpcRouter = (ctx, register) => {
 
 	register("mcp:list-servers", async () => {
 		const { projectId, cwd } = getProjectContext();
-		await ctx.mcpManager.loadConfig(projectId, cwd);
-		return { success: true, servers: ctx.mcpManager.getStatusList(projectId) };
+		await ctx.mcp.loadConfig(projectId, cwd);
+		return { success: true, servers: ctx.mcp.getStatusList(projectId) };
 	});
 
 	register("mcp:add-server", async (data) => {
 		try {
 			const { projectId, cwd } = getProjectContext();
-			await ctx.mcpManager.addServer(projectId, guardMcpServerConfig(data.config, "config"), cwd);
+			await ctx.mcp.addServer(projectId, guardMcpServerConfig(data.config, "config"), cwd);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -33,7 +33,7 @@ export const mcpRouter: IpcRouter = (ctx, register) => {
 	register("mcp:remove-server", async (data) => {
 		try {
 			const { projectId, cwd } = getProjectContext();
-			await ctx.mcpManager.removeServer(projectId, guardString(data.name, "name"), cwd);
+			await ctx.mcp.removeServer(projectId, guardString(data.name, "name"), cwd);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -42,24 +42,24 @@ export const mcpRouter: IpcRouter = (ctx, register) => {
 
 	register("mcp:test-server", async (data) => {
 		const { projectId } = getProjectContext();
-		return ctx.mcpManager.testServer(projectId, guardString(data.name, "name"));
+		return ctx.mcp.testServer(projectId, guardString(data.name, "name"));
 	});
 
 	register("mcp:list-tools", async (data) => {
 		const { projectId } = getProjectContext();
-		const tools = ctx.mcpManager.getToolsForServer(projectId, guardString(data.name, "name"));
+		const tools = ctx.mcp.getToolsForServer(projectId, guardString(data.name, "name"));
 		return { success: true, tools };
 	});
 
 	register("mcp:list-all-tools", async () => {
 		const { projectId } = getProjectContext();
-		return { success: true, tools: ctx.mcpManager.getAllTools(projectId) };
+		return { success: true, tools: ctx.mcp.getAllTools(projectId) };
 	});
 
 	register("mcp:toggle-server", async (data) => {
 		try {
 			const { projectId, cwd } = getProjectContext();
-			await ctx.mcpManager.toggleServer(
+			await ctx.mcp.toggleServer(
 				projectId,
 				guardString(data.name, "name"),
 				guardBoolean(data.enabled, "enabled"),
@@ -74,7 +74,7 @@ export const mcpRouter: IpcRouter = (ctx, register) => {
 	register("mcp:update-server", async (data) => {
 		try {
 			const { projectId, cwd } = getProjectContext();
-			await ctx.mcpManager.updateServer(
+			await ctx.mcp.updateServer(
 				projectId,
 				guardString(data.name, "name"),
 				guardMcpServerConfig(data.config, "config"),

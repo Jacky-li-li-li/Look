@@ -7,10 +7,10 @@ import {
 	openedSessionIdsAtom,
 	permissionAskQueueAtom,
 	recentlyCompletedAtom,
-	removeAgentAtoms,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
-} from "../src/renderer/store/atoms";
+} from '../src/renderer/store/atoms';
+import { removeAgentAtoms } from '../src/renderer/store/atomFamilyRegistry';
 import { clearSessionScheduling } from "../src/renderer/store/ui-event-processor";
 
 const sessionId = "agent-a";

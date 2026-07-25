@@ -2,13 +2,7 @@ import type { AgentInfo } from "@shared/types";
 import { atom } from "jotai";
 import { selectAtom } from "jotai/utils";
 import { atomFamily } from "jotai-family";
-import {
-	permissionModeAtomFamily,
-	planApprovalRequestAtomFamily,
-	planQuestionDraftAtomFamily,
-	planQuestionRequestAtomFamily,
-	todoItemsAtomFamily,
-} from "./permissionAtoms";
+import { registerAgentFamily } from "./atomFamilyRegistry";
 import {
 	deriveAgentPhase,
 	deriveSessionPhase,
@@ -26,6 +20,7 @@ export const recentlyCompletedAtom = atom<string[]>([]);
 export const sessionStateAtomFamily = atomFamily((_agentId: string) =>
 	atom<RendererSessionState>(emptyRendererSessionState()),
 );
+registerAgentFamily(sessionStateAtomFamily);
 
 export const sessionPhasesAtom = atom<Map<string, RendererSessionPhase>>((get) => {
 	const phases = new Map<string, RendererSessionPhase>();
@@ -45,10 +40,13 @@ export const runningAgentsAtom = atom<Set<string>>((get) => {
 });
 
 export const sessionLeafIdAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
+registerAgentFamily(sessionLeafIdAtomFamily);
 
 export const navigatingEntryAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
+registerAgentFamily(navigatingEntryAtomFamily);
 
 export const forkingEntryAtomFamily = atomFamily((_agentId: string) => atom<string | null>(null));
+registerAgentFamily(forkingEntryAtomFamily);
 
 export const subSessionsAtomFamily = atomFamily((parentId: string) =>
 	selectAtom(
@@ -63,15 +61,3 @@ export const activeAgentAtom = atom((get) => {
 	const id = get(activeAgentIdAtom);
 	return id ? (agents.find((a) => a.id === id) ?? null) : null;
 });
-
-export function removeAgentAtoms(agentId: string): void {
-	sessionStateAtomFamily.remove(agentId);
-	sessionLeafIdAtomFamily.remove(agentId);
-	navigatingEntryAtomFamily.remove(agentId);
-	forkingEntryAtomFamily.remove(agentId);
-	permissionModeAtomFamily.remove(agentId);
-	planQuestionRequestAtomFamily.remove(agentId);
-	planQuestionDraftAtomFamily.remove(agentId);
-	planApprovalRequestAtomFamily.remove(agentId);
-	todoItemsAtomFamily.remove(agentId);
-}

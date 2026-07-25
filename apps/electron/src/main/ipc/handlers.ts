@@ -3,13 +3,17 @@
 // Bridges Electron IPC between renderer and the pi session runtime registry.
 // Domain-specific routes live in src/main/ipc/routers/; this file only wires
 // them together and forwards runtime events to the renderer window.
+//
+// NOTE: This module receives a RuntimeManagerComposition directly, NOT a
+// SessionRuntimeManager. This eliminates the _getComposition() bridge and
+// keeps IPC routing decoupled from the bootstrap facade.
 // ============================================================
 
 import type { RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
-import type { SessionRuntimeManager } from "../session/runtime-manager.js";
-import type { InvokeContext, InvokeRouteMap } from "./invoke-context.js";
+import { InvokeDispatcher, type InvokeContext } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
+import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
 import {
 	agentRouter,
 	fileRouter,
@@ -48,11 +52,8 @@ const domainRouters = [
 	mcpRouter,
 ];
 
-/** Route map built once in registerIpcHandlers; ctx properties are stable references. */
-let invokeRouteMap: InvokeRouteMap = {};
-
 export function registerIpcHandlers(
-	runtimeManager: SessionRuntimeManager,
+	composition: RuntimeManagerComposition,
 	mainWindow: BrowserWindow,
 	rendererEvents: RendererEventTransport,
 	larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager,
@@ -64,98 +65,105 @@ export function registerIpcHandlers(
 	ipcMain.removeHandler("look:invoke");
 	ipcMain.removeAllListeners("look:event");
 
-	const workspaceFileService = runtimeManager.getWorkspaceFileService();
+	const workspaceFileService = composition.workspaceFileService;
 	// 重建窗口时先清旧 callback,避免 chokidar emit 同时打到新/旧 window(M-7)。
-	workspaceFileService.clearEmitCallback();
-	workspaceFileService.setEmitCallback((event) => rendererEvents.send(event));
+	workspaceFileService?.clearEmitCallback();
+	workspaceFileService?.setEmitCallback((event) => rendererEvents.send(event));
 
-	const workspaceTreeService = runtimeManager.getWorkspaceTreeService();
-	workspaceTreeService.clearEmitCallback();
-	workspaceTreeService.setEmitCallback((event) => rendererEvents.send(event));
+	const workspaceTreeService = composition.workspaceTreeService;
+	workspaceTreeService?.clearEmitCallback();
+	workspaceTreeService?.setEmitCallback((event) => rendererEvents.send(event));
 
 	// Forward session-scoped runtime events to the renderer.
-	const unsubscribeEvents = runtimeManager.onEvent((event) => rendererEvents.send(event));
+	const unsubscribeEvents = composition.eventBus.onEvent((event) => rendererEvents.send(event));
 
 	mainWindow.on("closed", () => {
 		unsubscribeEvents();
-		// workspaceFileService.dispose() / workspaceTreeService.dispose() 由 SessionRuntimeManager.dispose() 统一处理
 	});
 
-	// Build the route map once. All ctx properties are stable references to the
-	// same underlying objects (runtimeManager, mainWindow, etc.) so closures
-	// capturing ctx remain valid across invocations.
-
-	// Temporary bridge: access composition services until routers migrate to
-	// direct service references on ctx.
-	const comp = runtimeManager._getComposition();
-
-	const ctx: InvokeContext = {
-		runtimeManager,
+	const ctx = {
 		mainWindow,
-		modelRuntime: runtimeManager.modelRuntime,
-		modelRegistry: runtimeManager.modelRegistry,
-		credentialStore: runtimeManager.credentialStore,
-		customProviders: runtimeManager.customProviders,
-		workspaceFileService,
-		workspaceTreeService,
-		larkChannelManager,
-		larkBridgeService,
-		mcpManager: runtimeManager.mcpManager,
-		schedulerService,
 
-		// Session domain services (migrated from ctx.runtimeManager.*)
-		sessionMessaging: comp.sessionMessagingService,
-		sessionControl: comp.sessionControlService,
-		sessionHistory: comp.sessionHistoryService,
-		sessionLifecycle: comp.sessionLifecycleService,
-		sessionSettings: comp.sessionSettingsService,
-		sessionInfo: comp.sessionInfoService,
-		sessionPermission: comp.sessionPermissionOrchestrator,
-		sessionNotifier: comp.sessionNotifier,
-		runtimeLifecycle: comp.runtimeLifecycle,
-
-		// Agent domain services
-		agentDefinitions: comp.agentDefinitionService,
-		subagentService: comp.sessionSubagentService,
-		subAgentRegistry: comp.subAgentRegistry,
-
-		// Project domain services
-		projectService: comp.projectService,
-		projectDeletion: comp.projectDeletionService,
-		projectRuntime: comp.projectRuntimeService,
-		projectApplication: comp.projectApplicationService,
-		projectTrust: {
-			getProjectTrustStatus: (projectId) => comp.projectService.getProjectTrustStatus(projectId),
-			listProjects: () => comp.projectService.listProjects(),
-			setProjectTrust: (projectId, trusted) => comp.projectRuntimeService.setProjectTrust(projectId, trusted),
+		model: {
+			runtime: composition.modelRuntime,
+			registry: composition.modelRegistry,
+			credentials: composition.credentialStore,
+			customProviders: composition.customProviders,
 		},
 
-		// Permission / Plan
-		permissionService: comp.permissionService,
-		planService: comp.planService,
+		session: {
+			messaging: composition.sessionMessagingService,
+			control: composition.sessionControlService,
+			history: composition.sessionHistoryService,
+			lifecycle: composition.sessionLifecycleService,
+			settings: composition.sessionSettingsService,
+			info: composition.sessionInfoService,
+			permission: composition.sessionPermissionOrchestrator,
+			notifier: composition.sessionNotifier,
+		},
 
-		// Settings
-		promptStore: runtimeManager.promptStore,
+		runtime: {
+			lifecycle: composition.runtimeLifecycle,
+		},
 
-		// Skills
-		skillService: comp.skillManagementService,
-	};
-	invokeRouteMap = {};
+		agent: {
+			definitions: composition.agentDefinitionService,
+			subagentService: composition.sessionSubagentService,
+			subAgentRegistry: composition.subAgentRegistry,
+		},
+
+		project: {
+			service: composition.projectService,
+			deletion: composition.projectDeletionService,
+			runtime: composition.projectRuntimeService,
+			application: composition.projectApplicationService,
+			trust: {
+				getProjectTrustStatus: (projectId: string) => composition.projectService.getProjectTrustStatus(projectId),
+				listProjects: () => composition.projectService.listProjects(),
+				setProjectTrust: (projectId: string, trusted: boolean) =>
+					composition.projectRuntimeService.setProjectTrust(projectId, trusted),
+			},
+		},
+
+		permission: {
+			service: composition.permissionService,
+			plan: composition.planService,
+		},
+
+		workspace: {
+			fileService: workspaceFileService,
+			treeService: workspaceTreeService,
+		},
+
+		im: {
+			channelManager: larkChannelManager,
+			bridgeService: larkBridgeService,
+		},
+
+		mcp: composition.mcpManager,
+		scheduler: schedulerService,
+		skill: composition.skillManagementService,
+		settings: { prompts: composition.promptStore },
+	} as InvokeContext;
+
+	// Build the dispatcher from all domain routers
+	const dispatcher = new InvokeDispatcher();
 	for (const router of domainRouters) {
-		router(ctx, (type, handler) => {
-			(invokeRouteMap as Record<string, unknown>)[type] = handler;
-		});
+		dispatcher.install(router, ctx);
 	}
 
-	// Handle renderer → main events
+	// Handle renderer → main events (fire-and-forget)
 	ipcMain.on("look:event", (_event, data: RendererToMainEvent) => {
-		handleRendererEvent(data);
+		switch (data.type) {
+			case "app:ready":
+				break;
+		}
 	});
 
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
 		try {
-			return await handleRendererInvoke(data);
+			return await dispatcher.dispatch(data);
 		} catch (err) {
 			return {
 				success: false,
@@ -165,34 +173,4 @@ export function registerIpcHandlers(
 			};
 		}
 	});
-}
-
-function handleRendererEvent(data: RendererToMainEvent): void {
-	switch (data.type) {
-		case "app:ready":
-			// 占位事件:渲染端通知主进程已就绪,目前无需特殊处理
-			break;
-	}
-}
-
-async function handleRendererInvoke(data: RendererToMainEvent): Promise<unknown> {
-	const handler = invokeRouteMap[data.type];
-	if (handler) {
-		try {
-			// `data` is narrowed by `data.type` at runtime to match the handler's expected subtype.
-			// TypeScript cannot prove this statically across the map lookup, so we assert here.
-			// Safety: the route map is keyed by `data.type`, guaranteeing the handler matches the payload.
-			// biome-ignore lint/suspicious/noExplicitAny: TypeScript cannot prove the narrowing across map lookup.
-			return await handler(data as any);
-		} catch (err) {
-			return {
-				success: false,
-				error: err instanceof Error ? err.message : String(err),
-				errorCode: (err as NodeJS.ErrnoException)?.code ?? null,
-				errorStack: err instanceof Error ? (err.stack ?? null) : null,
-			};
-		}
-	}
-	// biome-ignore lint/suspicious/noExplicitAny: fallback error message needs `.type`.
-	return { success: false, error: `Unknown event: ${(data as any).type}` };
 }

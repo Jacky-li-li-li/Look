@@ -90,29 +90,35 @@ npm run package
 ```
 apps/
 └── electron/
-    ├── src/main/      # Electron main process (TypeScript, Node.js)
-    ├── src/renderer/  # React renderer process (TypeScript, Vite)
-    ├── test/          # Application tests
-    ├── scripts/       # Build and packaging helpers
-    └── tools/         # Application asset-generation utilities
+    ├── src/main/          # Electron main process (TypeScript, Node.js)
+    ├── src/renderer/      # React renderer process (TypeScript, Vite)
+    │   └── assets/        # Bundled assets (icons, avatars)
+    ├── test/              # Application tests (Vitest)
+    ├── default-agents/    # Built-in agent templates
+    ├── default-skills/    # Built-in skill templates
+    ├── scripts/           # Build and packaging helpers
+    ├── build/             # Platform icons and resources
+    └── tools/             # Standalone asset-generation utilities
 packages/
-└── shared/            # Shared types, utilities and UI components
-```
-
-## Asset Generation
-
-The Open Peeps avatar generator is isolated at `apps/electron/tools/open-peeps-avatars/` so its design-time dependencies do not affect the application workspace. Its ignored `output/` directory contains generated candidates and previews; review and copy only the intended SVG assets into `apps/electron/src/renderer/assets/ai-avatars/`.
-
-```bash
-cd apps/electron/tools/open-peeps-avatars
-npm ci
-npm run generate
+└── shared/                # Shared types, storage paths, UI components
 ```
 
 ## Code Conventions
 
 - **TypeScript**: Strict mode, avoid `any` — use `unknown` or precise types
-- **Formatting**: Biome with tabs (indent: 3), 120-char line width
-- **Styling**: Tailwind CSS v4 + shadcn/ui Radix Nova style
-- **Testing**: Vitest with per-file isolated LOOK_HOME
-- **IPC**: All main↔renderer communication goes through the preload bridge
+- **Formatting**: Biome — `indentStyle: tab`, `indentWidth: 3`, `lineWidth: 120`
+- **Styling**: Tailwind CSS v4 + shadcn/ui (Radix UI primitives)
+- **Testing**: Vitest with per-file isolated `LOOK_HOME` (see `test/setup-look-home.ts`)
+- **IPC**: All main ↔ renderer communication goes through the preload bridge (`preload.cts`)
+
+## Asset Generation
+
+Open Peeps avatars are generated via a standalone tool at `apps/electron/tools/open-peeps-avatars/`. Its dependencies are isolated from the application workspace.
+
+```bash
+cd apps/electron/tools/open-peeps-avatars
+npm ci
+node generate.mjs
+```
+
+Generated SVGs and PNGs land in `output/`. After review, copy the desired SVGs into `apps/electron/src/renderer/assets/ai-avatars/` for use in the app.

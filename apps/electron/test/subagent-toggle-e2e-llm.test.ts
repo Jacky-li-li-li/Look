@@ -54,7 +54,7 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 			// ── 验证：新会话没有 subagent 工具 ──
 			const diagId = await manager.createAgent({ name: "toggle-diag" });
 			const managed = Array.from(
-				(manager._getComposition() as unknown as TestManagerInternals).runtimeRegistry.entries(),
+				(manager.composition as unknown as TestManagerInternals).runtimeRegistry.entries(),
 			).find(([sid]: [string, unknown]) => sid === diagId)?.[1];
 			const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : "unknown";
 			expect(hasSubagent, "toggle OFF 时 subagent 不应在活动工具中").toBe(false);
@@ -98,7 +98,7 @@ describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
 
 		const id = await manager.createAgent({ name: "toggle-on-api" });
 		const managed = Array.from(
-			(manager._getComposition() as unknown as TestManagerInternals).runtimeRegistry.entries(),
+			(manager.composition as unknown as TestManagerInternals).runtimeRegistry.entries(),
 		).find(([sid]: [string, unknown]) => sid === id)?.[1];
 		const hasSubagent = managed ? managed.runtime.session.getActiveToolNames().includes("subagent") : false;
 		expect(hasSubagent, "toggle ON 时 subagent 应在活动工具中").toBe(true);

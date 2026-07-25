@@ -54,8 +54,8 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 	register("shell:open-project-folder", async (data) => {
 		const { shell } = await import("electron");
 		const project = data.projectId
-			? ctx.projectService.listProjects().find((item) => item.id === data.projectId)
-			: ctx.projectService.getActiveProject();
+			? ctx.project.service.listProjects().find((item) => item.id === data.projectId)
+			: ctx.project.service.getActiveProject();
 		if (!project?.valid) throw new Error("Project folder is unavailable");
 		await shell.openPath(project.cwd);
 		return { success: true, path: project.cwd };
@@ -82,7 +82,7 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("usage:get", async () => {
-		const usage = await getUsage(ctx.projectService.listProjects());
+		const usage = await getUsage(ctx.project.service.listProjects());
 		return { success: true, usage };
 	});
 };

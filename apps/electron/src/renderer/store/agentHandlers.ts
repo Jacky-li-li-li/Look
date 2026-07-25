@@ -9,8 +9,8 @@ import {
 	openedSessionIdsAtom,
 	permissionAskQueueAtom,
 	recentlyCompletedAtom,
-	removeAgentAtoms,
 } from "./atoms";
+import { removeAgentAtoms } from "./atomFamilyRegistry";
 import { clearSessionScheduling } from "./ui-event-processor";
 
 const t = i18n.t.bind(i18n);

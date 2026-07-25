@@ -45,7 +45,7 @@ function installFakeRuntime(
 		dispose: () => Promise.resolve(),
 		sessionManager,
 	};
-	(manager._getComposition() as unknown as TestManagerInternals).runtimeRegistry.set(sessionId, {
+	(manager.composition as unknown as TestManagerInternals).runtimeRegistry.set(sessionId, {
 		runtime: { session, dispose: () => Promise.resolve() } as unknown as Record<string, unknown>,
 		projectId,
 		cwd: "/project",

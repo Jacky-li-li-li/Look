@@ -24,6 +24,7 @@ import type {
 	IProjectTrustManager,
 	IRuntimeLifecycle,
 	ISessionEventHost,
+	ISessionRuntimeBootstrap,
 	ISubAgentRuntimeHost,
 } from "../core/contracts.js";
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
@@ -44,9 +45,21 @@ export type { EventCallback };
  * of the concrete SRT class.
  */
 export class SessionRuntimeManager
-	implements IEventBus, IRuntimeLifecycle, ISessionEventHost, ISubAgentRuntimeHost, IProjectTrustManager, IImAgentHost
+	implements
+		IEventBus,
+		IRuntimeLifecycle,
+		ISessionEventHost,
+		ISubAgentRuntimeHost,
+		IProjectTrustManager,
+		IImAgentHost,
+		ISessionRuntimeBootstrap
 {
-	private composition!: RuntimeManagerComposition;
+	/**
+	 * Public composition access — used by handlers.ts to populate InvokeContext
+	 * and by tests to set up internal state. Replaces the old _getComposition().
+	 * Assigned once in the static create() factory.
+	 */
+	composition!: RuntimeManagerComposition;
 	private disposed = false;
 
 	private constructor() {}
@@ -86,14 +99,7 @@ export class SessionRuntimeManager
 		return this.composition.mcpManager;
 	}
 
-	/**
-	 * @internal Temporary bridge for IPC context population.
-	 * TODO: Remove once all routers use direct service refs on InvokeContext
-	 * and handlers.ts no longer needs to reach into the composition.
-	 */
-	_getComposition(): RuntimeManagerComposition {
-		return this.composition;
-	}
+
 
 	getWorkspaceFileService(): WorkspaceFileService {
 		if (this.disposed) {

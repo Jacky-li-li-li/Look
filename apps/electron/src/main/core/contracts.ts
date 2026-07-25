@@ -233,6 +233,22 @@ export interface IHeadlessExecutionHost {
 }
 
 /**
+ * Bootstrap surface for SessionRuntimeManager.
+ *
+ * Covers startup orchestration methods that are not needed by domain services
+ * or IPC routers. Indexing into this interface is the only way bootstrap code
+ * interacts with SRT — domain code depends on narrower interfaces.
+ */
+export interface ISessionRuntimeBootstrap {
+	loadProjects(): Promise<import("@look/shared/types").ProjectInfo[]>;
+	recoverOrphanedProjects(): Promise<boolean>;
+	restoreWorkspace(): Promise<number>;
+	setSchedulerService(scheduler: import("../scheduler/scheduler-service.js").SchedulerService): void;
+	importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }>;
+	dispose(): Promise<void>;
+}
+
+/**
  * Minimal event and project-query surface needed while composing services.
  * Runtime lifecycle methods are supplied separately to consumers that
  * require them; this contract intentionally does not expose the manager.

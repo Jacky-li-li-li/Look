@@ -43,7 +43,7 @@ function installFakeRuntime(
 		getAllTools: () => allTools.map((name) => ({ name })),
 		sessionManager,
 	};
-	const internal = manager._getComposition() as unknown as TestManagerInternals;
+	const internal = manager.composition as unknown as TestManagerInternals;
 	internal.runtimeRegistry.set(sessionId, {
 		runtime: { session },
 		projectId: "test-project",
@@ -151,7 +151,7 @@ describe("SubAgent toggle — API-level behavior", () => {
 			["read", "write", "bash", "subagent", "AskUserQuestion", "ExitPlanMode"],
 		);
 		try {
-			(manager._getComposition() as unknown as TestManagerInternals).permissionService.setMode(
+			(manager.composition as unknown as TestManagerInternals).permissionService.setMode(
 				"fake-plan-session",
 				"plan",
 			);

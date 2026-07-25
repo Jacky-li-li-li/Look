@@ -23,21 +23,21 @@ import type { IpcRouter } from "../invoke-context.js";
 
 export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:get", async () => {
-		const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+		const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 		return { success: true, ...result };
 	});
 
 	register("settings:get-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
-		const key = await getApiKey(ctx.credentialStore, _provider);
+		const key = await getApiKey(ctx.model.credentials, _provider);
 		return { success: true, key: key ?? null };
 	});
 
 	register("settings:set-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
 		guardString(data.key, "key");
-		await setApiKey(ctx.credentialStore, _provider, data.key);
-		const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+		await setApiKey(ctx.model.credentials, _provider, data.key);
+		const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 		return { success: true, ...result };
 	});
 
@@ -50,7 +50,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 
 	register("settings:test-env-key", async (data) => {
 		const _provider = guardProvider(data.provider);
-		const result = await testConfiguredProvider(ctx.modelRegistry, _provider);
+		const result = await testConfiguredProvider(ctx.model.registry, _provider);
 		return { success: true, result };
 	});
 
@@ -84,7 +84,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:provider-login", async (data) => {
 		const _provider = guardProvider(data.provider);
 
-		const providerObj = ctx.modelRuntime.getProvider(_provider);
+		const providerObj = ctx.model.runtime.getProvider(_provider);
 		const providerName = providerObj?.name ?? _provider;
 
 		if (!providerObj?.auth?.oauth) {
@@ -109,7 +109,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 								? { type: "manual_code", message: prompt.message, placeholder: prompt.placeholder }
 								: { type: "info", message: prompt.message },
 				};
-				ctx.sessionNotifier.emit(promptEvent);
+				ctx.session.notifier.emit(promptEvent);
 
 				return new Promise<string>((resolve, reject) => {
 					pendingPrompts.set(promptId, { resolve, reject });
@@ -117,14 +117,14 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 			},
 			notify: (event) => {
 				if (event.type === "auth_url") {
-					ctx.sessionNotifier.emit({
+					ctx.session.notifier.emit({
 						type: "login:prompt",
 						providerId: _provider,
 						promptId: crypto.randomUUID(),
 						prompt: { type: "auth_url", url: event.url, instructions: event.instructions },
 					});
 				} else if (event.type === "device_code") {
-					ctx.sessionNotifier.emit({
+					ctx.session.notifier.emit({
 						type: "login:prompt",
 						providerId: _provider,
 						promptId: crypto.randomUUID(),
@@ -135,7 +135,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 						},
 					});
 				} else if (event.type === "progress" || event.type === "info") {
-					ctx.sessionNotifier.emit({
+					ctx.session.notifier.emit({
 						type: "login:prompt",
 						providerId: _provider,
 						promptId: crypto.randomUUID(),
@@ -146,24 +146,24 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		};
 
 		try {
-			await ctx.modelRuntime.login(_provider, "oauth", interaction);
-			ctx.sessionNotifier.emit({
+			await ctx.model.runtime.login(_provider, "oauth", interaction);
+			ctx.session.notifier.emit({
 				type: "login:completed",
 				providerId: _provider,
 				success: true,
 			});
-			const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 			return { success: true, ...result };
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			ctx.sessionNotifier.emit({
+			ctx.session.notifier.emit({
 				type: "login:completed",
 				providerId: _provider,
 				success: false,
 				error: message,
 			});
 			if (message === "Login cancelled") {
-				const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+				const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 				return { success: false, ...result, error: message };
 			}
 			return { success: false, error: message };
@@ -173,8 +173,8 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:provider-logout", async (data) => {
 		const _provider = guardProvider(data.provider);
 		try {
-			await ctx.modelRuntime.logout(_provider);
-			const result = getProviderSettings(ctx.modelRegistry, ctx.customProviders);
+			await ctx.model.runtime.logout(_provider);
+			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 			return { success: true, ...result };
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -184,7 +184,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 
 	register("settings:add-custom-provider", async (data) => {
 		const input = guardCustomProviderInput(data.payload, "payload");
-		ctx.customProviders.add(input);
+		ctx.model.customProviders.add(input);
 		return { success: true };
 	});
 
@@ -192,18 +192,18 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const payload = guardObject(data.payload, "payload");
 		const name = guardString(payload.name, "payload.name");
 		const patch = guardObject(payload.patch, "payload.patch") as Partial<CustomProviderInput>;
-		ctx.customProviders.update(name, patch);
+		ctx.model.customProviders.update(name, patch);
 		return { success: true };
 	});
 
 	register("settings:remove-custom-provider", async (data) => {
 		const payload = guardObject(data.payload, "payload");
 		const name = guardString(payload.name, "payload.name");
-		return { success: true, removed: ctx.customProviders.remove(name) };
+		return { success: true, removed: ctx.model.customProviders.remove(name) };
 	});
 
 	register("settings:list-custom-providers", async () => {
-		return { success: true, providers: ctx.customProviders.list() };
+		return { success: true, providers: ctx.model.customProviders.list() };
 	});
 
 	register("settings:test-custom-provider", async (data) => {
@@ -268,7 +268,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("settings:general:get", async () => {
-		return { success: true, settings: ctx.sessionSettings.get() };
+		return { success: true, settings: ctx.session.settings.get() };
 	});
 
 	register("settings:general:set", async (data) => {
@@ -331,23 +331,23 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
 			ctx.mainWindow.setBackgroundColor(settings.themeTone === "light" ? "#fbfbfa" : "#030202");
 		}
-		const updated = await ctx.sessionSettings.update(settings);
+		const updated = await ctx.session.settings.update(settings);
 
 		return { success: true, settings: updated };
 	});
 
 	register("settings:general:reset", async () => {
-		return { success: true, settings: await ctx.sessionSettings.reset() };
+		return { success: true, settings: await ctx.session.settings.reset() };
 	});
 
 	register("settings:prompts:list", async () => {
-		return { success: true, ...ctx.promptStore.list() };
+		return { success: true, ...ctx.settings.prompts.list() };
 	});
 
 	register("settings:prompts:create", async (data) => {
 		const name = guardString(data.name, "name");
 		const content = guardString(data.content, "content");
-		const prompt = ctx.promptStore.create(name, content);
+		const prompt = ctx.settings.prompts.create(name, content);
 		return { success: true, prompt };
 	});
 
@@ -356,39 +356,39 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const patch: { name?: string; content?: string } = {};
 		if ("name" in data) patch.name = guardString(data.name, "name");
 		if ("content" in data) patch.content = guardString(data.content, "content");
-		const prompt = ctx.promptStore.update(id, patch);
+		const prompt = ctx.settings.prompts.update(id, patch);
 		if (!prompt) return { success: false, error: "Prompt not found" };
 		if (patch.content) {
-			ctx.promptStore.syncProjectOverridesForPrompt(id);
+			ctx.settings.prompts.syncProjectOverridesForPrompt(id);
 		}
 		return { success: true, prompt };
 	});
 
 	register("settings:prompts:delete", async (data) => {
 		const id = guardString(data.id, "id");
-		const deleted = ctx.promptStore.delete(id);
+		const deleted = ctx.settings.prompts.delete(id);
 		if (!deleted) return { success: false, error: "Cannot delete this prompt" };
 		return { success: true };
 	});
 
 	register("settings:prompts:set-active", async (data) => {
 		const id = guardString(data.id, "id");
-		const ok = ctx.promptStore.setActive(id);
+		const ok = ctx.settings.prompts.setActive(id);
 		if (!ok) return { success: false, error: "Prompt not found" };
 		return { success: true };
 	});
 
 	register("settings:project-prompts:list", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
-		return { success: true, ...ctx.promptStore.listProjectPrompts(projectId) };
+		return { success: true, ...ctx.settings.prompts.listProjectPrompts(projectId) };
 	});
 
 	register("settings:project-prompts:create", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const name = guardString(data.name, "name");
 		const content = guardString(data.content, "content");
-		const prompt = ctx.promptStore.createProjectPrompt(projectId, name, content);
-		ctx.promptStore.syncProjectSystemFile(projectId);
+		const prompt = ctx.settings.prompts.createProjectPrompt(projectId, name, content);
+		ctx.settings.prompts.syncProjectSystemFile(projectId);
 		return { success: true, prompt };
 	});
 
@@ -398,27 +398,27 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const patch: { name?: string; content?: string } = {};
 		if ("name" in data) patch.name = guardString(data.name, "name");
 		if ("content" in data) patch.content = guardString(data.content, "content");
-		const prompt = ctx.promptStore.updateProjectPrompt(projectId, id, patch);
+		const prompt = ctx.settings.prompts.updateProjectPrompt(projectId, id, patch);
 		if (!prompt) return { success: false, error: "Prompt not found" };
-		ctx.promptStore.syncProjectSystemFile(projectId);
+		ctx.settings.prompts.syncProjectSystemFile(projectId);
 		return { success: true, prompt };
 	});
 
 	register("settings:project-prompts:delete", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const id = guardString(data.id, "id");
-		const deleted = ctx.promptStore.deleteProjectPrompt(projectId, id);
+		const deleted = ctx.settings.prompts.deleteProjectPrompt(projectId, id);
 		if (!deleted) return { success: false, error: "Cannot delete this prompt" };
-		ctx.promptStore.syncProjectSystemFile(projectId);
+		ctx.settings.prompts.syncProjectSystemFile(projectId);
 		return { success: true };
 	});
 
 	register("settings:project-prompts:set-active", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const id = guardString(data.id, "id");
-		const ok = ctx.promptStore.setProjectActive(projectId, id);
+		const ok = ctx.settings.prompts.setProjectActive(projectId, id);
 		if (!ok) return { success: false, error: "Prompt not found" };
-		ctx.promptStore.syncProjectSystemFile(projectId);
+		ctx.settings.prompts.syncProjectSystemFile(projectId);
 		return { success: true };
 	});
 };

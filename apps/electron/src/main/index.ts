@@ -441,7 +441,7 @@ function bootstrapIM(): void {
 
 async function bootstrapStartupSequence(): Promise<void> {
 	registerIpcHandlers(
-		runtimeManager!,
+		runtimeManager!.composition,
 		mainWindow!,
 		rendererEvents,
 		larkChannelManager!,
@@ -516,14 +516,20 @@ app.whenReady().then(async () => {
 	}
 
 	createWindow();
-	await bootstrapApp();
+	try {
+		await bootstrapApp();
+	} catch (err) {
+		console.error("[Look] Fatal: Application bootstrap failed — quitting", err);
+		app.quit();
+		return;
+	}
 
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
 			if (mainWindow && runtimeManager) {
 				registerIpcHandlers(
-					runtimeManager,
+					runtimeManager.composition,
 					mainWindow,
 					rendererEvents,
 					larkChannelManager ?? undefined,

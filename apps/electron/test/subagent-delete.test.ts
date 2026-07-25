@@ -36,7 +36,7 @@ describe("SubAgent deletion cleanup", () => {
 			if (event.type === "agent:destroyed") events.push(event.agentId);
 		});
 		try {
-			(manager._getComposition() as unknown as TestManagerInternals).sessionCatalog.replace("project-a", [
+			(manager.composition as unknown as TestManagerInternals).sessionCatalog.replace("project-a", [
 				{
 					id: "child-session",
 					name: "child",
@@ -50,13 +50,13 @@ describe("SubAgent deletion cleanup", () => {
 					allMessagesText: "",
 				},
 			]);
-			(manager._getComposition() as unknown as TestManagerInternals).subAgentRegistry.register(
+			(manager.composition as unknown as TestManagerInternals).subAgentRegistry.register(
 				"parent-session",
 				"child-session",
 				"child",
 			);
 
-			await (manager._getComposition() as unknown as TestManagerInternals).subAgentRuntimeService.destroySubSessions(
+			await (manager.composition as unknown as TestManagerInternals).subAgentRuntimeService.destroySubSessions(
 				"parent-session",
 			);
 
@@ -81,7 +81,7 @@ describe("SubAgent deletion cleanup", () => {
 		const manager = await SessionRuntimeManager.create();
 		try {
 			const created = (
-				manager._getComposition() as unknown as TestManagerInternals
+				manager.composition as unknown as TestManagerInternals
 			).projectService.createProjectRecord(root, projectName);
 			const createdId = created.id;
 			const sharedDir = getProjectSharedDir(createdId);
@@ -90,7 +90,7 @@ describe("SubAgent deletion cleanup", () => {
 			await mkdir(sharedDir, { recursive: true });
 			await mkdir(actualSubsessionsDir, { recursive: true });
 			await writeFile(join(actualSubsessionsDir, "child.jsonl"), "", "utf8");
-			(manager._getComposition() as unknown as TestManagerInternals).sessionCatalog.replace(createdId, [
+			(manager.composition as unknown as TestManagerInternals).sessionCatalog.replace(createdId, [
 				{
 					id: "parent-session",
 					name: "parent",
@@ -110,7 +110,7 @@ describe("SubAgent deletion cleanup", () => {
 			expect(existsSync(sessionPath)).toBe(false);
 			expect(existsSync(sharedDir)).toBe(false);
 			expect(existsSync(actualSubsessionsDir)).toBe(false);
-			expect((manager._getComposition() as unknown as TestManagerInternals).projectService.has(createdId)).toBe(
+			expect((manager.composition as unknown as TestManagerInternals).projectService.has(createdId)).toBe(
 				false,
 			);
 			expect(sanitiseWorkspaceName(projectName)).toBe(projectName);

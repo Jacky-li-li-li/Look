@@ -20,6 +20,8 @@ import type { SessionNotifier } from "../session-notifier.js";
  * are attached before the composition is returned to application code.
  */
 export class CompositionHost implements ICompositionHost, IRuntimeStore, ISubAgentRuntimeHost {
+	/** Guard against accidental double-bind or premature use. */
+	private bound = false;
 	private runtimeLifecycle: Pick<RuntimeLifecycleCoordinator, "disposeRuntime"> | null = null;
 	private sessionNotifier: Pick<
 		SessionNotifier,
@@ -48,6 +50,10 @@ export class CompositionHost implements ICompositionHost, IRuntimeStore, ISubAge
 		sessionEventEffects: Pick<SessionEventEffects, "onAgentEnd" | "onMessageEnd" | "onSubSessionAgentEnd">;
 		subAgentRuntimeService: Pick<SubAgentRuntimeService, "hasCleanupTimer">;
 	}): void {
+		if (this.bound) {
+			throw new Error("CompositionHost already bound — bindRuntimeServices must be called exactly once");
+		}
+		this.bound = true;
 		this.runtimeLifecycle = deps.runtimeLifecycle;
 		this.sessionNotifier = deps.sessionNotifier;
 		this.sessionEventEffects = deps.sessionEventEffects;
