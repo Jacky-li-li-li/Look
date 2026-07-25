@@ -35,7 +35,7 @@ export const CHANGELOG: ChangelogEntry[] = [
 			},
 			{
 				zh: "权限弹窗选择「本次会话始终允许」后，输入框权限指示同步切换",
-				en: "Choosing \"Always allow this session\" now updates the permission indicator",
+				en: 'Choosing "Always allow this session" now updates the permission indicator',
 				ja: "「このセッションでは常に許可」選択後、権限インジケーターが連動",
 			},
 			{

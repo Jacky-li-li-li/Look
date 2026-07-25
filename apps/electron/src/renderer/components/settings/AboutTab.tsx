@@ -7,10 +7,10 @@
 // 状态反馈（进度/结果）以标题行下方的轻量文本呈现。
 // ============================================================
 
-import appIconUrl from "../../../../assets/icon-1024.png";
 import { CircleCheck, Download, Loader2, RefreshCw, RotateCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import appIconUrl from "../../../../assets/icon-1024.png";
 import { CHANGELOG } from "../../data/changelog";
 import { useAppUpdate } from "../../hooks/useAppUpdate";
 
