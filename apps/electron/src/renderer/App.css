@@ -6,6 +6,7 @@
 @plugin "@tailwindcss/typography";
 
 @source "../../../../packages/shared/src/**/*.{ts,tsx}";
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
 @source "../../../../node_modules/streamdown/dist/*.js";
 @source "../../../../node_modules/@streamdown/code/dist/*.js";
 @source "../../../../node_modules/@streamdown/mermaid/dist/*.js";
