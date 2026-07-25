@@ -21,6 +21,7 @@ let initialized = false;
 let sendEvent: SendEvent | null = null;
 
 function emit(phase: AppUpdatePhase, extra?: { version?: string; percent?: number; error?: string }): void {
+	console.log(`[Look][updater] ${phase}`, extra ?? "");
 	sendEvent?.({ type: "update:status", phase, ...extra });
 }
 
