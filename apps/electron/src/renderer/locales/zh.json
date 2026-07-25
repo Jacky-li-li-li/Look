@@ -762,6 +762,8 @@
     "ready": "更新已就绪。重启以完成安装。",
     "restart": "立即重启",
     "restartInstall": "重启安装",
+    "autoRestartHint": "将在 5 秒后自动重启安装",
+    "cancelAutoRestart": "取消自动重启",
     "failed": "更新失败"
   },
   "agentAvatar": {

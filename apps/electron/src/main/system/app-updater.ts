@@ -14,11 +14,14 @@ const { autoUpdater } = updater;
 
 const INITIAL_CHECK_DELAY_MS = 30_000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+/** 下载完成后自动重启安装的宽限时间（渲染层 toast 同步展示倒计时） */
+const AUTO_INSTALL_DELAY_MS = 5_000;
 
 type SendEvent = (event: MainToRendererEvent) => void;
 
 let initialized = false;
 let sendEvent: SendEvent | null = null;
+let autoInstallTimer: NodeJS.Timeout | null = null;
 
 function emit(phase: AppUpdatePhase, extra?: { version?: string; percent?: number; error?: string }): void {
 	console.log(`[Look][updater] ${phase}`, extra ?? "");
@@ -46,7 +49,15 @@ export function initAppUpdater(send: SendEvent): void {
 	autoUpdater.on("update-available", (info) => emit("available", { version: info.version }));
 	autoUpdater.on("update-not-available", () => emit("not-available"));
 	autoUpdater.on("download-progress", (progress) => emit("downloading", { percent: Math.round(progress.percent) }));
-	autoUpdater.on("update-downloaded", (info) => emit("downloaded", { version: info.version }));
+	autoUpdater.on("update-downloaded", (info) => {
+		emit("downloaded", { version: info.version });
+		// 用户点过「下载」即视为同意更新：宽限几秒后自动重启安装，
+		// 期间可被 update:cancel-install 取消（退回手动重启）。
+		autoInstallTimer = setTimeout(() => {
+			autoInstallTimer = null;
+			autoUpdater.quitAndInstall();
+		}, AUTO_INSTALL_DELAY_MS);
+	});
 	autoUpdater.on("error", (err) => emit("error", { error: err instanceof Error ? err.message : String(err) }));
 
 	setTimeout(() => {
@@ -82,5 +93,14 @@ export async function installUpdate(): Promise<{ success: boolean; error?: strin
 	if (!app.isPackaged) return devError();
 	// 延迟到 IPC 响应送达渲染层后再退出安装
 	setImmediate(() => autoUpdater.quitAndInstall());
+	return { success: true };
+}
+
+/** 取消下载完成后的自动重启安装（退回手动「重启安装」）。 */
+export function cancelAutoInstall(): { success: boolean } {
+	if (autoInstallTimer) {
+		clearTimeout(autoInstallTimer);
+		autoInstallTimer = null;
+	}
 	return { success: true };
 }

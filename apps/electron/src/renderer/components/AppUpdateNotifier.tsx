@@ -3,12 +3,14 @@
 //
 // 订阅 appUpdateAtom（由主进程 update:status 事件驱动），
 // 用固定 toast id 原地更新：available → downloading → downloaded。
+// downloaded 后主进程会在数秒后自动重启安装，toast 提供
+// 「立即重启」和「取消自动重启」（退回手动）两个出口。
 // 仅在发现新版本后才出现；checking / not-available / error 不打扰用户
 // （手动检查的结果在设置页 AboutTab 展示）。
 // ============================================================
 
 import { useAtomValue } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useAppUpdate } from "../hooks/useAppUpdate";
@@ -19,7 +21,13 @@ const TOAST_ID = "app-update";
 export default function AppUpdateNotifier() {
 	const { t } = useTranslation();
 	const update = useAtomValue(appUpdateAtom);
-	const { downloadUpdate, installUpdate } = useAppUpdate();
+	const { downloadUpdate, installUpdate, cancelAutoInstall } = useAppUpdate();
+	const [autoInstallCancelled, setAutoInstallCancelled] = useState(false);
+
+	// 新一轮下载开始时重置取消状态
+	useEffect(() => {
+		if (update?.phase === "downloading") setAutoInstallCancelled(false);
+	}, [update?.phase]);
 
 	useEffect(() => {
 		if (!update) return;
@@ -40,18 +48,35 @@ export default function AppUpdateNotifier() {
 				});
 				break;
 			case "downloaded":
-				toast(t("update.ready"), {
-					id: TOAST_ID,
-					description: update.version,
-					duration: Number.POSITIVE_INFINITY,
-					action: { label: t("update.restart"), onClick: () => void installUpdate() },
-				});
+				if (autoInstallCancelled) {
+					toast(t("update.ready"), {
+						id: TOAST_ID,
+						description: update.version,
+						duration: Number.POSITIVE_INFINITY,
+						action: { label: t("update.restart"), onClick: () => void installUpdate() },
+						cancel: { label: t("update.later"), onClick: () => {} },
+					});
+				} else {
+					toast(t("update.ready"), {
+						id: TOAST_ID,
+						description: t("update.autoRestartHint"),
+						duration: Number.POSITIVE_INFINITY,
+						action: { label: t("update.restart"), onClick: () => void installUpdate() },
+						cancel: {
+							label: t("update.cancelAutoRestart"),
+							onClick: () => {
+								void cancelAutoInstall();
+								setAutoInstallCancelled(true);
+							},
+						},
+					});
+				}
 				break;
 			default:
 				toast.dismiss(TOAST_ID);
 				break;
 		}
-	}, [update, t, downloadUpdate, installUpdate]);
+	}, [update, autoInstallCancelled, t, downloadUpdate, installUpdate, cancelAutoInstall]);
 
 	return null;
 }

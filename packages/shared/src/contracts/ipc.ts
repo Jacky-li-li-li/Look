@@ -343,6 +343,8 @@ export interface LookAPI {
 	checkForUpdates(): Promise<{ success: boolean; error?: string }>;
 	downloadUpdate(): Promise<{ success: boolean; error?: string }>;
 	installUpdate(): Promise<{ success: boolean; error?: string }>;
+	/** 取消下载完成后的自动重启安装（退回手动「重启安装」） */
+	cancelAutoInstall(): Promise<{ success: boolean; error?: string }>;
 }
 
 interface SkillEntry {

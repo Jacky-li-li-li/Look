@@ -768,7 +768,8 @@ export type RendererToMainEvent =
 	// ---- 应用自动更新（renderer → main） ----
 	| { type: "update:check" }
 	| { type: "update:download" }
-	| { type: "update:install" };
+	| { type: "update:install" }
+	| { type: "update:cancel-install" };
 
 /** 应用自动更新的阶段（update:status 事件的 phase 字段） */
 export type AppUpdatePhase = "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";

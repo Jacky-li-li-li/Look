@@ -762,6 +762,8 @@
     "ready": "Update ready. Restart to install.",
     "restart": "Restart",
     "restartInstall": "Restart to install",
+    "autoRestartHint": "Restarting automatically in 5 seconds",
+    "cancelAutoRestart": "Cancel auto-restart",
     "failed": "Update failed"
   },
   "agentAvatar": {

@@ -242,6 +242,7 @@ const api: LookAPI = {
 	checkForUpdates: () => ipcRenderer.invoke("look:invoke", { type: "update:check" }),
 	downloadUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:download" }),
 	installUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:install" }),
+	cancelAutoInstall: () => ipcRenderer.invoke("look:invoke", { type: "update:cancel-install" }),
 
 	// ---- Permission management ----
 	setPermissionMode: (agentId, mode) =>

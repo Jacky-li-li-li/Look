@@ -88,7 +88,11 @@ export default function AboutTab({ providers, customStats }: AboutTabProps) {
 						</span>
 					</div>
 				)}
-				{phase === "downloaded" && <span className="text-[11px] text-muted-foreground">{t("update.ready")}</span>}
+				{phase === "downloaded" && (
+					<span className="text-[11px] text-muted-foreground">
+						{t("update.ready")} {t("update.autoRestartHint")}
+					</span>
+				)}
 				{phase === "error" && (
 					<span className="flex max-w-xs items-start gap-1.5 text-[11px] text-destructive">
 						<TriangleAlert className="mt-0.5 size-3 shrink-0" />
