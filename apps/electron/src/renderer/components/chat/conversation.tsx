@@ -6,8 +6,9 @@
  * - 用户滚离后停止跟随 + 显示"回到底部"按钮
  * - 配合 ScrollPositionManager 实现会话切换位置记忆
  */
-import { Button } from "@look/ui/components/ui/button";
+
 import { cn } from "@look/ui";
+import { Button } from "@look/ui/components/ui/button";
 import { ArrowDown } from "lucide-react";
 import type { ComponentProps, ReactElement } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";

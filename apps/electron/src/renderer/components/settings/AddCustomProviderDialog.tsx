@@ -2,9 +2,9 @@
 // AddCustomProviderDialog — form for adding/editing custom providers
 // ============================================================
 
+import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@look/ui/components/ui/dialog";
-import { cn } from "@look/ui";
 import type { TFunction } from "i18next";
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import type React from "react";

@@ -2,6 +2,7 @@
 // ApiKeysTab — Provider API key management
 // ============================================================
 
+import { cn } from "@look/ui";
 import { Badge } from "@look/ui/components/ui/badge";
 import { Button } from "@look/ui/components/ui/button";
 import {
@@ -13,7 +14,6 @@ import {
 	DialogTitle,
 } from "@look/ui/components/ui/dialog";
 import { Input } from "@look/ui/components/ui/input";
-import { cn } from "@look/ui";
 import type { TFunction } from "i18next";
 import { AlertCircle, ChevronRight, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";

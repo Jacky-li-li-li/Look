@@ -2,6 +2,7 @@
 // Sidebar/ProjectHeader — 项目头部（折叠/编辑/操作菜单）
 // ============================================================
 
+import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { CollapsibleTrigger } from "@look/ui/components/ui/collapsible";
 import {
@@ -11,7 +12,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@look/ui/components/ui/dropdown-menu";
-import { cn } from "@look/ui";
 import { DEFAULT_PROJECT_ID } from "@shared/types";
 import { AlertTriangle, ChevronRight, Folder, FolderOpen, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";

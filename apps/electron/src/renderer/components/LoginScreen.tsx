@@ -3,10 +3,10 @@
 // Ink Wash design language
 // ============================================================
 
+import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Input } from "@look/ui/components/ui/input";
 import { Switch } from "@look/ui/components/ui/switch";
-import { cn } from "@look/ui";
 import { useAtom } from "jotai";
 import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 import { useCallback, useState } from "react";

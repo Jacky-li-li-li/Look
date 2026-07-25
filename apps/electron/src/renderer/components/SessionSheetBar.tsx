@@ -6,9 +6,9 @@ import { closestCenter, DndContext, type DragEndEvent, PointerSensor, useSensor,
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
-import { cn } from "@look/ui";
 import type { AgentInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { PanelLeftOpen, PanelRightOpen, X } from "lucide-react";

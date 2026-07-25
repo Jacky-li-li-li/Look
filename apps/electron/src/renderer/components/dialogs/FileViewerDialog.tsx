@@ -6,8 +6,8 @@
 // 其他文本文件走 shiki 双主题高亮;二进制文件显示不可预览 + Finder 按钮。
 // ============================================================
 
-import { Button } from "@look/ui/components/ui/button";
 import { cn } from "@look/ui";
+import { Button } from "@look/ui/components/ui/button";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom } from "jotai";
 import { ArrowLeft, Copy, Eye, FileWarning, FolderOpen, Pencil, RefreshCw, Save, X } from "lucide-react";

@@ -2,6 +2,7 @@
 // GeneralTab — Appearance + Behavior settings
 // ============================================================
 
+import { cn } from "@look/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@look/ui/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@look/ui/components/ui/popover";
 import {
@@ -13,7 +14,6 @@ import {
 	SelectValue,
 } from "@look/ui/components/ui/select";
 import { Switch } from "@look/ui/components/ui/switch";
-import { cn } from "@look/ui";
 import { useSetAtom } from "jotai";
 import { Check, Cpu, Sun, Zap } from "lucide-react";
 import { useEffect, useState } from "react";

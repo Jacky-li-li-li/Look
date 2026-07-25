@@ -1,7 +1,7 @@
+import { cn } from "@look/ui";
 import { AgentTag } from "@look/ui/components/AgentTag";
 import { McpTag } from "@look/ui/components/McpTag";
 import { SkillTag } from "@look/ui/components/SkillTag";
-import { cn } from "@look/ui";
 import { useAtomValue, useSetAtom } from "jotai";
 import { type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "react";
 import type { Components } from "streamdown";
