@@ -19,9 +19,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = join(__dirname, "..");
 
-const SOURCE_ICONS_DIR = join(ROOT, "node_modules", "material-icon-theme", "icons");
+// npm workspaces hoists dependencies to the repository root, but a
+// non-workspace install places them under apps/electron/node_modules.
+// Check both locations.
+function resolveMaterialIconTheme(...subpath) {
+	const candidates = [
+		join(ROOT, "node_modules", "material-icon-theme", ...subpath),
+		join(ROOT, "..", "..", "node_modules", "material-icon-theme", ...subpath),
+	];
+	for (const candidate of candidates) {
+		if (existsSync(candidate)) return candidate;
+	}
+	throw new Error(
+		`material-icon-theme not found. Checked:\n  ${candidates.join("\n  ")}`,
+	);
+}
+
+const SOURCE_ICONS_DIR = resolveMaterialIconTheme("icons");
 const TARGET_ICONS_DIR = join(ROOT, "src", "renderer", "file-icons");
-const MANIFEST_PATH = join(ROOT, "node_modules", "material-icon-theme", "dist", "material-icons.json");
+const MANIFEST_PATH = resolveMaterialIconTheme("dist", "material-icons.json");
 const MAP_OUTPUT_PATH = join(ROOT, "src", "renderer", "lib", "fileIconMap.ts");
 
 // Curated lists: tweak these to control which icons are bundled.

@@ -3,7 +3,7 @@
 // The repository's root node_modules remains a development environment and is
 // never handed to the packager.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +12,9 @@ const repositoryRoot = resolve(appRoot, "../..");
 const sourceNodeModules = join(repositoryRoot, "node_modules");
 const stagingRoot = join(appRoot, ".release-staging");
 const stagingNodeModules = join(stagingRoot, "node_modules");
+const STAGE_CACHE_FILE = join(stagingRoot, "stage-cache.json");
+
+const CACHE_VERSION = 1;
 
 const RUNTIME_ROOTS = [
 	"@earendil-works/pi-agent-core",
@@ -62,10 +65,15 @@ const EXCLUDED_PACKAGE_ENTRIES = new Set([
 	"tests",
 ]);
 
+// File extensions that are never needed at runtime.
+// .mts/.cts are ESM/CJS TypeScript declarations emitted alongside .mjs/.cjs;
+// .ts/.tsx are uncompiled source; .map are sourcemaps.
+const EXCLUDED_EXTENSIONS = new Set([".map", ".ts", ".tsx", ".mts", ".cts"]);
+
 function copyRuntimePackageFilter(source) {
 	const name = basename(source);
 	if (EXCLUDED_PACKAGE_ENTRIES.has(name)) return false;
-	return !name.endsWith(".map") && !name.endsWith(".ts") && !name.endsWith(".tsx");
+	return !EXCLUDED_EXTENSIONS.has(name.slice(name.lastIndexOf(".")));
 }
 
 function copyWorkspaceShared() {
@@ -90,7 +98,7 @@ function copyDependencyClosure() {
 		return version;
 	}
 
-	function copyPackage(packageName, sourceParent, targetNodeModules, ancestors = new Set()) {
+	function copyPackage(packageName, sourceParent, targetNodeModules, ancestors = new Set(), recurseDeps = true) {
 		if (packageName === "@look/shared") {
 			const source = copyWorkspaceShared();
 			topLevelSources.set(packageName, source);
@@ -135,7 +143,15 @@ function copyDependencyClosure() {
 				const canReuseTopLevel = !topLevelSource || packageVersion(topLevelSource) === packageVersion(resolved);
 				if (!topLevelSource && canReuseTopLevel) topLevelSources.set(dependency.name, resolved);
 				const destination = canReuseTopLevel ? stagingNodeModules : join(target, "node_modules");
-				copyPackage(dependency.name, source, destination, nextAncestors);
+
+				// Performance optimization: when a dependency matches the hoisted root
+				// version and is placed at staging root, skip recursing into its own
+				// transitive dependencies. At runtime, Node.js module resolution will
+				// find them from the staging root node_modules. Only recurse when the
+				// dependency has a conflicting version that must be nested (different
+				// version inside a package's own node_modules).
+				const shouldRecurse = recurseDeps && !(canReuseTopLevel && destination === stagingNodeModules);
+				copyPackage(dependency.name, source, destination, nextAncestors, shouldRecurse);
 			} catch (error) {
 				if (dependency.optional) continue;
 				throw error;
@@ -227,12 +243,77 @@ function countFiles(directory) {
 	return count;
 }
 
+// ── Incremental cache ──
+
+function readCache() {
+	try {
+		return JSON.parse(readFileSync(STAGE_CACHE_FILE, "utf8"));
+	} catch {
+		return null;
+	}
+}
+
+function buildCacheKey() {
+	const sources = {};
+	for (const packageName of RUNTIME_ROOTS) {
+		const source =
+			packageName === "@look/shared"
+				? join(repositoryRoot, "packages", "shared")
+				: findPackage(packageName, appRoot);
+		const st = statSync(source);
+		const manifest = readManifest(source);
+		sources[packageName] = {
+			path: source,
+			mtime: st.mtimeMs,
+			version: manifest.version ?? "0.0.0",
+		};
+	}
+	const pkgMtime = statSync(join(appRoot, "package.json")).mtimeMs;
+	const distMtime = statSync(join(appRoot, "dist")).mtimeMs;
+	return {
+		version: CACHE_VERSION,
+		sources,
+		packageMtime: pkgMtime,
+		distMtime,
+	};
+}
+
+function isCacheValid(cache) {
+	if (!cache || cache.version !== CACHE_VERSION) return false;
+	const current = buildCacheKey();
+	if (current.packageMtime !== cache.packageMtime) return false;
+	if (current.distMtime !== cache.distMtime) return false;
+	for (const name of RUNTIME_ROOTS) {
+		const a = current.sources[name];
+		const b = cache.sources[name];
+		if (!a || !b) return false;
+		if (a.mtime !== b.mtime) return false;
+		if (a.version !== b.version) return false;
+	}
+	return true;
+}
+
+function writeCache() {
+	const key = buildCacheKey();
+	writeFileSync(STAGE_CACHE_FILE, `${JSON.stringify(key, null, "\t")}\n`);
+}
+
 export function stageProductionApp() {
 	if (!existsSync(join(appRoot, "dist", "src", "main", "index.js"))) {
 		throw new Error("Missing apps/electron/dist/src/main/index.js. Run npm run build first.");
 	}
 	if (!existsSync(join(repositoryRoot, "packages", "shared", "dist"))) {
 		throw new Error("Missing packages/shared/dist. Run npm run build:shared first.");
+	}
+
+	// Skip full staging if nothing changed since last run.
+	if (existsSync(stagingRoot)) {
+		const cache = readCache();
+		if (isCacheValid(cache)) {
+			console.log("[Look] Stage cache hit, skipping dependency copy.");
+			return cache.lastSummary ?? { platform: process.platform, cached: true };
+		}
+		console.log("[Look] Stage cache miss, re-staging...");
 	}
 
 	rmSync(stagingRoot, { recursive: true, force: true });
@@ -249,6 +330,12 @@ export function stageProductionApp() {
 		packages: closure.packages,
 	};
 	writeFileSync(join(stagingRoot, "runtime-dependencies.json"), `${JSON.stringify(summary, null, "\t")}\n`);
+
+	// Write cache *after* full staging completes successfully.
+	const cache = buildCacheKey();
+	cache.lastSummary = summary;
+	writeFileSync(STAGE_CACHE_FILE, `${JSON.stringify(cache, null, "\t")}\n`);
+
 	console.log(
 		`[Look] Staged ${summary.packageCount} runtime packages and ${summary.fileCount} files in ${stagingRoot}`,
 	);
