@@ -105,26 +105,27 @@ jobs:
           set -euo pipefail
           REPO="${GITHUB_REPOSITORY}"
 
-          mapfile -t IDS < <(gh api "repos/${REPO}/releases" \
+          # 注意：macOS runner 自带 bash 3.2，不要用 mapfile
+          IDS=$(gh api "repos/${REPO}/releases" \
             --jq ".[] | select(.tag_name==\"${TAG}\" and .draft==true) | .id")
-          if [ "${#IDS[@]}" -eq 0 ]; then
+          if [ -z "$IDS" ]; then
             echo "no draft release found for ${TAG} (already published?)"
             exit 0
           fi
 
           # 主 release = 含 latest-mac.yml 的那个；都没有则取第一个
           CANONICAL=""
-          for id in "${IDS[@]}"; do
+          for id in $IDS; do
             if gh api "repos/${REPO}/releases/${id}" --jq '.assets[].name' | grep -q '^latest-mac.yml$'; then
               CANONICAL="$id"
               break
             fi
           done
-          CANONICAL="${CANONICAL:-${IDS[0]}}"
+          CANONICAL="${CANONICAL:-$(echo "$IDS" | head -1)}"
           echo "canonical release: ${CANONICAL}"
 
           # 把其余 draft 的资产搬到主 release，然后删除它们
-          for id in "${IDS[@]}"; do
+          for id in $IDS; do
             [ "$id" = "$CANONICAL" ] && continue
             echo "merging assets from ${id}..."
             while read -r asset_id asset_name; do
