@@ -337,7 +337,6 @@ async function bootstrapApp(): Promise<void> {
 
 	// Phase 6: Sync built-in skills and agents
 	await syncBuiltinResources();
-
 }
 
 // ── Phase 1: Core runtime ──

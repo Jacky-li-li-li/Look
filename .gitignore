@@ -18,3 +18,4 @@ release/
 _probe.ts
 # Generated application-tool intermediates — final assets live under apps/electron/src/renderer/assets/
 apps/electron/tools/*/output/
+coverage/

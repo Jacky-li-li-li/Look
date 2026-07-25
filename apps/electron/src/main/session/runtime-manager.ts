@@ -99,8 +99,6 @@ export class SessionRuntimeManager
 		return this.composition.mcpManager;
 	}
 
-
-
 	getWorkspaceFileService(): WorkspaceFileService {
 		if (this.disposed) {
 			throw new Error("SessionRuntimeManager has been disposed");

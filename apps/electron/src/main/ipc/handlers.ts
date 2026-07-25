@@ -11,9 +11,9 @@
 
 import type { RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
-import { InvokeDispatcher, type InvokeContext } from "./invoke-context.js";
-import type { RendererEventTransport } from "./renderer-event-transport.js";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
+import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
+import type { RendererEventTransport } from "./renderer-event-transport.js";
 import {
 	agentRouter,
 	fileRouter,

@@ -91,8 +91,7 @@ const api: LookAPI = {
 	respondLoginPrompt: (promptId, value) =>
 		ipcRenderer.invoke("look:invoke", { type: "login:prompt-respond", promptId, value }),
 
-	cancelLoginPrompt: (promptId) =>
-		ipcRenderer.invoke("look:invoke", { type: "login:prompt-cancel", promptId }),
+	cancelLoginPrompt: (promptId) => ipcRenderer.invoke("look:invoke", { type: "login:prompt-cancel", promptId }),
 
 	// ---- Custom providers ----
 	addCustomProvider: (input) =>

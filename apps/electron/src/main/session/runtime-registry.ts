@@ -65,6 +65,7 @@ export class RuntimeRegistry {
 		return initialization;
 	}
 
+	// 初始化失败已由 createManagedRuntime 上报给创建方，这里仅等待 settle，避免重复告警。
 	async awaitInitialization(sessionId: string): Promise<void> {
 		await this.initializations.get(sessionId)?.catch(() => undefined);
 	}

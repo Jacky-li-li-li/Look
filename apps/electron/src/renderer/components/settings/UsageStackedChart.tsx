@@ -172,7 +172,7 @@ export default function UsageStackedChart({ modelUsage, selectedYear }: UsageSta
 										}}
 									>
 										<div style={{ fontWeight: 600, marginBottom: 4 }}>{fullDate}</div>
-										{payload
+										{[...payload]
 											.sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0))
 											.map((entry) => {
 												const modelName = entry.name ?? String(entry.dataKey);

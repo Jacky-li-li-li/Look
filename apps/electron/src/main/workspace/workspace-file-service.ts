@@ -133,25 +133,12 @@ export class WorkspaceFileService {
 		}
 	}
 
-	/**
-	 * Drag-drop fallback: write file content provided as base64/utf8 string to
-	 * the shared area. Used when webUtils.getPathForFile() cannot return an
-	 * absolute path (older Electron, sandboxed renderer, dropped directory where
-	 * we have content but no path).
-	 *
-	 * 安全约束:
-	 *   - relativePath 仍需通过 resolveSharedPath 校验,防 `../` 越界
-	 *   - 解码前先按字符长度粗判上界(防止 4GB base64 字符串 OOM 之后再发现超大)
-	 *   - 二进制内容统一以 base64 字符串形式传输,主端解码
-	 */
 	async writeSharedContent(
 		projectId: string,
 		relativePath: string,
 		content: string,
 		encoding: "base64" | "utf8" = "utf8",
 	): Promise<void> {
-		// 粗判:base64 是 4 char -> 3 bytes,字符数/4 * 3 是解码后字节数上界。
-		// 字符数本身已经超过合理值(>SHARED_MAX_CONTENT_BYTES 的 4 倍)就直接拒。
 		const charLimit = SHARED_MAX_CONTENT_BYTES * 4;
 		if (content.length > charLimit) {
 			throw new Error(`Content too large: ${content.length} chars (max ${charLimit})`);
@@ -187,16 +174,12 @@ export class WorkspaceFileService {
 		if (!destStat?.isDirectory()) {
 			throw new Error("Import destination must be an existing directory");
 		}
-		// IPC 不可信边界:绝对路径 source 必须位于用户 home 内,防止恶意渲染端
-		// 读取任意文件并写入共享区(M-11)。相对路径走 dialog / drag,正常可信。
 		const homeDir = process.env.HOME || process.env.USERPROFILE;
 		if (!homeDir) {
 			throw new Error("Cannot determine user home directory for import");
 		}
 		const imported: string[] = [];
 		try {
-			// 并行导入所有源，提升批量导入吞吐；allSettled 确保全部尝试后才取首个 rejection，
-			// 失败时 catch 块统一回滚已成功项，保证原子性语义。
 			const outcomes = await Promise.allSettled(
 				sources.map(async (source) => {
 					const resolved = path.isAbsolute(source) ? path.resolve(source) : path.resolve(homeDir, source);
@@ -225,7 +208,6 @@ export class WorkspaceFileService {
 				if (outcome.status === "fulfilled" && outcome.value) imported.push(outcome.value);
 			}
 		} catch (error) {
-			// 单条失败时回滚已导入项,避免脏状态
 			await Promise.all(
 				imported.map((item) => fs.promises.rm(item, { recursive: true, force: true }).catch(() => undefined)),
 			);
@@ -277,13 +259,11 @@ export class WorkspaceFileService {
 		await new Promise<void>((resolve, reject) => {
 			watcher.once("ready", resolve);
 			watcher.once("error", (error) => {
-				// ready 之前失败时清理 watcher,避免孤儿 chokidar 句柄
 				watcher.close().catch(() => undefined);
 				reject(error);
 			});
 		});
 
-		// 等待 ready 后再次检查,防止并发创建多个 watcher
 		if (this.watchers.has(projectId)) {
 			await watcher.close();
 			return;

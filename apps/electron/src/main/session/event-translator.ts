@@ -64,16 +64,16 @@ export function extractUserMessageImages(message: AgentMessage): ImageContent[] 
 
 /**
  * Guard against non-serializable values reaching the structured-clone IPC boundary.
- * Returns the original value if it round-trips through structuredClone, or a safe
- * fallback empty object when serialization fails (e.g. functions, Symbols, DOM nodes).
+ * Returns a structuredClone deep copy (so downstream mutation cannot corrupt the pi
+ * SDK's event objects), or a safe fallback empty object when cloning fails
+ * (e.g. functions, Symbols, DOM nodes).
  *
  * NOTE: All call sites pass objects (Record / unknown). Returning `{}` prevents
  * downstream property-access crashes; a string would type-assert silently and
  * produce `undefined` on every property access later. */
 function safeClone<T>(value: T, context?: string): T {
 	try {
-		structuredClone(value);
-		return value;
+		return structuredClone(value);
 	} catch (err) {
 		console.warn(
 			`[Look][EventTranslator] Value failed structuredClone${context ? ` [${context}]` : ""} — replacing with placeholder.`,

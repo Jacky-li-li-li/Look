@@ -1,30 +1,13 @@
 import { atom } from "jotai";
-import type { CustomProviderInput } from "../components/settings/types";
+import type { CustomProviderInput, ProviderInfo } from "../components/settings/types";
 
 export interface CustomProviderStats {
 	configured: number;
 	totalModels: number;
 }
 
-interface SettingsProviderInfo {
-	id: string;
-	name: string;
-	hasKey: boolean;
-	envVar?: string;
-	modelsAvailable: number;
-	models?: Array<{
-		id: string;
-		name: string;
-		reasoning: boolean;
-		contextWindow: number;
-		maxTokens: number;
-	}>;
-	authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
-	envLabel?: string;
-}
-
 export interface ProviderSettingsData {
-	providers: SettingsProviderInfo[];
+	providers: ProviderInfo[];
 	customProviders: CustomProviderInput[];
 	customStats: CustomProviderStats;
 }

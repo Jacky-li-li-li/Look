@@ -1,12 +1,6 @@
 import type { MainToRendererEvent } from "@shared/types";
 import { appStore } from "./appStore";
-import {
-	loginCompletedAtom,
-	loginPromptAtom,
-	mcpStatusVersionAtom,
-	usageDataAtom,
-	usageVersionAtom,
-} from "./atoms";
+import { loginCompletedAtom, loginPromptAtom, mcpStatusVersionAtom, usageDataAtom, usageVersionAtom } from "./atoms";
 
 export function handleSystemEvent(event: MainToRendererEvent): boolean {
 	switch (event.type) {

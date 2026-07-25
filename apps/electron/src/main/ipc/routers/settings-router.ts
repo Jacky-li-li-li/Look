@@ -55,10 +55,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	});
 
 	// Track pending OAuth prompts that need renderer interaction.
-	const pendingPrompts = new Map<
-		string,
-		{ resolve: (value: string) => void; reject: (err: Error) => void }
-	>();
+	const pendingPrompts = new Map<string, { resolve: (value: string) => void; reject: (err: Error) => void }>();
 
 	register("login:prompt-respond", async (data) => {
 		const promptId = guardString(data.promptId, "promptId");

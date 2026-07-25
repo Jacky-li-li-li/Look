@@ -702,7 +702,10 @@ export class LarkBridgeService {
 		const key = this.keyFor(appId, chatId);
 		let binding = this.findBinding(appId, chatId);
 		if (!binding) {
-			binding = await this.pendingBindings.get(key)?.catch(() => undefined);
+			binding = await this.pendingBindings.get(key)?.catch((err: unknown) => {
+				console.warn("[LarkBridgeService] pendingBindings.get failed:", err);
+				return undefined;
+			});
 		}
 		if (binding && !this.validateBinding(binding)) {
 			binding = undefined;

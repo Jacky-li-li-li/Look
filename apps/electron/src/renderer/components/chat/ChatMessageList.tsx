@@ -2,6 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import { Button } from "@shared/components/ui/button";
 import { cn } from "@shared/lib/utils";
+import type { LookUiToolExecState } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { Check, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,6 +29,9 @@ import {
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
 import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
+
+/** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
+const EMPTY_TOOL_EXECUTIONS: Record<string, LookUiToolExecState> = {};
 
 interface ChatMessageListProps {
 	agentId: string;
@@ -399,13 +403,11 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 									agentName={agentName}
 									isStreaming={isBusy}
 									autoCollapse={autoCollapse}
-									toolExecutions={{} as Record<string, import("@shared/types").LookUiToolExecState>}
+									toolExecutions={EMPTY_TOOL_EXECUTIONS}
 									toolResultMap={item.toolResultMap}
 									isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
 									liveBlocks={item.uiBlocks}
-									liveToolExecutions={
-										item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)
-									}
+									liveToolExecutions={item.uiTools ?? EMPTY_TOOL_EXECUTIONS}
 								/>
 								{renderMessageActions(item, true)}
 							</div>
@@ -418,9 +420,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 							<StreamingMessageBubble
 								agentName={agentName}
 								blocks={item.uiBlocks}
-								toolExecutions={
-									item.uiTools ?? ({} as Record<string, import("@shared/types").LookUiToolExecState>)
-								}
+								toolExecutions={item.uiTools ?? EMPTY_TOOL_EXECUTIONS}
 								isStreaming={isBusy}
 								autoCollapse={autoCollapse}
 							/>
@@ -441,7 +441,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 							agentName={agentName}
 							isStreaming={false}
 							autoCollapse={autoCollapse}
-							toolExecutions={{} as Record<string, import("@shared/types").LookUiToolExecState>}
+							toolExecutions={EMPTY_TOOL_EXECUTIONS}
 							toolResultMap={item.toolResultMap}
 							isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
 							flash={flashEntryId === item.id}

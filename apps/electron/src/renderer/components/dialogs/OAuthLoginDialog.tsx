@@ -134,11 +134,7 @@ export default function OAuthLoginDialog() {
 							<Button variant="line" size="sm" onClick={handleCancel}>
 								Cancel
 							</Button>
-							<Button
-								variant="line-filled"
-								size="sm"
-								onClick={() => handleOpenBrowser(promptData.url)}
-							>
+							<Button variant="line-filled" size="sm" onClick={() => handleOpenBrowser(promptData.url)}>
 								<ExternalLink className="mr-1.5 size-3.5" aria-hidden="true" />
 								Open Browser
 							</Button>
@@ -150,9 +146,7 @@ export default function OAuthLoginDialog() {
 					<>
 						<DialogHeader>
 							<DialogTitle>{prompt.providerName} Login</DialogTitle>
-							<DialogDescription>
-								Your verification code:
-							</DialogDescription>
+							<DialogDescription>Your verification code:</DialogDescription>
 						</DialogHeader>
 						<div className="flex justify-center py-2">
 							<code className="rounded-md bg-muted px-4 py-2 font-mono text-lg font-bold tracking-widest">
@@ -190,9 +184,7 @@ export default function OAuthLoginDialog() {
 									</div>
 								</DialogDescription>
 							)}
-							{promptData.type === "info" && (
-								<DialogDescription>{promptData.message}</DialogDescription>
-							)}
+							{promptData.type === "info" && <DialogDescription>{promptData.message}</DialogDescription>}
 						</DialogHeader>
 						<DialogFooter>
 							<Button variant="line" size="sm" onClick={handleDismiss}>

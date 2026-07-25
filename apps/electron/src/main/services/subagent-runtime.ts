@@ -87,7 +87,7 @@ export class SubAgentRuntimeService {
 				pending.aborted = true;
 				const runtime = this.host.getRuntime(childSessionId);
 				if (runtime?.session.isStreaming) {
-					runtime.session.abort().catch(() => undefined);
+					runtime.session.abort().catch((err: unknown) => console.warn("[SubAgentRuntime] abort failed:", err));
 				}
 			};
 			signal.addEventListener("abort", onAbort, { once: true });
@@ -206,7 +206,9 @@ export class SubAgentRuntimeService {
 			childIds.map(async (childId) => {
 				const child = this.host.getRuntime(childId);
 				if (child?.session.isStreaming) {
-					await child.session.abort().catch(() => undefined);
+					await child.session
+						.abort()
+						.catch((err: unknown) => console.warn("[SubAgentRuntime] abort failed:", err));
 				}
 			}),
 		);
@@ -220,7 +222,9 @@ export class SubAgentRuntimeService {
 				this.cancelSubSessionCleanup(childId);
 				const childFile =
 					this.host.getRuntime(childId)?.session.sessionFile ?? this.host.getStoredSessionPath(childId);
-				await this.host.disposeRuntime(childId, true).catch(() => undefined);
+				await this.host
+					.disposeRuntime(childId, true)
+					.catch((err: unknown) => console.warn("[SubAgentRuntime] cleanup failed:", err));
 				if (childFile) {
 					try {
 						const fs = await import("node:fs");
@@ -273,7 +277,9 @@ export class SubAgentRuntimeService {
 		if (runtime.session.isStreaming) return;
 
 		// Use disposeRuntime for full cleanup
-		this.host.disposeRuntime(childSessionId, false).catch(() => undefined);
+		this.host
+			.disposeRuntime(childSessionId, false)
+			.catch((err: unknown) => console.warn("[SubAgentRuntime] cleanup failed:", err));
 		this.registry.unregister(childSessionId);
 	}
 }

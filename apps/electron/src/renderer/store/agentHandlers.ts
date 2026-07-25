@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import i18n from "../i18n";
 import { agentDefinitionsAtom } from "./agentDefinitionsAtoms";
 import { appStore } from "./appStore";
+import { removeAgentAtoms } from "./atomFamilyRegistry";
 import {
 	activeAgentIdAtom,
 	agentsAtom,
@@ -10,7 +11,6 @@ import {
 	permissionAskQueueAtom,
 	recentlyCompletedAtom,
 } from "./atoms";
-import { removeAgentAtoms } from "./atomFamilyRegistry";
 import { clearSessionScheduling } from "./ui-event-processor";
 
 const t = i18n.t.bind(i18n);

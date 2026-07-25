@@ -51,7 +51,9 @@
 			"apps/electron/vite.config.ts",
 			"apps/electron/vitest.config.ts",
 			"packages/*/src/**/*.ts",
-			"packages/*/src/**/*.tsx"
+			"packages/*/src/**/*.tsx",
+			"packages/*/test/**/*.ts",
+			"packages/*/vitest.config.ts"
 		],
 		"ignoreUnknown": true
 	}

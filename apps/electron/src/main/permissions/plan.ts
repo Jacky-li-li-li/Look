@@ -359,7 +359,10 @@ async function writePlanAtomically(sessionId: string, cwd: string, plan: string)
 		await fs.promises.writeFile(temporaryPath, `${plan.trim()}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
 		await fs.promises.rename(temporaryPath, filePath);
 	} finally {
-		await fs.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
+		await fs.promises.rm(temporaryPath, { force: true }).catch((err: unknown) => {
+			console.warn("[PlanService] cleanup temp file failed:", err);
+			return undefined;
+		});
 	}
 	return filePath;
 }

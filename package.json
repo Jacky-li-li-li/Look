@@ -22,7 +22,7 @@
 		"build:main": "npm run build:main --workspace=@look/electron",
 		"build:renderer": "npm run build:renderer --workspace=@look/electron",
 		"start": "npm run start --workspace=@look/electron",
-		"test": "npm run test --workspace=@look/electron",
+		"test": "npm test --workspaces --if-present",
 		"test:watch": "npm run test:watch --workspace=@look/electron",
 		"lint": "biome check apps/electron/src packages",
 		"lint:fix": "biome check --write --unsafe apps/electron/src packages",
