@@ -3,9 +3,8 @@ productName: Look
 electronVersion: 42.5.1
 
 publish:
-  provider: github
-  owner: Jacky-li-li-li
-  repo: Look
+  provider: generic
+  url: https://look-updates-1382933627.cos.ap-guangzhou.myqcloud.com
 
 directories:
   # electron-builder only sees the generated production app, never the full

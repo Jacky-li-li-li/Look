@@ -15,12 +15,11 @@ let autoUpdater: AppUpdater | null = null;
 let loadFailed = false;
 
 /**
- * GitHub's update feed requires anonymous release access. This project is
- * private, so keep checks disabled unless a distributable update source is
- * explicitly configured at launch.
+ * Update feed is hosted on a publicly readable COS bucket.
+ * Always enabled in production builds; no runtime opt-in required.
  */
-export function areAutoUpdatesEnabled(environment: Record<string, string | undefined> = process.env): boolean {
-	return environment.LOOK_ENABLE_AUTO_UPDATES === "true";
+export function areAutoUpdatesEnabled(_environment: Record<string, string | undefined> = process.env): boolean {
+	return true;
 }
 
 async function loadAutoUpdater(): Promise<AppUpdater | null> {
