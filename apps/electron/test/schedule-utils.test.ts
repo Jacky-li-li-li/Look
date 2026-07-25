@@ -90,15 +90,18 @@ describe("formatTimeLeft", () => {
 	});
 
 	it("formats minutes for near-term runs", () => {
-		expect(formatTimeLeft(new Date(Date.now() + 5 * 60_000).toISOString())).toBe("5m");
+		// formatTimeLeft 逐级 floor，且函数内部再次取 Date.now()。
+		// 不留余量时两次取时必须落在同一毫秒才能通过（CI 上极易翻）；
+		// +30s 余量让 floor 落在同一桶内。
+		expect(formatTimeLeft(new Date(Date.now() + 5 * 60_000 + 30_000).toISOString())).toBe("5m");
 	});
 
 	it("formats hours and minutes", () => {
-		expect(formatTimeLeft(new Date(Date.now() + 90 * 60_000).toISOString())).toBe("1h 30m");
+		expect(formatTimeLeft(new Date(Date.now() + 90 * 60_000 + 30_000).toISOString())).toBe("1h 30m");
 	});
 
 	it("formats days and hours", () => {
-		expect(formatTimeLeft(new Date(Date.now() + 25 * 60 * 60_000).toISOString())).toBe("1d 1h");
+		expect(formatTimeLeft(new Date(Date.now() + 25 * 60 * 60_000 + 30 * 60_000).toISOString())).toBe("1d 1h");
 	});
 });
 
