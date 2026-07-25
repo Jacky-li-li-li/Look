@@ -79,12 +79,70 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          ok=0
           for i in 1 2 3; do
             if npx electron-builder --mac --arm64 --publish always; then
-              exit 0
+              ok=1
+              break
             fi
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
-          echo "electron-builder failed after 3 attempts"
-          exit 1
+          if [ "$ok" != 1 ]; then
+            echo "electron-builder failed after 3 attempts"
+            exit 1
+          fi
+
+      # electron-builder 并行上传 dmg/zip 时存在竞态：同一 tag 可能创建多个
+      # draft release（资产被拆散）。这里把资产合并到含 latest-mac.yml 的
+      # release 上、删除多余草稿，并把草稿正式发布（electron-updater 只认
+      # 已发布的 latest release）。
+      - name: 合并 draft releases 并正式发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          REPO="${GITHUB_REPOSITORY}"
+
+          mapfile -t IDS < <(gh api "repos/${REPO}/releases" \
+            --jq ".[] | select(.tag_name==\"${TAG}\" and .draft==true) | .id")
+          if [ "${#IDS[@]}" -eq 0 ]; then
+            echo "no draft release found for ${TAG} (already published?)"
+            exit 0
+          fi
+
+          # 主 release = 含 latest-mac.yml 的那个；都没有则取第一个
+          CANONICAL=""
+          for id in "${IDS[@]}"; do
+            if gh api "repos/${REPO}/releases/${id}" --jq '.assets[].name' | grep -q '^latest-mac.yml$'; then
+              CANONICAL="$id"
+              break
+            fi
+          done
+          CANONICAL="${CANONICAL:-${IDS[0]}}"
+          echo "canonical release: ${CANONICAL}"
+
+          # 把其余 draft 的资产搬到主 release，然后删除它们
+          for id in "${IDS[@]}"; do
+            [ "$id" = "$CANONICAL" ] && continue
+            echo "merging assets from ${id}..."
+            while read -r asset_id asset_name; do
+              [ -z "$asset_id" ] && continue
+              if gh api "repos/${REPO}/releases/${CANONICAL}" --jq '.assets[].name' | grep -qx "$asset_name"; then
+                echo "  skip $asset_name (already on canonical)"
+                continue
+              fi
+              echo "  moving $asset_name"
+              curl -sfL -H "Authorization: token ${GH_TOKEN}" -H "Accept: application/octet-stream" \
+                "https://api.github.com/repos/${REPO}/releases/assets/${asset_id}" -o "/tmp/${asset_name}"
+              gh api -X POST "https://uploads.github.com/repos/${REPO}/releases/${CANONICAL}/assets?name=${asset_name}" \
+                -H "Content-Type: application/octet-stream" --input "/tmp/${asset_name}" > /dev/null
+              rm -f "/tmp/${asset_name}"
+            done < <(gh api "repos/${REPO}/releases/${id}" --jq '.assets[] | "\(.id) \(.name)"')
+            gh api -X DELETE "repos/${REPO}/releases/${id}"
+            echo "  deleted draft ${id}"
+          done
+
+          gh release edit "${TAG}" --draft=false --latest
+          echo "published ${TAG}"
