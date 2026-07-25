@@ -210,7 +210,8 @@ export default function ProfileEditor() {
 					}}
 					className="flex items-center gap-2 text-sm text-muted-foreground hover:opacity-80"
 				>
-					<span>@{displayHandle}</span>
+					{/* 未设置自定义 handle 时展示完整登录邮箱，而不是邮箱前缀伪 handle */}
+					<span>{profile.handle?.trim() ? `@${displayHandle}` : profile.email || `@${displayHandle}`}</span>
 				</button>
 			)}
 

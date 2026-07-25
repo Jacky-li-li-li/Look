@@ -41,12 +41,27 @@ export default function AppUpdateNotifier() {
 					cancel: { label: t("update.later"), onClick: () => {} },
 				});
 				break;
-			case "downloading":
-				toast(t("update.downloading", { percent: Math.round(update.percent ?? 0) }), {
-					id: TOAST_ID,
-					duration: Number.POSITIVE_INFINITY,
-				});
+			case "downloading": {
+				const percent = Math.round(update.percent ?? 0);
+				toast.custom(
+					() => (
+						<div className="w-[300px] rounded-xl border border-hairline bg-popover px-4 py-3 shadow-lg">
+							<div className="mb-2 text-[12px] font-medium">{t("update.downloadingTitle")}</div>
+							<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+								<div
+									className="h-full rounded-full bg-foreground transition-[width] duration-200 motion-reduce:transition-none"
+									style={{ width: `${percent}%` }}
+								/>
+							</div>
+							<div className="mt-1.5 text-right font-mono text-[10px] tabular-nums text-muted-foreground">
+								{percent}%
+							</div>
+						</div>
+					),
+					{ id: TOAST_ID, duration: Number.POSITIVE_INFINITY },
+				);
 				break;
+			}
 			case "downloaded":
 				if (autoInstallCancelled) {
 					toast(t("update.ready"), {

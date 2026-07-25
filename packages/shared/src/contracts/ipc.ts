@@ -160,6 +160,8 @@ export interface LookAPI {
 	setPermissionMode(
 		agentId: string,
 		mode: "always" | "ask" | "plan",
+		/** 默认 true：连带更新用户全局默认模式；会话内临时提升传 false */
+		updateDefault?: boolean,
 	): Promise<{ success: boolean; mode?: "always" | "ask" | "plan"; error?: string }>;
 	getPermissionMode(agentId: string): Promise<{ success: boolean; mode?: "always" | "ask" | "plan"; error?: string }>;
 	respondPermission(payload: {

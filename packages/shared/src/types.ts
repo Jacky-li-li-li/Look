@@ -665,7 +665,7 @@ export type RendererToMainEvent =
 	// 查看器窗口就绪:取回待打开路径(一次性消费)
 	| { type: "fileViewer:ready" }
 	// ---- Permission events (renderer → main) ----
-	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode }
+	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode; updateDefault?: boolean }
 	| { type: "permission:get-mode"; agentId: string }
 	| { type: "permission:respond"; payload: PermissionRespondPayload }
 	| { type: "plan:question-respond"; payload: PlanQuestionResponse }

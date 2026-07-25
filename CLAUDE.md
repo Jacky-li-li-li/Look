@@ -29,6 +29,9 @@ wrapper lives in `apps/electron/src/main/system/app-updater.ts`.
 git tag v1.3.1 && git push origin v1.3.1   # cut a release (keep tag in sync with apps/electron version)
 ```
 
+每次发版同时在 `apps/electron/src/renderer/data/changelog.ts` 头部追加一条版本记录
+（设置 → 关于页的「版本记录」模块读取它，items 面向用户、中英日三语）。
+
 Required GitHub Secrets: `MAC_CERTS` (base64 .p12), `MAC_CERTS_PASSWORD`,
 `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
 

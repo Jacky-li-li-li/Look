@@ -168,7 +168,7 @@ const SettingsDialog = memo(function SettingsDialog({
 						value="about"
 						className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
 					>
-						<AboutTab providers={providers} customStats={customStats} />
+						<AboutTab />
 					</TabsContent>
 				</Tabs>
 			</DialogContent>

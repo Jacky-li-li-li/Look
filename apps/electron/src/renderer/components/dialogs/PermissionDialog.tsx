@@ -14,16 +14,17 @@ import {
 	DialogTitle,
 } from "@look/ui/components/ui/dialog";
 import type { PermissionRespondPayload } from "@shared/types";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AlertTriangle, Check, Shield, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { agentsAtom, permissionAskQueueAtom } from "../../store/atoms";
+import { agentsAtom, permissionAskQueueAtom, permissionModeAtomFamily } from "../../store/atoms";
 
 export default function PermissionDialog() {
 	const [queue, setQueue] = useAtom(permissionAskQueueAtom);
 	const agents = useAtomValue(agentsAtom);
 	const event = queue[0] ?? null;
+	const setPermissionMode = useSetAtom(permissionModeAtomFamily(event?.agentId ?? ""));
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const respondingRef = useRef<string | null>(null);
 	const [responding, setResponding] = useState(false);
@@ -49,6 +50,15 @@ export default function PermissionDialog() {
 					return;
 				}
 				setQueue((items) => items.filter((item) => item.requestId !== event.requestId));
+				if (action === "allow_always") {
+					// 「本次会话始终允许」= 把当前会话提升为 always（不动全局默认），
+					// 输入框底部权限指示随之切换为「始终允许」。
+					setPermissionMode("always");
+					const modeResult = await window.look.setPermissionMode(event.agentId, "always", false);
+					if (!modeResult?.success) {
+						toast.error(modeResult?.error ?? "权限模式切换失败");
+					}
+				}
 			} catch (error) {
 				toast.error(error instanceof Error ? error.message : "权限响应发送失败");
 			} finally {
@@ -56,7 +66,7 @@ export default function PermissionDialog() {
 				setResponding(false);
 			}
 		},
-		[event, setQueue],
+		[event, setQueue, setPermissionMode],
 	);
 
 	// Keep respond in a ref so effects don't re-subscribe when it changes
@@ -141,7 +151,7 @@ export default function PermissionDialog() {
 						className="h-8 text-[11px] text-emerald-600"
 					>
 						<Check className="size-3" />
-						本会话始终允许此工具
+						本次会话始终允许
 					</Button>
 					<Button
 						disabled={responding}

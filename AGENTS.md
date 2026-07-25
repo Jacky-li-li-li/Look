@@ -58,3 +58,4 @@ Type: rule
 - Auto-update is electron-updater with the `github` provider (`apps/electron/electron-builder.yml`). The zip target is required for updates — never ship dmg-only.
 - Update UX is manual-download: main (`system/app-updater.ts`) polls and emits `update:status`; renderer triggers `update:check` / `update:download` / `update:install` over IPC.
 - `scripts/release.sh` is a local verification build only (signed + notarized, `--publish never`); it does not publish.
+- Every version bump must add a user-facing entry (zh/en/ja) at the top of `apps/electron/src/renderer/data/changelog.ts` — the About page release-notes timeline reads it.

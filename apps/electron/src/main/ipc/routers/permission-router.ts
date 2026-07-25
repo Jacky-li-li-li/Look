@@ -3,14 +3,18 @@
 // ============================================================
 
 import type { PermissionMode } from "@look/shared/types";
-import { guardAgentId, guardEnum, guardObject, guardString } from "../guards.js";
+import { guardAgentId, guardEnum, guardObject, guardOptionalBoolean, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
 export const permissionRouter: IpcRouter = (ctx, register) => {
 	register("permission:set-mode", async (data) => {
 		const sessionId = guardAgentId(data.agentId, "agentId");
 		const mode = guardEnum(data.mode, "mode", ["always", "ask", "plan"] as const) as PermissionMode;
-		await ctx.session.permission.applyMode(sessionId, mode, { internal: false, updateDefault: true });
+		guardOptionalBoolean(data.updateDefault, "updateDefault");
+		// 默认连带更新用户全局默认模式（输入框手动切换的历史行为）；
+		// 会话内弹窗选择「本次会话始终允许」时传 false，只提升当前会话。
+		const updateDefault = data.updateDefault !== false;
+		await ctx.session.permission.applyMode(sessionId, mode, { internal: false, updateDefault });
 		return { success: true, mode };
 	});
 

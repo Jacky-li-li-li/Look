@@ -245,8 +245,8 @@ const api: LookAPI = {
 	cancelAutoInstall: () => ipcRenderer.invoke("look:invoke", { type: "update:cancel-install" }),
 
 	// ---- Permission management ----
-	setPermissionMode: (agentId, mode) =>
-		ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", agentId, mode }),
+	setPermissionMode: (agentId, mode, updateDefault) =>
+		ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", agentId, mode, updateDefault }),
 	getPermissionMode: (agentId) => ipcRenderer.invoke("look:invoke", { type: "permission:get-mode", agentId }),
 	respondPermission: (payload) => ipcRenderer.invoke("look:invoke", { type: "permission:respond", payload }),
 	respondPlanQuestion: (payload) => ipcRenderer.invoke("look:invoke", { type: "plan:question-respond", payload }),
