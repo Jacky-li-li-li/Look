@@ -34,6 +34,9 @@ jobs:
       - name: Typecheck shared
         run: npm run typecheck --workspace=@look/shared
 
+      - name: Build shared
+        run: npm run build --workspace=@look/shared
+
       - name: Typecheck electron
         run: npm run typecheck --workspace=@look/electron
 
