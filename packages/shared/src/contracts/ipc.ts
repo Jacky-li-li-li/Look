@@ -318,11 +318,8 @@ export interface LookAPI {
 		tools?: Array<{ server: string; tool: { name: string; description?: string } }>;
 		error?: string;
 	}>;
-	// ---- Usage & updates ----
+	// ---- Usage ----
 	getUsage(): Promise<IpcResult<{ usage: unknown }>>;
-	checkForUpdates(): Promise<IpcResult<{ updateAvailable: boolean; version?: string }>>;
-	downloadUpdate(): Promise<IpcResult>;
-	installUpdate(): Promise<IpcResult>;
 	listPrompts(): Promise<IpcResult<{ prompts: unknown[] }>>;
 	createPrompt(name: string, content: string): Promise<IpcResult>;
 	updatePrompt(id: string, patch: Record<string, unknown>): Promise<IpcResult>;

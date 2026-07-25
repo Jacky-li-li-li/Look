@@ -13,8 +13,8 @@ import type { CustomProviderStats, ProviderInfo } from "../src/renderer/componen
 import i18n from "../src/renderer/i18n";
 
 const providers: ProviderInfo[] = [
-	{ id: "anthropic", name: "Anthropic", hasKey: false, modelsAvailable: 3 },
-	{ id: "openai", name: "OpenAI", hasKey: true, modelsAvailable: 2 },
+	{ id: "anthropic", name: "Anthropic", hasKey: false, modelsAvailable: 3, hasLogin: false, supportsApiKey: true },
+	{ id: "openai", name: "OpenAI", hasKey: true, modelsAvailable: 2, hasLogin: false, supportsApiKey: true },
 ];
 
 const customStats: CustomProviderStats = { configured: 0, totalModels: 0 };

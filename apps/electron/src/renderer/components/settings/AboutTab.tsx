@@ -1,82 +1,11 @@
 // ============================================================
-// AboutTab — App info + update checker
+// AboutTab — App info
 // ============================================================
 
 import { Badge } from "@shared/components/ui/badge";
-import { useAtomValue } from "jotai";
-import { Loader2, Palette, Settings } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { updateStatusAtom } from "../../store/atoms";
+import { Palette, Settings } from "lucide-react";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import type { CustomProviderStats, ProviderInfo } from "./types";
-
-const api = window.look;
-
-function UpdateCheckButton() {
-	const { t } = useTranslation();
-	const updateStatus = useAtomValue(updateStatusAtom);
-
-	if (!updateStatus || updateStatus.stage === "not-available" || updateStatus.stage === "error") {
-		return (
-			<button
-				type="button"
-				onClick={() => api?.checkForUpdates?.()}
-				className="rounded-md border border-hairline px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-accent transition-colors"
-			>
-				{t("settings.checkForUpdates", "Check for Updates")}
-			</button>
-		);
-	}
-
-	if (updateStatus.stage === "checking") {
-		return (
-			<span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-				<Loader2 className="size-3 animate-spin" />
-				Checking...
-			</span>
-		);
-	}
-
-	if (updateStatus.stage === "available") {
-		return (
-			<div className="flex flex-col items-center gap-2">
-				<span className="text-[12px] font-medium text-foreground">Version {updateStatus.version} available</span>
-				<button
-					type="button"
-					onClick={() => api?.downloadUpdate?.()}
-					className="rounded-md bg-foreground px-3 py-1.5 text-[11px] font-medium text-background hover:opacity-90"
-				>
-					Download Update
-				</button>
-			</div>
-		);
-	}
-
-	if (updateStatus.stage === "downloading") {
-		return (
-			<span className="text-[11px] text-muted-foreground">
-				Downloading: {(updateStatus.percent ?? 0).toFixed(0)}%
-			</span>
-		);
-	}
-
-	if (updateStatus.stage === "downloaded") {
-		return (
-			<div className="flex flex-col items-center gap-2">
-				<span className="text-[12px] text-foreground">Update ready</span>
-				<button
-					type="button"
-					onClick={() => api?.installUpdate?.()}
-					className="rounded-md bg-foreground px-3 py-1.5 text-[11px] font-medium text-background hover:opacity-90"
-				>
-					Restart to Install
-				</button>
-			</div>
-		);
-	}
-
-	return null;
-}
 
 interface AboutTabProps {
 	providers: ProviderInfo[];
@@ -111,7 +40,6 @@ export default function AboutTab({ providers, customStats }: AboutTabProps) {
 				{configured} provider{configured !== 1 ? "s" : ""} configured ·{" "}
 				{providers.reduce((s, p) => s + p.modelsAvailable, 0) + customStats.totalModels} models
 			</p>
-			<UpdateCheckButton />
 		</div>
 	);
 }

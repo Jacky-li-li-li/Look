@@ -4,37 +4,12 @@ import {
 	loginCompletedAtom,
 	loginPromptAtom,
 	mcpStatusVersionAtom,
-	updateStatusAtom,
 	usageDataAtom,
 	usageVersionAtom,
 } from "./atoms";
 
 export function handleSystemEvent(event: MainToRendererEvent): boolean {
 	switch (event.type) {
-		case "update:checking":
-			appStore.set(updateStatusAtom, { stage: "checking" });
-			return true;
-
-		case "update:available":
-			appStore.set(updateStatusAtom, { stage: "available", version: event.version });
-			return true;
-
-		case "update:not-available":
-			appStore.set(updateStatusAtom, { stage: "not-available" });
-			return true;
-
-		case "update:download-progress":
-			appStore.set(updateStatusAtom, { stage: "downloading", percent: event.percent });
-			return true;
-
-		case "update:downloaded":
-			appStore.set(updateStatusAtom, { stage: "downloaded", version: event.version });
-			return true;
-
-		case "update:error":
-			appStore.set(updateStatusAtom, { stage: "error", message: event.message });
-			return true;
-
 		case "mcp:status-changed":
 			appStore.set(mcpStatusVersionAtom, (prev) => prev + 1);
 			return true;

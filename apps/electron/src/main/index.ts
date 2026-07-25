@@ -25,8 +25,6 @@ import { readThemeToneSync } from "./settings/store.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
-import { checkForUpdates, initUpdater } from "./system/updater.js";
-
 import { closeViewerWindow } from "./viewer/viewer-window-manager.js";
 import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
@@ -340,8 +338,6 @@ async function bootstrapApp(): Promise<void> {
 	// Phase 6: Sync built-in skills and agents
 	await syncBuiltinResources();
 
-	// Phase 7: Auto-updater
-	bootstrapUpdater();
 }
 
 // ── Phase 1: Core runtime ──
@@ -507,15 +503,6 @@ async function syncBuiltinResources(): Promise<void> {
 	} catch (err) {
 		console.warn("[Look] 同步内置 Agent 失败:", err);
 	}
-}
-
-// ── Phase 7: Auto-updater ──
-
-function bootstrapUpdater(): void {
-	initUpdater(rendererEvents);
-	setTimeout(() => {
-		checkForUpdates().catch((err) => console.warn("[Look] Update check failed:", err));
-	}, 3000);
 }
 
 app.whenReady().then(async () => {

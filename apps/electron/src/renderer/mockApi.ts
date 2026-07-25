@@ -389,11 +389,6 @@ const mockApi = {
 	startWorkspaceWatch: () => ok,
 	stopWorkspaceWatch: () => ok,
 
-	// ---- Auto Updater ----
-	checkForUpdates: () => ok,
-	downloadUpdate: () => ok,
-	installUpdate: () => ok,
-
 	// ---- Permission ----
 	setPermissionMode: () => ok,
 	getPermissionMode: () => success({ mode: "always" }),

@@ -15,7 +15,7 @@ interface UsageStackedChartProps {
 }
 
 /** 12-color palette for model assignment. */
-const MODEL_COLORS = [
+export const MODEL_COLORS = [
 	"oklch(0.646 0.222 41.116)", // orange
 	"oklch(0.6 0.118 184.704)", // cyan
 	"oklch(0.398 0.07 227.392)", // indigo
@@ -46,6 +46,62 @@ function modelTotal(usage: AggregatedUsage): number {
 	return usage.cost.output + usage.cost.input + usage.cost.cacheRead + usage.cost.cacheWrite;
 }
 
+export function buildModelColorMap(modelNames: string[]): Record<string, string> {
+	const map: Record<string, string> = {};
+	modelNames.forEach((model, i) => {
+		map[model] = MODEL_COLORS[i % MODEL_COLORS.length];
+	});
+	return map;
+}
+
+export function buildChartData(
+	modelUsage: Record<string, Record<string, AggregatedUsage>>,
+	selectedYear: number,
+): { chartData: ChartDataPoint[]; modelNames: string[]; modelKeys: Record<string, string> } {
+	const yearPrefix = `${selectedYear}-`;
+
+	const dayCosts: Map<string, Map<string, number>> = new Map();
+	const allModels = new Set<string>();
+
+	for (const [dateKey, models] of Object.entries(modelUsage)) {
+		if (!dateKey.startsWith(yearPrefix)) continue;
+		const mmdd = dateKey.slice(5);
+		if (!dayCosts.has(mmdd)) dayCosts.set(mmdd, new Map());
+		const costMap = dayCosts.get(mmdd)!;
+		for (const [model, usage] of Object.entries(models)) {
+			allModels.add(model);
+			costMap.set(model, (costMap.get(model) ?? 0) + modelTotal(usage));
+		}
+	}
+
+	const modelNames = Array.from(allModels).sort((a, b) => {
+		let aCost = 0,
+			bCost = 0;
+		for (const costMap of dayCosts.values()) {
+			aCost += costMap.get(a) ?? 0;
+			bCost += costMap.get(b) ?? 0;
+		}
+		return bCost - aCost;
+	});
+
+	const modelKeys: Record<string, string> = {};
+	modelNames.forEach((model, i) => {
+		modelKeys[model] = `m_${i}`;
+	});
+
+	const dates = Array.from(dayCosts.keys()).sort();
+	const chartData: ChartDataPoint[] = dates.map((mmdd) => {
+		const costMap = dayCosts.get(mmdd)!;
+		const point: ChartDataPoint = { day: mmdd, label: mmdd };
+		for (const model of modelNames) {
+			point[modelKeys[model]] = costMap.get(model) ?? 0;
+		}
+		return point;
+	});
+
+	return { chartData, modelNames, modelKeys };
+}
+
 interface ChartMeta {
 	chartData: ChartDataPoint[];
 	modelNames: string[];
@@ -56,56 +112,15 @@ interface ChartMeta {
 
 export default function UsageStackedChart({ modelUsage, selectedYear }: UsageStackedChartProps) {
 	const meta = useMemo<ChartMeta>(() => {
-		const yearPrefix = `${selectedYear}-`;
-
-		// Aggregate per-model total cost per day
-		const dayCosts: Map<string, Map<string, number>> = new Map();
-		const allModels = new Set<string>();
-
-		for (const [dateKey, models] of Object.entries(modelUsage)) {
-			if (!dateKey.startsWith(yearPrefix)) continue;
-			const mmdd = dateKey.slice(5);
-			if (!dayCosts.has(mmdd)) dayCosts.set(mmdd, new Map());
-			const costMap = dayCosts.get(mmdd)!;
-			for (const [model, usage] of Object.entries(models)) {
-				allModels.add(model);
-				costMap.set(model, (costMap.get(model) ?? 0) + modelTotal(usage));
-			}
-		}
-
-		const modelNames = Array.from(allModels).sort((a, b) => {
-			let aCost = 0,
-				bCost = 0;
-			for (const costMap of dayCosts.values()) {
-				aCost += costMap.get(a) ?? 0;
-				bCost += costMap.get(b) ?? 0;
-			}
-			return bCost - aCost;
-		});
-
-		const modelColorMap: Record<string, string> = {};
-		modelNames.forEach((model, i) => {
-			modelColorMap[model] = MODEL_COLORS[i % MODEL_COLORS.length];
-		});
-
-		const modelKeys: Record<string, string> = {};
-		modelNames.forEach((model, i) => {
-			modelKeys[model] = `m_${i}`;
-		});
-
-		const dates = Array.from(dayCosts.keys()).sort();
-		const chartData: ChartDataPoint[] = dates.map((mmdd) => {
-			const costMap = dayCosts.get(mmdd)!;
-			const point: ChartDataPoint = { day: mmdd, label: mmdd };
-			for (const model of modelNames) {
-				point[modelKeys[model]] = costMap.get(model) ?? 0;
-			}
-			return point;
-		});
+		const { chartData, modelNames, modelKeys } = buildChartData(modelUsage, selectedYear);
+		const modelColorMap = buildModelColorMap(modelNames);
 
 		let totalCost = 0;
-		for (const costMap of dayCosts.values()) {
-			for (const cost of costMap.values()) totalCost += cost;
+		for (const [dateKey, models] of Object.entries(modelUsage)) {
+			if (!dateKey.startsWith(`${selectedYear}-`)) continue;
+			for (const usage of Object.values(models)) {
+				totalCost += modelTotal(usage);
+			}
 		}
 
 		return { chartData, modelNames, modelColorMap, modelKeys, totalCost };

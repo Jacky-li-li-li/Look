@@ -273,7 +273,6 @@ function AppLayout({
 				<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 				<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 			</div>
-			<UpdateNotification />
 		</>
 	);
 }

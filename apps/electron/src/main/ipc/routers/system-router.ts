@@ -1,9 +1,8 @@
 // ============================================================
-// System router — dialogs, shell, updates, user profile, usage
+// System router — dialogs, shell, user profile, usage
 // ============================================================
 
 import { dialog } from "electron";
-import { checkForUpdates, downloadUpdate, quitAndInstall } from "../../system/updater.js";
 import { getUsage } from "../../system/usage-service.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "../../system/user-profile.js";
 import { guardObject, guardOptionalBoolean, guardOptionalString, guardPath } from "../guards.js";
@@ -60,21 +59,6 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 		if (!project?.valid) throw new Error("Project folder is unavailable");
 		await shell.openPath(project.cwd);
 		return { success: true, path: project.cwd };
-	});
-
-	register("update:check", async () => {
-		checkForUpdates().catch((err) => console.warn("[system-router] checkForUpdates failed:", err));
-		return { success: true };
-	});
-
-	register("update:download", async () => {
-		downloadUpdate().catch((err) => console.warn("[system-router] downloadUpdate failed:", err));
-		return { success: true };
-	});
-
-	register("update:install", async () => {
-		quitAndInstall();
-		return { success: true };
 	});
 
 	register("user-profile:get", async () => {

@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appStore } from "../src/renderer/store/appStore";
-import { mcpStatusVersionAtom, updateStatusAtom, usageDataAtom, usageVersionAtom } from "../src/renderer/store/atoms";
+import { mcpStatusVersionAtom, usageDataAtom, usageVersionAtom } from "../src/renderer/store/atoms";
 import { handleSystemEvent } from "../src/renderer/store/systemHandlers";
 
 describe("handleSystemEvent", () => {
 	beforeEach(() => {
-		appStore.set(updateStatusAtom, { stage: "checking" });
 		appStore.set(mcpStatusVersionAtom, 0);
 		appStore.set(usageVersionAtom, 0);
 		appStore.set(usageDataAtom, null);
@@ -20,27 +19,6 @@ describe("handleSystemEvent", () => {
 			typeof handleSystemEvent
 		>[0]);
 		expect(result).toBe(false);
-	});
-
-	it("update:checking sets stage", () => {
-		handleSystemEvent({ type: "update:checking" } as unknown as Parameters<typeof handleSystemEvent>[0]);
-		expect(appStore.get(updateStatusAtom)).toEqual({ stage: "checking" });
-	});
-
-	it("update:available sets stage and version", () => {
-		handleSystemEvent({
-			type: "update:available",
-			version: "1.2.3",
-		} as unknown as Parameters<typeof handleSystemEvent>[0]);
-		expect(appStore.get(updateStatusAtom)).toEqual({ stage: "available", version: "1.2.3" });
-	});
-
-	it("update:downloading sets progress", () => {
-		handleSystemEvent({
-			type: "update:download-progress",
-			percent: 42,
-		} as unknown as Parameters<typeof handleSystemEvent>[0]);
-		expect(appStore.get(updateStatusAtom)).toEqual({ stage: "downloading", percent: 42 });
 	});
 
 	it("mcp:status-changed increments version", () => {

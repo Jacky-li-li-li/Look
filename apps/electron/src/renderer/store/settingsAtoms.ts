@@ -86,15 +86,6 @@ export const usageDataAtom = atom<UsageAtomData | null>(null);
 
 export const usageVersionAtom = atom(0);
 
-export interface UpdateStatus {
-	stage: "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
-	version?: string;
-	percent?: number;
-	message?: string;
-}
-
-export const updateStatusAtom = atom<UpdateStatus | null>(null);
-
 export const showSettingsAtom = atom(false);
 
 export type SettingsTab = "general" | "prompt" | "api-keys" | "im-channels" | "about" | "profile" | "mcp";

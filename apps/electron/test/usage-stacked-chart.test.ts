@@ -4,19 +4,24 @@
 import { describe, expect, it } from "vitest";
 import { buildChartData, buildModelColorMap } from "../src/renderer/components/settings/UsageStackedChart";
 
+function agg(output: number) {
+	return { turns: 1, cost: { output, input: 0, cacheRead: 0, cacheWrite: 0 } };
+}
+
 describe("buildChartData", () => {
 	it("keeps models with dots in their names addressable via safe dataKeys", () => {
 		const { chartData, modelNames, modelKeys } = buildChartData(
 			{
 				"2026-07-01": {
-					"gemini-2.5-pro": { turns: 2, cost: 0.0123 },
-					"deepseek-v3": { turns: 1, cost: 0.0045 },
+					"gemini-2.5-pro": agg(0.0123),
+					"deepseek-v3": agg(0.0045),
 				},
 			},
 			2026,
 		);
 
-		expect(modelNames).toEqual(["deepseek-v3", "gemini-2.5-pro"]);
+		// sorted by total cost descending: gemini-2.5-pro (0.0123) before deepseek-v3 (0.0045)
+		expect(modelNames).toEqual(["gemini-2.5-pro", "deepseek-v3"]);
 		// dataKeys must never contain characters recharts treats as path syntax
 		for (const key of Object.values(modelKeys)) {
 			expect(key).toMatch(/^[a-zA-Z0-9_]+$/);
@@ -31,9 +36,9 @@ describe("buildChartData", () => {
 	it("filters by selected year and fills missing models with 0", () => {
 		const { chartData, modelKeys } = buildChartData(
 			{
-				"2025-12-31": { "gpt-4.1": { turns: 1, cost: 1 } },
-				"2026-01-01": { "gpt-4.1": { turns: 1, cost: 0.5 } },
-				"2026-01-02": { other: { turns: 1, cost: 0.25 } },
+				"2025-12-31": { "gpt-4.1": agg(1) },
+				"2026-01-01": { "gpt-4.1": agg(0.5) },
+				"2026-01-02": { other: agg(0.25) },
 			},
 			2026,
 		);
@@ -46,7 +51,7 @@ describe("buildChartData", () => {
 	});
 
 	it("returns empty chart data when the year has no usage", () => {
-		const { chartData, modelNames } = buildChartData({ "2025-01-01": { a: { turns: 1, cost: 1 } } }, 2026);
+		const { chartData, modelNames } = buildChartData({ "2025-01-01": { a: agg(1) } }, 2026);
 		expect(chartData).toEqual([]);
 		expect(modelNames).toEqual([]);
 	});

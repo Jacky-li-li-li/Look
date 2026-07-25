@@ -541,13 +541,6 @@ export type MainToRendererEvent =
 	| { type: "shared:updated"; projectId: string }
 	// ---- Workspace tree events ----
 	| { type: "workspace:updated"; projectId: string; relativePath: string }
-	// ---- Auto updater events ----
-	| { type: "update:checking" }
-	| { type: "update:available"; version: string; releaseDate?: string }
-	| { type: "update:not-available" }
-	| { type: "update:download-progress"; percent: number }
-	| { type: "update:downloaded"; version: string }
-	| { type: "update:error"; message: string }
 	// ---- IM / Feishu channel events ----
 	| {
 			type: "im:registration-update";
@@ -776,10 +769,6 @@ export type RendererToMainEvent =
 			entryId: string;
 			label: string | null;
 	  }
-	// ---- Auto Updater ----
-	| { type: "update:check" }
-	| { type: "update:download" }
-	| { type: "update:install" }
 	// ---- User Profile ----
 	| { type: "user-profile:get" }
 	| {
