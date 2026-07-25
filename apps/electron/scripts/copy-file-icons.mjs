@@ -11,6 +11,8 @@
 // Or via npm postinstall.
 // ============================================================
 
+
+import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -450,6 +452,9 @@ export const ICON_SVGS: Record<string, string> = ${JSON.stringify(iconSvgs, null
 `;
 
 	writeFileSync(MAP_OUTPUT_PATH, mapContent);
+
+	// Format the generated file so keys don't have unnecessary quotes.
+	execSync(`npx biome format --write "${MAP_OUTPUT_PATH}"`, { cwd: ROOT, stdio: "inherit" });
 
 	console.log(`Copied ${copied.size} icons to src/renderer/file-icons/`);
 	console.log(`Generated ${MAP_OUTPUT_PATH}`);
