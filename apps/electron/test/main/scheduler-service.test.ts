@@ -293,7 +293,9 @@ describe("SchedulerService", () => {
 		const task = await service.create({ ...INPUT, retry: { ...INPUT.retry, maxAttempts: 2 } });
 
 		await service.runNow(task.id);
-		await waitFor(() => service.listLogs(task.id)[0]?.status === "failed");
+		// 服务先写 failed 日志再发 alert（scheduler-service.ts:652-653），
+		// 只等日志状态会在慢机器上跑赢 alert，两个条件都要等。
+		await waitFor(() => service.listLogs(task.id)[0]?.status === "failed" && alert.mock.calls.length === 1);
 		const log = service.listLogs(task.id)[0];
 		expect(executor.execute).toHaveBeenCalledTimes(2);
 		expect(log.errorMessage).toBe("permanent failure");
