@@ -1,0 +1,57 @@
+appId: com.look.app
+productName: Look
+copyright: Copyright © 2026 Look
+
+directories:
+  output: release
+  buildResources: build
+
+# 打包进 app.asar 的内容：tsc 编译后的主进程 + Vite 构建的渲染层。
+# 运行时依赖（pi SDK、electron-updater 等）由 electron-builder 自动
+# 从 node_modules 裁剪进包。
+files:
+  - dist/**
+  - package.json
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+
+# 内置资源：主进程通过 process.resourcesPath/default-skills 等路径读取
+# （见 src/main/system/bundled-resource-paths.ts 与 agents/default-skills.ts）
+extraResources:
+  - from: default-skills
+    to: default-skills
+  - from: default-agents
+    to: default-agents
+
+# pi SDK 的原生模块 / 子进程二进制不能呆在 asar 里
+asarUnpack:
+  - "**/*.node"
+  - "node_modules/@earendil-works/**/native/**"
+  - "node_modules/@earendil-works/**/bin/**"
+
+mac:
+  category: public.app-category.developer-tools
+  icon: assets/icon-1024.png
+  target:
+    - dmg
+    - zip # zip 是 electron-updater 自动更新的载体，必须保留
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # electron-builder 内置公证：读取 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
+  # APPLE_TEAM_ID 环境变量（CI 由 Secrets 注入，本地由 scripts/release.sh 要求）
+  notarize: true
+
+dmg:
+  title: Look
+  window:
+    width: 540
+    height: 380
+
+# 发布到 GitHub Releases（公开仓库，CI 用 --publish always 上传；
+# electron-updater 默认也从这里检查更新）
+publish:
+  provider: github
+  owner: Jacky-li-li-li
+  repo: Look

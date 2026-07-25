@@ -238,10 +238,10 @@ const api: LookAPI = {
 	openFileViewer: (path) => ipcRenderer.invoke("look:invoke", { type: "fileViewer:open", path }),
 	fileViewerReady: () => ipcRenderer.invoke("look:invoke", { type: "fileViewer:ready" }),
 
-	// ---- Auto Updater (reserved — no router wired yet) ----
-	checkForUpdates: () => Promise.resolve({ success: false, error: "Not implemented" }),
-	downloadUpdate: () => Promise.resolve({ success: false, error: "Not implemented" }),
-	installUpdate: () => Promise.resolve({ success: false, error: "Not implemented" }),
+	// ---- Auto Updater ----
+	checkForUpdates: () => ipcRenderer.invoke("look:invoke", { type: "update:check" }),
+	downloadUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:download" }),
+	installUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:install" }),
 
 	// ---- Permission management ----
 	setPermissionMode: (agentId, mode) =>

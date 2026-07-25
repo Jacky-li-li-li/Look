@@ -50,3 +50,11 @@ Type: rule
 - vitest runs every test file with a per-file throwaway `LOOK_HOME` (`test/setup-look-home.ts`). Tests must never read or write the real `~/.look`; a static import chain alone is enough to bind `look-storage.ts`'s module-cached `LOOK_DIR` to the real home and wipe `projects.json`.
 - Tests needing a specific home must `vi.stubEnv("LOOK_HOME", dir)` + `vi.resetModules()` in `beforeEach`, then dynamic-import the modules under test (reference: `test/main/project-service-migration.test.ts`).
 - Built-in agents exist in `<LOOK_HOME>/agents/marketplace/` only after `syncLookDefaultAgents(projectDir)` runs; tests that call `discoverAgents` must seed them first.
+
+## Release and auto-update
+Type: rule
+
+- Releases are cut by pushing a `v*` tag; `.github/workflows/release.yml` builds, signs (Developer ID), notarizes and publishes dmg+zip to GitHub Releases. Keep the tag version in sync with `apps/electron/package.json`.
+- Auto-update is electron-updater with the `github` provider (`apps/electron/electron-builder.yml`). The zip target is required for updates — never ship dmg-only.
+- Update UX is manual-download: main (`system/app-updater.ts`) polls and emits `update:status`; renderer triggers `update:check` / `update:download` / `update:install` over IPC.
+- `scripts/release.sh` is a local verification build only (signed + notarized, `--publish never`); it does not publish.

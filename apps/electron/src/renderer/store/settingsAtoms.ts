@@ -1,5 +1,13 @@
+import type { AppUpdatePhase } from "@shared/types";
 import { atom } from "jotai";
 import type { CustomProviderInput, ProviderInfo } from "../components/settings/types";
+
+export interface AppUpdateState {
+	phase: AppUpdatePhase;
+	version?: string;
+	percent?: number;
+	error?: string;
+}
 
 export interface CustomProviderStats {
 	configured: number;
@@ -109,3 +117,7 @@ export interface LoginPromptState {
 
 export const loginPromptAtom = atom<LoginPromptState | null>(null);
 export const loginCompletedAtom = atom<{ providerId: string; success: boolean; error?: string } | null>(null);
+
+// ── App auto update ──
+// null = 尚未收到任何 update:status 事件（后台轮询尚未产生结果）
+export const appUpdateAtom = atom<AppUpdateState | null>(null);

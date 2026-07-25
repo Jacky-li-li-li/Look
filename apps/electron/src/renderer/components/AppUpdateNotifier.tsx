@@ -1,0 +1,57 @@
+// ============================================================
+// AppUpdateNotifier — 全局自动更新提示（sonner toast）
+//
+// 订阅 appUpdateAtom（由主进程 update:status 事件驱动），
+// 用固定 toast id 原地更新：available → downloading → downloaded。
+// 仅在发现新版本后才出现；checking / not-available / error 不打扰用户
+// （手动检查的结果在设置页 AboutTab 展示）。
+// ============================================================
+
+import { useAtomValue } from "jotai";
+import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { useAppUpdate } from "../hooks/useAppUpdate";
+import { appUpdateAtom } from "../store/atoms";
+
+const TOAST_ID = "app-update";
+
+export default function AppUpdateNotifier() {
+	const { t } = useTranslation();
+	const update = useAtomValue(appUpdateAtom);
+	const { downloadUpdate, installUpdate } = useAppUpdate();
+
+	useEffect(() => {
+		if (!update) return;
+		switch (update.phase) {
+			case "available":
+				toast(t("update.available"), {
+					id: TOAST_ID,
+					description: update.version ? t("update.versionAvailable", { version: update.version }) : undefined,
+					duration: Number.POSITIVE_INFINITY,
+					action: { label: t("update.download"), onClick: () => void downloadUpdate() },
+					cancel: { label: t("update.later"), onClick: () => {} },
+				});
+				break;
+			case "downloading":
+				toast(t("update.downloading", { percent: Math.round(update.percent ?? 0) }), {
+					id: TOAST_ID,
+					duration: Number.POSITIVE_INFINITY,
+				});
+				break;
+			case "downloaded":
+				toast(t("update.ready"), {
+					id: TOAST_ID,
+					description: update.version,
+					duration: Number.POSITIVE_INFINITY,
+					action: { label: t("update.restart"), onClick: () => void installUpdate() },
+				});
+				break;
+			default:
+				toast.dismiss(TOAST_ID);
+				break;
+		}
+	}, [update, t, downloadUpdate, installUpdate]);
+
+	return null;
+}

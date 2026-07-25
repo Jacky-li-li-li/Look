@@ -750,14 +750,19 @@
     "configFirstModelDesc": "Add a provider API key in Settings to get started"
   },
   "update": {
+    "checkForUpdates": "Check for updates",
     "checking": "Checking for updates...",
+    "upToDate": "You're on the latest version",
     "available": "Update available",
     "versionAvailable": "Version {{version}} is available. Download now?",
     "download": "Download",
+    "downloadUpdate": "Download update",
     "later": "Later",
     "downloading": "Downloading: {{percent}}%",
     "ready": "Update ready. Restart to install.",
-    "restart": "Restart"
+    "restart": "Restart",
+    "restartInstall": "Restart to install",
+    "failed": "Update failed"
   },
   "agentAvatar": {
     "title": "Open Peeps avatar selection",

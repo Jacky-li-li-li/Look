@@ -1,0 +1,86 @@
+# GitHub Actions: 自动打包分发（参考 proma-ai/Proma 的 release.yml）
+#
+# 触发条件：推送 v* tag（如 v1.3.1，建议与 apps/electron/package.json 的 version 保持一致）
+# 构建 macOS Apple Silicon 产物（dmg + zip）并发布到 GitHub Releases，
+# 应用内 electron-updater 会从同一 Release 检查/下载更新。
+#
+# 所需 GitHub Secrets（Settings → Secrets and variables → Actions）:
+# - MAC_CERTS: Base64 编码的 Developer ID Application 证书 (.p12)
+#   导出方法：Keychain Access → 选中证书和私钥 → 导出 .p12 →
+#   base64 -i LookCert.p12 | pbcopy 后粘贴为 Secret
+- MAC_CERT_PASSWORD: 导出 .p12 时设置的密码
+# - APPLE_ID: Apple ID（公证用）
+# - APPLE_APP_SPECIFIC_PASSWORD: App-Specific 密码（appleid.apple.com 生成）
+# - APPLE_TEAM_ID: Apple Developer Team ID（10 位，developer.apple.com 会员页可见）
+# GITHUB_TOKEN 由 GitHub Actions 自动提供，无需手动配置。
+#
+# 公开仓库的 macos-latest runner 免费不限量；如需 Intel (x64) 构建，
+# 可照抄本 job 加 macos-13 runner + --x64（注意两个 job 并行发布时
+# latest-mac.yml 需要合并，届时再处理）。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac-arm64:
+    name: build (macOS arm64)
+    runs-on: macos-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      # macOS 代码签名准备：把 Secrets 里的证书导入临时 keychain
+      - name: 导入 macOS 签名证书
+        env:
+          MAC_CERTS: ${{ secrets.MAC_CERTS }}
+          MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$MAC_CERTS" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 -P "$MAC_CERTS_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          rm $RUNNER_TEMP/cert.p12
+
+      - name: 构建应用（shared + main + renderer）
+        run: npm run build
+
+      # 打包 + 签名 + 公证 + 发布到 GitHub Releases
+      # 公证偶发超时，失败重试 3 次（与 Proma 一致）
+      - name: 打包并发布 (macOS arm64)
+        working-directory: apps/electron
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for i in 1 2 3; do
+            npx electron-builder --mac --arm64 --publish always && break
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done

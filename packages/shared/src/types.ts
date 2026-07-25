@@ -425,7 +425,17 @@ export type MainToRendererEvent =
 				| { type: "device_code"; userCode: string; verificationUri: string }
 				| { type: "progress"; message: string };
 	  }
-	| { type: "login:completed"; providerId: string; success: boolean; error?: string };
+	| { type: "login:completed"; providerId: string; success: boolean; error?: string }
+	// ---- 应用自动更新（main → renderer） ----
+	| {
+			type: "update:status";
+			phase: AppUpdatePhase;
+			/** 新版本号（available / downloading / downloaded 时存在） */
+			version?: string;
+			/** 下载进度 0-100（downloading 时存在） */
+			percent?: number;
+			error?: string;
+	  };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
 export interface CustomProviderModelInput {
@@ -754,7 +764,14 @@ export type RendererToMainEvent =
 			type: "mcp:update-server";
 			name: string;
 			config: Record<string, unknown>;
-	  };
+	  }
+	// ---- 应用自动更新（renderer → main） ----
+	| { type: "update:check" }
+	| { type: "update:download" }
+	| { type: "update:install" };
+
+/** 应用自动更新的阶段（update:status 事件的 phase 字段） */
+export type AppUpdatePhase = "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
 
 /** Available model info (returned from ModelRegistry) */
 export interface AvailableModel {

@@ -750,14 +750,19 @@
     "configFirstModelDesc": "在 API 密钥里添加一个 provider 的 key 即可使用"
   },
   "update": {
+    "checkForUpdates": "检查更新",
     "checking": "正在检查更新...",
+    "upToDate": "已是最新版本",
     "available": "有新版本可用",
     "versionAvailable": "版本 {{version}} 已发布。是否立即下载？",
     "download": "下载",
+    "downloadUpdate": "下载更新",
     "later": "稍后",
     "downloading": "下载中: {{percent}}%",
     "ready": "更新已就绪。重启以完成安装。",
-    "restart": "立即重启"
+    "restart": "立即重启",
+    "restartInstall": "重启安装",
+    "failed": "更新失败"
   },
   "agentAvatar": {
     "title": "Open Peeps 头像选择",

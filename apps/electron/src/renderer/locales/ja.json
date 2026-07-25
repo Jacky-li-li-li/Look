@@ -750,14 +750,19 @@
 		"configFirstModelDesc": "設定でプロバイダーの API キーを追加してください"
 	},
 	"update": {
+		"checkForUpdates": "更新を確認",
 		"checking": "更新を確認中...",
+		"upToDate": "最新バージョンです",
 		"available": "更新があります",
 		"versionAvailable": "バージョン {{version}} が利用可能です。ダウンロードしますか？",
 		"download": "ダウンロード",
+		"downloadUpdate": "更新をダウンロード",
 		"later": "後で",
 		"downloading": "ダウンロード中: {{percent}}%",
 		"ready": "更新の準備ができました。再起動してインストールしてください。",
-		"restart": "再起動"
+		"restart": "再起動",
+		"restartInstall": "再起動してインストール",
+		"failed": "更新に失敗しました"
 	},
 	"agentAvatar": {
 		"title": "Open Peeps アバター選択",

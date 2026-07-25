@@ -22,6 +22,7 @@ import { FileTaskLock } from "./scheduler/task-lock.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
 import { SessionRuntimeManager } from "./session/runtime-manager.js";
 import { readThemeToneSync } from "./settings/store.js";
+import { initAppUpdater } from "./system/app-updater.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
@@ -515,6 +516,7 @@ app.whenReady().then(async () => {
 	}
 
 	createWindow();
+	initAppUpdater(safeSendEvent);
 	try {
 		await bootstrapApp();
 	} catch (err) {

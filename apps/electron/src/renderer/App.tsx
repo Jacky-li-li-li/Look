@@ -5,6 +5,7 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo } from "react";
 import AppLayout from "./components/AppLayout";
+import AppUpdateNotifier from "./components/AppUpdateNotifier";
 import LoginScreen from "./components/LoginScreen";
 import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import { useAgentActions } from "./hooks/useAgentActions";
@@ -124,50 +125,53 @@ export default function App() {
 
 	// ── Main layout ──
 	return (
-		<AppLayout
-			sidebarCollapsed={sidebarCollapsed}
-			rightPanelCollapsed={rightPanelCollapsed}
-			agents={agents}
-			openedSessionIds={openedSessionIds}
-			activeAgent={activeAgent}
-			activeAgentId={activeAgentId}
-			activeSessionState={activeSessionState}
-			activeQueue={activeQueue}
-			activePhase={activePhase}
-			autoCollapse={autoCollapse}
-			thinkingLevels={thinkingLevels}
-			projects={projects}
-			activeProject={activeProject}
-			showAgentSquare={showAgentSquare}
-			showScheduledTasks={showScheduledTasks}
-			newProjectCwd={projectActions.newProjectCwd}
-			setNewProjectCwd={projectActions.setNewProjectCwd}
-			pendingDelete={pendingDelete}
-			showSettings={showSettings}
-			settingsTab={settingsTab}
-			providerSettings={providerSettings}
-			handleSendMessage={agentActions.handleSendMessage}
-			handleSelectAgent={agentActions.handleSelectAgent}
-			handleCloseSessionSheet={agentActions.handleCloseSessionSheet}
-			handleReorderSessionSheets={agentActions.handleReorderSessionSheets}
-			handleDestroyAgent={agentActions.handleDestroyAgent}
-			handleAbortAgent={agentActions.handleAbortAgent}
-			handleThinkingChange={agentActions.handleThinkingChange}
-			handleModelChanged={agentActions.handleModelChanged}
-			handleCreateClick={agentActions.handleCreateClick}
-			handleRequestApiKeys={handleRequestApiKeys}
-			handleOpenProject={projectActions.handleOpenProject}
-			handleDeleteProject={projectActions.handleDeleteProject}
-			handleProjectCreated={projectActions.handleProjectCreated}
-			handleDeleteProjectCancelled={projectActions.handleDeleteProjectCancelled}
-			handleDeleteProjectConfirmed={projectActions.handleDeleteProjectConfirmed}
-			handleRenameProject={projectActions.handleRenameProject}
-			handleOpenProjectFolderById={projectActions.handleOpenProjectFolderById}
-			handleSettingsClick={handleSettingsClick}
-			handleCloseSettings={handleCloseSettings}
-			handleExpandSidebar={handleExpandSidebar}
-			handleExpandRightPanel={handleExpandRightPanel}
-			onProvidersChange={onProvidersChange}
-		/>
+		<>
+			<AppUpdateNotifier />
+			<AppLayout
+				sidebarCollapsed={sidebarCollapsed}
+				rightPanelCollapsed={rightPanelCollapsed}
+				agents={agents}
+				openedSessionIds={openedSessionIds}
+				activeAgent={activeAgent}
+				activeAgentId={activeAgentId}
+				activeSessionState={activeSessionState}
+				activeQueue={activeQueue}
+				activePhase={activePhase}
+				autoCollapse={autoCollapse}
+				thinkingLevels={thinkingLevels}
+				projects={projects}
+				activeProject={activeProject}
+				showAgentSquare={showAgentSquare}
+				showScheduledTasks={showScheduledTasks}
+				newProjectCwd={projectActions.newProjectCwd}
+				setNewProjectCwd={projectActions.setNewProjectCwd}
+				pendingDelete={pendingDelete}
+				showSettings={showSettings}
+				settingsTab={settingsTab}
+				providerSettings={providerSettings}
+				handleSendMessage={agentActions.handleSendMessage}
+				handleSelectAgent={agentActions.handleSelectAgent}
+				handleCloseSessionSheet={agentActions.handleCloseSessionSheet}
+				handleReorderSessionSheets={agentActions.handleReorderSessionSheets}
+				handleDestroyAgent={agentActions.handleDestroyAgent}
+				handleAbortAgent={agentActions.handleAbortAgent}
+				handleThinkingChange={agentActions.handleThinkingChange}
+				handleModelChanged={agentActions.handleModelChanged}
+				handleCreateClick={agentActions.handleCreateClick}
+				handleRequestApiKeys={handleRequestApiKeys}
+				handleOpenProject={projectActions.handleOpenProject}
+				handleDeleteProject={projectActions.handleDeleteProject}
+				handleProjectCreated={projectActions.handleProjectCreated}
+				handleDeleteProjectCancelled={projectActions.handleDeleteProjectCancelled}
+				handleDeleteProjectConfirmed={projectActions.handleDeleteProjectConfirmed}
+				handleRenameProject={projectActions.handleRenameProject}
+				handleOpenProjectFolderById={projectActions.handleOpenProjectFolderById}
+				handleSettingsClick={handleSettingsClick}
+				handleCloseSettings={handleCloseSettings}
+				handleExpandSidebar={handleExpandSidebar}
+				handleExpandRightPanel={handleExpandRightPanel}
+				onProvidersChange={onProvidersChange}
+			/>
+		</>
 	);
 }

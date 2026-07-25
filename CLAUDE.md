@@ -13,8 +13,24 @@ npm run build                        # Full production build
 npm run build:main                   # tsc for main process only
 npm run build:renderer               # Vite build for renderer only
 npm run start                        # Launch Electron from apps/electron/dist/ (must build first)
-npm run package                      # Build + package with electron-builder
+npm run package                      # Build + package with electron-builder (signed, notarized, no publish)
+./scripts/release.sh                 # Same as package + artifact & notarization verification
 ```
+
+### Release & auto-update
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) on `v*` tags
+(public repo → free macOS runners): build → Developer ID sign → notarize → upload
+dmg/zip to GitHub Releases. In-app auto-update uses electron-updater with the
+`github` provider (see `apps/electron/electron-builder.yml`); the main-process
+wrapper lives in `apps/electron/src/main/system/app-updater.ts`.
+
+```bash
+git tag v1.3.1 && git push origin v1.3.1   # cut a release (keep tag in sync with apps/electron version)
+```
+
+Required GitHub Secrets: `MAC_CERTS` (base64 .p12), `MAC_CERTS_PASSWORD`,
+`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
 
 ### Linting & formatting
 

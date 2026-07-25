@@ -1,6 +1,13 @@
 import type { MainToRendererEvent } from "@shared/types";
 import { appStore } from "./appStore";
-import { loginCompletedAtom, loginPromptAtom, mcpStatusVersionAtom, usageDataAtom, usageVersionAtom } from "./atoms";
+import {
+	appUpdateAtom,
+	loginCompletedAtom,
+	loginPromptAtom,
+	mcpStatusVersionAtom,
+	usageDataAtom,
+	usageVersionAtom,
+} from "./atoms";
 
 export function handleSystemEvent(event: MainToRendererEvent): boolean {
 	switch (event.type) {
@@ -42,6 +49,16 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 			appStore.set(loginCompletedAtom, {
 				providerId: event.providerId,
 				success: event.success,
+				error: event.error,
+			});
+			return true;
+		}
+
+		case "update:status": {
+			appStore.set(appUpdateAtom, {
+				phase: event.phase,
+				version: event.version,
+				percent: event.percent,
 				error: event.error,
 			});
 			return true;

@@ -38,6 +38,7 @@ export type {
 	AgentDefinitionInput,
 	AgentDefinitionSource,
 	AgentInfo,
+	AppUpdatePhase,
 	AvailableModel,
 	EventCallback,
 	FileTreeNode,
