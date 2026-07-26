@@ -20,6 +20,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.3.9",
+		date: "2026-07-26",
+		items: [
+			{
+				zh: "修复自动更新：取消自动重启后界面状态与实际行为保持一致",
+				en: "Auto-update fix: cancelling auto-restart now stays in sync with actual behavior",
+				ja: "自動更新の修正：自動再起動のキャンセル後、表示と実際の動作が一致するように",
+			},
+			{
+				zh: "修复窗口已关闭时更新下载完成会无预警自动重启的问题",
+				en: "Fixed the app auto-restarting without warning when an update finishes while the window is closed",
+				ja: "ウィンドウを閉じた状態で更新が完了すると予告なく自動再起動する問題を修正",
+			},
+		],
+	},
+	{
 		version: "1.3.8",
 		date: "2026-07-26",
 		items: [
