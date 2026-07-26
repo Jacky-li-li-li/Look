@@ -25,7 +25,7 @@ interface ChatPanelProps {
 	currentModel: string;
 	currentThinking: string;
 	availableThinkingLevels?: ThinkingLevel[];
-	onSend: (text: string, images?: ImageContent[]) => Promise<boolean>;
+	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
 	onThinkingChange: (level: string) => void;
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
@@ -70,7 +70,7 @@ const ChatPanel = memo(function ChatPanel({
 			/>
 			{/* TODO 进度条 — 替代原 SubAgent 进度卡片 */}
 			<TodoPanel />
-			<ChatQueueDrawer steerMessages={queue.steering} followUpMessages={queue.followUp} />
+			<ChatQueueDrawer agentId={agentId} steerMessages={queue.steering} followUpMessages={queue.followUp} />
 			<ChatInput
 				ref={inputRef}
 				agentId={agentId}

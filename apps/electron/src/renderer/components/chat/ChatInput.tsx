@@ -29,7 +29,7 @@ interface ChatInputProps {
 	currentThinking: string;
 	availableThinkingLevels?: ThinkingLevel[];
 	isBusy: boolean;
-	onSend: (text: string, images?: ImageContent[]) => Promise<boolean>;
+	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
 	onThinkingChange: (level: string) => void;
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
@@ -128,11 +128,11 @@ const ChatInput = function ChatInput({
 
 	const hasContent = input.trim().length > 0 || pendingImages.length > 0;
 
-	const handleSend = useCallback(async () => {
+	const handleSend = useCallback(async (sendMode?: "steer" | "followUp") => {
 		const text = (inputRef.current?.getText() ?? "").trim();
 		if (!text && pendingImages.length === 0) return;
 		const images = pendingImages.length > 0 ? pendingImages : undefined;
-		if (await onSend(text || "", images)) {
+		if (await onSend(text || "", images, sendMode)) {
 			setInput("");
 			setPendingImages([]);
 		}
@@ -182,7 +182,11 @@ const ChatInput = function ChatInput({
 
 		if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent as KeyboardEvent).isComposing) {
 			e.preventDefault();
-			void handleSend();
+			// Enter: steer (interrupt after current tool call when busy)
+			// Ctrl+Enter: followUp (wait until agent finishes when busy)
+			// Both: normal send when idle (sendMode ignored server-side)
+			const sendMode = e.ctrlKey || e.metaKey ? "followUp" : "steer";
+			void handleSend(sendMode);
 		}
 	};
 
@@ -241,7 +245,7 @@ const ChatInput = function ChatInput({
 
 			<ContentEditableInput
 				ref={inputRef}
-				placeholder={isBusy ? `${t("chat.send")}… (${t("chat.enterToQueue")})` : `${t("chat.placeholder")}`}
+				placeholder={isBusy ? `${t("chat.send")}… Enter ${t("chat.toSteer")} · Ctrl+Enter ${t("chat.toQueue")}` : `${t("chat.placeholder")}`}
 				onChange={handleEditorChange}
 				onImagesPasted={handleImagesPasted}
 				onKeyDown={handleEditorKeyDown}
@@ -257,7 +261,7 @@ const ChatInput = function ChatInput({
 				onModelChange={onModelChange}
 				onThinkingChange={onThinkingChange}
 				onRequestApiKeys={onRequestApiKeys}
-				onSend={handleSend}
+				onSend={() => handleSend("steer")}
 				onAbort={handleAbort}
 			/>
 		</div>

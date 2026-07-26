@@ -60,7 +60,9 @@ export interface LookAPI {
 	invoke(event: RendererToMainEvent): Promise<unknown>;
 	onEvent(callback: (event: MainToRendererEvent) => void): () => void;
 
-	sendMessage(agentId: string, message: string, images?: ImageContent[]): Promise<IpcResult>;
+	sendMessage(agentId: string, message: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<IpcResult>;
+	removeQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
+	insertQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
 	activateSession(sessionId: string): Promise<IpcResult>;
 	createAgent(
 		name?: string | { name?: string; projectId?: string; imProvider?: "feishu" },
@@ -345,8 +347,6 @@ export interface LookAPI {
 	checkForUpdates(): Promise<{ success: boolean; error?: string }>;
 	downloadUpdate(): Promise<{ success: boolean; error?: string }>;
 	installUpdate(): Promise<{ success: boolean; error?: string }>;
-	/** 取消下载完成后的自动重启安装（退回手动「重启安装」）；cancelled=false 表示已无可取消 */
-	cancelAutoInstall(): Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
 }
 
 interface SkillEntry {

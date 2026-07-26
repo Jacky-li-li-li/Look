@@ -2,12 +2,13 @@
 // ChatQueueDrawer — 排队消息指示器
 //
 // 位于聊天区和输入框之间，显示等待顺序交付的 steer / followUp 消息。
-// steer = 引导修正（工作中 Enter），followUp = 追加任务（Shift+Enter）。
+// steer = 中断当前 turn（当前 tool call 完成后立即交付），Enter 触发
+// followUp = 排队等待整个 agent run 结束后交付，Ctrl+Enter 触发
 // 视觉隐喻："热介入 / 冷排队" — steer 用左侧暖色条，followUp 用冷灰条。
 // ============================================================
 
 import { cn } from "@look/ui";
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 interface QueueEntry {
@@ -17,15 +18,34 @@ interface QueueEntry {
 }
 
 interface ChatQueueDrawerProps {
+	agentId: string;
 	steerMessages: readonly string[];
 	followUpMessages: readonly string[];
 }
 
-const ChatQueueDrawer = memo(function ChatQueueDrawer({ steerMessages, followUpMessages }: ChatQueueDrawerProps) {
+const ChatQueueDrawer = memo(function ChatQueueDrawer({ agentId, steerMessages, followUpMessages }: ChatQueueDrawerProps) {
 	const { t } = useTranslation();
 	const total = steerMessages.length + followUpMessages.length;
 
 	if (total === 0) return null;
+
+	const handleRecall = useCallback(
+		(text: string) => {
+			window.look.removeQueuedMessage(agentId, text).catch((err) =>
+				console.warn("[ChatQueueDrawer] removeQueuedMessage failed:", err),
+			);
+		},
+		[agentId],
+	);
+
+	const handleInsert = useCallback(
+		(text: string) => {
+			window.look.insertQueuedMessage(agentId, text).catch((err) =>
+				console.warn("[ChatQueueDrawer] insertQueuedMessage failed:", err),
+			);
+		},
+		[agentId],
+	);
 
 	// 构建有序列表：steer 在前，followUp 在后，各自保持原始序号
 	const entries: QueueEntry[] = [
@@ -61,7 +81,28 @@ const ChatQueueDrawer = memo(function ChatQueueDrawer({ steerMessages, followUpM
 							{entry.kind === "steer" ? t("chat.queuedSteering") : t("chat.queuedFollowUp")}
 						</span>
 						{/* 消息文本 */}
-						<span className="min-w-0 truncate text-[12px] leading-relaxed text-foreground/70">{entry.text}</span>
+						<span className="min-w-0 flex-1 truncate text-[12px] leading-relaxed text-foreground/70">
+							{entry.text}
+						</span>
+						{/* 操作按钮：悬停显示 */}
+						<div className="hidden group-hover:flex items-center gap-1 shrink-0">
+							<button
+								type="button"
+								onClick={() => handleInsert(entry.text)}
+								className="rounded px-1.5 py-0.5 text-[10px] font-medium text-primary/70 hover:bg-primary/10 transition-colors"
+								title={t("chat.queuedInsert")}
+							>
+								{t("chat.queuedInsert")}
+							</button>
+							<button
+								type="button"
+								onClick={() => handleRecall(entry.text)}
+								className="rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive/70 hover:bg-destructive/10 transition-colors"
+								title={t("chat.queuedRecall")}
+							>
+								{t("chat.queuedRecall")}
+							</button>
+						</div>
 					</div>
 				))}
 			</div>

@@ -54,7 +54,7 @@ interface AppLayoutProps {
 	showSettings: boolean;
 	settingsTab?: SettingsTab;
 	providerSettings: ProviderSettingsData;
-	handleSendMessage: (text: string, images?: ImageContent[]) => Promise<boolean>;
+	handleSendMessage: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
 	handleSelectAgent: (agentId: string) => void;
 	handleCloseSessionSheet: (agentId: string) => void;
 	handleReorderSessionSheets: (nextIds: string[]) => void;

@@ -27,8 +27,14 @@ const api: LookAPI = {
 		};
 	},
 
-	sendMessage: (agentId, message, images) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message, images }),
+	sendMessage: (agentId, message, images, sendMode) =>
+		ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message, images, sendMode }),
+
+	removeQueuedMessage: (agentId, text) =>
+		ipcRenderer.invoke("look:invoke", { type: "agent:remove-queued-message", agentId, text }),
+
+	insertQueuedMessage: (agentId, text) =>
+		ipcRenderer.invoke("look:invoke", { type: "agent:insert-queued-message", agentId, text }),
 
 	activateSession: (sessionId) => ipcRenderer.invoke("look:invoke", { type: "agent:activate", agentId: sessionId }),
 
@@ -242,7 +248,6 @@ const api: LookAPI = {
 	checkForUpdates: () => ipcRenderer.invoke("look:invoke", { type: "update:check" }),
 	downloadUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:download" }),
 	installUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:install" }),
-	cancelAutoInstall: () => ipcRenderer.invoke("look:invoke", { type: "update:cancel-install" }),
 
 	// ---- Permission management ----
 	setPermissionMode: (agentId, mode, updateDefault) =>

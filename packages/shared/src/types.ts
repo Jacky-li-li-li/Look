@@ -434,10 +434,6 @@ export type MainToRendererEvent =
 			version?: string;
 			/** 下载进度 0-100（downloading 时存在） */
 			percent?: number;
-			/** 是否已排定自动重启安装（downloaded 时存在；取消或跳过后为 false） */
-			autoInstallScheduled?: boolean;
-			/** 自动重启安装的宽限秒数（autoInstallScheduled 时存在） */
-			autoRestartInSeconds?: number;
 			error?: string;
 	  };
 
@@ -495,6 +491,19 @@ export type RendererToMainEvent =
 			agentId: string;
 			message: string;
 			images?: ImageContent[];
+			sendMode?: "steer" | "followUp";
+	  }
+	| {
+			type: "agent:remove-queued-message";
+			agentId: string;
+			/** Exact text of the queued message to remove */
+			text: string;
+	  }
+	| {
+			type: "agent:insert-queued-message";
+			agentId: string;
+			/** Exact text of the queued message to insert immediately */
+			text: string;
 	  }
 	| { type: "agent:activate"; agentId: string }
 	| { type: "agent:create"; name?: string; projectId?: string; imProvider?: ImSessionProvider }
@@ -772,8 +781,7 @@ export type RendererToMainEvent =
 	// ---- 应用自动更新（renderer → main） ----
 	| { type: "update:check" }
 	| { type: "update:download" }
-	| { type: "update:install" }
-	| { type: "update:cancel-install" };
+	| { type: "update:install" };
 
 /** 应用自动更新的阶段（update:status 事件的 phase 字段） */
 export type AppUpdatePhase = "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";

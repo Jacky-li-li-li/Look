@@ -11,7 +11,44 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:send-message", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		guardString(data.message, "message");
-		await ctx.session.messaging.sendMessage(_agentId, data.message, data.images);
+		const sendMode = data.sendMode === "steer" || data.sendMode === "followUp" ? data.sendMode : undefined;
+		await ctx.session.messaging.sendMessage(_agentId, data.message, data.images, sendMode);
+		return { success: true };
+	});
+
+	register("agent:remove-queued-message", async (data) => {
+		const _agentId = guardAgentId(data.agentId, "agentId");
+		guardString(data.text, "text");
+		const managed = ctx.session.info.getManagedRuntime(_agentId);
+		if (!managed) return { success: false, error: "Session not found" };
+		const session = managed.runtime.session;
+		const { steering, followUp } = session.clearQueue();
+		// Re-queue everything except the removed message
+		for (const t of steering) {
+			if (t !== data.text) await session.steer(t);
+		}
+		for (const t of followUp) {
+			if (t !== data.text) await session.followUp(t);
+		}
+		return { success: true };
+	});
+
+	register("agent:insert-queued-message", async (data) => {
+		const _agentId = guardAgentId(data.agentId, "agentId");
+		guardString(data.text, "text");
+		const managed = ctx.session.info.getManagedRuntime(_agentId);
+		if (!managed) return { success: false, error: "Session not found" };
+		const session = managed.runtime.session;
+		const { steering, followUp } = session.clearQueue();
+		// Re-queue everything except the one we're inserting
+		for (const t of steering) {
+			if (t !== data.text) await session.steer(t);
+		}
+		for (const t of followUp) {
+			if (t !== data.text) await session.followUp(t);
+		}
+		// Send the removed message immediately as steer (interrupt)
+		await session.prompt(data.text, { streamingBehavior: "steer" });
 		return { success: true };
 	});
 

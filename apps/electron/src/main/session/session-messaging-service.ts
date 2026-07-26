@@ -18,7 +18,7 @@ export interface SessionMessagingHost {
 export class SessionMessagingService {
 	constructor(private readonly host: SessionMessagingHost) {}
 
-	async sendMessage(sessionId: string, text: string, images?: ImageContent[]): Promise<void> {
+	async sendMessage(sessionId: string, text: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<void> {
 		const managed = await this.host.ensureRuntime(sessionId);
 		const session = managed.runtime.session;
 
@@ -47,7 +47,7 @@ export class SessionMessagingService {
 				.prompt(text, {
 					images,
 					source: "rpc",
-					streamingBehavior: session.isStreaming ? "followUp" : undefined,
+					streamingBehavior: session.isStreaming ? (sendMode ?? "followUp") : undefined,
 					preflightResult: (success) => {
 						if (!success || accepted) return;
 						accepted = true;
