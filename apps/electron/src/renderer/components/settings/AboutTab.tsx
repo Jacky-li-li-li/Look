@@ -81,6 +81,12 @@ export default function AboutTab() {
 				</div>
 
 				{/* 状态反馈行 */}
+				{phase === "available" && (
+					<p className="-mt-1.5 mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+						<Download className="size-3" />
+						{update?.version ? t("update.versionAvailable", { version: update.version }) : t("update.available")}
+					</p>
+				)}
 				{phase === "not-available" && (
 					<p className="-mt-1.5 mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
 						<CircleCheck className="size-3" />
@@ -102,7 +108,10 @@ export default function AboutTab() {
 				)}
 				{phase === "downloaded" && (
 					<p className="-mt-1.5 mb-2 text-[11px] text-muted-foreground">
-						{t("update.ready")} {t("update.autoRestartHint")}
+						{t("update.ready")}
+						{update?.autoInstallScheduled
+							? ` ${t("update.autoRestartHint", { seconds: update.autoRestartInSeconds ?? 5 })}`
+							: ""}
 					</p>
 				)}
 				{phase === "error" && (
@@ -155,9 +164,9 @@ export default function AboutTab() {
 									}`}
 								>
 									<ul className="overflow-hidden">
-										{localize(entry.items, i18n.language).map((text) => (
+										{localize(entry.items, i18n.language).map((text, index) => (
 											<li
-												key={text}
+												key={`${entry.version}-${index}`}
 												className="flex items-start gap-2 py-1 text-[12px] leading-relaxed text-muted-foreground"
 											>
 												<span className="mt-[7px] size-1 shrink-0 rounded-full bg-muted-foreground/40" />

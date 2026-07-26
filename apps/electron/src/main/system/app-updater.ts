@@ -2,19 +2,20 @@
 // App Updater — electron-updater 封装
 //
 // 仅在打包环境启用；更新源为 GitHub Releases（electron-builder.yml 的
-// publish provider）。策略：自动检查、手动下载、手动重启安装——
-// 渲染层通过 update:status 事件感知状态，通过 update:* IPC 触发动作。
+// publish provider）。策略：自动检查、手动下载、下载完成后宽限数秒自动
+// 重启安装（可取消、无可见窗口时退回手动）。渲染层通过 update:status
+// 事件感知状态，通过 update:* IPC 触发动作。
 // ============================================================
 
 import type { AppUpdatePhase, MainToRendererEvent } from "@look/shared/types";
-import { app } from "electron";
+import { app, BrowserWindow } from "electron";
 import updater from "electron-updater";
 
 const { autoUpdater } = updater;
 
 const INITIAL_CHECK_DELAY_MS = 30_000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
-/** 下载完成后自动重启安装的宽限时间（渲染层 toast 同步展示倒计时） */
+/** 下载完成后自动重启安装的宽限时间（随 update:status 推送秒数给渲染层展示） */
 const AUTO_INSTALL_DELAY_MS = 5_000;
 
 type SendEvent = (event: MainToRendererEvent) => void;
@@ -22,8 +23,19 @@ type SendEvent = (event: MainToRendererEvent) => void;
 let initialized = false;
 let sendEvent: SendEvent | null = null;
 let autoInstallTimer: NodeJS.Timeout | null = null;
+/** 最近一次下载完成的版本号（取消/跳过自动安装后 re-emit 状态时保持） */
+let downloadedVersion: string | null = null;
 
-function emit(phase: AppUpdatePhase, extra?: { version?: string; percent?: number; error?: string }): void {
+function emit(
+	phase: AppUpdatePhase,
+	extra?: {
+		version?: string;
+		percent?: number;
+		error?: string;
+		autoInstallScheduled?: boolean;
+		autoRestartInSeconds?: number;
+	},
+): void {
 	console.log(`[Look][updater] ${phase}`, extra ?? "");
 	sendEvent?.({ type: "update:status", phase, ...extra });
 }
@@ -50,11 +62,24 @@ export function initAppUpdater(send: SendEvent): void {
 	autoUpdater.on("update-not-available", () => emit("not-available"));
 	autoUpdater.on("download-progress", (progress) => emit("downloading", { percent: Math.round(progress.percent) }));
 	autoUpdater.on("update-downloaded", (info) => {
-		emit("downloaded", { version: info.version });
+		downloadedVersion = info.version;
+		emit("downloaded", {
+			version: info.version,
+			autoInstallScheduled: true,
+			autoRestartInSeconds: AUTO_INSTALL_DELAY_MS / 1000,
+		});
 		// 用户点过「下载」即视为同意更新：宽限几秒后自动重启安装，
 		// 期间可被 update:cancel-install 取消（退回手动重启）。
+		// 重复触发时先清掉旧计时器，避免句柄丢失后提前 quitAndInstall。
+		if (autoInstallTimer) clearTimeout(autoInstallTimer);
 		autoInstallTimer = setTimeout(() => {
 			autoInstallTimer = null;
+			// 窗口不可见（如 macOS 关窗未退出）时用户看不到倒计时 toast，
+			// 不自动重启，退回手动安装。
+			if (!BrowserWindow.getAllWindows().some((win) => win.isVisible())) {
+				emit("downloaded", { version: downloadedVersion ?? undefined, autoInstallScheduled: false });
+				return;
+			}
 			autoUpdater.quitAndInstall();
 		}, AUTO_INSTALL_DELAY_MS);
 	});
@@ -96,11 +121,14 @@ export async function installUpdate(): Promise<{ success: boolean; error?: strin
 	return { success: true };
 }
 
-/** 取消下载完成后的自动重启安装（退回手动「重启安装」）。 */
-export function cancelAutoInstall(): { success: boolean } {
-	if (autoInstallTimer) {
-		clearTimeout(autoInstallTimer);
-		autoInstallTimer = null;
-	}
-	return { success: true };
+/**
+ * 取消下载完成后的自动重启安装（退回手动「重启安装」）。
+ * cancelled=false 表示调用时已没有 pending 的自动安装（竞态窗口内取消失败）。
+ */
+export function cancelAutoInstall(): { success: boolean; cancelled: boolean } {
+	if (!autoInstallTimer) return { success: true, cancelled: false };
+	clearTimeout(autoInstallTimer);
+	autoInstallTimer = null;
+	emit("downloaded", { version: downloadedVersion ?? undefined, autoInstallScheduled: false });
+	return { success: true, cancelled: true };
 }

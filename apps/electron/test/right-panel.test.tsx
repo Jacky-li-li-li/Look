@@ -63,13 +63,14 @@ describe("RightPanel 共享区 watcher", () => {
 	});
 
 	afterEach(async () => {
-		// 先冲刷 effect 链上仍在途中的 promise（listSharedFiles/startSharedWatch
-		// 的 .then 回调会触发 jotai 更新并排入 React 调度器）。若放任不管，
-		// 它们会在 jsdom 拆除后才执行，react-dom 访问 window 抛出
-		// "window is not defined" 的 unhandled error（CI 上偶发退出码 1）。
-		await act(async () => {});
+		// 先重置 atom，再冲刷 effect 链上仍在途中的 promise
+		// （listSharedFiles/startSharedWatch 的 .then 回调会触发 jotai 更新
+		// 并排入 React 调度器）。若放任不管，它们会在 jsdom 拆除后才执行，
+		// react-dom 访问 window 抛出 "window is not defined" 的
+		// unhandled error（CI 上偶发退出码 1）。
 		appStore.set(projectsAtom, []);
 		appStore.set(activeProjectIdAtom, null);
+		await act(async () => {});
 		document.body.replaceChildren();
 	});
 

@@ -758,12 +758,11 @@
 		"download": "ダウンロード",
 		"downloadUpdate": "更新をダウンロード",
 		"later": "後で",
-		"downloading": "ダウンロード中: {{percent}}%",
 		"downloadingTitle": "更新をダウンロード中",
 		"ready": "更新の準備ができました。再起動してインストールしてください。",
 		"restart": "再起動",
 		"restartInstall": "再起動してインストール",
-		"autoRestartHint": "5秒後に自動で再起動してインストールします",
+		"autoRestartHint": "{{seconds}}秒後に自動で再起動してインストールします",
 		"cancelAutoRestart": "自動再起動をキャンセル",
 		"failed": "更新に失敗しました"
 	},

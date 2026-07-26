@@ -6,6 +6,8 @@ export interface AppUpdateState {
 	phase: AppUpdatePhase;
 	version?: string;
 	percent?: number;
+	autoInstallScheduled?: boolean;
+	autoRestartInSeconds?: number;
 	error?: string;
 }
 

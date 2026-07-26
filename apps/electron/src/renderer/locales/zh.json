@@ -758,12 +758,11 @@
     "download": "下载",
     "downloadUpdate": "下载更新",
     "later": "稍后",
-    "downloading": "下载中: {{percent}}%",
     "downloadingTitle": "正在下载更新",
     "ready": "更新已就绪。重启以完成安装。",
     "restart": "立即重启",
     "restartInstall": "重启安装",
-    "autoRestartHint": "将在 5 秒后自动重启安装",
+    "autoRestartHint": "将在 {{seconds}} 秒后自动重启安装",
     "cancelAutoRestart": "取消自动重启",
     "failed": "更新失败"
   },

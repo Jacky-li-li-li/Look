@@ -434,6 +434,10 @@ export type MainToRendererEvent =
 			version?: string;
 			/** 下载进度 0-100（downloading 时存在） */
 			percent?: number;
+			/** 是否已排定自动重启安装（downloaded 时存在；取消或跳过后为 false） */
+			autoInstallScheduled?: boolean;
+			/** 自动重启安装的宽限秒数（autoInstallScheduled 时存在） */
+			autoRestartInSeconds?: number;
 			error?: string;
 	  };
 

@@ -758,12 +758,11 @@
     "download": "Download",
     "downloadUpdate": "Download update",
     "later": "Later",
-    "downloading": "Downloading: {{percent}}%",
     "downloadingTitle": "Downloading update",
     "ready": "Update ready. Restart to install.",
     "restart": "Restart",
     "restartInstall": "Restart to install",
-    "autoRestartHint": "Restarting automatically in 5 seconds",
+    "autoRestartHint": "Restarting automatically in {{seconds}} seconds",
     "cancelAutoRestart": "Cancel auto-restart",
     "failed": "Update failed"
   },

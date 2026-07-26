@@ -51,16 +51,17 @@ export default function PermissionDialog() {
 				}
 				setQueue((items) => items.filter((item) => item.requestId !== event.requestId));
 				if (action === "allow_always") {
-					// 「本次会话始终允许」= 把当前会话提升为 always（不动全局默认），
-					// 输入框底部权限指示随之切换为「始终允许」。
-					setPermissionMode("always");
+					// 「本次会话始终允许」= 把当前会话提升为 always（不动全局默认）。
+					// 先切主进程，成功后再更新渲染端指示，避免两边状态分叉。
 					const modeResult = await window.look.setPermissionMode(event.agentId, "always", false);
-					if (!modeResult?.success) {
+					if (modeResult?.success) {
+						setPermissionMode("always");
+					} else {
 						toast.error(modeResult?.error ?? "权限模式切换失败");
 					}
 				}
 			} catch (error) {
-				toast.error(error instanceof Error ? error.message : "权限响应发送失败");
+				toast.error(error instanceof Error ? error.message : "操作失败");
 			} finally {
 				respondingRef.current = null;
 				setResponding(false);

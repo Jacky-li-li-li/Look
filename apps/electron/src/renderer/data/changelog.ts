@@ -73,6 +73,17 @@ export const CHANGELOG: ChangelogEntry[] = [
 		],
 	},
 	{
+		version: "1.3.5",
+		date: "2026-07-26",
+		items: [
+			{
+				zh: "修复构建与 CI 发布流程问题（无功能变更）",
+				en: "Build and CI release pipeline fixes (no functional changes)",
+				ja: "ビルドと CI リリースフローの修正（機能変更なし）",
+			},
+		],
+	},
+	{
 		version: "1.3.4",
 		date: "2026-07-25",
 		items: [
