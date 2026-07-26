@@ -1,5 +1,10 @@
 // ============================================================
 // Supabase client — cloud auth + profile sync
+//
+// Single-client singleton. `getSupabase()` returns the same
+// `SupabaseClient` instance on every call so Supabase's
+// GoTrueClient never warns about duplicate instances sharing
+// the same storage key.
 // ============================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -14,6 +19,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
  * mode can boot without VITE_SUPABASE_* values instead of throwing during
  * module evaluation and leaving the renderer on a blank screen.
  */
+
+let client: SupabaseClient | null = null;
 let clientPromise: Promise<SupabaseClient | null> | null = null;
 let lastPersistSession = true;
 
@@ -28,19 +35,24 @@ function readRememberMe(): boolean {
 export function getSupabase(): Promise<SupabaseClient | null> {
 	if (!isSupabaseConfigured()) return Promise.resolve(null);
 	const persistSession = readRememberMe();
+	// Already have a client with the right config — return immediately
+	if (client && lastPersistSession === persistSession) return Promise.resolve(client);
+	// Creating for the first time, or persistSession changed
 	if (!clientPromise || lastPersistSession !== persistSession) {
 		lastPersistSession = persistSession;
 		clientPromise = import("@supabase/supabase-js")
-			.then(({ createClient }) =>
-				createClient(supabaseUrl, supabaseAnonKey, {
+			.then(({ createClient }) => {
+				client = createClient(supabaseUrl, supabaseAnonKey, {
 					auth: {
 						persistSession,
 						autoRefreshToken: persistSession,
 						storage: persistSession ? undefined : globalThis.sessionStorage,
 					},
-				}),
-			)
+				});
+				return client;
+			})
 			.catch((error: unknown) => {
+				client = null;
 				clientPromise = null;
 				console.error("[Look] Failed to load Supabase client", error);
 				return null;
@@ -53,6 +65,7 @@ export function getSupabase(): Promise<SupabaseClient | null> {
  * 重置 Supabase 客户端，使 remember-me 偏好在下一次 getSupabase() 时生效。
  */
 export function resetSupabaseClient(): void {
+	client = null;
 	clientPromise = null;
 }
 
