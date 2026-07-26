@@ -18,7 +18,12 @@ export interface SessionMessagingHost {
 export class SessionMessagingService {
 	constructor(private readonly host: SessionMessagingHost) {}
 
-	async sendMessage(sessionId: string, text: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<void> {
+	async sendMessage(
+		sessionId: string,
+		text: string,
+		images?: ImageContent[],
+		sendMode?: "steer" | "followUp",
+	): Promise<void> {
 		const managed = await this.host.ensureRuntime(sessionId);
 		const session = managed.runtime.session;
 

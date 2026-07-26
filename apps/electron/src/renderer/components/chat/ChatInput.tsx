@@ -128,15 +128,18 @@ const ChatInput = function ChatInput({
 
 	const hasContent = input.trim().length > 0 || pendingImages.length > 0;
 
-	const handleSend = useCallback(async (sendMode?: "steer" | "followUp") => {
-		const text = (inputRef.current?.getText() ?? "").trim();
-		if (!text && pendingImages.length === 0) return;
-		const images = pendingImages.length > 0 ? pendingImages : undefined;
-		if (await onSend(text || "", images, sendMode)) {
-			setInput("");
-			setPendingImages([]);
-		}
-	}, [onSend, pendingImages, setInput]);
+	const handleSend = useCallback(
+		async (sendMode?: "steer" | "followUp") => {
+			const text = (inputRef.current?.getText() ?? "").trim();
+			if (!text && pendingImages.length === 0) return;
+			const images = pendingImages.length > 0 ? pendingImages : undefined;
+			if (await onSend(text || "", images, sendMode)) {
+				setInput("");
+				setPendingImages([]);
+			}
+		},
+		[onSend, pendingImages, setInput],
+	);
 
 	const handleAbort = useCallback(() => {
 		onAbort?.();
@@ -245,7 +248,11 @@ const ChatInput = function ChatInput({
 
 			<ContentEditableInput
 				ref={inputRef}
-				placeholder={isBusy ? `${t("chat.send")}… Enter ${t("chat.toSteer")} · Ctrl+Enter ${t("chat.toQueue")}` : `${t("chat.placeholder")}`}
+				placeholder={
+					isBusy
+						? `${t("chat.send")}… Enter ${t("chat.toSteer")} · Ctrl+Enter ${t("chat.toQueue")}`
+						: `${t("chat.placeholder")}`
+				}
 				onChange={handleEditorChange}
 				onImagesPasted={handleImagesPasted}
 				onKeyDown={handleEditorKeyDown}

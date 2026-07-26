@@ -23,29 +23,33 @@ interface ChatQueueDrawerProps {
 	followUpMessages: readonly string[];
 }
 
-const ChatQueueDrawer = memo(function ChatQueueDrawer({ agentId, steerMessages, followUpMessages }: ChatQueueDrawerProps) {
+const ChatQueueDrawer = memo(function ChatQueueDrawer({
+	agentId,
+	steerMessages,
+	followUpMessages,
+}: ChatQueueDrawerProps) {
 	const { t } = useTranslation();
 	const total = steerMessages.length + followUpMessages.length;
 
-	if (total === 0) return null;
-
 	const handleRecall = useCallback(
 		(text: string) => {
-			window.look.removeQueuedMessage(agentId, text).catch((err) =>
-				console.warn("[ChatQueueDrawer] removeQueuedMessage failed:", err),
-			);
+			window.look
+				.removeQueuedMessage(agentId, text)
+				.catch((err) => console.warn("[ChatQueueDrawer] removeQueuedMessage failed:", err));
 		},
 		[agentId],
 	);
 
 	const handleInsert = useCallback(
 		(text: string) => {
-			window.look.insertQueuedMessage(agentId, text).catch((err) =>
-				console.warn("[ChatQueueDrawer] insertQueuedMessage failed:", err),
-			);
+			window.look
+				.insertQueuedMessage(agentId, text)
+				.catch((err) => console.warn("[ChatQueueDrawer] insertQueuedMessage failed:", err));
 		},
 		[agentId],
 	);
+
+	if (total === 0) return null;
 
 	// 构建有序列表：steer 在前，followUp 在后，各自保持原始序号
 	const entries: QueueEntry[] = [

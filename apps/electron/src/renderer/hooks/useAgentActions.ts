@@ -19,21 +19,24 @@ import { markSessionSnapshotLoading } from "../store/snapshot";
 const api = window.look;
 
 export function useAgentActions() {
-	const handleSendMessage = useCallback(async (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<boolean> => {
-		const id = appStore.get(activeAgentIdAtom);
-		if (!id || !api) return false;
-		try {
-			const result = await api.sendMessage(id, text, images, sendMode);
-			if (!result?.success) {
-				toast.error(result?.error ?? "Message was not accepted");
+	const handleSendMessage = useCallback(
+		async (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<boolean> => {
+			const id = appStore.get(activeAgentIdAtom);
+			if (!id || !api) return false;
+			try {
+				const result = await api.sendMessage(id, text, images, sendMode);
+				if (!result?.success) {
+					toast.error(result?.error ?? "Message was not accepted");
+					return false;
+				}
+				return true;
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : "Message was not accepted");
 				return false;
 			}
-			return true;
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "Message was not accepted");
-			return false;
-		}
-	}, []);
+		},
+		[],
+	);
 
 	const handleSelectAgent = useCallback(async (agentId: string) => {
 		if (!api) return;

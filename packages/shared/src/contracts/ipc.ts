@@ -60,7 +60,12 @@ export interface LookAPI {
 	invoke(event: RendererToMainEvent): Promise<unknown>;
 	onEvent(callback: (event: MainToRendererEvent) => void): () => void;
 
-	sendMessage(agentId: string, message: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<IpcResult>;
+	sendMessage(
+		agentId: string,
+		message: string,
+		images?: ImageContent[],
+		sendMode?: "steer" | "followUp",
+	): Promise<IpcResult>;
 	removeQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
 	insertQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
 	activateSession(sessionId: string): Promise<IpcResult>;

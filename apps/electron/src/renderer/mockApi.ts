@@ -225,7 +225,12 @@ const mockApi = {
 	},
 
 	// ---- Agent ----
-	sendMessage: (_agentId: string, message: string, _images?: import("@shared/types").ImageContent[], _sendMode?: "steer" | "followUp") => {
+	sendMessage: (
+		_agentId: string,
+		message: string,
+		_images?: import("@shared/types").ImageContent[],
+		_sendMode?: "steer" | "followUp",
+	) => {
 		if (mockScenario === "chat") runMockStream(message);
 		return ok;
 	},
