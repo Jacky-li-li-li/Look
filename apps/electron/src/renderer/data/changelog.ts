@@ -20,6 +20,37 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.3.11",
+		date: "2026-07-27",
+		items: [
+			{
+				zh: "新增 GitHub 和 Google OAuth 登录，支持浏览器窗口 PKCE 安全授权流程",
+				en: "New GitHub and Google OAuth login with secure PKCE flow via browser window",
+				ja: "GitHub および Google OAuth ログイン追加、ブラウザウィンドウによる安全な PKCE フローに対応",
+			},
+			{
+				zh: "子代理调用卡片：消息流中的子代理工具调用以分组头像卡片展示，点击可查看任务摘要",
+				en: "Subagent call cards: subagent tool calls now appear as grouped avatar cards, tap to inspect task brief",
+				ja: "サブエージェント呼び出しカード：サブエージェントのツール呼び出しをグループ化されたアバターカードで表示、タップでタスク概要を確認可能",
+			},
+			{
+				zh: "子代理会话统一使用「Agent：标题」命名，标题更清晰可辨识",
+				en: 'Subagent sessions now consistently named "Agent: <title>" for better identification',
+				ja: "サブエージェントセッションを「Agent：<タイトル>」で統一命名、識別性を向上",
+			},
+			{
+				zh: "聊天中的 /skill:name 指令以标签芯片展示，不再展开完整内容",
+				en: "Chat /skill:name commands now render as tag chips instead of expanded content",
+				ja: "チャット内の /skill:name コマンドをタグチップで表示、全文展開しないように改善",
+			},
+			{
+				zh: "多项修复：skill 菜单去重防冲突、段落渲染兼容外部图片、OAuth 报错优化、代码格式化修正",
+				en: "Fixes: skill menu deduplication, paragraph rendering for external images, improved OAuth error messages, and code formatting",
+				ja: "複数の修正：スキルメニュー重複排除、外部画像対応の段落レンダリング、OAuth エラー表示改善、コード整形修正",
+			},
+		],
+	},
+	{
 		version: "1.3.10",
 		date: "2026-07-26",
 		items: [
