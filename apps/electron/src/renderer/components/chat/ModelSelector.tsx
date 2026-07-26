@@ -5,7 +5,7 @@
 import { Button } from "@look/ui/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@look/ui/components/ui/dialog";
 import type { AvailableModel } from "@shared/types";
-import { ArrowRight, Check, Search } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Loader2, Search } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -104,7 +104,8 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	);
 
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
-	const label = switching ? "…" : (currentModelObj?.name ?? currentModel?.split("/").pop() ?? t("agent.model"));
+	// 切换中不换文案（避免按钮宽度一缩一放的抖动），只把图标换成 spinner
+	const label = currentModelObj?.name ?? currentModel?.split("/").pop() ?? t("agent.model");
 
 	// Default the active tab to whichever side has content. If the
 	// user only configured env-var credentials, the "API Keys" tab
@@ -126,12 +127,22 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 			}}
 		>
 			<DialogTrigger asChild>
-				<Button variant="line-ghost" size="sm" className="group/selector h-7 font-mono text-[11px]" title={label}>
-					<ProviderIcon
-						id={currentModelObj?.provider ?? currentModel?.split("/")[0] ?? ""}
-						className="size-3"
-						data-icon="inline-start"
-					/>
+				<Button
+					variant="line-ghost"
+					size="sm"
+					className="group/selector h-7 font-mono text-[11px]"
+					title={label}
+					disabled={switching}
+				>
+					{switching ? (
+						<Loader2 className="size-3 animate-spin" data-icon="inline-start" />
+					) : (
+						<ProviderIcon
+							id={currentModelObj?.provider ?? currentModel?.split("/")[0] ?? ""}
+							className="size-3"
+							data-icon="inline-start"
+						/>
+					)}
 					<span className="whitespace-nowrap">{label}</span>
 				</Button>
 			</DialogTrigger>
@@ -171,7 +182,13 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 						<p className="px-4 py-8 text-center text-[12px] text-muted-foreground">{`No models matching "${searchQuery}"`}</p>
 					) : (
 						<div className="p-2">
-							<ModelList models={filteredModels} currentModel={currentModel} onSwitch={handleSwitch} t={t} />
+							<ModelList
+								models={filteredModels}
+								currentModel={currentModel}
+								onSwitch={handleSwitch}
+								expandAll={searchQuery.trim().length > 0}
+								t={t}
+							/>
 						</div>
 					)}
 				</div>
@@ -184,56 +201,90 @@ function ModelList({
 	models,
 	currentModel,
 	onSwitch,
+	expandAll,
 	t,
 }: {
 	models: AvailableModel[];
 	currentModel: string;
 	onSwitch: (k: string) => void;
+	/** 搜索时强制展开全部分组，让匹配结果直接可见 */
+	expandAll: boolean;
 	t: (key: string) => string;
 }) {
-	if (models.length === 0) {
-		return <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">{t("agent.noModelsCategory")}</p>;
-	}
 	const grouped: Record<string, AvailableModel[]> = {};
 	for (const m of models) {
 		if (!grouped[m.provider]) grouped[m.provider] = [];
 		grouped[m.provider].push(m);
 	}
+	// 默认折叠全部分组，只展开当前模型所在 provider；弹窗随 Dialog
+	// 卸载重建，useState 初始值每次打开都会重算。
+	const activeProvider = models.find((m) => `${m.provider}/${m.id}` === currentModel)?.provider;
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(activeProvider ? [activeProvider] : []));
+
+	if (models.length === 0) {
+		return <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">{t("agent.noModelsCategory")}</p>;
+	}
+
+	const toggle = (provider: string) =>
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			if (next.has(provider)) next.delete(provider);
+			else next.add(provider);
+			return next;
+		});
+
 	return (
 		<>
-			{Object.entries(grouped).map(([provider, pModels], index, entries) => (
-				<React.Fragment key={provider}>
-					<div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-						<ProviderIcon id={provider} className="size-3" />
-						<span>{provider}</span>
-					</div>
-					<div>
-						{pModels.map((m) => {
-							const mk = `${m.provider}/${m.id}`;
-							const isActive = mk === currentModel;
-							return (
-								<button
-									key={mk}
-									type="button"
-									disabled={isActive}
-									onClick={() => onSwitch(mk)}
-									className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-1.5 text-left text-[12px] outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground disabled:cursor-default disabled:opacity-50"
-								>
-									<span className={isActive ? "font-semibold" : ""}>
-										{m.name}
-										{isActive && <Check className="ml-1 inline size-3" />}
-									</span>
-									<span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-										{m.reasoning ? t("agent.modelThink") : t("agent.modelBase")} /{" "}
-										{(m.contextWindow / 1000).toFixed(0)}K
-									</span>
-								</button>
-							);
-						})}
-					</div>
-					{index < entries.length - 1 && <div className="-mx-1 my-1 h-px bg-border" />}
-				</React.Fragment>
-			))}
+			{Object.entries(grouped).map(([provider, pModels], index, entries) => {
+				const isOpen = expandAll || expanded.has(provider);
+				const hasActive = pModels.some((m) => `${m.provider}/${m.id}` === currentModel);
+				return (
+					<React.Fragment key={provider}>
+						<button
+							type="button"
+							onClick={() => toggle(provider)}
+							aria-expanded={isOpen}
+							className="flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-left text-[11px] font-medium uppercase tracking-widest text-muted-foreground outline-hidden transition-colors hover:text-foreground focus-visible:text-foreground"
+						>
+							<ProviderIcon id={provider} className="size-3" />
+							<span>{provider}</span>
+							<span className="font-mono tracking-normal text-muted-foreground/50">{pModels.length}</span>
+							{!isOpen && hasActive && <Check className="size-3 text-foreground" />}
+							<ChevronDown
+								className={`ml-auto size-3 shrink-0 transition-transform duration-150 ${isOpen ? "" : "-rotate-90"}`}
+							/>
+						</button>
+						{isOpen && (
+							<div>
+								{pModels.map((m) => {
+									const mk = `${m.provider}/${m.id}`;
+									const isActive = mk === currentModel;
+									return (
+										<button
+											key={mk}
+											type="button"
+											disabled={isActive}
+											onClick={() => onSwitch(mk)}
+											className="flex w-full cursor-pointer items-center rounded-md px-3 py-1.5 text-left text-[12px] outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground disabled:cursor-default"
+										>
+											{/* 当前模型：书签线压行首，不用 ✓ */}
+											<span
+												className={`mr-2 h-3.5 w-0.5 shrink-0 rounded-full ${isActive ? "bg-foreground" : ""}`}
+											/>
+											<span className={isActive ? "font-semibold" : ""}>{m.name}</span>
+											<span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+												{m.reasoning ? t("agent.modelThink") : t("agent.modelBase")} /{" "}
+												{(m.contextWindow / 1000).toFixed(0)}K
+											</span>
+										</button>
+									);
+								})}
+							</div>
+						)}
+						{index < entries.length - 1 && <div className="-mx-1 my-1 h-px bg-border" />}
+					</React.Fragment>
+				);
+			})}
 		</>
 	);
 }

@@ -107,12 +107,7 @@ export default function AboutTab() {
 					</div>
 				)}
 				{phase === "downloaded" && (
-					<p className="-mt-1.5 mb-2 text-[11px] text-muted-foreground">
-						{t("update.ready")}
-						{update?.autoInstallScheduled
-							? ` ${t("update.autoRestartHint", { seconds: update.autoRestartInSeconds ?? 5 })}`
-							: ""}
-					</p>
+					<p className="-mt-1.5 mb-2 text-[11px] text-muted-foreground">{t("update.ready")}</p>
 				)}
 				{phase === "error" && (
 					<p className="-mt-1.5 mb-2 flex items-start gap-1.5 text-[11px] text-destructive">

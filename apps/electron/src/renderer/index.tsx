@@ -138,6 +138,60 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("reac
 	});
 }
 
+// DEV: 预览自动更新 toast 各阶段（?preview-update）。
+// 循环播放 available → downloading → downloaded，供 UI 走查；
+// 不影响打包产物。
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview-update")) {
+	void import("./store/atoms").then(({ appUpdateAtom }) => {
+		const version = "9.9.9";
+		let stage: "available" | "downloading" | "downloaded" = "available";
+		let percent = 0;
+		let elapsed = 0;
+		setInterval(() => {
+			elapsed += 400;
+			switch (stage) {
+				case "available":
+					appStore.set(appUpdateAtom, { phase: "available", version });
+					if (elapsed >= 2400) {
+						stage = "downloading";
+						elapsed = 0;
+					}
+					break;
+				case "downloading":
+					percent = Math.min(100, percent + 4);
+					appStore.set(appUpdateAtom, { phase: "downloading", version, percent });
+					if (percent >= 100) {
+						stage = "downloaded";
+						elapsed = 0;
+					}
+					break;
+				case "downloaded":
+					appStore.set(appUpdateAtom, { phase: "downloaded", version });
+					if (elapsed >= 2400) {
+						stage = "available";
+						percent = 0;
+						elapsed = 0;
+					}
+					break;
+			}
+		}, 400);
+	});
+}
+
+// DEV: 预览个人信息卡（?preview-profile）：注入示例身份数据，
+// 打开 设置 → 个人信息 即可查看；不影响打包产物。
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview-profile")) {
+	void import("./store/authAtoms").then(({ userProfileAtom }) => {
+		appStore.set(userProfileAtom, {
+			userId: "preview",
+			email: "ziwu@look.app",
+			userName: "张子午",
+			handle: "ziwu",
+			avatar: "🦉",
+		});
+	});
+}
+
 const api = window.look;
 
 // 独立文件查看器窗口(?mode=file-viewer):不加载会话/项目数据,不注册主应用 IPC 路由

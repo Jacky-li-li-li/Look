@@ -40,10 +40,5 @@ export function useAppUpdate() {
 		return fallbackError(await api.installUpdate());
 	}, []);
 
-	const cancelAutoInstall = useCallback(async () => {
-		if (!api) return { success: false, error: "Harness API not available" };
-		return api.cancelAutoInstall();
-	}, []);
-
-	return { update, checkForUpdates, downloadUpdate, installUpdate, cancelAutoInstall };
+	return { update, checkForUpdates, downloadUpdate, installUpdate };
 }

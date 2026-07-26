@@ -59,8 +59,6 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 				phase: event.phase,
 				version: event.version,
 				percent: event.percent,
-				autoInstallScheduled: event.autoInstallScheduled,
-				autoRestartInSeconds: event.autoRestartInSeconds,
 				error: event.error,
 			});
 			return true;

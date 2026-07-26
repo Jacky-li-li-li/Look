@@ -1612,6 +1612,13 @@ body {
 	background: linear-gradient(180deg, var(--glass-highlight), transparent 38%), var(--glass-bg-strong);
 }
 
+/* sonner toast 必须始终可点：radix modal Dialog 打开时会把 body 设为
+   pointer-events:none，没有这条规则 toast 上的按钮（如更新 toast 的
+   「下载」）会点不中、点击穿透到背景层。 */
+[data-sonner-toast] {
+	pointer-events: auto;
+}
+
 /* Streamdown's code block UI is library-owned, while Look owns its density
    and color contract. These rules remain unlayered so they reliably override
    the generated Tailwind utilities from the package. */

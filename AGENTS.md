@@ -56,6 +56,6 @@ Type: rule
 
 - Releases are cut by pushing a `v*` tag; `.github/workflows/release.yml` builds, signs (Developer ID), notarizes and publishes dmg+zip to GitHub Releases. Keep the tag version in sync with `apps/electron/package.json`.
 - Auto-update is electron-updater with the `github` provider (`apps/electron/electron-builder.yml`). The zip target is required for updates — never ship dmg-only.
-- Update UX is manual-download with auto-install grace: main (`system/app-updater.ts`) polls and emits `update:status`; renderer triggers `update:check` / `update:download` / `update:install` over IPC. After download completes, main auto-restarts and installs after a 5s grace period unless the renderer cancels via `update:cancel-install`; when no window is visible it stays manual. Main owns the auto-install-pending state and pushes it as `autoInstallScheduled` on `update:status`.
+- Update UX is manual-download with immediate install: main (`system/app-updater.ts`) polls and emits `update:status`; renderer triggers `update:check` / `update:download` / `update:install` over IPC. Clicking "Download" implies consent — main restarts and installs as soon as the download completes.
 - `scripts/release.sh` is a local verification build only (signed + notarized, `--publish never`); it does not publish.
 - Every version bump must add a user-facing entry (zh/en/ja) at the top of `apps/electron/src/renderer/data/changelog.ts` — the About page release-notes timeline reads it.

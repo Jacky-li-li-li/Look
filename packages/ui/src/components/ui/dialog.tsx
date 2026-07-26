@@ -39,6 +39,7 @@ function DialogContent({
 	className,
 	children,
 	showCloseButton = true,
+	onPointerDownOutside,
 	"aria-describedby": ariaDescribedby = undefined,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
@@ -50,6 +51,11 @@ function DialogContent({
 			<DialogPrimitive.Content
 				data-slot="dialog-content"
 				aria-describedby={ariaDescribedby}
+				// modal Dialog 打开时 body 已是 pointer-events:none，外部点击本来
+				// 就到不了 content；默认拦下 outside-dismiss，避免点到 toast 等
+				// 浮层时 DismissableLayer 把 Dialog 误关（见 SettingsDialog + 更新
+				// toast 的冲突）。调用方仍可传自己的 onPointerDownOutside 覆盖。
+				onPointerDownOutside={onPointerDownOutside ?? ((event) => event.preventDefault())}
 				className={cn(
 					"fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-hidden max-w-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
 					className,

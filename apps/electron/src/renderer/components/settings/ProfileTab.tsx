@@ -12,7 +12,7 @@ export default function ProfileTab() {
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
 			{/* Profile section */}
 			<div className="px-5 pt-4 pb-2">
-				<span className="text-[15px] font-semibold uppercase tracking-wide text-muted-foreground">
+				<span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
 					{t("profile.title")}
 				</span>
 			</div>
@@ -21,11 +21,11 @@ export default function ProfileTab() {
 			</div>
 
 			{/* Separator */}
-			<div className="border-t border-hairline mx-5" />
+			<div className="mx-5 border-t border-hairline" />
 
 			{/* Activity section */}
 			<div className="px-5 pt-4 pb-2">
-				<span className="text-[15px] font-semibold uppercase tracking-wide text-muted-foreground">
+				<span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
 					{t("profile.activity")}
 				</span>
 			</div>
