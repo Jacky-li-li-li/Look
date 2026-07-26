@@ -23,6 +23,13 @@ export type IpcResult<T extends object = Record<string, never>> =
 	| ({ success: true } & T)
 	| { success: false; error: string; errorCode?: string | null; errorStack?: string | null };
 
+/**
+ * Redirect target for Supabase account OAuth (GitHub/Google). Uses the app's
+ * custom protocol so the callback never resolves to a real servable page;
+ * the main process captures it via navigation events and a protocol handler.
+ */
+export const OAUTH_REDIRECT_URL = "look://auth/callback";
+
 export interface ProviderSettingsData {
 	providers: Array<{
 		id: string;

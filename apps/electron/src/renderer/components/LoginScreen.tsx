@@ -13,6 +13,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { writeAuthCache } from "../lib/authCache";
+import { OAUTH_REDIRECT_URL, parseOAuthCallback } from "../lib/oauth-callback";
 import { getSupabase, resetSupabaseClient } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
 import { PixelAgentAvatar } from "./PixelAgentAvatar";
@@ -52,6 +53,7 @@ function LoginForm({
 	setRememberMe,
 	handleLogin,
 	onGithubLogin,
+	onGoogleLogin,
 	onSwitchToForgot,
 	onSwitchToRegister,
 }: {
@@ -65,6 +67,7 @@ function LoginForm({
 	setRememberMe: (v: boolean) => void;
 	handleLogin: (e: React.FormEvent) => Promise<void>;
 	onGithubLogin: () => Promise<void>;
+	onGoogleLogin: () => Promise<void>;
 	onSwitchToForgot: () => void;
 	onSwitchToRegister: () => void;
 }) {
@@ -170,6 +173,37 @@ function LoginForm({
 					</svg>
 				)}
 				{t("auth.signInWithGithub")}
+			</Button>
+			<Button
+				type="button"
+				variant="outline"
+				onClick={onGoogleLogin}
+				disabled={loginSubmitting}
+				className="h-11 w-full gap-2 text-[13px] font-medium"
+			>
+				{loginSubmitting ? (
+					<Loader2 className="size-4 animate-spin" />
+				) : (
+					<svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+						<path
+							fill="#4285F4"
+							d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+						/>
+						<path
+							fill="#34A853"
+							d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+						/>
+						<path
+							fill="#FBBC05"
+							d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+						/>
+						<path
+							fill="#EA4335"
+							d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+						/>
+					</svg>
+				)}
+				{t("auth.signInWithGoogle")}
 			</Button>
 		</form>
 	);
@@ -378,25 +412,38 @@ export default function LoginScreen() {
 
 	// ── Login ──
 
-	async function handleGithubLogin() {
+	// Apply remember-me preference before creating the Supabase client so the
+	// session is persisted (or not) according to the user's choice.
+	function applyRememberMePreference() {
+		try {
+			if (!rememberMe) {
+				localStorage.setItem("look_remember_me", "0");
+			} else {
+				localStorage.removeItem("look_remember_me");
+			}
+		} catch {}
+		resetSupabaseClient();
+	}
+
+	async function runOAuthLogin(provider: "github" | "google") {
 		setError(null);
 		setSubmitting(true);
 		try {
+			applyRememberMePreference();
 			const supabase = await getSupabase();
 			if (!supabase) {
 				setError(t("auth.unavailable"));
 				return;
 			}
 
-			const redirectTo = `${window.location.origin}/auth/callback`;
 			const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
-				provider: "github",
-				options: { redirectTo },
+				provider,
+				options: { redirectTo: OAUTH_REDIRECT_URL, skipBrowserRedirect: true },
 			});
 			if (oauthErr || !data?.url) {
-				const msg = oauthErr?.message ?? "Failed to start GitHub login";
+				const msg = oauthErr?.message ?? t("auth.oauthFailed");
 				if (msg.includes("not enabled")) {
-					setError(t("auth.githubNotEnabled"));
+					setError(provider === "github" ? t("auth.githubNotEnabled") : t("auth.googleNotEnabled"));
 				} else {
 					setError(msg);
 				}
@@ -404,23 +451,36 @@ export default function LoginScreen() {
 			}
 
 			// Open the OAuth URL in a controlled browser window
-			const result = await api?.openOAuthUrl(data.url, redirectTo);
+			const result = await api?.openOAuthUrl(data.url, OAUTH_REDIRECT_URL);
 			if (!result || !result.success) {
-				setError(result && "error" in result ? result.error : "Authorization cancelled");
+				setError(result && "error" in result ? result.error : t("auth.oauthCancelled"));
 				return;
 			}
 
-			// Extract the code from the redirect URL and exchange it
-			const urlObj = new URL((result as { redirectUrl: string }).redirectUrl);
-			const code = urlObj.searchParams.get("code");
-			if (!code) {
-				setError("No authorization code received");
+			const callback = parseOAuthCallback((result as { redirectUrl: string }).redirectUrl);
+			let sessionData: { user: { id: string; email?: string } | null } | null = null;
+			let sessionErr: { message: string } | null = null;
+			if (callback.type === "code") {
+				const res = await supabase.auth.exchangeCodeForSession(callback.code);
+				sessionData = res.data;
+				sessionErr = res.error;
+			} else if (callback.type === "tokens") {
+				const res = await supabase.auth.setSession({
+					access_token: callback.accessToken,
+					refresh_token: callback.refreshToken,
+				});
+				sessionData = res.data;
+				sessionErr = res.error;
+			} else {
+				setError(
+					callback.error === "no-credentials" || callback.error === "invalid-url"
+						? t("auth.oauthNoCredentials")
+						: callback.error,
+				);
 				return;
 			}
-
-			const { data: sessionData, error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
-			if (exchangeErr || !sessionData?.user) {
-				setError(exchangeErr?.message ?? "Failed to complete GitHub login");
+			if (sessionErr || !sessionData?.user) {
+				setError(sessionErr?.message ?? t("auth.oauthFailed"));
 				return;
 			}
 
@@ -432,6 +492,9 @@ export default function LoginScreen() {
 			setSubmitting(false);
 		}
 	}
+
+	const handleGithubLogin = () => runOAuthLogin("github");
+	const handleGoogleLogin = () => runOAuthLogin("google");
 
 	async function handleLogin(e: React.FormEvent) {
 		e.preventDefault();
@@ -446,18 +509,7 @@ export default function LoginScreen() {
 		}
 
 		setSubmitting(true);
-		// Apply remember-me preference before creating the Supabase client so the
-		// sign-in session is persisted (or not) according to the user's choice.
-		if (!rememberMe) {
-			try {
-				localStorage.setItem("look_remember_me", "0");
-			} catch {}
-		} else {
-			try {
-				localStorage.removeItem("look_remember_me");
-			} catch {}
-		}
-		resetSupabaseClient();
+		applyRememberMePreference();
 		const supabase = await getSupabase();
 		if (!supabase) {
 			setError(t("auth.unavailable"));
@@ -597,6 +649,7 @@ export default function LoginScreen() {
 						setRememberMe={setRememberMe}
 						handleLogin={handleLogin}
 						onGithubLogin={handleGithubLogin}
+						onGoogleLogin={handleGoogleLogin}
 						loginSubmitting={submitting}
 						onSwitchToForgot={() => {
 							setMode("forgot");

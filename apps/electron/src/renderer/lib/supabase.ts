@@ -47,6 +47,11 @@ export function getSupabase(): Promise<SupabaseClient | null> {
 						persistSession,
 						autoRefreshToken: persistSession,
 						storage: persistSession ? undefined : globalThis.sessionStorage,
+						// OAuth redirects are handled manually (exchangeCodeForSession /
+						// setSession from the captured callback URL). Auto-detection would
+						// let a second app instance inside the OAuth window consume the
+						// callback instead.
+						detectSessionInUrl: false,
 					},
 				});
 				return client;

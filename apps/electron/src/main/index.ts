@@ -4,7 +4,7 @@
 
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
-import { app, BrowserWindow, Notification, session, shell } from "electron";
+import { app, BrowserWindow, Notification, protocol, session, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
@@ -24,6 +24,7 @@ import { SessionRuntimeManager } from "./session/runtime-manager.js";
 import { readThemeToneSync } from "./settings/store.js";
 import { initAppUpdater } from "./system/app-updater.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
+import { registerOAuthProtocol } from "./system/oauth-callback.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { closeViewerWindow } from "./viewer/viewer-window-manager.js";
@@ -50,6 +51,13 @@ function safeSendEvent(event: MainToRendererEvent): void {
 }
 
 const isDev = !app.isPackaged;
+
+// OAuth (Supabase GitHub/Google) redirects to look://auth/callback. Mark the
+// scheme standard + secure so https pages may navigate to it and Chromium
+// parses it with a real host/path. Must run before app ready.
+protocol.registerSchemesAsPrivileged([
+	{ scheme: "look", privileges: { standard: true, secure: true, supportFetchAPI: false } },
+]);
 
 if (isDev) {
 	// Vite dev server needs relaxed CSP for HMR; keep Electron's warning out of
@@ -508,6 +516,7 @@ async function syncBuiltinResources(): Promise<void> {
 app.whenReady().then(async () => {
 	setupProcessBoundary();
 	setupCsp();
+	registerOAuthProtocol();
 
 	// Set Dock icon on macOS (PNG supported since Electron 20+)
 	if (process.platform === "darwin" && app.dock) {
