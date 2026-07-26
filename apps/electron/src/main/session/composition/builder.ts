@@ -33,6 +33,7 @@ import { createMcpExtensionFactory } from "../../extensions/mcp-extension.js";
 import { createModelListExtensionFactory } from "../../extensions/model-extension.js";
 import { createPermissionExtensionFactory } from "../../extensions/permission-extension.js";
 import { createPlanExtensionFactory } from "../../extensions/plan-extension.js";
+import { createSkillInjectExtensionFactory } from "../../extensions/skill-inject-extension.js";
 import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "../../extensions/subagent/subagent-extension.js";
 import { MCPManager } from "../../mcp/manager.js";
@@ -287,6 +288,7 @@ export class CompositionBuilder {
 						resolvedProjectId,
 					),
 					createMcpExtensionFactory(sessionId, this.mcpManager!, cwd, resolvedProjectId),
+					createSkillInjectExtensionFactory(),
 				];
 			},
 		});
