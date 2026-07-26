@@ -627,6 +627,7 @@
     "passwordMinLength": "Password must be at least 6 characters",
     "unavailable": "Account sign-in is not configured for this build.",
     "alreadyRegistered": "This email is already registered. Please sign in instead.",
+    "githubNotEnabled": "GitHub login is not enabled. Contact your admin or enable it in Supabase Dashboard > Authentication > Providers > GitHub.",
     "checkEmailToConfirm": "Please check your email and click the confirmation link to activate your account.",
     "checkEmailTitle": "Check your email",
     "checkEmailDesc": "We sent a confirmation link to",

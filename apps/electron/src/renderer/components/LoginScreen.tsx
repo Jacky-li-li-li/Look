@@ -394,7 +394,12 @@ export default function LoginScreen() {
 				options: { redirectTo },
 			});
 			if (oauthErr || !data?.url) {
-				setError(oauthErr?.message ?? "Failed to start GitHub login");
+				const msg = oauthErr?.message ?? "Failed to start GitHub login";
+				if (msg.includes("not enabled")) {
+					setError(t("auth.githubNotEnabled"));
+				} else {
+					setError(msg);
+				}
 				return;
 			}
 

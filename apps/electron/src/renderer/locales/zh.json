@@ -627,6 +627,7 @@
     "passwordMinLength": "密码至少需要6个字符",
     "unavailable": "当前构建未配置账户登录。",
     "alreadyRegistered": "该邮箱已注册，请直接登录。",
+    "githubNotEnabled": "GitHub 登录未启用。请在 Supabase 后台 > Authentication > Providers > GitHub 中开启。",
     "checkEmailToConfirm": "请查看邮箱并点击确认链接来激活账户。",
     "checkEmailTitle": "查看邮箱",
     "checkEmailDesc": "确认链接已发送至",
