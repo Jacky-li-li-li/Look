@@ -120,8 +120,33 @@ function Strong({ className, ...props }: ElementProps<"strong">) {
 	return <strong {...withoutNode(props)} className={cn("look-md-strong", className)} />;
 }
 
-function Paragraph({ className, ...props }: ElementProps<"p">) {
-	return <p {...withoutNode(props)} className={cn("look-md-paragraph", className)} />;
+/** Minimal HAST element shape for node-tree inspection. */
+interface HastNode {
+	type?: string;
+	tagName?: string;
+	children?: Array<HastNode | { type: string; value?: string }>;
+}
+
+/**
+ * Check whether the HAST subtree contains an <img> element.
+ * Streamdown wraps every <img> in a block-level <div data-streamdown="image-wrapper">,
+ * so a paragraph containing an image MUST render as a <div> to avoid HTML nesting errors.
+ */
+function containsImgDescendant(node: unknown): boolean {
+	const n = node as HastNode | null | undefined;
+	if (!n || typeof n !== "object") return false;
+	if (n.tagName === "img") return true;
+	if (Array.isArray(n.children)) {
+		for (const child of n.children) {
+			if (containsImgDescendant(child)) return true;
+		}
+	}
+	return false;
+}
+
+function Paragraph({ className, node, ...props }: ElementProps<"p">) {
+	const Tag = containsImgDescendant(node) ? "div" : "p";
+	return <Tag {...props} className={cn("look-md-paragraph", className)} />;
 }
 
 function Blockquote({ className, ...props }: ElementProps<"blockquote">) {
