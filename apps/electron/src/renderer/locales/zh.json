@@ -588,6 +588,9 @@
   "tool": {
     "arguments": "参数",
     "result": "结果",
+    "subagentItems": "{{n}} 个子任务",
+    "subagentGroup": "{{n}} 个子代理",
+    "subagentBrief": "任务简报",
     "error": "错误",
     "noArgs": "无参数",
     "readSummary": "读取 {{path}}（{{lines}} 行, {{size}}）",

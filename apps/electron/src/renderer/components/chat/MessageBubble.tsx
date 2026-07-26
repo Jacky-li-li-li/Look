@@ -13,11 +13,14 @@ import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shar
 import { useAtomValue } from "jotai";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { segmentExecutionBlocks } from "../../lib/executionSegments";
 import { hashKey } from "../../lib/stableKey";
 import { userProfileAtom } from "../../store/authAtoms";
 import { AiAvatar } from "../AiAvatar";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import SkillAwareContent from "./SkillAwareContent";
+import { isSubagentTool } from "./SubagentArgsCards";
+import SubagentToolGroup from "./SubagentToolGroup";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
 
@@ -147,31 +150,17 @@ function ContentBlocks({
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
-	// Simple adjacent grouping: a group is just a run of consecutive
-	// (thinking | toolCall) blocks. Text blocks are always rendered
-	// standalone and never absorbed into a group, so user-written notes
-	// between tool calls stay visible at all times.
-	type Segment =
-		| { kind: "single"; block: TextContent | ThinkingContent | ImageContent | ToolCall; index: number }
-		| { kind: "group"; blocks: Array<ThinkingContent | ToolCall>; startIndex: number };
-
-	const segments: Segment[] = [];
-	let i = 0;
-	while (i < blocks.length) {
-		const b = blocks[i];
-		if (b.type === "thinking" || b.type === "toolCall") {
-			const startIndex = i;
-			const groupBlocks: Array<ThinkingContent | ToolCall> = [];
-			while (i < blocks.length && (blocks[i].type === "thinking" || blocks[i].type === "toolCall")) {
-				groupBlocks.push(blocks[i] as ThinkingContent | ToolCall);
-				i++;
-			}
-			segments.push({ kind: "group", blocks: groupBlocks, startIndex });
-		} else {
-			segments.push({ kind: "single", block: b, index: i });
-			i++;
-		}
-	}
+	// Adjacent grouping via shared segmenter: runs of consecutive
+	// (thinking | toolCall) blocks form a collapsible group, except
+	// subagent-class tool calls, which are carved out into their own
+	// always-visible card section (SubagentToolGroup). Text blocks are
+	// always rendered standalone and never absorbed into a group, so
+	// user-written notes between tool calls stay visible at all times.
+	const segments = segmentExecutionBlocks(
+		blocks,
+		(b) => b.type === "thinking" || b.type === "toolCall",
+		(b) => b.type === "toolCall" && isSubagentTool(b.name),
+	);
 
 	// Pre-compute a stable ToolCallViewModel per toolCall block. Without this memo
 	// the inline `{ ... }` literal at the ToolCallCard call site creates a new
@@ -269,12 +258,29 @@ function ContentBlocks({
 					return null;
 				}
 
+				if (seg.kind === "subagent") {
+					const calls = (seg.blocks as ToolCall[]).map((block) => {
+						const viewKey = block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`;
+						return (
+							toolCallViews.get(viewKey) ?? {
+								callId: block.id,
+								toolName: block.name,
+								args: block.arguments,
+								status: "pending" as const,
+								result: undefined,
+								isError: undefined,
+							}
+						);
+					});
+					return <SubagentToolGroup key={`subagents-${seg.startIndex}-${segIdx}`} calls={calls} />;
+				}
+
 				const groupEndIndex = seg.startIndex + seg.blocks.length;
 				const isActiveGroup = isStreaming && groupEndIndex === blocks.length;
 				return (
 					<CollapsibleExecutionGroup
 						key={`group-${seg.startIndex}-${segIdx}`}
-						blocks={seg.blocks}
+						blocks={seg.blocks as Array<ThinkingContent | ToolCall>}
 						toolExecutions={toolExecutions}
 						toolResultMap={toolResultMap}
 						isStreaming={isActiveGroup}
@@ -509,28 +515,13 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 	}
 
 	// Group consecutive thinking/toolcall blocks into CollapsibleExecutionGroup
-	// so the badge with rolling counts is shown during streaming, not after.
-	type StreamSegment =
-		| { kind: "single"; block: LookUiStreamBlock; index: number }
-		| { kind: "group"; blocks: LookUiStreamBlock[]; startIndex: number };
-
-	const segments: StreamSegment[] = [];
-	let i = 0;
-	while (i < blocks.length) {
-		const b = blocks[i];
-		if (b.kind === "thinking" || b.kind === "toolcall") {
-			const startIndex = i;
-			const groupBlocks: LookUiStreamBlock[] = [];
-			while (i < blocks.length && (blocks[i].kind === "thinking" || blocks[i].kind === "toolcall")) {
-				groupBlocks.push(blocks[i]);
-				i++;
-			}
-			segments.push({ kind: "group", blocks: groupBlocks, startIndex });
-		} else {
-			segments.push({ kind: "single", block: b, index: i });
-			i++;
-		}
-	}
+	// so the badge with rolling counts is shown during streaming, not after;
+	// subagent-class calls are carved out into their own card section.
+	const segments = segmentExecutionBlocks(
+		blocks,
+		(b) => b.kind === "thinking" || b.kind === "toolcall",
+		(b) => b.kind === "toolcall" && isSubagentTool(b.toolName ?? ""),
+	);
 
 	return (
 		<div className="flex flex-col gap-msg-block">
@@ -549,6 +540,28 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 							autoCollapse={autoCollapse}
 						/>
 					);
+				}
+
+				if (seg.kind === "subagent") {
+					const calls = seg.blocks.map((b) => {
+						const toolExecution = b.toolCallId ? toolExecutions[b.toolCallId] : undefined;
+						const status = toolExecution
+							? toolExecution.phase === "running"
+								? ("running" as const)
+								: toolExecution.isError
+									? ("error" as const)
+									: ("success" as const)
+							: ("running" as const);
+						return {
+							callId: b.toolCallId ?? "",
+							toolName: b.toolName ?? "unknown",
+							args: b.args ?? (b.argsRaw ? safelyParsePartialJson(b.argsRaw) : undefined) ?? {},
+							status,
+							result: toolExecution?.result ?? toolExecution?.partialResult,
+							isError: toolExecution?.isError,
+						};
+					});
+					return <SubagentToolGroup key={`subagents-${seg.startIndex}-${segIdx}`} calls={calls} />;
 				}
 
 				// Convert stream blocks to content blocks for CollapsibleExecutionGroup

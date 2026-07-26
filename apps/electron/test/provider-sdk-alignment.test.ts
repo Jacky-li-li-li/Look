@@ -1,23 +1,34 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-const sdkMocks = vi.hoisted(() => ({
-	completeSimple: vi.fn(),
-}));
-
-vi.mock("@earendil-works/pi-ai/compat", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@earendil-works/pi-ai/compat")>();
-	return {
-		...actual,
-		completeSimple: sdkMocks.completeSimple,
-	};
-});
-
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { testApiKey, testConfiguredProvider } from "../src/main/models/validator.js";
+
+/** 伪造一次成功的 completeSimple（触发 onResponse 并返回正常 assistant 消息） */
+function mockCompleteSimpleSuccess(provider: string, modelId: string) {
+	return vi.spyOn(ModelRuntime.prototype, "completeSimple").mockImplementation(async (_model, _context, options) => {
+		options?.onResponse?.({ status: 200, headers: {} });
+		return {
+			role: "assistant",
+			content: [{ type: "text", text: "OK" }],
+			api: "openai-completions",
+			provider,
+			model: modelId,
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: Date.now(),
+		} as never;
+	});
+}
 
 function writeModelsConfig(config: unknown): string {
 	const dir = mkdtempSync(join(tmpdir(), "look-provider-sdk-"));
@@ -59,7 +70,7 @@ function customProviderConfig() {
 
 describe("pi SDK provider alignment", () => {
 	afterEach(() => {
-		sdkMocks.completeSimple.mockReset();
+		vi.restoreAllMocks();
 	});
 
 	it("uses ModelRegistry custom providers as available SDK models", async () => {
@@ -86,74 +97,37 @@ describe("pi SDK provider alignment", () => {
 		expect(registry.getAvailable().map((m) => `${m.provider}/${m.id}`)).toContain("minimax-cn/MiniMax-M3");
 	});
 
-	it("passes SDK-resolved provider and model headers to completeSimple", async () => {
+	it("resolves the custom provider model and completes through ModelRuntime", async () => {
 		const modelsPath = writeModelsConfig(customProviderConfig());
 		const mr = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath });
-		const registry = new ModelRegistry(mr);
-		sdkMocks.completeSimple.mockImplementation(async (_model, _context, options) => {
-			options?.onResponse?.({ status: 200, headers: {} });
-			return {
-				role: "assistant",
-				content: [{ type: "text", text: "OK" }],
-				api: "openai-completions",
-				provider: "sdk-test",
-				model: "sdk-test-model",
-				usage: {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
-					totalTokens: 0,
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-				},
-				stopReason: "stop",
-				timestamp: Date.now(),
-			};
-		});
+		const completeSimpleSpy = mockCompleteSimpleSuccess("sdk-test", "sdk-test-model");
 
-		const result = await testConfiguredProvider(registry, "sdk-test");
+		const result = await testConfiguredProvider(mr, "sdk-test");
 
 		expect(result).toEqual({ ok: true, status: 200 });
-		expect(sdkMocks.completeSimple).toHaveBeenCalledTimes(1);
-		const [, , options] = sdkMocks.completeSimple.mock.calls[0];
-		expect(options.apiKey).toBe("literal-test-key");
-		expect(options.headers).toMatchObject({
-			"x-provider-header": "provider",
-			"x-model-header": "model",
-			Authorization: "Bearer literal-test-key",
-		});
+		expect(completeSimpleSpy).toHaveBeenCalledTimes(1);
+		const [model] = completeSimpleSpy.mock.calls[0];
+		// validator 通过 modelRuntime.getModels(provider) 取该 provider 的第一个模型；
+		// apiKey/headers 由 ModelRuntime.prepareRequest 内部解析（SDK 职责，不在此断言）
+		expect(model.provider).toBe("sdk-test");
+		expect(model.id).toBe("sdk-test-model");
 	});
 
-	it("tests candidate API keys through SDK streaming", async () => {
-		sdkMocks.completeSimple.mockImplementation(async (_model, _context, options) => {
-			options?.onResponse?.({ status: 200, headers: {} });
-			return {
-				role: "assistant",
-				content: [{ type: "text", text: "OK" }],
-				api: "openai-completions",
-				provider: "openai",
-				model: "gpt-test",
-				usage: {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
-					totalTokens: 0,
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-				},
-				stopReason: "stop",
-				timestamp: Date.now(),
-			};
-		});
+	it("tests candidate API keys through ModelRuntime", async () => {
+		const completeSimpleSpy = mockCompleteSimpleSuccess("openai", "gpt-test");
+		const modifySpy = vi.spyOn(InMemoryCredentialStore.prototype, "modify");
 
 		const result = await testApiKey("openai", "sk-candidate");
 
 		expect(result).toEqual({ ok: true, status: 200 });
-		expect(sdkMocks.completeSimple).toHaveBeenCalledTimes(1);
-		const [model, context, options] = sdkMocks.completeSimple.mock.calls[0];
+		expect(completeSimpleSpy).toHaveBeenCalledTimes(1);
+		const [model, context] = completeSimpleSpy.mock.calls[0];
 		expect(model.provider).toBe("openai");
 		expect(context.messages[0].content).toEqual("Hi");
-		expect(options.apiKey).toBe("sk-candidate");
+		// 候选 key 注入 InMemoryCredentialStore（Look 侧职责；后续鉴权由 SDK 完成）
+		expect(modifySpy).toHaveBeenCalledWith("openai", expect.any(Function));
+		const credential = await modifySpy.mock.calls[0][1](undefined as never);
+		expect(credential).toEqual({ type: "api_key", key: "sk-candidate" });
 	});
 });
 

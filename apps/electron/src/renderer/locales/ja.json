@@ -588,6 +588,9 @@
 	"tool": {
 		"arguments": "引数",
 		"result": "結果",
+		"subagentItems": "{{n}} 件のサブタスク",
+		"subagentGroup": "{{n}} 件のサブエージェント",
+		"subagentBrief": "タスクブリーフ",
 		"error": "エラー",
 		"noArgs": "引数なし",
 		"readSummary": "{{path}} を読み取り（{{lines}} 行, {{size}}）",

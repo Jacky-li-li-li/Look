@@ -588,6 +588,9 @@
   "tool": {
     "arguments": "Arguments",
     "result": "Result",
+    "subagentItems": "{{n}} sub-tasks",
+    "subagentGroup": "{{n}} subagents",
+    "subagentBrief": "Task brief",
     "error": "Error",
     "noArgs": "no args",
     "readSummary": "Read {{path}} ({{lines}} lines, {{size}})",
