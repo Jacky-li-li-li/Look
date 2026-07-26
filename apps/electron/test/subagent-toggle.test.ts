@@ -133,11 +133,16 @@ describe("SubAgent toggle — API-level behavior", () => {
 		expect(manager.isSubagentEnabled("session-x")).toBe(true);
 	});
 
-	it("7. enabling only adds subagent and does not restore all configured tools", async () => {
-		const fake = installFakeRuntime(manager, "fake-toggle-session", ["read"], ["read", "write", "bash", "subagent"]);
+	it("7. enabling only adds subagent tools and does not restore all configured tools", async () => {
+		const fake = installFakeRuntime(
+			manager,
+			"fake-toggle-session",
+			["read"],
+			["read", "write", "bash", "subagent", "subagent_parallel", "subagent_chain"],
+		);
 		try {
 			await manager.setSubagentEnabled("fake-toggle-session", true);
-			expect(fake.getActiveTools()).toEqual(["read", "subagent"]);
+			expect(fake.getActiveTools()).toEqual(["read", "subagent", "subagent_parallel", "subagent_chain"]);
 		} finally {
 			fake.cleanup();
 		}
@@ -162,12 +167,12 @@ describe("SubAgent toggle — API-level behavior", () => {
 		}
 	});
 
-	it("9. disabling only removes subagent from the current active tools", async () => {
+	it("9. disabling only removes subagent tools from the current active tools", async () => {
 		const fake = installFakeRuntime(
 			manager,
 			"fake-disable-session",
-			["read", "custom-tool", "subagent"],
-			["read", "write", "custom-tool", "subagent"],
+			["read", "custom-tool", "subagent", "subagent_parallel", "subagent_chain"],
+			["read", "write", "custom-tool", "subagent", "subagent_parallel", "subagent_chain"],
 		);
 		try {
 			await manager.setSubagentEnabled("fake-disable-session", false);

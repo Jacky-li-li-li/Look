@@ -71,7 +71,11 @@ describe("SessionSubagentService", () => {
 		});
 
 		service.setDefaultEnabled(false);
-		const session = makeSession("s1", ["read", "subagent"], ["read", "subagent"]);
+		const session = makeSession(
+			"s1",
+			["read", "subagent", "subagent_parallel", "subagent_chain"],
+			["read", "subagent", "subagent_parallel", "subagent_chain"],
+		);
 		service.applyDefaultOnBind("s1", session);
 		expect(session.setActiveToolsByName).toHaveBeenCalledWith(["read"]);
 	});
@@ -102,7 +106,7 @@ describe("SessionSubagentService", () => {
 			tools: ["nonexistent-tool"],
 		};
 
-		await expect(service.runSubSession("parent", agent, "task", undefined)).rejects.toThrow(
+		await expect(service.runSubSession("parent", agent, "task", undefined, "测试标题")).rejects.toThrow(
 			'Agent "test" allowlist contains no valid tools',
 		);
 		expect(childSession.setActiveToolsByName).not.toHaveBeenCalled();
@@ -128,8 +132,33 @@ describe("SessionSubagentService", () => {
 			systemPrompt: "",
 		};
 
-		await expect(service.runSubSession("parent", agent, "task", undefined)).rejects.toThrow(
+		await expect(service.runSubSession("parent", agent, "task", undefined, "测试标题")).rejects.toThrow(
 			"Parent session parent is not live",
+		);
+	});
+
+	it("runSubSession throws when title is empty", async () => {
+		const service = new SessionSubagentService({
+			host: makeHost(),
+			modelRegistry: { find: vi.fn() } as unknown as ModelRegistry,
+			subAgentRegistry: { getParent: vi.fn(() => null), register: vi.fn() } as unknown as SubAgentRegistry,
+			subAgentRuntimeService: {} as unknown as SubAgentRuntimeService,
+			permissionService: {} as unknown as IPermissionService,
+			planService: {} as unknown as IPlanService,
+			userSettings: { getAll: vi.fn(() => ({})) } as unknown as UserSettingsStore,
+			agentDefinitionService: {} as unknown as AgentDefinitionService,
+			maxSubagentDepth: 5,
+			maxNameLength: 80,
+		});
+
+		const agent: AgentConfig = {
+			name: "test",
+			description: "",
+			systemPrompt: "",
+		};
+
+		await expect(service.runSubSession("parent", agent, "task", undefined, "   ")).rejects.toThrow(
+			"Subagent title is required and must not be empty.",
 		);
 	});
 });

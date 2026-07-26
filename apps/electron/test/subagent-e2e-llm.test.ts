@@ -11,7 +11,8 @@
 // CI 中由 .github/workflows/nightly-e2e.yml 每日定时触发。
 // ============================================================
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getWorkspaceSubsessionsDir } from "@shared/look-storage";
 import { describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
@@ -100,6 +101,26 @@ describe.skipIf(!RUN)("SubAgent real-LLM E2E", () => {
 				expect(
 					events.some((e) => e.startsWith("completed:")),
 					"应收到 session:subagent-completed 事件",
+				).toBe(true);
+
+				// 断言 4：子会话名采用 LLM 提供的 title，格式为 Agent：<title>
+				// （新 schema 下 title 为必填；SDK 校验会驳回缺 title 的调用让 LLM 重试）
+				const names: string[] = [];
+				for (const file of newFiles) {
+					for (const line of readFileSync(join(subsessionsDir, file), "utf-8").split("\n")) {
+						if (!line.includes("session_info")) continue;
+						try {
+							const entry = JSON.parse(line) as { type?: string; name?: string };
+							if (entry.type === "session_info" && typeof entry.name === "string") names.push(entry.name);
+						} catch {
+							// 忽略非 JSON 行
+						}
+					}
+				}
+				console.log(`[E2E] subsession names: ${names.join(" | ") || "(none)"}`);
+				expect(
+					names.some((n) => n.startsWith("Agent：") && n.length > "Agent：".length),
+					"子会话名应为 Agent：<title> 格式",
 				).toBe(true);
 			} finally {
 				// 清理：销毁父会话会级联销毁子会话（destroySubSessions）

@@ -15,6 +15,7 @@ import type { AgentInfo, MainToRendererEvent } from "@look/shared/types";
 import type { AgentDefinitionService } from "../agents/definition-service.js";
 import type { IPermissionService, IPlanService, ISessionScope } from "../core/contracts.js";
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
+import { SUBAGENT_TOOL_NAMES } from "../extensions/subagent/types.js";
 import type { ProjectService } from "../projects/project-service.js";
 import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../settings/store.js";
@@ -107,11 +108,13 @@ export class SessionSubagentService {
 		}
 		if (enabled) {
 			const configured = new Set(session.getAllTools().map((tool) => tool.name));
-			if (!configured.has("subagent")) return;
 			const active = session.getActiveToolNames();
-			if (!active.includes("subagent")) session.setActiveToolsByName([...active, "subagent"]);
+			const missing = SUBAGENT_TOOL_NAMES.filter((name) => configured.has(name) && !active.includes(name));
+			if (missing.length > 0) session.setActiveToolsByName([...active, ...missing]);
 		} else {
-			session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
+			session.setActiveToolsByName(
+				session.getActiveToolNames().filter((name) => !(SUBAGENT_TOOL_NAMES as readonly string[]).includes(name)),
+			);
 		}
 	}
 
@@ -119,7 +122,9 @@ export class SessionSubagentService {
 	applyDefaultOnBind(sessionId: string, session: AgentSession): void {
 		if (this.defaultEnabled) return;
 		this.enabledBySession.set(sessionId, false);
-		session.setActiveToolsByName(session.getActiveToolNames().filter((name) => name !== "subagent"));
+		session.setActiveToolsByName(
+			session.getActiveToolNames().filter((name) => !(SUBAGENT_TOOL_NAMES as readonly string[]).includes(name)),
+		);
 	}
 
 	/** Clean up per-session override when a runtime is disposed. */
@@ -160,13 +165,19 @@ export class SessionSubagentService {
 		agent: AgentConfig,
 		task: string,
 		signal: AbortSignal | undefined,
+		title: string,
 		onUpdate?: (progress: SubagentProgress) => void,
-		title?: string,
 	): Promise<SubagentResult> {
 		// Fail fast if the signal was already aborted before we start.
 		if (signal?.aborted) {
 			const reason = signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason ?? "Aborted"));
 			throw reason;
+		}
+
+		// title 必填：子会话名固定为 Agent：<title>，不再自动拼接回退名
+		const trimmedTitle = title.trim();
+		if (!trimmedTitle) {
+			throw new Error("Subagent title is required and must not be empty.");
 		}
 
 		const parentManaged = this.deps.host.getManagedRuntime(parentSessionId);
@@ -204,10 +215,7 @@ export class SessionSubagentService {
 		const session = managed.runtime.session;
 		const childSessionId = session.sessionId;
 
-		const rawName = title?.trim()
-			? title.trim()
-			: `${agent.title || agent.name} · ${task.replace(/\s+/g, " ").trim().slice(0, 48)}`;
-		const displayName = `Agent：${rawName}`.slice(0, this.deps.maxNameLength);
+		const displayName = `Agent：${trimmedTitle}`.slice(0, this.deps.maxNameLength);
 		session.setSessionName(displayName);
 
 		// 继承父会话权限：定时任务等后台会话的父会话已设为 always，

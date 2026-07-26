@@ -1,9 +1,18 @@
 // ============================================================
 // SubAgent Extension — 扩展入口（ExtensionFactory）
 //
-// 注册 `subagent` 工具到 pi SDK。LLM 调用时按 mode 分发到
-// agent-runner 的 single / parallel / chain 执行引擎，每个子会话
-// 通过 SubagentHost.runSubSession 创建完整 Look 子会话。
+// 注册三个工具到 pi SDK（每种执行模式一个）：
+//   - subagent:          single  单个子会话 {agent, task, title}
+//   - subagent_parallel: 并发多个子会话 {tasks: [{agent, task, title}]}
+//   - subagent_chain:    顺序子会话链 {chain: [{agent, task, title}]}，
+//                        task 可含 {previous} 占位符
+//
+// 为什么不合并为一个 union schema 工具：主流 provider（DeepSeek/
+// OpenAI 兼容、Anthropic）要求工具参数顶层必须是 type: "object"，
+// 顶层 anyOf（union）会被直接 400 拒绝。拆成三个独立 object schema
+// 后，每个模式的 title 都能做到 schema 级必填。
+//
+// title 为必填：子会话名固定为 Agent：<title>（见 SessionSubagentService）。
 //
 // 注入点：SessionRuntimeManager.buildExtensionFactories()，与
 // permission / plan 扩展同等的 ExtensionFactory 机制。
@@ -18,6 +27,7 @@ import { Type } from "typebox";
 import { discoverAgents, formatAgentList } from "./agent-discovery.js";
 import { runChainAgents, runParallelAgents, runSingleAgent } from "./agent-runner.js";
 import {
+	type AgentScope,
 	formatUsage,
 	type SubagentDetails,
 	type SubagentHost,
@@ -25,16 +35,19 @@ import {
 	type SubagentResult,
 } from "./types.js";
 
+const TITLE_DESCRIPTION =
+	"Short display title for this sub-session (a few words naming the task); becomes the session name (Agent：<title>) in the sidebar";
+
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task to delegate to the agent" }),
-	title: Type.Optional(Type.String({ description: "Short display title for this sub-session (shown in sidebar)" })),
+	title: Type.String({ description: TITLE_DESCRIPTION }),
 });
 
 const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior step output" }),
-	title: Type.Optional(Type.String({ description: "Short display title for this sub-session" })),
+	title: Type.String({ description: TITLE_DESCRIPTION }),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -42,11 +55,23 @@ const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
 	default: "both",
 });
 
-const SubagentParams = Type.Object({
-	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (single mode)" })),
-	task: Type.Optional(Type.String({ description: "Task to delegate (single mode)" })),
-	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
-	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
+const AGENT_SCOPE_DESCRIPTION =
+	'agentScope: "both" (default, user + project), "user" (~/.look/agents), or "project" (~/.look/projects/<id>/agents).';
+
+const SingleParams = Type.Object({
+	agent: Type.String({ description: "Name of the agent to invoke" }),
+	task: Type.String({ description: "Task to delegate to the agent" }),
+	title: Type.String({ description: TITLE_DESCRIPTION }),
+	agentScope: Type.Optional(AgentScopeSchema),
+});
+
+const ParallelParams = Type.Object({
+	tasks: Type.Array(TaskItem, { description: "Array of {agent, task, title} to execute in parallel" }),
+	agentScope: Type.Optional(AgentScopeSchema),
+});
+
+const ChainParams = Type.Object({
+	chain: Type.Array(ChainItem, { description: "Array of {agent, task, title} to execute sequentially" }),
 	agentScope: Type.Optional(AgentScopeSchema),
 });
 
@@ -61,6 +86,11 @@ function summarizeSingle(result: SubagentResult): string {
 	const usage = formatUsage(result.usage, result.model);
 	return `### [${result.agentName}] ${tag}${usage ? `\n${usage}` : ""}\n\n${result.finalOutput}`;
 }
+
+/** 工具 onUpdate 回调的结构化类型（与 SDK 的 AgentToolResult 结构兼容） */
+type ToolUpdateFn =
+	| ((update: { content: Array<{ type: "text"; text: string }>; details: SubagentDetails }) => void)
+	| undefined;
 
 /**
  * 创建 SubAgent 扩展工厂。
@@ -80,154 +110,197 @@ export async function createSubagentExtensionFactory(
 	const agentListText = formatAgentList(discovery.agents);
 
 	return (api) => {
-		api.registerTool<typeof SubagentParams, SubagentDetails>({
+		/** 子会话进度 → 父会话工具流式更新 */
+		const forwardProgress =
+			(onUpdate: ToolUpdateFn) =>
+			(p: SubagentProgress): void => {
+				onUpdate?.({
+					content: [
+						{
+							type: "text",
+							text: `[${p.agentName}] ${p.status}${p.partialOutput ? `: ${p.partialOutput.slice(0, 200)}` : ""}`,
+						},
+					],
+					details: { mode: "parallel", agentScope: "both", results: [] },
+				});
+			};
+
+		const disabledResult = (mode: SubagentDetails["mode"]) => ({
+			content: [{ type: "text" as const, text: "SubAgent is disabled for this session." }],
+			details: { mode, agentScope: "both" as AgentScope, results: [] },
+		});
+
+		const makeDetails =
+			(mode: SubagentDetails["mode"], agentScope: AgentScope) =>
+			(results: SubagentResult[]): SubagentDetails => ({
+				mode,
+				agentScope,
+				results,
+			});
+
+		// ── single：单个子会话 ──
+		api.registerTool<typeof SingleParams, SubagentDetails>({
 			name: "subagent",
 			label: "Subagent",
 			description: [
-				"Delegate tasks to specialized subagents with isolated context windows.",
-				"Each subagent runs as a full Look session (visible nested under this session in the sidebar) and returns its final output.",
-				"Modes: single ({agent, task}), parallel ({tasks:[{agent,task}]}), chain ({chain:[{agent,task}]} with {previous} placeholder).",
-				'agentScope: "both" (default, user + project), "user" (~/.look/agents), or "project" (~/.look/projects/<id>/agents).',
+				"Delegate a single task to a specialized subagent with an isolated context window.",
+				"The subagent runs as a full Look session (visible nested under this session in the sidebar) and returns its final output.",
+				'"title" is required: a few words naming the task; it becomes the session name (Agent：<title>) in the sidebar.',
+				AGENT_SCOPE_DESCRIPTION,
 				`Available agents: ${agentListText}.`,
-				"Use this for complex, parallelizable, or specialized work that benefits from isolated context.",
+				"For multiple independent tasks use subagent_parallel; for sequential steps use subagent_chain.",
 			].join(" "),
 			promptSnippet: "Delegate a task to a specialized subagent",
-			parameters: SubagentParams,
+			parameters: SingleParams,
 			executionMode: "parallel",
 
 			async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-				// Stage 2: Agent 开关关闭时工具理论上已被移除（setActiveToolsByName），
-				// 这里再做一次防御性检查。
-				if (!host.isSubagentEnabled(sessionId)) {
-					return {
-						content: [{ type: "text", text: "SubAgent is disabled for this session." }],
-						details: { mode: "single", agentScope: "both", results: [] },
-					};
-				}
+				if (!host.isSubagentEnabled(sessionId)) return disabledResult("single");
 
 				const agentScope = params.agentScope ?? "both";
-				const runtimeDiscovery = await discoverAgents(projectId, agentScope);
-				const agents = runtimeDiscovery.agents;
+				const { agents } = await discoverAgents(projectId, agentScope);
 
-				const hasChain = (params.chain?.length ?? 0) > 0;
-				const hasTasks = (params.tasks?.length ?? 0) > 0;
-				const hasSingle = Boolean(params.agent && params.task);
-				const modeCount = Number(hasChain) + Number(hasTasks) + Number(hasSingle);
-
-				const makeDetails =
-					(mode: "single" | "parallel" | "chain") =>
-					(results: SubagentResult[]): SubagentDetails => ({
-						mode,
-						agentScope,
-						results,
-					});
-
-				const makeProgress =
-					(_parentSessionId: string): ((p: SubagentProgress) => void) =>
-					(p) => {
-						onUpdate?.({
-							content: [
-								{
-									type: "text",
-									text: `[${p.agentName}] ${p.status}${p.partialOutput ? `: ${p.partialOutput.slice(0, 200)}` : ""}`,
-								},
-							],
-							details: makeDetails("parallel")([]),
-						});
-					};
-
-				if (modeCount !== 1) {
+				const result = await runSingleAgent(
+					host,
+					sessionId,
+					agents,
+					params.agent,
+					params.task,
+					signal,
+					params.title,
+					forwardProgress(onUpdate),
+				);
+				if (isFailedResult(result)) {
 					return {
-						content: [
-							{
-								type: "text",
-								text: `Invalid parameters. Provide exactly one mode (single / parallel / chain).\nAvailable agents: ${formatAgentList(agents)}`,
-							},
-						],
-						details: makeDetails("single")([]),
+						content: [{ type: "text", text: `Agent ${result.status}: ${result.finalOutput}` }],
+						details: makeDetails("single", agentScope)([result]),
+						isError: true,
 					};
 				}
-
-				// ── chain 模式 ──
-				if (params.chain && params.chain.length > 0) {
-					const { results, stoppedAtStep } = await runChainAgents(
-						host,
-						sessionId,
-						agents,
-						params.chain,
-						signal,
-						onUpdate ? makeProgress(sessionId) : undefined,
-					);
-					if (stoppedAtStep !== undefined) {
-						const failed = results[results.length - 1];
-						return {
-							content: [
-								{
-									type: "text",
-									text: `Chain stopped at step ${stoppedAtStep} (${failed.agentName}): ${failed.finalOutput}`,
-								},
-							],
-							details: makeDetails("chain")(results),
-							isError: true,
-						};
-					}
-					const last = results[results.length - 1];
-					return {
-						content: [{ type: "text", text: last.finalOutput || "(no output)" }],
-						details: makeDetails("chain")(results),
-					};
-				}
-
-				// ── parallel 模式 ──
-				if (params.tasks && params.tasks.length > 0) {
-					const results = await runParallelAgents(
-						host,
-						sessionId,
-						agents,
-						params.tasks,
-						signal,
-						onUpdate ? makeProgress(sessionId) : undefined,
-					);
-					const successCount = results.filter((r) => !isFailedResult(r)).length;
-					const summaries = results.map((r) => summarizeSingle(r));
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n---\n\n")}`,
-							},
-						],
-						details: makeDetails("parallel")(results),
-					};
-				}
-
-				// ── single 模式 ──
-				if (params.agent && params.task) {
-					const result = await runSingleAgent(
-						host,
-						sessionId,
-						agents,
-						params.agent,
-						params.task,
-						signal,
-						onUpdate ? makeProgress(sessionId) : undefined,
-					);
-					if (isFailedResult(result)) {
-						return {
-							content: [{ type: "text", text: `Agent ${result.status}: ${result.finalOutput}` }],
-							details: makeDetails("single")([result]),
-							isError: true,
-						};
-					}
-					return {
-						content: [{ type: "text", text: result.finalOutput || "(no output)" }],
-						details: makeDetails("single")([result]),
-					};
-				}
-
 				return {
-					content: [{ type: "text", text: `Invalid parameters. Available agents: ${formatAgentList(agents)}` }],
-					details: makeDetails("single")([]),
+					content: [{ type: "text", text: result.finalOutput || "(no output)" }],
+					details: makeDetails("single", agentScope)([result]),
+				};
+			},
+		});
+
+		// ── parallel：并发多个子会话 ──
+		api.registerTool<typeof ParallelParams, SubagentDetails>({
+			name: "subagent_parallel",
+			label: "Subagent Parallel",
+			description: [
+				"Run multiple subagent tasks in parallel, each with an isolated context window.",
+				"Each subagent runs as a full Look session (visible nested under this session in the sidebar) and returns its final output.",
+				'Each item\'s "title" is required: a few words naming the task; it becomes the session name (Agent：<title>) in the sidebar.',
+				AGENT_SCOPE_DESCRIPTION,
+				`Available agents: ${agentListText}.`,
+				"Use this for complex, parallelizable work; for a single task use subagent; for sequential steps use subagent_chain.",
+			].join(" "),
+			promptSnippet: "Run multiple subagent tasks in parallel",
+			parameters: ParallelParams,
+			executionMode: "parallel",
+
+			async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+				if (!host.isSubagentEnabled(sessionId)) return disabledResult("parallel");
+
+				const agentScope = params.agentScope ?? "both";
+				const { agents } = await discoverAgents(projectId, agentScope);
+
+				if (params.tasks.length === 0) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Invalid parameters. Provide at least one task.\nAvailable agents: ${formatAgentList(agents)}`,
+							},
+						],
+						details: makeDetails("parallel", agentScope)([]),
+						isError: true,
+					};
+				}
+
+				const results = await runParallelAgents(
+					host,
+					sessionId,
+					agents,
+					params.tasks,
+					signal,
+					forwardProgress(onUpdate),
+				);
+				const successCount = results.filter((r) => !isFailedResult(r)).length;
+				const summaries = results.map((r) => summarizeSingle(r));
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n---\n\n")}`,
+						},
+					],
+					details: makeDetails("parallel", agentScope)(results),
+				};
+			},
+		});
+
+		// ── chain：顺序子会话链（{previous} 占位符） ──
+		api.registerTool<typeof ChainParams, SubagentDetails>({
+			name: "subagent_chain",
+			label: "Subagent Chain",
+			description: [
+				"Run subagent steps sequentially; each step's task may contain a {previous} placeholder that is replaced with the prior step's output.",
+				"Each subagent runs as a full Look session (visible nested under this session in the sidebar) and returns its final output.",
+				'Each item\'s "title" is required: a few words naming the task; it becomes the session name (Agent：<title>) in the sidebar.',
+				AGENT_SCOPE_DESCRIPTION,
+				`Available agents: ${agentListText}.`,
+				"The chain stops at the first failed step. For independent parallel work use subagent_parallel; for a single task use subagent.",
+			].join(" "),
+			promptSnippet: "Run subagent steps sequentially with {previous} chaining",
+			parameters: ChainParams,
+			executionMode: "parallel",
+
+			async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+				if (!host.isSubagentEnabled(sessionId)) return disabledResult("chain");
+
+				const agentScope = params.agentScope ?? "both";
+				const { agents } = await discoverAgents(projectId, agentScope);
+
+				if (params.chain.length === 0) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Invalid parameters. Provide at least one chain step.\nAvailable agents: ${formatAgentList(agents)}`,
+							},
+						],
+						details: makeDetails("chain", agentScope)([]),
+						isError: true,
+					};
+				}
+
+				const { results, stoppedAtStep } = await runChainAgents(
+					host,
+					sessionId,
+					agents,
+					params.chain,
+					signal,
+					forwardProgress(onUpdate),
+				);
+				if (stoppedAtStep !== undefined) {
+					const failed = results[results.length - 1];
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Chain stopped at step ${stoppedAtStep} (${failed.agentName}): ${failed.finalOutput}`,
+							},
+						],
+						details: makeDetails("chain", agentScope)(results),
+						isError: true,
+					};
+				}
+				const last = results[results.length - 1];
+				return {
+					content: [{ type: "text", text: last.finalOutput || "(no output)" }],
+					details: makeDetails("chain", agentScope)(results),
 				};
 			},
 		});

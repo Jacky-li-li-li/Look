@@ -93,7 +93,7 @@ export interface SubagentResult {
 	agentSource: AgentSource;
 	task: string;
 	status: SubagentStatus;
-	/** 子会话显示标题（来自 taskItem.title 或自动拼接） */
+	/** 预留字段：子会话显示标题。当前未填充，展示统一走 agentName（即 Agent：<title>） */
 	title?: string;
 	/** 子会话最后一条 assistant 文本输出 */
 	finalOutput: string;
@@ -129,16 +129,24 @@ export interface SubagentDetails {
 export interface SubagentTaskItem {
 	agent: string;
 	task: string;
-	/** 可选：子会话显示标题（不填则自动拼接 agentName + task 摘要） */
-	title?: string;
+	/** 子会话显示标题（必填，侧边栏会话名为 Agent：<title>） */
+	title: string;
 }
 
 /** chain 模式的步骤项（task 可含 {previous} 占位符） */
 export interface SubagentChainItem {
 	agent: string;
 	task: string;
-	title?: string;
+	/** 子会话显示标题（必填，侧边栏会话名为 Agent：<title>） */
+	title: string;
 }
+
+/**
+ * SubAgent 扩展注册的全部工具名（single / parallel / chain 各一个）。
+ * 拆三个工具而非 union schema 单一工具的原因见 subagent-extension.ts 头部注释。
+ * 开关（enable/disable）按此列表整体增删。
+ */
+export const SUBAGENT_TOOL_NAMES = ["subagent", "subagent_parallel", "subagent_chain"] as const;
 
 /**
  * SubAgent 扩展宿主接口——由 SessionRuntimeManager 实现。
@@ -157,8 +165,8 @@ export interface SubagentHost {
 		agent: AgentConfig,
 		task: string,
 		signal: AbortSignal | undefined,
+		title: string,
 		onUpdate?: (progress: SubagentProgress) => void,
-		title?: string,
 	): Promise<SubagentResult>;
 	/** Agent 开关状态（Stage 2 持久化；Stage 1 恒为 true） */
 	isSubagentEnabled(sessionId: string): boolean;

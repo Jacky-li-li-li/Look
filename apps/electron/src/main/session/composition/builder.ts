@@ -281,8 +281,8 @@ export class CompositionBuilder {
 									result.agents = result.agents.filter((agent) => enabled.includes(agent.name));
 								return result;
 							},
-							runSubSession: (parentId, agent, task, signal, onUpdate, title) =>
-								this.sessionSubagentService!.runSubSession(parentId, agent, task, signal, onUpdate, title),
+							runSubSession: (parentId, agent, task, signal, title, onUpdate) =>
+								this.sessionSubagentService!.runSubSession(parentId, agent, task, signal, title, onUpdate),
 							isSubagentEnabled: (id) => this.sessionSubagentService!.isEnabled(id),
 						},
 						resolvedProjectId,

@@ -326,7 +326,8 @@ function pickToolIcon(toolName: string, className?: string): React.ReactElement 
 	if (["find", "glob"].includes(name)) return <FileSearch className={cls} />;
 	if (["webfetch", "websearch", "curl", "fetch", "web"].includes(name)) return <Globe className={cls} />;
 	if (["think", "reason", "brain"].includes(name)) return <Brain className={cls} />;
-	if (["agent", "subagent", "delegate_agent", "delegate_agents"].includes(name)) return <Bot className={cls} />;
+	if (["agent", "subagent", "subagent_parallel", "subagent_chain", "delegate_agent", "delegate_agents"].includes(name))
+		return <Bot className={cls} />;
 	return <Code2 className={cls} />;
 }
 

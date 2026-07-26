@@ -12,42 +12,48 @@ import { zeroUsage } from "../src/main/extensions/subagent/types";
 const BUILT_IN_AGENTS = ["scout", "planner", "reviewer", "worker"];
 
 /** 构造 mock 宿主：runSubSession 返回确定性结果，便于断言分发逻辑。 */
-function createMockHost(captured: { calls: Array<{ agent: string; task: string }> }): SubagentHost {
+function createMockHost(captured: { calls: Array<{ agent: string; task: string; title: string }> }): SubagentHost {
 	return {
 		discoverAgents: (cwd, scope) => discoverAgents(cwd, scope),
 		isSubagentEnabled: () => true,
-		runSubSession: vi.fn(async (_parent, agent: AgentConfig, task: string): Promise<SubagentResult> => {
-			captured.calls.push({ agent: agent.name, task });
-			return {
-				sessionId: `child-${agent.name}`,
-				agentName: agent.name,
-				agentSource: agent.source,
-				task,
-				status: "completed",
-				finalOutput: `<output of ${agent.name}>`,
-				usage: zeroUsage(),
-			};
-		}),
+		runSubSession: vi.fn(
+			async (_parent, agent: AgentConfig, task: string, _signal, title: string): Promise<SubagentResult> => {
+				captured.calls.push({ agent: agent.name, task, title });
+				return {
+					sessionId: `child-${agent.name}`,
+					agentName: agent.name,
+					agentSource: agent.source,
+					task,
+					status: "completed",
+					finalOutput: `<output of ${agent.name}>`,
+					usage: zeroUsage(),
+				};
+			},
+		),
 	};
 }
 
-/** 捕获工厂注册的工具。 */
-async function captureRegisteredTool(host: SubagentHost, cwd: string) {
-	let registered: { name: string; execute: (...args: unknown[]) => Promise<unknown> } | null = null;
+/** 捕获工厂注册的全部工具（single / parallel / chain 各一个）。 */
+async function captureRegisteredTools(host: SubagentHost, cwd: string) {
+	const registered = new Map<string, { name: string; execute: (...args: unknown[]) => Promise<unknown> }>();
 	const api = {
-		registerTool: (tool: unknown) =>
-			(registered = tool as { name: string; execute: (...args: unknown[]) => Promise<unknown> }),
+		registerTool: (tool: unknown) => {
+			const t = tool as { name: string; execute: (...args: unknown[]) => Promise<unknown> };
+			registered.set(t.name, t);
+		},
 	};
 	const factory = await createSubagentExtensionFactory("parent-1", host, cwd);
 	factory(api as Parameters<typeof factory>[0]);
-	if (!registered) throw new Error("subagent tool was not registered");
+	for (const name of ["subagent", "subagent_parallel", "subagent_chain"]) {
+		if (!registered.has(name)) throw new Error(`tool ${name} was not registered`);
+	}
 	return registered;
 }
 
 describe("SubAgent extension — runtime dispatch", () => {
 	const cwd = process.cwd();
-	const captured = { calls: [] as Array<{ agent: string; task: string }> };
-	let tool: { name: string; execute: (...args: unknown[]) => Promise<unknown> };
+	const captured = { calls: [] as Array<{ agent: string; task: string; title: string }> };
+	let tools: Map<string, { name: string; execute: (...args: unknown[]) => Promise<unknown> }>;
 	beforeAll(() => {
 		// 内置 Agent 平时由应用启动时从 default-agents/ 同步到
 		// <LOOK_HOME>/agents/marketplace/；测试的 LOOK_HOME 是每文件临时目录
@@ -57,11 +63,11 @@ describe("SubAgent extension — runtime dispatch", () => {
 	beforeEach(async () => {
 		captured.calls = [];
 		const host = createMockHost(captured);
-		tool = await captureRegisteredTool(host, cwd);
+		tools = await captureRegisteredTools(host, cwd);
 	});
 
-	it("registers a tool named subagent", () => {
-		expect(tool.name).toBe("subagent");
+	it("registers subagent, subagent_parallel and subagent_chain tools", () => {
+		expect([...tools.keys()].sort()).toEqual(["subagent", "subagent_chain", "subagent_parallel"]);
 	});
 
 	it("discovers the built-in agents from ~/.look/agents", async () => {
@@ -72,11 +78,15 @@ describe("SubAgent extension — runtime dispatch", () => {
 		}
 	});
 
-	it("dispatches single mode to one runSubSession call", async () => {
-		const result = await tool.execute("call-1", { agent: "scout", task: "find auth code" }, undefined, undefined, {
-			cwd,
-		});
-		expect(captured.calls).toEqual([{ agent: "scout", task: "find auth code" }]);
+	it("dispatches single mode to one runSubSession call and passes the title through", async () => {
+		// 注意：测试直接调 execute，绕过了 SDK 的 validateToolArguments；
+		// title 的 schema 级必填由 SDK 校验层保证（object schema + required title）。
+		const result = await tools
+			.get("subagent")!
+			.execute("call-1", { agent: "scout", task: "find auth code", title: "认证代码分析" }, undefined, undefined, {
+				cwd,
+			});
+		expect(captured.calls).toEqual([{ agent: "scout", task: "find auth code", title: "认证代码分析" }]);
 		expect(result.details.mode).toBe("single");
 		expect(result.details.results).toHaveLength(1);
 		expect(result.content[0].text).toContain("<output of scout>");
@@ -84,12 +94,12 @@ describe("SubAgent extension — runtime dispatch", () => {
 	});
 
 	it("dispatches parallel mode to concurrent runSubSession calls", async () => {
-		const result = await tool.execute(
+		const result = await tools.get("subagent_parallel")!.execute(
 			"call-2",
 			{
 				tasks: [
-					{ agent: "scout", task: "frontend auth" },
-					{ agent: "scout", task: "backend auth" },
+					{ agent: "scout", task: "frontend auth", title: "前端认证" },
+					{ agent: "scout", task: "backend auth", title: "后端认证" },
 				],
 			},
 			undefined,
@@ -104,12 +114,12 @@ describe("SubAgent extension — runtime dispatch", () => {
 	});
 
 	it("dispatches chain mode sequentially with {previous} substitution", async () => {
-		const result = await tool.execute(
+		const result = await tools.get("subagent_chain")!.execute(
 			"call-3",
 			{
 				chain: [
-					{ agent: "scout", task: "find code {previous}" },
-					{ agent: "planner", task: "plan based on: {previous}" },
+					{ agent: "scout", task: "find code {previous}", title: "找代码" },
+					{ agent: "planner", task: "plan based on: {previous}", title: "做计划" },
 				],
 			},
 			undefined,
@@ -118,8 +128,8 @@ describe("SubAgent extension — runtime dispatch", () => {
 		);
 		// 第一步 {previous} 替换为空字符串；第二步替换为第一步输出
 		expect(captured.calls).toEqual([
-			{ agent: "scout", task: "find code " },
-			{ agent: "planner", task: "plan based on: <output of scout>" },
+			{ agent: "scout", task: "find code ", title: "找代码" },
+			{ agent: "planner", task: "plan based on: <output of scout>", title: "做计划" },
 		]);
 		expect(result.details.mode).toBe("chain");
 		// chain 返回最后一步输出
@@ -127,22 +137,12 @@ describe("SubAgent extension — runtime dispatch", () => {
 	});
 
 	it("reports an error for an unknown agent", async () => {
-		const result = await tool.execute("call-4", { agent: "nope", task: "x" }, undefined, undefined, { cwd });
+		const result = await tools
+			.get("subagent")!
+			.execute("call-4", { agent: "nope", task: "x", title: "不存在" }, undefined, undefined, { cwd });
 		expect(captured.calls).toHaveLength(0);
 		expect(result.isError).toBe(true);
 		expect(result.content[0].text).toContain("Unknown agent");
-	});
-
-	it("rejects ambiguous params (more than one mode)", async () => {
-		const result = await tool.execute(
-			"call-5",
-			{ agent: "scout", task: "x", tasks: [{ agent: "scout", task: "y" }] },
-			undefined,
-			undefined,
-			{ cwd },
-		);
-		expect(captured.calls).toHaveLength(0);
-		expect(result.content[0].text).toContain("exactly one mode");
 	});
 });
 
