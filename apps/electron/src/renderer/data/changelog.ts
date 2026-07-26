@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.3.10",
+		date: "2026-07-26",
+		items: [
+			{
+				zh: "消息队列修复：忙碌时 Enter 为打断式引导，Ctrl+Enter 为排队追加；每条排队消息可撤回或立即插入",
+				en: "Message queue fix: Enter while busy sends a steering interrupt, Ctrl+Enter queues a follow-up; each queued message can be recalled or inserted immediately",
+				ja: "メッセージキュー修正：ビジー中は Enter で割り込み誘導、Ctrl+Enter でフォローアップキュー；各キューイングメッセージは撤回または即時挿入可能",
+			},
+		],
+	},
+	{
 		version: "1.3.9",
 		date: "2026-07-26",
 		items: [
