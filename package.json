@@ -12,7 +12,7 @@
 		"node": ">=20.19.0"
 	},
 	"scripts": {
-		"postinstall": "npm run copy-file-icons --workspace=@look/electron",
+		"postinstall": "npx simple-git-hooks && npm run copy-file-icons --workspace=@look/electron",
 		"dev": "npm run dev --workspace=@look/electron",
 		"copy-file-icons": "npm run copy-file-icons --workspace=@look/electron",
 		"dev:renderer": "npm run dev:renderer --workspace=@look/electron",
@@ -29,5 +29,11 @@
 		"lint:fix": "biome check --write --unsafe apps/electron/src packages",
 		"format": "biome format --write apps/electron/src apps/electron/test packages",
 		"check": "npm run lint && npm run typecheck --workspace=@look/shared && npm run typecheck --workspace=@look/electron && npm test"
+	},
+	"simple-git-hooks": {
+		"pre-commit": "npx biome check --no-errors-on-unmatched --files-ignore-unknown=true --staged"
+	},
+	"devDependencies": {
+		"simple-git-hooks": "^2.13.1"
 	}
 }
