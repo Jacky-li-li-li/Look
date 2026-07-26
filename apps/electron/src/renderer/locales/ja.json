@@ -611,6 +611,8 @@
 		"loginDesc": "アカウントでサインイン",
 		"registerDesc": "新しいアカウントを作成",
 		"forgotDesc": "パスワードをリセット",
+		"signInWithGithub": "GitHub でサインイン",
+		"or": "または",
 		"emailPlaceholder": "メールアドレス",
 		"passwordPlaceholder": "パスワード",
 		"setYourPassword": "パスワードを設定",

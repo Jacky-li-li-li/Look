@@ -289,6 +289,9 @@ const api: LookAPI = {
 		}),
 
 	// ---- User Profile ----
+	openOAuthUrl: (url, redirectTo) =>
+		ipcRenderer.invoke("look:invoke", { type: "auth:open-oauth-url", url, redirectTo }),
+
 	getUserProfile: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),
 	updateUserProfile: (patch) => ipcRenderer.invoke("look:invoke", { type: "user-profile:update", patch }),
 	resetUserProfile: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:reset" }),

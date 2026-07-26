@@ -208,6 +208,8 @@ export interface LookAPI {
 	// ---- Skills：Skill 开关 ----
 	setSkillEnabled(name: string, enabled: boolean): Promise<{ success: boolean; error?: string }>;
 	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
+	/** Open an OAuth URL in a controlled browser window, returns the final redirect URL. */
+	openOAuthUrl(url: string, redirectTo: string): Promise<IpcResult<{ redirectUrl: string }>>;
 	getUserProfile(): Promise<IpcResult<{ profile: UserProfile | null }>>;
 	updateUserProfile(patch: unknown): Promise<IpcResult>;
 	resetUserProfile(): Promise<IpcResult>;

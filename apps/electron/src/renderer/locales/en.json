@@ -611,6 +611,8 @@
     "loginDesc": "Sign in with your account",
     "registerDesc": "Create a new account",
     "forgotDesc": "Reset your password",
+    "signInWithGithub": "Sign in with GitHub",
+    "or": "or",
     "emailPlaceholder": "Email",
     "passwordPlaceholder": "Password",
     "setYourPassword": "Set your password",

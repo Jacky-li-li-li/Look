@@ -532,6 +532,7 @@ export type RendererToMainEvent =
 	// Renderer responds to an OAuth login prompt from the main process
 	| { type: "login:prompt-respond"; promptId: string; value: string }
 	| { type: "login:prompt-cancel"; promptId: string }
+	| { type: "auth:open-oauth-url"; url: string; redirectTo: string }
 	| { type: "settings:provider-login"; provider: string }
 	| { type: "settings:provider-logout"; provider: string }
 	| { type: "settings:general:get" }

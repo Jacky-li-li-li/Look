@@ -611,6 +611,8 @@
     "loginDesc": "使用账户登录",
     "registerDesc": "创建新账户",
     "forgotDesc": "重置密码",
+    "signInWithGithub": "使用 GitHub 登录",
+    "or": "或",
     "emailPlaceholder": "邮箱",
     "passwordPlaceholder": "密码",
     "setYourPassword": "设置你的密码",

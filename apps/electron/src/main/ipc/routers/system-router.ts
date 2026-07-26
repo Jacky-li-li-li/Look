@@ -2,10 +2,10 @@
 // System router — dialogs, shell, user profile, usage
 // ============================================================
 
-import { dialog } from "electron";
+import { BrowserWindow, dialog } from "electron";
 import { getUsage } from "../../system/usage-service.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "../../system/user-profile.js";
-import { guardObject, guardOptionalBoolean, guardOptionalString, guardPath } from "../guards.js";
+import { guardObject, guardOptionalBoolean, guardOptionalString, guardPath, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
 export const systemRouter: IpcRouter = (ctx, register) => {
@@ -79,6 +79,47 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 	register("user-profile:logout", async () => {
 		resetUserProfile();
 		return { success: true };
+	});
+
+	register("auth:open-oauth-url", async (data) => {
+		guardString(data.url, "url");
+		guardString(data.redirectTo, "redirectTo");
+
+		return await new Promise<{ success: boolean; redirectUrl?: string; error?: string }>((resolve) => {
+			const authWindow = new BrowserWindow({
+				width: 800,
+				height: 700,
+				title: "Authorize Look",
+				autoHideMenuBar: true,
+				webPreferences: { sandbox: true },
+			});
+
+			const redirectMatcher = (url: string) => url.startsWith(data.redirectTo);
+
+			const handleNavigation = (_event: Electron.Event, url: string) => {
+				if (redirectMatcher(url)) {
+					authWindow.destroy();
+					resolve({ success: true, redirectUrl: url });
+				}
+			};
+
+			authWindow.webContents.on("will-redirect", handleNavigation);
+			authWindow.webContents.on("will-navigate", handleNavigation);
+
+			// Fallback: detect redirect via navigation end
+			authWindow.webContents.on("did-navigate", (_event, url) => {
+				if (redirectMatcher(url)) {
+					authWindow.destroy();
+					resolve({ success: true, redirectUrl: url });
+				}
+			});
+
+			authWindow.on("closed", () => {
+				resolve({ success: false, error: "Authorization window closed" });
+			});
+
+			authWindow.loadURL(data.url);
+		});
 	});
 
 	register("usage:get", async () => {
