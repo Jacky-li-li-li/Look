@@ -30,8 +30,16 @@ export class SkillManagementService {
 			activeRuntime?.services.settingsManager.getSkillPaths() ?? this.options.globalSettingsManager.getSkillPaths();
 		const loaded = activeRuntime?.services.resourceLoader.getSkills() ?? { skills: [], diagnostics: [] };
 		const rawSkills = loaded.skills.length > 0 ? loaded.skills : discoverSkillsFromPaths(skillPaths);
+		// Deduplicate by name: the same skill can be discovered from multiple paths,
+		// and the pi SDK may also return duplicates across its scan roots.
+		const seen = new Set<string>();
+		const deduped = rawSkills.filter((s) => {
+			if (seen.has(s.name)) return false;
+			seen.add(s.name);
+			return true;
+		});
 		return {
-			skills: rawSkills.map((skill) => ({
+			skills: deduped.map((skill) => ({
 				...skill,
 				category: isBuiltinSkillPath(skill) ? ("builtin" as const) : ("mine" as const),
 			})),

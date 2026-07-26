@@ -21,8 +21,8 @@
 // ============================================================
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { type AssistantMessage, completeSimple } from "@earendil-works/pi-ai/compat";
-import type { AgentSession, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import { extractUserMessageText } from "../session/event-translator.js";
 
@@ -158,7 +158,7 @@ export function cleanTitle(raw: string): string | null {
 }
 
 export interface AutoTitleServiceDeps {
-	modelRegistry: ModelRegistry;
+	modelRuntime: ModelRuntime;
 	/** Read fresh inside generate, never cache — lets settings changes apply immediately. */
 	getUserSettings: () => { autoTitleModel: string | null };
 }
@@ -196,7 +196,7 @@ export class AutoTitleService {
 			const [provider, ...rest] = preferred.split("/");
 			const id = rest.join("/");
 			if (provider && id) {
-				const found = this.deps.modelRegistry.find(provider, id);
+				const found = this.deps.modelRuntime.getModel(provider, id);
 				if (found) return found;
 				debugLog("preferred not found, falling back to session model", preferred);
 			}
@@ -240,12 +240,6 @@ export class AutoTitleService {
 			return null;
 		}
 
-		const auth = await this.deps.modelRegistry.getApiKeyAndHeaders(model);
-		if (!auth.ok) {
-			debugLog("SKIP: auth failed", auth.error);
-			return null;
-		}
-
 		const controller = new AbortController();
 		this.controllers.set(sessionId, controller);
 		this.inProgress.add(sessionId);
@@ -257,15 +251,14 @@ export class AutoTitleService {
 			// the provider", which disables thinking for all providers
 			// (deepseek / o1 / etc.). This is intentional — title generation
 			// is a ≤15-char task that does not benefit from reasoning.
-			const result: AssistantMessage = await completeSimple(
+			// ModelRuntime.completeSimple handles auth internally.
+			const result: AssistantMessage = await this.deps.modelRuntime.completeSimple(
 				model,
 				{
 					systemPrompt: TITLE_SYSTEM_PROMPT,
 					messages: [{ role: "user", content: text, timestamp: Date.now() }],
 				},
 				{
-					apiKey: auth.apiKey,
-					headers: auth.headers,
 					maxTokens: 80,
 					timeoutMs: TITLE_GEN_TIMEOUT_MS,
 					maxRetries: TITLE_GEN_MAX_RETRIES,

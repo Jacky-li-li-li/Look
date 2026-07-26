@@ -39,6 +39,7 @@ export function isBuiltinSkillPath(s: { filePath?: string; baseDir?: string }): 
 
 /** Recursively scan directories for SKILL.md files and parse frontmatter. */
 export function discoverSkillsFromPaths(paths: string[]): DiscoveredSkill[] {
+	const seen = new Set<string>();
 	const results: DiscoveredSkill[] = [];
 
 	for (const dir of paths) {
@@ -67,6 +68,8 @@ export function discoverSkillsFromPaths(paths: string[]): DiscoveredSkill[] {
 							else if (key === "description") description = value;
 						}
 					}
+					if (seen.has(name)) continue;
+					seen.add(name);
 					results.push({ name, description, filePath, baseDir, source: "path" });
 				} catch {
 					// Skip unreadable files

@@ -5,18 +5,12 @@
 // auth/header rules. Validation runs a tiny request through the same
 // pi SDK path as real agent traffic:
 //
-//   ModelRegistry -> getApiKeyAndHeaders(model) -> completeSimple()
+//   ModelRuntime.completeSimple() — handles auth internally
 // ============================================================
 
+import type { Api, AssistantMessage, Model, ProviderResponse } from "@earendil-works/pi-ai";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import {
-	type Api,
-	type AssistantMessage,
-	completeSimple,
-	type Model,
-	type ProviderResponse,
-} from "@earendil-works/pi-ai/compat";
-import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 export type TestResult =
 	| { ok: true; status: number; skipped?: false }
@@ -26,8 +20,9 @@ export type TestResult =
 const SELF_TEST_PROMPT = "Hi";
 const SELF_TEST_TIMEOUT_MS = 10_000;
 
-function firstProviderModel(modelRegistry: ModelRegistry, provider: string): Model<Api> | undefined {
-	return modelRegistry.getAll().find((m) => m.provider === provider);
+function firstProviderModel(modelRuntime: ModelRuntime, provider: string): Model<Api> | undefined {
+	const models = modelRuntime.getModels(provider);
+	return models.length > 0 ? models[0] : undefined;
 }
 
 function normalizeError(error: unknown): string {
@@ -40,28 +35,21 @@ function normalizeError(error: unknown): string {
 	}
 }
 
-async function runSdkSelfTest(modelRegistry: ModelRegistry, provider: string): Promise<TestResult> {
-	const model = firstProviderModel(modelRegistry, provider);
+async function runSdkSelfTest(modelRuntime: ModelRuntime, provider: string): Promise<TestResult> {
+	const model = firstProviderModel(modelRuntime, provider);
 	if (!model) {
 		return { skipped: true, reason: `No SDK model configured for "${provider}"` };
-	}
-
-	const auth = await modelRegistry.getApiKeyAndHeaders(model);
-	if (!auth.ok) {
-		return { ok: false, status: 0, error: auth.error };
 	}
 
 	let status = 0;
 	let message: AssistantMessage;
 	try {
-		message = await completeSimple(
+		message = await modelRuntime.completeSimple(
 			model,
 			{
 				messages: [{ role: "user", content: SELF_TEST_PROMPT, timestamp: Date.now() }],
 			},
 			{
-				apiKey: auth.apiKey,
-				headers: auth.headers,
 				maxTokens: 1,
 				timeoutMs: SELF_TEST_TIMEOUT_MS,
 				maxRetries: 0,
@@ -71,11 +59,11 @@ async function runSdkSelfTest(modelRegistry: ModelRegistry, provider: string): P
 			},
 		);
 	} catch (error) {
-		const message = normalizeError(error);
-		if (message.includes("No API provider registered for api:")) {
-			return { skipped: true, reason: message };
+		const errMsg = normalizeError(error);
+		if (errMsg.includes("No API provider registered for api:")) {
+			return { skipped: true, reason: errMsg };
 		}
-		return { ok: false, status, error: message };
+		return { ok: false, status, error: errMsg };
 	}
 
 	if (message.stopReason === "error") {
@@ -100,8 +88,7 @@ export async function testApiKey(provider: string, key: string): Promise<TestRes
 	const credentials = new InMemoryCredentialStore();
 	await credentials.modify(provider, async () => ({ type: "api_key" as const, key: trimmed }));
 	const modelRuntime = await ModelRuntime.create({ credentials });
-	const modelRegistry = new ModelRegistry(modelRuntime);
-	return runSdkSelfTest(modelRegistry, provider);
+	return runSdkSelfTest(modelRuntime, provider);
 }
 
 /**
@@ -109,6 +96,6 @@ export async function testApiKey(provider: string, key: string): Promise<TestRes
  * for environment, OAuth, and models.json-backed auth sources; Look
  * does not read process.env or provider-specific config itself.
  */
-export async function testConfiguredProvider(modelRegistry: ModelRegistry, provider: string): Promise<TestResult> {
-	return runSdkSelfTest(modelRegistry, provider);
+export async function testConfiguredProvider(modelRuntime: ModelRuntime, provider: string): Promise<TestResult> {
+	return runSdkSelfTest(modelRuntime, provider);
 }

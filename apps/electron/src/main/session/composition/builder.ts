@@ -239,7 +239,7 @@ export class CompositionBuilder {
 		this.customProviders.load();
 
 		this.autoTitleService = new AutoTitleService({
-			modelRegistry: this.modelRegistry,
+			modelRuntime: this.modelRuntime,
 			getUserSettings: () => this.userSettings!.getAll(),
 		});
 	}

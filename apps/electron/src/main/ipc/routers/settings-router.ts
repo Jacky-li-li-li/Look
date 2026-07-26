@@ -2,9 +2,9 @@
 // Settings router — API keys, custom providers, general settings, prompts
 // ============================================================
 
+import type { ProviderResponse } from "@earendil-works/pi-ai";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { completeSimple, type ProviderResponse } from "@earendil-works/pi-ai/compat";
-import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
 import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
@@ -50,7 +50,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 
 	register("settings:test-env-key", async (data) => {
 		const _provider = guardProvider(data.provider);
-		const result = await testConfiguredProvider(ctx.model.registry, _provider);
+		const result = await testConfiguredProvider(ctx.model.runtime, _provider);
 		return { success: true, result };
 	});
 
@@ -211,7 +211,6 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 			await memCredentials.modify(input.name, async () => ({ type: "api_key" as const, key: input.apiKey }));
 		}
 		const memRuntime = await ModelRuntime.create({ credentials: memCredentials });
-		const memRegistry = new ModelRegistry(memRuntime);
 		try {
 			memRuntime.registerProvider(input.name, toProviderConfig(input));
 		} catch (e) {
@@ -228,21 +227,15 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 			input.models.map(async (m) => {
 				const start = Date.now();
 				try {
-					const model = memRegistry.find(input.name, m.id);
+					const model = memRuntime.getModel(input.name, m.id);
 					if (!model) {
 						return { modelId: m.id, ok: false, error: "model not found in in-memory registry" };
 					}
-					const auth = await memRegistry.getApiKeyAndHeaders(model);
-					if (!auth.ok) {
-						return { modelId: m.id, ok: false, error: `auth: ${auth.error}` };
-					}
 					let status = 0;
-					const message = await completeSimple(
+					const message = await memRuntime.completeSimple(
 						model,
 						{ messages: [{ role: "user", content: "Hi", timestamp: Date.now() }] },
 						{
-							apiKey: auth.apiKey,
-							headers: auth.headers,
 							maxTokens: 1,
 							timeoutMs: 10_000,
 							maxRetries: 0,
