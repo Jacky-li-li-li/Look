@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.3.12",
+		date: "2026-07-27",
+		items: [
+			{
+				zh: "修复应用常驻后台（关闭窗口未退出）时检测不到新版本的问题：现在打开窗口或系统唤醒后会自动补检，更新提示更及时可靠",
+				en: "Fixed missed update detection while the app stayed in the background (window closed without quitting): it now re-checks when a window opens or the system wakes, so update prompts arrive reliably",
+				ja: "アプリがバックグラウンド常駐（ウィンドウを閉じただけ）の間に新バージョンを検出できない問題を修正：ウィンドウ表示やシステム復帰時に自動で再確認し、更新通知が確実に届くようになりました",
+			},
+		],
+	},
+	{
 		version: "1.3.11",
 		date: "2026-07-27",
 		items: [
