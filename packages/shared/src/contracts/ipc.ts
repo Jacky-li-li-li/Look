@@ -63,6 +63,9 @@ export interface LookAPI {
 	/** User home directory, injected by preload. Used to shorten absolute
 	 *  paths to ~/… in tool-call summaries. Empty string if unavailable. */
 	homedir: string;
+	/** Host platform (`process.platform`), injected by preload. Used for
+	 *  macOS-only chrome adjustments (hiddenInset traffic-light clearance). */
+	platform: string;
 	send(event: RendererToMainEvent): void;
 	invoke(event: RendererToMainEvent): Promise<unknown>;
 	onEvent(callback: (event: MainToRendererEvent) => void): () => void;

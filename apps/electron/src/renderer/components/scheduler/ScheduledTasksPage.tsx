@@ -1,12 +1,12 @@
 import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import type { ProjectInfo, ScheduledTask, ScheduledTaskRunLog } from "@shared/types";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { ArrowLeft, Plus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { activeAgentIdAtom, showScheduledTasksAtom } from "../../store/atoms";
+import { activeAgentIdAtom, showScheduledTasksAtom, sidebarCollapsedAtom } from "../../store/atoms";
 import { ExecutionHistory } from "./ExecutionHistory";
 import {
 	buildScheduledTaskInput,
@@ -31,6 +31,7 @@ export default function ScheduledTasksPage() {
 	const { t } = useTranslation();
 	const setShowScheduledTasks = useSetAtom(showScheduledTasksAtom);
 	const setActiveAgentId = useSetAtom(activeAgentIdAtom);
+	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const [tasks, setTasks] = useState<ScheduledTask[]>([]);
 	const [projects, setProjects] = useState<ProjectInfo[]>([]);
 	const [models, setModels] = useState<ModelChoice[]>([]);
@@ -260,7 +261,12 @@ export default function ScheduledTasksPage() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<header className="flex h-12 items-center justify-between gap-4 border-b border-hairline px-5">
+			<header
+				className={cn(
+					"app-drag flex h-12 items-center justify-between gap-4 border-b border-hairline px-5",
+					sidebarCollapsed && "mac-titlebar-pad",
+				)}
+			>
 				<div className="flex min-w-0 items-center gap-3">
 					<Button
 						variant="outline"

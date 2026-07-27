@@ -5,12 +5,13 @@
 // 顶栏已合并为 Tab 切换栏 + 返回按钮 一行。
 // ============================================================
 
+import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { ArrowLeft, Bot, WandSparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { agentSquareTabAtom } from "../../store/agentDefinitionsAtoms";
-import { showAgentSquareAtom } from "../../store/atoms";
+import { showAgentSquareAtom, sidebarCollapsedAtom } from "../../store/atoms";
 import SkillsPanel from "./SkillsPanel";
 import SubAgentPanel from "./SubAgentPanel";
 
@@ -18,11 +19,17 @@ export default function AgentSquare() {
 	const { t } = useTranslation();
 	const [tab, setTab] = useAtom(agentSquareTabAtom);
 	const [, setShowSquare] = useAtom(showAgentSquareAtom);
+	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 
 	return (
 		<div className="flex h-full flex-col">
 			{/* Tab 切换栏 + 返回按钮 */}
-			<div className="flex items-center gap-2 px-2 h-12 border-b border-hairline">
+			<div
+				className={cn(
+					"app-drag flex items-center gap-2 px-2 h-12 border-b border-hairline",
+					sidebarCollapsed && "mac-titlebar-pad",
+				)}
+			>
 				<Button
 					variant="outline"
 					size="sm"

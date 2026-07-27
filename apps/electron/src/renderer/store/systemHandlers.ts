@@ -7,6 +7,7 @@ import {
 	mcpStatusVersionAtom,
 	usageDataAtom,
 	usageVersionAtom,
+	windowFullscreenAtom,
 } from "./atoms";
 
 export function handleSystemEvent(event: MainToRendererEvent): boolean {
@@ -61,6 +62,11 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 				percent: event.percent,
 				error: event.error,
 			});
+			return true;
+		}
+
+		case "window:fullscreen-changed": {
+			appStore.set(windowFullscreenAtom, event.fullscreen);
 			return true;
 		}
 

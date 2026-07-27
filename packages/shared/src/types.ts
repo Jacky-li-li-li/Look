@@ -435,7 +435,10 @@ export type MainToRendererEvent =
 			/** 下载进度 0-100（downloading 时存在） */
 			percent?: number;
 			error?: string;
-	  };
+	  }
+	// ---- 窗口状态（main → renderer） ----
+	// macOS 全屏时隐藏红绿灯按钮，渲染端据此收回 hiddenInset 留白
+	| { type: "window:fullscreen-changed"; fullscreen: boolean };
 
 /** Custom provider model input (matches CustomProviderModelInput in custom-providers-store.ts) */
 export interface CustomProviderModelInput {

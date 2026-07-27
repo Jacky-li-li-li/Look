@@ -16,6 +16,11 @@ const api: LookAPI = {
 	// sandboxed preload we can't require("os"), but process.env is available.
 	homedir: process.env.HOME || process.env.USERPROFILE || "",
 
+	// Host platform, exposed as a sync constant so the renderer can apply
+	// macOS-only chrome adjustments (e.g. traffic-light clearance with
+	// titleBarStyle: "hiddenInset").
+	platform: process.platform,
+
 	send: (event) => ipcRenderer.send("look:event", event),
 	invoke: (event) => ipcRenderer.invoke("look:invoke", event),
 

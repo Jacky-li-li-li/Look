@@ -2017,3 +2017,25 @@ html[style*="--theme-transitioning:1"] *::after {
 	/* biome-ignore lint/complexity/noImportantStyles: 必须覆盖 shiki codeToHtml 输出的内联亮色样式 */
 	color: var(--shiki-dark) !important;
 }
+
+/* ── 窗口拖拽区(macOS hiddenInset 标题栏)──
+	 主进程 titleBarStyle:"hiddenInset" 隐藏原生标题栏后,顶部各 header
+	 通过 .app-drag 承担窗口拖拽;交互元素(按钮/链接/tab)必须排除,
+	 否则会吞掉点击与 dnd-kit 拖拽排序。非 macOS 平台无 hiddenInset,
+	 app-region 不生效,类名加上也无副作用。 */
+.app-drag {
+	-webkit-app-region: drag;
+}
+.app-drag :is(button, input, a, [role="button"]) {
+	-webkit-app-region: no-drag;
+}
+.app-no-drag,
+.app-no-drag * {
+	-webkit-app-region: no-drag;
+}
+
+/* macOS hiddenInset 红绿灯留白：仅 macOS 且非全屏时生效。
+	 全屏时系统隐藏红绿灯,留白自动收回,内容靠左。 */
+html[data-platform="darwin"]:not([data-fullscreen="true"]) .mac-titlebar-pad {
+	padding-left: 78px;
+}

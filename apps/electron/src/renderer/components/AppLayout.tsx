@@ -13,6 +13,7 @@ import {
 	rightPanelCollapsedAtom,
 	type SettingsTab,
 	sidebarCollapsedAtom,
+	windowFullscreenAtom,
 } from "../store/atoms";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatPanel from "./chat/ChatPanel";
@@ -127,6 +128,7 @@ function AppLayout({
 	const appReadyPhase = useAtomValue(appReadyPhaseAtom);
 	const setSidebarCollapsed = useSetAtom(sidebarCollapsedAtom);
 	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
+	const windowFullscreen = useAtomValue(windowFullscreenAtom);
 
 	// 首帧渲染后标记 data-app-ready，CSS 可据此禁用初始加载过渡
 	useEffect(() => {
@@ -137,6 +139,14 @@ function AppLayout({
 		});
 		return () => cancelAnimationFrame(raf);
 	}, []);
+
+	// 平台与全屏状态同步到 <html> dataset：mac-titlebar-pad 等 CSS 据此
+	// 在 macOS 非全屏时为红绿灯按钮留白（全屏时红绿灯隐藏，留白收回）。
+	useEffect(() => {
+		const el = document.documentElement;
+		el.dataset.platform = window.look?.platform ?? "";
+		el.dataset.fullscreen = String(windowFullscreen);
+	}, [windowFullscreen]);
 
 	// 窄窗口自动折叠侧边栏：优先折叠右栏，再折叠左栏
 	useEffect(() => {

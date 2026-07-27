@@ -209,8 +209,10 @@ export default function SessionSheetBar({
 	return (
 		<header
 			className={cn(
-				"flex h-12 shrink-0 items-center gap-2 border-b border-hairline",
+				"app-drag flex h-12 shrink-0 items-center gap-2 border-b border-hairline",
 				rightPanelCollapsed ? "px-2" : "pl-2",
+				// 侧栏折叠时红绿灯会压到展开按钮，macOS 非全屏时让出左侧位置
+				sidebarCollapsed && "mac-titlebar-pad",
 			)}
 		>
 			{sidebarCollapsed && (
@@ -232,7 +234,7 @@ export default function SessionSheetBar({
 			) : (
 				<div
 					ref={scrollContainerRef}
-					className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+					className="app-no-drag min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
 				>
 					<DndContext
 						sensors={sensors}

@@ -40,7 +40,7 @@ const SidebarInner = memo(function SidebarInner({
 
 	return (
 		<>
-			<header className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
+			<header className="app-drag mac-titlebar-pad flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
 				<div className="min-w-0">
 					<div className="text-sm font-bold tracking-[0.2em] text-foreground">LOOK</div>
 					<div className="mt-0.5 font-mono text-[9px] text-muted-foreground/55">

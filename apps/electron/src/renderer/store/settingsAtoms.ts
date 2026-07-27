@@ -85,6 +85,9 @@ export const settingsTabAtom = atom<SettingsTab>("general");
 
 export const sidebarCollapsedAtom = atom(false);
 
+/** 主窗口是否处于 macOS 全屏（全屏时红绿灯隐藏，顶部留白收回）。 */
+export const windowFullscreenAtom = atom(false);
+
 export const showAgentSquareAtom = atom(false);
 
 /** Whether the central content area is showing the scheduled-task workspace. */

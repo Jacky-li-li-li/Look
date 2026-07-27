@@ -247,6 +247,9 @@ function createWindow(): void {
 		minWidth: 900,
 		minHeight: 600,
 		title: "Look",
+		// 隐藏 macOS 原生标题栏，红绿灯按钮内嵌悬浮于内容区左上角
+		// （仅 macOS 生效，其他平台忽略）。渲染端通过 app-drag 区域拖动窗口。
+		titleBarStyle: "hiddenInset",
 		// 使用 persisted theme 的底色，避免启动时暗色窗口底从 repaint 间隙透出。
 		backgroundColor: initialTone === "light" ? "#fbfbfa" : "#030202",
 		icon: path.join(__dirname, "assets/icon-1024.png"),
@@ -270,6 +273,14 @@ function createWindow(): void {
 		mainWindow = null;
 		// 主窗口关闭时联动关闭独立文件查看器窗口
 		closeViewerWindow();
+	});
+
+	// 全屏状态同步给渲染端：macOS 全屏时红绿灯隐藏，顶部 hiddenInset 留白需收回
+	mainWindow.on("enter-full-screen", () => {
+		safeSendEvent({ type: "window:fullscreen-changed", fullscreen: true });
+	});
+	mainWindow.on("leave-full-screen", () => {
+		safeSendEvent({ type: "window:fullscreen-changed", fullscreen: false });
 	});
 
 	// 阻止 renderer 内嵌窗口/外链导航，只允许经过校验的 https/http 链接走系统浏览器
