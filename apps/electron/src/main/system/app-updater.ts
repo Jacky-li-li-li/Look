@@ -4,6 +4,8 @@
 // 仅在打包环境启用；更新源为 GitHub Releases（electron-builder.yml 的
 // publish provider）。策略：自动检查、手动下载、下载完成立即重启安装。
 // 渲染层通过 update:status 事件感知状态，通过 update:* IPC 触发动作。
+// macOS 关窗不退出期间事件会丢失，主进程持有 lastStatus，
+// 窗口 did-finish-load / 系统唤醒时重放并节流补检。
 // ============================================================
 
 import type { AppUpdatePhase, MainToRendererEvent } from "@look/shared/types";
@@ -14,15 +16,37 @@ const { autoUpdater } = updater;
 
 const INITIAL_CHECK_DELAY_MS = 30_000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+/** 窗口就绪/唤醒时补检的最小间隔，避免频繁请求 GitHub */
+const MIN_CHECK_GAP_MS = 10 * 60 * 1000;
 
+type UpdateStatus = { phase: AppUpdatePhase; version?: string; percent?: number; error?: string };
 type SendEvent = (event: MainToRendererEvent) => void;
 
 let initialized = false;
 let sendEvent: SendEvent | null = null;
+/** 最近一次更新状态。无窗口期间（macOS 关窗不退出）事件会被丢弃，
+ * 窗口重建后靠 replayUpdateStatus 恢复提示。 */
+let lastStatus: UpdateStatus | null = null;
+let lastCheckAt = 0;
 
 function emit(phase: AppUpdatePhase, extra?: { version?: string; percent?: number; error?: string }): void {
+	lastStatus = { phase, ...extra };
 	console.log(`[Look][updater] ${phase}`, extra ?? "");
-	sendEvent?.({ type: "update:status", phase, ...extra });
+	sendEvent?.({ type: "update:status", ...lastStatus });
+}
+
+/** 把最近一次更新状态重发给当前渲染层（窗口 did-finish-load 后调用）。 */
+export function replayUpdateStatus(): void {
+	// "checking" 是瞬时态，重放只会让 UI 显示一个不会结束的 spinner
+	if (!lastStatus || lastStatus.phase === "checking") return;
+	sendEvent?.({ type: "update:status", ...lastStatus });
+}
+
+/** 窗口就绪 / 系统唤醒时的节流补检：距上次检查不足间隔则跳过。 */
+export async function requestFreshCheck(): Promise<void> {
+	if (!app.isPackaged) return;
+	if (Date.now() - lastCheckAt < MIN_CHECK_GAP_MS) return;
+	await checkForUpdates();
 }
 
 function devError(): { success: false; error: string } {
@@ -65,6 +89,7 @@ export function initAppUpdater(send: SendEvent): void {
 
 export async function checkForUpdates(): Promise<{ success: boolean; error?: string }> {
 	if (!app.isPackaged) return devError();
+	lastCheckAt = Date.now();
 	try {
 		await autoUpdater.checkForUpdates();
 		return { success: true };

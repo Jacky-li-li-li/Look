@@ -4,7 +4,7 @@
 
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
-import { app, BrowserWindow, Notification, protocol, session, shell } from "electron";
+import { app, BrowserWindow, Notification, powerMonitor, protocol, session, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
@@ -22,7 +22,7 @@ import { FileTaskLock } from "./scheduler/task-lock.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
 import { SessionRuntimeManager } from "./session/runtime-manager.js";
 import { readThemeToneSync } from "./settings/store.js";
-import { initAppUpdater } from "./system/app-updater.js";
+import { initAppUpdater, replayUpdateStatus, requestFreshCheck } from "./system/app-updater.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { registerOAuthProtocol } from "./system/oauth-callback.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
@@ -273,6 +273,13 @@ function createWindow(): void {
 		mainWindow = null;
 		// 主窗口关闭时联动关闭独立文件查看器窗口
 		closeViewerWindow();
+	});
+
+	// 无窗口期间（macOS 关窗不退出）updater 事件会被丢弃：渲染层就绪后
+	// 先重放最近更新状态恢复提示，再做一次节流补检。页面重载同样适用。
+	mainWindow.webContents.on("did-finish-load", () => {
+		replayUpdateStatus();
+		void requestFreshCheck();
 	});
 
 	// 全屏状态同步给渲染端：macOS 全屏时红绿灯隐藏，顶部 hiddenInset 留白需收回
@@ -537,6 +544,10 @@ app.whenReady().then(async () => {
 
 	createWindow();
 	initAppUpdater(safeSendEvent);
+	// 合盖睡眠期间轮询定时器不走，唤醒后尽快补一次（内部有节流）
+	powerMonitor.on("resume", () => {
+		void requestFreshCheck();
+	});
 	try {
 		await bootstrapApp();
 	} catch (err) {

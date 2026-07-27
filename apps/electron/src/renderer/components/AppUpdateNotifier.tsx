@@ -69,6 +69,10 @@ export default function AppUpdateNotifier() {
 					cancel: undefined,
 				});
 				break;
+			case "checking":
+				// 每次轮询都会先进入 checking；不能 dismiss，
+				// 否则已展示的「有新版本」toast 会被下次轮询闪掉。
+				break;
 			default:
 				toast.dismiss(TOAST_ID);
 				break;
