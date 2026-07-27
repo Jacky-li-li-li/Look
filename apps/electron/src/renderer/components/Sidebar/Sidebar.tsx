@@ -20,6 +20,7 @@ import {
 import { userProfileAtom } from "../../store/authAtoms";
 import { appStore } from "../../store/ipcHandler";
 import ProjectTree from "./ProjectTree";
+import SidebarUpdateButton from "./SidebarUpdateButton";
 import type { SidebarProps } from "./types";
 
 const SidebarInner = memo(function SidebarInner({
@@ -132,6 +133,8 @@ const SidebarInner = memo(function SidebarInner({
 					{t("sidebar.settings", "Settings")}
 				</span>
 			</button>
+
+			<SidebarUpdateButton />
 		</>
 	);
 });

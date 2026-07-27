@@ -777,7 +777,9 @@
 		"downloadingTitle": "更新をダウンロード中",
 		"ready": "更新の準備ができました。再起動してインストールしてください。",
 		"restartInstall": "再起動してインストール",
-		"failed": "更新に失敗しました"
+		"failed": "更新に失敗しました",
+		"sidebarCta": "アップデート",
+		"installing": "再起動してインストール中…"
 	},
 	"about": {
 		"current": "現在のバージョン",
