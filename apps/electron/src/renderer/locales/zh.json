@@ -777,7 +777,9 @@
     "downloadingTitle": "正在下载更新",
     "ready": "更新已就绪。重启以完成安装。",
     "restartInstall": "重启安装",
-    "failed": "更新失败"
+    "failed": "更新失败",
+    "sidebarCta": "更新",
+    "installing": "正在重启安装…"
   },
   "about": {
     "current": "当前版本",

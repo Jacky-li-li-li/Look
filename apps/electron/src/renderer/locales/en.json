@@ -777,7 +777,9 @@
     "downloadingTitle": "Downloading update",
     "ready": "Update ready. Restart to install.",
     "restartInstall": "Restart to install",
-    "failed": "Update failed"
+    "failed": "Update failed",
+    "sidebarCta": "Update",
+    "installing": "Restarting to install…"
   },
   "about": {
     "current": "Current",
