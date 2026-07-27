@@ -37,6 +37,10 @@ const SubagentToolGroup = React.memo(function SubagentToolGroup({ calls }: Subag
 
 	if (renderable.length === 0) return null;
 
+	// 计数按子代理（卡片项）总数，而非工具调用次数：
+	// 一次 subagent_parallel/chain 调用包含多个子代理
+	const totalItems = renderable.reduce((n, entry) => n + entry.items.length, 0);
+
 	return (
 		<div className="flex flex-col" data-subagent-group="" data-open={expanded}>
 			<button
@@ -54,7 +58,7 @@ const SubagentToolGroup = React.memo(function SubagentToolGroup({ calls }: Subag
 				/>
 				<Bot className="size-3.5 shrink-0 text-muted-foreground" />
 				<span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] tracking-wide text-muted-foreground">
-					{t("tool.subagentGroup", { n: renderable.length })}
+					{t("tool.subagentGroup", { n: totalItems })}
 				</span>
 			</button>
 			<div

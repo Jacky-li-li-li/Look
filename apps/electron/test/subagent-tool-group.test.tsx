@@ -47,6 +47,23 @@ describe("SubagentToolGroup", () => {
 		expect(container.querySelector("[data-tool-panel]")).toBeNull();
 	});
 
+	it("计数按子代理总数：一次 parallel 调用含多个子代理", () => {
+		const parallelCall: ToolCallViewModel = {
+			callId: "c-par",
+			toolName: "subagent_parallel",
+			args: {
+				tasks: [
+					{ agent: "scout", task: "t1", title: "任务一" },
+					{ agent: "scout", task: "t2", title: "任务二" },
+					{ agent: "planner", task: "t3", title: "任务三" },
+				],
+			},
+			status: "running",
+		};
+		const { getByText } = renderGroup([parallelCall]);
+		expect(getByText("3 subagents")).toBeTruthy();
+	});
+
 	it("点击头部可折叠/展开", () => {
 		const { container, getByRole } = renderGroup([makeCall("c1", "架构深度分析")]);
 		const trigger = getByRole("button", { name: /subagents/ });
