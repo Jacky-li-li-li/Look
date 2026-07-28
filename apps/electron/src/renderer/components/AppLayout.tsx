@@ -7,6 +7,7 @@ import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@share
 import { useAtomValue, useSetAtom } from "jotai";
 import { lazy, memo, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { syncTrafficLightPosition } from "../lib/trafficLight";
 import {
 	appReadyPhaseAtom,
 	type ProviderSettingsData,
@@ -147,6 +148,22 @@ function AppLayout({
 		el.dataset.platform = window.look?.platform ?? "";
 		el.dataset.fullscreen = String(windowFullscreen);
 	}, [windowFullscreen]);
+
+	// macOS 红绿灯垂直对齐：实测当前顶部栏中心回传主进程（lib/trafficLight）。
+	// 侧栏折叠、页面切换（Agent 广场/定时任务）会替换当前顶部栏，需重新实测。
+	// 侧栏折叠/展开有 260ms 平移动画（App.css），期间测到的是中间态，
+	// 故 rAF 首测后再于动画结束(300ms)复测一次，两次均为幂等校正。
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 视图切换（侧栏折叠/广场/定时任务/全屏）是重新实测的触发信号，回调内不直接引用这些值
+	useEffect(() => {
+		const raf = requestAnimationFrame(() => syncTrafficLightPosition());
+		const settle = setTimeout(() => syncTrafficLightPosition(), 300);
+		window.addEventListener("resize", syncTrafficLightPosition);
+		return () => {
+			cancelAnimationFrame(raf);
+			clearTimeout(settle);
+			window.removeEventListener("resize", syncTrafficLightPosition);
+		};
+	}, [sidebarCollapsed, showAgentSquare, showScheduledTasks, windowFullscreen]);
 
 	// 窄窗口自动折叠侧边栏：优先折叠右栏，再折叠左栏
 	useEffect(() => {

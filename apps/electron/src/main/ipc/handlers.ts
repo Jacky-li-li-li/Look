@@ -12,6 +12,7 @@
 import type { RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
+import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../system/traffic-light.js";
 import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
 import {
@@ -159,6 +160,17 @@ export function registerIpcHandlers(
 		switch (data.type) {
 			case "app:ready":
 				break;
+			// 渲染端实测顶部栏可视中心(CSS px) → 校正 macOS 红绿灯垂直位置。
+			// CSS px 乘 zoomFactor 换算为 pt;仅 macOS 有 hiddenInset 红绿灯。
+			case "window:traffic-light-center": {
+				if (process.platform !== "darwin" || mainWindow.isDestroyed()) break;
+				const zoom = mainWindow.webContents.zoomFactor || 1;
+				mainWindow.setWindowButtonPosition({
+					x: TRAFFIC_LIGHT_X,
+					y: trafficLightYForCenter(data.centerCssPx * zoom),
+				});
+				break;
+			}
 		}
 	});
 

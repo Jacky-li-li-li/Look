@@ -27,6 +27,7 @@ import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { registerOAuthProtocol } from "./system/oauth-callback.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
+import { TRAFFIC_LIGHT_INITIAL_Y, TRAFFIC_LIGHT_X } from "./system/traffic-light.js";
 import { closeViewerWindow } from "./viewer/viewer-window-manager.js";
 import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
@@ -250,6 +251,10 @@ function createWindow(): void {
 		// 隐藏 macOS 原生标题栏，红绿灯按钮内嵌悬浮于内容区左上角
 		// （仅 macOS 生效，其他平台忽略）。渲染端通过 app-drag 区域拖动窗口。
 		titleBarStyle: "hiddenInset",
+		// 红绿灯垂直对齐顶部栏：此处为 48px(h-12) 栏的估算初值，渲染端
+		// 实测栏中心后通过 "window:traffic-light-center" 事件校正
+		// （换算见 system/traffic-light.ts）。仅 macOS 生效，其他平台忽略。
+		trafficLightPosition: { x: TRAFFIC_LIGHT_X, y: TRAFFIC_LIGHT_INITIAL_Y },
 		// 使用 persisted theme 的底色，避免启动时暗色窗口底从 repaint 间隙透出。
 		backgroundColor: initialTone === "light" ? "#fbfbfa" : "#030202",
 		icon: path.join(__dirname, "assets/icon-1024.png"),

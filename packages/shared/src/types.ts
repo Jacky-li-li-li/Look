@@ -574,6 +574,9 @@ export type RendererToMainEvent =
 	// ---- OS shell: open project root in file manager ----
 	| { type: "shell:open-project-folder"; projectId?: string }
 	| { type: "app:ready" }
+	// 渲染端实测的窗口顶部栏可视中心（CSS px，相对视口顶）。主进程据此
+	// 校正 macOS 红绿灯垂直位置，避免与 CSS 脱节的硬编码偏移
+	| { type: "window:traffic-light-center"; centerCssPx: number }
 	// ---- Project CRUD ----
 	| { type: "project:list" }
 	| { type: "project:create"; cwd: string; name?: string }
