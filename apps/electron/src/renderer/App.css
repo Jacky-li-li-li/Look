@@ -1342,27 +1342,71 @@ body {
 	}
 
 	/* ============================================================
-		 Collapsible Sidebar — smooth width + fade transitions
-		 Only width changes trigger layout; min/max-width are instant
-		 to avoid 3× layout per frame. border-width transitions removed
-		 (only border-radius needed for rounded corners).
+   Registered custom properties for grid track animation.
+   CSS transitions on <length> custom properties give smooth
+   grid-template-columns resize without the flex-1 layout jump
+   that caused message-area top-bar flicker during sidebar expand.
+   ============================================================ */
+	@property --sidebar-track {
+		syntax: "<length>";
+		initial-value: 280px;
+		inherits: false;
+	}
+	@property --sidebar-sep-track {
+		syntax: "<length>";
+		initial-value: 1px;
+		inherits: false;
+	}
+	@property --right-panel-track {
+		syntax: "<length>";
+		initial-value: 260px;
+		inherits: false;
+	}
+
+	/* Grid-based shell replaces flex layout. Track widths animate
+   via registered custom properties; the 1fr main track fills
+   remaining space. Sidebar/right-panel elements use width:100%
+   to fill their cells rather than animating their own width. */
+	.app-shell {
+		display: grid;
+		--sidebar-track: 280px;
+		--sidebar-sep-track: 1px;
+		--right-panel-track: 260px;
+		grid-template-columns: var(--sidebar-track) var(--sidebar-sep-track) 1fr var(--right-panel-track);
+		transition:
+			--sidebar-track 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			--sidebar-sep-track 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			--right-panel-track 260ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.app-shell[data-sidebar-collapsed="true"] {
+		--sidebar-track: 0px;
+		--sidebar-sep-track: 0px;
+	}
+
+	.app-shell[data-right-panel-collapsed="true"] {
+		--right-panel-track: 0px;
+	}
+	/* ============================================================
+		 Collapsible Sidebar — uses translateX slide so internal
+		 layout stays at full 280px; no content reflow during
+		 expand/collapse eliminates text-jump artifacts.
 		 ============================================================ */
 
 	.sidebar-wrapper {
-		width: var(--sidebar-width);
+		width: 280px;
 		min-width: 0;
-		max-width: var(--sidebar-width);
+		transform: translateX(0);
 		opacity: 1;
 		contain: layout style;
 		transition:
-			width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
 			opacity 200ms ease,
 			border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.sidebar-wrapper[data-collapsed="true"] {
-		width: 0;
-		max-width: 0;
+		transform: translateX(-100%);
 		opacity: 0;
 		border-radius: 0;
 		pointer-events: none;
@@ -1370,17 +1414,11 @@ body {
 
 	.sidebar-separator {
 		opacity: 1;
-		transition:
-			opacity 200ms ease,
-			margin 260ms cubic-bezier(0.22, 1, 0.36, 1),
-			width 260ms cubic-bezier(0.22, 1, 0.36, 1);
+		transition: opacity 200ms ease;
 	}
 
 	.app-shell[data-sidebar-collapsed="true"] .sidebar-separator {
 		opacity: 0;
-		margin-left: 0;
-		margin-right: 0;
-		width: 0;
 	}
 
 	.expand-sidebar-btn {
@@ -1407,24 +1445,23 @@ body {
 	}
 
 	/* ============================================================
-		 Collapsible Right Panel — mirrors sidebar mechanism
-		 Only width changes trigger layout; min/max-width are instant.
+		 Collapsible Right Panel — mirror sidebar slide mechanism.
+		 Uses translateX from right so internal layout stays fixed.
 		 ============================================================ */
 
 	.right-panel-wrapper {
-		width: var(--right-panel-width);
+		width: 260px;
 		min-width: 0;
-		max-width: var(--right-panel-width);
+		transform: translateX(0);
 		opacity: 1;
 		transition:
-			width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
 			opacity 200ms ease,
 			border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.right-panel-wrapper[data-collapsed="true"] {
-		width: 0;
-		max-width: 0;
+		transform: translateX(100%);
 		opacity: 0;
 		border-radius: 0;
 		pointer-events: none;
@@ -1432,17 +1469,11 @@ body {
 
 	.right-panel-separator {
 		opacity: 1;
-		transition:
-			opacity 200ms ease,
-			margin 260ms cubic-bezier(0.22, 1, 0.36, 1),
-			width 260ms cubic-bezier(0.22, 1, 0.36, 1);
+		transition: opacity 200ms ease;
 	}
 
 	.app-shell[data-right-panel-collapsed="true"] .right-panel-separator {
 		opacity: 0;
-		margin-left: 0;
-		margin-right: 0;
-		width: 0;
 	}
 
 	.expand-right-panel-btn {
@@ -2026,6 +2057,12 @@ html[style*="--theme-transitioning:1"] *::after {
 .app-drag {
 	-webkit-app-region: drag;
 }
+/* padding-left 的 transition 必须在始终匹配的 .app-drag 上,
+   不能放在 .mac-titlebar-pad 上——展开侧栏时该类被移除,transition 也会消失,
+   导致 padding 瞬间跳变,会话标签闪现到应用最左侧。 */
+html[data-platform="darwin"]:not([data-fullscreen="true"]) .app-drag {
+	transition: padding-left 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 .app-drag :is(button, input, a, [role="button"]) {
 	-webkit-app-region: no-drag;
 }
@@ -2035,7 +2072,8 @@ html[style*="--theme-transitioning:1"] *::after {
 }
 
 /* macOS hiddenInset 红绿灯留白：仅 macOS 且非全屏时生效。
-	 全屏时系统隐藏红绿灯,留白自动收回,内容靠左。 */
+	 全屏时系统隐藏红绿灯,留白自动收回,内容靠左。
+	 transition 已上移至 .app-drag 选择器,确保类移除后 transition 不丢失。 */
 html[data-platform="darwin"]:not([data-fullscreen="true"]) .mac-titlebar-pad {
 	padding-left: 78px;
 }

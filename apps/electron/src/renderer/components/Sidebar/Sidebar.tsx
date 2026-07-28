@@ -34,7 +34,7 @@ const SidebarInner = memo(function SidebarInner({
 	onRenameProject,
 }: SidebarProps) {
 	const { t } = useTranslation();
-	const projects = useAtomValue(projectsAtom);
+	const _projects = useAtomValue(projectsAtom);
 	const userProfile = useAtomValue(userProfileAtom);
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
 	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
@@ -42,12 +42,7 @@ const SidebarInner = memo(function SidebarInner({
 	return (
 		<>
 			<header className="app-drag mac-titlebar-pad flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
-				<div className="min-w-0">
-					<div className="text-sm font-bold tracking-[0.2em] text-foreground">LOOK</div>
-					<div className="mt-0.5 font-mono text-[9px] text-muted-foreground/55">
-						{projects.length.toString().padStart(2, "0")} {t("workspace.projects", "projects")}
-					</div>
-				</div>
+				<div className="min-w-0" />
 				<div className="flex items-center gap-1.5">
 					<Button
 						variant="line-ghost"

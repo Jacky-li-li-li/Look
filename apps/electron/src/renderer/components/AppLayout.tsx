@@ -166,7 +166,7 @@ function AppLayout({
 
 	return (
 		<div
-			className="app-shell flex h-screen overflow-hidden bg-background"
+			className="app-shell h-screen overflow-hidden bg-background"
 			data-sidebar-collapsed={sidebarCollapsed}
 			data-right-panel-collapsed={rightPanelCollapsed}
 		>
@@ -183,7 +183,7 @@ function AppLayout({
 
 			<Separator orientation="vertical" className="sidebar-separator bg-transparent" />
 
-			<main className="flex min-w-[340px] flex-1 flex-col overflow-hidden bg-background">
+			<main className="flex min-w-[340px] flex-col overflow-hidden bg-background">
 				{appReadyPhase < 1 ? null : showScheduledTasks ? (
 					<ScheduledTasksPage />
 				) : projects.length === 0 ? (
