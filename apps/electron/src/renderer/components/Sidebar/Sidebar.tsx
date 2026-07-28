@@ -47,7 +47,7 @@ const SidebarInner = memo(function SidebarInner({
 					<Button
 						variant="line-ghost"
 						size="icon-sm"
-						className="border border-hairline rounded-md"
+						className="border border-hairline rounded-md sidebar-open-folder-btn"
 						onClick={onCreateProject}
 						aria-label={t("project.openProject", "Add project folder")}
 						title={t("project.openProject", "Add project folder")}
@@ -138,8 +138,12 @@ export default function Sidebar(props: SidebarProps) {
 	const collapsed = useAtomValue(sidebarCollapsedAtom);
 
 	return (
+		// border-t-0：顶部栏带上沿必须与主区标签栏齐平（均起于窗口 y=0），
+		// 否则侧栏 header 比标签栏低 1px，折叠/展开切换时 macOS 红绿灯的
+		// 对齐目标会变化导致跳动（见 lib/trafficLight.ts）。顶部边缘视觉由
+		// workspace-ledger 的 inset 高光保留。
 		<aside
-			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-l-xl border"
+			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-l-xl border border-t-0"
 			data-collapsed={collapsed}
 		>
 			<SidebarInner {...props} />

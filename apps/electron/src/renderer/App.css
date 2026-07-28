@@ -1412,6 +1412,14 @@ body {
 		pointer-events: none;
 	}
 
+	.sidebar-wrapper[data-collapsed="true"] .sidebar-open-folder-btn {
+		visibility: hidden;
+	}
+
+	.sidebar-open-folder-btn {
+		visibility: visible;
+	}
+
 	.sidebar-separator {
 		opacity: 1;
 		transition: opacity 200ms ease;
