@@ -153,6 +153,7 @@ export class SubAgentRuntimeService {
 				errorMessage: result.errorMessage,
 			},
 		});
+		pending.resolve(result);
 
 		// 调度延迟清理：保留 session JSONL 在磁盘，释放 AgentSessionRuntime 内存。
 		this.scheduleSubSessionCleanup(childSessionId);
