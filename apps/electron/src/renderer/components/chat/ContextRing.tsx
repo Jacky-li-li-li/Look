@@ -53,14 +53,20 @@ export default function ContextRing() {
 
 	const offset = CIRCUMFERENCE - (percentage / 100) * CIRCUMFERENCE;
 
-	// If contextUsage is undefined (historical session, no LLM interaction yet), allow compression.
-	// SDK's session.compact() is a no-op when there's nothing to compact, so this is safe.
+	// contextUsage may be undefined for historical sessions or during initial load.
+	// When undefined, allow the click — pi SDK will throw if there's nothing to compact,
+	// and the error is surfaced via the IpcResult.success check.
 	const canCompress = !compacting && !isStreaming && (contextUsage == null || percentage >= 5);
 
 	const handleClick = useCallback(() => {
 		if (!canCompress || !sessionId) return;
 		window.look
 			.compressSession(sessionId)
+			.then((result) => {
+				if (!result.success) {
+					console.warn("[ContextRing] compressSession failed:", result.error);
+				}
+			})
 			.catch((err) => console.error("[ContextRing] compressSession failed:", err));
 	}, [canCompress, sessionId]);
 
