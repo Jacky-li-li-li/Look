@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ISessionScopeRegistry } from "../src/main/core/contracts.js";
 import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
 import { type SessionControlHost, SessionControlService } from "../src/main/session/session-control-service.js";
+
+const scopeRegistry: Pick<ISessionScopeRegistry, "get"> = { get: () => undefined };
 
 function createHost(overrides: Partial<SessionControlHost> = {}): SessionControlHost {
 	return {
@@ -20,7 +23,11 @@ function createHost(overrides: Partial<SessionControlHost> = {}): SessionControl
 describe("SessionControlService", () => {
 	it("validates provider/model keys before it initializes a runtime", async () => {
 		const ensureRuntime = vi.fn();
-		const service = new SessionControlService(createHost({ ensureRuntime }), { find: () => undefined });
+		const service = new SessionControlService(
+			createHost({ ensureRuntime }),
+			{ find: () => undefined },
+			scopeRegistry,
+		);
 
 		await expect(service.setModel("session-a", "invalid")).rejects.toThrow("provider/model");
 		expect(ensureRuntime).not.toHaveBeenCalled();
@@ -34,6 +41,7 @@ describe("SessionControlService", () => {
 		const service = new SessionControlService(
 			createHost({ ensureRuntime: async () => runtime, emitSessionUpdated }),
 			{ find: () => model } as never,
+			scopeRegistry,
 		);
 
 		await service.setModel("session-a", "openai/gpt-test");
@@ -58,6 +66,7 @@ describe("SessionControlService", () => {
 				emitSessionList,
 			}),
 			{ find: () => undefined },
+			scopeRegistry,
 			8,
 		);
 
@@ -73,9 +82,13 @@ describe("SessionControlService", () => {
 	it("does not compact a streaming session", async () => {
 		const compact = vi.fn();
 		const runtime = { runtime: { session: { isStreaming: true, compact } } } as unknown as ManagedRuntime;
-		const service = new SessionControlService(createHost({ ensureRuntime: async () => runtime }), {
-			find: () => undefined,
-		});
+		const service = new SessionControlService(
+			createHost({ ensureRuntime: async () => runtime }),
+			{
+				find: () => undefined,
+			},
+			scopeRegistry,
+		);
 
 		await service.compress("session-a");
 

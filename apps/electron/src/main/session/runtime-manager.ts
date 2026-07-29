@@ -443,6 +443,8 @@ export class SessionRuntimeManager
 		task: string,
 		signal: AbortSignal | undefined,
 		title: string,
+		toolCallId: string,
+		taskTitle: string,
 		onUpdate?: (progress: SubagentProgress) => void,
 	): Promise<SubagentResult> {
 		return this.composition.sessionSubagentService.runSubSession(
@@ -451,6 +453,8 @@ export class SessionRuntimeManager
 			task,
 			signal,
 			title,
+			toolCallId,
+			taskTitle,
 			onUpdate,
 		);
 	}

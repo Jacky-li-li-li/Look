@@ -58,6 +58,7 @@ export interface ChildSessionInfo {
 	agent: AgentInfo;
 	childPhase: string;
 	childRunning: boolean;
+	childActive: boolean;
 }
 
 export interface ProjectTreeProps {

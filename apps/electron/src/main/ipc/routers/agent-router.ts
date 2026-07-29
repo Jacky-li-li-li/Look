@@ -108,7 +108,18 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 
 	register("session:compress", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
-		await ctx.session.control.compress(_agentId);
+		guardOptionalString(data.customInstructions, "customInstructions");
+		try {
+			await ctx.session.control.compress(_agentId, data.customInstructions);
+			return { success: true };
+		} catch (e) {
+			return { success: false, error: e instanceof Error ? e.message : "Compaction failed" };
+		}
+	});
+
+	register("session:abort-compress", async (data) => {
+		const _agentId = guardAgentId(data.agentId, "agentId");
+		ctx.session.control.abortCompress(_agentId);
 		return { success: true };
 	});
 

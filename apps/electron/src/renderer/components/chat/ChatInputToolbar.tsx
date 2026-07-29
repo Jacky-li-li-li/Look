@@ -20,6 +20,7 @@ interface ChatInputToolbarProps {
 	availableThinkingLevels?: ThinkingLevel[];
 	permissionMode: PermissionMode;
 	isBusy: boolean;
+	isCompacting: boolean;
 	hasContent: boolean;
 	onModelChange: (model: string) => void;
 	onThinkingChange: (level: string) => void;
@@ -35,6 +36,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 	availableThinkingLevels,
 	permissionMode,
 	isBusy,
+	isCompacting,
 	hasContent,
 	onModelChange,
 	onThinkingChange,
@@ -63,16 +65,20 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 			<ContextRing />
 			{isBusy ? (
 				<>
-					<Button
-						variant="line-ghost"
-						size="icon-sm"
-						onClick={onAbort}
-						aria-label={t("chat.stop")}
-						title={t("chat.stop")}
-						className="text-muted-foreground hover:text-destructive"
-					>
-						<Square data-icon="inline-start" className="size-3 fill-current" />
-					</Button>
+					{/* During compaction the CompactionStatusCard cancel button handles abortCompaction,
+					    so the Square stop button (abortAgent) is hidden to avoid confusion. */}
+					{!isCompacting && (
+						<Button
+							variant="line-ghost"
+							size="icon-sm"
+							onClick={onAbort}
+							aria-label={t("chat.stop")}
+							title={t("chat.stop")}
+							className="text-muted-foreground hover:text-destructive"
+						>
+							<Square data-icon="inline-start" className="size-3 fill-current" />
+						</Button>
+					)}
 					<Button
 						variant={hasContent ? "line-filled" : "line-ghost"}
 						size="icon-sm"

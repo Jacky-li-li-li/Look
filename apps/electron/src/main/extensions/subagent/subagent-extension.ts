@@ -168,6 +168,7 @@ export async function createSubagentExtensionFactory(
 					params.task,
 					signal,
 					params.title,
+					_toolCallId,
 					forwardProgress(onUpdate),
 				);
 				if (isFailedResult(result)) {
@@ -218,13 +219,13 @@ export async function createSubagentExtensionFactory(
 						isError: true,
 					};
 				}
-
 				const results = await runParallelAgents(
 					host,
 					sessionId,
 					agents,
 					params.tasks,
 					signal,
+					_toolCallId,
 					forwardProgress(onUpdate),
 				);
 				const successCount = results.filter((r) => !isFailedResult(r)).length;
@@ -275,13 +276,13 @@ export async function createSubagentExtensionFactory(
 						isError: true,
 					};
 				}
-
 				const { results, stoppedAtStep } = await runChainAgents(
 					host,
 					sessionId,
 					agents,
 					params.chain,
 					signal,
+					_toolCallId,
 					forwardProgress(onUpdate),
 				);
 				if (stoppedAtStep !== undefined) {

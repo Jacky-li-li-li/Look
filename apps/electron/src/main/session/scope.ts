@@ -24,6 +24,8 @@ export class SessionScope implements ISessionScope {
 	public isDefaultName = false;
 	public turnStartedAt: number | null = null;
 	public imProvider?: string;
+	/** Captured from CompactionResult.estimatedTokensAfter after session.compact() completes. */
+	public compactionEstimatedTokensAfter?: number;
 
 	constructor(sessionId: string, projectId: string) {
 		this.sessionId = sessionId;

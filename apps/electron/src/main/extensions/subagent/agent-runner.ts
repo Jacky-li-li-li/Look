@@ -52,12 +52,13 @@ export async function runSingleAgent(
 	task: string,
 	signal: AbortSignal | undefined,
 	title: string,
+	toolCallId: string,
 	onUpdate?: (progress: SubagentProgress) => void,
 	step?: number,
 ): Promise<SubagentResult> {
 	const agent = resolveAgent(agents, agentName);
 	if (!agent) return unknownAgentResult(agentName, task, agents);
-	const result = await host.runSubSession(parentSessionId, agent, task, signal, title, onUpdate);
+	const result = await host.runSubSession(parentSessionId, agent, task, signal, title, toolCallId, title, onUpdate);
 	if (step !== undefined) result.step = step;
 	return result;
 }
@@ -75,6 +76,7 @@ export async function runParallelAgents(
 	agents: AgentConfig[],
 	tasks: SubagentTaskItem[],
 	signal: AbortSignal | undefined,
+	toolCallId: string,
 	onUpdate?: (progress: SubagentProgress) => void,
 ): Promise<SubagentResult[]> {
 	const maxConcurrent = (() => {
@@ -99,6 +101,7 @@ export async function runParallelAgents(
 					t.task,
 					signal,
 					t.title,
+					toolCallId,
 					onUpdate,
 				);
 			} catch (error) {
@@ -134,6 +137,7 @@ export async function runChainAgents(
 	agents: AgentConfig[],
 	chain: SubagentChainItem[],
 	signal: AbortSignal | undefined,
+	toolCallId: string,
 	onUpdate?: (progress: SubagentProgress) => void,
 ): Promise<{ results: SubagentResult[]; stoppedAtStep?: number }> {
 	const results: SubagentResult[] = [];
@@ -150,6 +154,7 @@ export async function runChainAgents(
 			taskWithContext,
 			signal,
 			item.title,
+			toolCallId,
 			onUpdate,
 			i + 1,
 		);

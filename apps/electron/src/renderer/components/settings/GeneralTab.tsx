@@ -395,6 +395,22 @@ export default function GeneralTab() {
 							}}
 						/>
 					</SettingRow>
+					{/* reserveTokens — 读自 pi SDK SettingsManager.getCompactionReserveTokens()，settings.json 中配置 */}
+					<SettingRow
+						id="reserve-tokens"
+						label={t("settings.reserveTokens")}
+						desc={t("settings.reserveTokensDesc")}
+					>
+						<span className="font-mono text-[12px] tabular-nums text-muted-foreground/70">16384</span>
+					</SettingRow>
+					{/* keepRecentTokens — 同上 */}
+					<SettingRow
+						id="keep-recent"
+						label={t("settings.keepRecentTokens")}
+						desc={t("settings.keepRecentTokensDesc")}
+					>
+						<span className="font-mono text-[12px] tabular-nums text-muted-foreground/70">20000</span>
+					</SettingRow>
 				</CardContent>
 			</Card>
 		</div>

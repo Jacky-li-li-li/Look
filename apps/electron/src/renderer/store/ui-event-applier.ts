@@ -7,6 +7,7 @@ import type { AgentInfo, LookUiEvent, LookUiPhase, LookUiStreamBlock, LookUiTool
 import { toast } from "sonner";
 import { appStore } from "./appStore";
 import { agentsAtom, sessionStateAtomFamily } from "./atoms";
+import { subagentCardStatusAtom } from "./subagentAtoms";
 
 let _nextBlockUid = 0;
 
@@ -218,6 +219,13 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 						isError: ev.isError,
 					});
 				}
+				// Clean up per-card subagent status tracking for this tool call
+				appStore.set(subagentCardStatusAtom, (prev) => {
+					if (!(ev.toolCallId in prev)) return prev;
+					const next = { ...prev };
+					delete next[ev.toolCallId];
+					return next;
+				});
 				break;
 
 			// ── Phase / status ──

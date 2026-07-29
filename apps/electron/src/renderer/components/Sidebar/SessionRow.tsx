@@ -153,6 +153,7 @@ function SessionRowImpl({
 						data-agent-id={child.agent.id}
 						data-agent-status={child.childPhase}
 						data-running={child.childRunning || undefined}
+						data-active={child.childActive || undefined}
 						className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[32px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
 					>
 						<button

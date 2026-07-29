@@ -78,6 +78,7 @@ const ChatPanel = memo(function ChatPanel({
 				currentThinking={currentThinking}
 				availableThinkingLevels={availableThinkingLevels}
 				isBusy={isBusy}
+				isCompacting={phase === "compacting"}
 				onSend={onSend}
 				onThinkingChange={onThinkingChange}
 				onModelChange={onModelChange}

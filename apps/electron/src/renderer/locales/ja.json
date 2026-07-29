@@ -304,7 +304,11 @@
 		"autoCollapse": "自動折りたたみ",
 		"autoCollapseDesc": "出力のストリーミング開始時に思考パネルを折りたたむ",
 		"autoCompress": "自動圧縮",
-		"autoCompressDesc": "コンテキストがモデルウィンドウ制限に近づくと、SDKが自動的に会話履歴を圧縮します（16Kトークン予約）",
+		"autoCompressDesc": "コンテキストがモデルウィンドウ制限に近づくと、SDKが自動的に会話履歴を圧縮します",
+		"reserveTokens": "予約トークン数",
+		"reserveTokensDesc": "圧縮時にLLM応答用に確保するトークン数（設定ファイル: compaction.reserveTokens）",
+		"keepRecentTokens": "保持する最近のトークン数",
+		"keepRecentTokensDesc": "圧縮時に保持する最新トークン数（設定ファイル: compaction.keepRecentTokens）",
 		"autoTitleModel": "タイトル生成モデル",
 		"autoTitleModelDesc": "最初のメッセージからセッションタイトルを自動生成するために使用するモデル",
 		"autoTitleUseSessionModel": "現在のモデルを使用（デフォルト）",
@@ -582,6 +586,7 @@
 	},
 	"context": {
 		"compressing": "圧縮中…",
+		"compressed": "圧縮完了",
 		"stopFirst": "先にエージェントを停止してください",
 		"clickToCompress": "クリックで圧縮"
 	},

@@ -144,6 +144,8 @@ export interface ISessionScope {
 	isDefaultName: boolean;
 	turnStartedAt: number | null;
 	imProvider?: string;
+	/** Captured from CompactionResult.estimatedTokensAfter after session.compact() completes. */
+	compactionEstimatedTokensAfter?: number;
 }
 
 export interface ISessionScopeRegistry {

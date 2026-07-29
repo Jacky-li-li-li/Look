@@ -1569,10 +1569,8 @@ body {
 	}
 
 	.session-ledger-row[data-active] {
-		border-color: color-mix(in oklch, var(--foreground), transparent 86%);
-		background:
-			linear-gradient(90deg, color-mix(in oklch, var(--foreground), transparent 94%), transparent 72%),
-			color-mix(in oklch, var(--sidebar), var(--foreground) 3%);
+		border-color: color-mix(in oklch, var(--foreground), transparent 76%);
+		background: var(--sidebar-accent);
 	}
 
 	.session-ledger-row .status-mark[data-status="idle"],

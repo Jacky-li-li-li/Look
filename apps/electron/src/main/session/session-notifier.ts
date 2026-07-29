@@ -8,13 +8,14 @@
 
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import type { ProjectInfo, SessionSnapshotEnvelope } from "@look/shared/types";
-import type { IEventBus } from "../core/contracts.js";
+import type { IEventBus, ISessionScopeRegistry } from "../core/contracts.js";
 import type { ManagedRuntime } from "./runtime-registry.js";
 import type { SessionInfoService } from "./session-info-service.js";
 import { parseTodoFile } from "./todo-parser.js";
 
 export interface SessionNotifierQueries {
 	sessionInfoService: SessionInfoService;
+	scopeRegistry: Pick<ISessionScopeRegistry, "get">;
 	listProjects(): ProjectInfo[];
 	getActiveProjectId(): string | null;
 }
@@ -37,17 +38,24 @@ export class SessionNotifier {
 			const session = managed.runtime.session;
 			const allEntries = session.sessionManager.getBranch();
 			const leafId = session.sessionManager.getLeafId();
+			// snapshot.runtime.isCompacting is the renderer's single truth source.
+			// For compaction_end/agent_end we force false to avoid reading SDK's
+			// stale isCompacting before the SDK finishes its cleanup.
+			const isCompactingFinal = reason === "compaction_end" || reason === "agent_end" ? false : session.isCompacting;
+			// Read compactionEstimatedTokensAfter from scope (set after session.compact() returns).
+			const scope = this.queries.scopeRegistry.get(sessionId);
 			const runtime = {
 				model: session.model,
 				thinkingLevel: session.thinkingLevel,
 				isStreaming: willRetry !== undefined ? willRetry : (info?.isStreaming ?? session.isStreaming),
 				isRetrying: session.isRetrying,
-				isCompacting: session.isCompacting,
+				isCompacting: isCompactingFinal,
 				retryAttempt: session.retryAttempt,
 				steering: session.getSteeringMessages(),
 				followUp: session.getFollowUpMessages(),
 				stats: session.getSessionStats(),
 				contextUsage: session.getContextUsage(),
+				compactionEstimatedTokensAfter: scope?.compactionEstimatedTokensAfter,
 			};
 
 			// On activation, send the most recent messages first so the chat area

@@ -26,10 +26,11 @@ export default function ContextRing() {
 	const agents = useAtomValue(agentsAtom);
 	const agentInfo = agents.find((a) => a.id === sessionId);
 
-	// 优先 agentInfo（agent:updated 实时推送），fallback runtime snapshot
+	// sessionState.runtime.isCompacting is the single source of truth from the snapshot path.
+	// Fall back to agentInfo for sessions where runtime hasn't arrived yet (boot race).
 	const contextUsage = agentInfo?.contextUsage ?? sessionState.runtime?.contextUsage;
-	const compacting = agentInfo?.isCompacting ?? false;
-	const isStreaming = agentInfo?.isStreaming ?? false;
+	const compacting = sessionState.runtime?.isCompacting ?? agentInfo?.isCompacting ?? false;
+	const isStreaming = sessionState.runtime?.isStreaming ?? agentInfo?.isStreaming ?? false;
 
 	const percentage = Math.max(0, Math.min(100, contextUsage?.percent ?? 0));
 	const usedTokens = contextUsage?.tokens ?? 0;
@@ -52,11 +53,15 @@ export default function ContextRing() {
 
 	const offset = CIRCUMFERENCE - (percentage / 100) * CIRCUMFERENCE;
 
-	const canCompress = !compacting && !isStreaming && percentage >= 5;
+	// If contextUsage is undefined (historical session, no LLM interaction yet), allow compression.
+	// SDK's session.compact() is a no-op when there's nothing to compact, so this is safe.
+	const canCompress = !compacting && !isStreaming && (contextUsage == null || percentage >= 5);
 
 	const handleClick = useCallback(() => {
 		if (!canCompress || !sessionId) return;
-		void window.look.compressSession(sessionId);
+		window.look
+			.compressSession(sessionId)
+			.catch((err) => console.error("[ContextRing] compressSession failed:", err));
 	}, [canCompress, sessionId]);
 
 	if (!sessionId) return null;

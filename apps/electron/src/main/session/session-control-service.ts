@@ -6,7 +6,8 @@
 // ============================================================
 
 import type { ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ThinkingLevel } from "@look/shared/types";
+import type { SessionSnapshotEnvelope, ThinkingLevel } from "@look/shared/types";
+import type { ISessionScopeRegistry } from "../core/contracts.js";
 import type { ManagedRuntime } from "./runtime-registry.js";
 
 export interface SessionControlHost {
@@ -17,12 +18,14 @@ export interface SessionControlHost {
 	closeDefaultNameGate(sessionId: string): void;
 	emitSessionUpdated(sessionId: string): void;
 	emitSessionList(projectId: string): void;
+	emitSessionState(sessionId: string, reason?: SessionSnapshotEnvelope["reason"]): void;
 }
 
 export class SessionControlService {
 	constructor(
 		private readonly host: SessionControlHost,
 		private readonly modelRegistry: Pick<ModelRegistry, "find">,
+		private readonly scopeRegistry: Pick<ISessionScopeRegistry, "get">,
 		private readonly maxNameLength = 80,
 	) {}
 
@@ -41,11 +44,24 @@ export class SessionControlService {
 		managed.runtime.session.setThinkingLevel(level);
 	}
 
-	async compress(sessionId: string): Promise<void> {
+	async compress(sessionId: string, customInstructions?: string): Promise<void> {
 		const session = (await this.host.ensureRuntime(sessionId)).runtime.session;
 		if (!session.isStreaming && !session.isRetrying && !session.isCompacting) {
-			await session.compact();
+			const result = await session.compact(customInstructions);
+			// Store estimatedTokensAfter on the scope so the next snapshot carries it.
+			if (result?.estimatedTokensAfter != null) {
+				const scope = this.scopeRegistry.get(sessionId);
+				if (scope) scope.compactionEstimatedTokensAfter = result.estimatedTokensAfter;
+			}
+			// Emit a fresh snapshot so sessionState.runtime.compactionEstimatedTokensAfter
+			// reaches the renderer for display in CompactionStatusCard.
+			this.host.emitSessionState(sessionId);
 		}
+	}
+
+	abortCompress(sessionId: string): void {
+		const managed = this.host.getManagedRuntime(sessionId);
+		managed?.runtime.session.abortCompaction();
 	}
 
 	rename(sessionId: string, name: string): void {

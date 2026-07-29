@@ -18,6 +18,14 @@ export interface TimelineItem {
 	uiBlocks?: LookUiStreamBlock[];
 	/** Discrete-event tool execution states for the active assistant message. */
 	uiTools?: Record<string, LookUiToolExecState>;
+	/** Compaction status display. */
+	compactionPhase?: "compacting" | "done";
+	/** The compaction summary Markdown text (when phase is "done"). */
+	compactionSummary?: string;
+	/** Tokens before compaction (from SDK CompactionEntry.tokensBefore). */
+	compactionTokensBefore?: number;
+	/** Estimated tokens after compaction (from CompactionResult.estimatedTokensAfter). */
+	compactionEstimatedTokensAfter?: number;
 }
 
 function isToolResultMessage(msg: AgentMessage): msg is ToolResultMessage {
@@ -42,6 +50,7 @@ export function buildTimeline(
 	uiTools: Record<string, LookUiToolExecState> = {},
 	uiPhase: LookUiPhase = "idle",
 	pendingUserMessage: { text: string; images?: ImageContent[] } | null = null,
+	compactionEstimatedTokensAfter?: number,
 ): TimelineItem[] {
 	const items: TimelineItem[] = [];
 	let pendingToolResults: ToolResultMessage[] = [];
@@ -108,12 +117,29 @@ export function buildTimeline(
 			continue;
 		}
 
+		// pi SDK compaction entry — special UI treatment (horizontal status card).
+		if (entry.type === "compaction") {
+			closeAssistantContext();
+			items.push({
+				id: entry.id,
+				entryId: entry.id,
+				isLive: false,
+				compactionPhase: "done",
+				compactionSummary: entry.summary,
+				compactionTokensBefore:
+					"tokensBefore" in entry ? (entry as { tokensBefore: number }).tokensBefore : undefined,
+				compactionEstimatedTokensAfter,
+			});
+			continue;
+		}
+
 		// Look-specific system entries are not shown in the chat timeline.
 		const isLookSystemEntry =
 			entry.type === "model_change" ||
 			entry.type === "thinking_level_change" ||
 			entry.type === "session_info" ||
 			entry.type === "label" ||
+			entry.type === "branch_summary" ||
 			(entry.type === "custom" && entry.customType?.startsWith("look."));
 
 		if (isLookSystemEntry) continue;
@@ -155,10 +181,14 @@ export function buildTimeline(
 		});
 	}
 
-	// Append the active assistant as a single live item. Completed blocks remain
-	// visible during the short idle → agent_end snapshot handoff; the snapshot
-	// clears them atomically when persisted entries become the source of truth.
-	if (uiPhase !== "idle" || uiBlocks.length > 0) {
+	// ── Live compaction indicator ──
+	// Show a "compacting" status line while compaction is in progress.
+	// Only shown when no persisted compaction entry already exists (race guard).
+	const hasCompactionEntry = items.some((item) => item.compactionPhase === "done");
+	if (uiPhase === "compacting" && !hasCompactionEntry) {
+		closeAssistantContext();
+		items.push({ id: "compacting-live", isLive: true, compactionPhase: "compacting" });
+	} else if (uiPhase !== "idle" || uiBlocks.length > 0) {
 		// Within a single assistant turn, multiple assistant messages (and the
 		// tool results between them) are merged into one bubble. If a persisted
 		// assistant bubble already exists for this turn, attach the live blocks

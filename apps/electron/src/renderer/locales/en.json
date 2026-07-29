@@ -300,7 +300,11 @@
     "autoCollapse": "Auto Collapse",
     "autoCollapseDesc": "Collapse thinking panel when output starts streaming",
     "autoCompress": "Auto Compress",
-    "autoCompressDesc": "SDK auto-compacts conversation history when context nears the model window limit (reserves 16K tokens)",
+    "autoCompressDesc": "SDK auto-compacts conversation history when context nears the model window limit",
+    "reserveTokens": "Reserve Tokens",
+    "reserveTokensDesc": "Tokens reserved for the LLM response during compaction (settings.json: compaction.reserveTokens)",
+    "keepRecentTokens": "Keep Recent Tokens",
+    "keepRecentTokensDesc": "Recent tokens preserved during compaction (settings.json: compaction.keepRecentTokens)",
     "autoTitleModel": "Title generation model",
     "autoTitleModelDesc": "Model used to auto-generate the first session title from your first message",
     "autoTitleUseSessionModel": "Use current model (default)",
@@ -582,6 +586,7 @@
   },
   "context": {
     "compressing": "Compressing…",
+    "compressed": "Compression done",
     "stopFirst": "Stop the agent first to compress",
     "clickToCompress": "Click to compress"
   },

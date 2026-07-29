@@ -123,7 +123,10 @@ const api: LookAPI = {
 
 	resetGeneralSettings: () => ipcRenderer.invoke("look:invoke", { type: "settings:general:reset" }),
 
-	compressSession: (agentId) => ipcRenderer.invoke("look:invoke", { type: "session:compress", agentId }),
+	compressSession: (agentId, customInstructions) =>
+		ipcRenderer.invoke("look:invoke", { type: "session:compress", agentId, customInstructions }),
+
+	abortCompressSession: (agentId) => ipcRenderer.invoke("look:invoke", { type: "session:abort-compress", agentId }),
 
 	renameAgent: (agentId, name) => ipcRenderer.invoke("look:invoke", { type: "agent:rename", agentId, name }),
 

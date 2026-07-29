@@ -29,6 +29,7 @@ interface ChatInputProps {
 	currentThinking: string;
 	availableThinkingLevels?: ThinkingLevel[];
 	isBusy: boolean;
+	isCompacting?: boolean;
 	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
 	onThinkingChange: (level: string) => void;
 	onModelChange: (model: string) => void;
@@ -43,6 +44,7 @@ const ChatInput = function ChatInput({
 	currentThinking,
 	availableThinkingLevels,
 	isBusy,
+	isCompacting,
 	onSend,
 	onThinkingChange,
 	onModelChange,
@@ -264,6 +266,7 @@ const ChatInput = function ChatInput({
 				availableThinkingLevels={availableThinkingLevels}
 				permissionMode={permissionMode}
 				isBusy={isBusy}
+				isCompacting={isCompacting ?? false}
 				hasContent={hasContent}
 				onModelChange={onModelChange}
 				onThinkingChange={onThinkingChange}

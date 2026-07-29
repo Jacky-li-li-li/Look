@@ -1,3 +1,4 @@
+
 // ============================================================
 // IPC Handler — thin routing entry point for main→renderer events
 //
@@ -5,7 +6,7 @@
 // handlers via discriminated-union routing. Components subscribe only to
 // the Jotai atoms they render. Startup initialization is in startup.ts.
 // ============================================================
-
+import { subagentCardStatusAtom } from "./subagentAtoms";
 import type { MainToRendererEvent } from "@shared/types";
 import { handleAgentEvent } from "./agentHandlers";
 import { appStore } from "./appStore";
@@ -40,7 +41,22 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 			case "session:ui-event":
 				enqueueUiEvent(event.sessionId, event.events);
 				break;
-		}
+
+			case "session:subagent-progress":
+			case "session:subagent-completed": {
+				const status = event.type === "session:subagent-completed"
+					? event.result.status
+					: event.status;
+				const { toolCallId, taskTitle } = event;
+				if (toolCallId && taskTitle) {
+					appStore.set(subagentCardStatusAtom, (prev) => {
+						const current = prev[toolCallId] ?? {};
+						return { ...prev, [toolCallId]: { ...current, [taskTitle]: status } };
+					});
+				}
+				break;
+			}
+ 		}
 	});
 	return unsub;
 }

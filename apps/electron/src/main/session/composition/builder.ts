@@ -36,6 +36,7 @@ import { createPlanExtensionFactory } from "../../extensions/plan-extension.js";
 import { createSkillInjectExtensionFactory } from "../../extensions/skill-inject-extension.js";
 import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "../../extensions/subagent/subagent-extension.js";
+import type { AgentConfig, SubagentProgress } from "../../extensions/subagent/types.js";
 import { MCPManager } from "../../mcp/manager.js";
 import { getAvailableModels } from "../../models/model-queries.js";
 import { PlanService } from "../../permissions/plan.js";
@@ -207,6 +208,7 @@ export class CompositionBuilder {
 		});
 		this.sessionNotifier = new SessionNotifier(this.eventBus, {
 			sessionInfoService: this.sessionInfoService,
+			scopeRegistry: this.scopeRegistry,
 			listProjects: () => host.listProjects(),
 			getActiveProjectId: () => this.projectService!.activeId,
 		});
@@ -281,8 +283,26 @@ export class CompositionBuilder {
 									result.agents = result.agents.filter((agent) => enabled.includes(agent.name));
 								return result;
 							},
-							runSubSession: (parentId, agent, task, signal, title, onUpdate) =>
-								this.sessionSubagentService!.runSubSession(parentId, agent, task, signal, title, onUpdate),
+							runSubSession: (
+								parentId: string,
+								agent: AgentConfig,
+								task: string,
+								signal: AbortSignal | undefined,
+								title: string,
+								toolCallId: string,
+								taskTitle: string,
+								onUpdate?: (progress: SubagentProgress) => void,
+							) =>
+								this.sessionSubagentService!.runSubSession(
+									parentId,
+									agent,
+									task,
+									signal,
+									title,
+									toolCallId,
+									taskTitle,
+									onUpdate,
+								),
 							isSubagentEnabled: (id) => this.sessionSubagentService!.isEnabled(id),
 						},
 						resolvedProjectId,
@@ -413,8 +433,10 @@ export class CompositionBuilder {
 				},
 				emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
 				emitSessionList: (projectId) => this.sessionNotifier!.emitSessionList(projectId),
+				emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason ?? "activate"),
 			},
 			modelRegistry,
+			this.scopeRegistry,
 			MAX_NAME_LENGTH,
 		);
 

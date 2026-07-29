@@ -185,6 +185,8 @@ export interface SessionRuntimeSnapshot {
 	followUp: readonly string[];
 	stats: SessionStats;
 	contextUsage?: ContextUsage;
+	/** Captured from CompactionResult.estimatedTokensAfter after manual compaction. */
+	compactionEstimatedTokensAfter?: number;
 }
 
 export interface SessionSnapshotEnvelope {
@@ -318,6 +320,8 @@ export type MainToRendererEvent =
 			parentSessionId: string;
 			childSessionId: string;
 			agentName: string;
+			toolCallId: string;
+			taskTitle: string;
 			task: string;
 			status: "running" | "completed" | "failed" | "aborted";
 			partialOutput: string;
@@ -336,6 +340,8 @@ export type MainToRendererEvent =
 			parentSessionId: string;
 			childSessionId: string;
 			agentName: string;
+			toolCallId: string;
+			taskTitle: string;
 			result: {
 				sessionId: string;
 				agentName: string;
@@ -346,7 +352,6 @@ export type MainToRendererEvent =
 				errorMessage?: string;
 			};
 	  }
-	// ---- Project events ----
 	| {
 			type: "project:list";
 			projects: ProjectInfo[];
@@ -548,7 +553,8 @@ export type RendererToMainEvent =
 	| { type: "settings:remove-custom-provider"; payload: { name: string } }
 	| { type: "settings:list-custom-providers" }
 	| { type: "settings:test-custom-provider"; payload: CustomProviderInput }
-	| { type: "session:compress"; agentId: string }
+	| { type: "session:compress"; agentId: string; customInstructions?: string }
+	| { type: "session:abort-compress"; agentId: string }
 	| { type: "agent:rename"; agentId: string; name: string }
 	// P2-2: renderer → main "stop the current turn" signal. Matches
 	// the new agent:abort case in ipc-handlers.ts.

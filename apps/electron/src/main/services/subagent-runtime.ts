@@ -66,6 +66,8 @@ export class SubAgentRuntimeService {
 		signal: AbortSignal | undefined,
 		onUpdate: ((progress: SubagentProgress) => void) | undefined,
 		displayName?: string,
+		toolCallId?: string,
+		taskTitle?: string,
 	): Promise<SubagentResult> {
 		const pending: PendingSubSession = {
 			childSessionId,
@@ -73,6 +75,8 @@ export class SubAgentRuntimeService {
 			agent,
 			task,
 			displayName: displayName || agent.title || agent.name,
+			toolCallId: toolCallId || "",
+			taskTitle: taskTitle || "",
 			resolve: undefined!,
 			onUpdate,
 			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
@@ -132,12 +136,13 @@ export class SubAgentRuntimeService {
 			stopReason: pending.stopReason,
 			errorMessage: pending.errorMessage,
 		};
-
 		this.host.emit({
 			type: "session:subagent-completed",
 			parentSessionId: pending.parentSessionId,
 			childSessionId,
 			agentName: pending.displayName,
+			toolCallId: pending.toolCallId,
+			taskTitle: pending.taskTitle,
 			result: {
 				sessionId: result.sessionId,
 				agentName: result.agentName,
@@ -148,7 +153,6 @@ export class SubAgentRuntimeService {
 				errorMessage: result.errorMessage,
 			},
 		});
-		pending.resolve(result);
 
 		// 调度延迟清理：保留 session JSONL 在磁盘，释放 AgentSessionRuntime 内存。
 		this.scheduleSubSessionCleanup(childSessionId);
@@ -191,6 +195,8 @@ export class SubAgentRuntimeService {
 			parentSessionId: pending.parentSessionId,
 			childSessionId: sessionId,
 			agentName: pending.displayName,
+			toolCallId: pending.toolCallId,
+			taskTitle: pending.taskTitle,
 			status: "running",
 			task: pending.task,
 			usage: pending.usage,

@@ -166,6 +166,8 @@ export interface SubagentHost {
 		task: string,
 		signal: AbortSignal | undefined,
 		title: string,
+		toolCallId: string,
+		taskTitle: string,
 		onUpdate?: (progress: SubagentProgress) => void,
 	): Promise<SubagentResult>;
 	/** Agent 开关状态（Stage 2 持久化；Stage 1 恒为 true） */

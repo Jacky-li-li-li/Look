@@ -105,7 +105,8 @@ export interface LookAPI {
 	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
 	setEntryLabel(agentId: string, entryId: string, label: string | null): Promise<IpcResult>;
 	renameAgent(agentId: string, name: string): Promise<IpcResult>;
-	compressSession(agentId: string): Promise<IpcResult>;
+	compressSession(agentId: string, customInstructions?: string): Promise<IpcResult>;
+	abortCompressSession(agentId: string): Promise<IpcResult>;
 	navigateTree(
 		agentId: string,
 		entryId: string,

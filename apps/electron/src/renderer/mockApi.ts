@@ -105,7 +105,7 @@ function mockRuntime() {
 		steering: [],
 		followUp: [],
 		stats: {},
-		contextUsage: { tokens: 12_480, contextWindow: 128_000, percentage: 9.75 },
+		contextUsage: { tokens: 12_480, contextWindow: 128_000, percent: 9.75 },
 	};
 }
 

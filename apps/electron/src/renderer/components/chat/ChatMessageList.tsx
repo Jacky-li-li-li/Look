@@ -4,7 +4,7 @@ import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import type { LookUiToolExecState } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
-import { Check, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import {
 	type BranchConfirmRequest,
 	type BranchConfirmResult,
 } from "../dialogs/BranchConfirmDialog";
+import LookMarkdown from "../markdown/LookMarkdown";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
 import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
@@ -69,6 +70,90 @@ function messageText(message: AgentMessage): string {
 		.map((block) => block.text)
 		.join("\n\n")
 		.trim();
+}
+
+// ============================================================
+// CompactionStatusCard — 压缩状态指示条
+// ============================================================
+
+function CompactionStatusCard({
+	phase,
+	summary,
+	tokensBefore,
+	estimatedTokensAfter,
+	sessionId,
+}: {
+	phase: "compacting" | "done";
+	summary?: string;
+	tokensBefore?: number;
+	estimatedTokensAfter?: number;
+	sessionId?: string;
+}) {
+	const [expanded, setExpanded] = useState(false);
+	const { t } = useTranslation();
+
+	const handleAbort = useCallback(() => {
+		if (sessionId) {
+			window.look
+				.abortCompressSession(sessionId)
+				.catch((err: unknown) => console.error("[CompactionStatusCard] abort failed:", err));
+		}
+	}, [sessionId]);
+
+	if (phase === "compacting") {
+		return (
+			<div className="px-msg-item-x py-msg-item-y">
+				<div className="flex select-none items-center gap-3 text-[11px] text-muted-foreground/60">
+					<div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/30 to-muted-foreground/10" />
+					<Loader2 className="size-3 animate-spin" />
+					<span>{t("context.compressing")}</span>
+					<button
+						type="button"
+						onClick={handleAbort}
+						className="ml-2 rounded-xs px-1.5 py-0.5 text-[10px] text-muted-foreground/40 transition-colors hover:bg-destructive/10 hover:text-destructive"
+					>
+						{t("common.cancel")}
+					</button>
+					<div className="h-px flex-1 bg-gradient-to-r from-muted-foreground/10 via-muted-foreground/30 to-transparent" />
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="px-msg-item-x py-msg-item-y">
+			<button type="button" onClick={() => setExpanded(!expanded)} className="group w-full text-left">
+				<div className="flex select-none items-center gap-3 text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground/80">
+					<div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/20 to-muted-foreground/10" />
+					<div className="flex items-center gap-1.5">
+						<Check className="size-3 text-emerald-400" />
+						<span>{t("context.compressed")}</span>
+						{tokensBefore != null && tokensBefore > 0 && (
+							<span className="ml-1 font-mono text-[10px] tabular-nums text-muted-foreground/40">
+								{estimatedTokensAfter != null
+									? `${fmtTokens(tokensBefore)} → ${fmtTokens(estimatedTokensAfter)}`
+									: `-${fmtTokens(tokensBefore)}`}
+							</span>
+						)}
+						{summary &&
+							(expanded ? (
+								<ChevronUp className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+							) : (
+								<ChevronDown className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+							))}
+					</div>
+					<div className="h-px flex-1 bg-gradient-to-r from-muted-foreground/10 via-muted-foreground/20 to-transparent" />
+				</div>
+			</button>
+			{expanded && summary && (
+				<div className="mt-2 overflow-hidden rounded-md border border-hairline bg-muted/20 p-3">
+					<div className="max-h-80 overflow-auto">
+						<LookMarkdown content={summary} />
+					</div>
+				</div>
+			)}
+		</div>
+	);
 }
 
 // ============================================================
@@ -384,6 +469,20 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		(item: TimelineItem) => {
 			if (!item) return null;
 
+			// Compaction status card (live or persisted).
+			if (item.compactionPhase) {
+				return (
+					<CompactionStatusCard
+						key={item.id}
+						phase={item.compactionPhase}
+						summary={item.compactionSummary}
+						tokensBefore={item.compactionTokensBefore}
+						estimatedTokensAfter={item.compactionEstimatedTokensAfter}
+						sessionId={agentId}
+					/>
+				);
+			}
+
 			if (item.entry) {
 				return (
 					<div key={item.id} className="px-msg-item-x py-msg-item-y">
@@ -451,7 +550,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				</div>
 			);
 		},
-		[agentName, autoCollapse, flashEntryId, isBusy, leafId, renderMessageActions],
+		[agentName, autoCollapse, flashEntryId, isBusy, leafId, renderMessageActions, agentId],
 	);
 
 	const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
@@ -506,6 +605,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 				sessionState.uiTools,
 				sessionState.uiPhase,
 				sessionState.pendingUserMessage,
+				sessionState.runtime?.compactionEstimatedTokensAfter,
 			),
 		[
 			sessionState.entries,
@@ -514,6 +614,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 			sessionState.uiTools,
 			sessionState.uiPhase,
 			sessionState.pendingUserMessage,
+			sessionState.runtime?.compactionEstimatedTokensAfter,
 		],
 	);
 

@@ -80,7 +80,9 @@ export function deriveSessionPhase(state: RendererSessionState | null | undefine
 }
 
 export function deriveAgentPhase(agent: AgentInfo | null | undefined): RendererSessionPhase {
-	if (agent?.isCompacting) return "compacting";
+	// Note: isCompacting is intentionally excluded — it's carried only by
+	// sessionState.runtime (from session:snapshot), not by agent:updated/agent:list.
+	// deriveSessionPhase is always called first and handles compaction via uiPhase.
 	if (agent?.isRetrying) return "retrying";
 	if (agent?.isStreaming) return "thinking";
 	return "idle";

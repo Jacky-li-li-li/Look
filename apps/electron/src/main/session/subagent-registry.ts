@@ -19,6 +19,8 @@ export interface PendingSubSession {
 	agent: AgentConfig;
 	task: string;
 	displayName: string;
+	toolCallId: string;
+	taskTitle: string;
 	resolve: (result: SubagentResult) => void;
 	onUpdate?: (progress: SubagentProgress) => void;
 	usage: SubagentUsage;

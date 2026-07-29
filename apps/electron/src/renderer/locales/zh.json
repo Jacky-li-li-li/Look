@@ -300,7 +300,11 @@
     "autoCollapse": "自动折叠",
     "autoCollapseDesc": "当输出开始流式传输时自动折叠思考面板",
     "autoCompress": "自动压缩",
-    "autoCompressDesc": "上下文接近模型窗口限制时，SDK 自动压缩历史对话（预留 16K tokens）",
+    "autoCompressDesc": "上下文接近模型窗口限制时，SDK 自动压缩历史对话",
+    "reserveTokens": "预留 Token 数",
+    "reserveTokensDesc": "压缩时为 LLM 响应预留的 token 数（配置文件: compaction.reserveTokens）",
+    "keepRecentTokens": "保留最近 Token 数",
+    "keepRecentTokensDesc": "压缩时保留的最远 token 数（配置文件: compaction.keepRecentTokens）",
     "autoTitleModel": "标题生成模型",
     "autoTitleModelDesc": "用于根据首条消息自动生成会话标题的模型",
     "autoTitleUseSessionModel": "使用当前会话模型（默认）",
@@ -582,6 +586,7 @@
   },
   "context": {
     "compressing": "压缩中…",
+    "compressed": "压缩完成",
     "stopFirst": "请先停止 Agent 再压缩",
     "clickToCompress": "点击压缩上下文"
   },

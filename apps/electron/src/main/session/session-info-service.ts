@@ -116,7 +116,7 @@ export class SessionInfoService {
 			thinkingLevel: session.thinkingLevel as ThinkingLevel,
 			modelSupportsThinking: session.supportsThinking(),
 			availableThinkingLevels: session.getAvailableThinkingLevels() as ThinkingLevel[],
-			isStreaming: session.isStreaming || session.isRetrying || session.isCompacting,
+			isStreaming: session.isStreaming || session.isRetrying,
 			isRetrying: session.isRetrying,
 			isCompacting: session.isCompacting,
 			messageCount: stats.totalMessages,

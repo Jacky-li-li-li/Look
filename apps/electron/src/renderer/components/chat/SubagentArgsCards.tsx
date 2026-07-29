@@ -11,6 +11,7 @@
 import { cn } from "@look/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@look/ui/components/ui/dialog";
 import { useAtomValue } from "jotai";
+import { subagentCardStatusAtom, type SubagentCardStatus } from "../../store/subagentAtoms";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -68,22 +69,30 @@ export function parseSubagentItems(toolCall: ToolCallViewModel): SubagentItem[] 
 interface SubagentArgsCardsProps {
 	toolCall: ToolCallViewModel;
 	items: SubagentItem[];
-	/** 可选：在每张卡片右侧显示该调用的执行状态徽章 */
+	/** Tool-level status — used as fallback when per-card atom data is unavailable (history view). */
 	status?: ToolCallViewModel["status"];
 }
 
-const STATUS_BADGE_COLOR: Record<ToolCallViewModel["status"], string> = {
-	success: "text-emerald-500 dark:text-emerald-400",
-	error: "text-red-500 dark:text-red-400",
-	running: "text-amber-500 dark:text-amber-300",
-	pending: "text-muted-foreground",
+
+
+const ITEM_STATUS_BADGE: Record<SubagentCardStatus, { color: string; label: string }> = {
+	running: { color: "text-amber-500 dark:text-amber-300", label: "running" },
+	completed: { color: "text-emerald-500 dark:text-emerald-400", label: "completed" },
+	failed: { color: "text-red-500 dark:text-red-400", label: "failed" },
+	aborted: { color: "text-red-500 dark:text-red-400", label: "aborted" },
 };
 
 export default function SubagentArgsCards({ toolCall, items, status }: SubagentArgsCardsProps) {
 	const { t } = useTranslation();
 	const sessionId = useAtomValue(activeAgentIdAtom);
+	const cardStatuses = useAtomValue(subagentCardStatusAtom);
 	const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
+	/** Map tool-level status to per-card status as fallback for history view. */
+	const fallbackStatus: SubagentCardStatus =
+		status === "success" ? "completed"
+		: status === "error" ? "failed"
+		: "running";
 	const callKeyFor = (index: number): string =>
 		toolCall.toolName === "subagent" ? toolCall.callId : `${toolCall.callId}:${index}`;
 
@@ -115,16 +124,20 @@ export default function SubagentArgsCards({ toolCall, items, status }: SubagentA
 							</span>
 							<span className="truncate font-mono text-[11px] text-muted-foreground">{item.agent}</span>
 						</span>
-						{status && (
-							<span
-								className={cn(
-									"shrink-0 font-mono text-[9px] uppercase tracking-wider",
-									STATUS_BADGE_COLOR[status],
-								)}
-							>
-								{status}
-							</span>
-						)}
+						{(() => {
+							const itemStatus: SubagentCardStatus = cardStatuses[toolCall.callId]?.[item.title] ?? fallbackStatus;
+							const badge = ITEM_STATUS_BADGE[itemStatus];
+							return (
+								<span
+									className={cn(
+										"shrink-0 font-mono text-[9px] uppercase tracking-wider",
+										badge.color,
+									)}
+								>
+									{badge.label}
+								</span>
+							);
+						})()}
 						<ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
 					</button>
 				);

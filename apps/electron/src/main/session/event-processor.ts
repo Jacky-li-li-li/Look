@@ -80,9 +80,14 @@ export class SessionEventProcessor {
 			case "message_update":
 				this.host.emitContextUsage(sessionId);
 				break;
+			case "compaction_start":
+				// Emit snapshot so sessionState.runtime.isCompacting is the single source of truth.
+				this.host.emitSessionState(sessionId, "activate");
+				this.host.emitSessionUpdated(sessionId);
+				this.host.emitTodoUpdate(sessionId);
+				break;
 			case "thinking_level_changed":
 			case "session_info_changed":
-			case "compaction_start":
 			case "tool_execution_end":
 				this.host.emitSessionUpdated(sessionId);
 				this.host.emitTodoUpdate(sessionId);
@@ -93,6 +98,7 @@ export class SessionEventProcessor {
 				} else {
 					this.host.emitSessionState(sessionId, "agent_end", event.willRetry);
 				}
+				this.host.emitTodoUpdate(sessionId);
 				break;
 			case "auto_retry_start":
 			case "auto_retry_end":
