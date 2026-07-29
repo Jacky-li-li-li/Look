@@ -126,11 +126,11 @@ function makeCoordinator(runtimeFixture: RuntimeFixture, stored = storedSession(
 		},
 		subAgentRegistry: {
 			hasPending: vi.fn().mockReturnValue(false),
-			abortPendingForParent: vi.fn(),
 			unregister: vi.fn(),
 		},
 		subAgentRuntimeService: {
 			finalizeSubSession: vi.fn(),
+			finalizePendingChildren: vi.fn(),
 			cancelSubSessionCleanup: vi.fn(),
 		},
 		autoTitleService: { dispose: vi.fn() },

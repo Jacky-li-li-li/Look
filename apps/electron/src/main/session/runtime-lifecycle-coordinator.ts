@@ -36,8 +36,11 @@ export interface RuntimeLifecycleCoordinatorOptions {
 		IPlanService,
 		"restoreToolSnapshot" | "syncToolState" | "cancelInteractions" | "persistToolSnapshotIfDirty" | "disposeSession"
 	>;
-	subAgentRegistry: Pick<SubAgentRegistry, "hasPending" | "abortPendingForParent" | "unregister">;
-	subAgentRuntimeService: Pick<SubAgentRuntimeService, "finalizeSubSession" | "cancelSubSessionCleanup">;
+	subAgentRegistry: Pick<SubAgentRegistry, "hasPending" | "unregister">;
+	subAgentRuntimeService: Pick<
+		SubAgentRuntimeService,
+		"finalizeSubSession" | "cancelSubSessionCleanup" | "finalizePendingChildren"
+	>;
 	autoTitleService: Pick<AutoTitleService, "dispose">;
 	eventProcessor: Pick<SessionEventProcessor, "dispose">;
 	sessionSubagentService: Pick<SessionSubagentService, "applyDefaultOnBind" | "clearSession">;
@@ -356,7 +359,7 @@ export class RuntimeLifecycleCoordinator {
 			errors.push(error);
 		}
 		if (hasPending) attempt(() => this.options.subAgentRuntimeService.finalizeSubSession(sessionId, true));
-		attempt(() => this.options.subAgentRegistry.abortPendingForParent(sessionId));
+		attempt(() => this.options.subAgentRuntimeService.finalizePendingChildren(sessionId));
 		attempt(() => this.options.subAgentRegistry.unregister(sessionId));
 		if (abort && managed.runtime.session.isStreaming) {
 			try {

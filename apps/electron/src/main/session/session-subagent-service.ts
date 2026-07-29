@@ -118,13 +118,21 @@ export class SessionSubagentService {
 		}
 	}
 
-	/** Called once when a runtime is bound. Only mutates tools when default is off. */
+	/**
+	 * Called once when a runtime is bound. Applies per-session override if one
+	 * exists, otherwise falls back to the global default.
+	 */
 	applyDefaultOnBind(sessionId: string, session: AgentSession): void {
-		if (this.defaultEnabled) return;
-		this.enabledBySession.set(sessionId, false);
-		session.setActiveToolsByName(
-			session.getActiveToolNames().filter((name) => !(SUBAGENT_TOOL_NAMES as readonly string[]).includes(name)),
-		);
+		const perSession = this.enabledBySession.get(sessionId);
+		const enabled = perSession ?? this.defaultEnabled;
+		if (!enabled) {
+			session.setActiveToolsByName(
+				session.getActiveToolNames().filter((name) => !(SUBAGENT_TOOL_NAMES as readonly string[]).includes(name)),
+			);
+		}
+		if (perSession === undefined && !this.defaultEnabled) {
+			this.enabledBySession.set(sessionId, false);
+		}
 	}
 
 	/** Clean up per-session override when a runtime is disposed. */
@@ -291,7 +299,6 @@ export class SessionSubagentService {
 			taskTitle,
 		);
 
-
 		await new Promise<void>((resolve, reject) => {
 			let accepted = false;
 			void session
@@ -305,17 +312,25 @@ export class SessionSubagentService {
 					},
 				})
 				.catch((error) => {
-					if (!accepted) reject(error);
-					else {
-						this.deps.host.emit({
-							type: "error",
-							agentId: childSessionId,
-							message: error instanceof Error ? error.message : String(error),
-						});
+					if (!accepted) {
+						reject(error);
+						return;
 					}
+					this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
+					this.deps.host.emit({
+						type: "error",
+						agentId: childSessionId,
+						message: error instanceof Error ? error.message : String(error),
+					});
 				});
 		}).catch((error) => {
 			this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
+			session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
+				...delegation,
+				status: "failed",
+				finishedAt: new Date().toISOString(),
+				error: error instanceof Error ? error.message : String(error),
+			});
 			throw error;
 		});
 
@@ -323,7 +338,8 @@ export class SessionSubagentService {
 			(result) => {
 				session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
 					...delegation,
-					status: "completed",
+					status:
+						result.status === "completed" ? "completed" : result.status === "aborted" ? "cancelled" : "failed",
 					finishedAt: new Date().toISOString(),
 				});
 				return result;

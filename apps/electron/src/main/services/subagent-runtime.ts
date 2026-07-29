@@ -221,6 +221,22 @@ export class SubAgentRuntimeService {
 		);
 	}
 
+	/**
+	 * 在父会话 dispose 时，通过 finalizeSubSession 结算所有 pending 子会话。
+	 * 与 abortPendingForParent 不同，此方法走完整的 finalize 路径：
+	 * 构建 result、emit session:subagent-completed、调度 cleanup timer。
+	 */
+	finalizePendingChildren(parentSessionId: string): void {
+		const childIds = this.registry.listChildren(parentSessionId);
+		for (const childId of childIds) {
+			const pending = this.registry.getPending(childId);
+			if (pending) {
+				pending.aborted = true;
+			}
+			this.finalizeSubSession(childId, true);
+		}
+	}
+
 	/** 级联销毁子会话（dispose runtime + 删除 session 文件 + 清理注册表）。 */
 	async destroySubSessions(parentSessionId: string): Promise<void> {
 		const childIds = this.registry.listChildren(parentSessionId);
