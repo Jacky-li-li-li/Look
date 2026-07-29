@@ -100,7 +100,7 @@ describe("Plan extension", () => {
 		expect(result.details.questions[0].header).toBe("Choice");
 	});
 
-	it("queues execution and aborts the captured Plan loop after approval", async () => {
+	it("queues execution follow-up and keeps the signal valid for the next turn", async () => {
 		const { tools, host, sendMessage } = setup();
 		host.submitPlan.mockResolvedValue({ status: "approved", planId: "plan-1", filePath: "/tmp/plan.md" });
 		const exit = tools.find((tool) => tool.name === "ExitPlanMode")!;
@@ -110,7 +110,9 @@ describe("Plan extension", () => {
 			triggerTurn: true,
 			deliverAs: "followUp",
 		});
-		expect(context.abort).toHaveBeenCalledOnce();
+		// Must NOT abort the signal — prepareNextTurnWithContext already refreshes
+		// tools between turns, and the valid signal is required for the follow-up stream.
+		expect(context.abort).not.toHaveBeenCalled();
 		expect(result).toMatchObject({ details: { approved: true }, terminate: true });
 	});
 

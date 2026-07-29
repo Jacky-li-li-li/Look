@@ -108,7 +108,7 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 			promptSnippet: "Submit the final plan for approval",
 			parameters: exitPlanModeSchema,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+			async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
 				if (host.getMode(sessionId) !== "plan") return toolError("ExitPlanMode is only available in Plan mode.");
 				const plan = params.plan.trim();
 				if (!plan) return toolError("Plan must not be empty.");
@@ -130,9 +130,8 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 						},
 						{ triggerTurn: true, deliverAs: "followUp" },
 					);
-					// The active core loop captured the Plan tool list. Abort it so
-					// AgentSession continues the queued message with a fresh tool snapshot.
-					ctx.abort();
+					// prepareNextTurnWithContext picks up the restored tools from agent.state,
+					// and the followUp message triggers a new turn with the valid signal.
 					return {
 						content: [{ type: "text", text: "Plan approved. Continuing with implementation." }],
 						details: { approved: true, planId: outcome.planId, filePath: outcome.filePath },
@@ -140,7 +139,6 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 					};
 				}
 
-				ctx.abort();
 				if (outcome.status === "rejected") {
 					return {
 						content: [{ type: "text", text: "Plan rejected. The planning turn has ended." }],
