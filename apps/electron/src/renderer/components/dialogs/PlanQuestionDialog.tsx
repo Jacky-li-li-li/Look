@@ -3,9 +3,11 @@ import { Button } from "@look/ui/components/ui/button";
 import { Input } from "@look/ui/components/ui/input";
 import { useAtom } from "jotai";
 import { Check, CircleHelp, ListChecks, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../../store/atoms";
+
+const AUTO_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function PlanQuestionDialog({ sessionId }: { sessionId: string | null }) {
 	const [request, setRequest] = useAtom(planQuestionRequestAtomFamily(sessionId ?? ""));
@@ -15,14 +17,62 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 	const panelRef = useRef<HTMLDivElement>(null);
 	const respondingRef = useRef(false);
 	respondingRef.current = responding;
+	const requestRef = useRef(request);
+	requestRef.current = request;
+	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const deadlineRef = useRef<number | null>(null);
+	const [, tick] = useReducer((n: number) => n + 1, 0);
 	const draft = storedDraft.requestId === request?.requestId ? storedDraft : emptyPlanQuestionDraft();
 	const { selections, otherEnabled, otherValues } = draft;
 
 	const dismiss = useCallback(() => {
 		if (respondingRef.current) return;
-		setRequest(null);
-		setDraft(emptyPlanQuestionDraft());
+		// Notify main process before clearing local state,
+		// otherwise the planning turn hangs forever.
+		const req = requestRef.current;
+		if (req) {
+			void window.look
+				.respondPlanQuestion({
+					requestId: req.requestId,
+					sessionId: req.sessionId,
+					answers: {},
+					cancelled: true,
+				})
+				.catch(() => {
+					/* already resolved — ignore */
+				})
+				.finally(() => {
+					setRequest(null);
+					setDraft(emptyPlanQuestionDraft());
+				});
+		} else {
+			setRequest(null);
+			setDraft(emptyPlanQuestionDraft());
+		}
 	}, [setRequest, setDraft]);
+
+	// Set up auto-timeout (5 minutes)
+	useEffect(() => {
+		if (!request || request.sessionId !== sessionId) {
+			deadlineRef.current = null;
+			if (timerRef.current) clearInterval(timerRef.current);
+			return;
+		}
+		const deadline = Date.now() + AUTO_TIMEOUT_MS;
+		deadlineRef.current = deadline;
+		timerRef.current = setInterval(() => {
+			if (deadlineRef.current && Date.now() >= deadlineRef.current) {
+				if (timerRef.current) clearInterval(timerRef.current);
+				toast.info("Agent 提问已超时自动关闭");
+				dismiss();
+			} else {
+				tick();
+			}
+		}, 1000);
+		return () => {
+			if (timerRef.current) clearInterval(timerRef.current);
+		};
+	}, [request, sessionId, dismiss]);
 
 	// Animate in when request appears
 	useEffect(() => {

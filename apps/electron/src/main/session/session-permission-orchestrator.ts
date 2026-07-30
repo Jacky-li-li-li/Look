@@ -8,7 +8,7 @@
 // ============================================================
 
 import type { PermissionMode } from "@look/shared/types";
-import type { IPermissionService, IPlanService } from "../core/contracts.js";
+import type { IEventBus, IPermissionService, IPlanService } from "../core/contracts.js";
 import type { UserSettingsStore } from "../settings/store.js";
 import type { ManagedRuntime } from "./runtime-registry.js";
 
@@ -18,6 +18,7 @@ export interface SessionPermissionOrchestratorHost {
 
 export interface SessionPermissionOrchestratorDependencies {
 	host: SessionPermissionOrchestratorHost;
+	eventBus: IEventBus;
 	permissionService: IPermissionService;
 	planService: IPlanService;
 	userSettings: UserSettingsStore;
@@ -54,5 +55,8 @@ export class SessionPermissionOrchestrator {
 		if (!options.internal && managed.runtime.session.isStreaming && (previousMode === "plan" || mode === "plan")) {
 			await managed.runtime.session.abort();
 		}
+
+		// Broadcast mode change so the renderer can sync permissionModeAtomFamily.
+		this.deps.eventBus.emit({ type: "permission:mode-changed", agentId: sessionId, mode });
 	}
 }

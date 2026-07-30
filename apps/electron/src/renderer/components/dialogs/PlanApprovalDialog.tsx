@@ -26,6 +26,8 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 	const [, tick] = useReducer((n: number) => n + 1, 0);
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const deadlineRef = useRef<number | null>(null);
+	const requestRef = useRef(request);
+	requestRef.current = request;
 
 	// Set up auto-reject timeout
 	useEffect(() => {
@@ -42,9 +44,26 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 			const now = Date.now();
 			if (deadlineRef.current && now >= deadlineRef.current) {
 				if (timerRef.current) clearInterval(timerRef.current);
-				setRequest(null);
 				setAutoRejectAt(null);
-				toast.info("计划审批已超时自动拒绝");
+				// Notify main process before clearing local state,
+				// otherwise the planning turn hangs forever.
+				const req = requestRef.current;
+				if (req) {
+					void window.look
+						.respondPlanApproval({
+							requestId: req.requestId,
+							sessionId: req.sessionId,
+							action: "reject",
+						})
+						.catch(() => {
+							/* already resolved — ignore */
+						})
+						.finally(() => {
+							setRequest(null);
+						});
+				} else {
+					setRequest(null);
+				}
 			} else {
 				// Force re-render for the countdown display via tick counter.
 				// Using setAutoRejectAt(deadlineRef.current) would set the same

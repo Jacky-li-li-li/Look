@@ -166,6 +166,12 @@ export class PlanService implements IPlanService {
 	handleQuestionResponse(payload: PlanQuestionResponse): boolean {
 		const pending = this.questionsAwaiting.get(payload.requestId);
 		if (!pending || pending.request.sessionId !== payload.sessionId) return false;
+		if (payload.cancelled) {
+			return this.finishQuestion(payload.requestId, {
+				status: "cancelled",
+				reason: "User dismissed the question dialogue",
+			});
+		}
 		const answers: Record<string, string> = Object.create(null);
 		for (const question of pending.request.questions) {
 			const answer = payload.answers[question.question];

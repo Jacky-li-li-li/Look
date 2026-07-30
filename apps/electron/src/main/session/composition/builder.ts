@@ -487,6 +487,7 @@ export class CompositionBuilder {
 
 		this.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({
 			host: { ensureRuntime: (sessionId) => this.runtimeLifecycle!.ensureRuntime(sessionId) },
+			eventBus: this.eventBus!,
 			permissionService: this.permissionService!,
 			planService: this.planService!,
 			userSettings: this.userSettings!,

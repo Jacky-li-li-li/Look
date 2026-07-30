@@ -5,10 +5,14 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
-import type { IPermissionService, IPlanService } from "../src/main/core/contracts.js";
+import type { IEventBus, IPermissionService, IPlanService } from "../src/main/core/contracts.js";
 import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
 import { SessionPermissionOrchestrator } from "../src/main/session/session-permission-orchestrator.js";
 import type { UserSettingsStore } from "../src/main/settings/store.js";
+
+function makeEventBus(): IEventBus {
+	return { emit: vi.fn(), onEvent: vi.fn() };
+}
 
 function makeManagedRuntime(isStreaming = false): ManagedRuntime {
 	const sessionManager = {} as SessionManager;
@@ -37,6 +41,7 @@ describe("SessionPermissionOrchestrator", () => {
 
 		const orchestrator = new SessionPermissionOrchestrator({
 			host: { ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime())) },
+			eventBus: makeEventBus(),
 			permissionService,
 			planService: { cancelInteractions: vi.fn() } as unknown as IPlanService,
 			userSettings: { update: vi.fn() } as unknown as UserSettingsStore,
@@ -66,6 +71,7 @@ describe("SessionPermissionOrchestrator", () => {
 
 		const orchestrator = new SessionPermissionOrchestrator({
 			host: { ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime())) },
+			eventBus: makeEventBus(),
 			permissionService,
 			planService,
 			userSettings: { update: vi.fn() } as unknown as UserSettingsStore,

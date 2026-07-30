@@ -125,6 +125,8 @@ export interface PlanQuestionResponse {
 	requestId: string;
 	sessionId: string;
 	answers: Record<string, string>;
+	/** Set to true when the user dismisses the dialog without answering (Escape, backdrop click, timeout). */
+	cancelled?: boolean;
 }
 
 export interface PlanApprovalRequest {
@@ -295,6 +297,7 @@ export type MainToRendererEvent =
 	// ---- Permission events ----
 	| { type: "permission:ask"; agentId: string; event: PermissionAskEvent }
 	| { type: "permission:resolved"; agentId: string; requestId: string }
+	| { type: "permission:mode-changed"; agentId: string; mode: PermissionMode }
 	// ---- Plan interaction events ----
 	| {
 			type: "plan:question-requested";

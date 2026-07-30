@@ -3,6 +3,7 @@ import { appStore } from "./appStore";
 import {
 	emptyPlanQuestionDraft,
 	permissionAskQueueAtom,
+	permissionModeAtomFamily,
 	planApprovalRequestAtomFamily,
 	planQuestionDraftAtomFamily,
 	planQuestionRequestAtomFamily,
@@ -14,7 +15,19 @@ export function handlePermissionEvent(event: MainToRendererEvent): boolean {
 		case "permission:ask": {
 			const item = { ...event.event, agentId: event.agentId };
 			const queue = appStore.get(permissionAskQueueAtom);
-			if (!queue.some((pending) => pending.requestId === item.requestId)) {
+			if (queue.some((pending) => pending.requestId === item.requestId)) return true;
+
+			// Auto-deny pending permission requests from a different session.
+			// Without this, switching sessions while a permission dialog is open
+			// would block the new session's dialog with the old session's request.
+			const otherSessionItems = queue.filter((pending) => pending.agentId !== item.agentId);
+			if (otherSessionItems.length > 0) {
+				for (const pending of otherSessionItems) {
+					void window.look.respondPermission({ requestId: pending.requestId, action: "deny" }).catch(() => {});
+				}
+				const currentSessionItems = queue.filter((pending) => pending.agentId === item.agentId);
+				appStore.set(permissionAskQueueAtom, [...currentSessionItems, item]);
+			} else {
 				appStore.set(permissionAskQueueAtom, [...queue, item]);
 			}
 			return true;
@@ -59,6 +72,10 @@ export function handlePermissionEvent(event: MainToRendererEvent): boolean {
 			}
 			return true;
 		}
+
+		case "permission:mode-changed":
+			appStore.set(permissionModeAtomFamily(event.agentId), event.mode);
+			return true;
 
 		case "todo:update":
 			appStore.set(todoItemsAtomFamily(event.sessionId), event.items);

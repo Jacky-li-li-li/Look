@@ -190,6 +190,7 @@ export interface LookAPI {
 		requestId: string;
 		sessionId: string;
 		answers: Record<string, string>;
+		cancelled?: boolean;
 	}): Promise<{ success: boolean; error?: string }>;
 	respondPlanApproval(payload: {
 		requestId: string;
