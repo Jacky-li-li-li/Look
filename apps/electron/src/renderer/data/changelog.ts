@@ -20,6 +20,42 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.4.0",
+		date: "2026-07-31",
+		items: [
+			{
+				zh: "新增 Plan 模式专属模型选择功能，可在 Plan 模式下独立配置使用的模型",
+				en: "Plan mode now has its own model selector — configure a separate model for planning sessions",
+				ja: "Plan モード専用のモデル選択機能を追加。Plan モードで使用するモデルを個別に設定可能",
+			},
+			{
+				zh: "子代理修复：解决 pending 泄漏、委托状态异常、错误路径覆盖不全的问题",
+				en: "Subagent fixes: resolved pending leaks, delegation state errors, and uncovered error paths",
+				ja: "サブエージェント修正：pending リーク、委任状態の異常、エラーパスの不備を解消",
+			},
+			{
+				zh: "修复 Plan 模式下权限许可后交互卡死及跨会话阻塞的问题",
+				en: "Fixed interaction hangs after granting permissions in Plan mode and cross-session blocking",
+				ja: "Plan モードでの権限許可後の操作不能とセッション間ブロッキングを修正",
+			},
+			{
+				zh: "会话压缩（compaction）重构：与 pi SDK 设计对齐，新增结果捕获与设置界面",
+				en: "Session compaction refactored to align with pi SDK design: added result capture and settings UI",
+				ja: "セッション圧縮（compaction）をリファクタリング：pi SDK 設計に準拠、結果キャプチャと設定 UI を追加",
+			},
+			{
+				zh: "macOS 窗口控制按钮垂直对齐调整",
+				en: "Adjusted macOS traffic-light button vertical alignment",
+				ja: "macOS のウィンドウ制御ボタンの垂直配置を調整",
+			},
+			{
+				zh: "侧栏修复：收起时打开文件夹按钮不再隐藏，展开动画改为 grid + translateX 消除闪烁",
+				en: "Sidebar fixes: open-folder button no longer hides on collapse, expand animation switched to grid + translateX to eliminate flicker",
+				ja: "サイドバー修正：折りたたみ時にフォルダボタンが非表示にならないよう改善、展開アニメーションを grid + translateX に変更しちらつきを解消",
+			},
+		],
+	},
+	{
 		version: "1.3.12",
 		date: "2026-07-27",
 		items: [
