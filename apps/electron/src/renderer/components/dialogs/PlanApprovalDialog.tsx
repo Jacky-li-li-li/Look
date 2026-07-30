@@ -121,6 +121,9 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 							</span>
 						)}
 					</div>
+					{request.title && (
+						<p className="mt-1 truncate text-xs font-medium text-foreground/80">{request.title}</p>
+					)}
 					<DialogDescription className="text-xs">
 						会话"{sessionName}"已完成规划。批准后将切换为 Always 并立即开始实施。
 					</DialogDescription>

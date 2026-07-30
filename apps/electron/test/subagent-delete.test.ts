@@ -80,9 +80,10 @@ describe("SubAgent deletion cleanup", () => {
 
 		const manager = await SessionRuntimeManager.create();
 		try {
-			const created = (
-				manager.composition as unknown as TestManagerInternals
-			).projectService.createProjectRecord(root, projectName);
+			const created = (manager.composition as unknown as TestManagerInternals).projectService.createProjectRecord(
+				root,
+				projectName,
+			);
 			const createdId = created.id;
 			const sharedDir = getProjectSharedDir(createdId);
 			const actualSubsessionsDir = getWorkspaceSubsessionsDir(createdId);
@@ -110,9 +111,7 @@ describe("SubAgent deletion cleanup", () => {
 			expect(existsSync(sessionPath)).toBe(false);
 			expect(existsSync(sharedDir)).toBe(false);
 			expect(existsSync(actualSubsessionsDir)).toBe(false);
-			expect((manager.composition as unknown as TestManagerInternals).projectService.has(createdId)).toBe(
-				false,
-			);
+			expect((manager.composition as unknown as TestManagerInternals).projectService.has(createdId)).toBe(false);
 			expect(sanitiseWorkspaceName(projectName)).toBe(projectName);
 		} finally {
 			await manager.dispose();

@@ -2,7 +2,7 @@
 // SessionPermissionOrchestrator unit tests
 // ============================================================
 
-import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
 import type { IEventBus, IPermissionService, IPlanService } from "../src/main/core/contracts.js";
@@ -14,6 +14,17 @@ function makeEventBus(): IEventBus {
 	return { emit: vi.fn(), onEvent: vi.fn() };
 }
 
+function makeModelRegistry(): Pick<ModelRegistry, "find"> {
+	return { find: vi.fn() };
+}
+
+function makeUserSettings(planModel: string | null = null) {
+	return {
+		update: vi.fn(),
+		getAll: vi.fn(() => ({ planModel })),
+	} as unknown as UserSettingsStore;
+}
+
 function makeManagedRuntime(isStreaming = false): ManagedRuntime {
 	const sessionManager = {} as SessionManager;
 	return {
@@ -21,6 +32,8 @@ function makeManagedRuntime(isStreaming = false): ManagedRuntime {
 			session: {
 				isStreaming,
 				abort: vi.fn(),
+				model: undefined,
+				setModel: vi.fn(() => Promise.resolve(true)),
 			},
 		},
 		projectId: "p1",
@@ -44,7 +57,8 @@ describe("SessionPermissionOrchestrator", () => {
 			eventBus: makeEventBus(),
 			permissionService,
 			planService: { cancelInteractions: vi.fn() } as unknown as IPlanService,
-			userSettings: { update: vi.fn() } as unknown as UserSettingsStore,
+			userSettings: makeUserSettings(),
+			modelRegistry: makeModelRegistry(),
 		});
 
 		await orchestrator.applyMode("s1", "ask", { internal: false, updateDefault: true });
@@ -74,7 +88,8 @@ describe("SessionPermissionOrchestrator", () => {
 			eventBus: makeEventBus(),
 			permissionService,
 			planService,
-			userSettings: { update: vi.fn() } as unknown as UserSettingsStore,
+			userSettings: makeUserSettings(),
+			modelRegistry: makeModelRegistry(),
 		});
 
 		await orchestrator.applyMode("s1", "plan", { internal: false, updateDefault: false });

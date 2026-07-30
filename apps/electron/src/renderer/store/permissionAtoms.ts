@@ -19,6 +19,8 @@ registerAgentFamily(planQuestionRequestAtomFamily);
 
 export interface PlanQuestionDraft {
 	requestId: string | null;
+	activeTab: number;
+	focusedOptionIndex: number;
 	selections: Record<string, string[]>;
 	otherEnabled: Record<string, boolean>;
 	otherValues: Record<string, string>;
@@ -26,6 +28,8 @@ export interface PlanQuestionDraft {
 
 export const emptyPlanQuestionDraft = (): PlanQuestionDraft => ({
 	requestId: null,
+	activeTab: 0,
+	focusedOptionIndex: -1,
 	selections: {},
 	otherEnabled: {},
 	otherValues: {},

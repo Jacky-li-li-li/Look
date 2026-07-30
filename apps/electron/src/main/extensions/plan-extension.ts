@@ -7,6 +7,7 @@ export const PLAN_TOOL_NAMES = ["read", "grep", "find", "ls", "bash", "AskUserQu
 const optionSchema = Type.Object({
 	label: Type.String({ minLength: 1, description: "Short option label" }),
 	description: Type.String({ minLength: 1, description: "What choosing this option means" }),
+	preview: Type.Optional(Type.String({ minLength: 1, description: "Optional markdown preview for this option" })),
 });
 
 const questionSchema = Type.Object({
@@ -81,6 +82,7 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 					options: question.options.map((option) => ({
 						label: option.label.trim(),
 						description: option.description.trim(),
+						preview: option.preview?.trim() || undefined,
 					})),
 					multiSelect: question.multiSelect === true,
 				}));
@@ -121,10 +123,14 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 					return toolError(`Plan submission failed: ${error instanceof Error ? error.message : String(error)}`);
 				}
 				if (outcome.status === "approved") {
+					const planPath = `.context/plan/${sessionId}.md`;
 					api.sendMessage(
 						{
 							customType: "look.plan-execute.v1",
-							content: "The user approved the submitted plan. Implement it now using the restored tools.",
+							content:
+								`The user approved the submitted plan. Implement it now using the restored tools.\n\n` +
+								`The approved plan is saved at \`${planPath}\`. ` +
+								`If the plan details are no longer in context, read this file to recall them.`,
 							display: false,
 							details: { planId: outcome.planId, filePath: outcome.filePath },
 						},

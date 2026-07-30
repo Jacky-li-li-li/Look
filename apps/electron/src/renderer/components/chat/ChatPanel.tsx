@@ -10,6 +10,7 @@
 import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { memo, useCallback, useRef } from "react";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
+import PlanQuestionDialog from "../dialogs/PlanQuestionDialog";
 import { TodoPanel } from "../workspace/TodoPanel";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
 import ChatMessageList from "./ChatMessageList";
@@ -71,6 +72,7 @@ const ChatPanel = memo(function ChatPanel({
 			{/* TODO 进度条 — 替代原 SubAgent 进度卡片 */}
 			<TodoPanel />
 			<ChatQueueDrawer agentId={agentId} steerMessages={queue.steering} followUpMessages={queue.followUp} />
+			<PlanQuestionDialog sessionId={agentId} />
 			<ChatInput
 				ref={inputRef}
 				agentId={agentId}

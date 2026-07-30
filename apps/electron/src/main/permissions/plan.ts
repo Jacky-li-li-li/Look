@@ -213,7 +213,15 @@ export class PlanService implements IPlanService {
 			if (active?.requestId === requestId) this.interactionBySession.delete(sessionId);
 			throw error;
 		}
-		const request: PlanApprovalRequest = { requestId, planId, sessionId, plan, filePath };
+		const firstHeading = plan.match(/^[ \t]*#[ \t]+(.+?)[ \t]*$/m)?.[1]?.trim();
+		const request: PlanApprovalRequest = {
+			requestId,
+			planId,
+			sessionId,
+			plan,
+			filePath,
+			title: firstHeading || undefined,
+		};
 
 		return new Promise<PlanApprovalOutcome>((resolve) => {
 			const pending: PendingPlanApproval = { request, resolve, removeAbortListener: () => {}, resolving: false };

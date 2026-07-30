@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleAgentEvent } from "../src/renderer/store/agentHandlers";
 import { appStore } from "../src/renderer/store/appStore";
+import { removeAgentAtoms } from "../src/renderer/store/atomFamilyRegistry";
 import {
 	activeAgentIdAtom,
 	agentsAtom,
@@ -9,8 +10,7 @@ import {
 	recentlyCompletedAtom,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
-} from '../src/renderer/store/atoms';
-import { removeAgentAtoms } from '../src/renderer/store/atomFamilyRegistry';
+} from "../src/renderer/store/atoms";
 import { clearSessionScheduling } from "../src/renderer/store/ui-event-processor";
 
 const sessionId = "agent-a";

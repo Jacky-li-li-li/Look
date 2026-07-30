@@ -10,6 +10,8 @@ export interface UserSettings {
 	compactionEnabled: boolean;
 	permissionMode: PermissionMode;
 	preferredModel: string | null;
+	/** Model used specifically when entering Plan mode. null = inherit current session model. */
+	planModel: string | null;
 	lastActiveSessionId: string;
 	lastActiveProjectId: string;
 	openProjectIds: string[];

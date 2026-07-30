@@ -37,6 +37,7 @@ function persistSettings(partial: {
 	autoCollapse?: boolean;
 	compactionEnabled?: boolean;
 	autoTitleModel?: string | null;
+	planModel?: string | null;
 	aiAvatar?: string | null;
 }) {
 	if (!api) return;
@@ -112,6 +113,7 @@ interface GeneralSettingsState {
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
 	autoTitleModel: string | null;
+	planModel: string | null;
 	aiAvatar: string | null;
 	availableModels: Array<{ provider: string; id: string; name: string }>;
 }
@@ -126,6 +128,7 @@ export default function GeneralTab() {
 		autoCollapse: true,
 		compactionEnabled: true,
 		autoTitleModel: null,
+		planModel: null,
 		aiAvatar: null,
 		availableModels: [],
 	});
@@ -133,7 +136,7 @@ export default function GeneralTab() {
 	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 	// 三态：undefined=未悬停（预览跟随已选项），null=悬停在默认像素头像上
 	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
-	const { language, autoCollapse, compactionEnabled, autoTitleModel, aiAvatar, availableModels } = state;
+	const { language, autoCollapse, compactionEnabled, autoTitleModel, planModel, aiAvatar, availableModels } = state;
 	// 预览区跟随悬停（试穿），未悬停时跟随已选项
 	const previewAvatar = hoveredAvatar !== undefined ? hoveredAvatar : aiAvatar;
 	const previewUrl = getAiAvatarUrl(previewAvatar);
@@ -159,6 +162,7 @@ export default function GeneralTab() {
 							? { compactionEnabled: settings.compactionEnabled }
 							: {}),
 						...("autoTitleModel" in settings ? { autoTitleModel: settings.autoTitleModel } : {}),
+						...("planModel" in settings ? { planModel: settings.planModel } : {}),
 						...("aiAvatar" in settings ? { aiAvatar: settings.aiAvatar } : {}),
 					}));
 				}
@@ -319,6 +323,30 @@ export default function GeneralTab() {
 									<SelectItem value="en">English</SelectItem>
 									<SelectItem value="zh">中文</SelectItem>
 									<SelectItem value="ja">日本語</SelectItem>
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</SettingRow>
+					<SettingRow id="plan-model" label={t("settings.planModel")} desc={t("settings.planModelDesc")}>
+						<Select
+							value={planModel ?? USE_SESSION_MODEL}
+							onValueChange={(v) => {
+								const next = v === USE_SESSION_MODEL ? null : v;
+								setState((prev) => ({ ...prev, planModel: next }));
+								persistSettings({ planModel: next });
+							}}
+						>
+							<SelectTrigger id="plan-model" size="sm" className="w-[240px]">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									<SelectItem value={USE_SESSION_MODEL}>{t("settings.planUseSessionModel")}</SelectItem>
+									{availableModels.map((m) => (
+										<SelectItem key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+											{m.name} ({m.provider})
+										</SelectItem>
+									))}
 								</SelectGroup>
 							</SelectContent>
 						</Select>

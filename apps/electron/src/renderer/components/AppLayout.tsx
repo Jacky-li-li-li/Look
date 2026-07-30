@@ -25,7 +25,6 @@ import NewProjectDialog from "./dialogs/NewProjectDialog";
 import OAuthLoginDialog from "./dialogs/OAuthLoginDialog";
 import PermissionDialog from "./dialogs/PermissionDialog";
 import PlanApprovalDialog from "./dialogs/PlanApprovalDialog";
-import PlanQuestionDialog from "./dialogs/PlanQuestionDialog";
 import SessionSheetBar from "./SessionSheetBar";
 import Sidebar from "./Sidebar";
 import ScheduledTasksPage from "./scheduler/ScheduledTasksPage";
@@ -295,7 +294,6 @@ function AppLayout({
 			)}
 			<OAuthLoginDialog />
 			<PermissionDialog />
-			<PlanQuestionDialog key={`plan-question:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 			<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 		</div>
 	);

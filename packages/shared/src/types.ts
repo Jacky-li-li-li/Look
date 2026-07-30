@@ -106,6 +106,8 @@ export interface PlanApprovalOutcome {
 export interface PlanQuestionOption {
 	label: string;
 	description: string;
+	/** Optional long-form markdown preview shown for the currently focused option. */
+	preview?: string;
 }
 
 export interface PlanQuestion {
@@ -135,6 +137,8 @@ export interface PlanApprovalRequest {
 	sessionId: string;
 	plan: string;
 	filePath: string;
+	/** Extracted from the first # Heading in the plan markdown, or undefined. */
+	title?: string;
 }
 
 export interface PlanApprovalResponse {

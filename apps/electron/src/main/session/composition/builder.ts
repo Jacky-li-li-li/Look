@@ -491,6 +491,7 @@ export class CompositionBuilder {
 			permissionService: this.permissionService!,
 			planService: this.planService!,
 			userSettings: this.userSettings!,
+			modelRegistry: this.modelRegistry!,
 		});
 
 		this.sessionEventEffects = new SessionEventEffects({

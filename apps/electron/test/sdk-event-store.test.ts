@@ -1,7 +1,7 @@
 import type { LookUiEvent } from "@shared/types";
 import { afterEach, describe, expect, it } from "vitest";
-import { agentsAtom, sessionStateAtomFamily } from '../src/renderer/store/atoms';
-import { removeAgentAtoms } from '../src/renderer/store/atomFamilyRegistry';
+import { removeAgentAtoms } from "../src/renderer/store/atomFamilyRegistry";
+import { agentsAtom, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { appStore, initIpcHandlers } from "../src/renderer/store/ipcHandler";
 import { deriveSessionPhase } from "../src/renderer/store/sessionTypes";
 import { flushAllUiEvents } from "../src/renderer/store/ui-event-processor";

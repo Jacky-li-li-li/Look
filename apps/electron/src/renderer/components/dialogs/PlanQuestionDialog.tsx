@@ -1,34 +1,45 @@
 import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Input } from "@look/ui/components/ui/input";
+import type { PlanQuestion } from "@shared/types";
 import { useAtom } from "jotai";
-import { Check, CircleHelp, ListChecks, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { CircleHelp, Send, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../../store/atoms";
+import LookMarkdown from "../markdown/LookMarkdown";
 
 const AUTO_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const AUTO_ADVANCE_DELAY_MS = 150;
 
 export default function PlanQuestionDialog({ sessionId }: { sessionId: string | null }) {
 	const [request, setRequest] = useAtom(planQuestionRequestAtomFamily(sessionId ?? ""));
 	const [storedDraft, setDraft] = useAtom(planQuestionDraftAtomFamily(sessionId ?? ""));
 	const [responding, setResponding] = useState(false);
-	const [visible, setVisible] = useState(false);
-	const panelRef = useRef<HTMLDivElement>(null);
-	const respondingRef = useRef(false);
-	respondingRef.current = responding;
 	const requestRef = useRef(request);
-	requestRef.current = request;
+	const respondingRef = useRef(false);
+	const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const deadlineRef = useRef<number | null>(null);
-	const [, tick] = useReducer((n: number) => n + 1, 0);
 	const draft = storedDraft.requestId === request?.requestId ? storedDraft : emptyPlanQuestionDraft();
-	const { selections, otherEnabled, otherValues } = draft;
+
+	requestRef.current = request;
+	respondingRef.current = responding;
+
+	const clearAutoAdvanceTimer = useCallback(() => {
+		if (!autoAdvanceTimerRef.current) return;
+		clearTimeout(autoAdvanceTimerRef.current);
+		autoAdvanceTimerRef.current = null;
+	}, []);
+
+	const clearDraft = useCallback(() => {
+		setRequest(null);
+		setDraft(emptyPlanQuestionDraft());
+	}, [setDraft, setRequest]);
 
 	const dismiss = useCallback(() => {
 		if (respondingRef.current) return;
-		// Notify main process before clearing local state,
-		// otherwise the planning turn hangs forever.
+		clearAutoAdvanceTimer();
 		const req = requestRef.current;
 		if (req) {
 			void window.look
@@ -42,16 +53,13 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 					/* already resolved — ignore */
 				})
 				.finally(() => {
-					setRequest(null);
-					setDraft(emptyPlanQuestionDraft());
+					clearDraft();
 				});
-		} else {
-			setRequest(null);
-			setDraft(emptyPlanQuestionDraft());
+			return;
 		}
-	}, [setRequest, setDraft]);
+		clearDraft();
+	}, [clearAutoAdvanceTimer, clearDraft]);
 
-	// Set up auto-timeout (5 minutes)
 	useEffect(() => {
 		if (!request || request.sessionId !== sessionId) {
 			deadlineRef.current = null;
@@ -65,284 +73,470 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 				if (timerRef.current) clearInterval(timerRef.current);
 				toast.info("Agent 提问已超时自动关闭");
 				dismiss();
-			} else {
-				tick();
 			}
 		}, 1000);
 		return () => {
 			if (timerRef.current) clearInterval(timerRef.current);
 		};
-	}, [request, sessionId, dismiss]);
+	}, [dismiss, request, sessionId]);
 
-	// Animate in when request appears
-	useEffect(() => {
-		if (request && request.sessionId === sessionId) {
-			const timer = requestAnimationFrame(() => setVisible(true));
-			return () => cancelAnimationFrame(timer);
-		}
-		setVisible(false);
-	}, [request, sessionId]);
+	useEffect(() => () => clearAutoAdvanceTimer(), [clearAutoAdvanceTimer]);
 
-	// Move focus into the modal sheet, trap Tab within it, and restore focus on close.
 	useEffect(() => {
-		if (!request || !visible) return;
-		const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		panelRef.current?.focus();
-		const onKey = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				dismiss();
-				return;
-			}
-			if (event.key !== "Tab" || !panelRef.current) return;
-			const focusable = Array.from(
-				panelRef.current.querySelectorAll<HTMLElement>(
-					'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-				),
-			).filter((element) => !element.hidden);
-			if (focusable.length === 0) {
-				event.preventDefault();
-				panelRef.current.focus();
-				return;
-			}
-			const first = focusable[0];
-			const last = focusable[focusable.length - 1];
-			if (event.shiftKey && document.activeElement === first) {
-				event.preventDefault();
-				last.focus();
-			} else if (!event.shiftKey && document.activeElement === last) {
-				event.preventDefault();
-				first.focus();
-			}
-		};
-		document.addEventListener("keydown", onKey);
-		return () => {
-			document.removeEventListener("keydown", onKey);
-			previouslyFocused?.focus();
-		};
-	}, [request, visible, dismiss]);
+		if (!request || request.sessionId !== sessionId) return;
+		setDraft((previous) => {
+			const base =
+				previous.requestId === request.requestId
+					? previous
+					: { ...emptyPlanQuestionDraft(), requestId: request.requestId };
+			const maxTab = Math.max(request.questions.length - 1, 0);
+			const nextTab = Math.min(Math.max(base.activeTab, 0), maxTab);
+			if (base.requestId === request.requestId && base.activeTab === nextTab) return base;
+			return { ...base, activeTab: nextTab, focusedOptionIndex: -1 };
+		});
+	}, [request, sessionId, setDraft]);
+
+	const getSelectionState = useCallback(
+		(questionText: string) => {
+			const selected = draft.selections[questionText] ?? [];
+			const showCustom = draft.otherEnabled[questionText] === true;
+			const customText = draft.otherValues[questionText] ?? "";
+			return { selected, showCustom, customText };
+		},
+		[draft.otherEnabled, draft.otherValues, draft.selections],
+	);
+
+	const hasAnswer = useCallback(
+		(questionText: string) => {
+			const { selected, showCustom, customText } = getSelectionState(questionText);
+			return selected.length > 0 || (showCustom && customText.trim().length > 0);
+		},
+		[getSelectionState],
+	);
 
 	const complete = useMemo(() => {
 		if (!request) return false;
-		return request.questions.every((question) => {
-			const selected = selections[question.question] ?? [];
-			const other = otherEnabled[question.question] ? (otherValues[question.question] ?? "").trim() : "";
-			return selected.length > 0 || other.length > 0;
-		});
-	}, [request, selections, otherEnabled, otherValues]);
+		return request.questions.every((question) => hasAnswer(question.question));
+	}, [hasAnswer, request]);
 
-	if (!request || request.sessionId !== sessionId) return null;
+	const activeRequest = request && request.sessionId === sessionId ? request : null;
+	const requestId = activeRequest?.requestId ?? "";
+	const requestSessionId = activeRequest?.sessionId ?? sessionId ?? "";
+	const questions = activeRequest?.questions ?? [];
+	const activeTab = Math.min(Math.max(draft.activeTab, 0), Math.max(questions.length - 1, 0));
+	const currentQuestion = questions[activeTab];
 
-	const chooseOption = (questionText: string, label: string, multiSelect: boolean) => {
-		setDraft((previous) => {
-			const base =
-				previous.requestId === request.requestId
-					? previous
-					: { ...emptyPlanQuestionDraft(), requestId: request.requestId };
-			const current = base.selections[questionText] ?? [];
-			const next = multiSelect
-				? current.includes(label)
-					? current.filter((item) => item !== label)
-					: [...current, label]
-				: [label];
-			return {
-				...base,
-				selections: { ...base.selections, [questionText]: next },
-				otherEnabled: multiSelect ? base.otherEnabled : { ...base.otherEnabled, [questionText]: false },
-			};
-		});
-	};
+	const setActiveTab = useCallback(
+		(nextTab: number) => {
+			setDraft((previous) => {
+				const base = previous.requestId === requestId ? previous : { ...emptyPlanQuestionDraft(), requestId };
+				const maxTab = Math.max(questions.length - 1, 0);
+				return {
+					...base,
+					activeTab: Math.min(Math.max(nextTab, 0), maxTab),
+					focusedOptionIndex: -1,
+				};
+			});
+		},
+		[questions.length, requestId, setDraft],
+	);
 
-	const chooseOther = (questionText: string, multiSelect: boolean) => {
-		setDraft((previous) => {
-			const base =
-				previous.requestId === request.requestId
-					? previous
-					: { ...emptyPlanQuestionDraft(), requestId: request.requestId };
-			return {
-				...base,
-				otherEnabled: { ...base.otherEnabled, [questionText]: !base.otherEnabled[questionText] },
-				selections: multiSelect ? base.selections : { ...base.selections, [questionText]: [] },
-			};
-		});
-	};
+	const setFocusedOptionIndex = useCallback(
+		(nextIndex: number) => {
+			setDraft((previous) => {
+				const base = previous.requestId === requestId ? previous : { ...emptyPlanQuestionDraft(), requestId };
+				return { ...base, focusedOptionIndex: nextIndex };
+			});
+		},
+		[requestId, setDraft],
+	);
 
-	const submit = async () => {
-		if (!complete || responding) return;
+	const chooseOption = useCallback(
+		(questionText: string, label: string, multiSelect: boolean) => {
+			setDraft((previous) => {
+				const base = previous.requestId === requestId ? previous : { ...emptyPlanQuestionDraft(), requestId };
+				const current = base.selections[questionText] ?? [];
+				const next = multiSelect
+					? current.includes(label)
+						? current.filter((item) => item !== label)
+						: [...current, label]
+					: [label];
+				return {
+					...base,
+					selections: { ...base.selections, [questionText]: next },
+					otherEnabled: { ...base.otherEnabled, [questionText]: false },
+					otherValues: multiSelect ? base.otherValues : { ...base.otherValues, [questionText]: "" },
+				};
+			});
+
+			if (!multiSelect && activeTab < questions.length - 1) {
+				clearAutoAdvanceTimer();
+				autoAdvanceTimerRef.current = setTimeout(() => {
+					autoAdvanceTimerRef.current = null;
+					setActiveTab(activeTab + 1);
+				}, AUTO_ADVANCE_DELAY_MS);
+			}
+		},
+		[activeTab, clearAutoAdvanceTimer, questions.length, requestId, setActiveTab, setDraft],
+	);
+
+	const chooseOther = useCallback(
+		(questionText: string, multiSelect: boolean) => {
+			setDraft((previous) => {
+				const base = previous.requestId === requestId ? previous : { ...emptyPlanQuestionDraft(), requestId };
+				const showCustom = !base.otherEnabled[questionText];
+				return {
+					...base,
+					otherEnabled: { ...base.otherEnabled, [questionText]: showCustom },
+					selections: multiSelect || !showCustom ? base.selections : { ...base.selections, [questionText]: [] },
+				};
+			});
+		},
+		[requestId, setDraft],
+	);
+
+	const setCustomText = useCallback(
+		(questionText: string, value: string) => {
+			setDraft((previous) => {
+				const base = previous.requestId === requestId ? previous : { ...emptyPlanQuestionDraft(), requestId };
+				return {
+					...base,
+					otherValues: { ...base.otherValues, [questionText]: value },
+				};
+			});
+		},
+		[requestId, setDraft],
+	);
+
+	const submit = useCallback(async () => {
+		if (!activeRequest || !complete || responding) return;
 		setResponding(true);
 		const answers: Record<string, string> = Object.create(null);
-		for (const question of request.questions) {
-			const values = [...(selections[question.question] ?? [])];
-			if (otherEnabled[question.question]) values.push((otherValues[question.question] ?? "").trim());
-			answers[question.question] = values.join(", ");
+		for (const question of questions) {
+			const values = [...(draft.selections[question.question] ?? [])];
+			if (draft.otherEnabled[question.question]) values.push((draft.otherValues[question.question] ?? "").trim());
+			answers[question.question] = values.filter(Boolean).join(", ");
 		}
 		try {
 			const result = await window.look.respondPlanQuestion({
-				requestId: request.requestId,
-				sessionId: request.sessionId,
+				requestId,
+				sessionId: requestSessionId,
 				answers,
 			});
 			if (!result.success) throw new Error(result.error ?? "Plan question request is no longer pending");
-			setRequest(null);
-			setDraft(emptyPlanQuestionDraft());
+			clearDraft();
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "回答提交失败");
 		} finally {
 			setResponding(false);
 		}
-	};
+	}, [
+		clearDraft,
+		complete,
+		draft.otherEnabled,
+		draft.otherValues,
+		draft.selections,
+		questions,
+		activeRequest,
+		requestId,
+		requestSessionId,
+		responding,
+	]);
+
+	useEffect(() => {
+		if (!currentQuestion) return;
+		const itemCount = currentQuestion.options.length + 1;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				dismiss();
+				return;
+			}
+			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+				if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+					event.preventDefault();
+					if (activeTab === questions.length - 1) void submit();
+					else setActiveTab(activeTab + 1);
+				}
+				return;
+			}
+			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+				event.preventDefault();
+				const currentIndex = draft.focusedOptionIndex;
+				const nextIndex =
+					currentIndex === -1
+						? event.key === "ArrowDown"
+							? 0
+							: itemCount - 1
+						: event.key === "ArrowDown"
+							? (currentIndex + 1) % itemCount
+							: (currentIndex - 1 + itemCount) % itemCount;
+				setFocusedOptionIndex(nextIndex);
+				if (nextIndex < currentQuestion.options.length) {
+					const option = currentQuestion.options[nextIndex];
+					if (option) chooseOption(currentQuestion.question, option.label, currentQuestion.multiSelect === true);
+				} else {
+					chooseOther(currentQuestion.question, currentQuestion.multiSelect === true);
+				}
+				return;
+			}
+			if (event.key === "Enter" && !event.isComposing) {
+				event.preventDefault();
+				if (activeTab === questions.length - 1) void submit();
+				else setActiveTab(activeTab + 1);
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [
+		activeTab,
+		chooseOption,
+		chooseOther,
+		currentQuestion,
+		dismiss,
+		draft.focusedOptionIndex,
+		questions,
+		setActiveTab,
+		setFocusedOptionIndex,
+		submit,
+	]);
+
+	if (!activeRequest || !currentQuestion) return null;
+
+	const isLastTab = activeTab >= questions.length - 1;
+	const currentState = getSelectionState(currentQuestion.question);
 
 	return (
-		<>
-			{/* Backdrop */}
-			<div
-				aria-hidden="true"
-				className={cn(
-					"fixed inset-0 z-40 bg-black/5 transition-opacity duration-200",
-					visible ? "opacity-100" : "opacity-0 pointer-events-none",
-				)}
-				onClick={dismiss}
-			/>
-
-			{/* Options Panel */}
-			<div
-				ref={panelRef}
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby="plan-question-title"
-				aria-describedby="plan-question-description"
-				tabIndex={-1}
-				className={cn(
-					"fixed top-0 right-0 z-50 flex h-full w-[420px] max-w-[90vw] flex-col",
-					"bg-popover border-l border-hairline shadow-2xl",
-					"transition-transform duration-300 ease-out",
-					visible ? "translate-x-0" : "translate-x-full",
-				)}
-			>
-				{/* Panel Header */}
-				<div className="flex shrink-0 items-center justify-between border-b px-5 py-4">
-					<div className="flex items-center gap-2.5">
-						<div className="flex size-7 items-center justify-center rounded-lg bg-sky-500/10">
-							<CircleHelp className="size-4 text-sky-500" />
+		<div className="ask-user-banner mx-4 mb-3 overflow-hidden rounded-xl border border-hairline bg-card shadow-lg animate-in slide-in-from-bottom-2 duration-200">
+			<div className="px-4 pb-2 pt-3">
+				<div className="mb-2 flex items-center justify-between gap-3">
+					<div className="flex min-w-0 items-center gap-2">
+						<div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+							<CircleHelp className="size-4 text-primary" />
 						</div>
-						<div>
-							<p id="plan-question-title" className="text-[13px] font-medium leading-tight">
-								Agent 提问
-							</p>
-							<p id="plan-question-description" className="text-[10px] text-muted-foreground">
-								{request.questions.length} 个问题 · 请选择后提交
+						<div className="min-w-0">
+							<p className="truncate text-sm font-medium text-foreground">Agent 需要你的输入</p>
+							<p className="text-[10px] text-muted-foreground">
+								{questions.length} 个问题 · {complete ? "已可提交" : "请补全全部答案"}
 							</p>
 						</div>
 					</div>
-					<Button variant="ghost" size="icon-sm" onClick={dismiss} disabled={responding} aria-label="关闭">
-						<X className="size-4" />
-					</Button>
+					<button
+						type="button"
+						className="flex size-5 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-foreground"
+						onClick={dismiss}
+						title="关闭并取消本次提问"
+					>
+						<X className="size-3.5" />
+					</button>
 				</div>
 
-				{/* Panel Body */}
-				<div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-					{request.questions.map((question, index) => {
-						const selected = selections[question.question] ?? [];
-						const isMulti = question.multiSelect === true;
-						return (
-							<section key={question.question} className="space-y-2.5">
-								<div className="flex items-start gap-2.5">
-									<span className="mt-0.5 shrink-0 rounded-md bg-sky-500/10 px-2 py-1 font-mono text-[10px] font-medium text-sky-600 dark:text-sky-400">
-										{question.header}
-									</span>
-									<div>
-										<p className="text-[13px] font-medium leading-snug">{question.question}</p>
-										<p className="mt-1 text-[10px] text-muted-foreground">
-											{isMulti ? "多选" : "单选"} · {index + 1} / {request.questions.length}
-										</p>
-									</div>
-								</div>
-								<div className="space-y-1.5">
-									{question.options.map((option) => {
-										const active = selected.includes(option.label);
-										return (
-											<button
-												key={option.label}
-												type="button"
-												disabled={responding}
-												onClick={() => chooseOption(question.question, option.label, isMulti)}
-												className={cn(
-													"flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-all",
-													active
-														? "border-sky-500/60 bg-sky-500/6 shadow-sm"
-														: "border-hairline hover:border-border hover:bg-accent/50",
-												)}
-											>
-												<span
-													className={cn(
-														"mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-														active
-															? "border-sky-500 bg-sky-500 text-white"
-															: "border-muted-foreground/30",
-													)}
-												>
-													{active && <Check className="size-3" strokeWidth={3} />}
-												</span>
-												<span className="min-w-0">
-													<span className="block text-xs font-medium">{option.label}</span>
-													<span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">
-														{option.description}
-													</span>
-												</span>
-											</button>
-										);
-									})}
-								</div>
-								<div className="flex items-center gap-2">
-									<Button
-										type="button"
-										variant={otherEnabled[question.question] ? "line-filled" : "line"}
-										size="sm"
-										onClick={() => chooseOther(question.question, isMulti)}
-										disabled={responding}
-										className="h-7 text-[11px]"
-									>
-										Other
-									</Button>
-									{otherEnabled[question.question] && (
-										<Input
-											autoFocus
-											disabled={responding}
-											value={otherValues[question.question] ?? ""}
-											onChange={(event) => {
-												const value = event.target.value;
-												setDraft((previous) => {
-													const base =
-														previous.requestId === request.requestId
-															? previous
-															: { ...emptyPlanQuestionDraft(), requestId: request.requestId };
-													return {
-														...base,
-														otherValues: { ...base.otherValues, [question.question]: value },
-													};
-												});
-											}}
-											placeholder="输入自定义答案..."
-											className="h-7 flex-1 text-xs"
-										/>
+				{questions.length > 1 && (
+					<div className="flex flex-wrap gap-1">
+						{questions.map((question, index) => {
+							const isActive = index === activeTab;
+							const answered = hasAnswer(question.question);
+							return (
+								<button
+									key={question.question}
+									type="button"
+									onClick={() => setActiveTab(index)}
+									className={cn(
+										"rounded-lg px-2.5 py-1 text-xs font-medium outline-none transition-all",
+										isActive
+											? "bg-primary text-primary-foreground shadow-sm"
+											: answered
+												? "bg-primary/15 text-primary"
+												: "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
 									)}
-								</div>
-							</section>
-						);
-					})}
-				</div>
-
-				{/* Panel Footer */}
-				<div className="flex shrink-0 items-center justify-between border-t px-5 py-3">
-					<span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-						<ListChecks className="size-3" />
-						{complete ? "可以提交" : "请完成全部问题"}
-					</span>
-					<Button disabled={!complete || responding} onClick={() => void submit()} size="sm">
-						提交答案
-					</Button>
-				</div>
+								>
+									{`${index + 1}-${question.multiSelect ? "多选" : "单选"}：${question.header || `问题 ${index + 1}`}`}
+								</button>
+							);
+						})}
+					</div>
+				)}
 			</div>
-		</>
+
+			<div className="px-4 pb-2">
+				<QuestionCard
+					question={currentQuestion}
+					questionIndex={activeTab}
+					answer={currentState}
+					focusedIndex={draft.focusedOptionIndex}
+					showBadge={questions.length === 1}
+					disabled={responding}
+					onToggleOption={(label) =>
+						chooseOption(currentQuestion.question, label, currentQuestion.multiSelect === true)
+					}
+					onToggleCustom={() => chooseOther(currentQuestion.question, currentQuestion.multiSelect === true)}
+					onCustomTextChange={(value) => setCustomText(currentQuestion.question, value)}
+					onSubmit={() => {
+						if (isLastTab) void submit();
+						else setActiveTab(activeTab + 1);
+					}}
+				/>
+			</div>
+
+			<div className="flex items-center justify-end gap-1.5 px-4 pb-3">
+				<span className="mr-auto text-[10px] text-muted-foreground/50">
+					↑↓ 选择 · Enter {isLastTab ? "确认" : "下一个"}
+				</span>
+				{isLastTab && (
+					<Button
+						variant="default"
+						size="sm"
+						onClick={() => void submit()}
+						disabled={responding || !complete}
+						className="h-7 px-3 text-xs"
+					>
+						<Send className="mr-1 size-3" />
+						确认
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
+
+interface QuestionState {
+	selected: string[];
+	showCustom: boolean;
+	customText: string;
+}
+
+function QuestionCard({
+	question,
+	questionIndex,
+	answer,
+	focusedIndex,
+	showBadge,
+	disabled,
+	onToggleOption,
+	onToggleCustom,
+	onCustomTextChange,
+	onSubmit,
+}: {
+	question: PlanQuestion;
+	questionIndex: number;
+	answer: QuestionState;
+	focusedIndex: number;
+	showBadge: boolean;
+	disabled: boolean;
+	onToggleOption: (label: string) => void;
+	onToggleCustom: () => void;
+	onCustomTextChange: (text: string) => void;
+	onSubmit: () => void;
+}): React.ReactElement {
+	const optionCount = question.options.length;
+	const previewOption =
+		focusedIndex >= 0 && focusedIndex < optionCount
+			? question.options[focusedIndex]
+			: question.options.find((option) => answer.selected.includes(option.label));
+	const previewContent = previewOption?.preview?.trim();
+
+	return (
+		<div className="space-y-2">
+			<div className="space-y-1">
+				{showBadge && (
+					<span className="inline-flex items-center rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm">
+						{`${questionIndex + 1}-${question.multiSelect ? "多选" : "单选"}${question.header ? `：${question.header}` : ""}`}
+					</span>
+				)}
+				<p className="text-sm text-foreground">{question.question}</p>
+			</div>
+
+			<div className="flex flex-col gap-1">
+				{question.options.map((option, index) => {
+					const isSelected = answer.selected.includes(option.label);
+					const isFocused = focusedIndex === index;
+					return (
+						<button
+							key={option.label}
+							type="button"
+							disabled={disabled}
+							onClick={() => onToggleOption(option.label)}
+							className={cn(
+								"flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs outline-none transition-all",
+								isSelected
+									? "bg-primary text-primary-foreground shadow-sm"
+									: "bg-muted/50 text-foreground/80 hover:bg-muted",
+								isFocused && "ring-2 ring-primary/50 ring-offset-1 ring-offset-card",
+							)}
+						>
+							<span
+								className={cn(
+									"shrink-0 text-[10px]",
+									isSelected ? "text-primary-foreground/60" : "text-muted-foreground/50",
+								)}
+							>
+								{index + 1}
+							</span>
+							<span className="font-medium">{option.label}</span>
+							{option.description && (
+								<span
+									className={cn(
+										"text-[11px]",
+										isSelected ? "text-primary-foreground/70" : "text-muted-foreground",
+									)}
+								>
+									{option.description}
+								</span>
+							)}
+						</button>
+					);
+				})}
+
+				<button
+					type="button"
+					disabled={disabled}
+					onClick={onToggleCustom}
+					className={cn(
+						"flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs outline-none transition-all",
+						answer.showCustom
+							? "bg-primary text-primary-foreground shadow-sm"
+							: "bg-muted/50 text-foreground/80 hover:bg-muted",
+						focusedIndex === optionCount && "ring-2 ring-primary/50 ring-offset-1 ring-offset-card",
+					)}
+				>
+					<span
+						className={cn(
+							"shrink-0 text-[10px]",
+							answer.showCustom ? "text-primary-foreground/60" : "text-muted-foreground/50",
+						)}
+					>
+						{optionCount + 1}
+					</span>
+					<span className="font-medium">其他...</span>
+				</button>
+			</div>
+
+			{answer.showCustom && (
+				<Input
+					autoFocus
+					disabled={disabled}
+					type="text"
+					placeholder="输入自定义答案..."
+					value={answer.customText}
+					onChange={(event) => onCustomTextChange(event.target.value)}
+					onKeyDown={(event) => {
+						if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+							event.preventDefault();
+							event.stopPropagation();
+							onSubmit();
+						}
+					}}
+					className="h-9 rounded-lg border-none bg-muted/40 pr-3 text-xs placeholder:text-muted-foreground/40 focus:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+				/>
+			)}
+
+			{previewContent && (
+				<div className="rounded-lg bg-muted/40 p-3">
+					<div className="text-xs leading-5">
+						<LookMarkdown content={previewContent} />
+					</div>
+				</div>
+			)}
+		</div>
 	);
 }

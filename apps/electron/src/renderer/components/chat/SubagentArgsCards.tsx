@@ -11,12 +11,12 @@
 import { cn } from "@look/ui";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@look/ui/components/ui/dialog";
 import { useAtomValue } from "jotai";
-import { subagentCardStatusAtom, type SubagentCardStatus } from "../../store/subagentAtoms";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { assignPeepId } from "../../lib/subagentAvatars";
 import { activeAgentIdAtom } from "../../store/agentAtoms";
+import { type SubagentCardStatus, subagentCardStatusAtom } from "../../store/subagentAtoms";
 import AgentAvatar from "../AgentMarketplace/AgentAvatar";
 import { makeOpenPeepIcon } from "../AgentMarketplace/openPeeps";
 import LookMarkdown from "../markdown/LookMarkdown";
@@ -73,8 +73,6 @@ interface SubagentArgsCardsProps {
 	status?: ToolCallViewModel["status"];
 }
 
-
-
 const ITEM_STATUS_BADGE: Record<SubagentCardStatus, { color: string; label: string }> = {
 	running: { color: "text-amber-500 dark:text-amber-300", label: "running" },
 	completed: { color: "text-emerald-500 dark:text-emerald-400", label: "completed" },
@@ -90,9 +88,7 @@ export default function SubagentArgsCards({ toolCall, items, status }: SubagentA
 
 	/** Map tool-level status to per-card status as fallback for history view. */
 	const fallbackStatus: SubagentCardStatus =
-		status === "success" ? "completed"
-		: status === "error" ? "failed"
-		: "running";
+		status === "success" ? "completed" : status === "error" ? "failed" : "running";
 	const callKeyFor = (index: number): string =>
 		toolCall.toolName === "subagent" ? toolCall.callId : `${toolCall.callId}:${index}`;
 
@@ -125,15 +121,11 @@ export default function SubagentArgsCards({ toolCall, items, status }: SubagentA
 							<span className="truncate font-mono text-[11px] text-muted-foreground">{item.agent}</span>
 						</span>
 						{(() => {
-							const itemStatus: SubagentCardStatus = cardStatuses[toolCall.callId]?.[item.title] ?? fallbackStatus;
+							const itemStatus: SubagentCardStatus =
+								cardStatuses[toolCall.callId]?.[item.title] ?? fallbackStatus;
 							const badge = ITEM_STATUS_BADGE[itemStatus];
 							return (
-								<span
-									className={cn(
-										"shrink-0 font-mono text-[9px] uppercase tracking-wider",
-										badge.color,
-									)}
-								>
+								<span className={cn("shrink-0 font-mono text-[9px] uppercase tracking-wider", badge.color)}>
 									{badge.label}
 								</span>
 							);

@@ -1,4 +1,10 @@
-
+import type { MainToRendererEvent } from "@shared/types";
+import { handleAgentEvent } from "./agentHandlers";
+import { appStore } from "./appStore";
+import { appReadyPhaseAtom } from "./atoms";
+import { handlePermissionEvent } from "./permissionHandlers";
+import { handleProjectEvent } from "./projectHandlers";
+import { applySnapshot } from "./snapshot";
 // ============================================================
 // IPC Handler — thin routing entry point for main→renderer events
 //
@@ -7,13 +13,6 @@
 // the Jotai atoms they render. Startup initialization is in startup.ts.
 // ============================================================
 import { subagentCardStatusAtom } from "./subagentAtoms";
-import type { MainToRendererEvent } from "@shared/types";
-import { handleAgentEvent } from "./agentHandlers";
-import { appStore } from "./appStore";
-import { appReadyPhaseAtom } from "./atoms";
-import { handlePermissionEvent } from "./permissionHandlers";
-import { handleProjectEvent } from "./projectHandlers";
-import { applySnapshot } from "./snapshot";
 import { handleSystemEvent } from "./systemHandlers";
 import { enqueueUiEvent } from "./ui-event-processor";
 
@@ -44,9 +43,7 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 
 			case "session:subagent-progress":
 			case "session:subagent-completed": {
-				const status = event.type === "session:subagent-completed"
-					? event.result.status
-					: event.status;
+				const status = event.type === "session:subagent-completed" ? event.result.status : event.status;
 				const { toolCallId, taskTitle } = event;
 				if (toolCallId && taskTitle) {
 					appStore.set(subagentCardStatusAtom, (prev) => {
@@ -56,7 +53,7 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 				}
 				break;
 			}
- 		}
+		}
 	});
 	return unsub;
 }

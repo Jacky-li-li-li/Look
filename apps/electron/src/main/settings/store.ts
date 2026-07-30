@@ -34,6 +34,7 @@ const DEFAULTS: UserSettings = {
 	compactionEnabled: true,
 	permissionMode: "ask",
 	preferredModel: null,
+	planModel: null,
 	lastActiveSessionId: "",
 	lastActiveProjectId: "",
 	openProjectIds: [],
@@ -71,6 +72,8 @@ interface UiSettings {
 	themeTone: LookTone;
 	/** Model used to auto-generate the first session title. See UserSettings.autoTitleModel. */
 	autoTitleModel: string | null;
+	/** Model used specifically when entering Plan mode. See UserSettings.planModel. */
+	planModel: string | null;
 	/** SubAgent 功能总开关。 */
 	subagentEnabled: boolean;
 	/** 已启用的 SubAgent 定义名称列表。null=全部启用（向后兼容） */
@@ -96,6 +99,7 @@ const UI_DEFAULTS: UiSettings = {
 	openedSessionIds: [],
 	themeTone: "dark",
 	autoTitleModel: null,
+	planModel: null,
 	subagentEnabled: true,
 	enabledAgentDefinitions: null,
 	enabledSkills: null,
@@ -235,6 +239,7 @@ export class UserSettingsStore {
 		if (partial.openedSessionIds !== undefined) uiPartial.openedSessionIds = [...partial.openedSessionIds];
 		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
 		if (partial.autoTitleModel !== undefined) uiPartial.autoTitleModel = partial.autoTitleModel;
+		if (partial.planModel !== undefined) uiPartial.planModel = partial.planModel;
 		if (partial.subagentEnabled !== undefined) uiPartial.subagentEnabled = partial.subagentEnabled;
 		if (partial.enabledAgentDefinitions !== undefined)
 			uiPartial.enabledAgentDefinitions =
