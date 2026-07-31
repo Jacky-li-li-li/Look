@@ -11,6 +11,7 @@ import { Type } from "typebox";
 import type { MCPManager } from "../mcp/manager.js";
 import { jsonSchemaToTypeBox } from "../mcp/schema-convert.js";
 import type { McpCallResult } from "../mcp/types.js";
+import { declareApprovalRequiredTool } from "./tool-permission-registry.js";
 
 const McpConnectParams = Type.Object({
 	name: Type.String({ description: "A short name for this MCP server (e.g. filesystem, github)" }),
@@ -30,6 +31,7 @@ export function createMcpExtensionFactory(
 	mcpManager: MCPManager,
 	cwd: string,
 	projectId: string,
+	resolveProjectTrust?: (cwd: string) => boolean,
 ): ExtensionFactory {
 	return (api) => {
 		const registeredToolNames = new Set<string>();
@@ -76,6 +78,9 @@ export function createMcpExtensionFactory(
 		};
 
 		// ── mcp_connect 工具 —— AI 可调用来自动配置 MCP 服务器 ──
+		// 声明式权限：mcp_connect 会 spawn 任意 stdio 进程（npx/uvx/...），
+		// 必须在 ask/plan 模式走权限拦截。声明后 permission-extension 自动拦截。
+		declareApprovalRequiredTool("mcp_connect");
 		api.registerTool<typeof McpConnectParams, Record<string, unknown>>({
 			name: "mcp_connect",
 			label: "Connect MCP server",
@@ -115,7 +120,11 @@ export function createMcpExtensionFactory(
 
 		// ── session_start —— 启动所有已配置的 MCP 服务器 ──
 		api.on("session_start", async () => {
-			await mcpManager.loadConfig(projectId, cwd);
+			// Gate project-level .look/mcp.json behind project trust. pi's own
+			// trust check only covers .pi/* — without this gate, an untrusted
+			// project's .look/mcp.json would still be loaded and spawned.
+			const loadProjectConfig = resolveProjectTrust?.(cwd) ?? true;
+			await mcpManager.loadConfig(projectId, cwd, { loadProjectConfig });
 			const { started, failed } = await mcpManager.startEnabled(projectId);
 
 			// 注册所有 MCP 工具到 pi SDK

@@ -39,6 +39,10 @@ interface KeyEditState {
 	editing: string | null;
 	input: string;
 	showKey: boolean;
+	/** 当前编辑的是否为掩码值（主进程脱敏返回）；若用户未改动则不覆盖原 key。 */
+	masked: boolean;
+	/** 打开编辑器时回填的原始内容（用于判断用户是否改动）。 */
+	originalInput: string;
 }
 
 interface UiState {
@@ -403,7 +407,13 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 	const { t } = useTranslation();
 
 	// ── grouped state (13 → 4 useState) ──
-	const [keyEdit, setKeyEdit] = useState<KeyEditState>({ editing: null, input: "", showKey: false });
+	const [keyEdit, setKeyEdit] = useState<KeyEditState>({
+		editing: null,
+		input: "",
+		showKey: false,
+		masked: false,
+		originalInput: "",
+	});
 	const [ui, setUi] = useState<UiState>({ saving: false, loadingKey: false, testStatus: {}, forceSave: null });
 	const [accordion, setAccordion] = useState<AccordionState>({ providers: {}, customProviders: {} });
 	// customProviders prop seeds the list from the startup-loaded settings, so the
@@ -490,6 +500,8 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		patchKeyEdit("editing", null);
 		patchKeyEdit("input", "");
 		patchKeyEdit("showKey", false);
+		patchKeyEdit("masked", false);
+		patchKeyEdit("originalInput", "");
 		patchUi("loadingKey", false);
 		patchUi("forceSave", null);
 		// 恢复焦点到触发编辑的按钮
@@ -501,6 +513,8 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		editTriggerRef.current = document.activeElement as HTMLElement | null;
 		patchKeyEdit("editing", provider.id);
 		patchKeyEdit("showKey", false);
+		patchKeyEdit("masked", false);
+		patchKeyEdit("originalInput", "");
 		patchUi("forceSave", null);
 		if (provider.hasKey && canClearProviderKey(provider) && api) {
 			patchUi("loadingKey", true);
@@ -510,9 +524,10 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 				if (r?.success && r.key) {
 					// 防御竞态：只有当前仍在编辑同一 provider 时才写入
 					const key = r.key;
+					const masked = r.masked === true;
 					setKeyEdit((prev) => {
 						if (prev.editing !== provider.id) return prev;
-						return { ...prev, input: key };
+						return { ...prev, input: key, masked, originalInput: key };
 					});
 				}
 			} catch {
@@ -522,6 +537,8 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		} else {
 			// env-var / 非可清除 provider：同步清空，无竞态窗口
 			patchKeyEdit("input", "");
+			patchKeyEdit("masked", false);
+			patchKeyEdit("originalInput", "");
 		}
 	};
 
@@ -529,6 +546,12 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		if (!keyEdit.editing || !api || !keyEdit.input.trim()) return;
 		const providerId = keyEdit.editing;
 		const key = keyEdit.input.trim();
+		// 掩码回填且用户未改动：保持原 key，不做任何写入，直接关闭。
+		// （掩码不是真实 key，走测试/保存流程必然失败。）
+		if (keyEdit.masked && keyEdit.originalInput && key === keyEdit.originalInput.trim()) {
+			closeEditor();
+			return;
+		}
 		patchUi("saving", true);
 		patchUi("forceSave", null);
 		let testResult: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } | null =

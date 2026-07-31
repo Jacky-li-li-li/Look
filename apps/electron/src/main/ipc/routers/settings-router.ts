@@ -5,6 +5,7 @@
 import type { ProviderResponse } from "@earendil-works/pi-ai";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { maskSecret } from "@look/shared/secret-mask";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
 import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
@@ -30,13 +31,25 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:get-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
 		const key = await getApiKey(ctx.model.credentials, _provider);
-		return { success: true, key: key ?? null };
+		// 安全：只返回掩码给渲染进程，避免密钥明文进入渲染侧（XSS/导航攻击面）。
+		// 前端编辑时若用户不改动掩码，则不覆盖原 key（见 ApiKeysTab）。
+		if (key) {
+			return { success: true, key: maskSecret(key), masked: true };
+		}
+		return { success: true, key: null, masked: false };
 	});
 
 	register("settings:set-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
 		guardString(data.key, "key");
 		await setApiKey(ctx.model.credentials, _provider, data.key);
+		// Trigger SDK model refresh so the provider's latest model list
+		// (including newly released models) becomes available immediately.
+		const refreshResult = await ctx.model.runtime.refresh({ allowNetwork: true });
+		if (refreshResult.errors.size > 0) {
+			console.warn("[Look] Model refresh after set-api-key had errors:", refreshResult.errors);
+		}
+		ctx.session.notifier.emit({ type: "model:updated" });
 		const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 		return { success: true, ...result };
 	});
@@ -149,6 +162,8 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 				providerId: _provider,
 				success: true,
 			});
+			await ctx.model.runtime.refresh({ allowNetwork: true });
+			ctx.session.notifier.emit({ type: "model:updated" });
 			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 			return { success: true, ...result };
 		} catch (err) {
@@ -171,6 +186,8 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const _provider = guardProvider(data.provider);
 		try {
 			await ctx.model.runtime.logout(_provider);
+			await ctx.model.runtime.refresh({ allowNetwork: true });
+			ctx.session.notifier.emit({ type: "model:updated" });
 			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 			return { success: true, ...result };
 		} catch (err) {
@@ -295,6 +312,9 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		}
 		if ("autoTitleModel" in settings) {
 			guardNullableString(settings.autoTitleModel, "settings.autoTitleModel");
+		}
+		if ("planModel" in settings) {
+			guardNullableString(settings.planModel, "settings.planModel");
 		}
 		if ("subagentEnabled" in settings) {
 			guardBoolean(settings.subagentEnabled, "settings.subagentEnabled");

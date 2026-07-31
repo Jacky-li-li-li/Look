@@ -55,12 +55,20 @@ export class MCPManager {
 		this.onChange?.();
 	}
 
-	async loadConfig(projectId: string, cwd?: string): Promise<void> {
+	async loadConfig(
+		projectId: string,
+		cwd?: string,
+		options: { loadProjectConfig?: boolean } = {},
+	): Promise<void> {
 		const merged = new Map<string, McpServerConfig>();
 		for (const config of await discoverCompatibleConfigs(cwd)) {
 			merged.set(config.name, { ...config, _source: "discovered" });
 		}
-		if (cwd) {
+		// Project-level .look/mcp.json can spawn arbitrary stdio commands, so it
+		// must be gated by project trust. The caller (MCP extension) decides
+		// whether the project is trusted and passes loadProjectConfig=false
+		// otherwise — the same gate that blocks .pi/* resources.
+		if (cwd && options.loadProjectConfig !== false) {
 			const projectConfigPath = path.join(cwd, ".look", "mcp.json");
 			for (const config of await loadConfigFile(projectConfigPath)) {
 				merged.set(config.name, { ...config, _source: "project" });

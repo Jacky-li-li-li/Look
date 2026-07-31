@@ -3,8 +3,45 @@
 // ============================================================
 
 import fs from "node:fs";
+import path from "node:path";
+import { getProjectSharedDir } from "@look/shared/look-storage";
 import { guardPath } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
+
+/**
+ * Resolve a user-supplied path and assert it lives inside at least one of the
+ * allowed project roots. Prevents the renderer from reading/writing arbitrary
+ * files (~/.ssh/*, ~/.look/auth.json, ...) if the renderer process is ever
+ * compromised. Uses realpath so symlinks pointing outside the roots are
+ * rejected too (best effort: for not-yet-existing files realpath fails and we
+ * fall back to the lexical path check).
+ */
+async function guardAllowedProjectPath(rawPath: unknown, label: string, projectRoots: string[]): Promise<string> {
+	const resolved = guardPath(rawPath, label);
+	const roots = projectRoots.filter((root) => typeof root === "string" && root.length > 0);
+	if (roots.length === 0) {
+		throw new Error(`Path denied for ${label}: no allowed project directories are configured`);
+	}
+	const isInside = (p: string): boolean =>
+		roots.some((root) => {
+			const rel = path.relative(root, p);
+			return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+		});
+	if (!isInside(resolved)) {
+		throw new Error(`Path denied for ${label}: outside allowed project directories`);
+	}
+	// Reject symlinks that escape the allowed roots.
+	try {
+		const real = await fs.promises.realpath(resolved);
+		if (!isInside(real)) {
+			throw new Error(`Path denied for ${label}: symlink escapes allowed project directories`);
+		}
+	} catch (error) {
+		if (error instanceof Error && error.message.startsWith("Path denied")) throw error;
+		// ENOENT etc.: file may not exist yet (write); lexical check already passed.
+	}
+	return resolved;
+}
 
 /** 读取上限 4MB,超出部分截断返回。 */
 const FILE_READ_MAX_BYTES = 4 * 1024 * 1024;
@@ -77,11 +114,19 @@ export async function statPathKind(filePath: string): Promise<PathStatResult> {
 	return { success: true, kind: "file" };
 }
 
-export const fileRouter: IpcRouter = (_ctx, register) => {
-	register("file:read", async (data) => readFileContent(guardPath(data.path, "path")));
+export const fileRouter: IpcRouter = (ctx, register) => {
+	// Allowed roots: every project cwd plus each project's shared area
+	// (~/.look/shared/<projectId>). Keeping the shared area inside the allowlist
+	// preserves the shared-file viewer without opening arbitrary home paths.
+	const projectRoots = () => ctx.project.service.listProjects().flatMap((p) => [p.cwd, getProjectSharedDir(p.id)]);
+
+	register("file:read", async (data) => {
+		const filePath = await guardAllowedProjectPath(data.path, "path", projectRoots());
+		return readFileContent(filePath);
+	});
 
 	register("file:write", async (data) => {
-		const filePath = guardPath(data.path, "path");
+		const filePath = await guardAllowedProjectPath(data.path, "path", projectRoots());
 		const content: unknown = data.content;
 		if (typeof content !== "string") {
 			throw new Error(`Invalid content: expected string, got ${typeof content}`);
@@ -89,5 +134,8 @@ export const fileRouter: IpcRouter = (_ctx, register) => {
 		return writeFileContent(filePath, content);
 	});
 
-	register("file:stat", async (data) => statPathKind(guardPath(data.path, "path")));
+	register("file:stat", async (data) => {
+		const filePath = await guardAllowedProjectPath(data.path, "path", projectRoots());
+		return statPathKind(filePath);
+	});
 };

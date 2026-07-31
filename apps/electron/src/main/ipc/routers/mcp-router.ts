@@ -16,7 +16,9 @@ export const mcpRouter: IpcRouter = (ctx, register) => {
 
 	register("mcp:list-servers", async () => {
 		const { projectId, cwd } = getProjectContext();
-		await ctx.mcp.loadConfig(projectId, cwd);
+		// Only load project-level .look/mcp.json when the project is trusted.
+		const loadProjectConfig = cwd ? ctx.project.service.resolveProjectTrust(cwd) : false;
+		await ctx.mcp.loadConfig(projectId, cwd, { loadProjectConfig });
 		return { success: true, servers: ctx.mcp.getStatusList(projectId) };
 	});
 

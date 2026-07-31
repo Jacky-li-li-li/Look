@@ -36,7 +36,6 @@ export class ProjectService {
 	}
 
 	// ── Persistence ──
-
 	/** Load projects from the persisted index. Does NOT scan for orphans —
 	 *  call {@link recoverOrphanedProjects} separately so it can run off the
 	 *  startup critical path.
@@ -313,13 +312,29 @@ export class ProjectService {
 
 	// ── Trust ──
 
+	/**
+	 * True when the project directory contains Look project-local resources
+	 * that must be gated by project trust. pi's SDK only knows about `.pi` and
+	 * `.agents/skills`; Look adds `.look/mcp.json` (project-level MCP servers,
+	 * which can spawn arbitrary stdio commands). Without this, a project that
+	 * only ships a `.look/mcp.json` would be loaded unconditionally — even
+	 * after the user clicks "Do Not Trust".
+	 */
+	hasTrustRequiringLookResources(cwd: string): boolean {
+		return existsSync(path.join(cwd, ".look", "mcp.json"));
+	}
+
+	private hasTrustRequiringResources(cwd: string): boolean {
+		return hasTrustRequiringProjectResources(cwd) || this.hasTrustRequiringLookResources(cwd);
+	}
+
 	getProjectTrustStatus(projectId: string): {
 		requiresTrust: boolean;
 		decision: boolean | null;
 		shouldAsk: boolean;
 	} {
 		const project = this.projects.get(projectId);
-		if (!project?.valid || !hasTrustRequiringProjectResources(project.cwd)) {
+		if (!project?.valid || !this.hasTrustRequiringResources(project.cwd)) {
 			return { requiresTrust: false, decision: true, shouldAsk: false };
 		}
 		const decision = this.trustStore.get(project.cwd);
@@ -337,7 +352,7 @@ export class ProjectService {
 	}
 
 	resolveProjectTrust(cwd: string): boolean {
-		if (!hasTrustRequiringProjectResources(cwd)) return true;
+		if (!this.hasTrustRequiringResources(cwd)) return true;
 		const saved = this.trustStore.get(cwd);
 		if (saved !== null) return saved;
 		return this.globalSettingsManager.getDefaultProjectTrust() === "always";

@@ -14,18 +14,23 @@
 
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ToolCallHandler } from "@look/shared/types";
+import { isApprovalRequiredTool } from "./tool-permission-registry.js";
 
 // ---- Constants ----
 
 /**
- * Tools that require interception.
+ * SDK 内置工具（由 pi SDK 注册，Look 无法在注册处声明副作用）中需要
+ * 拦截的基线名单。
  * - In "ask" mode: all are prompted for user approval
  * - In "plan" mode: mutations are blocked and bash is validated
+ *
+ * Look 自注册的危险工具（如 mcp_connect）通过 tool-permission-registry
+ * 声明式注册，不在此硬编码（见 declareApprovalRequiredTool）。
  */
 const INTERCEPT_TOOLS = new Set(["write", "edit", "notebook_edit", "bash", "task_create", "task_update"]);
 
 export function shouldInterceptPermissionTool(toolName: string): boolean {
-	return INTERCEPT_TOOLS.has(toolName);
+	return INTERCEPT_TOOLS.has(toolName) || isApprovalRequiredTool(toolName);
 }
 
 const PLAN_BLOCKED_TOOLS = new Set(["write", "edit", "notebook_edit", "task_create", "task_update"]);
