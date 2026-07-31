@@ -17,6 +17,15 @@ import {
 	sessionStateAtomFamily,
 } from "./atoms";
 
+/**
+ * Last-applied snapshot sequence per session. Snapshots are versioned by the
+ * main process (SessionNotifier.sequence); the deferred full-history snapshot
+ * that follows a partial one must not clobber streaming state produced by a
+ * newer turn, so any snapshot whose sequence is older than the last applied
+ * one is dropped.
+ */
+const lastAppliedSnapshotSequence = new Map<string, number>();
+
 export function markSessionSnapshotLoading(sessionId: string, loading: boolean): void {
 	const atom = sessionStateAtomFamily(sessionId);
 	const previous = appStore.get(atom);
@@ -27,6 +36,10 @@ export function markSessionSnapshotLoading(sessionId: string, loading: boolean):
 }
 
 export function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
+	const lastSequence = lastAppliedSnapshotSequence.get(snapshot.sessionId) ?? 0;
+	if (snapshot.sequence < lastSequence) return;
+	lastAppliedSnapshotSequence.set(snapshot.sessionId, snapshot.sequence);
+
 	const previous = appStore.get(sessionStateAtomFamily(snapshot.sessionId));
 	const isAgentEnd = snapshot.reason === "agent_end";
 

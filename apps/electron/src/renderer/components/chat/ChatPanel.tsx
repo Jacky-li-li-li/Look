@@ -8,7 +8,9 @@
 // ============================================================
 
 import type { ImageContent, ThinkingLevel } from "@shared/types";
-import { memo, useCallback, useRef } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { memo, useCallback, useMemo, useRef } from "react";
+import { activeAgentAtom, autoCollapseAtom, settingsTabAtom, showSettingsAtom } from "../../store/atoms";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
 import PlanQuestionDialog from "../dialogs/PlanQuestionDialog";
 import { TodoPanel } from "../workspace/TodoPanel";
@@ -20,16 +22,13 @@ interface ChatPanelProps {
 	agentId: string;
 	agentName?: string;
 	sessionState: RendererSessionState;
-	autoCollapse: boolean;
 	queue: { steering: string[]; followUp: string[] };
 	phase: RendererSessionPhase;
 	currentModel: string;
 	currentThinking: string;
-	availableThinkingLevels?: ThinkingLevel[];
 	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
-	onThinkingChange: (level: string) => void;
+	onThinkingChange: (level: ThinkingLevel) => void;
 	onModelChange: (model: string) => void;
-	onRequestApiKeys?: () => void;
 	onAbort?: () => void;
 }
 
@@ -37,19 +36,33 @@ const ChatPanel = memo(function ChatPanel({
 	agentId,
 	agentName,
 	sessionState,
-	autoCollapse,
 	queue,
 	phase,
 	currentModel,
 	currentThinking,
-	availableThinkingLevels,
 	onSend,
 	onThinkingChange,
 	onModelChange,
-	onRequestApiKeys,
 	onAbort,
 }: ChatPanelProps) {
 	const inputRef = useRef<ChatInputHandle>(null);
+	const autoCollapse = useAtomValue(autoCollapseAtom);
+	const activeAgent = useAtomValue(activeAgentAtom);
+	const setShowSettings = useSetAtom(showSettingsAtom);
+	const setSettingsTab = useSetAtom(settingsTabAtom);
+
+	const availableThinkingLevels = useMemo(() => {
+		const levels =
+			activeAgent?.availableThinkingLevels && activeAgent.availableThinkingLevels.length > 0
+				? activeAgent.availableThinkingLevels
+				: (["off"] as ThinkingLevel[]);
+		return levels;
+	}, [activeAgent?.availableThinkingLevels]);
+
+	const handleRequestApiKeys = useCallback(() => {
+		setSettingsTab("api-keys");
+		setShowSettings(true);
+	}, [setSettingsTab, setShowSettings]);
 
 	const isBusy = phase !== "idle";
 
@@ -84,7 +97,7 @@ const ChatPanel = memo(function ChatPanel({
 				onSend={onSend}
 				onThinkingChange={onThinkingChange}
 				onModelChange={onModelChange}
-				onRequestApiKeys={onRequestApiKeys}
+				onRequestApiKeys={handleRequestApiKeys}
 				onAbort={handleAbort}
 			/>
 		</div>

@@ -109,11 +109,23 @@ describe("createMcpExtensionFactory", () => {
 
 		await triggerSessionStart(api);
 
-		expect(mcpManager.loadConfig).toHaveBeenCalledWith(TEST_PROJECT_ID, "/test/cwd");
+		expect(mcpManager.loadConfig).toHaveBeenCalledWith(TEST_PROJECT_ID, "/test/cwd", { loadProjectConfig: true });
 		expect(mcpManager.startEnabled).toHaveBeenCalledWith(TEST_PROJECT_ID);
 		expect(api.registerTool).toHaveBeenCalled();
 		expect(api.tools.length).toBe(2);
 		expect(api.tools[1].name).toBe("mcp__test-server__hello");
+	});
+
+	it("skips project-level config when resolveProjectTrust returns false", async () => {
+		const mcpManager = createMockMCPManager();
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID, () => false);
+		const api = createMockAPI();
+		factory(api as unknown as ExtensionAPI);
+
+		await triggerSessionStart(api);
+
+		expect(mcpManager.loadConfig).toHaveBeenCalledWith(TEST_PROJECT_ID, "/test/cwd", { loadProjectConfig: false });
+		expect(mcpManager.startEnabled).toHaveBeenCalledWith(TEST_PROJECT_ID);
 	});
 
 	it("does not stop shared MCP clients on session_shutdown", async () => {

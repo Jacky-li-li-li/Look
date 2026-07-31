@@ -47,7 +47,7 @@ const LEVEL_COLORS: Record<ThinkingLevel, string> = {
 interface ThinkingSelectorProps {
 	currentLevel: string;
 	availableThinkingLevels?: ThinkingLevel[];
-	onChanged: (level: string) => void;
+	onChanged: (level: ThinkingLevel) => void;
 }
 
 export default function ThinkingSelector({ currentLevel, availableThinkingLevels, onChanged }: ThinkingSelectorProps) {
@@ -57,7 +57,7 @@ export default function ThinkingSelector({ currentLevel, availableThinkingLevels
 
 	const LEVELS = useMemo(() => buildLevels(t), [t]);
 
-	const handleSelect = useCallback((level: string) => {
+	const handleSelect = useCallback((level: ThinkingLevel) => {
 		onChangedRef.current?.(level);
 	}, []);
 

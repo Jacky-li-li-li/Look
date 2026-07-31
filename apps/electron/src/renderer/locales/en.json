@@ -489,7 +489,6 @@
         }
       }
     },
-    "chatPrompt": "Chat Prompt",
     "chatPromptDesc": "Customize the system prompt sent to AI, switch between different assistant styles.",
     "addPrompt": "Add Prompt",
     "editPrompt": "Edit Prompt",
@@ -836,5 +835,40 @@
     "windowTitle": "File viewer",
     "emptyHint": "Click a file in the main Look window to view it",
     "close": "Close"
+  },
+  "planDialogs": {
+    "toolConfirmTitle": "Tool approval required",
+    "toolConfirmDesc": "Session “{{agentName}}” requests a protected tool. Approve?",
+    "autoDeny": "Auto-deny in 30s if no action",
+    "queuedRequests": "· {{count}} more request(s) queued",
+    "denyEsc": "Deny (Esc)",
+    "allowAlways": "Always allow this session",
+    "allow": "Allow",
+    "permissionExpired": "Permission request is no longer pending",
+    "modeSwitchFailed": "Failed to change permission mode",
+    "operationFailed": "Operation failed",
+    "approvalTitle": "Approve implementation plan",
+    "approvalAutoReject": "Auto-reject in {{time}}",
+    "approvalDesc": "Session “{{sessionName}}” finished planning. Approving switches to Always and starts implementation.",
+    "approvalReject": "Reject & end",
+    "approvalApprove": "Approve & execute",
+    "approvalFailed": "Plan approval failed",
+    "questionTitle": "Agent needs your input",
+    "questionCount": "{{count}} question(s) · {{state}}",
+    "questionComplete": "Ready to submit",
+    "questionIncomplete": "Answer all questions",
+    "closeCancel": "Close and cancel this question",
+    "multiSelect": "Multi",
+    "singleSelect": "Single",
+    "questionLabel": "Question {{index}}",
+    "other": "Other...",
+    "customPlaceholder": "Type a custom answer...",
+    "keyHint": "↑↓ select · Enter {{confirm}}",
+    "confirm": "Confirm",
+    "next": "Next",
+    "questionTimeout": "Agent question timed out and closed",
+    "submitFailed": "Failed to submit answers",
+    "remainingMinutes": "{{minutes}}m {{seconds}}s",
+    "remainingSeconds": "{{seconds}}s"
   }
 }

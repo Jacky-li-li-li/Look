@@ -9,9 +9,9 @@ import type { AgentDefinitionService } from "../src/main/agents/definition-servi
 import type { IPermissionService, IPlanService, ISessionScope } from "../src/main/core/contracts.js";
 import type { AgentConfig } from "../src/main/extensions/subagent/types.js";
 import type { SubAgentRuntimeService } from "../src/main/services/subagent-runtime.js";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import type { SessionSubagentHost } from "../src/main/session/session-subagent-service.js";
-import { SessionSubagentService } from "../src/main/session/session-subagent-service.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import type { SessionSubagentHost } from "../src/main/session/services/session-subagent-service.js";
+import { SessionSubagentService } from "../src/main/session/services/session-subagent-service.js";
 import type { SubAgentRegistry } from "../src/main/session/subagent-registry.js";
 import type { UserSettingsStore } from "../src/main/settings/store.js";
 

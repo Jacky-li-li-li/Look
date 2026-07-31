@@ -14,6 +14,7 @@ const mockTone =
 		? "light"
 		: "dark";
 const MOCK_SESSION_ID = "dev-chat-session";
+let mockSnapshotSequence = 0;
 
 /** 泛型成功响应 */
 function success<T>(data: T) {
@@ -114,6 +115,7 @@ function emitMockSnapshot(reason: "activate" | "agent_end" = "activate"): void {
 		type: "session:snapshot",
 		sessionId: MOCK_SESSION_ID,
 		reason,
+		sequence: ++mockSnapshotSequence,
 		leafId: "mock-assistant-1",
 		entries: mockEntries,
 		runtime: mockRuntime(),
@@ -307,7 +309,7 @@ const mockApi = {
 			customProviders: [],
 			customStats: { configured: 0, totalModels: 0 },
 		}),
-	getApiKey: () => Promise.resolve({ success: true, key: "" }),
+	getApiKey: () => Promise.resolve({ success: true, key: "", masked: false }),
 	testApiKey: () => Promise.resolve({ success: true, valid: false }),
 	testEnvKey: () => Promise.resolve({ success: true, valid: false }),
 	setApiKey: () => ok,

@@ -104,7 +104,7 @@ describe("Plan dialogs", () => {
 	it("requires every question to be answered and submits a session-scoped response", async () => {
 		appStore.set(planQuestionRequestAtomFamily("session-a"), questionRequest);
 		renderWithStore(<ActivePlanQuestionDialog />);
-		const submit = screen.getByRole("button", { name: "提交答案" });
+		const submit = screen.getByRole("button", { name: "Confirm" });
 		expect((submit as HTMLButtonElement).disabled).toBe(true);
 		fireEvent.click(screen.getByRole("button", { name: /Small/ }));
 		expect((submit as HTMLButtonElement).disabled).toBe(false);
@@ -128,13 +128,13 @@ describe("Plan dialogs", () => {
 		appStore.set(planQuestionRequestAtomFamily("session-a"), questionRequest);
 		renderWithStore(<ActivePlanQuestionDialog />);
 		fireEvent.click(screen.getByRole("button", { name: /Small/ }));
-		expect((screen.getByRole("button", { name: "提交答案" }) as HTMLButtonElement).disabled).toBe(false);
+		expect((screen.getByRole("button", { name: "Confirm" }) as HTMLButtonElement).disabled).toBe(false);
 		act(() => appStore.set(activeAgentIdAtom, "session-b"));
 		expect(screen.getByTestId("active-session").textContent).toBe("session-b");
 		await waitFor(() => expect(screen.queryByText("规划问题")).toBeNull());
 		act(() => appStore.set(activeAgentIdAtom, "session-a"));
 		await waitFor(() =>
-			expect((screen.getByRole("button", { name: "提交答案" }) as HTMLButtonElement).disabled).toBe(false),
+			expect((screen.getByRole("button", { name: "Confirm" }) as HTMLButtonElement).disabled).toBe(false),
 		);
 	});
 
@@ -145,9 +145,9 @@ describe("Plan dialogs", () => {
 		});
 		renderWithStore(<ActivePlanQuestionDialog />);
 		fireEvent.click(screen.getByRole("button", { name: /Small/ }));
-		fireEvent.click(screen.getByRole("button", { name: "Other" }));
-		fireEvent.change(screen.getByPlaceholderText("输入自定义答案..."), { target: { value: "Custom" } });
-		fireEvent.click(screen.getByRole("button", { name: "提交答案" }));
+		fireEvent.click(screen.getByRole("button", { name: /Other\.\.\./ }));
+		fireEvent.change(screen.getByPlaceholderText("Type a custom answer..."), { target: { value: "Custom" } });
+		fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 		await waitFor(() =>
 			expect(respondPlanQuestion).toHaveBeenCalledWith(
 				expect.objectContaining({ answers: { "Which scope?": "Small, Custom" } }),
@@ -160,7 +160,7 @@ describe("Plan dialogs", () => {
 		appStore.set(permissionModeAtomFamily("session-a"), "plan");
 		renderWithStore(<PlanApprovalDialog sessionId="session-a" />);
 		expect(screen.getByText("Implementation plan")).toBeTruthy();
-		fireEvent.click(screen.getByRole("button", { name: "批准并执行" }));
+		fireEvent.click(screen.getByRole("button", { name: "Approve & execute" }));
 		await waitFor(() =>
 			expect(respondPlanApproval).toHaveBeenCalledWith({
 				requestId: "approval-1",

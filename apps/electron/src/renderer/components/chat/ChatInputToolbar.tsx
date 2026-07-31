@@ -23,7 +23,7 @@ interface ChatInputToolbarProps {
 	isCompacting: boolean;
 	hasContent: boolean;
 	onModelChange: (model: string) => void;
-	onThinkingChange: (level: string) => void;
+	onThinkingChange: (level: ThinkingLevel) => void;
 	onRequestApiKeys?: () => void;
 	onSend: () => void;
 	onAbort?: () => void;

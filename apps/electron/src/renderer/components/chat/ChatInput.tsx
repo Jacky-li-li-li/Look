@@ -31,7 +31,7 @@ interface ChatInputProps {
 	isBusy: boolean;
 	isCompacting?: boolean;
 	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
-	onThinkingChange: (level: string) => void;
+	onThinkingChange: (level: ThinkingLevel) => void;
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
 	onAbort?: () => void;

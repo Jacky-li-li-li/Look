@@ -32,6 +32,7 @@ export {
 	resetLegacySessionsOnce,
 	sanitiseWorkspaceName,
 } from "./look-storage.js";
+export { maskSecret } from "./secret-mask.js";
 export { DEFAULT_SESSION_NAME } from "./session-defaults.js";
 export type {
 	AgentDefinitionInfo,

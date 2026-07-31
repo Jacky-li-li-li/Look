@@ -124,6 +124,7 @@ The core singleton hosts a deduplicated `AgentSessionRuntime` registry keyed by 
 - **Main → Renderer**: `look:event` carries the active pi session lifecycle, streaming message snapshots, tool state, usage, history, and tree updates.
 - **Renderer → Main**: `look:invoke` (request-response) for commands (send message, create/destroy agent, switch model, get settings) and `look:event` (fire-and-forget) for `app:ready`
 - SessionRuntimeManager's `onEvent()` callback forwards every live session stream with its session ID; IPC handlers bridge the two directions
+- **Contract enforcement（不要引入 codegen）**: IPC 契约用 TypeScript 类型系统保证——`const api: LookAPI = {...}`（preload.cts）+ `register<T extends RendererToMainEvent["type"]>`（invoke-context.ts）在编译期强制实现完整与类型匹配；`test/preload-contract.test.ts` 做轻量守门。新增 IPC 方法直接改 `LookAPI` 接口 + preload + router 即可，**不要**引入 schema / 代码生成器（详见 .claude/memory/ipc-contract.md）。
 
 ### Skills System
 

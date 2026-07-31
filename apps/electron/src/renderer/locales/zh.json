@@ -489,7 +489,6 @@
         }
       }
     },
-    "chatPrompt": "对话提示",
     "chatPromptDesc": "自定义发送给 AI 的系统提示词，切换不同风格的助手行为。",
     "addPrompt": "添加提示词",
     "editPrompt": "编辑提示词",
@@ -836,5 +835,40 @@
     "windowTitle": "文件查看器",
     "emptyHint": "在 Look 主窗口中点击文件以查看",
     "close": "关闭"
+  },
+  "planDialogs": {
+    "toolConfirmTitle": "工具调用确认",
+    "toolConfirmDesc": "会话“{{agentName}}”请求执行受保护工具，请确认是否允许",
+    "autoDeny": "30 秒内未操作将自动拒绝",
+    "queuedRequests": "· 另有 {{count}} 个请求排队",
+    "denyEsc": "拒绝 (Esc)",
+    "allowAlways": "本次会话始终允许",
+    "allow": "允许",
+    "permissionExpired": "权限请求已失效",
+    "modeSwitchFailed": "权限模式切换失败",
+    "operationFailed": "操作失败",
+    "approvalTitle": "审批实施计划",
+    "approvalAutoReject": "{{time}} 后自动拒绝",
+    "approvalDesc": "会话“{{sessionName}}”已完成规划。批准后将切换为 Always 并立即开始实施。",
+    "approvalReject": "拒绝并结束",
+    "approvalApprove": "批准并执行",
+    "approvalFailed": "计划审批失败",
+    "questionTitle": "Agent 需要你的输入",
+    "questionCount": "{{count}} 个问题 · {{state}}",
+    "questionComplete": "已可提交",
+    "questionIncomplete": "请补全全部答案",
+    "closeCancel": "关闭并取消本次提问",
+    "multiSelect": "多选",
+    "singleSelect": "单选",
+    "questionLabel": "问题 {{index}}",
+    "other": "其他...",
+    "customPlaceholder": "输入自定义答案...",
+    "keyHint": "↑↓ 选择 · Enter {{confirm}}",
+    "confirm": "确认",
+    "next": "下一个",
+    "questionTimeout": "Agent 提问已超时自动关闭",
+    "submitFailed": "回答提交失败",
+    "remainingMinutes": "{{minutes}} 分 {{seconds}} 秒",
+    "remainingSeconds": "{{seconds}} 秒"
   }
 }

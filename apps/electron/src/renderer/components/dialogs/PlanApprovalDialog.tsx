@@ -10,6 +10,7 @@ import {
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Check, FileText, ShieldCheck, X } from "lucide-react";
 import { lazy, Suspense, useEffect, useReducer, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { agentsAtom, permissionModeAtomFamily, planApprovalRequestAtomFamily } from "../../store/atoms";
 
@@ -18,6 +19,7 @@ const LookMarkdown = lazy(() => import("../markdown/LookMarkdown"));
 const AUTO_REJECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function PlanApprovalDialog({ sessionId }: { sessionId: string | null }) {
+	const { t } = useTranslation();
 	const agents = useAtomValue(agentsAtom);
 	const [request, setRequest] = useAtom(planApprovalRequestAtomFamily(sessionId ?? ""));
 	const setPermissionMode = useSetAtom(permissionModeAtomFamily(sessionId ?? ""));
@@ -92,7 +94,7 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 			if (action === "approve") setPermissionMode("always");
 			setRequest(null);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "计划审批失败");
+			toast.error(error instanceof Error ? error.message : t("planDialogs.approvalFailed"));
 		} finally {
 			setResponding(false);
 		}
@@ -100,7 +102,11 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 
 	const remainingSec = autoRejectAt ? Math.max(0, Math.ceil((autoRejectAt - Date.now()) / 1000)) : 0;
 	const remainingMin = Math.floor(remainingSec / 60);
-	const remainingStr = remainingMin > 0 ? `${remainingMin} 分 ${remainingSec % 60} 秒` : `${remainingSec} 秒`;
+	// i18n 化的剩余时间（zh/en/ja 均有对应格式）
+	const remainingLocalized =
+		remainingMin > 0
+			? t("planDialogs.remainingMinutes", { minutes: remainingMin, seconds: remainingSec % 60 })
+			: t("planDialogs.remainingSeconds", { seconds: remainingSec });
 
 	return (
 		<Dialog open>
@@ -114,10 +120,10 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 				<DialogHeader className="border-b px-5 py-4">
 					<div className="flex items-center gap-2">
 						<ShieldCheck className="size-4 text-sky-500" />
-						<DialogTitle className="text-sm">审批实施计划</DialogTitle>
+						<DialogTitle className="text-sm">{t("planDialogs.approvalTitle")}</DialogTitle>
 						{autoRejectAt && (
 							<span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">
-								{remainingStr} 后自动拒绝
+								{t("planDialogs.approvalAutoReject", { time: remainingLocalized })}
 							</span>
 						)}
 					</div>
@@ -125,7 +131,7 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 						<p className="mt-1 truncate text-xs font-medium text-foreground/80">{request.title}</p>
 					)}
 					<DialogDescription className="text-xs">
-						会话"{sessionName}"已完成规划。批准后将切换为 Always 并立即开始实施。
+						{t("planDialogs.approvalDesc", { sessionName })}
 					</DialogDescription>
 					<div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
 						<FileText className="size-3" />
@@ -142,11 +148,11 @@ export default function PlanApprovalDialog({ sessionId }: { sessionId: string | 
 				<DialogFooter className="mx-0 mb-0 flex-row justify-end rounded-none px-5 py-3">
 					<Button variant="line" size="sm" disabled={responding} onClick={() => void respond("reject")}>
 						<X className="size-3" />
-						拒绝并结束
+						{t("planDialogs.approvalReject")}
 					</Button>
 					<Button variant="line-filled" size="sm" disabled={responding} onClick={() => void respond("approve")}>
 						<Check className="size-3" />
-						批准并执行
+						{t("planDialogs.approvalApprove")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

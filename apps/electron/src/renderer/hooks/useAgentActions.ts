@@ -4,7 +4,7 @@
 // 所有回调使用 appStore.get() 读最新 atom 值，避免闭包过期。
 // ============================================================
 
-import type { ImageContent } from "@shared/types";
+import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -113,7 +113,7 @@ export function useAgentActions() {
 		}
 	}, []);
 
-	const handleThinkingChange = useCallback(async (level: string) => {
+	const handleThinkingChange = useCallback(async (level: ThinkingLevel) => {
 		const id = appStore.get(activeAgentIdAtom);
 		if (!id || !api) return;
 		await api.updateThinking(id, level);

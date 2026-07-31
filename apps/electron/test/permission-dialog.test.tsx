@@ -81,7 +81,7 @@ describe("permission dialog", () => {
 	it("does not turn Enter on the focused deny button into an allow decision", async () => {
 		appStore.set(permissionAskQueueAtom, [request("request-a", "session-a")]);
 		renderDialog();
-		const deny = screen.getByRole("button", { name: "拒绝 (Esc)" });
+		const deny = screen.getByRole("button", { name: "Deny (Esc)" });
 		deny.focus();
 		fireEvent.keyDown(deny, { key: "Enter" });
 		expect(respondPermission).not.toHaveBeenCalled();
@@ -97,9 +97,9 @@ describe("permission dialog", () => {
 		]);
 		renderDialog();
 		expect(screen.getByText(/Session A/)).toBeTruthy();
-		expect(screen.getByText(/另有 1 个请求排队/)).toBeTruthy();
+		expect(screen.getByText(/1 more request\(s\) queued/)).toBeTruthy();
 
-		fireEvent.click(screen.getByRole("button", { name: "允许" }));
+		fireEvent.click(screen.getByRole("button", { name: "Allow" }));
 		await waitFor(() => expect(screen.getByText(/Session B/)).toBeTruthy());
 		expect(screen.getByText("mcp:github:create_issue")).toBeTruthy();
 	});

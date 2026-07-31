@@ -26,6 +26,10 @@
     "./session-defaults": {
       "types": "./dist/session-defaults.d.ts",
       "default": "./dist/session-defaults.js"
+    },
+    "./secret-mask": {
+      "types": "./dist/secret-mask.d.ts",
+      "default": "./dist/secret-mask.js"
     }
   },
   "scripts": {

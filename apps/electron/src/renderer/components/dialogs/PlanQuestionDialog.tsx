@@ -5,6 +5,7 @@ import type { PlanQuestion } from "@shared/types";
 import { useAtom } from "jotai";
 import { CircleHelp, Send, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../../store/atoms";
 import LookMarkdown from "../markdown/LookMarkdown";
@@ -13,6 +14,7 @@ const AUTO_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const AUTO_ADVANCE_DELAY_MS = 150;
 
 export default function PlanQuestionDialog({ sessionId }: { sessionId: string | null }) {
+	const { t } = useTranslation();
 	const [request, setRequest] = useAtom(planQuestionRequestAtomFamily(sessionId ?? ""));
 	const [storedDraft, setDraft] = useAtom(planQuestionDraftAtomFamily(sessionId ?? ""));
 	const [responding, setResponding] = useState(false);
@@ -71,14 +73,14 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 		timerRef.current = setInterval(() => {
 			if (deadlineRef.current && Date.now() >= deadlineRef.current) {
 				if (timerRef.current) clearInterval(timerRef.current);
-				toast.info("Agent 提问已超时自动关闭");
+				toast.info(t("planDialogs.questionTimeout"));
 				dismiss();
 			}
 		}, 1000);
 		return () => {
 			if (timerRef.current) clearInterval(timerRef.current);
 		};
-	}, [dismiss, request, sessionId]);
+	}, [dismiss, request, sessionId, t]);
 
 	useEffect(() => () => clearAutoAdvanceTimer(), [clearAutoAdvanceTimer]);
 
@@ -226,7 +228,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 			if (!result.success) throw new Error(result.error ?? "Plan question request is no longer pending");
 			clearDraft();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "回答提交失败");
+			toast.error(error instanceof Error ? error.message : t("planDialogs.submitFailed"));
 		} finally {
 			setResponding(false);
 		}
@@ -241,6 +243,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 		requestId,
 		requestSessionId,
 		responding,
+		t,
 	]);
 
 	useEffect(() => {
@@ -315,9 +318,12 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 							<CircleHelp className="size-4 text-primary" />
 						</div>
 						<div className="min-w-0">
-							<p className="truncate text-sm font-medium text-foreground">Agent 需要你的输入</p>
+							<p className="truncate text-sm font-medium text-foreground">{t("planDialogs.questionTitle")}</p>
 							<p className="text-[10px] text-muted-foreground">
-								{questions.length} 个问题 · {complete ? "已可提交" : "请补全全部答案"}
+								{t("planDialogs.questionCount", {
+									count: questions.length,
+									state: complete ? t("planDialogs.questionComplete") : t("planDialogs.questionIncomplete"),
+								})}
 							</p>
 						</div>
 					</div>
@@ -325,7 +331,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 						type="button"
 						className="flex size-5 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-foreground"
 						onClick={dismiss}
-						title="关闭并取消本次提问"
+						title={t("planDialogs.closeCancel")}
 					>
 						<X className="size-3.5" />
 					</button>
@@ -350,7 +356,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 												: "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
 									)}
 								>
-									{`${index + 1}-${question.multiSelect ? "多选" : "单选"}：${question.header || `问题 ${index + 1}`}`}
+									{`${index + 1}-${question.multiSelect ? t("planDialogs.multiSelect") : t("planDialogs.singleSelect")}：${question.header || t("planDialogs.questionLabel", { index: index + 1 })}`}
 								</button>
 							);
 						})}
@@ -380,7 +386,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 
 			<div className="flex items-center justify-end gap-1.5 px-4 pb-3">
 				<span className="mr-auto text-[10px] text-muted-foreground/50">
-					↑↓ 选择 · Enter {isLastTab ? "确认" : "下一个"}
+					{t("planDialogs.keyHint", { confirm: isLastTab ? t("planDialogs.confirm") : t("planDialogs.next") })}
 				</span>
 				{isLastTab && (
 					<Button
@@ -391,7 +397,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 						className="h-7 px-3 text-xs"
 					>
 						<Send className="mr-1 size-3" />
-						确认
+						{t("planDialogs.confirm")}
 					</Button>
 				)}
 			</div>
@@ -428,6 +434,7 @@ function QuestionCard({
 	onCustomTextChange: (text: string) => void;
 	onSubmit: () => void;
 }): React.ReactElement {
+	const { t } = useTranslation();
 	const optionCount = question.options.length;
 	const previewOption =
 		focusedIndex >= 0 && focusedIndex < optionCount
@@ -440,7 +447,7 @@ function QuestionCard({
 			<div className="space-y-1">
 				{showBadge && (
 					<span className="inline-flex items-center rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground shadow-sm">
-						{`${questionIndex + 1}-${question.multiSelect ? "多选" : "单选"}${question.header ? `：${question.header}` : ""}`}
+						{`${questionIndex + 1}-${question.multiSelect ? t("planDialogs.multiSelect") : t("planDialogs.singleSelect")}${question.header ? `：${question.header}` : ""}`}
 					</span>
 				)}
 				<p className="text-sm text-foreground">{question.question}</p>
@@ -507,7 +514,7 @@ function QuestionCard({
 					>
 						{optionCount + 1}
 					</span>
-					<span className="font-medium">其他...</span>
+					<span className="font-medium">{t("planDialogs.other")}</span>
 				</button>
 			</div>
 
@@ -516,7 +523,7 @@ function QuestionCard({
 					autoFocus
 					disabled={disabled}
 					type="text"
-					placeholder="输入自定义答案..."
+					placeholder={t("planDialogs.customPlaceholder")}
 					value={answer.customText}
 					onChange={(event) => onCustomTextChange(event.target.value)}
 					onKeyDown={(event) => {

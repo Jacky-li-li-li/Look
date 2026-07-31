@@ -17,10 +17,12 @@ import type { PermissionRespondPayload } from "@shared/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AlertTriangle, Check, Shield, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { agentsAtom, permissionAskQueueAtom, permissionModeAtomFamily } from "../../store/atoms";
 
 export default function PermissionDialog() {
+	const { t } = useTranslation();
 	const [queue, setQueue] = useAtom(permissionAskQueueAtom);
 	const agents = useAtomValue(agentsAtom);
 	const event = queue[0] ?? null;
@@ -46,7 +48,7 @@ export default function PermissionDialog() {
 				const result = await window.look.respondPermission(payload);
 				if (!result?.success) {
 					setQueue((items) => items.filter((item) => item.requestId !== event.requestId));
-					toast.error(result?.error ?? "权限请求已失效");
+					toast.error(result?.error ?? t("planDialogs.permissionExpired"));
 					return;
 				}
 				setQueue((items) => items.filter((item) => item.requestId !== event.requestId));
@@ -57,17 +59,17 @@ export default function PermissionDialog() {
 					if (modeResult?.success) {
 						setPermissionMode("always");
 					} else {
-						toast.error(modeResult?.error ?? "权限模式切换失败");
+						toast.error(modeResult?.error ?? t("planDialogs.modeSwitchFailed"));
 					}
 				}
 			} catch (error) {
-				toast.error(error instanceof Error ? error.message : "操作失败");
+				toast.error(error instanceof Error ? error.message : t("planDialogs.operationFailed"));
 			} finally {
 				respondingRef.current = null;
 				setResponding(false);
 			}
 		},
-		[event, setQueue, setPermissionMode],
+		[event, setQueue, setPermissionMode, t],
 	);
 
 	// Keep respond in a ref so effects don't re-subscribe when it changes
@@ -104,10 +106,10 @@ export default function PermissionDialog() {
 				<DialogHeader className="px-4 pt-4 pb-0">
 					<div className="flex items-center gap-2">
 						<Shield className="size-4 text-amber-500" />
-						<DialogTitle className="text-[13px] font-semibold">工具调用确认</DialogTitle>
+						<DialogTitle className="text-[13px] font-semibold">{t("planDialogs.toolConfirmTitle")}</DialogTitle>
 					</div>
 					<DialogDescription className="text-[11px] text-muted-foreground">
-						会话“{agentName}”请求执行受保护工具，请确认是否允许
+						{t("planDialogs.toolConfirmDesc", { agentName })}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -129,7 +131,8 @@ export default function PermissionDialog() {
 					{/* Timeout warning */}
 					<p className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
 						<AlertTriangle className="size-3" />
-						30 秒内未操作将自动拒绝{queue.length > 1 ? ` · 另有 ${queue.length - 1} 个请求排队` : ""}
+						{t("planDialogs.autoDeny")}
+						{queue.length > 1 ? ` · ${t("planDialogs.queuedRequests", { count: queue.length - 1 })}` : ""}
 					</p>
 				</div>
 
@@ -142,7 +145,7 @@ export default function PermissionDialog() {
 						className="h-8 text-[11px]"
 					>
 						<X className="size-3" />
-						拒绝 (Esc)
+						{t("planDialogs.denyEsc")}
 					</Button>
 					<Button
 						variant="line"
@@ -152,7 +155,7 @@ export default function PermissionDialog() {
 						className="h-8 text-[11px] text-emerald-600"
 					>
 						<Check className="size-3" />
-						本次会话始终允许
+						{t("planDialogs.allowAlways")}
 					</Button>
 					<Button
 						disabled={responding}
@@ -162,7 +165,7 @@ export default function PermissionDialog() {
 						className="h-8 text-[11px]"
 					>
 						<Check className="size-3" />
-						允许
+						{t("planDialogs.allow")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

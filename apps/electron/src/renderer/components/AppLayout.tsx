@@ -2,6 +2,7 @@
 // AppLayout — 主应用布局（Sidebar + 主内容区 + RightPanel + Dialogs）
 // ============================================================
 
+import { ErrorBoundarySection } from "@look/ui/components/ErrorBoundary";
 import { Separator } from "@look/ui/components/ui/separator";
 import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
@@ -43,10 +44,7 @@ interface AppLayoutProps {
 	activeSessionState: RendererSessionState;
 	activeQueue: { steering: string[]; followUp: string[] };
 	activePhase: RendererSessionPhase;
-	autoCollapse: boolean;
-	thinkingLevels: ThinkingLevel[];
 	projects: ProjectInfo[];
-	activeProject: ProjectInfo | null;
 	showAgentSquare: boolean;
 	showScheduledTasks: boolean;
 	newProjectCwd: string | null;
@@ -61,10 +59,9 @@ interface AppLayoutProps {
 	handleReorderSessionSheets: (nextIds: string[]) => void;
 	handleDestroyAgent: (agentId: string) => void;
 	handleAbortAgent: () => void;
-	handleThinkingChange: (level: string) => void;
+	handleThinkingChange: (level: ThinkingLevel) => void;
 	handleModelChanged: (model: string) => void;
 	handleCreateClick: (projectId: string) => void;
-	handleRequestApiKeys: () => void;
 	handleOpenProject: () => void;
 	handleDeleteProject: (project: ProjectInfo) => void;
 	handleProjectCreated: (projectId: string) => void;
@@ -72,10 +69,6 @@ interface AppLayoutProps {
 	handleDeleteProjectConfirmed: () => void;
 	handleRenameProject: (projectId: string, name: string) => void;
 	handleOpenProjectFolderById: (projectId: string) => void;
-	handleSettingsClick: () => void;
-	handleCloseSettings: () => void;
-	handleExpandSidebar: () => void;
-	handleExpandRightPanel: () => void;
 	onProvidersChange: (data: ProviderSettingsData) => void;
 }
 
@@ -89,10 +82,7 @@ function AppLayout({
 	activeSessionState,
 	activeQueue,
 	activePhase,
-	autoCollapse,
-	thinkingLevels,
 	projects,
-	activeProject,
 	showAgentSquare,
 	showScheduledTasks,
 	newProjectCwd,
@@ -110,7 +100,6 @@ function AppLayout({
 	handleThinkingChange,
 	handleModelChanged,
 	handleCreateClick,
-	handleRequestApiKeys,
 	handleOpenProject,
 	handleDeleteProject,
 	handleProjectCreated,
@@ -118,10 +107,6 @@ function AppLayout({
 	handleDeleteProjectConfirmed,
 	handleRenameProject,
 	handleOpenProjectFolderById,
-	handleSettingsClick,
-	handleCloseSettings,
-	handleExpandSidebar,
-	handleExpandRightPanel,
 	onProvidersChange,
 }: AppLayoutProps) {
 	const { t } = useTranslation();
@@ -186,78 +171,76 @@ function AppLayout({
 			data-sidebar-collapsed={sidebarCollapsed}
 			data-right-panel-collapsed={rightPanelCollapsed}
 		>
-			<Sidebar
-				onSelect={handleSelectAgent}
-				onDestroy={handleDestroyAgent}
-				onCreateClick={handleCreateClick}
-				onSettingsClick={handleSettingsClick}
-				onCreateProject={handleOpenProject}
-				onDeleteProject={handleDeleteProject}
-				onOpenProject={handleOpenProjectFolderById}
-				onRenameProject={handleRenameProject}
-			/>
+			<ErrorBoundarySection>
+				<Sidebar
+					onSelect={handleSelectAgent}
+					onDestroy={handleDestroyAgent}
+					onCreateClick={handleCreateClick}
+					onCreateProject={handleOpenProject}
+					onDeleteProject={handleDeleteProject}
+					onOpenProject={handleOpenProjectFolderById}
+					onRenameProject={handleRenameProject}
+				/>
+			</ErrorBoundarySection>
 
 			<Separator orientation="vertical" className="sidebar-separator bg-transparent" />
 
 			<main className="flex min-w-[340px] flex-col overflow-hidden bg-background">
-				{appReadyPhase < 1 ? null : showScheduledTasks ? (
-					<ScheduledTasksPage />
-				) : projects.length === 0 ? (
-					<WelcomeScreen onOpenProject={handleOpenProject} />
-				) : showAgentSquare ? (
-					<Suspense
-						fallback={
-							<div
-								className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
-								role="status"
-							>
-								{t("common.loading")}
-							</div>
-						}
-					>
-						<AgentSquare />
-					</Suspense>
-				) : (
-					<>
-						<SessionSheetBar
-							agentIds={openedSessionIds}
-							agents={agents}
-							projects={projects}
-							activeAgentId={activeAgentId}
-							sidebarCollapsed={sidebarCollapsed}
-							rightPanelCollapsed={rightPanelCollapsed}
-							onSelect={handleSelectAgent}
-							onClose={handleCloseSessionSheet}
-							onReorder={handleReorderSessionSheets}
-							onExpandSidebar={handleExpandSidebar}
-							onExpandRightPanel={handleExpandRightPanel}
-						/>
-						{activeAgent ? (
-							<ChatPanel
-								agentId={activeAgent.id}
-								agentName={activeAgent.name}
-								sessionState={activeSessionState}
-								autoCollapse={autoCollapse}
-								queue={activeQueue}
-								phase={activePhase}
-								currentModel={activeAgent.model}
-								currentThinking={activeAgent.thinkingLevel}
-								availableThinkingLevels={thinkingLevels}
-								onSend={handleSendMessage}
-								onThinkingChange={handleThinkingChange}
-								onModelChange={handleModelChanged}
-								onRequestApiKeys={handleRequestApiKeys}
-								onAbort={handleAbortAgent}
+				<ErrorBoundarySection>
+					{appReadyPhase < 1 ? null : showScheduledTasks ? (
+						<ScheduledTasksPage />
+					) : projects.length === 0 ? (
+						<WelcomeScreen onOpenProject={handleOpenProject} />
+					) : showAgentSquare ? (
+						<Suspense
+							fallback={
+								<div
+									className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+									role="status"
+								>
+									{t("common.loading")}
+								</div>
+							}
+						>
+							<AgentSquare />
+						</Suspense>
+					) : (
+						<>
+							<SessionSheetBar
+								agentIds={openedSessionIds}
+								agents={agents}
+								projects={projects}
+								activeAgentId={activeAgentId}
+								sidebarCollapsed={sidebarCollapsed}
+								rightPanelCollapsed={rightPanelCollapsed}
+								onSelect={handleSelectAgent}
+								onClose={handleCloseSessionSheet}
+								onReorder={handleReorderSessionSheets}
 							/>
-						) : agents.length > 0 ? (
-							<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-								选择左侧会话查看消息
-							</div>
-						) : appReadyPhase >= 2 ? (
-							<EmptySessionState activeProject={activeProject} handleCreateClick={handleCreateClick} />
-						) : null}
-					</>
-				)}
+							{activeAgent ? (
+								<ChatPanel
+									agentId={activeAgent.id}
+									agentName={activeAgent.name}
+									sessionState={activeSessionState}
+									queue={activeQueue}
+									phase={activePhase}
+									currentModel={activeAgent.model}
+									currentThinking={activeAgent.thinkingLevel}
+									onSend={handleSendMessage}
+									onThinkingChange={handleThinkingChange}
+									onModelChange={handleModelChanged}
+									onAbort={handleAbortAgent}
+								/>
+							) : agents.length > 0 ? (
+								<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+									选择左侧会话查看消息
+								</div>
+							) : appReadyPhase >= 2 ? (
+								<EmptySessionState handleCreateClick={handleCreateClick} />
+							) : null}
+						</>
+					)}
+				</ErrorBoundarySection>
 			</main>
 
 			<RightPanel />
@@ -288,7 +271,6 @@ function AppLayout({
 					customProviders={providerSettings.customProviders}
 					customStats={providerSettings.customStats}
 					onProvidersChange={onProvidersChange}
-					onClose={handleCloseSettings}
 					defaultTab={settingsTab}
 				/>
 			)}
