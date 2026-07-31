@@ -51,12 +51,25 @@ export interface ProviderSettingsResult {
 	};
 }
 
+/**
+ * 判断 provider 凭据是否有效。
+ *
+ * 已启用环境变量凭据：pi-ai 在 shell env 中检测到 API key（如 ANTHROPIC_API_KEY，
+ * 由 shell-env.ts 启动时从 rc 文件非破坏性合并进 process.env）时，auth 返回
+ * { configured: true, source: "environment", label: "<ENV 变量名>" }。这里将其视为
+ * 有效配置，与 pi CLI 的内置 provider 自动识别行为一致。来源由 UI 徽标展示
+ * （"环境变量" + 变量名 title），用户可据此区分 key 来自环境变量还是 Look 存储。
+ */
+function isUsableCredential(auth: { configured: boolean; source?: string }): boolean {
+	return auth.configured;
+}
+
 /** Get all available models with configured auth credentials. */
 export function getAvailableModels(modelRegistry: ModelRegistry): AvailableModel[] {
 	return modelRegistry.getAvailable().flatMap((model) => {
 		const auth = modelRegistry.getProviderAuthStatus(model.provider);
-		if (auth.source === "environment") return [];
-		if (!auth.configured) return [];
+		// 环境变量来源暂不作为可用凭据（功能未启用）。
+		if (!isUsableCredential(auth)) return [];
 		return [
 			{
 				provider: model.provider,
@@ -80,7 +93,7 @@ export function getProviders(modelRegistry: ModelRegistry): ProviderInfo[] {
 	return Array.from(providers, ([id, name]) => ({
 		id,
 		name,
-		hasCredentials: modelRegistry.getProviderAuthStatus(id).configured,
+		hasCredentials: isUsableCredential(modelRegistry.getProviderAuthStatus(id)),
 		models: modelRegistry.getAvailable().flatMap((model) => (model.provider === id ? [model.id] : [])),
 		supportsLogin: providerSupportsLogin(id, modelRegistry),
 	}));
@@ -122,6 +135,8 @@ export function getProviderSettings(
 				id: provider.id,
 				name: provider.name,
 				hasKey: provider.hasCredentials,
+				// 环境变量来源的 provider：透出 env 变量名（auth.label）供 UI 展示
+				// "export <ENV>=..." 提示与徽标 title。
 				envVar: auth.source === "environment" ? auth.label : undefined,
 				modelsAvailable: models.length,
 				models,

@@ -39,7 +39,7 @@ export type RendererToMainEvent =
 	| { type: "scheduled-task:logs"; taskId?: string; limit?: number }
 	| { type: "scheduled-task:validate-cron"; cron: string; timezone?: string }
 	| { type: "settings:get" }
-	| { type: "settings:get-api-key"; provider: string }
+	| { type: "settings:get-api-key"; provider: string; reveal?: boolean }
 	| { type: "settings:set-api-key"; provider: string; key: string }
 	| { type: "settings:test-api-key"; provider: string; key: string }
 	| { type: "settings:test-env-key"; provider: string }

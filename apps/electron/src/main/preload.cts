@@ -85,7 +85,8 @@ const api: LookAPI = {
 
 	getSettings: () => ipcRenderer.invoke("look:invoke", { type: "settings:get" }),
 
-	getApiKey: (provider) => ipcRenderer.invoke("look:invoke", { type: "settings:get-api-key", provider }),
+	getApiKey: (provider, opts) =>
+		ipcRenderer.invoke("look:invoke", { type: "settings:get-api-key", provider, reveal: opts?.reveal }),
 
 	testApiKey: (provider, key) => ipcRenderer.invoke("look:invoke", { type: "settings:test-api-key", provider, key }),
 

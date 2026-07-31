@@ -31,12 +31,16 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:get-api-key", async (data) => {
 		const _provider = guardProvider(data.provider);
 		const key = await getApiKey(ctx.model.credentials, _provider);
-		// 安全：只返回掩码给渲染进程，避免密钥明文进入渲染侧（XSS/导航攻击面）。
-		// 前端编辑时若用户不改动掩码，则不覆盖原 key（见 ApiKeysTab）。
-		if (key) {
-			return { success: true, key: maskSecret(key), masked: true };
+		if (!key) {
+			return { success: true, key: null, masked: false };
 		}
-		return { success: true, key: null, masked: false };
+		// 安全：默认只返回掩码给渲染进程，避免密钥明文常驻渲染侧（XSS/导航攻击面）。
+		// 仅当用户显式点击"显示"时（reveal=true）才返回明文，用于查看/复制。
+		// 前端编辑时若用户不改动掩码，则不覆盖原 key（见 ApiKeysTab）。
+		if (data.reveal === true) {
+			return { success: true, key, masked: false };
+		}
+		return { success: true, key: maskSecret(key), masked: true };
 	});
 
 	register("settings:set-api-key", async (data) => {

@@ -15,7 +15,7 @@ import {
 } from "@look/ui/components/ui/dialog";
 import { Input } from "@look/ui/components/ui/input";
 import type { TFunction } from "i18next";
-import { AlertCircle, ChevronRight, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertCircle, ChevronRight, Copy, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -39,15 +39,18 @@ interface KeyEditState {
 	editing: string | null;
 	input: string;
 	showKey: boolean;
-	/** 当前编辑的是否为掩码值（主进程脱敏返回）；若用户未改动则不覆盖原 key。 */
+	/** 当前 input 是否为掩码值（主进程脱敏返回）；若用户未改动则不覆盖原 key。 */
 	masked: boolean;
 	/** 打开编辑器时回填的原始内容（用于判断用户是否改动）。 */
 	originalInput: string;
+	/** reveal 成功后拿到的明文；隐藏且未改动时用它判断是否可安全恢复掩码。 */
+	revealedKey: string | null;
 }
 
 interface UiState {
 	saving: boolean;
 	loadingKey: boolean;
+	revealing: boolean;
 	testStatus: Record<string, TestVerdict>;
 	forceSave: ForceSaveState;
 }
@@ -82,6 +85,24 @@ function ProviderModelCount({ provider }: { provider: ProviderInfo }) {
 			{provider.modelsAvailable}
 		</Badge>
 	);
+}
+
+/** 凭据来源徽标文案 key（authSource 枚举 → i18n key），未知来源返回 null 不显示。
+ *  stored（存储在 Look）是默认情况，不显示徽标；只标注非默认来源（环境变量/本次会话/配置文件）。 */
+function authSourceLabelKey(source: string | undefined): string | null {
+	switch (source) {
+		case "environment":
+			return "settings.authSourceEnvironment";
+		case "runtime":
+			return "settings.authSourceRuntime";
+		case "models_json_key":
+		case "models_json_command":
+			return "settings.authSourceConfig";
+		case "auto":
+			return "settings.authSourceAuto";
+		default:
+			return null;
+	}
 }
 
 function ModelList({ models, t }: { models: ProviderModelInfo[]; t: (key: string) => string }) {
@@ -173,8 +194,12 @@ function BuiltInProviderRow({
 		editing: string | null;
 		input: string;
 		showKey: boolean;
+		masked: boolean;
+		originalInput: string;
+		revealing: boolean;
 		setInput: (v: string) => void;
-		setShowKey: (v: boolean) => void;
+		onToggleReveal: () => void;
+		onCopyKey: () => void;
 	};
 	saving: boolean;
 	loadingKey: boolean;
@@ -239,6 +264,15 @@ function BuiltInProviderRow({
 						/>
 						<ProviderIcon id={provider.id} className="size-4 shrink-0" />
 						<span className="min-w-0 truncate text-[12px] font-medium">{provider.name}</span>
+						{provider.hasKey && authSourceLabelKey(provider.authSource) && (
+							<Badge
+								variant="outline"
+								className="h-4 shrink-0 px-1 text-[9px] font-normal text-muted-foreground"
+								title={provider.envLabel ? `${provider.envLabel}` : undefined}
+							>
+								{t(authSourceLabelKey(provider.authSource)!)}
+							</Badge>
+						)}
 						<ProviderModelCount provider={provider} />
 					</div>
 				</div>
@@ -249,7 +283,7 @@ function BuiltInProviderRow({
 					)}
 					onClick={(e) => e.stopPropagation()}
 				>
-					{provider.hasLogin && provider.hasKey && (
+					{provider.hasLogin && canClearProviderKey(provider) && (
 						<Button
 							variant="line"
 							size="xs"
@@ -271,7 +305,7 @@ function BuiltInProviderRow({
 							{t("settings.login")}
 						</Button>
 					)}
-					{provider.supportsApiKey && (
+					{provider.supportsApiKey && provider.authSource !== "environment" && (
 						<Button
 							variant={isEditing ? "line-filled" : "line"}
 							size="xs"
@@ -321,18 +355,34 @@ function BuiltInProviderRow({
 								placeholder={loadingKey ? t("common.loading") : "sk-..."}
 								autoFocus
 								autoComplete="new-password"
-								disabled={loadingKey}
-								className="h-8 pr-9 font-mono text-[12px]"
+								disabled={loadingKey || editor.revealing}
+								className="h-8 pr-16 font-mono text-[12px]"
 							/>
+							{/* 显示明文后出现复制按钮，方便一键复制完整 key */}
+							{editor.showKey && !editor.masked && editor.input && (
+								<Button
+									variant="ghost"
+									size="icon"
+									className="absolute right-8 top-0 size-8"
+									onClick={editor.onCopyKey}
+									aria-label={t("settings.copyKey")}
+									title={t("settings.copyKey")}
+								>
+									<Copy data-icon="inline-start" aria-hidden="true" className="size-3.5" />
+								</Button>
+							)}
 							<Button
 								variant="ghost"
 								size="icon"
 								className="absolute right-0 top-0 size-8"
-								onClick={() => editor.setShowKey(!editor.showKey)}
+								onClick={editor.onToggleReveal}
+								disabled={editor.revealing}
 								aria-label={editor.showKey ? t("settings.hideKey") : t("settings.showKey")}
 								aria-pressed={editor.showKey}
 							>
-								{editor.showKey ? (
+								{editor.revealing ? (
+									<Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+								) : editor.showKey ? (
 									<EyeOff data-icon="inline-start" aria-hidden="true" />
 								) : (
 									<Eye data-icon="inline-start" aria-hidden="true" />
@@ -413,8 +463,15 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		showKey: false,
 		masked: false,
 		originalInput: "",
+		revealedKey: null,
 	});
-	const [ui, setUi] = useState<UiState>({ saving: false, loadingKey: false, testStatus: {}, forceSave: null });
+	const [ui, setUi] = useState<UiState>({
+		saving: false,
+		loadingKey: false,
+		revealing: false,
+		testStatus: {},
+		forceSave: null,
+	});
 	const [accordion, setAccordion] = useState<AccordionState>({ providers: {}, customProviders: {} });
 	// customProviders prop seeds the list from the startup-loaded settings, so the
 	// section renders its rows on first paint instead of flashing the empty state
@@ -502,7 +559,9 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		patchKeyEdit("showKey", false);
 		patchKeyEdit("masked", false);
 		patchKeyEdit("originalInput", "");
+		patchKeyEdit("revealedKey", null);
 		patchUi("loadingKey", false);
+		patchUi("revealing", false);
 		patchUi("forceSave", null);
 		// 恢复焦点到触发编辑的按钮
 		editTriggerRef.current?.focus();
@@ -515,6 +574,7 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 		patchKeyEdit("showKey", false);
 		patchKeyEdit("masked", false);
 		patchKeyEdit("originalInput", "");
+		patchKeyEdit("revealedKey", null);
 		patchUi("forceSave", null);
 		if (provider.hasKey && canClearProviderKey(provider) && api) {
 			patchUi("loadingKey", true);
@@ -539,6 +599,55 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 			patchKeyEdit("input", "");
 			patchKeyEdit("masked", false);
 			patchKeyEdit("originalInput", "");
+		}
+	};
+
+	const handleToggleReveal = async () => {
+		const providerId = keyEdit.editing;
+		if (!providerId || !api) return;
+		if (keyEdit.showKey) {
+			// 隐藏：若当前是 reveal 出来的明文且用户未改动，恢复掩码显示，避免明文残留在屏幕上
+			if (keyEdit.revealedKey && keyEdit.input.trim() === keyEdit.revealedKey.trim()) {
+				setKeyEdit((prev) => ({
+					...prev,
+					showKey: false,
+					input: prev.originalInput,
+					masked: true,
+					revealedKey: null,
+				}));
+			} else {
+				patchKeyEdit("showKey", false);
+			}
+			return;
+		}
+		if (keyEdit.masked) {
+			// 掩码 → 按需向主进程请求明文（仅用户显式点击显示时才会发生）
+			patchUi("revealing", true);
+			try {
+				const r = await api.getApiKey(providerId, { reveal: true });
+				const revealedKey = r?.success ? r.key : null;
+				if (revealedKey) {
+					setKeyEdit((prev) => {
+						if (prev.editing !== providerId) return prev;
+						return { ...prev, input: revealedKey, masked: false, showKey: true, revealedKey };
+					});
+				}
+			} catch {
+				/* 获取明文失败保持掩码，用户可重试 */
+			}
+			patchUi("revealing", false);
+		} else {
+			patchKeyEdit("showKey", true);
+		}
+	};
+
+	const handleCopyKey = async () => {
+		if (!keyEdit.input) return;
+		try {
+			await navigator.clipboard.writeText(keyEdit.input);
+			toast.success(t("settings.keyCopied"));
+		} catch {
+			toast.error(t("settings.keyCopyFailed"));
 		}
 	};
 
@@ -760,6 +869,8 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 						closeEditor={closeEditor}
 						handleSave={handleSave}
 						handleForceSave={handleForceSave}
+						handleToggleReveal={handleToggleReveal}
+						handleCopyKey={handleCopyKey}
 						onClearClick={(p) => patchCustom("confirmClear", p)}
 						onLoginClick={handleLogin}
 						onLogoutClick={handleLogout}
@@ -791,6 +902,8 @@ interface BuiltInProviderListProps {
 	closeEditor: () => void;
 	handleSave: () => void;
 	handleForceSave: () => void;
+	handleToggleReveal: () => void;
+	handleCopyKey: () => void;
 	onClearClick: (provider: ProviderInfo) => void;
 	onLoginClick: (provider: ProviderInfo) => void;
 	onLogoutClick: (provider: ProviderInfo) => void;
@@ -807,6 +920,8 @@ function BuiltInProviderList({
 	closeEditor,
 	handleSave,
 	handleForceSave,
+	handleToggleReveal,
+	handleCopyKey,
 	onClearClick,
 	onLoginClick,
 	onLogoutClick,
@@ -827,8 +942,12 @@ function BuiltInProviderList({
 							editing: keyEdit.editing,
 							input: keyEdit.input,
 							showKey: keyEdit.showKey,
+							masked: keyEdit.masked,
+							originalInput: keyEdit.originalInput,
+							revealing: ui.revealing,
 							setInput: (v) => patchKeyEdit("input", v),
-							setShowKey: (v) => patchKeyEdit("showKey", v),
+							onToggleReveal: () => void handleToggleReveal(),
+							onCopyKey: handleCopyKey,
 						}}
 						saving={ui.saving}
 						loadingKey={ui.loadingKey}

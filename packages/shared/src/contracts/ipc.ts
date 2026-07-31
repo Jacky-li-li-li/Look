@@ -146,7 +146,10 @@ export interface LookAPI {
 		success: boolean;
 		result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string };
 	}>;
-	getApiKey(provider: string): Promise<IpcResult<{ key: string | null; masked?: boolean }>>;
+	getApiKey(
+		provider: string,
+		opts?: { reveal?: boolean },
+	): Promise<IpcResult<{ key: string | null; masked?: boolean }>>;
 	testEnvKey(
 		provider: string,
 	): Promise<

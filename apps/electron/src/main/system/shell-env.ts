@@ -74,7 +74,7 @@ export function loadShellEnv(): void {
  * generic cloud-credential variables.
  */
 function isApiKeyEnvVar(name: string): boolean {
-	return /^(.*_API_KEY|.*_OAUTH_TOKEN|HF_TOKEN|OPENCODE_API_KEY|COPILOT_GITHUB_TOKEN|GOOGLE_APPLICATION_CREDENTIALS|GOOGLE_CLOUD_|AWS_|CLOUDFLARE_)/.test(
+	return /^(.*_API_KEY|.*_OAUTH_TOKEN|.*_AUTH_TOKEN|HF_TOKEN|OPENCODE_API_KEY|COPILOT_GITHUB_TOKEN|GOOGLE_APPLICATION_CREDENTIALS|GOOGLE_CLOUD_|AWS_|CLOUDFLARE_)/.test(
 		name,
 	);
 }
