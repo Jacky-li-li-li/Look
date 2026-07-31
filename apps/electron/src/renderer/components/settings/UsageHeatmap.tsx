@@ -180,42 +180,45 @@ export default function UsageHeatmap() {
 				</div>
 
 				<div ref={scrollRef} className="flex-1 min-w-0 overflow-x-auto">
-					{/* Month labels */}
-					<div className="relative" style={{ height: labelHeight }}>
-						{visibleMonthLabels.map(({ colIndex, label }) => (
-							<span
-								key={colIndex}
-								className="absolute top-0 text-[10px] text-muted-foreground"
-								style={{ left: colIndex * (CELL_SIZE + GAP) }}
-							>
-								{label}
-							</span>
-						))}
-					</div>
+					{/* w-fit + mx-auto：网格窄于容器时居中，超宽时回到左对齐滚动（auto margin 不会裁掉左侧） */}
+					<div className="mx-auto w-fit">
+						{/* Month labels */}
+						<div className="relative" style={{ height: labelHeight }}>
+							{visibleMonthLabels.map(({ colIndex, label }) => (
+								<span
+									key={colIndex}
+									className="absolute top-0 text-[10px] text-muted-foreground"
+									style={{ left: colIndex * (CELL_SIZE + GAP) }}
+								>
+									{label}
+								</span>
+							))}
+						</div>
 
-					{/* Grid */}
-					<div
-						className="grid grid-rows-7 grid-flow-col"
-						style={{
-							gridTemplateRows: `repeat(${WEEK_DAYS}, ${CELL_SIZE}px)`,
-							gridTemplateColumns: `repeat(${WEEKS_IN_YEAR}, ${CELL_SIZE}px)`,
-							gap: GAP,
-						}}
-					>
-						{days.map((day) => {
-							const key = formatLocalDateKey(day);
-							const count = data?.usage[key] ?? 0;
-							const level = getLevel(count);
-							const inYear = day.getFullYear() === selectedYear;
-							return (
-								<div
-									key={key + day.getTime()}
-									className={`rounded-sm ${inYear ? LEVEL_CLASSES[level] : "bg-transparent"}`}
-									style={{ width: CELL_SIZE, height: CELL_SIZE }}
-									title={inYear ? `${key}: ${count} ${t("profile.turns", { count })}` : ""}
-								/>
-							);
-						})}
+						{/* Grid */}
+						<div
+							className="grid grid-rows-7 grid-flow-col"
+							style={{
+								gridTemplateRows: `repeat(${WEEK_DAYS}, ${CELL_SIZE}px)`,
+								gridTemplateColumns: `repeat(${WEEKS_IN_YEAR}, ${CELL_SIZE}px)`,
+								gap: GAP,
+							}}
+						>
+							{days.map((day) => {
+								const key = formatLocalDateKey(day);
+								const count = data?.usage[key] ?? 0;
+								const level = getLevel(count);
+								const inYear = day.getFullYear() === selectedYear;
+								return (
+									<div
+										key={key + day.getTime()}
+										className={`rounded-sm ${inYear ? LEVEL_CLASSES[level] : "bg-transparent"}`}
+										style={{ width: CELL_SIZE, height: CELL_SIZE }}
+										title={inYear ? `${key}: ${count} ${t("profile.turns", { count })}` : ""}
+									/>
+								);
+							})}
+						</div>
 					</div>
 				</div>
 			</div>

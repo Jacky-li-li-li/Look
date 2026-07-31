@@ -8,6 +8,8 @@ const SETTINGS: UserSettings = {
 	language: "en",
 	autoCollapse: true,
 	compactionEnabled: true,
+	compactionReserveTokens: 16384,
+	compactionKeepRecentTokens: 20000,
 	permissionMode: "ask",
 	preferredModel: null,
 	lastActiveSessionId: "missing-session",

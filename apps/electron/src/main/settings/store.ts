@@ -32,6 +32,8 @@ const DEFAULTS: UserSettings = {
 	language: "en",
 	autoCollapse: true,
 	compactionEnabled: true,
+	compactionReserveTokens: 16384,
+	compactionKeepRecentTokens: 20000,
 	permissionMode: "ask",
 	preferredModel: null,
 	planModel: null,
@@ -133,6 +135,8 @@ type SettingsManagerLike = {
 	setDefaultModel(modelId: string): void;
 	getCompactionEnabled(): boolean;
 	setCompactionEnabled(enabled: boolean): void;
+	getCompactionReserveTokens(): number;
+	getCompactionKeepRecentTokens(): number;
 	flush(): Promise<void>;
 };
 
@@ -160,6 +164,9 @@ export class UserSettingsStore {
 			...this.ui,
 			preferredModel: sdk.preferredModel ?? DEFAULTS.preferredModel,
 			compactionEnabled: this.settingsManager.getCompactionEnabled() ?? DEFAULTS.compactionEnabled,
+			// Read-only SDK fields: always the SDK's live value, never persisted by us.
+			compactionReserveTokens: this.settingsManager.getCompactionReserveTokens(),
+			compactionKeepRecentTokens: this.settingsManager.getCompactionKeepRecentTokens(),
 		};
 	}
 

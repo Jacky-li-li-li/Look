@@ -21,6 +21,8 @@ function settingsManager() {
 		setDefaultModel: vi.fn(),
 		getCompactionEnabled: () => true,
 		setCompactionEnabled: vi.fn(),
+		getCompactionReserveTokens: () => 16384,
+		getCompactionKeepRecentTokens: () => 20000,
 		flush: vi.fn(async () => {}),
 	};
 }

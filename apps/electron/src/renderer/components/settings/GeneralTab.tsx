@@ -112,6 +112,10 @@ interface GeneralSettingsState {
 	language: string;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
+	/** 只读展示：读自 SDK SettingsManager（settings.json: compaction.reserveTokens）。 */
+	compactionReserveTokens: number;
+	/** 只读展示：读自 SDK SettingsManager（settings.json: compaction.keepRecentTokens）。 */
+	compactionKeepRecentTokens: number;
 	autoTitleModel: string | null;
 	planModel: string | null;
 	aiAvatar: string | null;
@@ -127,6 +131,8 @@ export default function GeneralTab() {
 		language: (SUPPORTED_LOCALES as string[]).includes(i18n.language) ? i18n.language : "en",
 		autoCollapse: true,
 		compactionEnabled: true,
+		compactionReserveTokens: 16384,
+		compactionKeepRecentTokens: 20000,
 		autoTitleModel: null,
 		planModel: null,
 		aiAvatar: null,
@@ -136,7 +142,17 @@ export default function GeneralTab() {
 	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 	// 三态：undefined=未悬停（预览跟随已选项），null=悬停在默认像素头像上
 	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
-	const { language, autoCollapse, compactionEnabled, autoTitleModel, planModel, aiAvatar, availableModels } = state;
+	const {
+		language,
+		autoCollapse,
+		compactionEnabled,
+		compactionReserveTokens,
+		compactionKeepRecentTokens,
+		autoTitleModel,
+		planModel,
+		aiAvatar,
+		availableModels,
+	} = state;
 	// 预览区跟随悬停（试穿），未悬停时跟随已选项
 	const previewAvatar = hoveredAvatar !== undefined ? hoveredAvatar : aiAvatar;
 	const previewUrl = getAiAvatarUrl(previewAvatar);
@@ -160,6 +176,12 @@ export default function GeneralTab() {
 						...(settings.autoCollapse !== undefined ? { autoCollapse: settings.autoCollapse } : {}),
 						...(settings.compactionEnabled !== undefined
 							? { compactionEnabled: settings.compactionEnabled }
+							: {}),
+						...("compactionReserveTokens" in settings
+							? { compactionReserveTokens: settings.compactionReserveTokens }
+							: {}),
+						...("compactionKeepRecentTokens" in settings
+							? { compactionKeepRecentTokens: settings.compactionKeepRecentTokens }
 							: {}),
 						...("autoTitleModel" in settings ? { autoTitleModel: settings.autoTitleModel } : {}),
 						...("planModel" in settings ? { planModel: settings.planModel } : {}),
@@ -198,8 +220,8 @@ export default function GeneralTab() {
 						<ThemePicker />
 					</div>
 					<SettingRow id="ai-avatar" label={t("settings.aiAvatar")} desc={t("settings.aiAvatarDesc")}>
-						{/* 设置页是 Radix 模态 Dialog：body 会被设为 pointer-events:none，
-							portal 到 body 的自定义浮层点不动，必须用 Radix Popover 才能点击 */}
+						{/* 头像选择浮层用 Radix Popover：portal 到 body，焦点与点击由 Radix 管理，
+							不会被设置页覆盖层拦截 */}
 						<Popover
 							open={avatarPickerOpen}
 							onOpenChange={(open) => {
@@ -257,9 +279,10 @@ export default function GeneralTab() {
 
 								<div className="my-2.5 border-t border-hairline" />
 
-								{/* 选择网格：默认像素头像在第一格，hover 试穿、点击提交并关闭 */}
+								{/* 选择网格：默认像素头像在第一格，hover 试穿、点击提交并关闭。
+									24 个 AI 头像 + 1 个默认 = 25 格，5 列排成 5×5 方阵（6 列会剩 1 格孤悬）。 */}
 								<div
-									className="grid grid-cols-6 gap-1.5"
+									className="grid grid-cols-5 gap-1.5"
 									role="radiogroup"
 									aria-label={t("settings.aiAvatar")}
 									onMouseLeave={() => setHoveredAvatar(undefined)}
@@ -423,21 +446,25 @@ export default function GeneralTab() {
 							}}
 						/>
 					</SettingRow>
-					{/* reserveTokens — 读自 pi SDK SettingsManager.getCompactionReserveTokens()，settings.json 中配置 */}
+					{/* reserveTokens — 只读展示：读自 SDK SettingsManager.getCompactionReserveTokens() */}
 					<SettingRow
 						id="reserve-tokens"
 						label={t("settings.reserveTokens")}
 						desc={t("settings.reserveTokensDesc")}
 					>
-						<span className="font-mono text-[12px] tabular-nums text-muted-foreground/70">16384</span>
+						<span className="font-mono text-[12px] tabular-nums text-muted-foreground/70">
+							{compactionReserveTokens.toLocaleString()}
+						</span>
 					</SettingRow>
-					{/* keepRecentTokens — 同上 */}
+					{/* keepRecentTokens — 只读展示：读自 SDK SettingsManager.getCompactionKeepRecentTokens() */}
 					<SettingRow
 						id="keep-recent"
 						label={t("settings.keepRecentTokens")}
 						desc={t("settings.keepRecentTokensDesc")}
 					>
-						<span className="font-mono text-[12px] tabular-nums text-muted-foreground/70">20000</span>
+						<span className="font-mono text-[12px] tabular-nums text-muted-foreground/70">
+							{compactionKeepRecentTokens.toLocaleString()}
+						</span>
 					</SettingRow>
 				</CardContent>
 			</Card>

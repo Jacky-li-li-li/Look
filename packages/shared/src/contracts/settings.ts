@@ -8,6 +8,12 @@ export interface UserSettings {
 	language: UILanguage;
 	autoCollapse: boolean;
 	compactionEnabled: boolean;
+	/** Tokens reserved for the LLM response during compaction. Read-only — owned by the SDK
+	 *  SettingsManager (settings.json: compaction.reserveTokens), never written through `update`. */
+	compactionReserveTokens: number;
+	/** Recent tokens preserved during compaction. Read-only — owned by the SDK
+	 *  SettingsManager (settings.json: compaction.keepRecentTokens), never written through `update`. */
+	compactionKeepRecentTokens: number;
 	permissionMode: PermissionMode;
 	preferredModel: string | null;
 	/** Model used specifically when entering Plan mode. null = inherit current session model. */
