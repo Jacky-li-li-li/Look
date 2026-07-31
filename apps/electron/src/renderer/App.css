@@ -548,14 +548,14 @@ body {
 		flex-direction: column;
 		gap: 0.25rem;
 		font-family: var(--font-body);
-		font-size: 13px;
-		line-height: 1.5;
+		font-size: 14px;
+		line-height: 1.55;
 		color: var(--foreground);
 		word-break: break-word;
 	}
 
 	.tone-light .whisper-bubble--assistant .look-markdown {
-		color: color-mix(in oklch, var(--foreground), var(--background) 24%);
+		color: color-mix(in oklch, var(--foreground), var(--background) 10%);
 	}
 
 	.look-md-paragraph {
@@ -588,7 +588,7 @@ body {
 	.look-md-h4,
 	.look-md-h5,
 	.look-md-h6 {
-		font-size: 13px;
+		font-size: 14px;
 		line-height: 1.45;
 		letter-spacing: 0;
 	}
@@ -740,7 +740,7 @@ body {
 	.look-md-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 12px;
+		font-size: 13px;
 		line-height: 1.4;
 	}
 
