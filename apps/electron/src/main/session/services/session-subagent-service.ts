@@ -20,8 +20,8 @@ import type { ProjectService } from "../../projects/project-service.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
-import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
+import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
 
 export interface SessionSubagentHost {
 	createManagedRuntime(

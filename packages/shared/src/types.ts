@@ -25,45 +25,74 @@ export type EventCallback = (event: MainToRendererEvent) => void;
 // Re-exports from sub-modules
 // ============================================================
 
-// Constants
-export { DEFAULT_PROJECT_ID, LOOK_MESSAGE_DURATION_ENTRY_TYPE } from "./types/constants.js";
-
-// Domain DTOs
-export type { AgentDefinitionInfo, AgentDefinitionInput, AgentDefinitionSource, AgentInfo } from "./types/dto/agent.js";
-export type { ImSessionProvider, FileTreeNode, AppUpdatePhase, LookMessageDurationEntryData, TodoItem } from "./types/dto/misc.js";
-export type {
-	PermissionAskEvent, PermissionAskQueueItem, PermissionRespondPayload,
-	PlanApprovalOutcome, PlanApprovalRequest, PlanApprovalResponse,
-	PlanQuestion, PlanQuestionOption, PlanQuestionOutcome,
-	PlanQuestionRequest, PlanQuestionResponse, ToolCallHandler,
-} from "./types/dto/permission.js";
-export type { ProjectInfo } from "./types/dto/project.js";
-export type {
-	AvailableModel, CustomProviderInput, CustomProviderModelInput,
-	ModelTestResult, ProviderInfo, TestCustomProviderResult,
-} from "./types/dto/provider.js";
-export type { SubagentCompletedEvent, SubagentProgressEvent } from "./types/dto/subagent.js";
-export type { UserProfile } from "./types/dto/user.js";
-export type {
-	ForkedSessionResult, LookSessionEntry, NavigateTreeResult,
-	SessionRuntimeSnapshot, SessionSnapshotEnvelope,
-} from "./types/dto/session.js";
-
-// Events
-export type { MainToRendererEvent, LoginPrompt } from "./types/events/main-to-renderer.js";
-export type { RendererToMainEvent } from "./types/events/renderer-to-main.js";
-
-// UI events (existing sub-module)
-export type {
-	LookUiEvent, LookUiPhase, LookUiStreamBlock, LookUiToolExecState, SessionUiEventEnvelope,
-} from "./types/ui-events.js";
-
 // Contracts and domain (pass-through)
 export type { PermissionMode } from "./contracts/permission.js";
 export type { LookTone, UILanguage, UserSettings } from "./contracts/settings.js";
 export type {
-	ScheduledTask, ScheduledTaskInput, ScheduledTaskNotification,
-	ScheduledTaskRetryPolicy, ScheduledTaskRunLog, ScheduledTaskRunStatus,
-	ScheduledTaskSchedule, ScheduledTaskStatus, ScheduledTaskTestResult,
-	TaskExecutionProfile, TaskRun, TaskRunSource,
+	ScheduledTask,
+	ScheduledTaskInput,
+	ScheduledTaskNotification,
+	ScheduledTaskRetryPolicy,
+	ScheduledTaskRunLog,
+	ScheduledTaskRunStatus,
+	ScheduledTaskSchedule,
+	ScheduledTaskStatus,
+	ScheduledTaskTestResult,
+	TaskExecutionProfile,
+	TaskRun,
+	TaskRunSource,
 } from "./domain/scheduler.js";
+// Constants
+export { DEFAULT_PROJECT_ID, LOOK_MESSAGE_DURATION_ENTRY_TYPE } from "./types/constants.js";
+// Domain DTOs
+export type { AgentDefinitionInfo, AgentDefinitionInput, AgentDefinitionSource, AgentInfo } from "./types/dto/agent.js";
+export type {
+	AppUpdatePhase,
+	FileTreeNode,
+	ImSessionProvider,
+	LookMessageDurationEntryData,
+	TodoItem,
+} from "./types/dto/misc.js";
+export type {
+	PermissionAskEvent,
+	PermissionAskQueueItem,
+	PermissionRespondPayload,
+	PlanApprovalOutcome,
+	PlanApprovalRequest,
+	PlanApprovalResponse,
+	PlanQuestion,
+	PlanQuestionOption,
+	PlanQuestionOutcome,
+	PlanQuestionRequest,
+	PlanQuestionResponse,
+	ToolCallHandler,
+} from "./types/dto/permission.js";
+export type { ProjectInfo } from "./types/dto/project.js";
+export type {
+	AvailableModel,
+	CustomProviderInput,
+	CustomProviderModelInput,
+	ModelTestResult,
+	ProviderInfo,
+	TestCustomProviderResult,
+} from "./types/dto/provider.js";
+export type {
+	ForkedSessionResult,
+	LookSessionEntry,
+	NavigateTreeResult,
+	SessionRuntimeSnapshot,
+	SessionSnapshotEnvelope,
+} from "./types/dto/session.js";
+export type { SubagentCompletedEvent, SubagentProgressEvent } from "./types/dto/subagent.js";
+export type { UserProfile } from "./types/dto/user.js";
+// Events
+export type { LoginPrompt, MainToRendererEvent } from "./types/events/main-to-renderer.js";
+export type { RendererToMainEvent } from "./types/events/renderer-to-main.js";
+// UI events (existing sub-module)
+export type {
+	LookUiEvent,
+	LookUiPhase,
+	LookUiStreamBlock,
+	LookUiToolExecState,
+	SessionUiEventEnvelope,
+} from "./types/ui-events.js";

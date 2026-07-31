@@ -13,10 +13,10 @@
 import type { ProjectInfo } from "@look/shared/types";
 import type { IEventBus } from "../../core/contracts.js";
 import type { ProjectService } from "../../projects/project-service.js";
-import type { ProjectRuntimeService } from "./project-runtime-service.js";
-import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
-import type { SessionCatalog } from "./session-catalog.js";
 import type { SessionNotifier } from "../events/session-notifier.js";
+import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ProjectRuntimeService } from "./project-runtime-service.js";
+import type { SessionCatalog } from "./session-catalog.js";
 
 export interface ProjectApplicationServiceDependencies {
 	projectService: Pick<ProjectService, "getProjectInfo" | "setActiveId" | "renameProject">;

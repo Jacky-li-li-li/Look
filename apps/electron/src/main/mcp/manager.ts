@@ -55,11 +55,7 @@ export class MCPManager {
 		this.onChange?.();
 	}
 
-	async loadConfig(
-		projectId: string,
-		cwd?: string,
-		options: { loadProjectConfig?: boolean } = {},
-	): Promise<void> {
+	async loadConfig(projectId: string, cwd?: string, options: { loadProjectConfig?: boolean } = {}): Promise<void> {
 		const merged = new Map<string, McpServerConfig>();
 		for (const config of await discoverCompatibleConfigs(cwd)) {
 			merged.set(config.name, { ...config, _source: "discovered" });

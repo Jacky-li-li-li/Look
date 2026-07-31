@@ -1,7 +1,10 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
-import { type SessionHistoryHost, SessionHistoryService } from "../src/main/session/services/session-history-service.js";
+import {
+	type SessionHistoryHost,
+	SessionHistoryService,
+} from "../src/main/session/services/session-history-service.js";
 
 function createHost(overrides: Partial<SessionHistoryHost> = {}): SessionHistoryHost {
 	return {

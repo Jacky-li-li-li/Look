@@ -53,23 +53,23 @@ import { PromptStore } from "../../settings/prompt-store.js";
 import { UserSettingsStore } from "../../settings/store.js";
 import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
-import { ActiveSessionSelection } from "../scope/active-session-selection.js";
+import { SessionEventBus } from "../events/session-event-bus.js";
+import { SessionEventEffects } from "../events/session-event-effects.js";
 import { SessionEventProcessor } from "../events/session-event-processor.js";
-import { ProjectApplicationService } from "../services/project-application-service.js";
-import { ProjectRuntimeService } from "../services/project-runtime-service.js";
+import { SessionNotifier } from "../events/session-notifier.js";
 import { SessionRuntimeFactory } from "../runtime/runtime-factory.js";
 import { RuntimeLifecycleCoordinator } from "../runtime/runtime-lifecycle-coordinator.js";
 import { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import { ActiveSessionSelection } from "../scope/active-session-selection.js";
 import { SessionScopeRegistry } from "../scope/scope-registry.js";
+import { ProjectApplicationService } from "../services/project-application-service.js";
+import { ProjectRuntimeService } from "../services/project-runtime-service.js";
 import { SessionCatalog } from "../services/session-catalog.js";
 import { SessionControlService } from "../services/session-control-service.js";
-import { SessionEventBus } from "../events/session-event-bus.js";
-import { SessionEventEffects } from "../events/session-event-effects.js";
 import { SessionHistoryService } from "../services/session-history-service.js";
 import { SessionInfoService } from "../services/session-info-service.js";
 import { SessionLifecycleService } from "../services/session-lifecycle-service.js";
 import { SessionMessagingService } from "../services/session-messaging-service.js";
-import { SessionNotifier } from "../events/session-notifier.js";
 import { SessionPermissionOrchestrator } from "../services/session-permission-orchestrator.js";
 import { SessionSettingsService } from "../services/session-settings-service.js";
 import { SessionSubagentService } from "../services/session-subagent-service.js";
@@ -330,12 +330,8 @@ export class CompositionBuilder {
 						},
 						resolvedProjectId,
 					),
-					createMcpExtensionFactory(
-						sessionId,
-						this.mcpManager!,
-						cwd,
-						resolvedProjectId,
-						(cwd) => this.projectService!.resolveProjectTrust(cwd),
+					createMcpExtensionFactory(sessionId, this.mcpManager!, cwd, resolvedProjectId, (cwd) =>
+						this.projectService!.resolveProjectTrust(cwd),
 					),
 					createSkillInjectExtensionFactory(),
 				];

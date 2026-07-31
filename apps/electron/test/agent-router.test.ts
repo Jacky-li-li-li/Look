@@ -4,9 +4,9 @@
 // Verifies: guard rejection paths, service delegation, error propagation.
 // ============================================================
 
-import { agentRouter } from "../src/main/ipc/routers/agent-router.js";
-import type { InvokeContext } from "../src/main/ipc/invoke-context.js";
 import { describe, expect, it, vi } from "vitest";
+import type { InvokeContext } from "../src/main/ipc/invoke-context.js";
+import { agentRouter } from "../src/main/ipc/routers/agent-router.js";
 import { expectGuardError, makeDispatcher, makeMockContext } from "./helpers/ipc-test-helpers.js";
 
 function makeAgentCtx(overrides?: Partial<InvokeContext["session"]>): InvokeContext {
@@ -139,9 +139,7 @@ describe("agent-router", () => {
 			(ctx.session.lifecycle.createAgent as ReturnType<typeof vi.fn>).mockRejectedValue(
 				new Error("Creation failed"),
 			);
-			await expect(
-				dispatch({ type: "agent:create", name: "x", projectId: "p" }),
-			).rejects.toThrow("Creation failed");
+			await expect(dispatch({ type: "agent:create", name: "x", projectId: "p" })).rejects.toThrow("Creation failed");
 		});
 	});
 });

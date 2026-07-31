@@ -5,12 +5,12 @@ import type {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import { ActiveSessionSelection } from "../src/main/session/scope/active-session-selection.js";
 import {
 	RuntimeLifecycleCoordinator,
 	type RuntimeLifecycleCoordinatorOptions,
 } from "../src/main/session/runtime/runtime-lifecycle-coordinator.js";
 import { RuntimeRegistry } from "../src/main/session/runtime/runtime-registry.js";
+import { ActiveSessionSelection } from "../src/main/session/scope/active-session-selection.js";
 import { SessionScopeRegistry } from "../src/main/session/scope/scope-registry.js";
 import type { StoredSession } from "../src/main/session/services/session-catalog.js";
 

@@ -2,9 +2,9 @@
 // Project router integration tests
 // ============================================================
 
-import { projectRouter } from "../src/main/ipc/routers/project-router.js";
-import type { InvokeContext } from "../src/main/ipc/invoke-context.js";
 import { describe, expect, it, vi } from "vitest";
+import type { InvokeContext } from "../src/main/ipc/invoke-context.js";
+import { projectRouter } from "../src/main/ipc/routers/project-router.js";
 import { expectGuardError, makeDispatcher, makeMockContext } from "./helpers/ipc-test-helpers.js";
 
 function makeProjectCtx(): InvokeContext {

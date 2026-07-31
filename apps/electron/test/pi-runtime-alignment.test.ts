@@ -14,7 +14,6 @@ const ipc =
 	read("src/main/ipc/routers/permission-router.ts") +
 	read("src/main/ipc/project-trust.ts");
 const preload = read("src/main/preload.cts");
-const index = read("src/main/index.ts");
 const application = read("src/main/application.ts");
 const types = readRepositoryFile("packages/shared/src/types.ts");
 const tsconfig = read("tsconfig.main.json");

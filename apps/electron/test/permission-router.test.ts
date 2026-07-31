@@ -2,9 +2,9 @@
 // Permission router integration tests
 // ============================================================
 
-import { permissionRouter } from "../src/main/ipc/routers/permission-router.js";
-import type { InvokeContext } from "../src/main/ipc/invoke-context.js";
 import { describe, expect, it, vi } from "vitest";
+import type { InvokeContext } from "../src/main/ipc/invoke-context.js";
+import { permissionRouter } from "../src/main/ipc/routers/permission-router.js";
 import { expectGuardError, makeDispatcher, makeMockContext } from "./helpers/ipc-test-helpers.js";
 
 function makePermissionCtx(): InvokeContext {
@@ -65,12 +65,10 @@ describe("permission-router", () => {
 	describe("error propagation", () => {
 		it("permission:set-mode returns error when service throws", async () => {
 			const { dispatch, ctx } = makeDispatcher(permissionRouter, makePermissionCtx());
-			(ctx.session.permission.applyMode as ReturnType<typeof vi.fn>).mockRejectedValue(
-				new Error("Invalid mode"),
+			(ctx.session.permission.applyMode as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Invalid mode"));
+			await expect(dispatch({ type: "permission:set-mode", agentId: "test-agent", mode: "ask" })).rejects.toThrow(
+				"Invalid mode",
 			);
-			await expect(
-				dispatch({ type: "permission:set-mode", agentId: "test-agent", mode: "ask" }),
-			).rejects.toThrow("Invalid mode");
 		});
 	});
 });

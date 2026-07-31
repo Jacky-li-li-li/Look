@@ -2,12 +2,10 @@
 // IPC test helpers — shared mock factories for router integration tests
 // ============================================================
 
-import { describe, expect, it, vi } from "vitest";
-
-import { InvokeDispatcher } from "../../src/main/ipc/invoke-context.js";
-import type { InvokeContext, IpcRouter } from "../../src/main/ipc/invoke-context.js";
 import type { RendererToMainEvent } from "@look/shared/types";
-import { vi } from "vitest";
+import { expect } from "vitest";
+import type { InvokeContext, IpcRouter } from "../../src/main/ipc/invoke-context.js";
+import { InvokeDispatcher } from "../../src/main/ipc/invoke-context.js";
 
 /**
  * Create a minimal mock InvokeContext with the given overrides.

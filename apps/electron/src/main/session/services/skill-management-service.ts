@@ -8,8 +8,8 @@ import {
 	discoverSkillsFromPaths,
 	isBuiltinSkillPath,
 } from "../../skills/skill-discovery-service.js";
-import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
 import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
 
 export interface SkillManagementServiceOptions {
 	runtimeRegistry: Pick<RuntimeRegistry, "get" | "values">;

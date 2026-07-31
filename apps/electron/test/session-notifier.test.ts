@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
 import { SessionEventBus } from "../src/main/session/events/session-event-bus.js";
-import type { SessionInfoService } from "../src/main/session/services/session-info-service.js";
 import { SessionNotifier, type SessionNotifierQueries } from "../src/main/session/events/session-notifier.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import type { SessionInfoService } from "../src/main/session/services/session-info-service.js";
 
 afterEach(() => vi.useRealTimers());
 

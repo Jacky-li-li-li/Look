@@ -1,16 +1,12 @@
-import type { AgentInfo } from "../dto/agent.js";
-import type { AppUpdatePhase, TodoItem } from "../dto/misc.js";
-import type {
-	PermissionAskEvent,
-	PlanApprovalRequest,
-	PlanQuestionRequest,
-} from "../dto/permission.js";
-import type { ProjectInfo } from "../dto/project.js";
-import type { SubagentCompletedEvent, SubagentProgressEvent } from "../dto/subagent.js";
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "../../contracts/permission.js";
-import type { SessionSnapshotEnvelope } from "../dto/session.js";
 import type { SessionUiEventEnvelope } from "../../types/ui-events.js";
+import type { AgentInfo } from "../dto/agent.js";
+import type { AppUpdatePhase, TodoItem } from "../dto/misc.js";
+import type { PermissionAskEvent, PlanApprovalRequest, PlanQuestionRequest } from "../dto/permission.js";
+import type { ProjectInfo } from "../dto/project.js";
+import type { SessionSnapshotEnvelope } from "../dto/session.js";
+import type { SubagentCompletedEvent, SubagentProgressEvent } from "../dto/subagent.js";
 
 type WithAgentId<T> = T & { agentId: string };
 
@@ -37,19 +33,50 @@ export type MainToRendererEvent =
 	| { type: "fileViewer:open-path"; path: string }
 	// ---- SubAgent events ----
 	| { type: "subagent:definitions-updated" }
-	| { type: "session:subagent-progress" } & SubagentProgressEvent
-	| { type: "session:subagent-completed" } & SubagentCompletedEvent
+	| ({ type: "session:subagent-progress" } & SubagentProgressEvent)
+	| ({ type: "session:subagent-completed" } & SubagentCompletedEvent)
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
-	| { type: "project:confirm-delete"; projectId: string; projectName: string; agentCount: number; runningCount: number }
+	| {
+			type: "project:confirm-delete";
+			projectId: string;
+			projectName: string;
+			agentCount: number;
+			runningCount: number;
+	  }
 	// ---- Shared area events ----
 	| { type: "shared:updated"; projectId: string }
 	// ---- Workspace tree events ----
 	| { type: "workspace:updated"; projectId: string; relativePath: string }
 	// ---- IM / Feishu channel events ----
-	| { type: "im:registration-update"; registrationId: string; phase: "qr" | "polling" | "success" | "error"; url?: string; expireIn?: number; error?: string; appId?: string }
-	| { type: "im:channel-status"; provider: string; status: "connected" | "disconnected" | "connecting" | "error"; appId?: string; error?: string }
-	| { type: "im:message-received"; provider: string; messageId: string; chatId: string; senderId: string; senderName?: string; content: string; rawContentType: string; createTime: number; raw?: unknown }
+	| {
+			type: "im:registration-update";
+			registrationId: string;
+			phase: "qr" | "polling" | "success" | "error";
+			url?: string;
+			expireIn?: number;
+			error?: string;
+			appId?: string;
+	  }
+	| {
+			type: "im:channel-status";
+			provider: string;
+			status: "connected" | "disconnected" | "connecting" | "error";
+			appId?: string;
+			error?: string;
+	  }
+	| {
+			type: "im:message-received";
+			provider: string;
+			messageId: string;
+			chatId: string;
+			senderId: string;
+			senderName?: string;
+			content: string;
+			rawContentType: string;
+			createTime: number;
+			raw?: unknown;
+	  }
 	// ---- IM Bridge status events ----
 	| { type: "im:bridge-status"; bindings: number; runningSessions: string[]; status: "running" | "stopped" }
 	// ---- TODO.md task progress ----

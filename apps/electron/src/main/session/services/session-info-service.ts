@@ -13,8 +13,8 @@ import type { AgentInfo, ImSessionProvider, ProjectInfo, ThinkingLevel } from "@
 import { loadBindings } from "../../im/im-storage.js";
 import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
-import type { SessionCatalog, StoredSession } from "./session-catalog.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
+import type { SessionCatalog, StoredSession } from "./session-catalog.js";
 
 export interface SessionInfoServiceDependencies {
 	runtimeRegistry: Pick<RuntimeRegistry, "get" | "entries">;
