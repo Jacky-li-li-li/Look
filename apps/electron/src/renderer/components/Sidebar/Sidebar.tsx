@@ -37,7 +37,7 @@ const SidebarInner = memo(function SidebarInner({
 	const userProfile = useAtomValue(userProfileAtom);
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
 	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
-	const setShowSettings = useSetAtom(showSettingsAtom);
+	const showSettings = useAtomValue(showSettingsAtom);
 	const setSettingsTab = useSetAtom(settingsTabAtom);
 
 	return (
@@ -87,6 +87,7 @@ const SidebarInner = memo(function SidebarInner({
 				onClick={() => {
 					appStore.set(showScheduledTasksAtom, true);
 					appStore.set(showAgentSquareAtom, false);
+					appStore.set(showSettingsAtom, false);
 					appStore.set(rightPanelCollapsedAtom, true);
 				}}
 				className={`group flex h-10 shrink-0 items-center gap-2.5 border-t border-hairline px-3 text-left transition-colors ${showScheduledTasks ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
@@ -104,6 +105,7 @@ const SidebarInner = memo(function SidebarInner({
 				onClick={() => {
 					appStore.set(showAgentSquareAtom, true);
 					appStore.set(showScheduledTasksAtom, false);
+					appStore.set(showSettingsAtom, false);
 					appStore.set(rightPanelCollapsedAtom, true);
 				}}
 				className={`group flex h-10 shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showAgentSquare ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
@@ -120,9 +122,12 @@ const SidebarInner = memo(function SidebarInner({
 				type="button"
 				onClick={() => {
 					setSettingsTab("profile");
-					setShowSettings(true);
+					appStore.set(showSettingsAtom, true);
+					appStore.set(showAgentSquareAtom, false);
+					appStore.set(showScheduledTasksAtom, false);
 				}}
-				className="flex h-11 shrink-0 items-center gap-2 px-3 text-left transition-colors hover:bg-foreground/[0.065]"
+				className={`flex h-11 shrink-0 items-center gap-2 px-3 text-left transition-colors ${showSettings ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.065]"}`}
+				aria-current={showSettings ? "page" : undefined}
 			>
 				<UserAvatar avatar={userProfile.avatar} size="sm" />
 				<span className="min-w-0 flex-1 truncate text-[11px] font-medium text-muted-foreground">

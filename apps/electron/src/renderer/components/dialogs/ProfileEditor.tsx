@@ -1,6 +1,6 @@
 // ============================================================
 // ProfileEditor — 名刺式身份卡：方形「印章」头像 + 字段表
-// Used inside SettingsDialog
+// Used inside SettingsPage
 //
 // 设计意图：头像不用圆形模板，而是与 About 页应用图标同圆角率
 // （22%）的方形印章；右侧是 hairline 分隔的字段行（微标签 +
