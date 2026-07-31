@@ -25,7 +25,7 @@ import type {
 	SessionSnapshotEnvelope,
 	ToolCallHandler,
 } from "@look/shared/types";
-import type { ContentBlockTracker } from "../session/event-translator.js";
+import type { ContentBlockTracker } from "../session/events/event-translator.js";
 
 // ═══════════════════════════════════════════════════════════
 // Infrastructure

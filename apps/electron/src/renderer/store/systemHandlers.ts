@@ -5,6 +5,7 @@ import {
 	loginCompletedAtom,
 	loginPromptAtom,
 	mcpStatusVersionAtom,
+	modelUpdatedVersionAtom,
 	usageDataAtom,
 	usageVersionAtom,
 	windowFullscreenAtom,
@@ -14,6 +15,10 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 	switch (event.type) {
 		case "mcp:status-changed":
 			appStore.set(mcpStatusVersionAtom, (prev) => prev + 1);
+			return true;
+
+		case "model:updated":
+			appStore.set(modelUpdatedVersionAtom, (prev) => prev + 1);
 			return true;
 
 		case "usage:updated": {

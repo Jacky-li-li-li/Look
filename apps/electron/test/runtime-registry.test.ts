@@ -1,6 +1,6 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { type ManagedRuntime, RuntimeRegistry } from "../src/main/session/runtime-registry.js";
+import { type ManagedRuntime, RuntimeRegistry } from "../src/main/session/runtime/runtime-registry.js";
 
 function managed(id: string): ManagedRuntime {
 	return {

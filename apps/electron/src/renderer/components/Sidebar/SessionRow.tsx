@@ -48,6 +48,7 @@ function SessionRowImpl({
 				data-completed={isCompleted ? "" : undefined}
 				data-active={isActive || undefined}
 				className="session-ledger-row group/session flex h-[38px] items-center gap-2 rounded-md border border-transparent px-2"
+				aria-current={isActive ? "true" : undefined}
 			>
 				<button
 					type="button"

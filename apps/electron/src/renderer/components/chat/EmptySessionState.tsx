@@ -3,16 +3,18 @@
 // ============================================================
 
 import { Button } from "@look/ui/components/ui/button";
+import { useAtomValue } from "jotai";
 import { FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { activeProjectAtom } from "../../store/atoms";
 
 interface EmptySessionStateProps {
-	activeProject: { id: string; name: string; valid: boolean } | null;
 	handleCreateClick: (projectId: string) => void;
 }
 
-export default function EmptySessionState({ activeProject, handleCreateClick }: EmptySessionStateProps) {
+export default function EmptySessionState({ handleCreateClick }: EmptySessionStateProps) {
 	const { t } = useTranslation();
+	const activeProject = useAtomValue(activeProjectAtom);
 	return (
 		<div className="flex flex-1 items-center justify-center p-10 text-center">
 			<div className="flex max-w-sm flex-col items-center gap-3">

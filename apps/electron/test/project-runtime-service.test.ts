@@ -4,9 +4,9 @@ import { join } from "node:path";
 import type { ProjectInfo } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
 import type { ProjectService } from "../src/main/projects/project-service.js";
-import { ProjectRuntimeService } from "../src/main/session/project-runtime-service.js";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import type { SessionCatalog } from "../src/main/session/session-catalog.js";
+import { ProjectRuntimeService } from "../src/main/session/services/project-runtime-service.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import type { SessionCatalog } from "../src/main/session/services/session-catalog.js";
 
 describe("ProjectRuntimeService", () => {
 	function makeProjectService(): ProjectService {

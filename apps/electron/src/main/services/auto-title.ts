@@ -24,7 +24,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
-import { extractUserMessageText } from "../session/event-translator.js";
+import { extractUserMessageText } from "../session/events/event-translator.js";
 
 const TITLE_SYSTEM_PROMPT = [
 	"You are a session title generator. Your ONLY job is to output a short title that summarizes what the user is asking about. You are NOT a chat assistant — never answer the user's question, never introduce yourself, never greet the user. Just output the title.",

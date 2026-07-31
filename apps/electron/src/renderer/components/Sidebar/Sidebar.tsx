@@ -6,15 +6,16 @@
 import { UserAvatar } from "@look/ui/components/UserAvatar";
 import { Button } from "@look/ui/components/ui/button";
 import { ScrollArea } from "@look/ui/components/ui/scroll-area";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { Bot, Clock3, FolderOpen, PanelLeftClose, Plus } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import {
-	projectsAtom,
 	rightPanelCollapsedAtom,
+	settingsTabAtom,
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
+	showSettingsAtom,
 	sidebarCollapsedAtom,
 } from "../../store/atoms";
 import { userProfileAtom } from "../../store/authAtoms";
@@ -27,17 +28,17 @@ const SidebarInner = memo(function SidebarInner({
 	onSelect,
 	onDestroy,
 	onCreateClick,
-	onSettingsClick,
 	onCreateProject,
 	onDeleteProject,
 	onOpenProject,
 	onRenameProject,
 }: SidebarProps) {
 	const { t } = useTranslation();
-	const _projects = useAtomValue(projectsAtom);
 	const userProfile = useAtomValue(userProfileAtom);
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
 	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
+	const setShowSettings = useSetAtom(showSettingsAtom);
+	const setSettingsTab = useSetAtom(settingsTabAtom);
 
 	return (
 		<>
@@ -117,7 +118,10 @@ const SidebarInner = memo(function SidebarInner({
 
 			<button
 				type="button"
-				onClick={onSettingsClick}
+				onClick={() => {
+					setSettingsTab("profile");
+					setShowSettings(true);
+				}}
 				className="flex h-11 shrink-0 items-center gap-2 px-3 text-left transition-colors hover:bg-foreground/[0.065]"
 			>
 				<UserAvatar avatar={userProfile.avatar} size="sm" />

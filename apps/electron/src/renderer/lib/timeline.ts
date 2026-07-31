@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, ImageContent, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { LookUiPhase, LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
+import type { LookSessionEntry, LookUiPhase, LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 
 export interface TimelineItem {
 	id: string;
@@ -8,7 +8,7 @@ export interface TimelineItem {
 	/** Other assistant entry IDs merged into this bubble, for diagnostics / future navigation. */
 	secondaryEntryIds?: string[];
 	message?: AgentMessage;
-	entry?: Exclude<SessionEntry, { type: "message" }>;
+	entry?: Exclude<LookSessionEntry, { type: "message" }>;
 	isLive: boolean;
 	/** toolResult messages keyed by toolCallId, attached to the preceding assistant. */
 	toolResultMap?: Record<string, ToolResultMessage>;
@@ -44,7 +44,7 @@ function mergeAssistantContent(target: AssistantMessage, source: AssistantMessag
 }
 
 export function buildTimeline(
-	entries: SessionEntry[],
+	entries: LookSessionEntry[],
 	messageDurations: Record<string, number> = {},
 	uiBlocks: LookUiStreamBlock[] = [],
 	uiTools: Record<string, LookUiToolExecState> = {},

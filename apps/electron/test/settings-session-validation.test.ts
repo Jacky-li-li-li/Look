@@ -27,7 +27,7 @@ interface TestManagerInternals {
 }
 
 function installFakeRuntime(
-	manager: import("../src/main/session/runtime-manager.js").SessionRuntimeManager,
+	manager: import("../src/main/session/runtime/runtime-manager.js").SessionRuntimeManager,
 	sessionId: string,
 	projectId: string,
 ) {
@@ -57,13 +57,13 @@ function installFakeRuntime(
 
 describe("Settings session/project reference validation", () => {
 	let lookDir: string;
-	let manager: import("../src/main/session/runtime-manager.js").SessionRuntimeManager;
+	let manager: import("../src/main/session/runtime/runtime-manager.js").SessionRuntimeManager;
 
 	beforeEach(async () => {
 		lookDir = mkdtempSync(join(tmpdir(), "look-settings-validation-"));
 		vi.stubEnv("LOOK_HOME", lookDir);
 		vi.resetModules();
-		const { SessionRuntimeManager } = await import("../src/main/session/runtime-manager.js");
+		const { SessionRuntimeManager } = await import("../src/main/session/runtime/runtime-manager.js");
 		manager = await SessionRuntimeManager.create();
 	}, 30_000);
 

@@ -13,7 +13,7 @@ import { createInterface } from "node:readline";
 import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { ProjectInfo } from "@look/shared/types";
-import { scanSessionDirectory } from "./scan.js";
+import { scanSessionDirectory } from "../scan.js";
 
 export interface StoredSession extends PiSessionInfo {
 	projectId: string;

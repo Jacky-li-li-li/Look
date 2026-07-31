@@ -9,7 +9,6 @@ export interface SidebarProps {
 	onSelect: (agentId: string) => void;
 	onDestroy: (agentId: string) => void;
 	onCreateClick: (projectId: string) => void;
-	onSettingsClick: () => void;
 	onCreateProject: () => void;
 	onDeleteProject: (project: ProjectInfo) => void;
 	onOpenProject: (projectId: string) => void;

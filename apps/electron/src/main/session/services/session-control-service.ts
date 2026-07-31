@@ -7,8 +7,8 @@
 
 import type { ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { SessionSnapshotEnvelope, ThinkingLevel } from "@look/shared/types";
-import type { ISessionScopeRegistry } from "../core/contracts.js";
-import type { ManagedRuntime } from "./runtime-registry.js";
+import type { ISessionScopeRegistry } from "../../core/contracts.js";
+import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionControlHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
@@ -48,7 +48,10 @@ export class SessionControlService {
 		const session = (await this.host.ensureRuntime(sessionId)).runtime.session;
 		if (!session.isStreaming && !session.isRetrying && !session.isCompacting) {
 			const result = await session.compact(customInstructions);
-			// Store estimatedTokensAfter on the scope so the next snapshot carries it.
+			// SDK workaround: CompactionResult.estimatedTokensAfter is returned by session.compact()
+			// but not persisted on the session object. We store it in SessionScope so emitSessionState
+			// can include it in the snapshot sent to the renderer.
+			// @see ARCHITECTURE: pi SDK workaround #3
 			if (result?.estimatedTokensAfter != null) {
 				const scope = this.scopeRegistry.get(sessionId);
 				if (scope) scope.compactionEstimatedTokensAfter = result.estimatedTokensAfter;

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SkillManagementService } from "../src/main/session/skill-management-service.js";
+import { SkillManagementService } from "../src/main/session/services/skill-management-service.js";
 
 const temporaryDirectories: string[] = [];
 

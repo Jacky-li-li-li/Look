@@ -6,17 +6,17 @@ import type {
 	SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { MainToRendererEvent, SessionSnapshotEnvelope } from "@look/shared/types";
-import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "../core/contracts.js";
-import type { AutoTitleService } from "../services/auto-title.js";
-import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
-import type { ActiveSessionSelection } from "./active-session-selection.js";
-import type { SessionEventProcessor } from "./event-processor.js";
+import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "../../core/contracts.js";
+import type { AutoTitleService } from "../../services/auto-title.js";
+import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
+import type { SessionEventProcessor } from "../events/session-event-processor.js";
+import type { SessionNotifier } from "../events/session-notifier.js";
+import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
+import type { StoredSession } from "../services/session-catalog.js";
+import type { SessionSubagentService } from "../services/session-subagent-service.js";
+import type { SubAgentRegistry } from "../subagent-registry.js";
 import type { RuntimeFactoryOptions, SessionRuntimeFactory } from "./runtime-factory.js";
 import type { ManagedRuntime, RuntimeRegistry, RuntimeSessionBinding } from "./runtime-registry.js";
-import type { StoredSession } from "./session-catalog.js";
-import type { SessionNotifier } from "./session-notifier.js";
-import type { SessionSubagentService } from "./session-subagent-service.js";
-import type { SubAgentRegistry } from "./subagent-registry.js";
 
 interface RuntimeLifecycleEvents {
 	emit(event: MainToRendererEvent): void;
@@ -383,6 +383,9 @@ export class RuntimeLifecycleCoordinator {
 		attempt(() => this.options.sessionSubagentService.clearSession(sessionId));
 		attempt(() => this.options.sessionNotifier.disposeSession(sessionId));
 		this.options.runtimeRegistry.releaseExclusive(sessionId);
+		// If the disposed session was the currently selected one, clear the
+		// selection so the renderer never holds a dangling active-session id.
+		this.options.selection.clearIfCurrent(sessionId);
 		try {
 			await managed.runtime.dispose();
 		} catch (error) {

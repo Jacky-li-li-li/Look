@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SessionRuntimeFactory } from "../src/main/session/runtime-factory.js";
+import { SessionRuntimeFactory } from "../src/main/session/runtime/runtime-factory.js";
 
 const cleanup: string[] = [];
 

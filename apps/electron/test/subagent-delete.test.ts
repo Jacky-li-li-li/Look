@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getProjectSharedDir, getWorkspaceSubsessionsDir, sanitiseWorkspaceName } from "@shared/look-storage";
 import { afterEach, describe, expect, it } from "vitest";
-import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
+import { SessionRuntimeManager } from "../src/main/session/runtime/runtime-manager.js";
 
 /** Test-only access to SessionRuntimeManager internals. */
 interface TestManagerInternals {

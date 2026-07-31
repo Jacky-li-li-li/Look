@@ -12,7 +12,7 @@ vi.mock("@look/shared/look-storage", () => ({
 	getWorkspaceSubsessionsDir: () => storage.subsessionsDir,
 }));
 
-import { SessionCatalog } from "../src/main/session/session-catalog.js";
+import { SessionCatalog } from "../src/main/session/services/session-catalog.js";
 import { SubAgentRegistry } from "../src/main/session/subagent-registry.js";
 
 const cleanup: string[] = [];

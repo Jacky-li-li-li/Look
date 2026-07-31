@@ -7,8 +7,8 @@
 // ============================================================
 
 import type { ImageContent } from "@earendil-works/pi-ai";
-import { discoverAgents } from "../extensions/subagent/agent-discovery.js";
-import type { ManagedRuntime } from "./runtime-registry.js";
+import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
+import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionMessagingHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;

@@ -7,8 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { IEventBus } from "../src/main/core/contracts.js";
 import { ProjectDeletionService } from "../src/main/projects/project-deletion-service.js";
 import type { ProjectService } from "../src/main/projects/project-service.js";
-import type { RuntimeRegistry } from "../src/main/session/runtime-registry.js";
-import type { SessionCatalog, StoredSession } from "../src/main/session/session-catalog.js";
+import type { RuntimeRegistry } from "../src/main/session/runtime/runtime-registry.js";
+import type { SessionCatalog, StoredSession } from "../src/main/session/services/session-catalog.js";
 import type { WorkspaceFileService } from "../src/main/workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../src/main/workspace/workspace-tree-service.js";
 

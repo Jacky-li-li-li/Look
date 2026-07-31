@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import type { StoredSession } from "../src/main/session/session-catalog.js";
-import type { SessionLifecycleHost } from "../src/main/session/session-lifecycle-service.js";
-import { SessionLifecycleService } from "../src/main/session/session-lifecycle-service.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import type { StoredSession } from "../src/main/session/services/session-catalog.js";
+import type { SessionLifecycleHost } from "../src/main/session/services/session-lifecycle-service.js";
+import { SessionLifecycleService } from "../src/main/session/services/session-lifecycle-service.js";
 
 describe("SessionLifecycleService", () => {
 	function makeSession(id = "session-1") {
@@ -59,17 +59,17 @@ describe("SessionLifecycleService", () => {
 				} as unknown as import("../src/main/projects/project-service.js").ProjectService,
 				runtimeRegistry: {
 					get: vi.fn().mockReturnValue(runtime),
-				} as unknown as import("../src/main/session/runtime-registry.js").RuntimeRegistry,
+				} as unknown as import("../src/main/session/runtime/runtime-registry.js").RuntimeRegistry,
 				scopeRegistry: {
 					get: vi.fn().mockReturnValue({ isDefaultName: false, imProvider: undefined }),
-				} as unknown as import("../src/main/session/scope-registry.js").SessionScopeRegistry,
+				} as unknown as import("../src/main/session/scope/scope-registry.js").SessionScopeRegistry,
 				subAgentRuntimeService: {
 					destroySubSessions: vi.fn().mockResolvedValue(undefined),
 					abortSubSessions: vi.fn().mockResolvedValue(undefined),
 				} as unknown as import("../src/main/services/subagent-runtime.js").SubAgentRuntimeService,
 				sessionInfoService: {
 					getAgentInfo: vi.fn().mockReturnValue({ id: "session-1", projectId }),
-				} as unknown as import("../src/main/session/session-info-service.js").SessionInfoService,
+				} as unknown as import("../src/main/session/services/session-info-service.js").SessionInfoService,
 				permissionService: {
 					cancelPending: vi.fn(),
 				} as unknown as import("../src/main/core/contracts.js").IPermissionService,

@@ -40,6 +40,9 @@ export const providerSettingsAtom = atom<ProviderSettingsData>({
 
 export const mcpStatusVersionAtom = atom(0);
 
+/** Incremented on model:updated IPC event to trigger ModelSelector cache invalidation. */
+export const modelUpdatedVersionAtom = atom(0);
+
 // ── SDK-aligned usage types ──
 // Mirrors pi SDK's Usage type (from session JSONL assistant messages).
 

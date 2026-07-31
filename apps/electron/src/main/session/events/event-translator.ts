@@ -71,6 +71,14 @@ export function extractUserMessageImages(message: AgentMessage): ImageContent[] 
  * NOTE: All call sites pass objects (Record / unknown). Returning `{}` prevents
  * downstream property-access crashes; a string would type-assert silently and
  * produce `undefined` on every property access later. */
+
+/**
+ * Wraps structuredClone with a defensive fallback.
+ * pi SDK event objects may contain non-serializable properties (functions, Symbols)
+ * that cause structuredClone to throw. When cloning fails, we return an empty object
+ * instead of crashing the IPC transport.
+ * @see ARCHITECTURE: pi SDK workaround #1 in .trae/documents/look-project-architecture-review.md
+ */
 function safeClone<T>(value: T, context?: string): T {
 	try {
 		return structuredClone(value);

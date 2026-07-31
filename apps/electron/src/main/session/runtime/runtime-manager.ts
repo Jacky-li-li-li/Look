@@ -26,13 +26,13 @@ import type {
 	ISessionEventHost,
 	ISessionRuntimeBootstrap,
 	ISubAgentRuntimeHost,
-} from "../core/contracts.js";
-import type { AgentConfig, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
-import type { UserSettings } from "../settings/store.js";
-import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
-import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
-import { RuntimeManagerComposition } from "./runtime-manager-composition.js";
-import type { StoredSession } from "./session-catalog.js";
+} from "../../core/contracts.js";
+import type { AgentConfig, SubagentProgress, SubagentResult } from "../../extensions/subagent/types.js";
+import type { UserSettings } from "../../settings/store.js";
+import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
+import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
+import { RuntimeManagerComposition } from "../runtime-manager-composition.js";
+import type { StoredSession } from "../services/session-catalog.js";
 
 export type { EventCallback };
 
@@ -125,7 +125,7 @@ export class SessionRuntimeManager
 	}
 
 	/** Allows the owner to wire the scheduler service after both objects are created. */
-	setSchedulerService(schedulerService: import("../scheduler/scheduler-service.js").SchedulerService): void {
+	setSchedulerService(schedulerService: import("../../scheduler/scheduler-service.js").SchedulerService): void {
 		this.composition.setSchedulerService(schedulerService);
 	}
 

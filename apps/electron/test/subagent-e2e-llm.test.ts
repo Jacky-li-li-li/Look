@@ -15,7 +15,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getWorkspaceSubsessionsDir } from "@shared/look-storage";
 import { describe, expect, it } from "vitest";
-import { SessionRuntimeManager } from "../src/main/session/runtime-manager.js";
+import { SessionRuntimeManager } from "../src/main/session/runtime/runtime-manager.js";
 
 const RUN = process.env.LOOK_E2E_LLM === "1";
 const TIMEOUT = 240_000; // 父+子 LLM 调用，给足 4 分钟

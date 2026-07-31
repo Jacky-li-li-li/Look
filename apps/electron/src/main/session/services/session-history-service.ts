@@ -9,7 +9,7 @@
 import fs, { existsSync } from "node:fs";
 import { type AgentSessionRuntime, SessionManager, type SessionStartEvent } from "@earendil-works/pi-coding-agent";
 import type { ForkedSessionResult, NavigateTreeResult, SessionSnapshotEnvelope } from "@look/shared/types";
-import type { ManagedRuntime } from "./runtime-registry.js";
+import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionHistoryHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;

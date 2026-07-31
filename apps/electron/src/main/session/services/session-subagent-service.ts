@@ -12,16 +12,16 @@ import type { AgentSession, ModelRegistry, SessionStartEvent } from "@earendil-w
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { AgentInfo, MainToRendererEvent } from "@look/shared/types";
-import type { AgentDefinitionService } from "../agents/definition-service.js";
-import type { IPermissionService, IPlanService, ISessionScope } from "../core/contracts.js";
-import type { AgentConfig, SubagentProgress, SubagentResult } from "../extensions/subagent/types.js";
-import { SUBAGENT_TOOL_NAMES } from "../extensions/subagent/types.js";
-import type { ProjectService } from "../projects/project-service.js";
-import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
-import type { UserSettingsStore } from "../settings/store.js";
-import type { ManagedRuntime } from "./runtime-registry.js";
+import type { AgentDefinitionService } from "../../agents/definition-service.js";
+import type { IPermissionService, IPlanService, ISessionScope } from "../../core/contracts.js";
+import type { AgentConfig, SubagentProgress, SubagentResult } from "../../extensions/subagent/types.js";
+import { SUBAGENT_TOOL_NAMES } from "../../extensions/subagent/types.js";
+import type { ProjectService } from "../../projects/project-service.js";
+import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
+import type { UserSettingsStore } from "../../settings/store.js";
+import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
-import type { SubAgentRegistry } from "./subagent-registry.js";
+import type { SubAgentRegistry } from "../subagent-registry.js";
 
 export interface SessionSubagentHost {
 	createManagedRuntime(

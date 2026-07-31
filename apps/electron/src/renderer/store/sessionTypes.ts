@@ -1,7 +1,7 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentInfo,
+	LookSessionEntry,
 	LookUiPhase,
 	LookUiStreamBlock,
 	LookUiToolExecState,
@@ -9,7 +9,7 @@ import type {
 } from "@shared/types";
 
 export interface RendererSessionState {
-	entries: SessionEntry[];
+	entries: LookSessionEntry[];
 	leafId: string | null;
 	/** Whether a persisted session snapshot has arrived for this session. */
 	snapshotLoaded: boolean;
@@ -17,7 +17,7 @@ export interface RendererSessionState {
 	loadingSnapshot: boolean;
 	/** Non-streaming runtime metadata (model, thinkingLevel, stats, contextUsage). */
 	runtime: SessionRuntimeSnapshot | null;
-	/** Per-entry finalized turn durations. Keyed by SessionEntry.id for persisted assistant messages. */
+	/** Per-entry finalized turn durations. Keyed by LookSessionEntry.id for persisted assistant messages. */
 	messageDurations: Record<string, number>;
 
 	/** Discrete-event path: live content blocks from session:ui-event. */

@@ -53,27 +53,27 @@ import { PromptStore } from "../../settings/prompt-store.js";
 import { UserSettingsStore } from "../../settings/store.js";
 import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
-import { ActiveSessionSelection } from "../active-session-selection.js";
-import { SessionEventProcessor } from "../event-processor.js";
-import { ProjectApplicationService } from "../project-application-service.js";
-import { ProjectRuntimeService } from "../project-runtime-service.js";
-import { SessionRuntimeFactory } from "../runtime-factory.js";
-import { RuntimeLifecycleCoordinator } from "../runtime-lifecycle-coordinator.js";
-import { RuntimeRegistry } from "../runtime-registry.js";
-import { SessionScopeRegistry } from "../scope-registry.js";
-import { SessionCatalog } from "../session-catalog.js";
-import { SessionControlService } from "../session-control-service.js";
-import { SessionEventBus } from "../session-event-bus.js";
-import { SessionEventEffects } from "../session-event-effects.js";
-import { SessionHistoryService } from "../session-history-service.js";
-import { SessionInfoService } from "../session-info-service.js";
-import { SessionLifecycleService } from "../session-lifecycle-service.js";
-import { SessionMessagingService } from "../session-messaging-service.js";
-import { SessionNotifier } from "../session-notifier.js";
-import { SessionPermissionOrchestrator } from "../session-permission-orchestrator.js";
-import { SessionSettingsService } from "../session-settings-service.js";
-import { SessionSubagentService } from "../session-subagent-service.js";
-import { SkillManagementService } from "../skill-management-service.js";
+import { ActiveSessionSelection } from "../scope/active-session-selection.js";
+import { SessionEventProcessor } from "../events/session-event-processor.js";
+import { ProjectApplicationService } from "../services/project-application-service.js";
+import { ProjectRuntimeService } from "../services/project-runtime-service.js";
+import { SessionRuntimeFactory } from "../runtime/runtime-factory.js";
+import { RuntimeLifecycleCoordinator } from "../runtime/runtime-lifecycle-coordinator.js";
+import { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import { SessionScopeRegistry } from "../scope/scope-registry.js";
+import { SessionCatalog } from "../services/session-catalog.js";
+import { SessionControlService } from "../services/session-control-service.js";
+import { SessionEventBus } from "../events/session-event-bus.js";
+import { SessionEventEffects } from "../events/session-event-effects.js";
+import { SessionHistoryService } from "../services/session-history-service.js";
+import { SessionInfoService } from "../services/session-info-service.js";
+import { SessionLifecycleService } from "../services/session-lifecycle-service.js";
+import { SessionMessagingService } from "../services/session-messaging-service.js";
+import { SessionNotifier } from "../events/session-notifier.js";
+import { SessionPermissionOrchestrator } from "../services/session-permission-orchestrator.js";
+import { SessionSettingsService } from "../services/session-settings-service.js";
+import { SessionSubagentService } from "../services/session-subagent-service.js";
+import { SkillManagementService } from "../services/skill-management-service.js";
 import { SubAgentRegistry } from "../subagent-registry.js";
 import { CompositionHost } from "./composition-host.js";
 
@@ -176,7 +176,6 @@ export class CompositionBuilder {
 		this.promptStore = new PromptStore();
 
 		this.mcpManager = new MCPManager();
-		this.mcpManager.setOnChange(() => host.emit({ type: "mcp:status-changed" }));
 
 		this.sessionCatalog = new SessionCatalog((metadata) => {
 			// Captures CompositionBuilder's subAgentRegistry field (assigned above).
@@ -193,6 +192,7 @@ export class CompositionBuilder {
 			this.activeSessionSelection,
 		);
 		const host = this.host;
+		this.mcpManager.setOnChange(() => host.emit({ type: "mcp:status-changed" }));
 		this.projectRuntimeService = new ProjectRuntimeService({
 			projectService: this.projectService,
 			sessionCatalog: this.sessionCatalog,
@@ -228,12 +228,24 @@ export class CompositionBuilder {
 
 	// ── Phase 2: Model runtime (async) ──
 
+	/**
+	 * Phase 2: Build the model layer.
+	 *
+	 * Creates global singletons: ModelRuntime, ModelRegistry, CredentialStore,
+	 * CustomProvidersStore, and AutoTitleService. This phase must complete before
+	 * any session runtime is created (Phase 3) because runtime factories consume
+	 * the ModelRuntime.
+	 *
+	 * Inputs: None (pure initialization from disk)
+	 * Outputs: modelRuntime, modelRegistry, credentialStore, customProviders, autoTitleService
+	 */
 	async buildModel(): Promise<void> {
 		const credentials = new EncryptedCredentialStore(getAuthPath());
 		this.credentialStore = credentials;
 		this.modelRuntime = await ModelRuntime.create({
 			credentials,
 			modelsPath: getModelsPath(),
+			allowModelNetwork: true,
 		});
 		this.modelRegistry = new ModelRegistry(this.modelRuntime);
 
@@ -254,6 +266,17 @@ export class CompositionBuilder {
 	// The closures are stored in runtimeFactory and only called during
 	// session creation, which happens after all phases complete.
 
+	/**
+	 * Phase 3: Build extension factories and the runtime factory.
+	 *
+	 * Creates ExtensionFactory instances (permission, plan, modelList, subagent,
+	 * MCP, skillInject) and the SessionRuntimeFactory. The runtime factory
+	 * serializes resource initialization (npm installs) via a Promise chain
+	 * to prevent concurrent package installation races.
+	 *
+	 * Inputs: modelRuntime (from Phase 2), skillDiscoveryService (from Phase 1)
+	 * Outputs: runtimeFactory containing createAgentSessionRuntime flow
+	 */
 	buildExtensions(): void {
 		const modelRuntime = this.modelRuntime!;
 
@@ -307,7 +330,13 @@ export class CompositionBuilder {
 						},
 						resolvedProjectId,
 					),
-					createMcpExtensionFactory(sessionId, this.mcpManager!, cwd, resolvedProjectId),
+					createMcpExtensionFactory(
+						sessionId,
+						this.mcpManager!,
+						cwd,
+						resolvedProjectId,
+						(cwd) => this.projectService!.resolveProjectTrust(cwd),
+					),
 					createSkillInjectExtensionFactory(),
 				];
 			},
@@ -317,6 +346,22 @@ export class CompositionBuilder {
 	// ── Phase 4: Core services (plan, agentDef, subagent, lifecycle) ──
 	// Circular deps are resolved via closures on `this`.
 
+	/**
+	 * Phase 4: Build the core session orchestrators.
+	 *
+	 * Creates PlanService, AgentDefinitionService, SessionSubagentService,
+	 * and the RuntimeLifecycleCoordinator (which manages per-session runtimes).
+	 *
+	 * The RuntimeLifecycleCoordinator is constructed via a factory closure to
+	 * resolve a genuine circular dependency: the coordinator needs references
+	 * to services created in Phase 5 (UI layer), while Phase 5 services need
+	 * the coordinator. The closure captures `this` which is resolved at call
+	 * time — the coordinator is initialized in Phase 4 but its closure won't
+	 * execute until Phase 5 completes.
+	 *
+	 * Inputs: All services from Phase 1-3, schedulerRef (late-bound)
+	 * Outputs: planService, agentDefinitionService, sessionSubagentService, runtimeLifecycleCoordinator
+	 */
 	buildCore(): void {
 		const host = this.host!;
 		const modelRegistry = this.modelRegistry!;
@@ -393,6 +438,16 @@ export class CompositionBuilder {
 
 	// ── Phase 5: UI-facing services ──
 
+	/**
+	 * Phase 5: Build the UI-facing services.
+	 *
+	 * Creates SessionHistoryService, SessionControlService, SessionLifecycleService,
+	 * ProjectDeletionService, and related UI-layer orchestrators. These services
+	 * consume the RuntimeLifecycleCoordinator from Phase 4.
+	 *
+	 * Inputs: All services from Phase 1-4
+	 * Outputs: sessionHistoryService, sessionControlService, sessionLifecycleService, etc.
+	 */
 	buildUI(): void {
 		const host = this.host!;
 		const modelRegistry = this.modelRegistry!;
@@ -509,7 +564,7 @@ export class CompositionBuilder {
 			emitSessionList: (projectId) => this.sessionNotifier!.emitSessionList(projectId),
 			emitError: (error, sessionId) => this.sessionNotifier!.emitError(error, sessionId),
 		});
-		this.host!.bindRuntimeServices({
+		host.bindRuntimeServices({
 			runtimeLifecycle: this.runtimeLifecycle!,
 			sessionNotifier: this.sessionNotifier!,
 			sessionEventEffects: this.sessionEventEffects,
@@ -539,9 +594,13 @@ export class CompositionBuilder {
 	// ── Validate ──
 
 	/**
-	 * Validates that all required services have been created.
-	 * Returns this builder for use by RuntimeManagerComposition.create().
-	 * If a field is null here, a phase method was skipped — fail fast.
+	 * Validate and freeze into an immutable RuntimeManagerComposition.
+	 *
+	 * Checks that all required service fields are non-null. If any phase was
+	 * skipped or failed, this throws a descriptive error identifying the
+	 * missing field.
+	 *
+	 * Returns: this (for chaining with build() method)
 	 */
 	validate(): this {
 		const required: Record<string, unknown> = {

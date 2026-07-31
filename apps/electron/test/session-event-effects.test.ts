@@ -1,9 +1,9 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import { SessionScopeRegistry } from "../src/main/session/scope-registry.js";
-import { SessionEventEffects } from "../src/main/session/session-event-effects.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import { SessionScopeRegistry } from "../src/main/session/scope/scope-registry.js";
+import { SessionEventEffects } from "../src/main/session/events/session-event-effects.js";
 
 // Hoist mock so it's set up before module imports execute
 const markUsageDirty = vi.hoisted(() => vi.fn());

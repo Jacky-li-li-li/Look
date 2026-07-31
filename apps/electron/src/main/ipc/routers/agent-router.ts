@@ -101,7 +101,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 
 	register("agent:update-thinking", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
-		const _level = guardEnum(data.level, "level", ["off", "minimal", "low", "medium", "high", "xhigh"] as const);
+		const _level = guardEnum(data.level, "level", ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const);
 		await ctx.session.control.setThinkingLevel(_agentId, _level as ThinkingLevel);
 		return { success: true };
 	});

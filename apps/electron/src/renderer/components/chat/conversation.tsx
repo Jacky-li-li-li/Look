@@ -193,7 +193,7 @@ export function Conversation({ className, ...props }: ConversationProps): ReactE
 
 	return (
 		<ConversationContext.Provider value={ctx}>
-			<div className={cn("relative flex-1 overflow-hidden", className)} role="log" {...props} />
+			<div className={cn("relative flex-1 overflow-hidden", className)} role="log" aria-live="polite" {...props} />
 		</ConversationContext.Provider>
 	);
 }

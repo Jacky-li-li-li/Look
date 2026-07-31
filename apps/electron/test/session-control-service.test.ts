@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ISessionScopeRegistry } from "../src/main/core/contracts.js";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import { type SessionControlHost, SessionControlService } from "../src/main/session/session-control-service.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import { type SessionControlHost, SessionControlService } from "../src/main/session/services/session-control-service.js";
 
 const scopeRegistry: Pick<ISessionScopeRegistry, "get"> = { get: () => undefined };
 

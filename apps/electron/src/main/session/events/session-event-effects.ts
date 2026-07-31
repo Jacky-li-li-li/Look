@@ -1,12 +1,12 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
-import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "../core/contracts.js";
-import type { AutoTitleService } from "../services/auto-title.js";
-import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
-import { persistTurnDuration } from "../services/turn-metrics.js";
-import { markUsageDirty } from "../system/usage-service.js";
-import type { RuntimeRegistry } from "./runtime-registry.js";
-import type { SubAgentRegistry } from "./subagent-registry.js";
+import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "../../core/contracts.js";
+import type { AutoTitleService } from "../../services/auto-title.js";
+import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
+import { persistTurnDuration } from "../../services/turn-metrics.js";
+import { markUsageDirty } from "../../system/usage-service.js";
+import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { SubAgentRegistry } from "../subagent-registry.js";
 
 export interface SessionEventEffectsOptions {
 	runtimeRegistry: Pick<RuntimeRegistry, "get">;
@@ -33,14 +33,19 @@ export class SessionEventEffects {
 
 	constructor(private readonly options: SessionEventEffectsOptions) {}
 
+	/** Handle agent_end: persist state, record turn duration, refresh sidebar. */
 	async onAgentEnd(sessionId: string): Promise<void> {
-		const binding = this.options.runtimeRegistry.get(sessionId)?.binding;
-		if (binding?.sessionId === sessionId) {
-			this.options.permissionService.persistIfDirty(sessionId, binding.sessionManager);
-			this.options.planService.persistToolSnapshotIfDirty(sessionId, binding.sessionManager);
+		try {
+			const binding = this.options.runtimeRegistry.get(sessionId)?.binding;
+			if (binding?.sessionId === sessionId) {
+				this.options.permissionService.persistIfDirty(sessionId, binding.sessionManager);
+				this.options.planService.persistToolSnapshotIfDirty(sessionId, binding.sessionManager);
+			}
+			this.persistTurnDurationIfPossible(sessionId);
+			await this.refreshAfterTurn(sessionId);
+		} catch (error) {
+			this.options.emitError(error, sessionId);
 		}
-		this.persistTurnDurationIfPossible(sessionId);
-		await this.refreshAfterTurn(sessionId).catch((error) => this.options.emitError(error, sessionId));
 	}
 
 	async onMessageEnd(sessionId: string, message: AgentMessage): Promise<void> {

@@ -1,7 +1,7 @@
 import type { ProjectInfo, UserSettings } from "@look/shared/types";
-import type { IPermissionService } from "../core/contracts.js";
-import type { UserSettingsStore } from "../settings/store.js";
-import type { ManagedRuntime } from "./runtime-registry.js";
+import type { IPermissionService } from "../../core/contracts.js";
+import type { UserSettingsStore } from "../../settings/store.js";
+import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 import type { SessionSubagentService } from "./session-subagent-service.js";
 
 interface ProjectTrustDefaults {

@@ -10,11 +10,11 @@ import { existsSync } from "node:fs";
 import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import type { AgentInfo, ImSessionProvider, ProjectInfo, ThinkingLevel } from "@look/shared/types";
-import { loadBindings } from "../im/im-storage.js";
-import type { ManagedRuntime, RuntimeRegistry } from "./runtime-registry.js";
-import type { SessionScopeRegistry } from "./scope-registry.js";
+import { loadBindings } from "../../im/im-storage.js";
+import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { SessionCatalog, StoredSession } from "./session-catalog.js";
-import type { SubAgentRegistry } from "./subagent-registry.js";
+import type { SubAgentRegistry } from "../subagent-registry.js";
 
 export interface SessionInfoServiceDependencies {
 	runtimeRegistry: Pick<RuntimeRegistry, "get" | "entries">;

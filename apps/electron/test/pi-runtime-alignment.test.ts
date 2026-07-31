@@ -6,7 +6,7 @@ const appRoot = resolve(import.meta.dirname, "..");
 const repositoryRoot = resolve(appRoot, "../..");
 const read = (file: string) => readFileSync(resolve(appRoot, file), "utf8");
 const readRepositoryFile = (file: string) => readFileSync(resolve(repositoryRoot, file), "utf8");
-const runtime = read("src/main/session/runtime-manager.ts");
+const runtime = read("src/main/session/runtime/runtime-manager.ts");
 const runtimeComposition = read("src/main/session/runtime-manager-composition.ts");
 const compositionBuilder = read("src/main/session/composition/builder.ts");
 const ipc =
@@ -15,17 +15,18 @@ const ipc =
 	read("src/main/ipc/project-trust.ts");
 const preload = read("src/main/preload.cts");
 const index = read("src/main/index.ts");
+const application = read("src/main/application.ts");
 const types = readRepositoryFile("packages/shared/src/types.ts");
 const tsconfig = read("tsconfig.main.json");
-const eventProcessor = read("src/main/session/event-processor.ts");
-const uiBatcher = read("src/main/session/ui-event-batcher.ts");
+const eventProcessor = read("src/main/session/events/session-event-processor.ts");
+const uiBatcher = read("src/main/session/events/ui-event-batcher.ts");
 const projectService = read("src/main/projects/project-service.ts");
-const runtimeRegistry = read("src/main/session/runtime-registry.ts");
-const runtimeFactory = read("src/main/session/runtime-factory.ts");
-const runtimeLifecycle = read("src/main/session/runtime-lifecycle-coordinator.ts");
-const sessionHistory = read("src/main/session/session-history-service.ts");
-const sessionNotifier = read("src/main/session/session-notifier.ts");
-const sessionLifecycle = read("src/main/session/session-lifecycle-service.ts");
+const runtimeRegistry = read("src/main/session/runtime/runtime-registry.ts");
+const runtimeFactory = read("src/main/session/runtime/runtime-factory.ts");
+const runtimeLifecycle = read("src/main/session/runtime/runtime-lifecycle-coordinator.ts");
+const sessionHistory = read("src/main/session/services/session-history-service.ts");
+const sessionNotifier = read("src/main/session/events/session-notifier.ts");
+const sessionLifecycle = read("src/main/session/services/session-lifecycle-service.ts");
 
 describe("pi runtime architecture regressions", () => {
 	it("1. does not pass a tools allowlist that filters extension tools", () => {
@@ -43,7 +44,7 @@ describe("pi runtime architecture regressions", () => {
 		expect(runtimeFactory).not.toContain("resolveProjectTrust: async () => trusted");
 		expect(projectService).toContain("hasTrustRequiringProjectResources");
 		expect(ipc).toContain("dialog.showMessageBox");
-		expect(index).toContain("await promptForProjectTrust");
+		expect(application).toContain("await promptForProjectTrust");
 	});
 
 	it("3. owns one independent AgentSessionRuntime per live session", () => {
@@ -62,7 +63,8 @@ describe("pi runtime architecture regressions", () => {
 		expect(uiBatcher).toContain('type: "session:ui-event"');
 		expect(eventProcessor).toContain("events: uiEvents");
 		expect(sessionNotifier).toContain("const allEntries = session.sessionManager.getBranch()");
-		expect(sessionNotifier).toContain("entries,");
+		// entries are translated through toLookSessionEntry() before crossing IPC
+		expect(sessionNotifier).toContain("entries.map(toLookSessionEntry)");
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
 		expect(existsSync(resolve(repositoryRoot, "packages/shared/src/message-convert.ts"))).toBe(false);
@@ -122,7 +124,7 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("11. sends projectId in the startup session-list contract", () => {
-		const listEvents = index.match(/type: "agent:list" as const,[\s\S]{0,80}?projectId: project\.id/g);
+		const listEvents = application.match(/type: "agent:list" as const,[\s\S]{0,80}?projectId: project\.id/g);
 		expect(listEvents).toHaveLength(1);
 	});
 

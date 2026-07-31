@@ -11,12 +11,12 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir } from "@look/shared/look-storage";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import type { ImSessionProvider, MainToRendererEvent, SessionSnapshotEnvelope } from "@look/shared/types";
-import type { IPermissionService, IPlanService } from "../core/contracts.js";
-import type { ProjectService } from "../projects/project-service.js";
-import type { SubAgentRuntimeService } from "../services/subagent-runtime.js";
-import type { UserSettingsStore } from "../settings/store.js";
-import type { ManagedRuntime, RuntimeRegistry } from "./runtime-registry.js";
-import type { SessionScopeRegistry } from "./scope-registry.js";
+import type { IPermissionService, IPlanService } from "../../core/contracts.js";
+import type { ProjectService } from "../../projects/project-service.js";
+import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
+import type { UserSettingsStore } from "../../settings/store.js";
+import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { StoredSession } from "./session-catalog.js";
 import type { SessionInfoService } from "./session-info-service.js";
 

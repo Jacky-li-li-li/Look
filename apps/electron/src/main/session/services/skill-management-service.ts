@@ -2,14 +2,14 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SettingsManager } from "@earendil-works/pi-coding-agent";
-import type { UserSettingsStore } from "../settings/store.js";
+import type { UserSettingsStore } from "../../settings/store.js";
 import {
 	detectCommonSkillPaths,
 	discoverSkillsFromPaths,
 	isBuiltinSkillPath,
-} from "../skills/skill-discovery-service.js";
-import type { ActiveSessionSelection } from "./active-session-selection.js";
-import type { RuntimeRegistry } from "./runtime-registry.js";
+} from "../../skills/skill-discovery-service.js";
+import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
+import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
 
 export interface SkillManagementServiceOptions {
 	runtimeRegistry: Pick<RuntimeRegistry, "get" | "values">;

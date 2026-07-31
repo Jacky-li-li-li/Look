@@ -7,7 +7,7 @@
 // ============================================================
 
 import type { EventCallback, MainToRendererEvent } from "@look/shared/types";
-import type { IEventBus } from "../core/contracts.js";
+import type { IEventBus } from "../../core/contracts.js";
 
 export class SessionEventBus implements IEventBus {
 	private readonly subscribers = new Set<EventCallback>();
@@ -20,7 +20,13 @@ export class SessionEventBus implements IEventBus {
 	emit(event: MainToRendererEvent): void {
 		// Snapshotting protects dispatch when a subscriber unsubscribes itself
 		// (or another subscriber) while this event is being delivered.
-		for (const callback of [...this.subscribers]) callback(event);
+		for (const callback of [...this.subscribers]) {
+			try {
+				callback(event);
+			} catch (error) {
+				console.error("[Look][EventBus] Subscriber threw during event dispatch:", error);
+			}
+		}
 	}
 
 	clear(): void {

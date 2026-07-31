@@ -9,9 +9,9 @@
 
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "@look/shared/types";
-import type { IEventBus, IPermissionService, IPlanService } from "../core/contracts.js";
-import type { UserSettingsStore } from "../settings/store.js";
-import type { ManagedRuntime } from "./runtime-registry.js";
+import type { IEventBus, IPermissionService, IPlanService } from "../../core/contracts.js";
+import type { UserSettingsStore } from "../../settings/store.js";
+import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionPermissionOrchestratorHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;

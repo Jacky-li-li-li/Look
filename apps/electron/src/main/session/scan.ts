@@ -8,6 +8,18 @@
 // Extracted from SessionRuntimeManager (Phase 1 refactor).
 // ============================================================
 
+/**
+ * Custom session scanning that bypasses pi SDK SessionManager.list().
+ *
+ * We implement our own JSONL scanning instead of using SessionManager.list() because:
+ * 1. We need projectId attribution (pi SDK SessionInfo doesn't carry project info)
+ * 2. We scan subsessions/ subdirectories for subagent child sessions
+ * 3. We read custom entries (e.g. look.subagent-parent.v1) for parent-child relationships
+ * 4. We use file fingerprint caching to avoid repeated re-scans
+ *
+ * @see ARCHITECTURE: pi SDK workaround #5
+ */
+
 import fs, { createReadStream } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";

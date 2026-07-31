@@ -5,10 +5,12 @@
 import { Badge } from "@look/ui/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@look/ui/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@look/ui/components/ui/tabs";
+import { useSetAtom } from "jotai";
 import { FileText, Key, MessageCircle, Palette, Server, UserRound, Zap } from "lucide-react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SettingsTab } from "../../store/atoms";
+import { showSettingsAtom } from "../../store/atoms";
 import AboutTab from "./AboutTab";
 import ApiKeysTab from "./ApiKeysTab";
 import GeneralTab from "./GeneralTab";
@@ -17,8 +19,6 @@ import McpServersTab from "./McpServersTab";
 import ProfileTab from "./ProfileTab";
 import PromptTab from "./PromptTab";
 import type { CustomProviderInput, CustomProviderStats, ProviderInfo } from "./types";
-
-const _api = window.look;
 
 interface SettingsDialogProps {
 	open: boolean;
@@ -30,7 +30,6 @@ interface SettingsDialogProps {
 		customProviders: CustomProviderInput[];
 		customStats: CustomProviderStats;
 	}) => void;
-	onClose: () => void;
 	defaultTab?: SettingsTab;
 }
 
@@ -40,10 +39,10 @@ const SettingsDialog = memo(function SettingsDialog({
 	customProviders,
 	customStats,
 	onProvidersChange,
-	onClose,
 	defaultTab = "profile",
 }: SettingsDialogProps) {
 	const { t } = useTranslation();
+	const setShowSettings = useSetAtom(showSettingsAtom);
 	const [tab, setTab] = useState<string>(defaultTab);
 	// Adjust tab when defaultTab changes (inline during render)
 	const [prevDefaultTab, setPrevDefaultTab] = useState(defaultTab);
@@ -55,7 +54,7 @@ const SettingsDialog = memo(function SettingsDialog({
 	const configured = providers.filter((p) => p.hasKey).length + customStats.configured;
 
 	return (
-		<Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+		<Dialog open={open} onOpenChange={(o) => !o && setShowSettings(false)}>
 			<DialogContent className="flex h-[82vh] max-h-[82vh] w-[calc(100%-2rem)] max-w-3xl flex-col" showCloseButton>
 				<DialogHeader>
 					<DialogTitle>{t("settings.title")}</DialogTitle>

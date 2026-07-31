@@ -8,8 +8,8 @@
 
 import fs, { existsSync } from "node:fs";
 import type { ProjectInfo } from "@look/shared/types";
-import type { ProjectService } from "../projects/project-service.js";
-import type { RuntimeRegistry } from "./runtime-registry.js";
+import type { ProjectService } from "../../projects/project-service.js";
+import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
 import type { SessionCatalog } from "./session-catalog.js";
 
 export interface ProjectRuntimeServiceDependencies {

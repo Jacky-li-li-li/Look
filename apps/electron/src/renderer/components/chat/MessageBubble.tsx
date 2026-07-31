@@ -9,7 +9,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import { cn } from "@look/ui";
 import { UserAvatar } from "@look/ui/components/UserAvatar";
-import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
+import type { LookSessionEntry, LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -389,7 +389,7 @@ const MessageBubble = memo(function MessageBubble({
 	);
 });
 
-export function SessionEntryBubble({ entry }: { entry: Exclude<SessionEntry, { type: "message" }> }) {
+export function SessionEntryBubble({ entry }: { entry: Exclude<LookSessionEntry, { type: "message" }> }) {
 	let title: string = entry.type;
 	let body = "";
 	if (entry.type === "branch_summary" || entry.type === "compaction") body = entry.summary;

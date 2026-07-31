@@ -4,8 +4,8 @@
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import { SessionMessagingService } from "../src/main/session/session-messaging-service.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import { SessionMessagingService } from "../src/main/session/services/session-messaging-service.js";
 
 vi.mock("../src/main/extensions/subagent/agent-discovery.js", () => ({
 	discoverAgents: vi.fn(() => Promise.resolve({ agents: [{ name: "test", description: "", systemPrompt: "" }] })),

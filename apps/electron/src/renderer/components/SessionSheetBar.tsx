@@ -10,12 +10,12 @@ import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { AgentInfo } from "@shared/types";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { PanelLeftOpen, PanelRightOpen, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { sessionStateAtomFamily } from "../store/atoms";
+import { rightPanelCollapsedAtom, sessionStateAtomFamily, sidebarCollapsedAtom } from "../store/atoms";
 import { deriveAgentPhase, deriveSessionPhase } from "../store/sessionTypes";
 
 interface SessionSheet {
@@ -34,8 +34,6 @@ interface SessionSheetBarProps {
 	onSelect: (agentId: string) => void;
 	onClose: (agentId: string) => void;
 	onReorder: (agentIds: string[]) => void;
-	onExpandSidebar: () => void;
-	onExpandRightPanel: () => void;
 }
 
 function SortableSheet({
@@ -143,10 +141,10 @@ export default function SessionSheetBar({
 	onSelect,
 	onClose,
 	onReorder,
-	onExpandSidebar,
-	onExpandRightPanel,
 }: SessionSheetBarProps) {
 	const { t } = useTranslation();
+	const setSidebarCollapsed = useSetAtom(sidebarCollapsedAtom);
+	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
 
 	const agentById = useMemo(() => {
 		const map = new Map<string, AgentInfo>();
@@ -220,7 +218,7 @@ export default function SessionSheetBar({
 					size="icon-sm"
 					variant="ghost"
 					className="expand-sidebar-btn shrink-0 rounded-md border border-hairline"
-					onClick={onExpandSidebar}
+					onClick={() => setSidebarCollapsed(false)}
 					aria-label={t("sidebar.expand", "Expand sidebar")}
 					title={t("sidebar.expand", "Expand sidebar")}
 				>
@@ -263,7 +261,7 @@ export default function SessionSheetBar({
 					size="icon-sm"
 					variant="ghost"
 					className="expand-right-panel-btn shrink-0 rounded-md border border-hairline"
-					onClick={onExpandRightPanel}
+					onClick={() => setRightPanelCollapsed(false)}
 					aria-label={t("rightPanel.expand", "展开右侧面板")}
 					title={t("rightPanel.expand", "展开右侧面板")}
 				>

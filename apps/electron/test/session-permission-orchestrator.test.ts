@@ -6,8 +6,8 @@ import type { ModelRegistry, SessionManager } from "@earendil-works/pi-coding-ag
 import type { PermissionMode } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
 import type { IEventBus, IPermissionService, IPlanService } from "../src/main/core/contracts.js";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import { SessionPermissionOrchestrator } from "../src/main/session/session-permission-orchestrator.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import { SessionPermissionOrchestrator } from "../src/main/session/services/session-permission-orchestrator.js";
 import type { UserSettingsStore } from "../src/main/settings/store.js";
 
 function makeEventBus(): IEventBus {

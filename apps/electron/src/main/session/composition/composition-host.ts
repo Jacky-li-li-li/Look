@@ -4,12 +4,12 @@ import type { MainToRendererEvent, ProjectInfo, SessionSnapshotEnvelope } from "
 import type { ICompositionHost, IEventBus, IRuntimeStore, ISubAgentRuntimeHost } from "../../core/contracts.js";
 import type { ProjectService } from "../../projects/project-service.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
-import type { ActiveSessionSelection } from "../active-session-selection.js";
-import type { RuntimeLifecycleCoordinator } from "../runtime-lifecycle-coordinator.js";
-import type { RuntimeRegistry } from "../runtime-registry.js";
-import type { SessionCatalog } from "../session-catalog.js";
-import type { SessionEventEffects } from "../session-event-effects.js";
-import type { SessionNotifier } from "../session-notifier.js";
+import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
+import type { RuntimeLifecycleCoordinator } from "../runtime/runtime-lifecycle-coordinator.js";
+import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { SessionCatalog } from "../services/session-catalog.js";
+import type { SessionEventEffects } from "../events/session-event-effects.js";
+import type { SessionNotifier } from "../events/session-notifier.js";
 
 /**
  * Internal callback adapter used while RuntimeManagerComposition is built.

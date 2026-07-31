@@ -17,9 +17,7 @@ import type { ProviderSettingsData } from "./store/atoms";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
-	activeProjectAtom,
 	agentsAtom,
-	autoCollapseAtom,
 	openedSessionIdsAtom,
 	pendingDeleteProjectAtom,
 	projectsAtom,
@@ -43,11 +41,9 @@ export default function App() {
 
 	// ── Atom reads ──
 	const activeAgent = useAtomValue(activeAgentAtom);
-	const autoCollapse = useAtomValue(autoCollapseAtom);
 	const showSettings = useAtomValue(showSettingsAtom);
 	const settingsTab = useAtomValue(settingsTabAtom);
 	const providerSettings = useAtomValue(providerSettingsAtom);
-	const activeProject = useAtomValue(activeProjectAtom);
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 	const [showAgentSquare] = useAtom(showAgentSquareAtom);
@@ -81,20 +77,9 @@ export default function App() {
 	// ── Hooks ──
 	const agentActions = useAgentActions();
 	const projectActions = useProjectActions();
-	const { thinkingLevels } = useAppEffects();
+	useAppEffects();
 
 	// ── Layout callbacks ──
-	const handleSettingsClick = useCallback(() => {
-		appStore.set(settingsTabAtom, "profile");
-		appStore.set(showSettingsAtom, true);
-	}, []);
-	const handleRequestApiKeys = useCallback(() => {
-		appStore.set(settingsTabAtom, "api-keys");
-		appStore.set(showSettingsAtom, true);
-	}, []);
-	const handleCloseSettings = useCallback(() => appStore.set(showSettingsAtom, false), []);
-	const handleExpandSidebar = useCallback(() => appStore.set(sidebarCollapsedAtom, false), []);
-	const handleExpandRightPanel = useCallback(() => appStore.set(rightPanelCollapsedAtom, false), []);
 	const onProvidersChange = useCallback((data: ProviderSettingsData) => appStore.set(providerSettingsAtom, data), []);
 
 	useEffect(() => {
@@ -137,10 +122,7 @@ export default function App() {
 				activeSessionState={activeSessionState}
 				activeQueue={activeQueue}
 				activePhase={activePhase}
-				autoCollapse={autoCollapse}
-				thinkingLevels={thinkingLevels}
 				projects={projects}
-				activeProject={activeProject}
 				showAgentSquare={showAgentSquare}
 				showScheduledTasks={showScheduledTasks}
 				newProjectCwd={projectActions.newProjectCwd}
@@ -158,7 +140,6 @@ export default function App() {
 				handleThinkingChange={agentActions.handleThinkingChange}
 				handleModelChanged={agentActions.handleModelChanged}
 				handleCreateClick={agentActions.handleCreateClick}
-				handleRequestApiKeys={handleRequestApiKeys}
 				handleOpenProject={projectActions.handleOpenProject}
 				handleDeleteProject={projectActions.handleDeleteProject}
 				handleProjectCreated={projectActions.handleProjectCreated}
@@ -166,10 +147,6 @@ export default function App() {
 				handleDeleteProjectConfirmed={projectActions.handleDeleteProjectConfirmed}
 				handleRenameProject={projectActions.handleRenameProject}
 				handleOpenProjectFolderById={projectActions.handleOpenProjectFolderById}
-				handleSettingsClick={handleSettingsClick}
-				handleCloseSettings={handleCloseSettings}
-				handleExpandSidebar={handleExpandSidebar}
-				handleExpandRightPanel={handleExpandRightPanel}
 				onProvidersChange={onProvidersChange}
 			/>
 		</>

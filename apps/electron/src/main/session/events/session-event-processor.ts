@@ -10,7 +10,7 @@
 // ============================================================
 
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { IEventBus, ISessionEventHost, ISessionScopeRegistry } from "../core/contracts.js";
+import type { IEventBus, ISessionEventHost, ISessionScopeRegistry } from "../../core/contracts.js";
 import { translateAgentSessionEvent } from "./event-translator.js";
 import { UIEventBatcher } from "./ui-event-batcher.js";
 
@@ -63,9 +63,7 @@ export class SessionEventProcessor {
 		switch (event.type) {
 			case "agent_end":
 				this.host.emitSessionState(sessionId, "agent_end", event.willRetry);
-				this.host.onAgentEnd(sessionId, event.willRetry).catch((err) => {
-					console.error("[SessionEventProcessor] onAgentEnd failed:", err);
-				});
+				this.host.onAgentEnd(sessionId, event.willRetry);
 				if (!event.willRetry) this.host.onSubSessionAgentEnd(sessionId);
 				break;
 			case "agent_start":
@@ -73,9 +71,7 @@ export class SessionEventProcessor {
 				this.host.emitSessionUpdated(sessionId);
 				break;
 			case "message_end":
-				this.host.onMessageEnd(sessionId, event.message).catch((err) => {
-					console.error("[SessionEventProcessor] onMessageEnd failed:", err);
-				});
+				this.host.onMessageEnd(sessionId, event.message);
 				break;
 			case "message_update":
 				this.host.emitContextUsage(sessionId);

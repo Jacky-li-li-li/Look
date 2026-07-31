@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SessionEventBus } from "../src/main/session/session-event-bus.js";
+import { SessionEventBus } from "../src/main/session/events/session-event-bus.js";
 
 describe("SessionEventBus", () => {
 	it("delivers events to every current subscriber and supports unsubscribe", () => {

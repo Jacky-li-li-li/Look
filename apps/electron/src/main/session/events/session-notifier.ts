@@ -6,12 +6,48 @@
 // IEventBus and all data is read through a narrow query port.
 // ============================================================
 
-import type { ContextUsage } from "@earendil-works/pi-coding-agent";
-import type { ProjectInfo, SessionSnapshotEnvelope } from "@look/shared/types";
-import type { IEventBus, ISessionScopeRegistry } from "../core/contracts.js";
-import type { ManagedRuntime } from "./runtime-registry.js";
-import type { SessionInfoService } from "./session-info-service.js";
-import { parseTodoFile } from "./todo-parser.js";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { LookSessionEntry, MainToRendererEvent, ProjectInfo, SessionSnapshotEnvelope } from "@look/shared/types";
+import type { IEventBus, ISessionScopeRegistry } from "../../core/contracts.js";
+import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { SessionInfoService } from "../services/session-info-service.js";
+import { parseTodoFile } from "../services/todo-parser.js";
+
+/**
+ * Translate pi SDK SessionEntry[] to renderer-optimized LookSessionEntry[].
+ * Only fields the renderer actually uses are retained — this decouples the
+ * renderer from pi SDK internals and reduces IPC payload size.
+ *
+ * @see ARCHITECTURE: .trae/documents/look-project-architecture-review.md #3
+ */
+function toLookSessionEntry(entry: SessionEntry): LookSessionEntry {
+	switch (entry.type) {
+		case "message":
+			return { type: "message", id: entry.id, message: entry.message };
+		case "compaction":
+			return { type: "compaction", id: entry.id, summary: entry.summary, tokensBefore: entry.tokensBefore };
+		case "branch_summary":
+			return { type: "branch_summary", id: entry.id, summary: entry.summary };
+		case "custom":
+			return { type: "custom", id: entry.id, customType: entry.customType, data: entry.data };
+		case "custom_message":
+			return {
+				type: "custom_message",
+				id: entry.id,
+				customType: entry.customType,
+				content: entry.content,
+				display: entry.display,
+			};
+		case "model_change":
+			return { type: "model_change", id: entry.id, provider: entry.provider, modelId: entry.modelId };
+		case "thinking_level_change":
+			return { type: "thinking_level_change", id: entry.id, thinkingLevel: entry.thinkingLevel };
+		case "label":
+			return { type: "label", id: entry.id, label: entry.label };
+		case "session_info":
+			return { type: "session_info", id: entry.id, name: entry.name };
+	}
+}
 
 export interface SessionNotifierQueries {
 	sessionInfoService: SessionInfoService;
@@ -22,6 +58,8 @@ export interface SessionNotifierQueries {
 
 export class SessionNotifier {
 	private readonly contextUsageLastEmit = new Map<string, number>();
+	/** Monotonic snapshot sequence per session; guards against stale deferred snapshots. */
+	private readonly snapshotSequences = new Map<string, number>();
 
 	constructor(
 		private readonly eventBus: IEventBus,
@@ -30,6 +68,8 @@ export class SessionNotifier {
 
 	emitSessionState(sessionId: string | null, reason: SessionSnapshotEnvelope["reason"], willRetry?: boolean): void {
 		if (!sessionId) return;
+		const sequence = (this.snapshotSequences.get(sessionId) ?? 0) + 1;
+		this.snapshotSequences.set(sessionId, sequence);
 		const info = this.queries.sessionInfoService.getAgentInfo(sessionId);
 		const projectId = info?.projectId;
 		if (projectId) this.emitSessionList(projectId);
@@ -41,9 +81,18 @@ export class SessionNotifier {
 			// snapshot.runtime.isCompacting is the renderer's single truth source.
 			// For compaction_end/agent_end we force false to avoid reading SDK's
 			// stale isCompacting before the SDK finishes its cleanup.
+
+			// SDK workaround: session.isCompacting may still be true when compaction_end / agent_end
+			// events arrive (the SDK cleans it up asynchronously after emitting). We force it to false
+			// so the renderer doesn't show a stale compacting indicator.
+			// @see ARCHITECTURE: pi SDK workaround #2
 			const isCompactingFinal = reason === "compaction_end" || reason === "agent_end" ? false : session.isCompacting;
 			// Read compactionEstimatedTokensAfter from scope (set after session.compact() returns).
 			const scope = this.queries.scopeRegistry.get(sessionId);
+			// SDK workaround: when agent_end carries willRetry=true, the renderer streaming state
+			// is set to willRetry (truthy) instead of false, preventing the UI from flashing back
+			// to idle between retry attempts.
+			// @see ARCHITECTURE: pi SDK workaround #4
 			const runtime = {
 				model: session.model,
 				thinkingLevel: session.thinkingLevel,
@@ -63,13 +112,15 @@ export class SessionNotifier {
 			const PARTIAL_SIZE = 100;
 			const usePartial = reason === "activate" && allEntries.length > PARTIAL_SIZE;
 			const entries = usePartial ? allEntries.slice(-PARTIAL_SIZE) : allEntries;
+			const lookEntries = entries.map(toLookSessionEntry);
 			this.eventBus.emit({
 				type: "session:snapshot",
 				sessionId,
 				reason,
+				sequence,
 				partial: usePartial,
 				leafId,
-				entries,
+				entries: lookEntries,
 				runtime,
 			});
 			if (usePartial) {
@@ -78,8 +129,9 @@ export class SessionNotifier {
 						type: "session:snapshot",
 						sessionId,
 						reason,
+						sequence,
 						leafId,
-						entries: allEntries,
+						entries: allEntries.map(toLookSessionEntry),
 						runtime,
 					});
 				});
@@ -100,7 +152,7 @@ export class SessionNotifier {
 	}
 
 	/** Emit an arbitrary event to the renderer. Used for OAuth login prompts etc. */
-	emit(event: import("@look/shared/types").MainToRendererEvent): void {
+	emit(event: MainToRendererEvent): void {
 		this.eventBus.emit(event);
 	}
 
@@ -111,10 +163,12 @@ export class SessionNotifier {
 		this.contextUsageLastEmit.set(sessionId, now);
 		const managed = this.getManagedRuntime(sessionId);
 		if (!managed) return;
+		const contextUsage = managed.runtime.session.getContextUsage();
+		if (!contextUsage) return;
 		this.eventBus.emit({
 			type: "agent:context-usage",
 			agentId: sessionId,
-			contextUsage: managed.runtime.session.getContextUsage() as ContextUsage,
+			contextUsage,
 		});
 	}
 

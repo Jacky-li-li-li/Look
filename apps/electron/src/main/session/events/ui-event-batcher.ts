@@ -12,7 +12,7 @@
 // ============================================================
 
 import type { LookUiEvent } from "@look/shared/types";
-import type { IEventBus, ISessionScope } from "../core/contracts.js";
+import type { IEventBus, ISessionScope } from "../../core/contracts.js";
 
 const UI_EVENT_BATCH_MS = 8;
 const UI_EVENT_FIRST_MS = 1;

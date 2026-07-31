@@ -5,10 +5,12 @@
 import { Button } from "@look/ui/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@look/ui/components/ui/dialog";
 import type { AvailableModel } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { ArrowRight, Check, ChevronDown, Loader2, Search } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { modelUpdatedVersionAtom } from "../../store/settingsAtoms";
 import { ProviderIcon } from "../ProviderIcon";
 
 const api = window.look;
@@ -33,6 +35,15 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 
 	// Cache: avoid re-fetching on every dialog open (ref persists across renders)
 	const modelsCacheRef = useRef<{ models: AvailableModel[]; ts: number }>({ models: [], ts: 0 });
+
+	// Invalidate the 60s cache when main process signals models have been refreshed
+	// (API key set, OAuth login, etc.) so the next dialog open always sees fresh data.
+	const modelVersion = useAtomValue(modelUpdatedVersionAtom);
+	const prevModelVersionRef = useRef(modelVersion);
+	if (prevModelVersionRef.current !== modelVersion) {
+		prevModelVersionRef.current = modelVersion;
+		modelsCacheRef.current.ts = 0;
+	}
 
 	const fetchModels = useCallback(async (force = false) => {
 		if (!api) return;

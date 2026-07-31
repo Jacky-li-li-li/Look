@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const source = readFileSync(resolve(import.meta.dirname, "../src/main/session/composition/builder.ts"), "utf8");
 const runtimeManagerSource = readFileSync(
-	resolve(import.meta.dirname, "../src/main/session/runtime-manager.ts"),
+	resolve(import.meta.dirname, "../src/main/session/runtime/runtime-manager.ts"),
 	"utf8",
 );
 const compositionSource = readFileSync(
@@ -23,7 +23,7 @@ describe("RuntimeManagerComposition", () => {
 
 	it("builds with an internal CompositionHost instead of escaping the partially initialized manager", () => {
 		expect(source).toContain("new CompositionHost(");
-		expect(source).toContain("this.host!.bindRuntimeServices");
+		expect(source).toContain("host.bindRuntimeServices");
 		expect(compositionSource).not.toContain("RuntimeManagerCompositionHost");
 		expect(runtimeManagerSource).not.toContain("RuntimeManagerComposition.create(\n\t\t\tsrt,");
 	});

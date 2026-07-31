@@ -1,8 +1,8 @@
 import type { AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { UserSettings } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
-import type { ManagedRuntime } from "../src/main/session/runtime-registry.js";
-import { SessionSettingsService } from "../src/main/session/session-settings-service.js";
+import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
+import { SessionSettingsService } from "../src/main/session/services/session-settings-service.js";
 
 const SETTINGS: UserSettings = {
 	language: "en",

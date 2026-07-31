@@ -10,8 +10,8 @@
 import fs, { existsSync } from "node:fs";
 import { getProjectSharedDir, getWorkspaceDir } from "@look/shared/look-storage";
 import { DEFAULT_PROJECT_ID } from "@look/shared/types";
-import type { RuntimeRegistry } from "../session/runtime-registry.js";
-import type { SessionCatalog } from "../session/session-catalog.js";
+import type { RuntimeRegistry } from "../session/runtime/runtime-registry.js";
+import type { SessionCatalog } from "../session/services/session-catalog.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 import type { ProjectService } from "./project-service.js";
