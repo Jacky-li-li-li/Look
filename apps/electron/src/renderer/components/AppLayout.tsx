@@ -29,7 +29,7 @@ import PlanApprovalDialog from "./dialogs/PlanApprovalDialog";
 import SessionSheetBar from "./SessionSheetBar";
 import Sidebar from "./Sidebar";
 import ScheduledTasksPage from "./scheduler/ScheduledTasksPage";
-import SettingsDialog from "./settings/SettingsDialog";
+import SettingsPage from "./settings/SettingsPage";
 import { RightPanel } from "./workspace/RightPanel";
 
 const AgentSquare = lazy(() => import("./AgentMarketplace/AgentSquare"));
@@ -264,19 +264,22 @@ function AppLayout({
 					onDeleted={handleDeleteProjectConfirmed}
 				/>
 			)}
-			{showSettings && (
-				<SettingsDialog
-					open={showSettings}
-					providers={providerSettings.providers}
-					customProviders={providerSettings.customProviders}
-					customStats={providerSettings.customStats}
-					onProvidersChange={onProvidersChange}
-					defaultTab={settingsTab}
-				/>
-			)}
 			<OAuthLoginDialog />
 			<PermissionDialog />
 			<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
+
+			{/* 设置页：全屏覆盖层，遮住左侧栏与右侧面板；z-40 低于 Radix Dialog 的 z-50，保证设置页内子弹窗正常显示 */}
+			{showSettings && (
+				<div className="fixed inset-0 z-40 bg-background">
+					<SettingsPage
+						providers={providerSettings.providers}
+						customProviders={providerSettings.customProviders}
+						customStats={providerSettings.customStats}
+						onProvidersChange={onProvidersChange}
+						defaultTab={settingsTab}
+					/>
+				</div>
+			)}
 		</div>
 	);
 }
