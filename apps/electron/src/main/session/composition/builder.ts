@@ -29,6 +29,8 @@ import {
 	resetLegacySessionsOnce,
 } from "@look/shared/look-storage";
 import { AgentDefinitionService } from "../../agents/definition-service.js";
+import { ComputerUseService } from "../../computer-use/computer-use-service.js";
+import { createComputerUseExtensionFactory } from "../../extensions/computer-use-extension.js";
 import { createMcpExtensionFactory } from "../../extensions/mcp-extension.js";
 import { createModelListExtensionFactory } from "../../extensions/model-extension.js";
 import { createPermissionExtensionFactory } from "../../extensions/permission-extension.js";
@@ -101,6 +103,7 @@ export class CompositionBuilder {
 	permissionService: PermissionService | null = null;
 	promptStore: PromptStore | null = null;
 	mcpManager: MCPManager | null = null;
+	computerUseService: ComputerUseService | null = null;
 	sessionCatalog: SessionCatalog | null = null;
 	projectRuntimeService: ProjectRuntimeService | null = null;
 	sessionInfoService: SessionInfoService | null = null;
@@ -176,6 +179,11 @@ export class CompositionBuilder {
 		this.promptStore = new PromptStore();
 
 		this.mcpManager = new MCPManager();
+
+		// Computer Use 是进程级 OS 服务（截图/输入与具体会话无关），
+		// 与 MCPManager 同为全局共享服务；构造不触碰 Electron API，
+		// 真正的 desktopCapturer/nut-js 调用发生在工具执行时（app ready 后）。
+		this.computerUseService = new ComputerUseService();
 
 		this.sessionCatalog = new SessionCatalog((metadata) => {
 			// Captures CompositionBuilder's subAgentRegistry field (assigned above).
@@ -334,6 +342,7 @@ export class CompositionBuilder {
 						this.projectService!.resolveProjectTrust(cwd),
 					),
 					createSkillInjectExtensionFactory(),
+					createComputerUseExtensionFactory(this.computerUseService!),
 				];
 			},
 		});
