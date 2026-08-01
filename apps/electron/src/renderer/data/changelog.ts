@@ -20,6 +20,42 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.5.0",
+		date: "2026-08-02",
+		items: [
+			{
+				zh: "应用更新体验升级：发现新版本后自动下载，顶部胶囊实时显示进度，下载完成一键重启安装",
+				en: "Update UX upgrade: new versions download automatically with a live progress pill in the header; one click restarts to install when ready",
+				ja: "アップデート体験を刷新：新バージョンを自動ダウンロードし、ヘッダーのピルで進捗を表示、準備完了後ワンクリックで再起動してインストール",
+			},
+			{
+				zh: "聊天中的工具结果与图片消息支持点击放大预览",
+				en: "Tool results and image messages in chat can be clicked to preview enlarged",
+				ja: "チャット内のツール結果や画像メッセージをクリックして拡大プレビュー可能に",
+			},
+			{
+				zh: "文件查看器支持图片预览",
+				en: "File viewer now previews images",
+				ja: "ファイルビューアが画像プレビューに対応",
+			},
+			{
+				zh: "新增 macOS 桌面操作工具集：支持屏幕截图与模拟键鼠操作",
+				en: "New macOS desktop automation toolset: screen capture and simulated keyboard/mouse actions",
+				ja: "macOS デスクトップ操作ツール集を追加：スクリーンショットとキーボード/マウス操作をシミュレート",
+			},
+			{
+				zh: "输入框快捷工具收敛为 Tool 按钮面板，文件拖拽体验优化",
+				en: "Input quick tools consolidated into a Tool button panel; better file drag-and-drop",
+				ja: "入力欄のクイックツールを Tool ボタンパネルに整理し、ファイルのドラッグ＆ドロップを改善",
+			},
+			{
+				zh: "空状态问候按时段自动切换，新增深夜档文案",
+				en: "Empty-state greetings switch by time of day, with a new late-night message",
+				ja: "時間帯に応じて空状態の挨拶を自動切替、深夜向けメッセージを追加",
+			},
+		],
+	},
+	{
 		version: "1.4.0",
 		date: "2026-07-31",
 		items: [
