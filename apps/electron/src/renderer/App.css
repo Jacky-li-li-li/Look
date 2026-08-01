@@ -952,11 +952,11 @@ body {
 	}
 
 	[data-tool-panel-body][data-open="true"] > .overflow-hidden > * {
-		animation: tool-reveal 240ms cubic-bezier(0, 0, 0.2, 1) both;
+		animation: tool-reveal 160ms cubic-bezier(0, 0, 0.2, 1) both;
 	}
 
 	[data-execution-group-body][data-open="true"] > .overflow-hidden > * > [data-tool-group-item] {
-		animation: tool-reveal 240ms cubic-bezier(0, 0, 0.2, 1) both;
+		animation: tool-reveal 160ms cubic-bezier(0, 0, 0.2, 1) both;
 	}
 
 	/* ============================================================

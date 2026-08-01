@@ -149,7 +149,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 				style={{
 					gridTemplateRows: isOpen ? "1fr" : "0fr",
 					opacity: isOpen ? 1 : 0,
-					transition: "grid-template-rows 380ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 320ms ease",
+					transition: "grid-template-rows 180ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 150ms ease",
 					pointerEvents: isOpen ? undefined : "none",
 				}}
 			>
@@ -161,7 +161,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 									key={`note-${hashKey(node.text)}`}
 									data-tool-group-item=""
 									className="message-prose text-[10px] text-muted-foreground"
-									style={{ animationDelay: `${i * 50}ms` }}
+									style={{ animationDelay: `${i * 20}ms` }}
 								>
 									<SkillAwareContent content={node.text} isStreaming={isStreaming} />
 								</div>
@@ -169,7 +169,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 								<div
 									key={node.kind === "block" ? `item-${node.index}` : `node-${i}`}
 									data-tool-group-item=""
-									style={{ animationDelay: `${i * 50}ms` }}
+									style={{ animationDelay: `${i * 20}ms` }}
 								>
 									{renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)}
 								</div>
