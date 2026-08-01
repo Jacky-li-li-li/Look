@@ -56,13 +56,13 @@ describe("session snapshot loading state", () => {
 		const state = { ...emptyRendererSessionState(), loadingSnapshot: true };
 		renderList(state);
 		expect(screen.getByText("Loading...")).toBeTruthy();
-		expect(screen.queryByText("No messages yet. Start a conversation.")).toBeNull();
+		expect(screen.queryByText(i18n.t("chat.greetingNoName"))).toBeNull();
 	});
 
 	it("shows the empty chat copy only after an empty snapshot has loaded", () => {
 		const state = { ...emptyRendererSessionState(), snapshotLoaded: true, loadingSnapshot: false };
 		renderList(state);
-		expect(screen.getByText("No messages yet. Start a conversation.")).toBeTruthy();
+		expect(screen.getByText(i18n.t("chat.greetingNoName"))).toBeTruthy();
 	});
 
 	it("clears loading flags when a snapshot is applied", () => {
