@@ -57,13 +57,15 @@
 	--message-action-gap: 0.25rem;
 	--message-avatar-offset: 0.125rem;
 
-	/* Prose spacing tokens */
-	--prose-line-height: 1.68;
-	--prose-flow-gap: 0.5rem;
-	--prose-heading-gap: 0.375rem;
-	--prose-block-gap: 0.75rem;
-	--prose-section-gap: 1rem;
-	--prose-hr-gap: 0.75em;
+	/* Prose typography — 阅读器尺度的消息正文排版系统 */
+	--prose-font-size: 15px;
+	--prose-line-height: 1.78;
+	--prose-measure: 68ch;
+	--prose-flow-gap: 0.85rem;
+	--prose-heading-gap: 0.5rem;
+	--prose-block-gap: 0.9rem;
+	--prose-section-gap: 1.6rem;
+	--prose-hr-gap: 0.9em;
 }
 
 .tone-light {
@@ -548,12 +550,17 @@ body {
 		flex-direction: column;
 		gap: 0.25rem;
 		font-family: var(--font-body);
-		font-size: 14px;
+		font-size: var(--prose-font-size);
 		line-height: var(--prose-line-height);
 		/* 微量字距：中日文与拉丁混排更透气，弱化“生硬”感 */
 		letter-spacing: 0.006em;
 		color: var(--foreground);
 		word-break: break-word;
+	}
+
+	/* 阅读器量尺：聊天正文限宽 68ch，长段落回绕到舒适行宽 */
+	.look-markdown--chat {
+		max-width: var(--prose-measure);
 	}
 
 	/* 助手消息正文：前景色向背景混 8%，柔化纯黑/纯白的生硬对比（明暗主题一致）；
@@ -570,36 +577,39 @@ body {
 	.look-md-heading {
 		margin: 0;
 		color: var(--foreground);
-		font-weight: 600;
-		letter-spacing: -0.008em;
+		font-weight: 640;
+		letter-spacing: -0.012em;
 	}
 
 	.look-md-h1 {
-		font-size: 18px;
+		font-size: 20px;
 		line-height: 1.35;
 	}
 
 	.look-md-h2 {
-		font-size: 16px;
+		font-size: 17px;
 		line-height: 1.4;
 	}
 
 	.look-md-h3 {
-		font-size: 14px;
-		line-height: 1.4;
+		font-size: 15.5px;
+		line-height: 1.45;
+		font-weight: 620;
+		letter-spacing: -0.006em;
 	}
 
 	.look-md-h4,
 	.look-md-h5,
 	.look-md-h6 {
-		font-size: 14px;
+		font-size: 15px;
 		line-height: 1.45;
-		letter-spacing: 0;
+		font-weight: 620;
+		letter-spacing: -0.004em;
 	}
 
 	.look-md-list {
 		margin: 0;
-		padding-left: 1.2rem;
+		padding-left: 1.35rem;
 	}
 
 	.look-md-list--unordered {
@@ -611,7 +621,7 @@ body {
 	}
 
 	.look-md-list-item {
-		margin: 0.08em 0;
+		margin: 0.14em 0;
 		padding-left: 0.08rem;
 	}
 
@@ -620,10 +630,15 @@ body {
 	}
 
 	.look-md-link {
-		color: var(--primary);
+		color: inherit;
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
-		text-underline-offset: 2px;
+		text-decoration-color: color-mix(in oklch, var(--foreground), transparent 62%);
+		text-underline-offset: 3px;
+	}
+
+	.look-md-link:hover {
+		text-decoration-color: var(--foreground);
 	}
 
 	.look-md-inline-code {
@@ -725,7 +740,8 @@ body {
 	.look-md-blockquote {
 		margin: 0;
 		border-left: 2px solid color-mix(in oklch, var(--foreground), transparent 68%);
-		padding-left: 0.7em;
+		padding-left: 1em;
+		font-size: 0.97em;
 		color: var(--muted-foreground);
 	}
 
@@ -737,33 +753,32 @@ body {
 		max-width: 100%;
 		margin: 0;
 		overflow-x: auto;
-		border: 1px solid var(--hairline);
-		border-radius: calc(var(--radius) * 0.8);
 	}
 
 	.look-md-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 13px;
-		line-height: 1.4;
+		font-size: 13.5px;
+		line-height: 1.5;
 	}
 
 	.look-md-th,
 	.look-md-td {
 		border-bottom: 1px solid var(--hairline);
-		padding: 0.32rem 0.5rem;
+		padding: 0.45rem 0.9rem 0.45rem 0;
 		text-align: left;
 		vertical-align: top;
 	}
 
-	.look-md-th {
-		background: color-mix(in oklch, var(--muted), transparent 42%);
-		color: var(--foreground);
-		font-weight: 600;
+	.look-md-th:last-child,
+	.look-md-td:last-child {
+		padding-right: 0;
 	}
 
-	.look-md-tr:last-child .look-md-td {
-		border-bottom: 0;
+	.look-md-th {
+		border-bottom-color: color-mix(in oklch, var(--foreground), transparent 72%);
+		color: var(--foreground);
+		font-weight: 620;
 	}
 
 	.look-md-rule {
@@ -828,7 +843,7 @@ body {
 		max-height: 18rem;
 		overflow: auto;
 		font-size: 0.6875rem;
-		line-height: var(--prose-line-height);
+		line-height: 1.55;
 		color: var(--muted-foreground);
 	}
 
@@ -836,7 +851,7 @@ body {
 		white-space: pre-wrap;
 		word-break: break-word;
 		font-size: 0.625rem;
-		line-height: var(--prose-line-height);
+		line-height: 1.55;
 	}
 
 	.inset-drawer__label {
@@ -1660,7 +1675,7 @@ body {
 	margin: 0;
 	overflow: hidden;
 	border-color: var(--code-border);
-	border-radius: calc(var(--radius) * 0.9);
+	border-radius: 10px;
 	background: var(--code-rail);
 	box-shadow: none;
 	gap: 0;
@@ -1742,7 +1757,7 @@ body {
 	font-family: var(--font-mono);
 	font-size: 12px;
 	font-variant-ligatures: none;
-	line-height: 1.5;
+	line-height: 1.6;
 }
 
 .look-markdown [data-streamdown="code-block"] pre {

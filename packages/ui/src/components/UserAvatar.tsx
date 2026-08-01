@@ -57,5 +57,3 @@ export function UserAvatar({ avatar, size = "sm", circular = false, className }:
 		</div>
 	);
 }
-
-export default UserAvatar;

@@ -103,5 +103,3 @@ export class ErrorBoundarySection extends ErrorBoundaryBase {
 		);
 	}
 }
-
-export default ErrorBoundary;

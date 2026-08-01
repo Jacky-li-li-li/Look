@@ -348,7 +348,7 @@ const MessageBubble = memo(function MessageBubble({
 				<MessageHeader sender={sender} isStreaming={isStreaming} isActiveLeaf={isActiveLeaf} isUser={isUser} />
 				<div
 					className={cn(
-						"whisper-bubble flex flex-col gap-msg-block text-[14px] leading-[var(--prose-line-height)]",
+						"whisper-bubble flex flex-col gap-msg-block text-[var(--prose-font-size)] leading-[var(--prose-line-height)]",
 						isUser ? "whisper-bubble--user" : "whisper-bubble--assistant w-full",
 						flash && "bubble-flash",
 					)}
@@ -619,7 +619,7 @@ export const StreamingMessageBubble = memo(function StreamingMessageBubble({
 					isActiveLeaf={false}
 					isUser={false}
 				/>
-				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-msg-block text-[14px] leading-[var(--prose-line-height)]">
+				<div className="whisper-bubble whisper-bubble--assistant w-full flex flex-col gap-msg-block text-[var(--prose-font-size)] leading-[var(--prose-line-height)]">
 					<StreamingBlocksBubble
 						blocks={blocks}
 						toolExecutions={toolExecutions}
