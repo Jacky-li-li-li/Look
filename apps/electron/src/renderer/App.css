@@ -507,7 +507,8 @@ body {
 	/* ============================================================
 		 Brand Mark — WelcomeScreen geometric anchor
 		 ============================================================ */
-	.welcome-brand-mark {
+	.welcome-brand-mark,
+	.brand-mark {
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -524,10 +525,12 @@ body {
 			inset 0 1px 0 oklch(1 0 0 / 0.15),
 			0 8px 24px oklch(0.04 0.002 85 / 0.1);
 	}
-	.welcome-brand-mark span {
+	.welcome-brand-mark span,
+	.brand-mark span {
 		color: var(--background);
 	}
-	.welcome-brand-mark::after {
+	.welcome-brand-mark::after,
+	.brand-mark::after {
 		content: "";
 		position: absolute;
 		bottom: 0.75rem;
@@ -1499,6 +1502,33 @@ body {
 
 	html[data-platform="darwin"]:not([data-fullscreen="true"]) .sidebar-header-actions {
 		left: 78px;
+	}
+
+	/* 顶部更新胶囊：下载中/待重启的呼吸光效（自动下载模式）
+	   TopUpdateButton 外层按钮用 conic-gradient 画进度环，
+	   内层胶囊叠加 box-shadow 呼吸光，形成动态下载光效。 */
+	@keyframes top-update-glow {
+		0%,
+		100% {
+			box-shadow:
+				0 0 3px color-mix(in oklab, var(--primary) 30%, transparent),
+				0 0 8px color-mix(in oklab, var(--primary) 18%, transparent);
+		}
+		50% {
+			box-shadow:
+				0 0 5px color-mix(in oklab, var(--primary) 65%, transparent),
+				0 0 14px color-mix(in oklab, var(--primary) 40%, transparent);
+		}
+	}
+
+	/* 下载中：进度环 + 呼吸光 */
+	.top-update-progress > span {
+		animation: top-update-glow 1.6s ease-in-out infinite;
+	}
+
+	/* 下载完成等待手动重启：更明显的提示光 */
+	.top-update-restart {
+		animation: top-update-glow 2s ease-in-out infinite;
 	}
 
 	.sidebar-separator {

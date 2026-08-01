@@ -5,9 +5,8 @@
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo } from "react";
 import AppLayout from "./components/AppLayout";
-import AppUpdateNotifier from "./components/AppUpdateNotifier";
+import { BrandMark } from "./components/BrandMark";
 import LoginScreen from "./components/LoginScreen";
-import { PixelAgentAvatar } from "./components/PixelAgentAvatar";
 import { useAgentActions } from "./hooks/useAgentActions";
 import { useAppEffects } from "./hooks/useAppEffects";
 import { useAuthSession } from "./hooks/useAuthSession";
@@ -93,7 +92,7 @@ export default function App() {
 	if (!api) {
 		return (
 			<div className="app-shell flex h-screen flex-col items-center justify-center gap-4 p-10 text-center">
-				<PixelAgentAvatar size="lg" active />
+				<BrandMark />
 				<h1 className="text-xl font-semibold tracking-tight text-foreground">Look</h1>
 				<p className="text-sm text-destructive">Harness API not available.</p>
 				<p className="text-xs text-muted-foreground">
@@ -110,45 +109,42 @@ export default function App() {
 
 	// ── Main layout ──
 	return (
-		<>
-			<AppUpdateNotifier />
-			<AppLayout
-				sidebarCollapsed={sidebarCollapsed}
-				rightPanelCollapsed={rightPanelCollapsed}
-				agents={agents}
-				openedSessionIds={openedSessionIds}
-				activeAgent={activeAgent}
-				activeAgentId={activeAgentId}
-				activeSessionState={activeSessionState}
-				activeQueue={activeQueue}
-				activePhase={activePhase}
-				projects={projects}
-				showAgentSquare={showAgentSquare}
-				showScheduledTasks={showScheduledTasks}
-				newProjectCwd={projectActions.newProjectCwd}
-				setNewProjectCwd={projectActions.setNewProjectCwd}
-				pendingDelete={pendingDelete}
-				showSettings={showSettings}
-				settingsTab={settingsTab}
-				providerSettings={providerSettings}
-				handleSendMessage={agentActions.handleSendMessage}
-				handleSelectAgent={agentActions.handleSelectAgent}
-				handleCloseSessionSheet={agentActions.handleCloseSessionSheet}
-				handleReorderSessionSheets={agentActions.handleReorderSessionSheets}
-				handleDestroyAgent={agentActions.handleDestroyAgent}
-				handleAbortAgent={agentActions.handleAbortAgent}
-				handleThinkingChange={agentActions.handleThinkingChange}
-				handleModelChanged={agentActions.handleModelChanged}
-				handleCreateClick={agentActions.handleCreateClick}
-				handleOpenProject={projectActions.handleOpenProject}
-				handleDeleteProject={projectActions.handleDeleteProject}
-				handleProjectCreated={projectActions.handleProjectCreated}
-				handleDeleteProjectCancelled={projectActions.handleDeleteProjectCancelled}
-				handleDeleteProjectConfirmed={projectActions.handleDeleteProjectConfirmed}
-				handleRenameProject={projectActions.handleRenameProject}
-				handleOpenProjectFolderById={projectActions.handleOpenProjectFolderById}
-				onProvidersChange={onProvidersChange}
-			/>
-		</>
+		<AppLayout
+			sidebarCollapsed={sidebarCollapsed}
+			rightPanelCollapsed={rightPanelCollapsed}
+			agents={agents}
+			openedSessionIds={openedSessionIds}
+			activeAgent={activeAgent}
+			activeAgentId={activeAgentId}
+			activeSessionState={activeSessionState}
+			activeQueue={activeQueue}
+			activePhase={activePhase}
+			projects={projects}
+			showAgentSquare={showAgentSquare}
+			showScheduledTasks={showScheduledTasks}
+			newProjectCwd={projectActions.newProjectCwd}
+			setNewProjectCwd={projectActions.setNewProjectCwd}
+			pendingDelete={pendingDelete}
+			showSettings={showSettings}
+			settingsTab={settingsTab}
+			providerSettings={providerSettings}
+			handleSendMessage={agentActions.handleSendMessage}
+			handleSelectAgent={agentActions.handleSelectAgent}
+			handleCloseSessionSheet={agentActions.handleCloseSessionSheet}
+			handleReorderSessionSheets={agentActions.handleReorderSessionSheets}
+			handleDestroyAgent={agentActions.handleDestroyAgent}
+			handleAbortAgent={agentActions.handleAbortAgent}
+			handleThinkingChange={agentActions.handleThinkingChange}
+			handleModelChanged={agentActions.handleModelChanged}
+			handleCreateClick={agentActions.handleCreateClick}
+			handleOpenProject={projectActions.handleOpenProject}
+			handleDeleteProject={projectActions.handleDeleteProject}
+			handleProjectCreated={projectActions.handleProjectCreated}
+			handleDeleteProjectCancelled={projectActions.handleDeleteProjectCancelled}
+			handleDeleteProjectConfirmed={projectActions.handleDeleteProjectConfirmed}
+			handleRenameProject={projectActions.handleRenameProject}
+			handleOpenProjectFolderById={projectActions.handleOpenProjectFolderById}
+			onProvidersChange={onProvidersChange}
+		/>
 	);
 }

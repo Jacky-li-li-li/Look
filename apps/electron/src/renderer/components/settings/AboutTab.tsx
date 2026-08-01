@@ -10,7 +10,7 @@
 // ============================================================
 
 import { Card, CardContent, CardHeader, CardTitle } from "@look/ui/components/ui/card";
-import { CircleCheck, Download, Loader2, RefreshCw, RotateCw, TriangleAlert } from "lucide-react";
+import { CircleCheck, Loader2, RefreshCw, RotateCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import appIconUrl from "../../../../assets/icon-1024.png";
@@ -26,7 +26,7 @@ function localize(items: { zh: string; en: string; ja?: string }[], lang: string
 export default function AboutTab() {
 	const { t, i18n } = useTranslation();
 	const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.0.0";
-	const { update, checkForUpdates, downloadUpdate, installUpdate } = useAppUpdate();
+	const { update, checkForUpdates, installUpdate } = useAppUpdate();
 	const phase = update?.phase;
 	const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -51,12 +51,12 @@ export default function AboutTab() {
 							{phase === "available" ? (
 								<button
 									type="button"
-									onClick={() => void downloadUpdate()}
-									title={`${t("update.downloadUpdate")}${update?.version ? ` · v${update.version}` : ""}`}
-									className="flex items-center gap-1.5 rounded-md border border-hairline bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									disabled
+									title={`${t("update.autoDownloading", { version: update?.version ?? "" })}`}
+									className="flex items-center gap-1.5 rounded-md border border-hairline px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground disabled:opacity-60"
 								>
-									<Download className="size-3" />
-									{t("update.downloadUpdate")}
+									<Loader2 className="size-3 animate-spin" />
+									{t("update.downloadingTitle")}
 								</button>
 							) : phase === "downloaded" ? (
 								<button

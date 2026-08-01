@@ -32,6 +32,7 @@ let mod: AppUpdaterModule;
 beforeEach(async () => {
 	mocks.autoUpdater.removeAllListeners();
 	mocks.autoUpdater.checkForUpdates.mockClear();
+	mocks.autoUpdater.quitAndInstall.mockClear();
 	vi.resetModules();
 	mod = await import("../../src/main/system/app-updater.js");
 });
@@ -72,5 +73,30 @@ describe("app-updater", () => {
 		expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
 		await mod.requestFreshCheck();
 		expect(mocks.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
+	});
+
+	it("自动下载模式：autoDownload=true，下载完成后不自动重启", () => {
+		const send = vi.fn();
+		mod.initAppUpdater(send);
+
+		// 发现更新后自动下载，但绝不自动安装
+		expect(mocks.autoUpdater.autoDownload).toBe(true);
+		expect(mocks.autoUpdater.autoInstallOnAppQuit).toBe(false);
+
+		mocks.autoUpdater.emit("update-available", { version: "9.9.9" });
+		mocks.autoUpdater.emit("download-progress", { percent: 42 });
+		mocks.autoUpdater.emit("update-downloaded", { version: "9.9.9" });
+
+		// 停留在 downloaded 阶段等待用户手动重启，不调用 quitAndInstall
+		expect(mocks.autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+		expect(send).toHaveBeenLastCalledWith({ type: "update:status", phase: "downloaded", version: "9.9.9" });
+	});
+
+	it("installUpdate 由用户手动触发重启安装", async () => {
+		mod.initAppUpdater(vi.fn());
+		await mod.installUpdate();
+		// quitAndInstall 延迟到 IPC 响应送达后再执行（setImmediate）
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
 	});
 });

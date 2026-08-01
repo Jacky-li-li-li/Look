@@ -23,7 +23,7 @@ import {
 import { userProfileAtom } from "../../store/authAtoms";
 import { appStore } from "../../store/ipcHandler";
 import ProjectTree from "./ProjectTree";
-import SidebarUpdateButton from "./SidebarUpdateButton";
+import TopUpdateButton from "./TopUpdateButton";
 import type { SidebarProps } from "./types";
 
 const SidebarInner = memo(function SidebarInner({
@@ -74,7 +74,7 @@ const SidebarInner = memo(function SidebarInner({
 				<span className="inline-flex size-5 items-center justify-center rounded-[5px] bg-foreground/[0.06] transition-colors group-hover:bg-foreground/[0.12]">
 					<Clock3 className="size-3 text-foreground/40 transition-colors group-hover:text-foreground/60" />
 				</span>
-				<span className="text-[11px] font-medium text-muted-foreground">{t("scheduledTasks.title")}</span>
+				<span className="text-[12px] font-medium text-muted-foreground">{t("scheduledTasks.title")}</span>
 			</button>
 
 			<button
@@ -92,7 +92,7 @@ const SidebarInner = memo(function SidebarInner({
 				<span className="inline-flex size-5 items-center justify-center rounded-[5px] bg-foreground/[0.06] transition-colors group-hover:bg-foreground/[0.12]">
 					<Bot className="size-3 text-foreground/35 transition-colors group-hover:text-foreground/55" />
 				</span>
-				<span className="text-[11px] font-medium text-muted-foreground">{t("marketplace.title")}</span>
+				<span className="text-[12px] font-medium text-muted-foreground">{t("marketplace.title")}</span>
 			</button>
 
 			<button
@@ -107,15 +107,13 @@ const SidebarInner = memo(function SidebarInner({
 				aria-current={showSettings ? "page" : undefined}
 			>
 				<UserAvatar avatar={userProfile.avatar} size="sm" />
-				<span className="min-w-0 flex-1 truncate text-[11px] font-medium text-muted-foreground">
+				<span className="min-w-0 flex-1 truncate text-[12px] font-medium text-muted-foreground">
 					{userProfile.userName || t("agent.you", "You")}
 				</span>
 				<span className="font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground/45">
 					{t("sidebar.settings", "Settings")}
 				</span>
 			</button>
-
-			<SidebarUpdateButton />
 		</>
 	);
 });
@@ -169,6 +167,9 @@ export default function Sidebar(props: SidebarProps) {
 			>
 				<MessageSquarePlus className="size-4" />
 			</Button>
+
+			{/* 顶部最右侧：更新胶囊（available/downloading 自动下载进度，downloaded 手动重启） */}
+			<TopUpdateButton />
 		</div>
 	);
 
