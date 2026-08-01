@@ -16,6 +16,8 @@ release/
 .trae/
 # Throwaway probes — kept locally for debugging, not part of the codebase
 _probe.ts
+# Local design/scratch demos — not part of the project
+_temp/
 # Generated application-tool intermediates — final assets live under apps/electron/src/renderer/assets/
 apps/electron/tools/*/output/
 coverage/

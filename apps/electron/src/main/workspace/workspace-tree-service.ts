@@ -42,7 +42,7 @@ const NOISE_DIRS = new Set([
 ]);
 const SYSTEM_FILES = new Set([".DS_Store", "Thumbs.db", "desktop.ini", ".Spotlight-V100", ".Trashes"]);
 
-function shouldIgnore(name: string, isDir: boolean, showHiddenFiles = false): boolean {
+function shouldIgnore(name: string, isDir: boolean, showHiddenFiles = true): boolean {
 	if (!showHiddenFiles && HIDDEN_PATTERN.test(name)) return true;
 	if (isDir && NOISE_DIRS.has(name)) return true;
 	if (!isDir && SYSTEM_FILES.has(name)) return true;
@@ -72,7 +72,7 @@ export class WorkspaceTreeService {
 	 * 列出指定子目录的一层子项(lazy-load 单层,VSCode 模式)。
 	 * relativePath 为 "" 表示项目根(ProjectInfo.cwd)。
 	 */
-	async listChildren(cwd: string, relativePath: string, showHiddenFiles: boolean = false): Promise<FileTreeNode[]> {
+	async listChildren(cwd: string, relativePath: string, showHiddenFiles: boolean = true): Promise<FileTreeNode[]> {
 		const target = await this.resolveWorkspacePath(cwd, relativePath);
 		const entries = await fs.promises.readdir(target, { withFileTypes: true }).catch((err: unknown) => {
 			console.error(`[WorkspaceTree] readdir failed for ${target}:`, err);

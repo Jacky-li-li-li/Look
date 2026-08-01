@@ -3,15 +3,24 @@
 // ============================================================
 
 import { Button } from "@look/ui/components/ui/button";
-import type { PermissionMode, ThinkingLevel } from "@shared/types";
-import { Send, Square } from "lucide-react";
+import SimplePopover from "@look/ui/components/ui/simple-popover";
+import type { AgentDefinitionInfo, PermissionMode, ThinkingLevel } from "@shared/types";
+import { Send, Square, Wrench } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import ContextRing from "./ContextRing";
 import ModelSelector from "./ModelSelector";
 import PermissionModeSelector from "./PermissionModeSelector";
+import type { SkillEntry } from "./SkillSlashMenu";
 import SubagentToggle from "./SubagentToggle";
 import ThinkingSelector from "./ThinkingSelector";
+import { type McpPickerEntry, ToolPickerPanel } from "./ToolPickerPanel";
+
+export interface ToolPickerData {
+	skills: SkillEntry[];
+	agents: AgentDefinitionInfo[];
+	mcpTools: McpPickerEntry[];
+}
 
 interface ChatInputToolbarProps {
 	agentId: string;
@@ -27,6 +36,10 @@ interface ChatInputToolbarProps {
 	onRequestApiKeys?: () => void;
 	onSend: () => void;
 	onAbort?: () => void;
+	/** Tool 面板数据源（技能 / Agent / MCP 工具）。 */
+	toolData: ToolPickerData;
+	/** Tool 面板选中后插入引用 token。 */
+	onInsertToken: (token: string) => void;
 }
 
 const ChatInputToolbar = memo(function ChatInputToolbar({
@@ -43,6 +56,8 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 	onRequestApiKeys,
 	onSend,
 	onAbort,
+	toolData,
+	onInsertToken,
 }: ChatInputToolbarProps) {
 	const { t } = useTranslation();
 
@@ -60,6 +75,32 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 				onChanged={onThinkingChange}
 			/>
 			<PermissionModeSelector agentId={agentId} currentMode={permissionMode} />
+			<SimplePopover
+				className="w-auto"
+				preferredHeight={360}
+				trigger={
+					<Button
+						variant="line-ghost"
+						size="icon-sm"
+						aria-label={t("chat.tools", "Tools")}
+						title={t("chat.tools", "Tools")}
+					>
+						<Wrench data-icon="inline-start" className="size-3.5" />
+					</Button>
+				}
+			>
+				{({ close }) => (
+					<ToolPickerPanel
+						skills={toolData.skills}
+						agents={toolData.agents}
+						mcpTools={toolData.mcpTools}
+						onInsert={(token) => {
+							onInsertToken(token);
+							close();
+						}}
+					/>
+				)}
+			</SimplePopover>
 			<SubagentToggle />
 			<div className="flex-1" />
 			<ContextRing />

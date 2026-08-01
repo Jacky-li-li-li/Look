@@ -404,6 +404,28 @@ interface WorkspaceTreeNodeRowProps {
 	onToggle: (row: FlatRow) => void;
 }
 
+/**
+ * 构造自定义拖拽幽灵卡片：文件图标 + 文件名。
+ * 元素需在 document 中才能被 setDragImage 截图，放置于视口外，
+ * 拖拽结束（dragend）后由调用方移除。
+ */
+function createDragImageCard(name: string, svg: SVGSVGElement | null): HTMLElement {
+	const card = document.createElement("div");
+	card.className =
+		"pointer-events-none fixed -top-[1000px] left-0 z-[9999] flex max-w-[240px] items-center gap-2 rounded-lg border border-hairline bg-card/95 px-2.5 py-1.5 shadow-lg backdrop-blur-md";
+	if (svg) {
+		svg.style.width = "16px";
+		svg.style.height = "16px";
+		svg.style.flexShrink = "0";
+		card.appendChild(svg);
+	}
+	const label = document.createElement("span");
+	label.className = "truncate text-[12px] font-medium text-foreground";
+	label.textContent = name;
+	card.appendChild(label);
+	return card;
+}
+
 function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNodeRowProps) {
 	const { node, depth } = row;
 	const isDir = node.type === "directory";
@@ -445,6 +467,16 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 		e.dataTransfer.setData("application/x-look-filepath", node.absolutePath);
 		e.dataTransfer.setData("application/x-look-filerelpath", node.path);
 		e.dataTransfer.effectAllowed = "copy";
+
+		// 自定义拖拽幽灵：文件图标 + 文件名卡片，替代默认的行截图。
+		// FileIcon 渲染为 span[class*=inline-flex] > svg，据此定位并克隆图标。
+		const iconSvg = e.currentTarget
+			.querySelector<SVGSVGElement>("span[class*='inline-flex'] svg")
+			?.cloneNode(true) as SVGSVGElement | null;
+		const card = createDragImageCard(node.name, iconSvg);
+		document.body.appendChild(card);
+		e.dataTransfer.setDragImage(card, 14, 12);
+		e.currentTarget.addEventListener("dragend", () => card.remove(), { once: true });
 	};
 
 	return (
@@ -458,16 +490,18 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 			style={{ paddingLeft: depth * INDENT_PX + 8 }}
 			className="group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
 			onClick={() => {
-				if (!isDir) handleViewFile();
-			}}
-			onDoubleClick={() => {
 				if (isDir) handleClickToggle();
+				else handleViewFile();
 			}}
 		>
 			{isDir ? (
 				<button
 					type="button"
-					onClick={handleClickToggle}
+					onClick={(e) => {
+						// 行内已绑单击展开/折叠，避免按钮与行事件重复触发（双向抵消）
+						e.stopPropagation();
+						handleClickToggle();
+					}}
 					className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-foreground/10"
 					aria-label={isExpanded ? "折叠" : "展开"}
 				>

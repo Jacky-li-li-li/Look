@@ -73,6 +73,9 @@ function _renderCombinedSegments(container: HTMLElement, content: string) {
 			const chip = document.createElement("span");
 			chip.setAttribute("data-file-chip", "");
 			chip.setAttribute("data-path", filePath);
+			// 扩展名用于 CSS 按文件类型切换图标（文档 / 代码 / 图片等）
+			const extMatch = filePath.match(/\.([A-Za-z0-9]+)$/);
+			if (extMatch) chip.setAttribute("data-ext", extMatch[1]!.toLowerCase());
 			chip.className = "file-chip";
 			chip.setAttribute("contenteditable", "false");
 			chip.textContent = `@${filePath}`;

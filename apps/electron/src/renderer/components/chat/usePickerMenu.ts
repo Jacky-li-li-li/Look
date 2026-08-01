@@ -2,7 +2,7 @@
 // usePickerMenu — 内联弹出菜单的共享容器逻辑
 //
 // 封装 click-outside 关闭、选中行滚动到视图、容器样式等
-// SkillSlashMenu 和 AgentHashMenu 共有的 UI 行为。
+// SkillSlashMenu 共有的 UI 行为。
 // 不涉及状态机逻辑（open/filter/commit 保持在 ChatInput 中）。
 // ============================================================
 

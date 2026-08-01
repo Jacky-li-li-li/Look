@@ -10,11 +10,9 @@ import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState } f
 import { useTranslation } from "react-i18next";
 import { useChatInputMenus } from "../../hooks/useChatInputMenus";
 import { chatInputInsertRequestAtom, permissionModeAtomFamily } from "../../store/atoms";
-import { AgentHashMenu } from "./AgentHashMenu";
 import ChatInputToolbar from "./ChatInputToolbar";
 import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ImagePreviewBar from "./ImagePreviewBar";
-import { McpHashMenu } from "./McpHashMenu";
 import { SkillSlashMenu } from "./SkillSlashMenu";
 
 export interface ChatInputHandle {
@@ -66,6 +64,8 @@ const ChatInput = function ChatInput({
 	inputSnapshotRef.current = input;
 	// Pending images pasted from clipboard, shown as thumbnails above the input.
 	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
+	// Whether a workspace file is currently being dragged over the input box.
+	const [dragActive, setDragActive] = useState(false);
 
 	// setInput is the single mutation entry-point: every
 	// programmatic change (slash menu pick, tools picker, send
@@ -128,6 +128,14 @@ const ChatInput = function ChatInput({
 		setPendingImages((prev) => prev.filter((_, i) => i !== index));
 	}, []);
 
+	// Tool 面板选中工具 → 追加引用 token 到输入框末尾（复用 insertRequest 机制）
+	const handleInsertToken = useCallback(
+		(token: string) => {
+			setInsertRequest({ id: Date.now(), agentId, text: token });
+		},
+		[agentId, setInsertRequest],
+	);
+
 	const hasContent = input.trim().length > 0 || pendingImages.length > 0;
 
 	const handleSend = useCallback(
@@ -160,16 +168,9 @@ const ChatInput = function ChatInput({
 			if (!/^\/[^\s]*$/.test(prev) && /^\/[^\s]*$/.test(text)) {
 				menus.setSlashIndex(0);
 			}
-			const AGENT_TRIGGER_RE = /(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/;
-			if (!AGENT_TRIGGER_RE.test(prev) && AGENT_TRIGGER_RE.test(text)) {
-				menus.setAtIndex(0);
-			}
-			if (!/(?:^|\s)#[^\s]*$/.test(prev) && /(?:^|\s)#[^\s]*$/.test(text)) {
-				menus.setMcpIndex(0);
-			}
 			setInputState(text);
 		},
-		[menus.setSlashIndex, menus.setAtIndex, menus.setMcpIndex],
+		[menus.setSlashIndex],
 	);
 
 	const handleEditorKeyDown = (e: React.KeyboardEvent) => {
@@ -196,38 +197,17 @@ const ChatInput = function ChatInput({
 	};
 
 	return (
-		<div className="relative mx-5 mb-2.5 rounded-lg border border-hairline bg-background/30 shadow-none backdrop-blur-sm">
-			{menus.atOpen ? (
-				<AgentHashMenu
-					agents={menus.filteredAgents}
-					searchTerm={menus.atSearchTerm}
-					selectedIndex={menus.atIndex}
-					onSelectedIndexChange={menus.setAtIndex}
-					onSelectAgent={(a) => {
-						const replaced = input.replace(/(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/, `/agent:${a.name} `);
-						setInput(replaced);
-					}}
-					onClose={() => {
-						const cleaned = input.replace(/(?:\/(?:agent|subagent)|@):?[A-Za-z0-9._-]*$/, "").trimEnd();
-						setInput(cleaned);
-					}}
-					subagentEnabled={menus.subagentOn}
-				/>
-			) : null}
-			{menus.mcpOpen ? (
-				<McpHashMenu
-					tools={menus.filteredMcpTools}
-					searchTerm={menus.mcpSearchTerm}
-					selectedIndex={menus.mcpIndex}
-					onSelectedIndexChange={menus.setMcpIndex}
-					onSelectTool={(t) => {
-						setInput(input.replace(/#[^\s]*$/, `#${t.server}__${t.toolName} `));
-					}}
-					onClose={() => {
-						const cleaned = input.replace(/#[^\s]*$/, "").trimEnd();
-						setInput(cleaned);
-					}}
-				/>
+		<div
+			className={[
+				"relative mx-5 mb-2.5 rounded-lg border bg-background/30 shadow-none backdrop-blur-sm transition-all",
+				dragActive ? "border-foreground/60 bg-foreground/[0.04] ring-2 ring-foreground/30" : "border-hairline",
+			].join(" ")}
+		>
+			{/* 拖拽悬停提示 */}
+			{dragActive ? (
+				<div className="pointer-events-none absolute -top-3.5 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full border border-hairline bg-card/95 px-2.5 py-0.5 text-[10px] text-foreground shadow-sm backdrop-blur">
+					{t("chat.dropFileHint", "松手插入文件引用")}
+				</div>
 			) : null}
 			{menus.slashOpen ? (
 				<SkillSlashMenu
@@ -258,6 +238,7 @@ const ChatInput = function ChatInput({
 				onChange={handleEditorChange}
 				onImagesPasted={handleImagesPasted}
 				onKeyDown={handleEditorKeyDown}
+				onDragActiveChange={setDragActive}
 			/>
 			<ChatInputToolbar
 				agentId={agentId}
@@ -273,6 +254,12 @@ const ChatInput = function ChatInput({
 				onRequestApiKeys={onRequestApiKeys}
 				onSend={() => handleSend("steer")}
 				onAbort={handleAbort}
+				toolData={{
+					skills: menus.pickableSkills,
+					agents: menus.pickableAgents,
+					mcpTools: menus.mcpTools,
+				}}
+				onInsertToken={handleInsertToken}
 			/>
 		</div>
 	);

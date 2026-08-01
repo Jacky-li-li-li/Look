@@ -58,6 +58,10 @@ interface ContentEditableInputProps {
 	className?: string;
 	/** Minimum number of visible text rows. Default 2. */
 	minRows?: number;
+	/** Notified when a workspace file is dragged over the editor
+	 *  (true) or the drag leaves / drops (false). Lets the consumer
+	 *  highlight the input box as a drop target. */
+	onDragActiveChange?: (active: boolean) => void;
 	ref?: React.Ref<ContentEditableInputHandle>;
 }
 
@@ -69,10 +73,15 @@ export const ContentEditableInput = function ContentEditableInput({
 	onKeyDown,
 	className,
 	minRows = 2,
+	onDragActiveChange,
 	ref,
 }: ContentEditableInputProps) {
 	const editorRef = useRef<HTMLDivElement>(null);
 	const [editorContent, setEditorContent] = useState("");
+	// Whether a workspace file drag is currently hovering the editor.
+	const [dragActive, setDragActive] = useState(false);
+	const onDragActiveChangeRef = useRef(onDragActiveChange);
+	onDragActiveChangeRef.current = onDragActiveChange;
 	const isComposingRef = useRef(false);
 	// Tracks the last value we wrote into the DOM so we can
 	// skip re-renders that would clobber the user's caret.
@@ -207,11 +216,14 @@ export const ContentEditableInput = function ContentEditableInput({
 	 * 会把外部拖入的文件(Finder / VSCode 等)直接插入到 contenteditable
 	 * 里,破坏 React state 与文档结构。
 	 */
+	const LOOK_FILE_MIME = "application/x-look-filerelpath";
+
 	const handleDrop = useCallback(
 		(e: React.DragEvent<HTMLDivElement>) => {
 			// 始终阻止默认行为,防止外部文件污染编辑器
 			e.preventDefault();
-			const relPath = e.dataTransfer.getData("application/x-look-filerelpath");
+			setDragActive(false);
+			const relPath = e.dataTransfer.getData(LOOK_FILE_MIME);
 			if (!relPath) return; // 不是工作区拖拽,已经 preventDefault 不会污染,只忽略
 			const text = `@${relPath}`;
 			const el = editorRef.current;
@@ -241,13 +253,31 @@ export const ContentEditableInput = function ContentEditableInput({
 		[onChange],
 	);
 
+	const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+		if (!e.dataTransfer.types.includes(LOOK_FILE_MIME)) return;
+		e.preventDefault();
+		setDragActive(true);
+	}, []);
+
 	const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
 		// 仅当携带工作区 MIME 时显示 drop effect
-		if (e.dataTransfer.types.includes("application/x-look-filerelpath")) {
-			e.preventDefault();
-			e.dataTransfer.dropEffect = "copy";
-		}
+		if (!e.dataTransfer.types.includes(LOOK_FILE_MIME)) return;
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "copy";
+		setDragActive(true);
 	}, []);
+
+	const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+		// 移动到子元素(child chip 等)会触发 dragleave,只有真正离开编辑器才取消高亮
+		const next = e.relatedTarget;
+		if (next instanceof Node && e.currentTarget.contains(next)) return;
+		setDragActive(false);
+	}, []);
+
+	// 同步拖拽悬停状态给父级(用于输入框整体高亮)
+	useEffect(() => {
+		onDragActiveChangeRef.current?.(dragActive);
+	}, [dragActive]);
 
 	const handleFocus = useCallback(() => {
 		// Some Chromium versions inject a stray `<br>` into
@@ -311,7 +341,9 @@ export const ContentEditableInput = function ContentEditableInput({
 				onKeyDown={handleKeyDown}
 				onPaste={handlePaste}
 				onDrop={handleDrop}
+				onDragEnter={handleDragEnter}
 				onDragOver={handleDragOver}
+				onDragLeave={handleDragLeave}
 				onCompositionStart={handleCompositionStart}
 				onCompositionEnd={handleCompositionEnd}
 				onFocus={handleFocus}
