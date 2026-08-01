@@ -268,6 +268,7 @@ export interface LookAPI {
 	): Promise<
 		IpcResult<
 			| { kind: "text"; content: string; truncated: boolean; sizeBytes: number }
+			| { kind: "image"; data: string; mimeType: string; sizeBytes: number }
 			| { kind: "binary"; sizeBytes: number }
 		>
 	>;

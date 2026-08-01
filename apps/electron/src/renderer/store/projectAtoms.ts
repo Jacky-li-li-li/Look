@@ -1,6 +1,8 @@
 import type { FileTreeNode, ProjectInfo } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
+import { toast } from "sonner";
+import i18n from "../i18n";
 
 export const projectsAtom = atom<ProjectInfo[]>([]);
 
@@ -34,6 +36,9 @@ export const showHiddenFilesAtom = atom(true);
 /** 文件查看器当前目标；非 null 时 FileViewerDialog 打开。全局同时只查看一个文件。 */
 export const viewingFileAtom = atom<{ absolutePath: string } | null>(null);
 
+/** 聊天图片放大预览当前目标；非 null 时 ImagePreviewDialog 打开。 */
+export const imagePreviewAtom = atom<{ src: string; alt: string } | null>(null);
+
 /** 查看器内 md 编辑的脏状态镜像（由 FileViewerDialog 写入）。 */
 export const fileViewerDirtyAtom = atom(false);
 
@@ -43,6 +48,12 @@ export const fileViewerDirtyAtom = atom(false);
  */
 export const requestViewFileAtom = atom(null, async (_get, _set, absolutePath: string) => {
 	const stat = await window.look.statFilePath(absolutePath).catch(() => null);
+	// 安全 guard 拒绝（路径在项目根之外）时 stat 返回 success:false，
+	// 点击处直接 toast，不再打开一个只会显示 IPC 错误的查看器窗口。
+	if (stat && !stat.success && stat.error.includes("Path denied")) {
+		toast.error(i18n.t("fileViewer.pathDenied"));
+		return;
+	}
 	if (stat?.success && stat.kind === "directory") {
 		void window.look.revealInFinder(absolutePath);
 		return;

@@ -836,6 +836,7 @@
     "refresh": "刷新",
     "loading": "正在加载文件...",
     "loadFailed": "文件加载失败",
+    "pathDenied": "该路径不在项目目录内，无法查看",
     "binaryNotSupported": "二进制文件无法预览。",
     "truncatedNotice": "文件过大，仅显示前 4 MB 内容。",
     "unsavedConfirm": "有未保存的修改，确定关闭吗？",

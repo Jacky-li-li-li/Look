@@ -836,6 +836,7 @@
     "refresh": "Refresh",
     "loading": "Loading file...",
     "loadFailed": "Failed to load file",
+    "pathDenied": "Path is outside the allowed project directories",
     "binaryNotSupported": "Binary files cannot be previewed.",
     "truncatedNotice": "File too large — showing the first 4 MB only.",
     "unsavedConfirm": "You have unsaved changes. Close anyway?",

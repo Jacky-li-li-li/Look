@@ -56,6 +56,49 @@ describe("file content read/write", () => {
 		expect("content" in result).toBe(false);
 	});
 
+	it("readFileContent returns base64 image data for a .png despite NUL bytes", async () => {
+		const filePath = path.join(dir, "shot.png");
+		const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a, 0x1a, 0x0a]);
+		fs.writeFileSync(filePath, bytes);
+		const result = await readFileContent(filePath);
+		expect(result).toEqual({
+			success: true,
+			kind: "image",
+			data: bytes.toString("base64"),
+			mimeType: "image/png",
+			sizeBytes: bytes.length,
+		});
+	});
+
+	it("readFileContent previews .svg as an image even though it is text", async () => {
+		const filePath = path.join(dir, "icon.svg");
+		const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>';
+		fs.writeFileSync(filePath, svg, "utf8");
+		const result = await readFileContent(filePath);
+		expect(result.success).toBe(true);
+		expect(result.kind).toBe("image");
+		if (result.kind !== "image") throw new Error("expected image result");
+		expect(result.mimeType).toBe("image/svg+xml");
+		expect(Buffer.from(result.data, "base64").toString("utf8")).toBe(svg);
+	});
+
+	it("readFileContent matches image extensions case-insensitively", async () => {
+		const filePath = path.join(dir, "PHOTO.JPEG");
+		fs.writeFileSync(filePath, Buffer.from([0xff, 0xd8, 0xff, 0x00]));
+		const result = await readFileContent(filePath);
+		expect(result.success).toBe(true);
+		expect(result.kind).toBe("image");
+		if (result.kind !== "image") throw new Error("expected image result");
+		expect(result.mimeType).toBe("image/jpeg");
+	});
+
+	it("readFileContent falls back to binary for images over the 20MB cap", async () => {
+		const filePath = path.join(dir, "huge.png");
+		fs.writeFileSync(filePath, Buffer.alloc(20 * 1024 * 1024 + 1, 0));
+		const result = await readFileContent(filePath);
+		expect(result).toEqual({ success: true, kind: "binary", sizeBytes: 20 * 1024 * 1024 + 1 });
+	});
+
 	it("readFileContent rejects a directory path", async () => {
 		await expect(readFileContent(dir)).rejects.toThrow(/Not a file/);
 	});

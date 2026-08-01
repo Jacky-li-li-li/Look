@@ -3,7 +3,8 @@
 //
 // 由 viewingFileAtom 驱动:工作区文件树 / 聊天内联路径 / @ 引用芯片
 // 三个入口设置 atom 即可打开。Markdown 支持预览 / 编辑切换与保存;
-// 其他文本文件走 shiki 双主题高亮;二进制文件显示不可预览 + Finder 按钮。
+// 图片(png/jpg/gif/webp/svg 等)直接预览;其他文本文件走 shiki 双主题
+// 高亮;不可预览的二进制文件显示提示 + Finder 按钮。
 // ============================================================
 
 import { cn } from "@look/ui";
@@ -75,6 +76,7 @@ function truncateMiddle(text: string, max = 72): string {
 type LoadState =
 	| { status: "loading" }
 	| { status: "error"; error: string }
+	| { status: "image"; data: string; mimeType: string; sizeBytes: number }
 	| { status: "binary"; sizeBytes: number }
 	| { status: "text"; content: string; truncated: boolean; sizeBytes: number };
 
@@ -309,6 +311,13 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 				if (cancelled) return;
 				if (!result.success) {
 					setLoadState({ status: "error", error: result.error });
+				} else if (result.kind === "image") {
+					setLoadState({
+						status: "image",
+						data: result.data,
+						mimeType: result.mimeType,
+						sizeBytes: result.sizeBytes,
+					});
 				} else if (result.kind === "binary") {
 					setLoadState({ status: "binary", sizeBytes: result.sizeBytes });
 				} else {
@@ -563,6 +572,14 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 						<p className="text-xs text-destructive">
 							{t("fileViewer.loadFailed")}: {loadState.error}
 						</p>
+					</div>
+				) : loadState.status === "image" ? (
+					<div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/30 p-4">
+						<img
+							src={`data:${loadState.mimeType};base64,${loadState.data}`}
+							alt={basename}
+							className="max-h-full max-w-full object-contain"
+						/>
 					</div>
 				) : loadState.status === "binary" ? (
 					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">

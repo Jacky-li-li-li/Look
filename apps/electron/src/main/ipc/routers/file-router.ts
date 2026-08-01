@@ -49,9 +49,27 @@ const FILE_READ_MAX_BYTES = 4 * 1024 * 1024;
 const FILE_WRITE_MAX_BYTES = 10 * 1024 * 1024;
 /** 二进制嗅探窗口:前 8KB 内出现 NUL 字节即视为二进制文件。 */
 const BINARY_SNIFF_BYTES = 8 * 1024;
+/** 图片预览读取上限 20MB(base64 后约 27MB,IPC 可承受);超出回退二进制提示。 */
+const IMAGE_READ_MAX_BYTES = 20 * 1024 * 1024;
+/**
+ * 可预览图片的扩展名 → MIME。svg 以 <img> data URI 渲染，
+ * 图片上下文不执行脚本，可安全预览。
+ */
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".webp": "image/webp",
+	".bmp": "image/bmp",
+	".ico": "image/x-icon",
+	".avif": "image/avif",
+	".svg": "image/svg+xml",
+};
 
 export type FileReadResult =
 	| { success: true; kind: "text"; content: string; truncated: boolean; sizeBytes: number }
+	| { success: true; kind: "image"; data: string; mimeType: string; sizeBytes: number }
 	| { success: true; kind: "binary"; sizeBytes: number };
 
 export interface FileWriteResult {
@@ -66,6 +84,13 @@ export async function readFileContent(filePath: string): Promise<FileReadResult>
 		throw new Error(`Not a file: ${filePath}`);
 	}
 	const sizeBytes = stat.size;
+	// 图片扩展名优先于二进制嗅探:png/jpg 等会被 NUL 规则判成二进制，
+	// svg 是文本但同样应预览为图片。超过 20MB 回退"二进制不可预览"。
+	const imageMime = IMAGE_MIME_BY_EXT[path.extname(filePath).toLowerCase()];
+	if (imageMime && sizeBytes <= IMAGE_READ_MAX_BYTES) {
+		const buffer = await fs.promises.readFile(filePath);
+		return { success: true, kind: "image", data: buffer.toString("base64"), mimeType: imageMime, sizeBytes };
+	}
 	const truncated = sizeBytes > FILE_READ_MAX_BYTES;
 	const length = Math.min(sizeBytes, FILE_READ_MAX_BYTES);
 	const handle = await fs.promises.open(filePath, "r");
