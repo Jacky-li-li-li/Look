@@ -5,6 +5,7 @@
 
 import { cn } from "@look/ui";
 import type { ImageContent } from "@shared/types";
+import { useSetAtom } from "jotai";
 import {
 	Bot,
 	Brain,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { imagePreviewAtom } from "../../store/atoms";
 import LookMarkdown from "../markdown/LookMarkdown";
 
 export interface ToolCallViewModel {
@@ -183,6 +185,7 @@ function formatStatSuffix(
 function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const { t } = useTranslation();
 	const [open, setOpen] = React.useState(false);
+	const setImagePreview = useSetAtom(imagePreviewAtom);
 
 	const argsJson = React.useMemo(() => safeJson(toolCall.args), [toolCall.args]);
 	const argsPreview = argsJson.slice(0, 80);
@@ -277,14 +280,24 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 												{t("tool.result")}
 											</span>
 											<div className="flex flex-wrap gap-2">
-												{resultImages.map((img, i) => (
-													<img
-														key={`result-img-${i}`}
-														src={`data:${img.mimeType};base64,${img.data}`}
-														alt={`Tool result ${i + 1}`}
-														className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
-													/>
-												))}
+												{resultImages.map((img, i) => {
+													const src = `data:${img.mimeType};base64,${img.data}`;
+													return (
+														<button
+															key={`result-img-${i}`}
+															type="button"
+															className="cursor-zoom-in"
+															aria-label={`View tool result image ${i + 1}`}
+															onClick={() => setImagePreview({ src, alt: `Tool result ${i + 1}` })}
+														>
+															<img
+																src={src}
+																alt={`Tool result ${i + 1}`}
+																className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
+															/>
+														</button>
+													);
+												})}
 											</div>
 										</section>
 									)}

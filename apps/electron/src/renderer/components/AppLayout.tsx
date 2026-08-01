@@ -22,6 +22,7 @@ import ChatPanel from "./chat/ChatPanel";
 import EmptySessionState from "./chat/EmptySessionState";
 import WelcomeScreen from "./chat/WelcomeScreen";
 import DeleteProjectDialog from "./dialogs/DeleteProjectDialog";
+import ImagePreviewDialog from "./dialogs/ImagePreviewDialog";
 import NewProjectDialog from "./dialogs/NewProjectDialog";
 import OAuthLoginDialog from "./dialogs/OAuthLoginDialog";
 import PermissionDialog from "./dialogs/PermissionDialog";
@@ -266,6 +267,7 @@ function AppLayout({
 			)}
 			<OAuthLoginDialog />
 			<PermissionDialog />
+			<ImagePreviewDialog />
 			<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 
 			{/* 设置页：全屏覆盖层，遮住左侧栏与右侧面板；z-40 低于 Radix Dialog 的 z-50，保证设置页内子弹窗正常显示 */}

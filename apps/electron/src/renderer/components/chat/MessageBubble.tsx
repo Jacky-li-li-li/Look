@@ -10,12 +10,13 @@ import type {
 import { cn } from "@look/ui";
 import { UserAvatar } from "@look/ui/components/UserAvatar";
 import type { LookSessionEntry, LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { segmentExecutionBlocks } from "../../lib/executionSegments";
 import { hashKey } from "../../lib/stableKey";
 import { userProfileAtom } from "../../store/authAtoms";
+import { imagePreviewAtom } from "../../store/projectAtoms";
 import { AiAvatar } from "../AiAvatar";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
 import SkillAwareContent from "./SkillAwareContent";
@@ -55,12 +56,21 @@ function resultText(value: unknown): string | undefined {
 }
 
 function ImageBlock({ block }: { block: ImageContent }) {
+	const setImagePreview = useSetAtom(imagePreviewAtom);
+	const src = `data:${block.mimeType};base64,${block.data}`;
 	return (
-		<img
-			src={`data:${block.mimeType};base64,${block.data}`}
-			alt="SDK message attachment"
-			className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
-		/>
+		<button
+			type="button"
+			className="cursor-zoom-in"
+			aria-label="View image"
+			onClick={() => setImagePreview({ src, alt: "SDK message attachment" })}
+		>
+			<img
+				src={src}
+				alt="SDK message attachment"
+				className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
+			/>
+		</button>
 	);
 }
 
