@@ -556,6 +556,7 @@
     "queuedInsert": "Insert",
     "queuedRecall": "Recall",
     "queuedDequeue": "Recall to edit",
+    "greetingNight": "Late night, {{name}}.",
     "greetingMorning": "Good morning, {{name}}.",
     "greetingAfternoon": "Good afternoon, {{name}}.",
     "greetingEvening": "Good evening, {{name}}.",

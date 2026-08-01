@@ -74,6 +74,39 @@ function messageText(message: AgentMessage): string {
 }
 
 // ============================================================
+// TimeGreeting — 空状态的时段问候
+// 每 60s 刷新一次，跨时段（如半夜跨入清晨）自动切换文案；
+// 0–5 点归入"深夜"档，不再误判为早上。
+// ============================================================
+
+function TimeGreeting() {
+	const { t } = useTranslation();
+	const isLoggedIn = useAtomValue(isLoggedInAtom);
+	const { userName } = useAtomValue(userProfileAtom);
+	const [hour, setHour] = useState(() => new Date().getHours());
+
+	useEffect(() => {
+		const id = setInterval(() => setHour(new Date().getHours()), 60_000);
+		return () => clearInterval(id);
+	}, []);
+
+	const hourKey =
+		hour < 5
+			? "chat.greetingNight"
+			: hour < 12
+				? "chat.greetingMorning"
+				: hour < 18
+					? "chat.greetingAfternoon"
+					: "chat.greetingEvening";
+
+	return (
+		<h3 className="text-[13px] font-semibold text-foreground">
+			{isLoggedIn && userName ? t(hourKey, { name: userName }) : t("chat.greetingNoName")}
+		</h3>
+	);
+}
+
+// ============================================================
 // CompactionStatusCard — 压缩状态指示条
 // ============================================================
 
@@ -559,13 +592,6 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 	const isAgentRunning = activeAgentId ? activeUiPhase !== "idle" : false;
 
-	// === 空状态：时段问候（带用户名）+ 安心文案 ===
-	const isLoggedIn = useAtomValue(isLoggedInAtom);
-	const { userName } = useAtomValue(userProfileAtom);
-	const hour = new Date().getHours();
-	const hourKey = hour < 12 ? "chat.greetingMorning" : hour < 18 ? "chat.greetingAfternoon" : "chat.greetingEvening";
-	const greeting = isLoggedIn && userName ? t(hourKey, { name: userName }) : t("chat.greetingNoName");
-
 	return (
 		<>
 			<ConversationContent>
@@ -583,7 +609,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 							<AiAvatar status={phase} size="lg" />
 							<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
 						</div>
-						<h3 className="text-[13px] font-semibold text-foreground">{greeting}</h3>
+						<TimeGreeting />
 						<p className="max-w-xs text-xs text-muted-foreground">{t("chat.emptyReassurance")}</p>
 					</div>
 				) : (
