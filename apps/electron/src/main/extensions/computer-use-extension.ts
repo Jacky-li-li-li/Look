@@ -19,8 +19,15 @@
 //   screenshot → 从图中取坐标 → click/type/key → 再 screenshot 验证。
 //
 // 注入点：CompositionBuilder.buildExtensionFactories()。
+//
+// 另注册 tool_result 监听：agent 用 bash osascript 做桌面操作被
+// macOS TCC 拦截时（assistive access / Apple events 错误），自动
+// 打开对应系统设置授权页（服务侧节流，每次运行每种权限一次），
+// 并向结果追加提示告知模型等待用户授权后重试。
 // ============================================================
 
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -30,7 +37,11 @@ import {
 	SUPPORTED_KEY_NAMES,
 	SUPPORTED_MODIFIER_NAMES,
 } from "../computer-use/key-map.js";
-import { type ComputerUseHost, ComputerUsePermissionError } from "../computer-use/types.js";
+import {
+	type ComputerUseHost,
+	ComputerUsePermissionError,
+	type ComputerUsePermissionKind,
+} from "../computer-use/types.js";
 import { declareApprovalRequiredTool } from "./tool-permission-registry.js";
 
 /** 有副作用、需要用户审批的输入工具。move/scroll/screenshot 不在此列。 */
@@ -102,44 +113,111 @@ function toToolError(error: unknown, details: Record<string, unknown> = {}) {
 	return toolError(error instanceof Error ? error.message : String(error), details);
 }
 
+/** macOS TCC 拦截特征 → 权限类别。bash osascript 的常见报错。 */
+const MAC_PERMISSION_BLOCK_PATTERNS: Array<[pattern: RegExp, kind: ComputerUsePermissionKind]> = [
+	[/not allowed assistive access|\(-1719\)/i, "accessibility"],
+	[/not authorized to send apple events|errAEEventNotPermitted|\(-1743\)/i, "automation"],
+];
+
+/** 从 bash 结果文本中识别 macOS 权限拦截；未命中返回 undefined。 */
+export function detectMacPermissionBlock(text: string): ComputerUsePermissionKind | undefined {
+	for (const [pattern, kind] of MAC_PERMISSION_BLOCK_PATTERNS) {
+		if (pattern.test(text)) return kind;
+	}
+	return undefined;
+}
+
+const PERMISSION_PANE_LABEL: Record<ComputerUsePermissionKind, string> = {
+	accessibility: "Accessibility",
+	automation: "Automation",
+	screen: "Screen Recording",
+};
+
 /**
- * 创建 Computer Use Extension 工厂函数。
  * @param host OS 能力宿主，主进程由 ComputerUseService 实现。
+ * @param screenshotDir 截图落盘目录（项目共享区 screenshots/）。
+ *   提供时每次截图额外保存 PNG 并在结果文本中返回路径——路径在
+ *   守卫白名单内，渲染为可点击芯片，查看器可直接预览；文本模型
+ *   看不到内联图片时，用户也能经此路径自行查看。保存失败不阻断
+ *   截图返回（仍只有内联图片）。
  */
-export function createComputerUseExtensionFactory(host: ComputerUseHost): ExtensionFactory {
+export function createComputerUseExtensionFactory(
+	host: ComputerUseHost,
+	screenshotDir?: string | null,
+): ExtensionFactory {
 	return (api) => {
 		// 声明式权限：副作用输入工具走 permission-extension 拦截。
 		for (const name of COMPUTER_USE_APPROVAL_TOOLS) declareApprovalRequiredTool(name);
+
+		// bash osascript 被 macOS TCC 拦截时：自动打开对应授权页（服务侧
+		// 节流），并向结果追加提示让模型等待用户授权后重试。
+		api.on("tool_result", (event) => {
+			if (event.toolName !== "bash" || !event.isError) return;
+			const text = event.content.map((block) => (block.type === "text" ? block.text : "")).join("\n");
+			const kind = detectMacPermissionBlock(text);
+			if (!kind) return;
+			host.openPermissionSettings(kind);
+			return {
+				content: [
+					...event.content,
+					{
+						type: "text" as const,
+						text:
+							`[Look] macOS blocked this command: ${PERMISSION_PANE_LABEL[kind]} permission is missing. ` +
+							"The System Settings page was opened for the user to grant it — wait for the user, then retry. " +
+							"For desktop control prefer the computer_* tools (computer_screenshot / computer_click / " +
+							"computer_type / computer_key) over bash osascript.",
+					},
+				],
+			};
+		});
 
 		api.registerTool<typeof ScreenshotParams, Record<string, unknown>>({
 			name: "computer_screenshot",
 			label: "Capture screen",
 			description:
-				"Capture a screenshot of the primary display. Returns the image plus its coordinate space in logical " +
-				"points (origin top-left). Use these coordinates directly with computer_mouse_move / computer_click / " +
-				"computer_scroll. Typical workflow: screenshot → pick coordinates from the image → act → screenshot " +
-				"again to verify the result.",
+				"Capture a screenshot of the primary display. Returns the image inline plus its coordinate space in logical " +
+				"points (origin top-left), and saves a PNG copy whose file path is included in the result — share that " +
+				"path with the user when they want to view the screenshot. Use the coordinates directly with " +
+				"computer_mouse_move / computer_click / computer_scroll. Typical workflow: screenshot → pick coordinates " +
+				"from the image → act → screenshot again to verify the result.",
 			promptSnippet: "Capture a screenshot of the primary display",
 			parameters: ScreenshotParams,
 			executionMode: "sequential",
 			async execute(_toolCallId, _params, _signal) {
 				try {
 					const shot = await host.captureScreenshot();
+					let savedPath: string | null = null;
+					if (screenshotDir) {
+						try {
+							await mkdir(screenshotDir, { recursive: true });
+							const stamp = new Date().toISOString().replaceAll(/[:.]/g, "-").replace("T", "_").slice(0, 19);
+							savedPath = path.join(
+								screenshotDir,
+								`screenshot-${stamp}-${Math.random().toString(36).slice(2, 6)}.png`,
+							);
+							await writeFile(savedPath, Buffer.from(shot.data, "base64"));
+						} catch {
+							savedPath = null;
+						}
+					}
+					const text =
+						`Screenshot of the primary display. Coordinate space: ${shot.width}×${shot.height} logical points, ` +
+						"origin top-left. Use these coordinates directly for computer_mouse_move / computer_click / computer_scroll." +
+						(savedPath
+							? ` A copy was saved to \`${savedPath}\` — share this path with the user if they want to view the file.`
+							: "");
 					return {
 						content: [
 							{ type: "image" as const, data: shot.data, mimeType: shot.mimeType },
-							{
-								type: "text" as const,
-								text:
-									`Screenshot of the primary display. Coordinate space: ${shot.width}×${shot.height} logical points, ` +
-									"origin top-left. Use these coordinates directly for computer_mouse_move / computer_click / computer_scroll.",
-							},
+							{ type: "text" as const, text },
 						],
 						details: {
 							width: shot.width,
 							height: shot.height,
 							scaleFactor: shot.scaleFactor,
 							bytes: Math.round((shot.data.length * 3) / 4),
+							path: savedPath,
 						},
 					};
 				} catch (error) {

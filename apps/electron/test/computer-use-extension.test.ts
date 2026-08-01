@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import { normalizeKeyName, normalizeModifierName } from "../src/main/computer-use/key-map";
@@ -5,6 +8,7 @@ import { type ComputerUseHost, ComputerUsePermissionError } from "../src/main/co
 import {
 	COMPUTER_USE_TOOL_NAMES,
 	createComputerUseExtensionFactory,
+	detectMacPermissionBlock,
 } from "../src/main/extensions/computer-use-extension";
 import { isApprovalRequiredTool } from "../src/main/extensions/tool-permission-registry";
 
@@ -30,18 +34,25 @@ function createFakeHost(overrides: Partial<ComputerUseHost> = {}): ComputerUseHo
 		scroll: vi.fn(async () => {}),
 		typeText: vi.fn(async () => {}),
 		pressKey: vi.fn(async () => {}),
+		openPermissionSettings: vi.fn(),
 		...overrides,
 	};
 }
 
-function captureRegisteredTools(host: ComputerUseHost = createFakeHost()) {
+interface ToolResultMutation {
+	content: Array<{ type: string; text?: string }>;
+}
+
+function captureRegisteredTools(host: ComputerUseHost = createFakeHost(), screenshotDir?: string | null) {
 	const tools = new Map<string, RegisteredTool>();
+	const eventHandlers = new Map<string, (event: unknown) => ToolResultMutation | undefined>();
 	const api = {
 		registerTool: (tool: RegisteredTool) => tools.set(tool.name, tool),
+		on: (event: string, handler: (e: unknown) => ToolResultMutation | undefined) => eventHandlers.set(event, handler),
 	};
-	const factory = createComputerUseExtensionFactory(host);
+	const factory = createComputerUseExtensionFactory(host, screenshotDir);
 	factory(api as unknown as ExtensionAPI);
-	return { tools, host };
+	return { tools, host, eventHandlers };
 }
 
 describe("Computer Use Extension", () => {
@@ -67,7 +78,26 @@ describe("Computer Use Extension", () => {
 		expect(image).toEqual({ type: "image", data: "aGVsbG8=", mimeType: "image/png" });
 		const text = result.content.find((block) => block.type === "text");
 		expect(text?.text).toContain("1710×1107 logical points");
-		expect(result.details).toMatchObject({ width: 1710, height: 1107, scaleFactor: 2 });
+		expect(text?.text).not.toContain("saved to");
+		expect(result.details).toMatchObject({ width: 1710, height: 1107, scaleFactor: 2, path: null });
+	});
+
+	it("computer_screenshot saves a PNG copy and returns its path when a dir is configured", async () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "look-cu-shot-test-"));
+		try {
+			const { tools } = captureRegisteredTools(createFakeHost(), path.join(dir, "screenshots"));
+			const result = await tools.get("computer_screenshot")!.execute("call-1", {});
+			const savedPath = result.details.path as string;
+			expect(savedPath).toMatch(/screenshots[/\\]screenshot-.+\.png$/);
+			// 文件真实落盘，内容与 host 返回的 base64 一致
+			expect(fs.readFileSync(savedPath).toString("base64")).toBe("aGVsbG8=");
+			const text = result.content.find((block) => block.type === "text");
+			expect(text?.text).toContain(`saved to \`${savedPath}\``);
+			// 内联图片仍然返回（视觉模型需要）
+			expect(result.content.some((block) => block.type === "image")).toBe(true);
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("turns a screen-permission failure into actionable error content", async () => {
@@ -108,6 +138,64 @@ describe("Computer Use Extension", () => {
 		expect(result.content[0].text).toContain("CMD+Enter");
 	});
 
+	it("opens Accessibility settings and appends a hint when bash hits a TCC assistive-access block", () => {
+		const { host, eventHandlers } = captureRegisteredTools();
+		const handler = eventHandlers.get("tool_result")!;
+		const result = handler({
+			type: "tool_result",
+			toolName: "bash",
+			isError: true,
+			content: [{ type: "text", text: "osascript is not allowed assistive access. (-1719)" }],
+		});
+		expect(host.openPermissionSettings).toHaveBeenCalledWith("accessibility");
+		expect(result?.content).toHaveLength(2);
+		expect(result?.content[1].text).toContain("Accessibility permission is missing");
+		expect(result?.content[1].text).toContain("computer_* tools");
+	});
+
+	it("opens Automation settings for Apple Events authorization errors", () => {
+		const { host, eventHandlers } = captureRegisteredTools();
+		const handler = eventHandlers.get("tool_result")!;
+		const result = handler({
+			type: "tool_result",
+			toolName: "bash",
+			isError: true,
+			content: [{ type: "text", text: "Not authorized to send Apple events to System Events. (-1743)" }],
+		});
+		expect(host.openPermissionSettings).toHaveBeenCalledWith("automation");
+		expect(result?.content).toHaveLength(2);
+	});
+
+	it("ignores non-bash results, non-error results, and unrelated bash errors", () => {
+		const { host, eventHandlers } = captureRegisteredTools();
+		const handler = eventHandlers.get("tool_result")!;
+		expect(
+			handler({
+				type: "tool_result",
+				toolName: "read",
+				isError: true,
+				content: [{ type: "text", text: "not allowed assistive access" }],
+			}),
+		).toBeUndefined();
+		expect(
+			handler({
+				type: "tool_result",
+				toolName: "bash",
+				isError: false,
+				content: [{ type: "text", text: "not allowed assistive access" }],
+			}),
+		).toBeUndefined();
+		expect(
+			handler({
+				type: "tool_result",
+				toolName: "bash",
+				isError: true,
+				content: [{ type: "text", text: "command not found: foo" }],
+			}),
+		).toBeUndefined();
+		expect(host.openPermissionSettings).not.toHaveBeenCalled();
+	});
+
 	it("computer_type surfaces host failures as error content instead of throwing", async () => {
 		const host = createFakeHost({
 			typeText: vi.fn(async () => {
@@ -118,6 +206,15 @@ describe("Computer Use Extension", () => {
 		const result = await tools.get("computer_type")!.execute("call-1", { text: "hello" });
 		expect(result.content[0].text).toContain("Accessibility permission");
 		expect(result.details).toMatchObject({ permission: "accessibility" });
+	});
+});
+
+describe("detectMacPermissionBlock", () => {
+	it("matches assistive access and Apple Events errors", () => {
+		expect(detectMacPermissionBlock("osascript is not allowed assistive access. (-1719)")).toBe("accessibility");
+		expect(detectMacPermissionBlock("Not authorized to send Apple events to Finder. (-1743)")).toBe("automation");
+		expect(detectMacPermissionBlock("errAEEventNotPermitted")).toBe("automation");
+		expect(detectMacPermissionBlock("some other error")).toBeUndefined();
 	});
 });
 

@@ -7,7 +7,7 @@
 // ============================================================
 
 /** macOS TCC 权限类别。 */
-export type ComputerUsePermissionKind = "screen" | "accessibility";
+export type ComputerUsePermissionKind = "screen" | "accessibility" | "automation";
 
 /** 权限未授予时抛出，扩展层转成对模型可操作的错误文本。 */
 export class ComputerUsePermissionError extends Error {
@@ -44,4 +44,6 @@ export interface ComputerUseHost {
 	scroll(dx: number, dy: number, x?: number, y?: number): Promise<void>;
 	typeText(text: string): Promise<void>;
 	pressKey(key: string, modifiers: string[]): Promise<void>;
+	/** 打开对应权限的系统设置授权页（实现方自行节流）。 */
+	openPermissionSettings(kind: ComputerUsePermissionKind): void;
 }

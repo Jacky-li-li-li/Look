@@ -12,6 +12,7 @@
 // ============================================================
 
 import { existsSync } from "node:fs";
+import path from "node:path";
 import {
 	ModelRegistry,
 	ModelRuntime,
@@ -25,6 +26,7 @@ import {
 	getCustomProvidersPath,
 	getLookDir,
 	getModelsPath,
+	getProjectSharedDir,
 	getUiSettingsPath,
 	resetLegacySessionsOnce,
 } from "@look/shared/look-storage";
@@ -342,7 +344,12 @@ export class CompositionBuilder {
 						this.projectService!.resolveProjectTrust(cwd),
 					),
 					createSkillInjectExtensionFactory(),
-					createComputerUseExtensionFactory(this.computerUseService!),
+					// 截图落盘到项目共享区（守卫白名单内，共享面板可见，
+					// 路径芯片点击可预览）；无项目时不落盘，仅内联返回。
+					createComputerUseExtensionFactory(
+						this.computerUseService!,
+						resolvedProjectId ? path.join(getProjectSharedDir(resolvedProjectId), "screenshots") : null,
+					),
 				];
 			},
 		});

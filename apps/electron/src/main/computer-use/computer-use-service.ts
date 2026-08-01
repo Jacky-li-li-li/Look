@@ -17,13 +17,14 @@
 // ============================================================
 
 import { Button, Key, keyboard, mouse, Point } from "@nut-tree/nut-js";
-import { desktopCapturer, screen as electronScreen, systemPreferences } from "electron";
+import { desktopCapturer, screen as electronScreen, shell, systemPreferences } from "electron";
 import { normalizeKeyName, normalizeModifierName } from "./key-map.js";
 import {
 	type ComputerMouseButton,
 	type ComputerScreenshot,
 	type ComputerUseHost,
 	ComputerUsePermissionError,
+	type ComputerUsePermissionKind,
 } from "./types.js";
 
 const NUT_BUTTON: Record<ComputerMouseButton, Button> = {
@@ -70,7 +71,23 @@ const NUT_MODIFIER: Record<string, Key> = {
 	shift: Key.LeftShift,
 };
 
+/** 各权限对应的系统设置授权页 URL（macOS 13+ System Settings）。 */
+const PERMISSION_SETTINGS_URL: Record<ComputerUsePermissionKind, string> = {
+	screen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+	accessibility: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+	automation: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+};
+
 export class ComputerUseService implements ComputerUseHost {
+	/** 每种权限每次运行只自动打开一次设置页，避免重试循环反复抢焦点。 */
+	private readonly openedSettingsFor = new Set<ComputerUsePermissionKind>();
+
+	openPermissionSettings(kind: ComputerUsePermissionKind): void {
+		if (this.openedSettingsFor.has(kind)) return;
+		this.openedSettingsFor.add(kind);
+		void shell.openExternal(PERMISSION_SETTINGS_URL[kind]);
+	}
+
 	async captureScreenshot(): Promise<ComputerScreenshot> {
 		this.ensureScreenPermission();
 		const display = electronScreen.getPrimaryDisplay();
@@ -159,23 +176,25 @@ export class ComputerUseService implements ComputerUseHost {
 
 	private ensureScreenPermission(): void {
 		if (systemPreferences.getMediaAccessStatus("screen") !== "granted") {
+			this.openPermissionSettings("screen");
 			throw new ComputerUsePermissionError(
 				"screen",
-				"Screen Recording permission is not granted to Look. The user must enable it in " +
-					"System Settings → Privacy & Security → Screen Recording, then relaunch Look.",
+				"Screen Recording permission is not granted to Look. The System Settings page was opened for the user " +
+					"to enable it (Privacy & Security → Screen Recording), then Look must be relaunched.",
 			);
 		}
 	}
 
 	private ensureAccessibility(): void {
 		if (systemPreferences.isTrustedAccessibilityClient(false)) return;
-		// 传 true 触发一次 macOS 授权弹窗；无论用户当场点什么都先失败，
+		// 传 true 触发一次 macOS 授权弹窗；同时打开设置页引导。
 		// 授权由系统异步生效，模型重试即可。
 		systemPreferences.isTrustedAccessibilityClient(true);
+		this.openPermissionSettings("accessibility");
 		throw new ComputerUsePermissionError(
 			"accessibility",
-			"Accessibility permission is not granted to Look. A system prompt was triggered; the user must " +
-				"enable Look in System Settings → Privacy & Security → Accessibility, then retry the action.",
+			"Accessibility permission is not granted to Look. The System Settings page was opened for the user " +
+				"to enable it (Privacy & Security → Accessibility), then retry the action.",
 		);
 	}
 
