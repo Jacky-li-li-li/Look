@@ -110,7 +110,7 @@ const SidebarInner = memo(function SidebarInner({
 				<span className="min-w-0 flex-1 truncate text-[12px] font-medium text-muted-foreground">
 					{userProfile.userName || t("agent.you", "You")}
 				</span>
-				<span className="font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground/45">
+				<span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/45">
 					{t("sidebar.settings", "Settings")}
 				</span>
 			</button>

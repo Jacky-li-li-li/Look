@@ -380,7 +380,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 			<CollapsibleContent className="workspace-group-content">
 				<div className="workspace-session-rail ml-[18px] space-y-0.5 pb-1 pl-2">
 					{!project.valid && (
-						<div className="mx-1 my-1 rounded-md border border-amber-500/25 bg-amber-500/8 px-2 py-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+						<div className="mx-1 my-1 rounded-md border border-amber-500/25 bg-amber-500/8 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
 							{t("project.pathMissing", "Project folder is unavailable")}
 						</div>
 					)}
@@ -455,7 +455,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 						<button
 							type="button"
 							onClick={() => onCreateClick(project.id)}
-							className="workspace-empty-session flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-[10px] text-muted-foreground"
+							className="workspace-empty-session flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-[11.5px] text-muted-foreground"
 						>
 							<Plus className="size-3" /> {t("workspace.createFirstSession", "Create first session")}
 						</button>

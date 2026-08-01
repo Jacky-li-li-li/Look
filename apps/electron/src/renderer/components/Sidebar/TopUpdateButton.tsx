@@ -30,7 +30,7 @@ export default function TopUpdateButton() {
 				type="button"
 				onClick={() => void installUpdate()}
 				title={t("update.ready")}
-				className="top-update-restart flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+				className="top-update-restart flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[12px] font-medium text-primary transition-colors hover:bg-primary/20"
 			>
 				<RotateCw className="size-3" />
 				{t("update.restartUpdate")}
@@ -54,7 +54,7 @@ export default function TopUpdateButton() {
 				background: `conic-gradient(from 0deg, var(--primary) ${clamped * 3.6}deg, transparent ${clamped * 3.6}deg), var(--sidebar-border)`,
 			}}
 		>
-			<span className="relative flex items-center gap-1.5 rounded-full bg-sidebar px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+			<span className="relative flex items-center gap-1.5 rounded-full bg-sidebar px-2.5 py-1 text-[12px] font-medium text-muted-foreground">
 				<Loader2 className="size-3 animate-spin" />
 				{t("update.updating")}
 			</span>
