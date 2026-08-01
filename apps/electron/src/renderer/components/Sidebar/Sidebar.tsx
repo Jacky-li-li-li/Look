@@ -125,6 +125,9 @@ export default function Sidebar(props: SidebarProps) {
 	const activeProject = useAtomValue(activeProjectAtom);
 	const { t } = useTranslation();
 	const canCreateSession = activeProject?.valid ?? false;
+	// 设置页为全屏遮罩（z-40）盖住侧边栏；按钮组 portal 到 body 层 z-50，
+	// 不隐藏会浮在设置页顶部，故设置页打开时卸载。
+	const showSettings = useAtomValue(showSettingsAtom);
 
 	// 按钮组通过 portal 渲染到 body 层并 fixed 定位，脱离 sidebar-wrapper 的 transform，
 	// 折叠/展开时完全不跟随面板移动；折叠时折叠按钮变展开按钮，其余按钮保持显示。
@@ -177,7 +180,7 @@ export default function Sidebar(props: SidebarProps) {
 			>
 				<SidebarInner {...props} />
 			</aside>
-			{createPortal(headerActions, document.body)}
+			{!showSettings && createPortal(headerActions, document.body)}
 		</>
 	);
 }
