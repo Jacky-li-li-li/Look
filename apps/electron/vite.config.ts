@@ -48,5 +48,8 @@ export default defineConfig({
 	},
 	server: {
 		port: 5174,
+		// Electron 主进程硬编码加载 5174（application.ts）；strictPort 保证
+		// 5174 被占用时 vite 直接报错退出，而不是静默切到 5175 导致白屏。
+		strictPort: true,
 	},
 });
