@@ -11,11 +11,11 @@ import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { AgentInfo } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
-import { PanelLeftOpen, PanelRightOpen, X } from "lucide-react";
+import { PanelLeftOpen, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { rightPanelCollapsedAtom, sessionStateAtomFamily, sidebarCollapsedAtom } from "../store/atoms";
+import { rightPanelCollapsedAtom, sessionStateAtomFamily } from "../store/atoms";
 import { deriveAgentPhase, deriveSessionPhase } from "../store/sessionTypes";
 
 interface SessionSheet {
@@ -143,7 +143,6 @@ export default function SessionSheetBar({
 	onReorder,
 }: SessionSheetBarProps) {
 	const { t } = useTranslation();
-	const setSidebarCollapsed = useSetAtom(sidebarCollapsedAtom);
 	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
 
 	const agentById = useMemo(() => {
@@ -207,24 +206,13 @@ export default function SessionSheetBar({
 	return (
 		<header
 			className={cn(
-				"app-drag flex h-12 shrink-0 items-center gap-2 border-b border-hairline",
+				"session-sheet-bar app-drag flex h-12 shrink-0 items-center gap-2 border-b border-hairline",
 				rightPanelCollapsed ? "px-2" : "pl-2",
-				// 侧栏折叠时红绿灯会压到展开按钮，macOS 非全屏时让出左侧位置
+				// 侧栏折叠时红绿灯会压到左侧，macOS 非全屏时让出左侧位置；
+				// 展开入口由侧边栏按钮组（fixed 左上角）提供，此处不再渲染展开按钮。
 				sidebarCollapsed && "mac-titlebar-pad",
 			)}
 		>
-			{sidebarCollapsed && (
-				<Button
-					size="icon-sm"
-					variant="ghost"
-					className="expand-sidebar-btn shrink-0 rounded-md border border-hairline"
-					onClick={() => setSidebarCollapsed(false)}
-					aria-label={t("sidebar.expand", "Expand sidebar")}
-					title={t("sidebar.expand", "Expand sidebar")}
-				>
-					<PanelRightOpen className="size-3.5" />
-				</Button>
-			)}
 			{sheets.length === 0 ? (
 				<div className="flex h-full flex-1 items-center px-2 text-[12px] text-muted-foreground">
 					{t("sheet.emptyHint", "Select a session from the sidebar")}

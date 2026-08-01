@@ -7,10 +7,12 @@ import { UserAvatar } from "@look/ui/components/UserAvatar";
 import { Button } from "@look/ui/components/ui/button";
 import { ScrollArea } from "@look/ui/components/ui/scroll-area";
 import { useAtomValue, useSetAtom } from "jotai";
-import { Bot, Clock3, FolderOpen, PanelLeftClose, Plus } from "lucide-react";
+import { Bot, Clock3, FolderOpen, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { memo } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
+	activeProjectAtom,
 	rightPanelCollapsedAtom,
 	settingsTabAtom,
 	showAgentSquareAtom,
@@ -28,7 +30,6 @@ const SidebarInner = memo(function SidebarInner({
 	onSelect,
 	onDestroy,
 	onCreateClick,
-	onCreateProject,
 	onDeleteProject,
 	onOpenProject,
 	onRenameProject,
@@ -42,32 +43,8 @@ const SidebarInner = memo(function SidebarInner({
 
 	return (
 		<>
-			<header className="app-drag mac-titlebar-pad flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
-				<div className="min-w-0" />
-				<div className="flex items-center gap-1.5">
-					<Button
-						variant="line-ghost"
-						size="icon-sm"
-						className="border border-hairline rounded-md sidebar-open-folder-btn"
-						onClick={onCreateProject}
-						aria-label={t("project.openProject", "Add project folder")}
-						title={t("project.openProject", "Add project folder")}
-					>
-						<FolderOpen className="size-3.5" />
-						<Plus className="absolute ml-3 mt-3 size-2.5 rounded-full bg-sidebar" />
-					</Button>
-					<Button
-						variant="line-ghost"
-						size="icon-sm"
-						className="border border-hairline rounded-md"
-						onClick={() => appStore.set(sidebarCollapsedAtom, true)}
-						aria-label={t("sidebar.collapse", "Collapse sidebar")}
-						title={t("sidebar.collapse", "Collapse sidebar")}
-					>
-						<PanelLeftClose className="size-3.5" />
-					</Button>
-				</div>
-			</header>
+			{/* Header 仅保留拖拽区；按钮组已通过 portal 固定到窗口层，不随面板移动 */}
+			<header className="app-drag mac-titlebar-pad h-12 shrink-0 border-b border-hairline" />
 
 			<ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
 				<div className="space-y-1.5 px-2 py-2">
@@ -145,17 +122,62 @@ const SidebarInner = memo(function SidebarInner({
 
 export default function Sidebar(props: SidebarProps) {
 	const collapsed = useAtomValue(sidebarCollapsedAtom);
+	const activeProject = useAtomValue(activeProjectAtom);
+	const { t } = useTranslation();
+	const canCreateSession = activeProject?.valid ?? false;
+
+	// 按钮组通过 portal 渲染到 body 层并 fixed 定位，脱离 sidebar-wrapper 的 transform，
+	// 折叠/展开时完全不跟随面板移动；折叠时折叠按钮变展开按钮，其余按钮保持显示。
+	const headerActions = (
+		<div className="sidebar-header-actions" data-collapsed={collapsed || undefined}>
+			<Button
+				variant="line-ghost"
+				size="icon"
+				onClick={() => appStore.set(sidebarCollapsedAtom, !collapsed)}
+				aria-label={collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
+				title={collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
+			>
+				{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+			</Button>
+			<Button
+				variant="line-ghost"
+				size="icon"
+				className="relative"
+				onClick={props.onCreateProject}
+				aria-label={t("project.openProject", "Add project folder")}
+				title={t("project.openProject", "Add project folder")}
+			>
+				<FolderOpen className="size-4" />
+				<Plus className="absolute ml-3 mt-3 size-2.5 rounded-full bg-sidebar" />
+			</Button>
+			<Button
+				variant="line-ghost"
+				size="icon"
+				onClick={() => {
+					if (activeProject) props.onCreateClick(activeProject.id);
+				}}
+				disabled={!canCreateSession}
+				aria-label={t("sidebar.newSession", "New session")}
+				title={
+					canCreateSession
+						? t("sidebar.newSession", "New session")
+						: t("workspace.noActiveProject", "Open a project first")
+				}
+			>
+				<MessageSquarePlus className="size-4" />
+			</Button>
+		</div>
+	);
 
 	return (
-		// border-t-0：顶部栏带上沿必须与主区标签栏齐平（均起于窗口 y=0），
-		// 否则侧栏 header 比标签栏低 1px，折叠/展开切换时 macOS 红绿灯的
-		// 对齐目标会变化导致跳动（见 lib/trafficLight.ts）。顶部边缘视觉由
-		// workspace-ledger 的 inset 高光保留。
-		<aside
-			className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-l-xl border border-t-0"
-			data-collapsed={collapsed}
-		>
-			<SidebarInner {...props} />
-		</aside>
+		<>
+			<aside
+				className="workspace-ledger glass-panel sidebar-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-l-xl border border-t-0"
+				data-collapsed={collapsed}
+			>
+				<SidebarInner {...props} />
+			</aside>
+			{createPortal(headerActions, document.body)}
+		</>
 	);
 }

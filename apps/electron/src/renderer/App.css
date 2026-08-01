@@ -3,7 +3,6 @@
 @import "shadcn/tailwind.css";
 @import "streamdown/styles.css";
 @import "@fontsource-variable/geist";
-@plugin "@tailwindcss/typography";
 
 @source "../../../../packages/shared/src/**/*.{ts,tsx}";
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
@@ -59,7 +58,7 @@
 	--message-avatar-offset: 0.125rem;
 
 	/* Prose spacing tokens */
-	--prose-line-height: 1.58;
+	--prose-line-height: 1.68;
 	--prose-flow-gap: 0.5rem;
 	--prose-heading-gap: 0.375rem;
 	--prose-block-gap: 0.75rem;
@@ -550,13 +549,17 @@ body {
 		gap: 0.25rem;
 		font-family: var(--font-body);
 		font-size: 14px;
-		line-height: 1.55;
+		line-height: var(--prose-line-height);
+		/* 微量字距：中日文与拉丁混排更透气，弱化“生硬”感 */
+		letter-spacing: 0.006em;
 		color: var(--foreground);
 		word-break: break-word;
 	}
 
-	.tone-light .whisper-bubble--assistant .look-markdown {
-		color: color-mix(in oklch, var(--foreground), var(--background) 10%);
+	/* 助手消息正文：前景色向背景混 8%，柔化纯黑/纯白的生硬对比（明暗主题一致）；
+		标题仍为全对比色，保留层级 */
+	.whisper-bubble--assistant .look-markdown {
+		color: color-mix(in oklch, var(--foreground), var(--background) 8%);
 	}
 
 	.look-md-paragraph {
@@ -567,8 +570,8 @@ body {
 	.look-md-heading {
 		margin: 0;
 		color: var(--foreground);
-		font-weight: 650;
-		letter-spacing: -0.012em;
+		font-weight: 600;
+		letter-spacing: -0.008em;
 	}
 
 	.look-md-h1 {
@@ -1399,11 +1402,13 @@ body {
 		min-width: 0;
 		transform: translateX(0);
 		opacity: 1;
-		contain: layout style;
+		contain: layout paint style;
+		will-change: transform, opacity;
 		transition:
 			transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-			opacity 200ms ease,
-			border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1);
+			opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			backdrop-filter 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.sidebar-wrapper[data-collapsed="true"] {
@@ -1411,46 +1416,37 @@ body {
 		opacity: 0;
 		border-radius: 0;
 		pointer-events: none;
+		/* 折叠动画期间禁用毛玻璃，避免 blur 重采样产生拖影 */
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
 	}
 
-	.sidebar-wrapper[data-collapsed="true"] .sidebar-open-folder-btn {
-		visibility: hidden;
+	/* Header 按钮组：portal 到 body 层 fixed 固定在窗口左上角（红绿灯右侧），
+	   脱离 sidebar-wrapper 的 transform，折叠/展开时完全不跟随面板移动；
+	   折叠时折叠按钮变展开按钮，其余按钮保持显示。 */
+	.sidebar-header-actions {
+		position: fixed;
+		top: 8px;
+		left: 12px;
+		z-index: 50;
+		/* portal 到 body 后覆盖在 header 拖拽区上方，必须显式 no-drag 才能接收点击 */
+		-webkit-app-region: no-drag;
+		display: flex;
+		align-items: center;
+		gap: 2px;
 	}
 
-	.sidebar-open-folder-btn {
-		visibility: visible;
+	html[data-platform="darwin"]:not([data-fullscreen="true"]) .sidebar-header-actions {
+		left: 78px;
 	}
 
 	.sidebar-separator {
 		opacity: 1;
-		transition: opacity 200ms ease;
+		transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.app-shell[data-sidebar-collapsed="true"] .sidebar-separator {
 		opacity: 0;
-	}
-
-	.expand-sidebar-btn {
-		opacity: 0;
-		width: 0;
-		padding-left: 0;
-		padding-right: 0;
-		transform: translateX(-4px);
-		pointer-events: none;
-		transition:
-			opacity 200ms ease,
-			width 220ms cubic-bezier(0.22, 1, 0.36, 1),
-			transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-			padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
-	}
-
-	.app-shell[data-sidebar-collapsed="true"] .expand-sidebar-btn {
-		opacity: 1;
-		width: 1.75rem;
-		padding-left: 0;
-		padding-right: 0;
-		transform: translateX(0);
-		pointer-events: auto;
 	}
 
 	/* ============================================================
@@ -2083,4 +2079,24 @@ html[data-platform="darwin"]:not([data-fullscreen="true"]) .app-drag {
 	 transition 已上移至 .app-drag 选择器,确保类移除后 transition 不丢失。 */
 html[data-platform="darwin"]:not([data-fullscreen="true"]) .mac-titlebar-pad {
 	padding-left: 78px;
+}
+
+/* ── 主区 header 让位平滑过渡 ──
+	 折叠/展开时标签随 padding-left 平滑滑动，与面板动画同步。
+	 （低特异性在前，biome noDescendingSpecificity） */
+.session-sheet-bar {
+	transition: padding-left 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── 侧栏折叠时主区 header 为 fixed 按钮组让位 ──
+	 必须放在未分层区域（tailwind utilities 层之后），
+	 否则会被 pl-2 / mac-titlebar-pad 等分层/低层规则覆盖。 */
+.app-shell[data-sidebar-collapsed="true"] .session-sheet-bar {
+	padding-left: 120px;
+}
+
+html[data-platform="darwin"]:not([data-fullscreen="true"])
+	.app-shell[data-sidebar-collapsed="true"]
+	.session-sheet-bar {
+	padding-left: 186px;
 }
