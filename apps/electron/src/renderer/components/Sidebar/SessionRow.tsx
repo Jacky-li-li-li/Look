@@ -47,7 +47,7 @@ function SessionRowImpl({
 				data-running={isRunning || undefined}
 				data-completed={isCompleted ? "" : undefined}
 				data-active={isActive || undefined}
-				className="session-ledger-row group/session flex h-[38px] items-center gap-2 rounded-md border border-transparent px-2"
+				className="session-ledger-row group/session flex h-[40px] items-center gap-2 rounded-md border border-transparent px-2"
 				aria-current={isActive ? "true" : undefined}
 			>
 				<button
@@ -67,20 +67,20 @@ function SessionRowImpl({
 								onBlur={commitEdit}
 								onKeyDown={handleEditKeyDown}
 								onClick={(event) => event.stopPropagation()}
-								className="w-full border-b border-foreground/40 bg-transparent text-[11px] font-medium outline-none"
+								className="w-full border-b border-foreground/40 bg-transparent text-[12.5px] font-medium outline-none"
 							/>
 						) : (
-							<span className="flex min-w-0 items-center gap-1 text-[11px] font-medium">
+							<span className="flex min-w-0 items-center gap-1 text-[12.5px] font-medium">
 								{agent.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
 								<span className="min-w-0 truncate">
 									{agent.name}
 									{hasChildren && (
-										<span className="ml-1 text-[9px] text-sky-500">({childrenList.length})</span>
+										<span className="ml-1 text-[10px] text-sky-500">({childrenList.length})</span>
 									)}
 								</span>
 							</span>
 						)}
-						<span className="block truncate font-mono text-[8.5px] leading-tight text-muted-foreground/50">
+						<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/50">
 							{isRunning
 								? t(`session.status.${phase}`, phase)
 								: agent.model ||
@@ -92,7 +92,7 @@ function SessionRowImpl({
 										: t("session.draft", "draft"))}
 						</span>
 					</span>
-					<span className="shrink-0 font-mono text-[9px] text-muted-foreground/45">
+					<span className="shrink-0 font-mono text-[10px] text-muted-foreground/45">
 						{fmtRelativeTime(agent.createdAt)}
 					</span>
 				</button>
@@ -128,18 +128,18 @@ function SessionRowImpl({
 					<DropdownMenuContent align="end" className="w-44">
 						<DropdownMenuItem
 							onSelect={() => beginEdit("session", agent.id, agent.name)}
-							className="gap-2 text-[12px]"
+							className="gap-2 text-[12.5px]"
 						>
 							<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => copySessionId(agent.id)} className="gap-2 text-[12px]">
+						<DropdownMenuItem onSelect={() => copySessionId(agent.id)} className="gap-2 text-[12.5px]">
 							<Copy className="size-3.5" /> {t("sidebar.copyId", "Copy session ID")}
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
 							variant="destructive"
 							onSelect={() => onDestroy(agent.id)}
-							className="gap-2 text-[12px]"
+							className="gap-2 text-[12.5px]"
 						>
 							<Trash2 className="size-3.5" /> {t("sidebar.delete", "Delete")}
 						</DropdownMenuItem>
@@ -155,7 +155,7 @@ function SessionRowImpl({
 						data-agent-status={child.childPhase}
 						data-running={child.childRunning || undefined}
 						data-active={child.childActive || undefined}
-						className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[32px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
+						className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[34px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
 					>
 						<button
 							type="button"
@@ -164,7 +164,7 @@ function SessionRowImpl({
 						>
 							<Bot className="size-3 shrink-0 text-sky-500" />
 							{child.agent.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
-							<span className="min-w-0 flex-1 truncate text-[10px] font-medium">
+							<span className="min-w-0 flex-1 truncate text-[11.5px] font-medium">
 								{child.agent.name || child.agent.agentConfigName}
 							</span>
 						</button>

@@ -429,7 +429,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 							type="button"
 							onClick={() => toggleProjectExpansion(project.id)}
 							aria-expanded={isExpanded}
-							className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
+							className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[11.5px] font-medium text-muted-foreground/70"
 						>
 							<ChevronsUpDown className="size-3" />
 							{t("workspace.expandMore", {
@@ -444,7 +444,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 							type="button"
 							onClick={() => toggleProjectExpansion(project.id)}
 							aria-expanded={isExpanded}
-							className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[10px] font-medium text-muted-foreground/70"
+							className="workspace-toggle-sessions flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-[11.5px] font-medium text-muted-foreground/70"
 						>
 							<ChevronsDownUp className="size-3" />
 							{t("workspace.collapseSessions", "收起")}

@@ -72,13 +72,13 @@ export default function ProjectHeader({
 								onBlur={commitEdit}
 								onKeyDown={handleEditKeyDown}
 								onClick={(event) => event.stopPropagation()}
-								className="w-full border-b border-foreground/40 bg-transparent text-[12px] font-semibold outline-none"
+								className="w-full border-b border-foreground/40 bg-transparent text-[13px] font-semibold outline-none"
 								maxLength={64}
 							/>
 						) : (
-							<span className="block truncate text-[12px] font-semibold">{project.name}</span>
+							<span className="block truncate text-[13px] font-semibold">{project.name}</span>
 						)}
-						<span className="block truncate font-mono text-[9px] leading-tight text-muted-foreground/55">
+						<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/55">
 							{shortenPath(project.cwd, homedir)}
 						</span>
 					</span>
@@ -107,12 +107,12 @@ export default function ProjectHeader({
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end" className="w-44" onCloseAutoFocus={(e) => e.preventDefault()}>
-						<DropdownMenuItem onSelect={() => onOpenProject(project.id)} className="gap-2 text-[12px]">
+						<DropdownMenuItem onSelect={() => onOpenProject(project.id)} className="gap-2 text-[12.5px]">
 							<FolderOpen className="size-3.5" /> {t("workspace.openFolder", "Open folder")}
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							onSelect={() => beginEdit("project", project.id, project.name)}
-							className="gap-2 text-[12px]"
+							className="gap-2 text-[12.5px]"
 						>
 							<Pencil className="size-3.5" /> {t("sidebar.rename", "Rename")}
 						</DropdownMenuItem>
@@ -120,7 +120,7 @@ export default function ProjectHeader({
 						<DropdownMenuItem
 							variant="destructive"
 							onSelect={() => onDeleteProject(project)}
-							className="gap-2 text-[12px]"
+							className="gap-2 text-[12.5px]"
 						>
 							<Trash2 className="size-3.5" /> {t("project.delete", "Delete project")}
 						</DropdownMenuItem>

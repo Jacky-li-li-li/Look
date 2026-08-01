@@ -12,11 +12,12 @@ import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+// 应用真实图标（与 Dock/Finder 的 Look.app 一致），由 Vite 打包进渲染产物
+import appIconUrl from "../../../assets/icon-1024.png";
 import { writeAuthCache } from "../lib/authCache";
 import { OAUTH_REDIRECT_URL, parseOAuthCallback } from "../lib/oauth-callback";
 import { getSupabase, resetSupabaseClient } from "../lib/supabase";
 import { authLoadingAtom, isLoggedInAtom, userProfileAtom } from "../store/authAtoms";
-import { PixelAgentAvatar } from "./PixelAgentAvatar";
 
 const api = window.look;
 
@@ -629,7 +630,7 @@ export default function LoginScreen() {
 		<div className="flex h-screen flex-col items-center justify-center bg-background p-6">
 			<div className="w-full max-w-sm">
 				<div className="mb-8 flex flex-col items-center gap-3">
-					<PixelAgentAvatar size="lg" active />
+					<img src={appIconUrl} alt="Look" className="size-16 rounded-[1.25rem] shadow-lg" draggable={false} />
 					<h1 className="text-xl font-semibold tracking-tight text-foreground">Look</h1>
 					<p className="text-xs text-muted-foreground">
 						{mode === "login" && t("auth.loginDesc")}
