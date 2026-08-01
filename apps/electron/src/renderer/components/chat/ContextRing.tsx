@@ -64,6 +64,9 @@ export default function ContextRing() {
 			.compressSession(sessionId)
 			.then((result) => {
 				if (!result.success) {
+					// "Nothing to compact" is an expected response when the session is
+					// too small — don't surface it as a real error.
+					if (result.error && result.error.includes("Nothing to compact")) return;
 					console.warn("[ContextRing] compressSession failed:", result.error);
 				}
 			})
