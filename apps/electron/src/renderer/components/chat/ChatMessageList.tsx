@@ -18,6 +18,7 @@ import {
 	recentlyCompletedAtom,
 	sessionStateAtomFamily,
 } from "../../store/atoms";
+import { isLoggedInAtom, userProfileAtom } from "../../store/authAtoms";
 import { appStore } from "../../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
 import { AiAvatar } from "../AiAvatar";
@@ -558,6 +559,22 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 	const isAgentRunning = activeAgentId ? activeUiPhase !== "idle" : false;
 
+	// === 空状态：时段问候（带用户名）+ 安心文案 + 快捷建议 chips ===
+	const isLoggedIn = useAtomValue(isLoggedInAtom);
+	const { userName } = useAtomValue(userProfileAtom);
+	const hour = new Date().getHours();
+	const hourKey = hour < 12 ? "chat.greetingMorning" : hour < 18 ? "chat.greetingAfternoon" : "chat.greetingEvening";
+	const greeting = isLoggedIn && userName ? t(hourKey, { name: userName }) : t("chat.greetingNoName");
+	const suggestions = [
+		t("chat.suggestionProjectStructure"),
+		t("chat.suggestionRecentChanges"),
+		t("chat.suggestionRunTests"),
+	];
+	const fillSuggestion = (text: string) => {
+		inputRef.current?.setText(text);
+		inputRef.current?.focus();
+	};
+
 	return (
 		<>
 			<ConversationContent>
@@ -570,12 +587,25 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						<h3 className="text-[13px] font-semibold text-foreground">{t("common.loading")}</h3>
 					</div>
 				) : timeline.length === 0 && !isBusy ? (
-					<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center py-8">
+					<div className="flex flex-1 flex-col items-center justify-center gap-3 text-center py-8">
 						<div className="relative">
 							<AiAvatar status={phase} size="lg" />
 							<MessageSquare className="absolute -right-2 -bottom-2 size-5 rounded-md border border-hairline bg-background p-1 text-foreground" />
 						</div>
-						<h3 className="text-[13px] font-semibold text-foreground">{t("chat.empty")}</h3>
+						<h3 className="text-[13px] font-semibold text-foreground">{greeting}</h3>
+						<p className="max-w-xs text-xs text-muted-foreground">{t("chat.emptyReassurance")}</p>
+						<div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+							{suggestions.map((s) => (
+								<button
+									key={s}
+									type="button"
+									onClick={() => fillSuggestion(s)}
+									className="rounded-full border border-hairline bg-accent/20 px-3 py-1.5 text-xs text-foreground/80 transition-colors hover:border-foreground/25 hover:bg-accent/40 hover:text-foreground"
+								>
+									{s}
+								</button>
+							))}
+						</div>
 					</div>
 				) : (
 					timeline.map((item) => renderTimelineItem(item))
