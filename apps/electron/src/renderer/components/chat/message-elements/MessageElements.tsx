@@ -61,7 +61,9 @@ export function MessageHeader({ sender, isStreaming, isActiveLeaf, isUser }: Mes
 	return (
 		<div
 			className={cn(
-				"mb-msg-header flex items-center gap-2 text-[10px] text-muted-foreground",
+				// h-[30px] = 头像总高（mt-msg-avatar 2px + size-sm 28px）：名称行占满头像高度，
+				// 名称垂直居中，正文第一行从头像底部水平线开始。
+				"mb-msg-header flex h-[30px] items-center gap-2 text-[10px] text-muted-foreground",
 				isUser && "justify-end",
 			)}
 		>
