@@ -4,7 +4,7 @@
 
 import { FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { BrandMark } from "../BrandMark";
+import appIconUrl from "../../../../assets/icon-1024.png";
 
 interface WelcomeScreenProps {
 	onOpenProject: () => void;
@@ -16,7 +16,7 @@ export default function WelcomeScreen({ onOpenProject }: WelcomeScreenProps) {
 	return (
 		<div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
 			<div className="flex flex-col items-center gap-3 text-center">
-				<BrandMark />
+				<img src={appIconUrl} alt="Look" className="size-16 rounded-[1.25rem] shadow-lg" draggable={false} />
 				<h2 className="text-xl font-semibold tracking-tight animate-draw-in" style={{ animationDelay: "100ms" }}>
 					{t("welcome.title", "Welcome to Look")}
 				</h2>
