@@ -26,7 +26,7 @@ export class SessionEventProcessor {
 	}
 
 	/** Main entry point. Called from the SDK's session.subscribe callback. */
-	handle(sessionId: string, event: AgentSessionEvent): void {
+	async handle(sessionId: string, event: AgentSessionEvent): Promise<void> {
 		const scope = this.scopeRegistry.get(sessionId);
 		if (!scope) {
 			// scope 可能在 disposeRuntime 中被释放，但 SDK 仍有残余事件到达。
@@ -62,8 +62,11 @@ export class SessionEventProcessor {
 		// 3. Side-effect dispatch
 		switch (event.type) {
 			case "agent_end":
+				// 正向时序：先完成 turn 收尾（持久化权限/计划状态与 duration 时长），
+				// 再发 agent_end 快照——保证快照 entries 已包含本轮 duration custom entry，
+				// 渲染端一次拿到时长，无需事后补发。
+				await this.host.onAgentEnd(sessionId, event.willRetry);
 				this.host.emitSessionState(sessionId, "agent_end", event.willRetry);
-				this.host.onAgentEnd(sessionId, event.willRetry);
 				if (!event.willRetry) this.host.onSubSessionAgentEnd(sessionId);
 				break;
 			case "agent_start":

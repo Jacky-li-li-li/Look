@@ -49,7 +49,7 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	selection: ActiveSessionSelection;
 	getStoredSession(sessionId: string): StoredSession | undefined;
 	openSessionManager(stored: StoredSession): SessionManager;
-	handleSessionEvent(sessionId: string, event: AgentSessionEvent): void;
+	handleSessionEvent(sessionId: string, event: AgentSessionEvent): Promise<void>;
 	setActiveProjectId(projectId: string): void;
 	getActiveProjectId(): string | null;
 	refreshProjectSessions(projectId: string): Promise<unknown>;
@@ -485,9 +485,10 @@ export class RuntimeLifecycleCoordinator {
 	}
 
 	private subscribe(session: AgentSession): () => void {
-		return session.subscribe((event) => {
+		return session.subscribe(async (event) => {
 			try {
-				this.options.handleSessionEvent(session.sessionId, event);
+				// await 让 agent_end 分支能在快照发出前完成 duration 持久化。
+				await this.options.handleSessionEvent(session.sessionId, event);
 			} catch (error) {
 				console.error("[Look] Error in session event handler:", error);
 			}

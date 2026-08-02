@@ -92,19 +92,35 @@ describe("SessionEventProcessor", () => {
 		expect(host.emitSessionUpdated).toHaveBeenCalledTimes(1); // agent_start only
 	});
 
-	it("agent_end dispatches onAgentEnd and sub-session finalize when not retrying", () => {
+	it("agent_end dispatches onAgentEnd and sub-session finalize when not retrying", async () => {
 		const { processor, scopeRegistry, host } = makeProcessor();
 		scopeRegistry.acquire("session-1", "project-1");
-		processor.handle("session-1", eventOf("agent_end", { willRetry: false }));
+		await processor.handle("session-1", eventOf("agent_end", { willRetry: false }));
 		expect(host.onAgentEnd).toHaveBeenCalledWith("session-1", false);
 		expect(host.onSubSessionAgentEnd).toHaveBeenCalledWith("session-1");
 		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "agent_end", false);
 	});
 
-	it("agent_end with willRetry does not finalize sub-session", () => {
+	it("agent_end 正向时序：先持久化 duration（onAgentEnd）再发快照（emitSessionState）", async () => {
+		// 回归锁定：快照必须包含 duration custom entry，故 onAgentEnd（写入时长）
+		// 必须先于 emitSessionState 完成，否则渲染端永远拿不到本条消息的时长。
 		const { processor, scopeRegistry, host } = makeProcessor();
 		scopeRegistry.acquire("session-1", "project-1");
-		processor.handle("session-1", eventOf("agent_end", { willRetry: true }));
+		const order: string[] = [];
+		vi.mocked(host.onAgentEnd).mockImplementation(async () => {
+			order.push("onAgentEnd");
+		});
+		vi.mocked(host.emitSessionState).mockImplementation(() => {
+			order.push("emitSessionState");
+		});
+		await processor.handle("session-1", eventOf("agent_end", { willRetry: false }));
+		expect(order).toEqual(["onAgentEnd", "emitSessionState"]);
+	});
+
+	it("agent_end with willRetry does not finalize sub-session", async () => {
+		const { processor, scopeRegistry, host } = makeProcessor();
+		scopeRegistry.acquire("session-1", "project-1");
+		await processor.handle("session-1", eventOf("agent_end", { willRetry: true }));
 		expect(host.onAgentEnd).toHaveBeenCalledWith("session-1", true);
 		expect(host.onSubSessionAgentEnd).not.toHaveBeenCalled();
 	});
