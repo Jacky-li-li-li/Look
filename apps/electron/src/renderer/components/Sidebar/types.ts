@@ -44,7 +44,8 @@ export interface SessionRowProps {
 	handleEditKeyDown: (e: React.KeyboardEvent) => void;
 	beginEdit: (kind: "project" | "session", id: string, value: string) => void;
 	selectSession: (agent: AgentInfo) => void;
-	collapsedSubSessions: Set<string>;
+	/** 子会话折叠状态：parentId → 是否折叠；未记录（undefined）视为折叠（默认折叠新父会话） */
+	collapsedSubSessions: Record<string, boolean>;
 	toggleSubSessions: (parentId: string, e: React.MouseEvent) => void;
 	/** 子会话列表，已预计算 phase 和 running 状态，避免 SessionRow 订阅全局 atom */
 	childrenList: ChildSessionInfo[];

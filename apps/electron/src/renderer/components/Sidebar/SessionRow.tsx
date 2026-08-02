@@ -38,12 +38,13 @@ function SessionRowImpl({
 }: SessionRowProps) {
 	const { t } = useTranslation();
 	const hasChildren = childrenList.length > 0;
+	const isCollapsed = collapsedSubSessions[agent.id] ?? true; // 未记录默认折叠
 	const feishuLabel = t("settings.feishu", "Feishu");
 	return (
 		<div
 			className="session-tree-group"
 			data-has-children={hasChildren || undefined}
-			data-expanded={hasChildren && !collapsedSubSessions.has(agent.id) ? "" : undefined}
+			data-expanded={hasChildren && !isCollapsed ? "" : undefined}
 		>
 			<div
 				data-agent-id={agent.id}
@@ -108,16 +109,12 @@ function SessionRowImpl({
 						className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
 						onClick={(e) => toggleSubSessions(agent.id, e)}
 						title={
-							collapsedSubSessions.has(agent.id)
+							isCollapsed
 								? t("sidebar.expandSubSessions", "展开子会话")
 								: t("sidebar.collapseSubSessions", "折叠子会话")
 						}
 					>
-						{collapsedSubSessions.has(agent.id) ? (
-							<ChevronRight className="size-3" />
-						) : (
-							<ChevronDown className="size-3" />
-						)}
+						{isCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
 					</button>
 				)}
 				<DropdownMenu>
@@ -153,7 +150,7 @@ function SessionRowImpl({
 				</DropdownMenu>
 			</div>
 			{/* Sub-sessions — 使用预计算的 phase/running，无需订阅全局 atom */}
-			{!collapsedSubSessions.has(agent.id) &&
+			{!isCollapsed &&
 				childrenList.map((child: ChildSessionInfo) => (
 					<div
 						key={child.agent.id}

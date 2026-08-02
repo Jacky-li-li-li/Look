@@ -76,29 +76,46 @@ export default function ProjectTree({
 		});
 	}, []);
 
-	// 子会话折叠
+	// 子会话折叠状态：parentId → 是否折叠（默认折叠）。
+	// 旧版本（<1.6）存的是折叠白名单数组 ["id1","id2"]，此处做格式迁移。
 	const LS_KEY = "look-collapsed-subsessions";
-	const [collapsedSubSessions, setCollapsedSubSessions] = useState<Set<string>>(() => {
+	const [collapsedSubSessions, setCollapsedSubSessions] = useState<Record<string, boolean>>(() => {
 		try {
 			const raw = localStorage.getItem(LS_KEY);
-			return raw ? new Set<string>(JSON.parse(raw)) : new Set();
+			if (!raw) return {};
+			const parsed = JSON.parse(raw) as unknown;
+			if (Array.isArray(parsed)) {
+				// 旧格式：白名单数组 → 折叠 map（数组中的 id 折叠）
+				const map: Record<string, boolean> = {};
+				for (const id of parsed) {
+					if (typeof id === "string") map[id] = true;
+				}
+				return map;
+			}
+			if (parsed && typeof parsed === "object") {
+				return parsed as Record<string, boolean>;
+			}
+			return {};
 		} catch {
-			return new Set();
+			return {};
 		}
 	});
+
+	// 持久化：副作用移出 setState updater，避免 React 并发渲染/strict mode 下
+	// updater 被重复调用或丢弃导致 localStorage 写入竞态（旧值覆盖新值）。
+	useEffect(() => {
+		try {
+			localStorage.setItem(LS_KEY, JSON.stringify(collapsedSubSessions));
+		} catch {
+			/* noop */
+		}
+	}, [collapsedSubSessions]);
 
 	const toggleSubSessions = useCallback((parentId: string, e: React.MouseEvent) => {
 		e.stopPropagation();
 		setCollapsedSubSessions((prev) => {
-			const next = new Set(prev);
-			if (next.has(parentId)) next.delete(parentId);
-			else next.add(parentId);
-			try {
-				localStorage.setItem(LS_KEY, JSON.stringify([...next]));
-			} catch {
-				/* noop */
-			}
-			return next;
+			const isCollapsed = prev[parentId] ?? true; // 未记录默认折叠
+			return { ...prev, [parentId]: !isCollapsed };
 		});
 	}, []);
 
@@ -295,7 +312,7 @@ interface ProjectTreeItemProps {
 	handleEditKeyDown: (event: React.KeyboardEvent) => void;
 	beginEdit: (kind: "project" | "session", id: string, value: string) => void;
 	selectSession: (agent: AgentInfo) => void;
-	collapsedSubSessions: Set<string>;
+	collapsedSubSessions: Record<string, boolean>;
 	toggleSubSessions: (parentId: string, event: React.MouseEvent) => void;
 	copySessionId: (sessionId: string) => Promise<void>;
 	onDestroy: (sessionId: string) => void;
