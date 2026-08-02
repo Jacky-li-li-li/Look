@@ -53,6 +53,7 @@
     "jotai-family": "^1.0.2",
     "lucide-react": "^1.17.0",
     "node-cron": "^4.6.0",
+    "@puppeteer/browsers": "^2.13.2",
     "puppeteer-core": "^24.43.1",
     "qrcode": "^1.5.4",
     "radix-ui": "^1.4.3",

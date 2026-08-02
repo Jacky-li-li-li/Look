@@ -32,6 +32,10 @@ interface PageScreenshotRequest {
 export class BrowserService implements BrowserHost {
 	private browsers = new Map<string, BrowserState>();
 	private nextId = 1;
+	/** 已暴露过 __look_screenshot 的 Page（puppeteer 重复 exposeFunction 会抛错，只首次注册）。 */
+	private exposedScreenshotPages = new WeakSet<Page>();
+	/** 当前 run 的截图收集器（按 Page 索引），已暴露的回调转发到这里，避免闭包持有单次调用状态。 */
+	private screenshotCollectors = new Map<Page, BrowserScreenshot[]>();
 
 	async launch(options: BrowserLaunchOptions = {}): Promise<string> {
 		const { launch } = await import("./launch.js");
@@ -138,22 +142,31 @@ export class BrowserService implements BrowserHost {
 		const displays: Array<{ type: "text" | "image"; text?: string; data?: string; mimeType?: string }> = [];
 		const screenshots: BrowserScreenshot[] = [];
 
+		// 挂载本次收集器：已暴露的回调会从这里读取，闭包不持有单次调用状态。
+		this.screenshotCollectors.set(page, screenshots);
+
 		// 暴露截图能力到页面（仅截图；页面无法借此注入文本到模型可见输出）。
-		// run 每次调用重新暴露，闭包持有本次调用的 screenshots 收集器。
-		await page.exposeFunction("__look_screenshot", async (req: PageScreenshotRequest | undefined) => {
-			const buf = (await page.screenshot({
-				fullPage: req?.fullPage ?? false,
-				type: "png",
-			})) as Buffer;
-			const data = buf.toString("base64");
-			screenshots.push({
-				data,
-				mimeType: "image/png",
-				width: page.viewport()?.width ?? 1280,
-				height: page.viewport()?.height ?? 720,
+		// 只在首次调用时注册一次——puppeteer 对同一 Page 重复 exposeFunction
+		// 会抛 `window['__look_screenshot'] already exists`，导致同一 tab 第二次
+		// browser_run 必然失败。后续调用复用首次注册的回调，转发到上面的收集器。
+		if (!this.exposedScreenshotPages.has(page)) {
+			await page.exposeFunction("__look_screenshot", async (req: PageScreenshotRequest | undefined) => {
+				const collector = this.screenshotCollectors.get(page);
+				const buf = (await page.screenshot({
+					fullPage: req?.fullPage ?? false,
+					type: "png",
+				})) as Buffer;
+				const data = buf.toString("base64");
+				collector?.push({
+					data,
+					mimeType: "image/png",
+					width: page.viewport()?.width ?? 1280,
+					height: page.viewport()?.height ?? 720,
+				});
+				return data;
 			});
-			return data;
-		});
+			this.exposedScreenshotPages.add(page);
+		}
 
 		// 页面脚本：纯字符串构建，内联快照函数与用户代码。
 		// 注意：这里不是主进程 TypeScript 作用域，避免 `document` 等 DOM
@@ -185,7 +198,22 @@ export class BrowserService implements BrowserHost {
 				type: "text",
 				text: `Browser run error: ${error instanceof Error ? error.message : String(error)}`,
 			});
+			// 超时可能是页面内同步死循环卡死了 JS 线程；主进程虽已放弃等待，
+			// 但页面后续操作仍会一直超时。主动关掉该 tab，让下一次操作重建。
+			if (error instanceof Error && error.message.includes("timed out")) {
+				try {
+					await this.closeTab(handle, tabName);
+					displays.push({
+						type: "text",
+						text: "[tab was killed after timeout — reopen it with browser_open]",
+					});
+				} catch {
+					// 关闭失败不阻塞错误返回
+				}
+			}
 			return { displays, screenshots };
+		} finally {
+			this.screenshotCollectors.delete(page);
 		}
 	}
 

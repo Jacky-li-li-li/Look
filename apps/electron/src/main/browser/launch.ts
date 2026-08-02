@@ -81,15 +81,23 @@ export async function launch(options: {
 	const browser = await puppeteer.launch({
 		executablePath,
 		headless,
-		args: [
-			"--no-sandbox",
-			"--disable-setuid-sandbox",
-			"--disable-dev-shm-usage",
-			"--disable-gpu",
-			`--window-size=${viewport.width},${viewport.height}`,
-		],
+		args: buildLaunchArgs(viewport),
 		defaultViewport: viewport,
 	});
 
 	return { browser, headless };
+}
+
+/**
+ * 构建 Chromium 启动参数。
+ *
+ * 仅当以 root 运行（典型于 Linux CI/容器）时才需要 --no-sandbox；
+ * 普通用户环境禁用沙箱会不必要地放大被访问网页的权限，故不加。
+ */
+function buildLaunchArgs(viewport: { width: number; height: number }): string[] {
+	const args = ["--disable-dev-shm-usage", "--disable-gpu", `--window-size=${viewport.width},${viewport.height}`];
+	if (typeof process.getuid === "function" && process.getuid() === 0) {
+		args.push("--no-sandbox", "--disable-setuid-sandbox");
+	}
+	return args;
 }

@@ -1268,12 +1268,14 @@ body {
 		animation: status-pulse 1.2s ease-in-out infinite;
 	}
 
-	/* Completed — static green border (box-shadow avoids layer conflicts) */
-	[data-completed] {
+	/* Completed — static green border (box-shadow avoids layer conflicts)
+	   Sub-session rows exclude it: their completed state is expressed by the
+	   Bot icon color only (see .subsession-tree-row[data-completed] above). */
+	[data-completed]:not(.subsession-tree-row) {
 		box-shadow: inset 0 0 0 1px oklch(0.55 0.15 150 / 0.6);
 		border-color: transparent;
 	}
-	[data-completed]:hover {
+	[data-completed]:not(.subsession-tree-row):hover {
 		box-shadow: inset 0 0 0 1px oklch(0.55 0.15 150 / 0.8);
 	}
 

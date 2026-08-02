@@ -63,8 +63,13 @@ export interface RuntimeLifecycleCoordinatorOptions {
 export class RuntimeLifecycleCoordinator {
 	private readonly disposals = new Map<string, Promise<void>>();
 	private readonly creationTargets = new Map<string, { cwd: string; projectId: string }>();
+	/** 最近一次向渲染端广播过 active project 的项目 id（用于 projectChanged 判定）。 */
+	private lastBroadcastProjectId: string | null;
 
-	constructor(private readonly options: RuntimeLifecycleCoordinatorOptions) {}
+	constructor(private readonly options: RuntimeLifecycleCoordinatorOptions) {
+		// 启动时内部 activeProjectId 与渲染端同步（由 project 路由恢复），以它为基线。
+		this.lastBroadcastProjectId = options.getActiveProjectId();
+	}
 
 	async createManagedRuntime(
 		cwd: string,
@@ -162,7 +167,11 @@ export class RuntimeLifecycleCoordinator {
 		// 同一项目内切换会话：项目列表与会话列表都没有变化，跳过磁盘扫描和
 		// project:list / project:active-changed 事件风暴（快速连点时的卡顿主因）。
 		// 仅跨项目切换才需要刷新项目级状态。
-		const projectChanged = this.options.getActiveProjectId() !== managed.projectId;
+		// 注意：以「最近一次已广播的项目」为基准，而非内部 activeProjectId——
+		// 新建会话路径（session-lifecycle-service）会直接 setActiveProjectId 但不广播，
+		// 若用内部值判定，会把这种「渲染端还不知情」的切换误判为同项目，
+		// 导致渲染端项目高亮/文件面板/最后活跃项目持久化永久漂移且不自愈。
+		const projectChanged = this.lastBroadcastProjectId !== managed.projectId;
 		this.options.selection.setCurrent(sessionId);
 		this.options.subAgentRuntimeService.cancelSubSessionCleanup(sessionId);
 		if (projectChanged) {
@@ -170,6 +179,7 @@ export class RuntimeLifecycleCoordinator {
 			await this.options.refreshProjectSessions(managed.projectId);
 			this.options.events.emitProjectList();
 			this.options.events.emit({ type: "project:active-changed", projectId: managed.projectId });
+			this.lastBroadcastProjectId = managed.projectId;
 		}
 		if (opts?.skipSnapshot && hadRuntime) {
 			// 轻量激活：仅跨项目切换时需要刷新新项目的会话列表；同项目内列表没变，跳过。

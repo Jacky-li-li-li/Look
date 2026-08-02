@@ -204,7 +204,7 @@ export default function AboutTab() {
 								<div
 									className="h-16 w-full"
 									style={{
-										background: "linear-gradient(to top, hsl(var(--popover)), transparent)",
+										background: "linear-gradient(to top, var(--popover), transparent)",
 										maskImage: "linear-gradient(to top, black 0%, transparent 100%)",
 										WebkitMaskImage: "linear-gradient(to top, black 0%, transparent 100%)",
 									}}
@@ -227,6 +227,9 @@ export default function AboutTab() {
 						<CardTitle className="text-[13px] font-medium">{t("about.contactTitle")}</CardTitle>
 					</CardHeader>
 					<CardContent className="px-4 py-3.5">
+						<p className="mb-2.5 text-[12px] leading-relaxed text-muted-foreground">
+							{t("about.contactDescription")}
+						</p>
 						<a
 							href="https://www.feishu.cn/invitation/page/add_contact/?token=b42nc543-2547-467b-8a3b-d73db71acce1&unique_id=NfhtWSY6D_FJhaHffrRANQ=="
 							target="_blank"

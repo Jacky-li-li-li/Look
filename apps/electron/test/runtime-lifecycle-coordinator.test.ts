@@ -102,7 +102,11 @@ function storedSession(id: string): StoredSession {
 	};
 }
 
-function makeCoordinator(runtimeFixture: RuntimeFixture, stored = storedSession("session-1")) {
+function makeCoordinator(
+	runtimeFixture: RuntimeFixture,
+	stored = storedSession("session-1"),
+	initialActiveProjectId: string | null = null,
+) {
 	const runtimeRegistry = new RuntimeRegistry();
 	const scopeRegistry = new SessionScopeRegistry();
 	const selection = new ActiveSessionSelection();
@@ -142,7 +146,7 @@ function makeCoordinator(runtimeFixture: RuntimeFixture, stored = storedSession(
 		openSessionManager: vi.fn(() => ({ getSessionId: () => stored.id }) as SessionManager),
 		handleSessionEvent: vi.fn(),
 		setActiveProjectId: vi.fn(),
-		getActiveProjectId: vi.fn(() => null),
+		getActiveProjectId: vi.fn(() => initialActiveProjectId),
 		refreshProjectSessions: vi.fn().mockResolvedValue([]),
 		events: {
 			emit: vi.fn((event) => emitted.push(event)),
@@ -462,8 +466,7 @@ describe("RuntimeLifecycleCoordinator", () => {
 	it("skips project-level refresh when switching within the same active project", async () => {
 		const session = makeSession("session-1");
 		const runtime = makeRuntime(session);
-		const fixture = makeCoordinator(runtime);
-		fixture.dependencies.getActiveProjectId = vi.fn(() => "project-1");
+		const fixture = makeCoordinator(runtime, storedSession("session-1"), "project-1");
 		await fixture.coordinator.createManagedRuntime("/project", session.session.sessionManager, "project-1");
 
 		await fixture.coordinator.activateSession("session-1");
@@ -474,5 +477,24 @@ describe("RuntimeLifecycleCoordinator", () => {
 		expect(fixture.dependencies.events.emitProjectList).not.toHaveBeenCalled();
 		expect(fixture.dependencies.events.emitSessionList).not.toHaveBeenCalled();
 		expect(fixture.dependencies.events.emitSessionState).toHaveBeenCalledTimes(1);
+	});
+
+	it("re-broadcasts project:active-changed when internal active project changed silently (createAgent path)", async () => {
+		// 场景：新建会话到非激活项目 B 时，session-lifecycle-service 会静默
+		// setActiveProjectId(B) 但不广播；随后点击 B 的项目会话必须补发
+		// project:active-changed，否则渲染端项目高亮/文件面板会永久漂移。
+		const sessionB = makeSession("session-b");
+		const runtimeB = makeRuntime(sessionB);
+		const fixture = makeCoordinator(runtimeB, storedSession("session-b"), "project-A");
+		// 模拟 createAgent 静默改内部 activeProjectId（不广播）
+		fixture.dependencies.getActiveProjectId = vi.fn(() => "project-B");
+		await fixture.coordinator.createManagedRuntime("/project-b", sessionB.session.sessionManager, "project-B");
+
+		await fixture.coordinator.activateSession("session-b");
+
+		expect(fixture.selection.currentId).toBe("session-b");
+		expect(fixture.dependencies.setActiveProjectId).toHaveBeenCalledWith("project-B");
+		expect(fixture.dependencies.events.emitProjectList).toHaveBeenCalledTimes(1);
+		expect(fixture.emitted).toContainEqual({ type: "project:active-changed", projectId: "project-B" });
 	});
 });

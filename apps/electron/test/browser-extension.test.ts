@@ -108,6 +108,28 @@ describe("Browser Extension", () => {
 		expect(host.launch).not.toHaveBeenCalled();
 	});
 
+	it("browser_open rejects disallowed URL protocols", async () => {
+		const { tools, host } = captureRegisteredTools();
+		for (const bad of ["file:///etc/passwd", "javascript:alert(1)", "data:text/html,<h1>x</h1>"]) {
+			const result = await tools.get("browser_open")!.execute("call-1", { url: bad });
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toContain("disallowed protocol");
+		}
+		expect(host.launch).not.toHaveBeenCalled();
+	});
+
+	it("browser_open allows bare domains and http(s) URLs", async () => {
+		const { tools, host } = captureRegisteredTools();
+		const ok = await tools.get("browser_open")!.execute("call-1", { url: "example.com/path" });
+		expect(ok.isError).toBeFalsy();
+		expect(host.openTab).toHaveBeenCalledWith("browser-1", "main", {
+			url: "example.com/path",
+			waitUntil: "domcontentloaded",
+		});
+		const https = await tools.get("browser_open")!.execute("call-2", { url: "https://example.com" });
+		expect(https.isError).toBeFalsy();
+	});
+
 	it("browser_open launches in a trusted project", async () => {
 		const { tools, host } = captureRegisteredTools(createFakeHost(), {
 			resolveProjectTrust: () => true,

@@ -27,6 +27,23 @@ const BROWSER_APPROVAL_TOOLS = ["browser_open", "browser_close", "browser_run"] 
 
 const DEFAULT_TAB_NAME = "main";
 
+/** 允许导航的 URL 协议（白名单，含冒号）。拒绝 file:/javascript:/data: 等本地/可执行协议。 */
+const ALLOWED_URL_PROTOCOLS = new Set(["http:", "https:", "about:"]);
+
+function assertSafeUrl(url: string | undefined): void {
+	if (!url) return;
+	const trimmed = url.trim();
+	if (!trimmed) return;
+	// 无协议前缀的裸地址（如 example.com）按 http 处理，直接放行；
+	// 有协议前缀时必须命中白名单。
+	const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(trimmed);
+	if (schemeMatch && !ALLOWED_URL_PROTOCOLS.has(`${schemeMatch[1].toLowerCase()}:`)) {
+		throw new Error(
+			`Refusing to navigate to disallowed protocol "${schemeMatch[1]}:". Only http:, https: (or a bare domain) are allowed.`,
+		);
+	}
+}
+
 const WAIT_UNTIL_VALUES = ["load", "domcontentloaded", "networkidle0", "networkidle2"] as const;
 
 // ── 参数 Schema ─────────────────────────────────────────────
@@ -84,7 +101,9 @@ function resolveTabName(params: { name?: string }): string {
 }
 
 function isTrusted(resolveProjectTrust: ((cwd: string) => boolean) | undefined, cwd?: string): boolean {
-	// 无 cwd（如某些测试场景）或未提供检查函数时视为信任。
+	// 无 cwd（非项目会话，如某些测试场景）或未提供检查函数时视为信任。
+	// 注意：browser_open 本身仍在 BROWSER_APPROVAL_TOOLS 中，每次调用都要过
+	// 用户审批闸门，因此这里放行不会绕过权限控制。
 	if (!cwd || !resolveProjectTrust) return true;
 	return resolveProjectTrust(cwd);
 }
@@ -123,6 +142,10 @@ export function createBrowserExtensionFactory(
 			executionMode: "sequential",
 			async execute(_toolCallId, params, _signal) {
 				try {
+					const tabName = resolveTabName(params);
+					// 先校验 URL 协议再启动浏览器：非法协议不应拉起 Chromium。
+					assertSafeUrl(params.url);
+
 					// Lazy launch on first use; gate behind project trust.
 					if (!browserHandle) {
 						if (!isTrusted(resolveProjectTrust, cwd)) {
@@ -136,7 +159,6 @@ export function createBrowserExtensionFactory(
 						});
 					}
 
-					const tabName = resolveTabName(params);
 					const info = await host.openTab(browserHandle, tabName, {
 						url: params.url,
 						waitUntil: (params.waitUntil as WaitUntil | undefined) ?? "domcontentloaded",
