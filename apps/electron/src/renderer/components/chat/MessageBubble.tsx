@@ -9,7 +9,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import { cn } from "@look/ui";
 import { UserAvatar } from "@look/ui/components/UserAvatar";
-import type { LookSessionEntry, LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
+import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,6 +19,7 @@ import { userProfileAtom } from "../../store/authAtoms";
 import { imagePreviewAtom } from "../../store/projectAtoms";
 import { AiAvatar } from "../AiAvatar";
 import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
+import { MessageHeader } from "./message-elements/MessageElements";
 import SkillAwareContent from "./SkillAwareContent";
 import { isSubagentTool } from "./SubagentArgsCards";
 import SubagentToolGroup from "./SubagentToolGroup";
@@ -121,30 +122,6 @@ function safelyParsePartialJson(raw: string): Record<string, unknown> | undefine
 	} catch {
 		return undefined;
 	}
-}
-
-function MessageHeader({
-	sender,
-	isStreaming,
-	isActiveLeaf,
-	isUser,
-}: {
-	sender: string;
-	isStreaming: boolean;
-	isActiveLeaf: boolean;
-	isUser: boolean;
-}) {
-	return (
-		<div
-			className={cn(
-				"mb-msg-header flex items-center gap-2 text-[10px] text-muted-foreground",
-				isUser && "justify-end",
-			)}
-		>
-			<span className="font-medium uppercase tracking-wider">{sender}</span>
-			{isStreaming && <span className="status-mark" data-status="thinking" />}
-		</div>
-	);
 }
 
 function ContentBlocks({
@@ -398,26 +375,6 @@ const MessageBubble = memo(function MessageBubble({
 		</div>
 	);
 });
-
-export function SessionEntryBubble({ entry }: { entry: Exclude<LookSessionEntry, { type: "message" }> }) {
-	let title: string = entry.type;
-	let body = "";
-	if (entry.type === "branch_summary" || entry.type === "compaction") body = entry.summary;
-	else if (entry.type === "custom_message")
-		body = typeof entry.content === "string" ? entry.content : (resultText(entry.content) ?? "");
-	else if (entry.type === "model_change") body = `${entry.provider}/${entry.modelId}`;
-	else if (entry.type === "thinking_level_change") body = entry.thinkingLevel;
-	else if (entry.type === "label") body = entry.label ?? "";
-	else if (entry.type === "session_info") body = entry.name ?? "";
-	else if (entry.type === "custom") body = resultText(entry.data) ?? "";
-	if (entry.type === "custom_message") title = entry.customType;
-	return (
-		<div className="mx-10 rounded-md border border-hairline bg-muted/20 px-3 py-2 text-xs">
-			<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
-			{body && <div className="message-prose whitespace-pre-wrap">{body}</div>}
-		</div>
-	);
-}
 
 // ============================================================
 // Streaming blocks rendering — discrete-event path

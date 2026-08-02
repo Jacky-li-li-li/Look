@@ -30,7 +30,8 @@ import {
 import LookMarkdown from "../markdown/LookMarkdown";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
-import MessageBubble, { SessionEntryBubble, StreamingMessageBubble } from "./MessageBubble";
+import MessageBubble, { StreamingMessageBubble } from "./MessageBubble";
+import { SessionEntryBubble } from "./SessionEntryBubble";
 
 /** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
 const EMPTY_TOOL_EXECUTIONS: Record<string, LookUiToolExecState> = {};
