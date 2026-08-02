@@ -95,11 +95,14 @@ describe("MessageItem", () => {
 });
 
 describe("MessageActions", () => {
-	it("renders reserved (invisible) placeholder when show=false", () => {
-		const { container } = render(<MessageActions show={false} isUser={false} />);
+	it("renders reserved placeholder when show=false (buttons invisible, meta still visible)", () => {
+		const { container } = render(
+			<MessageActions show={false} isUser={false} meta={<span data-testid="meta">1.2s</span>} />,
+		);
 		const el = container.querySelector("[data-message-actions]");
 		expect(el?.hasAttribute("data-reserved")).toBe(true);
-		expect(el?.classList.contains("invisible")).toBe(true);
+		// meta 常驻可见（不随 hover 隐藏）
+		expect(container.querySelector('[data-testid="meta"]')).toBeTruthy();
 	});
 
 	it("renders visible actions when show=true and callbacks provided", () => {

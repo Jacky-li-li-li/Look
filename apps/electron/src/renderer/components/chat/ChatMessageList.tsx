@@ -477,7 +477,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 									item.message.role === "assistant" &&
 									item.turnDurationMs != null &&
 									item.turnDurationMs > 0 ? (
-										<span className="ml-auto font-mono text-[10px] text-muted-foreground/60 tabular-nums">
+										<span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums">
 											{item.turnDurationMs >= 60_000
 												? `${(item.turnDurationMs / 60_000).toFixed(1)}m`
 												: `${(item.turnDurationMs / 1_000).toFixed(1)}s`}
