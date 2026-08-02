@@ -484,6 +484,9 @@ export class Application {
 			this.services.schedulerService!,
 		);
 
+		// 渲染进程等待此信号后才发起首次 IPC 调用（启动竞态防护）。
+		this.safeSendEvent({ type: "app:ready" as const });
+
 		this.bootstrapLarkBridge();
 
 		const allProjects = this.services.runtimeManager!.listProjects();

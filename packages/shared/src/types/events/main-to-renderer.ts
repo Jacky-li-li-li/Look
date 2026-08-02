@@ -94,7 +94,11 @@ export type MainToRendererEvent =
 	// ---- App auto-update (main → renderer) ----
 	| { type: "update:status"; phase: AppUpdatePhase; version?: string; percent?: number; error?: string }
 	// ---- Window state (main → renderer) ----
-	| { type: "window:fullscreen-changed"; fullscreen: boolean };
+	| { type: "window:fullscreen-changed"; fullscreen: boolean }
+	// ---- App lifecycle (main → renderer) ----
+	// 主进程 IPC handlers 注册完成后的就绪信号；渲染进程收到后才发起首次 IPC 调用，
+	// 避免启动竞态（No handler registered for 'look:invoke'）。
+	| { type: "app:ready" };
 
 /** OAuth login prompt variants sent from main to renderer. */
 export type LoginPrompt =
