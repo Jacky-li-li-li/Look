@@ -220,8 +220,8 @@ export default function McpServersTab() {
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
 			<div className="flex items-center justify-between">
 				<div>
-					<h3 className="text-sm font-semibold">{t("mcpServers.title")}</h3>
-					<p className="mt-0.5 text-xs text-muted-foreground">{t("mcpServers.description")}</p>
+					<h3 className="text-[13px] font-medium">{t("mcpServers.title")}</h3>
+					<p className="text-[11px] text-muted-foreground">{t("mcpServers.description")}</p>
 				</div>
 				<Button type="button" variant="line-filled" size="sm" className="h-7 gap-1.5 text-xs" onClick={handleAdd}>
 					<Plus className="size-3.5" />

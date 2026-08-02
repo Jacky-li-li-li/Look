@@ -819,11 +819,11 @@ export default function ImChannelsTab() {
 	};
 
 	return (
-		<div className="flex h-full flex-col gap-4 overflow-y-auto pr-1">
+		<div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
 			{/* ── Header with always-visible action buttons ── */}
 			<div className="flex items-center justify-between">
 				<div>
-					<h3 className="text-sm font-medium">{t("settings.imChannels")}</h3>
+					<h3 className="text-[13px] font-medium">{t("settings.imChannels")}</h3>
 					<p className="text-[11px] text-muted-foreground">{t("settings.imChannelsDescription")}</p>
 				</div>
 				<div className="flex items-center gap-2">

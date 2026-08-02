@@ -804,6 +804,7 @@
   "about": {
     "current": "現在のバージョン",
     "releaseNotes": "リリースノート",
+    "showAll": "すべてのバージョンを表示",
     "contactTitle": "Lookに連絡",
     "contactDescription": "FeishuでLookチームに連絡する",
     "contactButton": "Feishu"

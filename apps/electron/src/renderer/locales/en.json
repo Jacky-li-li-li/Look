@@ -804,6 +804,7 @@
   "about": {
     "current": "Current",
     "releaseNotes": "Release notes",
+    "showAll": "Show all versions",
     "contactTitle": "Contact Look",
     "contactDescription": "Get in touch with the Look team via Feishu",
     "contactButton": "Feishu"

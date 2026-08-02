@@ -30,6 +30,10 @@ export default function AboutTab() {
 	const { update, checkForUpdates, installUpdate } = useAppUpdate();
 	const phase = update?.phase;
 	const [expanded, setExpanded] = useState<string | null>(null);
+	const [showAllVersions, setShowAllVersions] = useState(false);
+
+	const visibleChangelog = showAllVersions ? CHANGELOG : CHANGELOG.slice(0, 5);
+	const hasMore = CHANGELOG.length > 5;
 
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
@@ -132,9 +136,9 @@ export default function AboutTab() {
 					<CardHeader className="border-b border-hairline px-4 py-2.5">
 						<CardTitle className="text-[13px] font-medium">{t("about.releaseNotes")}</CardTitle>
 					</CardHeader>
-					<CardContent className="px-4 py-3.5">
+					<CardContent className="relative px-4 py-3.5">
 						<div className="relative ml-[5px] border-l border-hairline pl-5">
-							{CHANGELOG.map((entry) => {
+							{visibleChangelog.map((entry) => {
 								const isCurrent = entry.version === appVersion;
 								const isOpen = expanded === entry.version;
 								return (
@@ -193,6 +197,27 @@ export default function AboutTab() {
 								);
 							})}
 						</div>
+
+						{/* 模糊渐变遮罩：提示还有更多版本 */}
+						{!showAllVersions && hasMore && (
+							<div className="pointer-events-none absolute bottom-0 left-0 right-0 flex flex-col items-center">
+								<div
+									className="h-16 w-full"
+									style={{
+										background: "linear-gradient(to top, hsl(var(--popover)), transparent)",
+										maskImage: "linear-gradient(to top, black 0%, transparent 100%)",
+										WebkitMaskImage: "linear-gradient(to top, black 0%, transparent 100%)",
+									}}
+								/>
+								<button
+									type="button"
+									onClick={() => setShowAllVersions(true)}
+									className="pointer-events-auto relative -mt-8 rounded-full border border-hairline bg-popover px-3 py-1 text-[11px] text-muted-foreground shadow-sm transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								>
+									{t("about.showAll")}
+								</button>
+							</div>
+						)}
 					</CardContent>
 				</Card>
 
