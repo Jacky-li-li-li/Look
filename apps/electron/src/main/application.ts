@@ -246,6 +246,12 @@ export class Application {
 		this.services.mainWindow.webContents.on("did-finish-load", () => {
 			replayUpdateStatus();
 			void requestFreshCheck();
+			// 重放当前全屏状态：渲染进程加载前已进入全屏时 enter-full-screen
+			// 事件已错过，不补发则红绿灯留白一直不收回。
+			this.safeSendEvent({
+				type: "window:fullscreen-changed",
+				fullscreen: this.services.mainWindow?.isFullScreen() ?? false,
+			});
 		});
 
 		this.services.mainWindow.on("enter-full-screen", () => {
