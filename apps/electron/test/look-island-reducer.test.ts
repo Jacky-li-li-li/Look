@@ -425,6 +425,34 @@ describe("LookIslandReducer", () => {
 		expect(state.sessions.has("s1")).toBe(false);
 	});
 
+	it("clears unread attention when the user activates a completed session", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		expect(state.sessions.get("s1")?.attention).toBe(true);
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 2000);
+		expect(state.sessions.get("s1")?.attention).toBe(false);
+		const pill = buildLookIslandPillSnapshot(state.sessions.values());
+		expect(pill.unreadCompletedCount).toBe(0);
+	});
+
+	it("clears unread attention on session:activated (any activation path)", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		expect(state.sessions.get("s1")?.attention).toBe(true);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
+		expect(state.sessions.get("s1")?.attention).toBe(false);
+		const pill = buildLookIslandPillSnapshot(state.sessions.values());
+		expect(pill.unreadCompletedCount).toBe(0);
+	});
+
+	it("clears unread attention on notification:activate-session (island jump)", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		expect(state.sessions.get("s1")?.attention).toBe(true);
+		applyLookIslandEvent(state, { type: "notification:activate-session", agentId: "s1" }, 2000);
+		expect(state.sessions.get("s1")?.attention).toBe(false);
+	});
+
 	it("caps the session map to avoid payload growth", () => {
 		const state = createLookIslandState();
 		// Create more than the 20-session cap.

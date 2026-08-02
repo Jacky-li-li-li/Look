@@ -101,7 +101,8 @@ export type MainToRendererEvent =
 	| { type: "app:ready" }
 	// ---- Desktop notification click (main → renderer) ----
 	// 用户点击系统桌面通知后，主进程请求渲染进程激活对应会话。
-	| { type: "notification:activate-session"; agentId: string };
+	| { type: "notification:activate-session"; agentId: string }
+	| { type: "session:activated"; agentId: string };
 
 /** OAuth login prompt variants sent from main to renderer. */
 export type LoginPrompt =

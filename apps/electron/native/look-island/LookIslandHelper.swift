@@ -444,7 +444,7 @@ private struct LookIslandPillView: View {
   let onContentWidth: (CGFloat) -> Void
 
   private var phase: String { state.pillSnapshot.phase }
-  private var hasSession: Bool { state.pillSnapshot.sessionCount > 0 }
+  private var hasSession: Bool { badgeCount > 0 }
 
   private var title: String {
     if !state.pillSnapshot.priorityTitle.isEmpty {
@@ -530,11 +530,14 @@ private struct LookIslandPillView: View {
     }
   }
 
+  /// Worth-noting sessions: currently running + unread (not yet viewed by
+  /// the user). Viewed completed sessions do not count toward the badge.
+  private var badgeCount: Int {
+    state.pillSnapshot.activeSessionCount + state.pillSnapshot.unreadCompletedCount
+  }
+
   private var badgeText: String {
-    let active = state.pillSnapshot.activeSessionCount
-    let total = state.pillSnapshot.sessionCount
-    if active > 0 && total > 1 { return "\(active)/\(total)" }
-    return "\(total)"
+    "\(badgeCount)"
   }
 }
 

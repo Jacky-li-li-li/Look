@@ -158,6 +158,8 @@ export class RuntimeLifecycleCoordinator {
 			} else {
 				this.options.events.emitSessionState(sessionId, "activate");
 			}
+			// 用户已查看该会话（已读）——任何激活路径都通知岛清除未读。
+			this.options.events.emit({ type: "session:activated", agentId: sessionId });
 			return;
 		}
 		// 记录调用前是否已有 live runtime：仅当 runtime 可复用且渲染端持有快照（skipSnapshot）
@@ -189,6 +191,8 @@ export class RuntimeLifecycleCoordinator {
 		} else {
 			this.options.events.emitSessionState(sessionId);
 		}
+		// 用户已查看该会话（已读）——任何激活路径都通知岛清除未读。
+		this.options.events.emit({ type: "session:activated", agentId: sessionId });
 	}
 
 	/** skipSnapshot 命中 current 短路时，仍刷新该会话所在项目的侧边栏列表。 */

@@ -135,6 +135,10 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 				session.detail = session.detail || "Completed";
 				session.attention = true;
 			}
+			// User opened this session in the main window — clear unread badge.
+			if (event.reason === "activate") {
+				session.attention = false;
+			}
 			return true;
 		}
 
@@ -265,6 +269,28 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 			}
 			session.lastActivityAt = now;
 			return true;
+		}
+
+		case "session:activated": {
+			const session = state.sessions.get(event.agentId);
+			if (!session) return false;
+			// User opened this session — mark as read (drop from unread badge).
+			if (session.attention) {
+				session.attention = false;
+				return true;
+			}
+			return false;
+		}
+
+		case "notification:activate-session": {
+			const session = state.sessions.get(event.agentId);
+			if (!session) return false;
+			// Island jump / notification click — mark as viewed.
+			if (session.attention) {
+				session.attention = false;
+				return true;
+			}
+			return false;
 		}
 
 		case "error": {
