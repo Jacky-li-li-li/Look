@@ -343,8 +343,8 @@ export class SessionRuntimeManager
 		return this.composition.runtimeLifecycle.disposeAllRuntimes();
 	}
 
-	async activateSession(sessionId: string): Promise<void> {
-		return this.composition.runtimeLifecycle.activateSession(sessionId);
+	async activateSession(sessionId: string, opts?: { skipSnapshot?: boolean }): Promise<void> {
+		return this.composition.runtimeLifecycle.activateSession(sessionId, opts);
 	}
 
 	async createAgent(

@@ -41,7 +41,12 @@ const api: LookAPI = {
 	insertQueuedMessage: (agentId, text) =>
 		ipcRenderer.invoke("look:invoke", { type: "agent:insert-queued-message", agentId, text }),
 
-	activateSession: (sessionId) => ipcRenderer.invoke("look:invoke", { type: "agent:activate", agentId: sessionId }),
+	activateSession: (sessionId, opts) =>
+		ipcRenderer.invoke("look:invoke", {
+			type: "agent:activate",
+			agentId: sessionId,
+			skipSnapshot: opts?.skipSnapshot,
+		}),
 
 	createAgent: (input) =>
 		ipcRenderer.invoke("look:invoke", {

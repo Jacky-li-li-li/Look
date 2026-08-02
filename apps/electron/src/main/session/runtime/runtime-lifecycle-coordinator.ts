@@ -21,6 +21,7 @@ import type { ManagedRuntime, RuntimeRegistry, RuntimeSessionBinding } from "./r
 interface RuntimeLifecycleEvents {
 	emit(event: MainToRendererEvent): void;
 	emitSessionState(sessionId: string, reason?: SessionSnapshotEnvelope["reason"]): void;
+	emitSessionList(projectId: string): void;
 	emitProjectList(): void;
 }
 
@@ -142,11 +143,20 @@ export class RuntimeLifecycleCoordinator {
 		await Promise.all(sessionIds.map((sessionId) => this.disposeRuntime(sessionId, true)));
 	}
 
-	async activateSession(sessionId: string): Promise<void> {
+	async activateSession(sessionId: string, opts?: { skipSnapshot?: boolean }): Promise<void> {
 		if (this.options.selection.isCurrent(sessionId) && this.options.runtimeRegistry.has(sessionId)) {
-			this.options.events.emitSessionState(sessionId, "activate");
+			// 渲染端已在顶部打开且持有快照时（skipSnapshot），只确认 selection 已是最新，
+			// 不重发全量会话历史。避免渲染端 entries 换新引用 → timeline 重算 → 全部消息重渲染。
+			if (opts?.skipSnapshot) {
+				this.refreshActiveProjectSessions(sessionId);
+			} else {
+				this.options.events.emitSessionState(sessionId, "activate");
+			}
 			return;
 		}
+		// 记录调用前是否已有 live runtime：仅当 runtime 可复用且渲染端持有快照（skipSnapshot）
+		// 时才可跳过快照重发；若 runtime 是新创建的（从磁盘恢复），渲染端没有可用数据，必须发快照。
+		const hadRuntime = this.options.runtimeRegistry.has(sessionId);
 		const managed = await this.ensureRuntime(sessionId);
 		this.options.setActiveProjectId(managed.projectId);
 		this.options.selection.setCurrent(sessionId);
@@ -154,7 +164,20 @@ export class RuntimeLifecycleCoordinator {
 		await this.options.refreshProjectSessions(managed.projectId);
 		this.options.events.emitProjectList();
 		this.options.events.emit({ type: "project:active-changed", projectId: managed.projectId });
-		this.options.events.emitSessionState(sessionId);
+		if (opts?.skipSnapshot && hadRuntime) {
+			// 轻量激活：只刷新侧边栏会话列表，不重发全量快照。
+			this.options.events.emitSessionList(managed.projectId);
+		} else {
+			this.options.events.emitSessionState(sessionId);
+		}
+	}
+
+	/** skipSnapshot 命中 current 短路时，仍刷新该会话所在项目的侧边栏列表。 */
+	private refreshActiveProjectSessions(sessionId: string): void {
+		const info = this.options.getStoredSession(sessionId);
+		const projectId = info?.projectId;
+		if (!projectId) return;
+		this.options.events.emitSessionList(projectId);
 	}
 
 	private async bindRuntime(

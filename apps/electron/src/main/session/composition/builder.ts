@@ -452,6 +452,7 @@ export class CompositionBuilder {
 			events: {
 				emit: (event) => host.emit(event),
 				emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason ?? "activate"),
+				emitSessionList: (projectId) => this.sessionNotifier!.emitSessionList(projectId),
 				emitProjectList: () => this.sessionNotifier!.emitProjectList(),
 			},
 		});

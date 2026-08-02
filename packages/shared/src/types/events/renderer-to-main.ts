@@ -19,7 +19,7 @@ export type RendererToMainEvent =
 	  }
 	| { type: "agent:remove-queued-message"; agentId: string; text: string }
 	| { type: "agent:insert-queued-message"; agentId: string; text: string }
-	| { type: "agent:activate"; agentId: string }
+	| { type: "agent:activate"; agentId: string; skipSnapshot?: boolean }
 	| { type: "agent:create"; name?: string; projectId?: string; imProvider?: ImSessionProvider }
 	| { type: "agent:destroy"; agentId: string }
 	| { type: "agent:switch-model"; agentId: string; model: string }

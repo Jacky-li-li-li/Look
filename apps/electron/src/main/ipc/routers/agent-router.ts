@@ -56,7 +56,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		const sessionId = guardAgentId(data.agentId, "agentId");
 		const projectId = ctx.session.info.getAgentInfo(sessionId)?.projectId;
 		if (projectId) await promptForProjectTrust(ctx.project.trust, projectId, ctx.mainWindow);
-		await ctx.runtime.lifecycle.activateSession(sessionId);
+		await ctx.runtime.lifecycle.activateSession(sessionId, { skipSnapshot: data.skipSnapshot === true });
 		return { success: true };
 	});
 

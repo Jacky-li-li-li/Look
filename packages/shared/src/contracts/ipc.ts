@@ -78,7 +78,7 @@ export interface LookAPI {
 	): Promise<IpcResult>;
 	removeQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
 	insertQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
-	activateSession(sessionId: string): Promise<IpcResult>;
+	activateSession(sessionId: string, opts?: { skipSnapshot?: boolean }): Promise<IpcResult>;
 	createAgent(
 		name?: string | { name?: string; projectId?: string; imProvider?: "feishu" },
 	): Promise<IpcResult<{ agentId: string }>>;
