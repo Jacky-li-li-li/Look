@@ -37,12 +37,14 @@ interface MessageAvatarProps {
 	className?: string;
 }
 
-/** 消息头像（user 显示用户头像，assistant 显示 AI 头像）。 */
+/** 消息头像（user 显示用户头像，assistant 显示 AI 头像）。
+ *  assistant 容器样式与 UserAvatar 对齐（bg-background + rounded-lg + 无阴影），
+ *  见 App.css .message-avatar--ai.pixel-agent-avatar。 */
 export function MessageAvatar({ from, userAvatar = "", className }: MessageAvatarProps): ReactNode {
 	if (from === "user") {
 		return <UserAvatar avatar={userAvatar} size="sm" className="mt-msg-avatar" />;
 	}
-	return <AiAvatar size="sm" className={cn("mt-msg-avatar shrink-0", className)} />;
+	return <AiAvatar size="sm" className={cn("message-avatar--ai mt-msg-avatar shrink-0", className)} />;
 }
 
 // ===== MessageHeader — 消息头部 =====

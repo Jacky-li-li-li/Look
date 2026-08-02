@@ -1074,6 +1074,17 @@ body {
 			0 4px 10px oklch(0.04 0.002 85 / 0.06);
 	}
 
+	/* 消息区 AI 头像与用户头像视觉统一（UserAvatar：bg-background + rounded-lg + 无阴影）
+	   同时禁用 radix Avatar 的 after 高光伪元素，避免与 UserAvatar 的边框表现不一致。 */
+	.message-avatar--ai.pixel-agent-avatar {
+		border-radius: 0.5rem;
+		background: var(--background);
+		box-shadow: none;
+	}
+	.message-avatar--ai.pixel-agent-avatar::after {
+		display: none;
+	}
+
 	.pixel-agent-avatar--xs {
 		width: 1.25rem;
 		height: 1.25rem;
