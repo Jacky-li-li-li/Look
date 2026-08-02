@@ -1074,17 +1074,6 @@ body {
 			0 4px 10px oklch(0.04 0.002 85 / 0.06);
 	}
 
-	/* 消息区 AI 头像与用户头像视觉统一（UserAvatar：bg-background + rounded-lg + 无阴影）
-	   同时禁用 radix Avatar 的 after 高光伪元素，避免与 UserAvatar 的边框表现不一致。 */
-	.message-avatar--ai.pixel-agent-avatar {
-		border-radius: 0.5rem;
-		background: var(--background);
-		box-shadow: none;
-	}
-	.message-avatar--ai.pixel-agent-avatar::after {
-		display: none;
-	}
-
 	.pixel-agent-avatar--xs {
 		width: 1.25rem;
 		height: 1.25rem;
@@ -2235,4 +2224,30 @@ html[data-platform="darwin"]:not([data-fullscreen="true"])
 	.app-shell[data-sidebar-collapsed="true"]
 	.session-sheet-bar {
 	padding-left: 186px;
+}
+
+/* ============================================================
+	 Unlayered overrides (beats @layer utilities)
+	 ============================================================ */
+
+/* ── 消息区 AI 头像与 User 头像视觉统一 ──
+	 消息区 AiAvatar（.message-avatar--ai）覆盖 PixelAgentAvatar/radix Avatar
+	 默认样式：背景 muted → background、圆角 → rounded-lg(8px)、去阴影、
+	 禁用 radix after 高光伪元素。放在未分层区域确保压过 Tailwind utilities。
+	 双重类名强化特异性（项目惯例，参照 .glass-dialog.glass-dialog）。 */
+.message-avatar--ai.pixel-agent-avatar.message-avatar--ai.pixel-agent-avatar {
+	border-radius: 0.5rem;
+	background: var(--background);
+	box-shadow: none;
+	width: 1.75rem;
+	height: 1.75rem;
+}
+
+.message-avatar--ai.pixel-agent-avatar.message-avatar--ai.pixel-agent-avatar::after {
+	display: none;
+}
+
+/* 像素图案 fallback 背景对齐 UserAvatar（bg-background） */
+.message-avatar--ai.pixel-agent-avatar.message-avatar--ai.pixel-agent-avatar .pixel-agent-avatar__fallback {
+	background: var(--background);
 }
