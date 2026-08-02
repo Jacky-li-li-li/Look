@@ -504,6 +504,36 @@ body {
 	}
 
 	/* ============================================================
+		 输入框 chip 深色主题覆盖 — 旧实现用 transparent 88%/70% 叠加在近黑背景上，
+		 背景与边框的亮度差趋近于零，chip 视觉上退化为纯文本（无 tag 轮廓）。
+		 深色下提高不透明度与文字亮度，恢复 tag/pill 外形；浅色主题不受影响。
+		 ============================================================ */
+	.tone-dark .skill-chip,
+	.tone-dark .agent-chip {
+		background: color-mix(in oklch, oklch(0.72 0.14 250), transparent 68%);
+		color: oklch(0.78 0.13 250);
+		border-color: color-mix(in oklch, oklch(0.72 0.14 250), transparent 45%);
+		box-shadow: inset 0 1px 0 color-mix(in oklch, oklch(0.85 0.12 250), transparent 82%);
+	}
+	.tone-dark .skill-chip:hover,
+	.tone-dark .agent-chip:hover {
+		background: color-mix(in oklch, oklch(0.72 0.14 250), transparent 58%);
+		border-color: color-mix(in oklch, oklch(0.72 0.14 250), transparent 32%);
+	}
+	.tone-dark .mcp-chip,
+	.tone-dark .file-chip {
+		background: color-mix(in oklch, oklch(0.66 0.1 160), transparent 68%);
+		color: oklch(0.76 0.1 160);
+		border-color: color-mix(in oklch, oklch(0.66 0.1 160), transparent 45%);
+		box-shadow: inset 0 1px 0 color-mix(in oklch, oklch(0.82 0.08 160), transparent 82%);
+	}
+	.tone-dark .mcp-chip:hover,
+	.tone-dark .file-chip:hover {
+		background: color-mix(in oklch, oklch(0.66 0.1 160), transparent 58%);
+		border-color: color-mix(in oklch, oklch(0.66 0.1 160), transparent 32%);
+	}
+
+	/* ============================================================
 		 Brand Mark — WelcomeScreen geometric anchor
 		 ============================================================ */
 	.welcome-brand-mark,
