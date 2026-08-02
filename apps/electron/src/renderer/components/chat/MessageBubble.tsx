@@ -10,21 +10,14 @@ import type {
 import { cn } from "@look/ui";
 import { UserAvatar } from "@look/ui/components/UserAvatar";
 import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue } from "jotai";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { segmentExecutionBlocks } from "../../lib/executionSegments";
-import { hashKey } from "../../lib/stableKey";
 import { userProfileAtom } from "../../store/authAtoms";
-import { imagePreviewAtom } from "../../store/projectAtoms";
 import { AiAvatar } from "../AiAvatar";
-import CollapsibleExecutionGroup from "./CollapsibleExecutionGroup";
+import { toUnifiedFromPiAi, toUnifiedFromStream } from "./block-renderer/blockTypes";
+import { MessageBlockList } from "./block-renderer/MessageBlockList";
 import { MessageHeader } from "./message-elements/MessageElements";
-import SkillAwareContent from "./SkillAwareContent";
-import { isSubagentTool } from "./SubagentArgsCards";
-import SubagentToolGroup from "./SubagentToolGroup";
-import ThinkingPanel from "./ThinkingPanel";
-import ToolCallCard from "./ToolCallCard";
 
 interface MessageBubbleProps {
 	message: AgentMessage;
@@ -56,74 +49,6 @@ function resultText(value: unknown): string | undefined {
 	}
 }
 
-function ImageBlock({ block }: { block: ImageContent }) {
-	const setImagePreview = useSetAtom(imagePreviewAtom);
-	const src = `data:${block.mimeType};base64,${block.data}`;
-	return (
-		<button
-			type="button"
-			className="cursor-zoom-in"
-			aria-label="View image"
-			onClick={() => setImagePreview({ src, alt: "SDK message attachment" })}
-		>
-			<img
-				src={src}
-				alt="SDK message attachment"
-				className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
-			/>
-		</button>
-	);
-}
-
-/**
- * Parse a JSON string that may be incomplete (the SDK streams tool-call
- * arguments in pieces). Returns whatever object it can extract — keys for
- * already-completed fields are present, the in-progress last field is
- * dropped if it can't be parsed. Used to give live tool cards a useful
- * `formatToolSummary` before the SDK sends the parsed final args.
- */
-function safelyParsePartialJson(raw: string): Record<string, unknown> | undefined {
-	const trimmed = raw.trim();
-	if (!trimmed) return undefined;
-	// Try the whole string first (it's complete).
-	try {
-		const v = JSON.parse(trimmed);
-		return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
-	} catch {
-		// Fall through.
-	}
-	// Trim back to the last completed `"key": value,` so the trailing partial
-	// field is dropped. We scan for unescaped quotes to find a safe prefix.
-	let lastSafe = -1;
-	let inString = false;
-	let escaped = false;
-	for (let i = 0; i < trimmed.length; i++) {
-		const ch = trimmed[i];
-		if (escaped) {
-			escaped = false;
-			continue;
-		}
-		if (ch === "\\") {
-			escaped = true;
-			continue;
-		}
-		if (ch === '"') {
-			inString = !inString;
-		}
-		if (!inString && (ch === "," || ch === "}")) {
-			lastSafe = i;
-		}
-	}
-	if (lastSafe < 0) return undefined;
-	const prefix = `${trimmed.slice(0, lastSafe)}}`;
-	try {
-		const v = JSON.parse(prefix);
-		return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
 function ContentBlocks({
 	blocks,
 	isStreaming,
@@ -137,144 +62,16 @@ function ContentBlocks({
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
-	// Adjacent grouping via shared segmenter: runs of consecutive
-	// (thinking | toolCall) blocks form a collapsible group, except
-	// subagent-class tool calls, which are carved out into their own
-	// always-visible card section (SubagentToolGroup). Text blocks are
-	// always rendered standalone and never absorbed into a group, so
-	// user-written notes between tool calls stay visible at all times.
-	const segments = segmentExecutionBlocks(
-		blocks,
-		(b) => b.type === "thinking" || b.type === "toolCall",
-		(b) => b.type === "toolCall" && isSubagentTool(b.name),
-	);
-
-	// Pre-compute a stable ToolCallViewModel per toolCall block. Without this memo
-	// the inline `{ ... }` literal at the ToolCallCard call site creates a new
-	// object reference every render, defeating ToolCallCard's memo comparator and
-	// forcing the card subtree to re-render on every streaming delta.
-	const toolCallViews = useMemo(() => {
-		const map = new Map<
-			string,
-			{
-				callId: string;
-				toolName: string;
-				args: Record<string, unknown>;
-				status: "pending" | "running" | "success" | "error";
-				result: unknown;
-				isError: boolean | undefined;
-			}
-		>();
-		for (const block of blocks) {
-			if (block.type !== "toolCall") continue;
-			const execution = toolExecutions[block.id];
-			const persistedResult = toolResultMap?.[block.id];
-			const status = execution
-				? execution.phase === "running"
-					? "running"
-					: execution.isError
-						? "error"
-						: "success"
-				: persistedResult
-					? persistedResult.isError
-						? "error"
-						: "success"
-					: "pending";
-			const result = execution ? (execution.result ?? execution.partialResult) : persistedResult?.content;
-			map.set(block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`, {
-				callId: block.id,
-				toolName: block.name,
-				args: block.arguments,
-				status,
-				result,
-				isError: execution?.isError ?? persistedResult?.isError,
-			});
-		}
-		return map;
-	}, [blocks, toolExecutions, toolResultMap]);
-
+	const unified = useMemo(() => toUnifiedFromPiAi(blocks), [blocks]);
 	return (
-		<div className="flex flex-col gap-msg-block">
-			{segments.map((seg, segIdx) => {
-				if (seg.kind === "single") {
-					const block = seg.block;
-					if (block.type === "text") {
-						if (!block.text) return null;
-						return (
-							<div key={`text-${hashKey(block.text)}`} className="message-prose">
-								<SkillAwareContent content={block.text} isStreaming={isStreaming} />
-							</div>
-						);
-					}
-					if (block.type === "thinking") {
-						if (!block.thinking) return null;
-						const isActiveThinking = isStreaming && seg.index === blocks.length - 1;
-						return (
-							<ThinkingPanel
-								key={`thinking-${hashKey(block.thinking)}`}
-								thinking={block.thinking}
-								isStreaming={isActiveThinking}
-								autoCollapse={autoCollapse}
-							/>
-						);
-					}
-					if (block.type === "image") return <ImageBlock key={`image-${hashKey(block.data)}`} block={block} />;
-					if (block.type === "toolCall") {
-						const viewKey = block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`;
-						const toolCallView = toolCallViews.get(viewKey);
-
-						return (
-							<ToolCallCard
-								key={viewKey}
-								toolCall={
-									toolCallView ?? {
-										callId: block.id,
-										toolName: block.name,
-										args: block.arguments,
-										status: "pending",
-										result: undefined,
-										isError: undefined,
-									}
-								}
-							/>
-						);
-					}
-					// Unknown block type — should not reach here.
-					const unknownBlock = block as { type?: string };
-					console.warn(`[ContentBlocks] Unknown block type: ${unknownBlock.type ?? "undefined"}`);
-					return null;
-				}
-
-				if (seg.kind === "subagent") {
-					const calls = (seg.blocks as ToolCall[]).map((block) => {
-						const viewKey = block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`;
-						return (
-							toolCallViews.get(viewKey) ?? {
-								callId: block.id,
-								toolName: block.name,
-								args: block.arguments,
-								status: "pending" as const,
-								result: undefined,
-								isError: undefined,
-							}
-						);
-					});
-					return <SubagentToolGroup key={`subagents-${seg.startIndex}-${segIdx}`} calls={calls} />;
-				}
-
-				const groupEndIndex = seg.startIndex + seg.blocks.length;
-				const isActiveGroup = isStreaming && groupEndIndex === blocks.length;
-				return (
-					<CollapsibleExecutionGroup
-						key={`group-${seg.startIndex}-${segIdx}`}
-						blocks={seg.blocks as Array<ThinkingContent | ToolCall>}
-						toolExecutions={toolExecutions}
-						toolResultMap={toolResultMap}
-						isStreaming={isActiveGroup}
-					/>
-				);
-			})}
-		</div>
+		<MessageBlockList
+			blocks={unified}
+			isStreaming={isStreaming}
+			autoCollapse={autoCollapse}
+			toolExecutions={toolExecutions}
+			toolResultMap={toolResultMap}
+			defaultToolStatus="pending"
+		/>
 	);
 }
 
@@ -380,92 +177,19 @@ const MessageBubble = memo(function MessageBubble({
 // Streaming blocks rendering — discrete-event path
 // ============================================================
 
-interface StreamingBlockViewProps {
-	block: LookUiStreamBlock;
-	toolExecution?: LookUiToolExecState;
-	isStreaming: boolean;
-	autoCollapse: boolean;
-}
-
-/**
- * Per-block memo component — keyed by stable block.uid.
- * When the parent re-renders with a new blocks array (one per frame after rAF
- * batching), only blocks whose props actually changed will reconcile.
- * Completed/frozen blocks skip entirely.
- */
-const StreamingBlockView = memo(function StreamingBlockView({
-	block,
-	toolExecution,
-	isStreaming,
-	autoCollapse,
-}: StreamingBlockViewProps) {
-	if (block.kind === "text") {
-		if (!block.text) return null;
-		return (
-			<div className="message-prose">
-				<SkillAwareContent content={block.text} isStreaming={isStreaming && !block.completed} />
-			</div>
-		);
-	}
-	if (block.kind === "thinking") {
-		return (
-			<ThinkingPanel
-				thinking={block.thinking}
-				isStreaming={isStreaming && !block.completed}
-				autoCollapse={autoCollapse}
-			/>
-		);
-	}
-	if (block.kind === "toolcall") {
-		const s = toolExecution
-			? toolExecution.phase === "running"
-				? "running"
-				: toolExecution.isError
-					? "error"
-					: "success"
-			: /* When exec hasn't arrived yet, default to "running" even
-			   if block.completed — toolcall_end may arrive before
-			   tool_exec_start. ToolCallCard inline state reset
-			   handles the eventual transition correctly. */
-				"running";
-		// While streaming, prefer the final parsed args; fall back to the
-		// accumulated raw JSON (the SDK streams arguments as partial
-		// strings before the parsed object arrives). Without this the
-		// tool header shows `…` for the entire delta phase.
-		const displayArgs = block.args ?? (block.argsRaw ? safelyParsePartialJson(block.argsRaw) : undefined) ?? {};
-		return (
-			<ToolCallCard
-				toolCall={{
-					callId: block.toolCallId ?? "",
-					toolName: block.toolName ?? "unknown",
-					args: displayArgs,
-					status: s,
-					result: toolExecution?.result ?? toolExecution?.partialResult,
-					isError: toolExecution?.isError,
-				}}
-			/>
-		);
-	}
-	if (block.kind === "image") {
-		if (!block.image) return null;
-		return <ImageBlock block={block.image} />;
-	}
-	return null;
-});
-
-interface StreamingBlocksBubbleProps {
-	blocks: LookUiStreamBlock[];
-	toolExecutions: Record<string, LookUiToolExecState>;
-	isStreaming: boolean;
-	autoCollapse: boolean;
-}
-
 export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 	blocks,
 	toolExecutions,
 	isStreaming,
 	autoCollapse,
-}: StreamingBlocksBubbleProps) {
+}: {
+	blocks: LookUiStreamBlock[];
+	toolExecutions: Record<string, LookUiToolExecState>;
+	isStreaming: boolean;
+	autoCollapse: boolean;
+}) {
+	const unified = useMemo(() => toUnifiedFromStream(blocks), [blocks]);
+
 	if (blocks.length === 0) {
 		// Show a loading indicator while the first streaming blocks are arriving.
 		// This prevents the bubble from appearing empty between assistant_message_start
@@ -481,81 +205,14 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 		return null;
 	}
 
-	// Group consecutive thinking/toolcall blocks into CollapsibleExecutionGroup
-	// so the badge with rolling counts is shown during streaming, not after;
-	// subagent-class calls are carved out into their own card section.
-	const segments = segmentExecutionBlocks(
-		blocks,
-		(b) => b.kind === "thinking" || b.kind === "toolcall",
-		(b) => b.kind === "toolcall" && isSubagentTool(b.toolName ?? ""),
-	);
-
 	return (
-		<div className="flex flex-col gap-msg-block">
-			{segments.map((seg, segIdx) => {
-				if (seg.kind === "single") {
-					const block = seg.block;
-					const key = block.uid != null ? `sb-${block.uid}` : `sb-${block.contentIndex ?? block.kind}`;
-					return (
-						<StreamingBlockView
-							key={key}
-							block={block}
-							toolExecution={
-								block.kind === "toolcall" && block.toolCallId ? toolExecutions[block.toolCallId] : undefined
-							}
-							isStreaming={isStreaming}
-							autoCollapse={autoCollapse}
-						/>
-					);
-				}
-
-				if (seg.kind === "subagent") {
-					const calls = seg.blocks.map((b) => {
-						const toolExecution = b.toolCallId ? toolExecutions[b.toolCallId] : undefined;
-						const status = toolExecution
-							? toolExecution.phase === "running"
-								? ("running" as const)
-								: toolExecution.isError
-									? ("error" as const)
-									: ("success" as const)
-							: ("running" as const);
-						return {
-							callId: b.toolCallId ?? "",
-							toolName: b.toolName ?? "unknown",
-							args: b.args ?? (b.argsRaw ? safelyParsePartialJson(b.argsRaw) : undefined) ?? {},
-							status,
-							result: toolExecution?.result ?? toolExecution?.partialResult,
-							isError: toolExecution?.isError,
-						};
-					});
-					return <SubagentToolGroup key={`subagents-${seg.startIndex}-${segIdx}`} calls={calls} />;
-				}
-
-				// Convert stream blocks to content blocks for CollapsibleExecutionGroup
-				const contentBlocks = seg.blocks.map((b) =>
-					b.kind === "thinking"
-						? { type: "thinking" as const, thinking: b.thinking, thinkingSignature: b.thinkingSignature }
-						: ({
-								type: "toolCall" as const,
-								id: b.toolCallId ?? "",
-								name: b.toolName ?? "unknown",
-								arguments: b.args ?? {},
-							} as ToolCall),
-				);
-
-				const groupEndIndex = seg.startIndex + seg.blocks.length;
-				const isActiveGroup = isStreaming && groupEndIndex === blocks.length;
-
-				return (
-					<CollapsibleExecutionGroup
-						key={`group-${seg.startIndex}-0`}
-						blocks={contentBlocks}
-						toolExecutions={toolExecutions}
-						isStreaming={isActiveGroup}
-					/>
-				);
-			})}
-		</div>
+		<MessageBlockList
+			blocks={unified}
+			isStreaming={isStreaming}
+			autoCollapse={autoCollapse}
+			toolExecutions={toolExecutions}
+			defaultToolStatus="running"
+		/>
 	);
 });
 
