@@ -803,7 +803,10 @@
   },
   "about": {
     "current": "当前版本",
-    "releaseNotes": "版本记录"
+    "releaseNotes": "版本记录",
+    "contactTitle": "联系 Look",
+    "contactDescription": "通过飞书与 Look 团队取得联系",
+    "contactButton": "飞书"
   },
   "agentAvatar": {
     "title": "Open Peeps 头像选择",

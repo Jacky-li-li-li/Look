@@ -803,7 +803,10 @@
   },
   "about": {
     "current": "Current",
-    "releaseNotes": "Release notes"
+    "releaseNotes": "Release notes",
+    "contactTitle": "Contact Look",
+    "contactDescription": "Get in touch with the Look team via Feishu",
+    "contactButton": "Feishu"
   },
   "agentAvatar": {
     "title": "Open Peeps avatar selection",

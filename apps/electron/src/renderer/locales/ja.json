@@ -803,7 +803,10 @@
   },
   "about": {
     "current": "現在のバージョン",
-    "releaseNotes": "リリースノート"
+    "releaseNotes": "リリースノート",
+    "contactTitle": "Lookに連絡",
+    "contactDescription": "FeishuでLookチームに連絡する",
+    "contactButton": "Feishu"
   },
   "agentAvatar": {
     "title": "Open Peeps アバター選択",

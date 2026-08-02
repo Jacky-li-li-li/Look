@@ -14,6 +14,7 @@ import { CircleCheck, Loader2, RefreshCw, RotateCw, TriangleAlert } from "lucide
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import appIconUrl from "../../../../assets/icon-1024.png";
+import feishuIconUrl from "../../assets/feishu.png";
 import { CHANGELOG } from "../../data/changelog";
 import { useAppUpdate } from "../../hooks/useAppUpdate";
 
@@ -192,6 +193,24 @@ export default function AboutTab() {
 								);
 							})}
 						</div>
+					</CardContent>
+				</Card>
+
+				{/* ── 联系卡：飞书联系方式 ── */}
+				<Card size="sm">
+					<CardHeader className="border-b border-hairline px-4 py-2.5">
+						<CardTitle className="text-[13px] font-medium">{t("about.contactTitle")}</CardTitle>
+					</CardHeader>
+					<CardContent className="px-4 py-3.5">
+						<a
+							href="https://www.feishu.cn/invitation/page/add_contact/?token=b42nc543-2547-467b-8a3b-d73db71acce1&unique_id=NfhtWSY6D_FJhaHffrRANQ=="
+							target="_blank"
+							rel="noopener noreferrer"
+							className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-hairline px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						>
+							<img src={feishuIconUrl} alt="Feishu" className="size-4 rounded object-contain" />
+							{t("about.contactButton")}
+						</a>
 					</CardContent>
 				</Card>
 			</div>
