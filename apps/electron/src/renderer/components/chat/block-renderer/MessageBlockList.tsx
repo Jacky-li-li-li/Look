@@ -105,7 +105,8 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 			);
 		}
 		case "thinking": {
-			if (!block.thinking && !isStreaming) return null;
+			// ThinkingPanel 自身处理空 thinking（空+非流式 → null，空+流式 → 骨架），
+			// 这里不再重复拦截，保持单一职责。
 			return (
 				<ThinkingPanel
 					thinking={block.thinking ?? ""}
