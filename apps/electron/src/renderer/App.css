@@ -57,10 +57,9 @@
 	--message-action-gap: 0.25rem;
 	--message-avatar-offset: 0.125rem;
 
-	/* Prose typography — 阅读器尺度的消息正文排版系统 */
+	/* Prose typography — 消息正文排版系统 */
 	--prose-font-size: 15px;
 	--prose-line-height: 1.78;
-	--prose-measure: 68ch;
 	--prose-flow-gap: 0.85rem;
 	--prose-heading-gap: 0.5rem;
 	--prose-block-gap: 0.9rem;
@@ -607,10 +606,8 @@ body {
 		word-break: break-word;
 	}
 
-	/* 阅读器量尺：聊天正文限宽 68ch，长段落回绕到舒适行宽 */
-	.look-markdown--chat {
-		max-width: var(--prose-measure);
-	}
+	/* 阅读器量尺已取消（用户偏好）：聊天正文不再限宽，占满消息气泡全宽。
+	   代码块/表格/图表不再被 68ch 截窄，右侧不再留白。 */
 
 	/* 助手消息正文：前景色向背景混 8%，柔化纯黑/纯白的生硬对比（明暗主题一致）；
 		标题仍为全对比色，保留层级 */
