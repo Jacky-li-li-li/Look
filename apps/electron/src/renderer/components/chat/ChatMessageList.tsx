@@ -53,15 +53,6 @@ function fmtTokens(n: number): string {
 	return `${n}`;
 }
 
-function _fmtUsage(message: AssistantMessage): string {
-	const parts = [fmtTokens(message.usage.totalTokens)];
-	if (message.usage.cost.total > 0)
-		parts.push(
-			message.usage.cost.total < 0.01 ? message.usage.cost.total.toFixed(4) : message.usage.cost.total.toFixed(2),
-		);
-	return parts.join(" · ");
-}
-
 function messageText(message: AgentMessage): string {
 	if (message.role === "bashExecution") return `$ ${message.command}\n${message.output}`.trim();
 	if (message.role === "branchSummary" || message.role === "compactionSummary") return message.summary.trim();
@@ -436,9 +427,12 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 			// 统一消息渲染：快照 / live / 纯 live 全部走 MessageItem。
 			// MessageItem 内部用原语组装，isStreaming 与 liveBlocks 是状态而非另一棵树。
+			// 注意 live 用 item.isLive 而非 Boolean(uiBlocks?.length)：纯 live 且
+			// 空数组（assistant_message_start 后、首个 block 前）也要传 liveBlocks=[]，
+			// 由 StreamingBlocksBubble 显示 loading 指示（与旧行为一致）。
 			if (item.message || (item.isLive && item.uiBlocks)) {
 				const itemEntryId = item.entryId;
-				const live = item.isLive && Boolean(item.uiBlocks?.length);
+				const live = item.isLive;
 				return (
 					<div key={item.id} className="px-msg-item-x py-msg-item-y">
 						<div data-message-id={item.id} className="group/message flex flex-col">
@@ -455,7 +449,14 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								liveToolExecutions={live ? (item.uiTools ?? EMPTY_TOOL_EXECUTIONS) : EMPTY_TOOL_EXECUTIONS}
 							/>
 							<MessageActions
-								show={Boolean(itemEntryId) && Boolean(item.message)}
+								// 旧版仅 assistant/user 显示操作按钮；live 项只保留占位（reserve），
+								// 快照落定前不显示可操作按钮。
+								show={
+									!live &&
+									Boolean(itemEntryId) &&
+									Boolean(item.message) &&
+									(item.message?.role === "assistant" || item.message?.role === "user")
+								}
 								isUser={item.message?.role === "user"}
 								busy={isBusy || Boolean(navigatingEntry || forkingEntry)}
 								onBranch={itemEntryId ? () => handleBranchFromHere(itemEntryId) : undefined}

@@ -10,7 +10,7 @@
 // ============================================================
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
+import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { memo } from "react";
@@ -26,7 +26,7 @@ export interface MessageItemProps {
 	isStreaming?: boolean;
 	autoCollapse: boolean;
 	toolExecutions?: Record<string, LookUiToolExecState>;
-	toolResultMap?: Record<string, unknown>;
+	toolResultMap?: Record<string, ToolResultMessage>;
 	isActiveLeaf?: boolean;
 	flash?: boolean;
 	/** 流式块（live 消息时传入；纯 live 时 message 为 undefined）。 */
@@ -128,7 +128,7 @@ function MessageBlockListForMessage({
 	isStreaming: boolean;
 	autoCollapse: boolean;
 	toolExecutions: Record<string, LookUiToolExecState>;
-	toolResultMap?: Record<string, unknown>;
+	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
 	const blocks = useMemo(() => messageBlocks(message), [message]);
 	const unified = useMemo(() => toUnifiedFromPiAi(blocks), [blocks]);
@@ -138,7 +138,7 @@ function MessageBlockListForMessage({
 			isStreaming={isStreaming}
 			autoCollapse={autoCollapse}
 			toolExecutions={toolExecutions}
-			toolResultMap={toolResultMap as never}
+			toolResultMap={toolResultMap}
 			defaultToolStatus="pending"
 		/>
 	);

@@ -24,6 +24,8 @@ export function safelyParsePartialJson(raw: string): Record<string, unknown> | u
 	}
 	// Trim back to the last completed `"key": value,` so the trailing partial
 	// field is dropped. We scan for unescaped quotes to find a safe prefix.
+	// 注意：lastSafe 记录的是逗号/右括号**位置本身**（不是之后），
+	// prefix 拼 `}` 后不能带尾逗号，否则 JSON.parse 必然失败。
 	let lastSafe = -1;
 	let inString = false;
 	let escaped = false;
@@ -39,13 +41,12 @@ export function safelyParsePartialJson(raw: string): Record<string, unknown> | u
 		}
 		if (ch === '"') {
 			inString = !inString;
-			continue;
 		}
-		if (!inString && ch === ",") {
-			lastSafe = i + 1;
+		if (!inString && (ch === "," || ch === "}")) {
+			lastSafe = i;
 		}
 	}
-	if (lastSafe <= 0) return undefined;
+	if (lastSafe < 0) return undefined;
 	const prefix = `${trimmed.slice(0, lastSafe)}}`;
 	try {
 		const v = JSON.parse(prefix);
