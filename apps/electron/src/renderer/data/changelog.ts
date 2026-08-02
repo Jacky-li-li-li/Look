@@ -20,6 +20,47 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.6.0",
+		date: "2026-08-02",
+		items: [
+			{
+				zh: "新增浏览器自动化工具集：Agent 可打开网页、读取页面快照、截图并执行脚本",
+				en: "New browser automation toolset: the agent can open pages, read page snapshots, take screenshots, and run scripts",
+				ja: "ブラウザ自動化ツール集を追加：エージェントがページを開き、スナップショットを取得し、スクリーンショットやスクリプト実行が可能に",
+			},
+			{
+				zh: "子会话总指挥模式：长任务按汇报点持续续等，可用 status/cancel 工具随时查看进度或取消",
+				en: "Subagent commander mode: long-running tasks keep waiting at checkpoints; use status/cancel tools to view progress or cancel anytime",
+				ja: "サブエージェント指揮モード：長時間タスクをチェックポイントで継続待機し、status/cancel ツールで進捗確認やキャンセルが可能に",
+			},
+			{
+				zh: "关于页新增飞书联系卡片，版本记录展示最近 5 个版本并带渐变入场效果",
+				en: "About page adds a Feishu contact card and shows the latest 5 versions with a gradient reveal",
+				ja: "バージョン情報ページに Feishu 連絡先カードを追加、直近 5 バージョンをグラデーション演出付きで表示",
+			},
+			{
+				zh: "切换会话更丝滑：同项目切换零事件风暴、免闪烁过渡，连点不再错乱",
+				en: "Smoother session switching: zero event storms within a project, flicker-free transitions, and rapid-click protection",
+				ja: "セッション切替がより滑らかに：同一プロジェクト内でイベント嵐を排除し、ちらつきのない遷移と連打保護を実装",
+			},
+			{
+				zh: "修复工具组展开时页面被拽到空白区的问题，展开后面板就地呈现不再跳动",
+				en: "Fix the page being pulled to blank space when expanding tool groups; panels now expand in place",
+				ja: "ツールグループ展開時に空白領域へスクロールされる問題を修正し、その場で展開されるように",
+			},
+			{
+				zh: "消息运行时长稳定常驻显示，消息渲染底层重构更稳健",
+				en: "Message duration now reliably persists on display; message rendering internals rebuilt for stability",
+				ja: "メッセージの実行時間表示を安定化し、レンダリング基盤を再構築して堅牢に",
+			},
+			{
+				zh: "修复启动竞态、队列串行化与凭据容错，升级 pi SDK 0.83，深色主题 chip 恢复轮廓",
+				en: "Fix startup race, serialize queue operations with credential tolerance, upgrade pi SDK 0.83, and restore chip outlines in dark theme",
+				ja: "起動競合の修正、キュー操作の直列化と認証情報の耐障害性向上、pi SDK 0.83 へ更新、ダークテーマのチップ輪郭を復元",
+			},
+		],
+	},
+	{
 		version: "1.5.0",
 		date: "2026-08-02",
 		items: [
