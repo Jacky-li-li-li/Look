@@ -206,7 +206,7 @@ export class Application {
 			if (
 				details.resourceType !== "mainFrame" &&
 				details.resourceType !== "subFrame" &&
-				details.resourceType !== "xmlhttprequest"
+				details.resourceType !== "xhr"
 			) {
 				callback({ responseHeaders: details.responseHeaders });
 				return;

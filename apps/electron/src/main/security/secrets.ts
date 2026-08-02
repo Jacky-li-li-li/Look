@@ -55,7 +55,7 @@ export function isEncryptionAvailable(): boolean {
  */
 export class EncryptedCredentialStore implements CredentialStore {
 	/** Serialize modify/delete per the pi-ai CredentialStore contract. */
-	private readonly _writeLock = Promise.resolve();
+	private _writeLock: Promise<void> = Promise.resolve();
 
 	constructor(private readonly filePath: string) {
 		fs.mkdirSync(path.dirname(filePath), { recursive: true });
