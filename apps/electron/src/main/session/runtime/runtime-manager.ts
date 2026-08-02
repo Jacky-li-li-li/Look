@@ -497,8 +497,8 @@ export class SessionRuntimeManager
 
 	// ── ISessionEventHost implementation ──
 
-	async onAgentEnd(sessionId: string, _willRetry: boolean): Promise<void> {
-		return this.composition.sessionEventEffects.onAgentEnd(sessionId);
+	async onAgentEnd(sessionId: string, willRetry: boolean): Promise<void> {
+		return this.composition.sessionEventEffects.onAgentEnd(sessionId, willRetry);
 	}
 
 	async onMessageEnd(sessionId: string, message: AgentMessage): Promise<void> {

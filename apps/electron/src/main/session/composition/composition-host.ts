@@ -115,8 +115,8 @@ export class CompositionHost implements ICompositionHost, IRuntimeStore, ISubAge
 		return this.requireService(this.runtimeLifecycle, "runtime lifecycle").disposeRuntime(sessionId, abort);
 	}
 
-	async onAgentEnd(sessionId: string, _willRetry: boolean): Promise<void> {
-		return this.requireService(this.sessionEventEffects, "session event effects").onAgentEnd(sessionId);
+	async onAgentEnd(sessionId: string, willRetry: boolean): Promise<void> {
+		return this.requireService(this.sessionEventEffects, "session event effects").onAgentEnd(sessionId, willRetry);
 	}
 
 	async onMessageEnd(sessionId: string, message: AgentMessage): Promise<void> {

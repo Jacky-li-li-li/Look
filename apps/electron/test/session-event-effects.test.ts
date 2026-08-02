@@ -132,4 +132,67 @@ describe("SessionEventEffects", () => {
 		);
 		expect(options.subAgentRuntimeService.finalizeSubSession).toHaveBeenCalledWith("session-1");
 	});
+
+	it("willRetry=false: 持久化 turn duration（对齐 pi-coding-agent 规范）", async () => {
+		const sessionManager = {
+			getSessionName: () => "New chat",
+			isPersisted: () => true,
+			getBranch: () => [
+				{
+					type: "message",
+					id: "entry-a1",
+					parentId: null,
+					timestamp: new Date().toISOString(),
+					message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
+				},
+			],
+			appendCustomEntry: vi.fn(),
+		};
+		const session = { sessionManager } as unknown as AgentSessionRuntime["session"];
+		const managed: ManagedRuntime = {
+			runtime: { session } as AgentSessionRuntime,
+			projectId: "project-1",
+			cwd: "/project",
+			createdAt: 1,
+			binding: { sessionId: "session-1", sessionManager },
+			unsubscribe: vi.fn(),
+		};
+		const { effects, options } = makeEffects();
+		options.runtimeRegistry.get.mockReturnValue(managed);
+		const scope = options.scopeRegistry.get("session-1");
+		scope!.turnStartedAt = 1000;
+
+		await effects.onAgentEnd("session-1", false);
+
+		expect(sessionManager.appendCustomEntry).toHaveBeenCalledTimes(1);
+		expect(scope!.turnStartedAt).toBeNull();
+	});
+
+	it("willRetry=true: 不持久化 duration，保留 turnStartedAt 供真正结束使用", async () => {
+		const sessionManager = {
+			getSessionName: () => "New chat",
+			isPersisted: () => true,
+			getBranch: () => [],
+			appendCustomEntry: vi.fn(),
+		};
+		const session = { sessionManager } as unknown as AgentSessionRuntime["session"];
+		const managed: ManagedRuntime = {
+			runtime: { session } as AgentSessionRuntime,
+			projectId: "project-1",
+			cwd: "/project",
+			createdAt: 1,
+			binding: { sessionId: "session-1", sessionManager },
+			unsubscribe: vi.fn(),
+		};
+		const { effects, options } = makeEffects();
+		options.runtimeRegistry.get.mockReturnValue(managed);
+		const scope = options.scopeRegistry.get("session-1");
+		scope!.turnStartedAt = 1000;
+
+		// 失败重试：agent_end(willRetry=true) 不应写时长、不应清空 turnStartedAt
+		await effects.onAgentEnd("session-1", true);
+
+		expect(sessionManager.appendCustomEntry).not.toHaveBeenCalled();
+		expect(scope!.turnStartedAt).toBe(1000);
+	});
 });

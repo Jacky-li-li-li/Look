@@ -33,15 +33,20 @@ export class SessionEventEffects {
 
 	constructor(private readonly options: SessionEventEffectsOptions) {}
 
-	/** Handle agent_end: persist state, record turn duration, refresh sidebar. */
-	async onAgentEnd(sessionId: string): Promise<void> {
+	/** Handle agent_end: persist state, record turn duration, refresh sidebar.
+	 *  willRetry=true 表示本轮以可重试错误结束、SDK 将自动重试：此时不持久化
+	 *  duration（本轮不完整），并保留 turnStartedAt 供真正结束的 agent_end 使用。
+	 *  对齐 pi-coding-agent 规范：agent_end.willRetry 区分“失败重试”与“正常结束”。 */
+	async onAgentEnd(sessionId: string, willRetry = false): Promise<void> {
 		try {
 			const binding = this.options.runtimeRegistry.get(sessionId)?.binding;
 			if (binding?.sessionId === sessionId) {
 				this.options.permissionService.persistIfDirty(sessionId, binding.sessionManager);
 				this.options.planService.persistToolSnapshotIfDirty(sessionId, binding.sessionManager);
 			}
-			this.persistTurnDurationIfPossible(sessionId);
+			if (!willRetry) {
+				this.persistTurnDurationIfPossible(sessionId);
+			}
 			await this.refreshAfterTurn(sessionId);
 		} catch (error) {
 			this.options.emitError(error, sessionId);
