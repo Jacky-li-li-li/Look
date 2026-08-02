@@ -22,7 +22,7 @@
 // callers see a single `UserSettings` object.
 // ============================================================
 
-import type { LookTone, PermissionMode, UILanguage, UserSettings } from "@look/shared/types";
+import type { DesktopNotificationMode, LookTone, PermissionMode, UILanguage, UserSettings } from "@look/shared/types";
 import fs from "fs";
 import { writeJsonFile } from "../utils/atomic-writer.js";
 
@@ -49,6 +49,7 @@ const DEFAULTS: UserSettings = {
 	sidebarCollapsed: false,
 	rightPanelCollapsed: false,
 	aiAvatar: null,
+	desktopNotifications: "all",
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -88,6 +89,8 @@ interface UiSettings {
 	rightPanelCollapsed: boolean;
 	/** AI 消息头像 ID（avatar-01…avatar-24）。null=使用默认像素头像。 */
 	aiAvatar: string | null;
+	/** OS 桌面通知模式（off / needs-action / all）。 */
+	desktopNotifications: DesktopNotificationMode;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -108,6 +111,7 @@ const UI_DEFAULTS: UiSettings = {
 	sidebarCollapsed: false,
 	rightPanelCollapsed: false,
 	aiAvatar: null,
+	desktopNotifications: "all",
 };
 
 /** Synchronously read the persisted tone from disk without instantiating the
@@ -256,6 +260,7 @@ export class UserSettingsStore {
 		if (partial.sidebarCollapsed !== undefined) uiPartial.sidebarCollapsed = partial.sidebarCollapsed;
 		if (partial.rightPanelCollapsed !== undefined) uiPartial.rightPanelCollapsed = partial.rightPanelCollapsed;
 		if (partial.aiAvatar !== undefined) uiPartial.aiAvatar = partial.aiAvatar;
+		if (partial.desktopNotifications !== undefined) uiPartial.desktopNotifications = partial.desktopNotifications;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

@@ -37,6 +37,13 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 				if (appStore.get(appReadyPhaseAtom) < 3) appStore.set(appReadyPhaseAtom, 3);
 				break;
 
+			case "notification:activate-session":
+				// 用户点击系统桌面通知：激活对应会话。
+				void window.look.activateSession(event.agentId).catch((err: unknown) => {
+					console.warn("[ipcHandler] activateSession from notification failed:", err);
+				});
+				break;
+
 			case "session:ui-event":
 				enqueueUiEvent(event.sessionId, event.events);
 				break;

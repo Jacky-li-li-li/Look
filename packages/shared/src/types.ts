@@ -27,7 +27,7 @@ export type EventCallback = (event: MainToRendererEvent) => void;
 
 // Contracts and domain (pass-through)
 export type { PermissionMode } from "./contracts/permission.js";
-export type { LookTone, UILanguage, UserSettings } from "./contracts/settings.js";
+export type { DesktopNotificationMode, LookTone, UILanguage, UserSettings } from "./contracts/settings.js";
 export type {
 	ScheduledTask,
 	ScheduledTaskInput,

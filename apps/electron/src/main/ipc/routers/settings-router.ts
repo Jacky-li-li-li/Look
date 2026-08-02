@@ -365,6 +365,13 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		if ("rightPanelCollapsed" in settings) {
 			guardBoolean(settings.rightPanelCollapsed, "settings.rightPanelCollapsed");
 		}
+		if ("desktopNotifications" in settings) {
+			guardEnum(settings.desktopNotifications, "settings.desktopNotifications", [
+				"off",
+				"needs-action",
+				"all",
+			] as const);
+		}
 		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
 			ctx.mainWindow.setBackgroundColor(settings.themeTone === "light" ? "#fbfbfa" : "#030202");
 		}

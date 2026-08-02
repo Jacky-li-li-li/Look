@@ -18,6 +18,7 @@ import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
 import { BrowserWindowEventTransport } from "./ipc/renderer-event-transport.js";
+import { DesktopNotifierService } from "./notifications/desktop-notifier.js";
 import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
 import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
@@ -46,6 +47,7 @@ export interface ApplicationServices {
 	workspaceTreeService: WorkspaceTreeService | null;
 	larkChannelManager: LarkChannelManager | null;
 	larkBridgeService: LarkBridgeService | null;
+	desktopNotifier: DesktopNotifierService | null;
 }
 
 export class Application {
@@ -66,6 +68,7 @@ export class Application {
 			workspaceTreeService: null,
 			larkChannelManager: null,
 			larkBridgeService: null,
+			desktopNotifier: null,
 		};
 	}
 
@@ -374,6 +377,9 @@ export class Application {
 		// Phase 4: Register IPC early（渲染进程就绪信号在此之后发出）
 		this.registerIpcHandlersNow();
 
+		// Phase 4.5: Desktop notifications (after event bus + IPC are ready)
+		this.bootstrapDesktopNotifier();
+
 		// Phase 5: Load persisted data
 		await this.services.runtimeManager!.loadProjects();
 		await this.services.runtimeManager!.recoverOrphanedProjects().catch((error) => {
@@ -529,6 +535,25 @@ export class Application {
 		console.log("[Look] IPC handlers registered");
 	}
 
+	// ── Phase 4.5: Desktop notifications ──
+
+	private bootstrapDesktopNotifier(): void {
+		if (!this.services.runtimeManager || this.services.desktopNotifier) return;
+		try {
+			this.services.desktopNotifier = new DesktopNotifierService({
+				eventBus: this.services.runtimeManager.composition.eventBus,
+				getMainWindow: () => this.services.mainWindow,
+				getSettings: () => this.services.runtimeManager!.composition.userSettings.getAll(),
+				getAgentInfo: (sessionId) =>
+					this.services.runtimeManager!.composition.sessionInfoService.getAgentInfo(sessionId),
+			});
+			this.services.desktopNotifier.subscribe();
+			console.log("[Look] DesktopNotifierService initialized");
+		} catch (err) {
+			console.warn("[Look] Failed to initialize DesktopNotifierService:", err);
+		}
+	}
+
 	// ── Phase 5: Workspace restore + service initialize ──
 
 	private async bootstrapStartupSequence(): Promise<void> {
@@ -588,6 +613,14 @@ export class Application {
 	// ============================================================
 
 	public async dispose(): Promise<void> {
+		if (this.services.desktopNotifier) {
+			try {
+				this.services.desktopNotifier.dispose();
+			} catch (err) {
+				console.error("[Look] desktopNotifier dispose failed:", err);
+			}
+			this.services.desktopNotifier = null;
+		}
 		if (this.services.schedulerService) {
 			try {
 				await this.services.schedulerService.dispose();
@@ -636,6 +669,16 @@ export class Application {
 		if (process.platform === "darwin" && app.dock) {
 			const iconPath = path.join(__dirname, "assets/icon-1024.png");
 			app.dock.setIcon(iconPath);
+		}
+
+		// Windows 打包后必须设置 AppUserModelID，否则系统通知不显示。
+		// （dev 模式 electron.exe 自带 id 通常可用，此调用幂等无害。）
+		if (process.platform === "win32") {
+			try {
+				app.setAppUserModelId("com.look.app");
+			} catch (err) {
+				console.warn("[Look] Failed to set AppUserModelId:", err);
+			}
 		}
 
 		this.createWindow();

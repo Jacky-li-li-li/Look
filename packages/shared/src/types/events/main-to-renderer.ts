@@ -98,7 +98,10 @@ export type MainToRendererEvent =
 	// ---- App lifecycle (main → renderer) ----
 	// 主进程 IPC handlers 注册完成后的就绪信号；渲染进程收到后才发起首次 IPC 调用，
 	// 避免启动竞态（No handler registered for 'look:invoke'）。
-	| { type: "app:ready" };
+	| { type: "app:ready" }
+	// ---- Desktop notification click (main → renderer) ----
+	// 用户点击系统桌面通知后，主进程请求渲染进程激活对应会话。
+	| { type: "notification:activate-session"; agentId: string };
 
 /** OAuth login prompt variants sent from main to renderer. */
 export type LoginPrompt =

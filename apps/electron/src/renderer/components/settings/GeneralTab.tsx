@@ -39,6 +39,7 @@ function persistSettings(partial: {
 	autoTitleModel?: string | null;
 	planModel?: string | null;
 	aiAvatar?: string | null;
+	desktopNotifications?: "off" | "needs-action" | "all";
 }) {
 	if (!api) return;
 	api.setGeneralSettings(partial).catch((err) => console.warn("[GeneralTab] setGeneralSettings failed:", err));
@@ -119,6 +120,7 @@ interface GeneralSettingsState {
 	autoTitleModel: string | null;
 	planModel: string | null;
 	aiAvatar: string | null;
+	desktopNotifications: "off" | "needs-action" | "all";
 	availableModels: Array<{ provider: string; id: string; name: string }>;
 }
 
@@ -136,6 +138,7 @@ export default function GeneralTab() {
 		autoTitleModel: null,
 		planModel: null,
 		aiAvatar: null,
+		desktopNotifications: "all",
 		availableModels: [],
 	});
 	const setAiAvatar = useSetAtom(aiAvatarAtom);
@@ -151,6 +154,7 @@ export default function GeneralTab() {
 		autoTitleModel,
 		planModel,
 		aiAvatar,
+		desktopNotifications,
 		availableModels,
 	} = state;
 	// 预览区跟随悬停（试穿），未悬停时跟随已选项
@@ -186,6 +190,11 @@ export default function GeneralTab() {
 						...("autoTitleModel" in settings ? { autoTitleModel: settings.autoTitleModel } : {}),
 						...("planModel" in settings ? { planModel: settings.planModel } : {}),
 						...("aiAvatar" in settings ? { aiAvatar: settings.aiAvatar } : {}),
+						...("desktopNotifications" in settings
+							? {
+									desktopNotifications: settings.desktopNotifications as "off" | "needs-action" | "all",
+								}
+							: {}),
 					}));
 				}
 			})
@@ -420,6 +429,31 @@ export default function GeneralTab() {
 											{m.name} ({m.provider})
 										</SelectItem>
 									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</SettingRow>
+					<SettingRow
+						id="desktop-notifications"
+						label={t("settings.desktopNotifications")}
+						desc={t("settings.desktopNotificationsDesc")}
+					>
+						<Select
+							value={desktopNotifications}
+							onValueChange={(v) => {
+								const next = v as "off" | "needs-action" | "all";
+								setState((prev) => ({ ...prev, desktopNotifications: next }));
+								persistSettings({ desktopNotifications: next });
+							}}
+						>
+							<SelectTrigger id="desktop-notifications" size="sm" className="w-[160px]">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									<SelectItem value="all">{t("settings.desktopNotificationsAll")}</SelectItem>
+									<SelectItem value="needs-action">{t("settings.desktopNotificationsNeedsAction")}</SelectItem>
+									<SelectItem value="off">{t("settings.desktopNotificationsOff")}</SelectItem>
 								</SelectGroup>
 							</SelectContent>
 						</Select>

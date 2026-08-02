@@ -3,6 +3,15 @@ import type { PermissionMode } from "./permission.js";
 export type UILanguage = "en" | "zh" | "ja";
 export type LookTone = "light" | "dark";
 
+/**
+ * Desktop notification delivery mode.
+ * - "off": never show OS notifications
+ * - "needs-action": only notify when the agent is blocked waiting for user input
+ *   (permission / plan question / plan approval / OAuth login)
+ * - "all": notify for needs-action, task completion and errors (default)
+ */
+export type DesktopNotificationMode = "off" | "needs-action" | "all";
+
 /** Canonical settings contract shared by main, preload IPC, and renderer. */
 export interface UserSettings {
 	language: UILanguage;
@@ -30,4 +39,6 @@ export interface UserSettings {
 	sidebarCollapsed: boolean;
 	rightPanelCollapsed: boolean;
 	aiAvatar: string | null;
+	/** OS desktop notification mode. UI preference, persisted in ui-settings.json. */
+	desktopNotifications: DesktopNotificationMode;
 }
