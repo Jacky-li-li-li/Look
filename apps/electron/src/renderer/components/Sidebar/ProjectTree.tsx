@@ -76,8 +76,10 @@ export default function ProjectTree({
 		});
 	}, []);
 
-	// 子会话折叠状态：parentId → 是否折叠（默认折叠）。
+	// 子会话折叠状态：parentId → 是否折叠（未记录默认展开）。
 	// 旧版本（<1.6）存的是折叠白名单数组 ["id1","id2"]，此处做格式迁移。
+	// 注意：创建子会话时应默认展开，让用户立即可见新子会话——
+	// 见下方 useNewSubsessionAutoExpand effect。
 	const LS_KEY = "look-collapsed-subsessions";
 	const [collapsedSubSessions, setCollapsedSubSessions] = useState<Record<string, boolean>>(() => {
 		try {
@@ -114,7 +116,7 @@ export default function ProjectTree({
 	const toggleSubSessions = useCallback((parentId: string, e: React.MouseEvent) => {
 		e.stopPropagation();
 		setCollapsedSubSessions((prev) => {
-			const isCollapsed = prev[parentId] ?? true; // 未记录默认折叠
+			const isCollapsed = prev[parentId] ?? false; // 未记录默认展开
 			return { ...prev, [parentId]: !isCollapsed };
 		});
 	}, []);
@@ -151,6 +153,35 @@ export default function ProjectTree({
 		}
 		return map;
 	}, [agents]);
+
+	// 新子会话自动展开：检测到 parent 新增了 child（或 child 集合变大）时，
+	// 即使该父会话之前被用户手动折叠过，也自动展开一次，确保创建子会话后
+	// 侧栏立即可见。只对“新增”触发，不覆盖用户后续的手动折叠。
+	const prevChildCountRef = useRef<Map<string, number>>(new Map());
+	useEffect(() => {
+		const prevCounts = prevChildCountRef.current;
+		const changedParents: string[] = [];
+		for (const [parentId, children] of childSessionsByParent) {
+			const prevCount = prevCounts.get(parentId) ?? 0;
+			if (children.length > prevCount) changedParents.push(parentId);
+		}
+		if (changedParents.length > 0) {
+			setCollapsedSubSessions((prev) => {
+				const next = { ...prev };
+				let changed = false;
+				for (const parentId of changedParents) {
+					if (next[parentId] !== false) {
+						next[parentId] = false;
+						changed = true;
+					}
+				}
+				return changed ? next : prev;
+			});
+		}
+		const nextCounts = new Map<string, number>();
+		for (const [parentId, children] of childSessionsByParent) nextCounts.set(parentId, children.length);
+		prevChildCountRef.current = nextCounts;
+	}, [childSessionsByParent]);
 
 	// Auto-expand active project
 	useEffect(() => {

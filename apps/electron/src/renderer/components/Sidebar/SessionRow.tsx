@@ -38,7 +38,7 @@ function SessionRowImpl({
 }: SessionRowProps) {
 	const { t } = useTranslation();
 	const hasChildren = childrenList.length > 0;
-	const isCollapsed = collapsedSubSessions[agent.id] ?? true; // 未记录默认折叠
+	const isCollapsed = collapsedSubSessions[agent.id] ?? false; // 未记录默认展开
 	const feishuLabel = t("settings.feishu", "Feishu");
 	return (
 		<div
