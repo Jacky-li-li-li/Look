@@ -31,7 +31,9 @@ import {
 	resetLegacySessionsOnce,
 } from "@look/shared/look-storage";
 import { AgentDefinitionService } from "../../agents/definition-service.js";
+import { BrowserService } from "../../browser/browser-service.js";
 import { ComputerUseService } from "../../computer-use/computer-use-service.js";
+import { createBrowserExtensionFactory } from "../../extensions/browser-extension.js";
 import { createComputerUseExtensionFactory } from "../../extensions/computer-use-extension.js";
 import { createMcpExtensionFactory } from "../../extensions/mcp-extension.js";
 import { createModelListExtensionFactory } from "../../extensions/model-extension.js";
@@ -106,6 +108,7 @@ export class CompositionBuilder {
 	promptStore: PromptStore | null = null;
 	mcpManager: MCPManager | null = null;
 	computerUseService: ComputerUseService | null = null;
+	browserService: BrowserService | null = null;
 	sessionCatalog: SessionCatalog | null = null;
 	projectRuntimeService: ProjectRuntimeService | null = null;
 	sessionInfoService: SessionInfoService | null = null;
@@ -186,6 +189,7 @@ export class CompositionBuilder {
 		// 与 MCPManager 同为全局共享服务；构造不触碰 Electron API，
 		// 真正的 desktopCapturer/nut-js 调用发生在工具执行时（app ready 后）。
 		this.computerUseService = new ComputerUseService();
+		this.browserService = new BrowserService();
 
 		this.sessionCatalog = new SessionCatalog((metadata) => {
 			// Captures CompositionBuilder's subAgentRegistry field (assigned above).
@@ -349,6 +353,11 @@ export class CompositionBuilder {
 					createComputerUseExtensionFactory(
 						this.computerUseService!,
 						resolvedProjectId ? path.join(getProjectSharedDir(resolvedProjectId), "screenshots") : null,
+					),
+					createBrowserExtensionFactory(
+						this.browserService!,
+						(cwd) => this.projectService!.resolveProjectTrust(cwd),
+						cwd,
 					),
 				];
 			},
