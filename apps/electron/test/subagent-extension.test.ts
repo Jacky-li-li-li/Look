@@ -33,7 +33,7 @@ function createMockHost(captured: { calls: Array<{ agent: string; task: string; 
 	};
 }
 
-/** 捕获工厂注册的全部工具（single / parallel / chain 各一个）。 */
+/** 捕获工厂注册的全部工具（执行 + 状态/取消工具）。 */
 async function captureRegisteredTools(host: SubagentHost, cwd: string) {
 	const registered = new Map<string, { name: string; execute: (...args: unknown[]) => Promise<unknown> }>();
 	const api = {
@@ -44,7 +44,7 @@ async function captureRegisteredTools(host: SubagentHost, cwd: string) {
 	};
 	const factory = await createSubagentExtensionFactory("parent-1", host, cwd);
 	factory(api as Parameters<typeof factory>[0]);
-	for (const name of ["subagent", "subagent_parallel", "subagent_chain"]) {
+	for (const name of ["subagent", "subagent_parallel", "subagent_chain", "subagent_status", "subagent_cancel"]) {
 		if (!registered.has(name)) throw new Error(`tool ${name} was not registered`);
 	}
 	return registered;
@@ -66,8 +66,14 @@ describe("SubAgent extension — runtime dispatch", () => {
 		tools = await captureRegisteredTools(host, cwd);
 	});
 
-	it("registers subagent, subagent_parallel and subagent_chain tools", () => {
-		expect([...tools.keys()].sort()).toEqual(["subagent", "subagent_chain", "subagent_parallel"]);
+	it("registers all five subagent tools", () => {
+		expect([...tools.keys()].sort()).toEqual([
+			"subagent",
+			"subagent_cancel",
+			"subagent_chain",
+			"subagent_parallel",
+			"subagent_status",
+		]);
 	});
 
 	it("discovers the built-in agents from ~/.look/agents", async () => {
@@ -143,6 +149,20 @@ describe("SubAgent extension — runtime dispatch", () => {
 		expect(captured.calls).toHaveLength(0);
 		expect(result.isError).toBe(true);
 		expect(result.content[0].text).toContain("Unknown agent");
+	});
+
+	it("subagent_status reports unknown run and subagent_cancel validates index", async () => {
+		const statusMissing = await tools
+			.get("subagent_status")!
+			.execute("call-5", { runId: "no-such-run" }, undefined, undefined, { cwd });
+		expect(statusMissing.isError).toBe(true);
+		expect(statusMissing.content[0].text).toContain("No parallel run found");
+
+		const cancelMissing = await tools
+			.get("subagent_cancel")!
+			.execute("call-6", { runId: "no-such-run" }, undefined, undefined, { cwd });
+		expect(cancelMissing.isError).toBe(true);
+		expect(cancelMissing.content[0].text).toContain("No parallel run found");
 	});
 });
 

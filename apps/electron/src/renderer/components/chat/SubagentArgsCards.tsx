@@ -28,6 +28,10 @@ export interface SubagentItem {
 	task: string;
 }
 
+// 只列"产生子代理"的执行工具：subagent_status / subagent_cancel 是查询/控制
+// 工具（参数无 task 列表，parseSubagentItems 会返回 null，加入列表反而会被
+// SubagentToolGroup 过滤整组不显示），保持走通用 ToolCallCard 渲染。
+// 若未来主进程新增执行类工具，须同步主进程 SUBAGENT_TOOL_NAMES 与本列表。
 const SUBAGENT_TOOL_NAMES = new Set(["subagent", "subagent_parallel", "subagent_chain"]);
 
 export function isSubagentTool(toolName: string): boolean {

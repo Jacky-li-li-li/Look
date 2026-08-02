@@ -142,11 +142,18 @@ export interface SubagentChainItem {
 }
 
 /**
- * SubAgent 扩展注册的全部工具名（single / parallel / chain 各一个）。
- * 拆三个工具而非 union schema 单一工具的原因见 subagent-extension.ts 头部注释。
+ * SubAgent 扩展注册的全部工具名（single / parallel / chain 各一个，
+ * 外加并行 run 的状态查询与取消工具）。
+ * 拆三个执行工具而非 union schema 单一工具的原因见 subagent-extension.ts 头部注释。
  * 开关（enable/disable）按此列表整体增删。
  */
-export const SUBAGENT_TOOL_NAMES = ["subagent", "subagent_parallel", "subagent_chain"] as const;
+export const SUBAGENT_TOOL_NAMES = [
+	"subagent",
+	"subagent_parallel",
+	"subagent_chain",
+	"subagent_status",
+	"subagent_cancel",
+] as const;
 
 /**
  * SubAgent 扩展宿主接口——由 SessionRuntimeManager 实现。

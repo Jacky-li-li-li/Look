@@ -20,8 +20,15 @@ import type { PendingSubSession, SubAgentRegistry } from "../session/subagent-re
 
 // ── Constants ──
 
-/** 子会话超时（5 分钟）：若 agent_end 未在此时限内触发，强制结算为 aborted。 */
-const SUBAGENT_TIMEOUT_MS = 5 * 60 * 1000;
+// 注意：不再设置子会话执行超时（曾为 5 分钟硬超时）。并行子会话共享
+// ModelRuntime/LLM 连接，全项目审查类任务实际耗时可达 4~8 分钟，硬超时
+// 会误杀正常执行的子会话；且旧超时结算只 finalize 不 abort，导致被判失败
+// 的子会话继续空跑浪费资源、父会话误判后重复重试（见项目级 Context
+// subagent-parallel-timeout-2026-08-02.md）。子会话中止现在只由 AbortSignal
+// 驱动（父会话中止/用户取消），不再有自动超时兜底。
+// 此设计取舍对 single / parallel / chain 三种模式一致：parallel 有
+// maxWaitMs 汇报点 + subagent_status/cancel 可主动管理；single/chain 卡死时
+// 只能靠用户停止父会话级联中止——这是用户明确拍板的决策，勿擅自加回超时。
 
 /** 子会话 runtime 完成后的延迟清理时间（5 分钟）。 */
 const SUBAGENT_CLEANUP_DELAY_MS = 5 * 60 * 1000;
@@ -85,12 +92,14 @@ export class SubAgentRuntimeService {
 		};
 		this.registry.addPending(pending);
 
-		// 父会话中止 → 中止子会话
+		// 父会话中止 → 中止子会话（无条件 abort：子会话可能不在 streaming，
+		// 此时 session.abort() 的 waitForIdle 立即返回，但 agent.abort() 已触发，
+		// 下一个 streaming 窗口会生效；不能因 isStreaming 跳过，否则取消永远不生效）
 		if (signal) {
 			const onAbort = () => {
 				pending.aborted = true;
 				const runtime = this.host.getRuntime(childSessionId);
-				if (runtime?.session.isStreaming) {
+				if (runtime?.session) {
 					runtime.session.abort().catch((err: unknown) => console.warn("[SubAgentRuntime] abort failed:", err));
 				}
 			};
@@ -98,13 +107,8 @@ export class SubAgentRuntimeService {
 			pending.removeAbortListener = () => signal.removeEventListener("abort", onAbort);
 		}
 
-		const timeout = setTimeout(() => {
-			this.finalizeSubSession(childSessionId, true);
-		}, SUBAGENT_TIMEOUT_MS);
-
 		return new Promise<SubagentResult>((resolve) => {
 			pending.resolve = (result: SubagentResult) => {
-				clearTimeout(timeout);
 				resolve(result);
 			};
 		});
@@ -191,6 +195,18 @@ export class SubAgentRuntimeService {
 
 		const childSession = this.host.getSession(sessionId);
 		const partialOutput = childSession ? this.getFinalAssistantText(childSession) : "";
+		const progress: SubagentProgress = {
+			childSessionId: sessionId,
+			parentSessionId: pending.parentSessionId,
+			agentName: pending.displayName,
+			task: pending.task,
+			status: "running",
+			partialOutput,
+			usage: pending.usage,
+			model: pending.model,
+		};
+		// 同步推送给工具层 onUpdate（并行 run 的进度快照/流式更新依赖此调用）
+		pending.onUpdate?.(progress);
 		this.host.emit({
 			type: "session:subagent-progress",
 			parentSessionId: pending.parentSessionId,
@@ -212,7 +228,7 @@ export class SubAgentRuntimeService {
 		await Promise.all(
 			childIds.map(async (childId) => {
 				const child = this.host.getRuntime(childId);
-				if (child?.session.isStreaming) {
+				if (child?.session) {
 					await child.session
 						.abort()
 						.catch((err: unknown) => console.warn("[SubAgentRuntime] abort failed:", err));

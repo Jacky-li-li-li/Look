@@ -1,15 +1,19 @@
 // ============================================================
 // SubAgent Extension — 扩展入口（ExtensionFactory）
 //
-// 注册三个工具到 pi SDK（每种执行模式一个）：
+// 注册五个工具到 pi SDK：
 //   - subagent:          single  单个子会话 {agent, task, title}
-//   - subagent_parallel: 并发多个子会话 {tasks: [{agent, task, title}]}
+//   - subagent_parallel: 并发多个子会话 {tasks, runId?, maxWaitMs?}
+//                        runId 用于续等同一批任务（总指挥模式：到点返回
+//                        部分结果+运行中清单，不判死）
 //   - subagent_chain:    顺序子会话链 {chain: [{agent, task, title}]}，
 //                        task 可含 {previous} 占位符
+//   - subagent_status:   查询并行 run 的实时状态（总指挥可随时查看）
+//   - subagent_cancel:   取消并行 run 的单个任务或整批
 //
 // 为什么不合并为一个 union schema 工具：主流 provider（DeepSeek/
 // OpenAI 兼容、Anthropic）要求工具参数顶层必须是 type: "object"，
-// 顶层 anyOf（union）会被直接 400 拒绝。拆成三个独立 object schema
+// 顶层 anyOf（union）会被直接 400 拒绝。拆成独立 object schema
 // 后，每个模式的 title 都能做到 schema 级必填。
 //
 // title 为必填：子会话名固定为 Agent：<title>（见 SessionSubagentService）。
@@ -26,6 +30,7 @@ import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { discoverAgents, formatAgentList } from "./agent-discovery.js";
 import { runChainAgents, runParallelAgents, runSingleAgent } from "./agent-runner.js";
+import { parallelRunStore } from "./parallel-run-store.js";
 import {
 	type AgentScope,
 	formatUsage,
@@ -66,8 +71,46 @@ const SingleParams = Type.Object({
 });
 
 const ParallelParams = Type.Object({
-	tasks: Type.Array(TaskItem, { description: "Array of {agent, task, title} to execute in parallel" }),
+	tasks: Type.Optional(
+		Type.Array(TaskItem, {
+			description:
+				"Array of {agent, task, title} to execute in parallel. Required for a new run; ignored (may be omitted or empty) when runId is provided.",
+		}),
+	),
 	agentScope: Type.Optional(AgentScopeSchema),
+	runId: Type.Optional(
+		Type.String({
+			description:
+				'Resume an existing parallel run: pass the runId returned by a previous subagent_parallel call to keep waiting for its remaining tasks. When provided, "tasks" is ignored (may be omitted or empty). If the runId is unknown, a new run is started.',
+		}),
+	),
+	maxWaitMs: Type.Optional(
+		Type.Number({
+			description:
+				"Max milliseconds to wait in this call before returning partial results (completed results + still-running task list). This is a progress report point, NOT a failure: pass the same runId again to keep waiting. Default 300000 (5 min); env LOOK_SUBAGENT_MAX_WAIT_MS overrides.",
+			minimum: 1_000,
+		}),
+	),
+});
+
+const StatusParams = Type.Object({
+	runId: Type.Optional(
+		Type.String({
+			description:
+				"Run ID from a subagent_parallel call. Omit to query the most recent parallel run of this session.",
+		}),
+	),
+});
+
+const CancelParams = Type.Object({
+	runId: Type.String({ description: "Run ID from a subagent_parallel call." }),
+	taskIndex: Type.Optional(
+		Type.Number({
+			description:
+				"Cancel only the task at this 0-based index (from the original tasks array). Omit to cancel all remaining tasks of the run.",
+			minimum: 0,
+		}),
+	),
 });
 
 const ChainParams = Type.Object({
@@ -110,9 +153,9 @@ export async function createSubagentExtensionFactory(
 	const agentListText = formatAgentList(discovery.agents);
 
 	return (api) => {
-		/** 子会话进度 → 父会话工具流式更新 */
+		/** 子会话进度 → 父会话工具流式更新（mode/scope 由调用方传入，避免误标 parallel） */
 		const forwardProgress =
-			(onUpdate: ToolUpdateFn) =>
+			(onUpdate: ToolUpdateFn, mode: SubagentDetails["mode"], agentScope: AgentScope) =>
 			(p: SubagentProgress): void => {
 				onUpdate?.({
 					content: [
@@ -121,7 +164,7 @@ export async function createSubagentExtensionFactory(
 							text: `[${p.agentName}] ${p.status}${p.partialOutput ? `: ${p.partialOutput.slice(0, 200)}` : ""}`,
 						},
 					],
-					details: { mode: "parallel", agentScope: "both", results: [] },
+					details: { mode, agentScope, results: [] },
 				});
 			};
 
@@ -169,7 +212,7 @@ export async function createSubagentExtensionFactory(
 					signal,
 					params.title,
 					_toolCallId,
-					forwardProgress(onUpdate),
+					forwardProgress(onUpdate, "single", agentScope),
 				);
 				if (isFailedResult(result)) {
 					return {
@@ -207,28 +250,58 @@ export async function createSubagentExtensionFactory(
 				const agentScope = params.agentScope ?? "both";
 				const { agents } = await discoverAgents(projectId, agentScope);
 
-				if (params.tasks.length === 0) {
+				// 续等模式：只带 runId 时不要求 tasks
+				const tasks = params.tasks ?? [];
+				if (!params.runId && tasks.length === 0) {
 					return {
 						content: [
 							{
 								type: "text",
-								text: `Invalid parameters. Provide at least one task.\nAvailable agents: ${formatAgentList(agents)}`,
+								text: `Invalid parameters. Provide at least one task, or pass runId to resume an existing run.\nAvailable agents: ${formatAgentList(agents)}`,
 							},
 						],
 						details: makeDetails("parallel", agentScope)([]),
 						isError: true,
 					};
 				}
-				const results = await runParallelAgents(
+				const snapshot = await runParallelAgents(
 					host,
 					sessionId,
 					agents,
-					params.tasks,
+					tasks,
 					signal,
 					_toolCallId,
-					forwardProgress(onUpdate),
+					forwardProgress(onUpdate, "parallel", agentScope),
+					{ runId: params.runId, maxWaitMs: params.maxWaitMs },
 				);
+				const { results, pending, runId, total, settled } = snapshot;
 				const successCount = results.filter((r) => !isFailedResult(r)).length;
+
+				// 尚未全部结算：返回中间状态（汇报点，不是失败）。父会话可携 runId 续等。
+				if (!settled) {
+					// 已完成任务只给一行摘要（避免多轮续等重复携带全量报告，节省 token）
+					const doneSummaries = results
+						.map((r) => {
+							const tag = isFailedResult(r) ? "failed" : "completed";
+							const usage = formatUsage(r.usage, r.model);
+							return `- ${r.agentName}: ${tag}${usage ? ` — ${usage}` : ""}`;
+						})
+						.join("\n");
+					// pending 编号用原始 taskIndex，与 subagent_status / subagent_cancel 对齐
+					const pendingList = pending
+						.map(({ task, index }) => `- [${index + 1}/${total}] ${task.title} (agent: ${task.agent})`)
+						.join("\n");
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Parallel run ${runId}: ${results.length}/${total} settled, ${pending.length} still running after waiting (not a failure).\n\n已完成：\n${doneSummaries || "(none yet)"}\n\n仍在运行：\n${pendingList}\n\n继续等待：调用 subagent_parallel 并传 runId="${runId}"（可带 maxWaitMs，缺省 5 分钟）；查询状态用 subagent_status；取消用 subagent_cancel。`,
+							},
+						],
+						details: makeDetails("parallel", agentScope)(results),
+					};
+				}
+
 				const summaries = results.map((r) => summarizeSingle(r));
 				return {
 					content: [
@@ -283,7 +356,7 @@ export async function createSubagentExtensionFactory(
 					params.chain,
 					signal,
 					_toolCallId,
-					forwardProgress(onUpdate),
+					forwardProgress(onUpdate, "chain", agentScope),
 				);
 				if (stoppedAtStep !== undefined) {
 					const failed = results[results.length - 1];
@@ -302,6 +375,145 @@ export async function createSubagentExtensionFactory(
 				return {
 					content: [{ type: "text", text: last.finalOutput || "(no output)" }],
 					details: makeDetails("chain", agentScope)(results),
+				};
+			},
+		});
+
+		// ── status：查询并行 run 状态（总指挥模式：父会话可随时查） ──
+		api.registerTool<typeof StatusParams, SubagentDetails>({
+			name: "subagent_status",
+			label: "Subagent Status",
+			description: [
+				"Query the live status of a subagent_parallel run: which tasks are done, still running, or were cancelled.",
+				"Pass runId from a subagent_parallel call; omit runId to query the most recent parallel run of this session.",
+				"Use this when a parallel run returned partial results and you need to decide whether to keep waiting (subagent_parallel with runId), cancel a stuck task (subagent_cancel), or proceed with what is done.",
+			].join(" "),
+			promptSnippet: "Query subagent parallel run status",
+			parameters: StatusParams,
+			executionMode: "parallel",
+
+			async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+				if (!host.isSubagentEnabled(sessionId)) return disabledResult("parallel");
+
+				const run = params.runId
+					? parallelRunStore.get(params.runId)
+					: parallelRunStore.getLatestForParent(sessionId);
+				if (!run) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: params.runId
+									? `No parallel run found for runId "${params.runId}". It may have been cleaned up (runs are kept ~30 minutes after settling). Start a new run with subagent_parallel.`
+									: "No parallel run found for this session. Start one with subagent_parallel.",
+							},
+						],
+						details: makeDetails("parallel", "both")([]),
+						isError: true,
+					};
+				}
+
+				const lines: string[] = [
+					`Parallel run ${run.runId}: ${run.tasks.filter((t) => t.result).length}/${run.tasks.length} settled${run.settled ? " (all done)" : " (still running)"}`,
+				];
+				run.tasks.forEach((task, i) => {
+					const def = task.task;
+					const progress = task.lastProgress;
+					const result = task.result;
+					if (result) {
+						const tag = isFailedResult(result)
+							? `failed${result.stopReason ? ` (${result.stopReason})` : ""}`
+							: "completed";
+						const usage = formatUsage(result.usage, result.model);
+						lines.push(
+							`- [${i + 1}/${run.tasks.length}] ${def.title} (${def.agent}): ${tag}${usage ? ` — ${usage}` : ""}`,
+						);
+						if (result.finalOutput) lines.push(`  output: ${result.finalOutput.slice(0, 300)}`);
+					} else if (progress) {
+						const usage = formatUsage(progress.usage, progress.model);
+						lines.push(
+							`- [${i + 1}/${run.tasks.length}] ${def.title} (${def.agent}): running${usage ? ` — ${usage}` : ""}`,
+						);
+						if (progress.partialOutput) lines.push(`  partial: ${progress.partialOutput.slice(0, 300)}`);
+					} else {
+						lines.push(`- [${i + 1}/${run.tasks.length}] ${def.title} (${def.agent}): queued`);
+					}
+				});
+				lines.push(
+					`To keep waiting, call subagent_parallel with runId="${run.runId}"; to cancel a task, call subagent_cancel with the same runId (optionally taskIndex).`,
+				);
+
+				const results = run.tasks.filter((t) => t.result).map((t) => t.result!);
+				return {
+					content: [{ type: "text", text: lines.join("\n") }],
+					details: makeDetails("parallel", "both")(results),
+				};
+			},
+		});
+
+		// ── cancel：取消并行 run 的单个任务或整批（总指挥模式） ──
+		api.registerTool<typeof CancelParams, SubagentDetails>({
+			name: "subagent_cancel",
+			label: "Subagent Cancel",
+			description: [
+				"Cancel a parallel subagent run or one of its tasks.",
+				"Pass runId from a subagent_parallel call. Omit taskIndex to cancel all remaining tasks of the run; pass taskIndex (0-based) to cancel just that task.",
+				"Cancelled tasks are settled as aborted; completed tasks are unaffected. After cancelling, use subagent_status to confirm.",
+			].join(" "),
+			promptSnippet: "Cancel subagent parallel run or task",
+			parameters: CancelParams,
+			executionMode: "parallel",
+
+			async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+				if (!host.isSubagentEnabled(sessionId)) return disabledResult("parallel");
+
+				const run = parallelRunStore.get(params.runId);
+				if (!run) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `No parallel run found for runId "${params.runId}". It may have been cleaned up or already settled.`,
+							},
+						],
+						details: makeDetails("parallel", "both")([]),
+						isError: true,
+					};
+				}
+
+				const cancelled: string[] = [];
+				if (params.taskIndex !== undefined) {
+					const task = run.tasks[params.taskIndex];
+					if (!task || task.result) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Task index ${params.taskIndex} is out of range or already settled. Use subagent_status to see the current state.`,
+								},
+							],
+							details: makeDetails("parallel", "both")([]),
+							isError: true,
+						};
+					}
+					const ok = parallelRunStore.cancelTask(run.runId, params.taskIndex);
+					if (ok) cancelled.push(`[${params.taskIndex + 1}/${run.tasks.length}] ${task.task.title}`);
+				} else {
+					const count = parallelRunStore.cancelAll(run.runId);
+					if (count > 0) cancelled.push(`${count} task(s)`);
+				}
+
+				return {
+					content: [
+						{
+							type: "text",
+							text:
+								cancelled.length > 0
+									? `Cancelled: ${cancelled.join(", ")}. Use subagent_status to confirm; completed tasks are unaffected.`
+									: "Nothing to cancel (tasks already settled).",
+						},
+					],
+					details: makeDetails("parallel", "both")([]),
 				};
 			},
 		});
