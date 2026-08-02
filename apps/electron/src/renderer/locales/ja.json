@@ -338,12 +338,11 @@
     "envKeyVerified": "{{provider}} 環境キーを確認しました",
     "failedSelfTest": "{{provider}} セルフテスト失敗しましたが保存されました: {{reason}}",
     "authSourceEnv": "環境変数 {{env}} から検出",
-    "authSourceRuntime": "ランタイムで提供",
+    "authSourceRuntime": "このセッション",
     "authSourceConfig": "~/.look/models.json で設定",
     "authSourceAuto": "自動設定",
     "authSourceStored": "Look に保存済み",
     "authSourceEnvironment": "環境変数",
-    "authSourceRuntime": "このセッション",
     "authSourceMissing": "キー未設定",
     "addKey": "キーを追加",
     "editKey": "編集",
@@ -518,7 +517,9 @@
     "selectProjectHint": "設定するプロジェクトを選択してください。",
     "noProjectPrompts": "プロジェクト固有のプロンプトはありません",
     "noPrompts": "プロンプトはありません",
-    "noProjects": "開いているプロジェクトはありません"
+    "noProjects": "開いているプロジェクトはありません",
+    "lookIsland": "Look Island",
+    "lookIslandDesc": "macOS ノッチ領域にエージェントの状態と承認カードを表示します（macOS 14+、ノッチ付きディスプレイが必要）"
   },
   "agent": {
     "model": "モデル",

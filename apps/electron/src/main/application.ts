@@ -5,9 +5,16 @@
 // eliminate module-level let variables, and enable testing.
 // ============================================================
 
-import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
-import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
-import { app, BrowserWindow, Notification, powerMonitor, session, shell } from "electron";
+import {
+	getLookIslandLayoutPath,
+	getLookIslandSettingsPath,
+	getScheduledTaskLocksDir,
+	getScheduledTasksPath,
+	getUiSettingsPath,
+} from "@look/shared/look-storage";
+import type { LookIslandSettings, MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
+import { isLookIslandSupportedPlatform } from "@look/shared/types";
+import { app, BrowserWindow, Notification, powerMonitor, screen, session, shell } from "electron";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
@@ -18,6 +25,9 @@ import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
 import { BrowserWindowEventTransport } from "./ipc/renderer-event-transport.js";
+import { createLookIslandLayoutStore } from "./look-island/layout-store.js";
+import { initLookIslandService } from "./look-island/service.js";
+import { createLookIslandSettingsStore } from "./look-island/settings.js";
 import { DesktopNotifierService } from "./notifications/desktop-notifier.js";
 import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
 import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
@@ -48,12 +58,17 @@ export interface ApplicationServices {
 	larkChannelManager: LarkChannelManager | null;
 	larkBridgeService: LarkBridgeService | null;
 	desktopNotifier: DesktopNotifierService | null;
+	lookIsland: ReturnType<typeof initLookIslandService> | null;
 }
 
 export class Application {
 	readonly services: ApplicationServices;
 	private rendererEvents = new BrowserWindowEventTransport(() => this.services.mainWindow);
 	private _disposing = false;
+	private lookIslandController: {
+		getSettings(): LookIslandSettings;
+		setEnabled(enabled: boolean): LookIslandSettings;
+	} | null = null;
 	/** 主进程 IPC handlers 是否已注册（registerIpcHandlersNow）。 */
 	private _ipcRegistered = false;
 	/** 窗口是否已完成加载（did-finish-load 已触发，渲染进程 onEvent 就绪）。 */
@@ -69,6 +84,7 @@ export class Application {
 			larkChannelManager: null,
 			larkBridgeService: null,
 			desktopNotifier: null,
+			lookIsland: null,
 		};
 	}
 
@@ -374,11 +390,17 @@ export class Application {
 		// 必须尽早注册，避免渲染进程加载完成后 IPC 尚未就绪的启动竞态。
 		this.bootstrapIM();
 
+		// Phase 3.5: Look Island controller（IPC 注册需要它，提前到 Phase 4 之前）
+		this.bootstrapLookIslandController();
+
 		// Phase 4: Register IPC early（渲染进程就绪信号在此之后发出）
 		this.registerIpcHandlersNow();
 
 		// Phase 4.5: Desktop notifications (after event bus + IPC are ready)
 		this.bootstrapDesktopNotifier();
+
+		// Phase 4.6: Look Island (macOS native notch panel; safe no-op elsewhere)
+		this.bootstrapLookIsland();
 
 		// Phase 5: Load persisted data
 		await this.services.runtimeManager!.loadProjects();
@@ -526,6 +548,7 @@ export class Application {
 			this.services.larkChannelManager!,
 			this.services.larkBridgeService!,
 			this.services.schedulerService!,
+			this.lookIslandController,
 		);
 
 		// IPC 已就绪：若窗口已完成加载（渲染进程 onEvent 已注册），立即发就绪信号；
@@ -551,6 +574,66 @@ export class Application {
 			console.log("[Look] DesktopNotifierService initialized");
 		} catch (err) {
 			console.warn("[Look] Failed to initialize DesktopNotifierService:", err);
+		}
+	}
+
+	private bootstrapLookIslandController(): void {
+		if (this.lookIslandController || !this.services.runtimeManager) return;
+		if (!isLookIslandSupportedPlatform(process.platform, process.getSystemVersion())) {
+			return;
+		}
+		const settingsStore = createLookIslandSettingsStore(getLookIslandSettingsPath());
+		this.lookIslandController = {
+			getSettings: () => settingsStore.get(),
+			setEnabled: (enabled) => {
+				const next = settingsStore.setEnabled(enabled);
+				if (enabled) {
+					if (!this.services.lookIsland) {
+						this.startLookIslandService();
+					} else {
+						this.services.lookIsland.enable();
+					}
+				} else {
+					this.services.lookIsland?.disable();
+				}
+				return next;
+			},
+		};
+	}
+
+	private bootstrapLookIsland(): void {
+		if (this.services.lookIsland || !this.services.runtimeManager) return;
+		if (!isLookIslandSupportedPlatform(process.platform, process.getSystemVersion())) {
+			return;
+		}
+		if (this.lookIslandController) {
+			const settings = this.lookIslandController.getSettings();
+			if (settings.enabled) {
+				this.startLookIslandService();
+			}
+		}
+	}
+
+	private startLookIslandService(): void {
+		if (this.services.lookIsland || !this.services.runtimeManager) return;
+		try {
+			this.services.lookIsland = initLookIslandService({
+				onEvent: (callback) => this.services.runtimeManager!.composition.eventBus.onEvent(callback),
+				getMainWindow: () => this.services.mainWindow,
+				getPrimaryDisplay: () => screen.getPrimaryDisplay(),
+				getAllDisplays: () => screen.getAllDisplays(),
+				emitEvent: (event) => this.services.runtimeManager!.composition.eventBus.emit(event),
+				permissionResponder: this.services.runtimeManager!.composition.permissionService,
+				planResponder: this.services.runtimeManager!.composition.planService,
+				layoutStore: createLookIslandLayoutStore(getLookIslandLayoutPath()),
+				isPlatformSupported: () => isLookIslandSupportedPlatform(process.platform, process.getSystemVersion()),
+			});
+			if (this.services.lookIsland) {
+				this.services.lookIsland.start();
+				console.log("[Look] Look Island initialized (macOS native)");
+			}
+		} catch (err) {
+			console.warn("[Look] Failed to initialize Look Island:", err);
 		}
 	}
 
@@ -613,6 +696,14 @@ export class Application {
 	// ============================================================
 
 	public async dispose(): Promise<void> {
+		if (this.services.lookIsland) {
+			try {
+				this.services.lookIsland.stop();
+			} catch (err) {
+				console.error("[Look] lookIsland dispose failed:", err);
+			}
+			this.services.lookIsland = null;
+		}
 		if (this.services.desktopNotifier) {
 			try {
 				this.services.desktopNotifier.dispose();
@@ -708,6 +799,7 @@ export class Application {
 						this.services.larkChannelManager ?? undefined,
 						this.services.larkBridgeService ?? undefined,
 						this.services.schedulerService ?? undefined,
+						this.lookIslandController,
 					);
 					this._ipcRegistered = true;
 					this.maybeSendAppReady();

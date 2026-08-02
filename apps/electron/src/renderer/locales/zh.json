@@ -334,12 +334,11 @@
     "envKeyVerified": "{{provider}} 环境密钥验证通过",
     "failedSelfTest": "{{provider}} 自检失败但已保存: {{reason}}",
     "authSourceEnv": "从环境变量 {{env}} 检测到",
-    "authSourceRuntime": "运行时提供",
+    "authSourceRuntime": "本次会话",
     "authSourceConfig": "通过 ~/.look/models.json 配置",
     "authSourceAuto": "自动配置",
     "authSourceStored": "存储在 Look",
     "authSourceEnvironment": "环境变量",
-    "authSourceRuntime": "本次会话",
     "authSourceMissing": "未配置密钥",
     "addKey": "添加密钥",
     "editKey": "编辑",
@@ -518,7 +517,9 @@
     "selectProjectHint": "请先选择要配置的项目。",
     "noProjectPrompts": "暂无项目专属提示词",
     "noPrompts": "暂无提示词",
-    "noProjects": "暂无已打开的项目"
+    "noProjects": "暂无已打开的项目",
+    "lookIsland": "灵动岛",
+    "lookIslandDesc": "在 macOS 刘海区域显示 Agent 运行状态与审批卡片（需要 macOS 14+ 与刘海屏）"
   },
   "agent": {
     "model": "模型",

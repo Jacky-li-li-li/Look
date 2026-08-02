@@ -26,6 +26,9 @@ extraResources:
     to: default-skills
   - from: default-agents
     to: default-agents
+  # Look Island 原生 helper：npm run build:island-native 编译产出（resources/tools/look-island/look-island-helper）
+  - from: build/look-island
+    to: tools/look-island
 
 # pi SDK 的原生模块 / 子进程二进制不能呆在 asar 里
 asarUnpack:

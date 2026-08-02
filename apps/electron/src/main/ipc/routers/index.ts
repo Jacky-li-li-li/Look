@@ -1,3 +1,4 @@
+export { lookIslandRouter } from "../../look-island/router.js";
 export { agentRouter } from "./agent-router.js";
 export { fileRouter } from "./file-router.js";
 export { fileViewerRouter } from "./file-viewer-router.js";

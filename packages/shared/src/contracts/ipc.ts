@@ -6,6 +6,7 @@ import type {
 	CustomProviderInput,
 	FileTreeNode,
 	ImageContent,
+	LookIslandSettings,
 	MainToRendererEvent,
 	ProjectInfo,
 	ProviderInfo,
@@ -165,6 +166,9 @@ export interface LookAPI {
 		settings: Partial<GeneralSettings>,
 	): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
 	resetGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
+	// ---- Look Island (macOS notch panel) ----
+	getLookIslandSettings(): Promise<{ success: boolean; settings?: LookIslandSettings; error?: string }>;
+	setLookIslandEnabled(enabled: boolean): Promise<{ success: boolean; settings?: LookIslandSettings; error?: string }>;
 	// ---- v0.3 skills ----
 	listSkills(): Promise<{
 		success: boolean;

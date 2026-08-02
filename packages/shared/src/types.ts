@@ -88,6 +88,50 @@ export type { UserProfile } from "./types/dto/user.js";
 // Events
 export type { LoginPrompt, MainToRendererEvent } from "./types/events/main-to-renderer.js";
 export type { RendererToMainEvent } from "./types/events/renderer-to-main.js";
+// Look Island (wire contract with the native Swift helper)
+export type {
+	LookIslandActivityLine,
+	LookIslandDisplayMode,
+	LookIslandDisplayPolicy,
+	LookIslandDisplayState,
+	LookIslandDownlinkMessage,
+	LookIslandInteraction,
+	LookIslandInteractionKind,
+	LookIslandNativeFrame,
+	LookIslandNativeScreenMetrics,
+	LookIslandNotchStatus,
+	LookIslandPhase,
+	LookIslandPillSnapshot,
+	LookIslandRect,
+	LookIslandSessionSnapshot,
+	LookIslandSettings,
+	LookIslandStrings,
+	LookIslandSubagentSnapshot,
+	LookIslandSubagentStatus,
+	LookIslandUplinkMessage,
+} from "./types/look-island.js";
+export {
+	computeLookIslandSimulatedNotchWidth,
+	DEFAULT_LOOK_ISLAND_SETTINGS,
+	DEFAULT_LOOK_ISLAND_STRINGS,
+	isLookIslandSupportedPlatform,
+	LOOK_ISLAND_CARRIER_COMPACT_INSET,
+	LOOK_ISLAND_CLOSED_HEIGHT,
+	LOOK_ISLAND_COMPACT_ACTIVE_WIDTH,
+	LOOK_ISLAND_COMPACT_HARDWARE_EXTRA_WIDTH,
+	LOOK_ISLAND_COMPACT_IDLE_WIDTH,
+	LOOK_ISLAND_COMPACT_MIN_WIDTH,
+	LOOK_ISLAND_MAX_EXPANDED_HEIGHT,
+	LOOK_ISLAND_MAX_EXPANDED_WIDTH,
+	LOOK_ISLAND_MIN_DARWIN_MAJOR,
+	LOOK_ISLAND_MIN_EXPANDED_WIDTH,
+	LOOK_ISLAND_PROTOCOL_VERSION,
+	LOOK_ISLAND_SCREEN_EDGE_GUTTER,
+	LOOK_ISLAND_SIMULATED_NOTCH_MAX_WIDTH,
+	LOOK_ISLAND_SIMULATED_NOTCH_MIN_WIDTH,
+	LOOK_ISLAND_SIMULATED_NOTCH_WIDTH_RATIO,
+	normalizeLookIslandSettings,
+} from "./types/look-island.js";
 // UI events (existing sub-module)
 export type {
 	LookUiEvent,

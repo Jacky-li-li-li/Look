@@ -334,12 +334,11 @@
     "envKeyVerified": "{{provider}} env key verified",
     "failedSelfTest": "{{provider}} saved despite failed self-test: {{reason}}",
     "authSourceEnv": "Detected from {{env}} in environment",
-    "authSourceRuntime": "Provided at runtime",
+    "authSourceRuntime": "This session",
     "authSourceConfig": "Configured via ~/.look/models.json",
     "authSourceAuto": "Auto-configured",
     "authSourceStored": "Stored in Look",
     "authSourceEnvironment": "Environment variable",
-    "authSourceRuntime": "This session",
     "authSourceMissing": "No key configured",
     "addKey": "Add key",
     "editKey": "Edit",
@@ -518,7 +517,9 @@
     "selectProjectHint": "Please select a project to configure.",
     "noProjectPrompts": "No project-specific prompts",
     "noPrompts": "No prompts",
-    "noProjects": "No projects opened yet"
+    "noProjects": "No projects opened yet",
+    "lookIsland": "Look Island",
+    "lookIslandDesc": "Show agent activity and approval cards in the macOS notch area (requires macOS 14+ and a notched display)"
   },
   "agent": {
     "model": "Model",

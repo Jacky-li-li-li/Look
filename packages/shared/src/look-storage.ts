@@ -115,6 +115,16 @@ export function getScheduledTaskLocksDir(): string {
 	return path.join(LOOK_DIR, "scheduled-task-locks");
 }
 
+/** Persisted Look Island layout preferences (per-display). */
+export function getLookIslandLayoutPath(): string {
+	return path.join(LOOK_DIR, "look-island-layout.json");
+}
+
+/** Persisted Look Island user settings (enabled etc.). */
+export function getLookIslandSettingsPath(): string {
+	return path.join(LOOK_DIR, "look-island-settings.json");
+}
+
 /** User profile (avatar, display name, etc.) */
 export function getUserProfilePath(): string {
 	return path.join(LOOK_DIR, "user-profile.json");

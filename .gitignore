@@ -22,3 +22,4 @@ _temp/
 apps/electron/tools/*/output/
 coverage/
 未命名/
+apps/electron/build/look-island/

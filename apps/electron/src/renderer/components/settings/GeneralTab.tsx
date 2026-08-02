@@ -145,6 +145,7 @@ export default function GeneralTab() {
 	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 	// 三态：undefined=未悬停（预览跟随已选项），null=悬停在默认像素头像上
 	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
+	const [lookIslandEnabled, setLookIslandEnabledState] = useState(false);
 	const {
 		language,
 		autoCollapse,
@@ -162,6 +163,26 @@ export default function GeneralTab() {
 	const previewUrl = getAiAvatarUrl(previewAvatar);
 
 	// 选择 AI 头像：更新本地 state、持久化到主进程并同步全局 atom
+	useEffect(() => {
+		if (!api || api.platform !== "darwin") return;
+		api.getLookIslandSettings()
+			.then((r) => {
+				if (r?.success && r.settings) {
+					setLookIslandEnabledState(r.settings.enabled);
+				}
+			})
+			.catch((err: unknown) => console.warn("[GeneralTab] getLookIslandSettings failed:", err));
+	}, []);
+
+	const setLookIslandEnabled = (enabled: boolean) => {
+		setLookIslandEnabledState(enabled);
+		if (!api) return;
+		api.setLookIslandEnabled(enabled).catch((err: unknown) => {
+			console.warn("[GeneralTab] setLookIslandEnabled failed:", err);
+			setLookIslandEnabledState(!enabled);
+		});
+	};
+
 	const selectAiAvatar = (next: string | null) => {
 		setState((prev) => ({ ...prev, aiAvatar: next }));
 		persistSettings({ aiAvatar: next });
@@ -458,6 +479,18 @@ export default function GeneralTab() {
 							</SelectContent>
 						</Select>
 					</SettingRow>
+					{api?.platform === "darwin" && (
+						<SettingRow id="look-island" label={t("settings.lookIsland")} desc={t("settings.lookIslandDesc")}>
+							<Switch
+								id="look-island"
+								size="sm"
+								checked={lookIslandEnabled}
+								onCheckedChange={(v) => {
+									setLookIslandEnabled(v);
+								}}
+							/>
+						</SettingRow>
+					)}
 				</CardContent>
 			</Card>
 
