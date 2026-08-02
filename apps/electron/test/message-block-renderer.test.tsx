@@ -129,4 +129,125 @@ describe("MessageBlockList dual-source equivalence", () => {
 		);
 		expect(container.textContent).toContain("Thinking");
 	});
+
+	it("thinking: stream source uses !completed (not last-block) semantics", () => {
+		// 流式源：thinking 未完成即 active（即使它不是最后一块）。
+		const blocks: LookUiStreamBlock[] = [
+			{ contentIndex: 0, kind: "thinking", text: "", thinking: "step 1", completed: false, uid: 1 },
+			{ contentIndex: 1, kind: "text", text: "after", thinking: "", completed: true, uid: 2 },
+		];
+		const unified = toUnifiedFromStream(blocks);
+		const { container } = render(
+			<MessageBlockList
+				blocks={unified}
+				isStreaming={true}
+				autoCollapse={false}
+				toolExecutions={{}}
+				defaultToolStatus="running"
+			/>,
+		);
+		// thinking 未完成 → ThinkingPanel 显示 reasoning 骨架/内容
+		expect(container.textContent).toContain("step 1");
+		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
+	});
+
+	it("thinking: snapshot source activates only the last block while streaming", () => {
+		// 快照源：isStreaming 时只有最后一块 thinking active；
+		// 前面已完成 thinking 不应显示 skeleton（ThinkingPanel 空内容时不渲染）。
+		const blocks = [
+			{ type: "thinking", thinking: "step 1" },
+			{ type: "text", text: "answer" },
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>;
+		const unified = toUnifiedFromPiAi(blocks);
+		const { container } = render(
+			<MessageBlockList
+				blocks={unified}
+				isStreaming={true}
+				autoCollapse={false}
+				toolExecutions={{}}
+				defaultToolStatus="pending"
+			/>,
+		);
+		expect(container.textContent).toContain("answer");
+	});
+
+	it("subagent tool calls are carved out into their own group", () => {
+		// subagent 类工具（delegate_agent 等）应独立成组，不混入普通折叠组。
+		const blocks = [
+			{ type: "text", text: "before" },
+			{ type: "toolCall", id: "sa1", name: "delegate_agent", arguments: { task: "x" } },
+			{ type: "text", text: "after" },
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>;
+		const unified = toUnifiedFromPiAi(blocks);
+		const { container } = render(
+			<MessageBlockList
+				blocks={unified}
+				isStreaming={false}
+				autoCollapse={false}
+				toolExecutions={{
+					sa1: { toolCallId: "sa1", toolName: "delegate_agent", args: {}, phase: "completed" },
+				}}
+				defaultToolStatus="pending"
+			/>,
+		);
+		expect(container.textContent).toContain("before");
+		expect(container.textContent).toContain("after");
+		expect(container.textContent).toContain("delegate_agent");
+	});
+
+	it("defaultToolStatus: stream subagent without execution renders without crash", () => {
+		// 无 execution 的 subagent：流式路径默认 running，快照路径默认 pending。
+		const subagentBlocks: LookUiStreamBlock[] = [
+			{
+				contentIndex: 0,
+				kind: "toolcall",
+				text: "",
+				thinking: "",
+				toolCallId: "sa1",
+				toolName: "delegate_agent",
+				args: {},
+				completed: true,
+				uid: 1,
+			},
+		];
+		const unified = toUnifiedFromStream(subagentBlocks);
+		const { container } = render(
+			<MessageBlockList
+				blocks={unified}
+				isStreaming={false}
+				autoCollapse={false}
+				toolExecutions={{}}
+				defaultToolStatus="running"
+			/>,
+		);
+		expect(container.textContent).toContain("delegate_agent");
+	});
+
+	it("stream image without image data renders nothing (no broken img)", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{ contentIndex: 0, kind: "image", text: "", thinking: "", completed: true, uid: 1 },
+		];
+		const unified = toUnifiedFromStream(blocks);
+		const { container } = render(
+			<MessageBlockList
+				blocks={unified}
+				isStreaming={false}
+				autoCollapse={false}
+				toolExecutions={{}}
+				defaultToolStatus="running"
+			/>,
+		);
+		// 不再渲染 data:image/png;base64, 坏图
+		expect(container.querySelector("img")).toBeNull();
+	});
 });

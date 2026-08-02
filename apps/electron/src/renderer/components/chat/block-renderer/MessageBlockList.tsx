@@ -16,7 +16,7 @@
 
 import type { ThinkingContent, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { LookUiToolExecState } from "@shared/types";
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import { segmentExecutionBlocks } from "../../../lib/executionSegments";
 import CollapsibleExecutionGroup from "../CollapsibleExecutionGroup";
 import SkillAwareContent from "../SkillAwareContent";
@@ -77,9 +77,10 @@ interface UnifiedBlockViewProps {
 	isStreaming: boolean;
 	autoCollapse: boolean;
 	toolExecution: LookUiToolExecState | undefined;
-	toolCallView?: ToolCallView;
-	/** 源 blocks 总数（thinking「最后一块」判断用）。 */
-	totalBlocks: number;
+	/** thinking 块是否处于「流式激活」状态（父级已按源类型计算好）。
+	 *  快照源：isStreaming && 是最后一块；流式源：isStreaming && !completed。
+	 *  作为布尔 prop 传入，避免 totalBlocks 变化击穿所有 block 的 memo。 */
+	thinkingStreaming: boolean;
 }
 
 /**
@@ -92,8 +93,7 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 	isStreaming,
 	autoCollapse,
 	toolExecution,
-	toolCallView,
-	totalBlocks,
+	thinkingStreaming,
 }: UnifiedBlockViewProps) {
 	switch (block.kind) {
 		case "text": {
@@ -109,7 +109,7 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 			return (
 				<ThinkingPanel
 					thinking={block.thinking ?? ""}
-					isStreaming={isThinkingStreaming(block, isStreaming, totalBlocks)}
+					isStreaming={thinkingStreaming}
 					autoCollapse={autoCollapse}
 				/>
 			);
@@ -119,18 +119,18 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 			return <ImageBlock block={block.image} />;
 		}
 		case "toolcall": {
+			// 防御性兜底：normal toolcall 恒被 segmentExecutionBlocks 归入 group，
+			// 此分支理论上不可达；保留以覆盖未知 future 分段变化。
 			return (
 				<ToolCallCard
-					toolCall={
-						toolCallView ?? {
-							callId: block.toolCallId ?? "",
-							toolName: block.toolName ?? "unknown",
-							args: block.args ?? {},
-							status: "running",
-							result: toolExecution?.result ?? toolExecution?.partialResult,
-							isError: toolExecution?.isError,
-						}
-					}
+					toolCall={{
+						callId: block.toolCallId ?? "",
+						toolName: block.toolName ?? "unknown",
+						args: block.args ?? {},
+						status: "running",
+						result: toolExecution?.result ?? toolExecution?.partialResult,
+						isError: toolExecution?.isError,
+					}}
 				/>
 			);
 		}
@@ -199,32 +199,15 @@ export const MessageBlockList = memo(function MessageBlockList({
 	toolResultMap,
 	defaultToolStatus,
 }: MessageBlockListProps) {
-	const totalBlocks = blocks.length;
-
 	// 单次分段：连续 thinking/toolcall 组成折叠组；subagent 类单独成组。
+	// 注意：toolcall 恒被归入 group（含 group of 1）或 subagent 段，
+	// "single" 分支只会有 text/image/thinking——因此不需要预计算
+	// toolCall 视图模型，UnifiedBlockView 的 toolcall 分支仅是防御性兜底。
 	const segments = segmentExecutionBlocks(
 		blocks,
 		(b) => b.kind === "thinking" || b.kind === "toolcall",
 		(b) => b.kind === "toolcall" && isSubagentTool(b.toolName ?? ""),
 	);
-
-	// 预计算 toolCall 视图模型：稳定 args 引用，避免 ToolCallCard memo 失效。
-	const toolCallViews = useMemo(() => {
-		const map = new Map<string, ToolCallView>();
-		for (const block of blocks) {
-			if (block.kind !== "toolcall") continue;
-			const execution = block.toolCallId ? toolExecutions[block.toolCallId] : undefined;
-			map.set(block.key, {
-				callId: block.toolCallId ?? "",
-				toolName: block.toolName ?? "unknown",
-				args: block.args ?? {},
-				status: statusFor(block, toolExecutions, toolResultMap, defaultToolStatus),
-				result: execution?.result ?? execution?.partialResult,
-				isError: execution?.isError,
-			});
-		}
-		return map;
-	}, [blocks, toolExecutions, toolResultMap, defaultToolStatus]);
 
 	return (
 		<div className="flex flex-col gap-msg-block">
@@ -240,8 +223,7 @@ export const MessageBlockList = memo(function MessageBlockList({
 							toolExecution={
 								block.kind === "toolcall" && block.toolCallId ? toolExecutions[block.toolCallId] : undefined
 							}
-							toolCallView={toolCallViews.get(block.key)}
-							totalBlocks={totalBlocks}
+							thinkingStreaming={isThinkingStreaming(block, isStreaming, blocks.length)}
 						/>
 					);
 				}
@@ -256,7 +238,7 @@ export const MessageBlockList = memo(function MessageBlockList({
 				}
 
 				const groupEndIndex = seg.startIndex + seg.blocks.length;
-				const isActiveGroup = isStreaming && groupEndIndex === totalBlocks;
+				const isActiveGroup = isStreaming && groupEndIndex === blocks.length;
 				return (
 					<CollapsibleExecutionGroup
 						key={`group-${seg.startIndex}-${segIdx}`}

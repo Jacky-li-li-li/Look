@@ -124,7 +124,9 @@ export function toUnifiedFromStream(blocks: LookUiStreamBlock[]): UnifiedBlock[]
 				unified = {
 					key,
 					kind: "image",
-					image: block.image ?? { type: "image", mimeType: "image/png", data: "" },
+					// image 缺失时不生成假空图（避免 data:image/png;base64, 坏图），
+					// 渲染层 UnifiedBlockView 对 !block.image 直接 return null。
+					image: block.image,
 					completed: block.completed,
 					sourceIndex: index,
 				};
