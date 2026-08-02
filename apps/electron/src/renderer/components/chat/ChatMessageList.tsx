@@ -30,7 +30,7 @@ import {
 import LookMarkdown from "../markdown/LookMarkdown";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
-import MessageBubble, { StreamingMessageBubble } from "./MessageBubble";
+import { MessageItem } from "./MessageItem";
 import { SessionEntryBubble } from "./SessionEntryBubble";
 
 /** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
@@ -526,64 +526,33 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				);
 			}
 
-			if (item.isLive && item.uiBlocks) {
+			// 统一消息渲染：快照 / live / 纯 live 全部走 MessageItem。
+			// MessageItem 内部用原语组装，isStreaming 与 liveBlocks 是状态而非另一棵树。
+			if (item.message || (item.isLive && item.uiBlocks)) {
 				const itemEntryId = item.entryId;
-				if (item.message) {
-					return (
-						<div key={item.id} className="px-msg-item-x py-msg-item-y">
-							<div data-message-id={item.id} className="group/message flex flex-col">
-								<MessageBubble
-									message={item.message}
-									agentName={agentName}
-									isStreaming={isBusy}
-									autoCollapse={autoCollapse}
-									toolExecutions={EMPTY_TOOL_EXECUTIONS}
-									toolResultMap={item.toolResultMap}
-									isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
-									liveBlocks={item.uiBlocks}
-									liveToolExecutions={item.uiTools ?? EMPTY_TOOL_EXECUTIONS}
-								/>
-								{renderMessageActions(item, true)}
-							</div>
-						</div>
-					);
-				}
+				const live = item.isLive && Boolean(item.uiBlocks?.length);
 				return (
 					<div key={item.id} className="px-msg-item-x py-msg-item-y">
 						<div data-message-id={item.id} className="group/message flex flex-col">
-							<StreamingMessageBubble
+							<MessageItem
+								message={item.message}
 								agentName={agentName}
-								blocks={item.uiBlocks}
-								toolExecutions={item.uiTools ?? EMPTY_TOOL_EXECUTIONS}
-								isStreaming={isBusy}
+								isStreaming={live ? isBusy : false}
 								autoCollapse={autoCollapse}
+								toolExecutions={EMPTY_TOOL_EXECUTIONS}
+								toolResultMap={item.toolResultMap}
+								isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
+								flash={flashEntryId === item.id}
+								liveBlocks={live ? item.uiBlocks : undefined}
+								liveToolExecutions={live ? (item.uiTools ?? EMPTY_TOOL_EXECUTIONS) : EMPTY_TOOL_EXECUTIONS}
 							/>
-							{renderMessageActions(item, true)}
+							{renderMessageActions(item, live)}
 						</div>
 					</div>
 				);
 			}
 
-			if (!item.message) return null;
-
-			const itemEntryId = item.entryId;
-			return (
-				<div key={item.id} className="px-msg-item-x py-msg-item-y">
-					<div data-message-id={item.id} className="group/message flex flex-col">
-						<MessageBubble
-							message={item.message}
-							agentName={agentName}
-							isStreaming={false}
-							autoCollapse={autoCollapse}
-							toolExecutions={EMPTY_TOOL_EXECUTIONS}
-							toolResultMap={item.toolResultMap}
-							isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
-							flash={flashEntryId === item.id}
-						/>
-						{renderMessageActions(item, false)}
-					</div>
-				</div>
-			);
+			return null;
 		},
 		[agentName, autoCollapse, flashEntryId, isBusy, leafId, renderMessageActions, agentId],
 	);
