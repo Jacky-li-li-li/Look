@@ -11,7 +11,7 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { toUnifiedFromPiAi, toUnifiedFromStream } from "../src/renderer/components/chat/block-renderer/blockTypes";
 import { MessageBlockList } from "../src/renderer/components/chat/block-renderer/MessageBlockList";
-import { StreamingBlocksBubble } from "../src/renderer/components/chat/MessageBubble";
+import { StreamingBlocksBubble } from "../src/renderer/components/chat/StreamingBlocksBubble";
 
 afterEach(cleanup);
 

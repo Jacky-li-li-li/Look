@@ -16,8 +16,8 @@ import { useAtomValue } from "jotai";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../../store/authAtoms";
-import { StreamingBlocksBubble } from "./MessageBubble";
 import { MessageAvatar, MessageContent, MessageHeader, MessageRoot } from "./message-elements/MessageElements";
+import { StreamingBlocksBubble } from "./StreamingBlocksBubble";
 
 export interface MessageItemProps {
 	/** 持久化消息（纯 live 时为 undefined）。 */
@@ -66,7 +66,9 @@ export const MessageItem = memo(function MessageItem({
 	const assistant = message?.role === "assistant" ? (message as AssistantMessage) : null;
 	const sender = senderFor(message, agentName, userProfile.userName || t("chat.you"), t("chat.agent"));
 
-	const hasLive = Boolean(liveBlocks && liveBlocks.length > 0);
+	// hasLive 基于「是否传入 liveBlocks」而非长度：空数组也要走流式分支，
+	// 由 StreamingBlocksBubble 显示 loading 指示（与旧 StreamingMessageBubble 行为一致）。
+	const hasLive = liveBlocks !== undefined;
 
 	return (
 		<MessageRoot from={isUser ? "user" : "assistant"}>
