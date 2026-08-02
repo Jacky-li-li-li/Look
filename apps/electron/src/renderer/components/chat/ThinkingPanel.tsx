@@ -13,6 +13,7 @@ import { cn } from "@look/ui";
 import { Brain, ChevronRight } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { useConversationContextSafe } from "./conversation";
 
 interface ThinkingPanelProps {
 	thinking: string;
@@ -22,14 +23,19 @@ interface ThinkingPanelProps {
 
 const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming, autoCollapse }: ThinkingPanelProps) {
 	const { t } = useTranslation();
+	// 仅在处于 Conversation（StickToBottom）内时可用；独立渲染（测试等）时优雅降级
+	const ctx = useConversationContextSafe();
 	// Collapsed by default (like tool-call cards); a boolean manualOpen
 	// means the user has taken control, null means "follow autoCollapse".
 	const [manualOpen, setManualOpen] = React.useState<boolean | null>(null);
 	const open = manualOpen ?? !autoCollapse;
 
 	const handleToggle = React.useCallback(() => {
+		// 展开时脱离“贴底”锁定：防止 stick-to-bottom 的 resize 跟随把视口拽到
+		// 展开后内容的底部（与 CollapsibleExecutionGroup 同一问题的 thinking 版本）。
+		if (!open) ctx?.stopScroll();
 		setManualOpen((prev) => !(prev ?? !autoCollapse));
-	}, [autoCollapse]);
+	}, [autoCollapse, open, ctx]);
 
 	// When streaming but no thinking content has arrived yet, show a loading
 	// skeleton with a pulse indicator so the user knows reasoning is in progress.

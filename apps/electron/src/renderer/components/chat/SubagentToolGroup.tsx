@@ -10,6 +10,7 @@ import { cn } from "@look/ui";
 import { Bot, ChevronRight } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { useConversationContextSafe } from "./conversation";
 import SubagentArgsCards, { parseSubagentItems } from "./SubagentArgsCards";
 import type { ToolCallViewModel } from "./ToolCallCard";
 
@@ -20,8 +21,17 @@ interface SubagentToolGroupProps {
 
 const SubagentToolGroup = React.memo(function SubagentToolGroup({ calls }: SubagentToolGroupProps) {
 	const { t } = useTranslation();
+	// 仅在处于 Conversation（StickToBottom）内时可用；独立渲染（测试等）时优雅降级
+	const ctx = useConversationContextSafe();
 	// 默认展开，点击头部手动折叠
 	const [expanded, setExpanded] = React.useState(true);
+
+	// 重新展开时脱离“贴底”锁定：防止 stick-to-bottom 的 resize 跟随把视口拽到
+	// 展开后内容的底部（与 CollapsibleExecutionGroup 同一问题的 subagent 版本）。
+	const handleToggle = React.useCallback(() => {
+		if (!expanded) ctx?.stopScroll();
+		setExpanded((prev) => !prev);
+	}, [expanded, ctx]);
 
 	// 流式早期 args 未完整 / 历史异常参数：跳过，待 args 完整后自然出现
 	const renderable = React.useMemo(
@@ -46,7 +56,7 @@ const SubagentToolGroup = React.memo(function SubagentToolGroup({ calls }: Subag
 			<button
 				type="button"
 				aria-expanded={expanded}
-				onClick={() => setExpanded((prev) => !prev)}
+				onClick={handleToggle}
 				className={cn(
 					"flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-2 text-left outline-none",
 					"text-[10px] hover:text-foreground transition-colors",

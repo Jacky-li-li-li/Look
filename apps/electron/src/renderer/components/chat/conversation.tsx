@@ -38,6 +38,15 @@ export function useConversationContext(): ConversationContextValue {
 	return ctx;
 }
 
+/**
+ * 安全的 Conversation context 访问：不在 Conversation（StickToBottom）内时
+ * 返回 null，调用方自行降级（如工具组展开时不脱离底部锁定），不会 throw。
+ * 用于嵌套较深、可能在测试/独立渲染中出现的不定上下文消费方。
+ */
+export function useConversationContextSafe(): ConversationContextValue | null {
+	return useContext(ConversationContext);
+}
+
 // ===== Conversation 根容器 =====
 
 export type ConversationProps = Omit<ComponentProps<typeof StickToBottom>, "children"> & { children?: ReactNode };
@@ -75,7 +84,13 @@ function ConversationContextBridge({ children }: { children: ReactNode }): React
 			},
 			stopScroll: lib.stopScroll,
 		}),
-		[lib],
+		// 只依赖稳定成员：scrollRef/contentRef/scrollToBottom/stopScroll 均为
+		// 稳定引用（库内 useCallback/useRefCallback 固定 deps），isAtBottom 只在
+		// 贴底状态翻转时变化。不依赖 lib 整体对象，避免 escapedFromLock 等
+		// 内部状态翻转（用户滚动穿过 70px 边界时高频发生）触发全体消费方
+		// （CEG / SubagentToolGroup / ThinkingPanel）无谓重渲染。
+		// biome-ignore lint/correctness/useExhaustiveDependencies: 见上方注释，仅订阅稳定成员
+		[lib.scrollRef, lib.contentRef, lib.isAtBottom, lib.scrollToBottom, lib.stopScroll],
 	);
 
 	return <ConversationContext.Provider value={value}>{children}</ConversationContext.Provider>;

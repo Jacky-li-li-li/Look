@@ -12,6 +12,7 @@ import { Brain, ChevronRight, Wrench } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { hashKey } from "../../lib/stableKey";
+import { useConversationContextSafe } from "./conversation";
 import SkillAwareContent from "./SkillAwareContent";
 import ThinkingPanel from "./ThinkingPanel";
 import ToolCallCard from "./ToolCallCard";
@@ -85,6 +86,8 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	isStreaming,
 }: CollapsibleExecutionGroupProps) {
 	const { t } = useTranslation();
+	// 仅在处于 Conversation（StickToBottom）内时可用；独立渲染（测试等）时优雅降级
+	const ctx = useConversationContextSafe();
 	const { kind, thinkingCount, toolCount } = React.useMemo(() => classify(blocks), [blocks]);
 	const summary = React.useMemo(() => {
 		if (kind === "mixed") return t("tool.mixedExecuted", { thinking: thinkingCount, tools: toolCount });
@@ -99,16 +102,28 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 
 	const isOpen = expanded;
 
+	// 点击展开时主动脱离“贴底”锁定（stopScroll），再切换展开状态：
+	// 防止 stick-to-bottom 的 resize 跟随把视口弹簧拽到展开后内容的最底部——
+	// 工具调用很多时展开高度骤增，视口落点处于 staggered reveal 延迟期（
+	// animationDelay: i*20ms，末尾卡片最长延迟 600ms+，opacity 仍为 0），
+	// 用户会看到空白并被迫等待动画滚到底部。
+	// 折叠时不需要 stopScroll（负 resize 在近底部时会自动恢复贴底）。
 	const handleBadgeClick = React.useCallback(() => {
+		if (!expanded) ctx?.stopScroll();
 		setExpanded((prev) => !prev);
-	}, []);
+	}, [expanded, ctx]);
 
-	const handleBadgeKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {
-		if (e.key === "Enter" || e.key === " ") {
-			e.preventDefault();
-			setExpanded((prev) => !prev);
-		}
-	}, []);
+	const handleBadgeKeyDown = React.useCallback(
+		(e: React.KeyboardEvent<HTMLButtonElement>) => {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				// 统一走 handleBadgeClick：键盘展开同样需要 stopScroll，
+				// 否则键盘用户展开大工具组时仍会被拽到 reveal 延迟期的最底部。
+				handleBadgeClick();
+			}
+		},
+		[handleBadgeClick],
+	);
 
 	// Optional inlineTexts: when provided (e.g. caller wants a note shown
 	// alongside the cards), interleave them between blocks. When empty
@@ -155,13 +170,17 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 			>
 				<div className="overflow-hidden">
 					<div className="flex flex-col">
-						{interleaved.map((node, i) =>
-							node.kind === "text" ? (
+						{interleaved.map((node, i) => {
+							// 封顶 stagger 延迟：工具很多时末尾卡片不再需要等 i*20ms 才出现，
+							// 空白窗口（reveal 前 opacity 仍为 0）有上限，避免任何路径被拽到
+							// 底部时长时间看到空白。
+							const revealDelay = Math.min(i * 20, 200);
+							return node.kind === "text" ? (
 								<div
 									key={`note-${hashKey(node.text)}`}
 									data-tool-group-item=""
 									className="message-prose text-[10px] text-muted-foreground"
-									style={{ animationDelay: `${i * 20}ms` }}
+									style={{ animationDelay: `${revealDelay}ms` }}
 								>
 									<SkillAwareContent content={node.text} isStreaming={isStreaming} />
 								</div>
@@ -169,12 +188,12 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 								<div
 									key={node.kind === "block" ? `item-${node.index}` : `node-${i}`}
 									data-tool-group-item=""
-									style={{ animationDelay: `${i * 20}ms` }}
+									style={{ animationDelay: `${revealDelay}ms` }}
 								>
 									{renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)}
 								</div>
-							),
-						)}
+							);
+						})}
 					</div>
 				</div>
 			</div>
