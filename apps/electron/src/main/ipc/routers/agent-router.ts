@@ -6,6 +6,10 @@ import type { ThinkingLevel } from "@look/shared/types";
 import { guardAgentId, guardEnum, guardOptionalString, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 import { promptForProjectTrust } from "../project-trust.js";
+import { withTimeout } from "../with-timeout.js";
+
+/** 压缩最长等待时间（SDK compact 内部可能因 LLM 卡死而永不返回）。 */
+const COMPRESS_TIMEOUT_MS = 15 * 60 * 1000;
 
 export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:send-message", async (data) => {
@@ -118,7 +122,12 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		guardOptionalString(data.customInstructions, "customInstructions");
 		try {
-			await ctx.session.control.compress(_agentId, data.customInstructions);
+			// 超时兜底：SDK compact 挂起时不能永久占用 IPC 通道。
+			await withTimeout(
+				ctx.session.control.compress(_agentId, data.customInstructions),
+				COMPRESS_TIMEOUT_MS,
+				"Compaction timed out after 15 minutes",
+			);
 			return { success: true };
 		} catch (e) {
 			return { success: false, error: e instanceof Error ? e.message : "Compaction failed" };

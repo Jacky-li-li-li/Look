@@ -72,7 +72,21 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	});
 
 	// Track pending OAuth prompts that need renderer interaction.
-	const pendingPrompts = new Map<string, { resolve: (value: string) => void; reject: (err: Error) => void }>();
+	const pendingPrompts = new Map<
+		string,
+		{ resolve: (value: string) => void; reject: (err: Error) => void; timer: NodeJS.Timeout }
+	>();
+	/** 渲染端崩溃/未响应时 prompt 的最大等待时间，超时 reject 避免主进程永久挂起。 */
+	const PROMPT_TIMEOUT_MS = 5 * 60 * 1000;
+
+	// 窗口关闭（渲染端崩溃/退出）时拒绝所有 pending prompt，避免主进程泄漏。
+	ctx.mainWindow.once("closed", () => {
+		for (const [, pending] of pendingPrompts) {
+			clearTimeout(pending.timer);
+			pending.reject(new Error("Renderer window closed"));
+		}
+		pendingPrompts.clear();
+	});
 
 	register("login:prompt-respond", async (data) => {
 		const promptId = guardString(data.promptId, "promptId");
@@ -80,6 +94,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const pending = pendingPrompts.get(promptId);
 		if (pending) {
 			pendingPrompts.delete(promptId);
+			clearTimeout(pending.timer);
 			pending.resolve(value);
 		}
 		return { success: true };
@@ -90,6 +105,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const pending = pendingPrompts.get(promptId);
 		if (pending) {
 			pendingPrompts.delete(promptId);
+			clearTimeout(pending.timer);
 			pending.reject(new Error("Login cancelled"));
 		}
 		return { success: true };
@@ -126,7 +142,14 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 				ctx.session.notifier.emit(promptEvent);
 
 				return new Promise<string>((resolve, reject) => {
-					pendingPrompts.set(promptId, { resolve, reject });
+					// 超时兜底：渲染端崩溃 / 用户长期不响应时 reject，
+					// 否则 pendingPrompts 永久挂起导致 runtime.login() 泄漏。
+					const timer = setTimeout(() => {
+						pendingPrompts.delete(promptId);
+						reject(new Error("Login prompt timed out"));
+					}, PROMPT_TIMEOUT_MS);
+					timer.unref?.();
+					pendingPrompts.set(promptId, { resolve, reject, timer });
 				});
 			},
 			notify: (event) => {

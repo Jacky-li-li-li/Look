@@ -362,7 +362,11 @@ describe("RuntimeLifecycleCoordinator", () => {
 		expect(session.abort).toHaveBeenCalledTimes(1);
 		expect(session.unsubscribe).toHaveBeenCalledTimes(1);
 		expect(runtime.dispose).toHaveBeenCalledTimes(1);
-		expect(fixture.dependencies.subAgentRuntimeService.finalizeSubSession).toHaveBeenCalledWith("session-1", true);
+		expect(fixture.dependencies.subAgentRuntimeService.finalizeSubSession).toHaveBeenCalledWith(
+			"session-1",
+			false,
+			true,
+		);
 		expect(fixture.dependencies.permissionService.persistIfDirty).toHaveBeenCalledWith(
 			"session-1",
 			session.session.sessionManager,

@@ -370,7 +370,15 @@ const api: LookAPI = {
 	listPrompts: () => ipcRenderer.invoke("look:invoke", { type: "settings:prompts:list" }),
 	createPrompt: (name, content) =>
 		ipcRenderer.invoke("look:invoke", { type: "settings:prompts:create", name, content }),
-	updatePrompt: (id, patch) => ipcRenderer.invoke("look:invoke", { type: "settings:prompts:update", id, ...patch }),
+	updatePrompt: (id, patch) => {
+		// 显式提取 patch 字段，禁止 patch 展开覆盖信封字段（type/id）：
+		// 恶意/错误 patch 不能把更新静默变成删除或改到其他 prompt。
+		const payload: Record<string, unknown> = { type: "settings:prompts:update", id };
+		const p = patch as Record<string, unknown>;
+		if ("name" in p && p.name !== undefined) payload.name = p.name;
+		if ("content" in p && p.content !== undefined) payload.content = p.content;
+		return ipcRenderer.invoke("look:invoke", payload);
+	},
 	deletePrompt: (id) => ipcRenderer.invoke("look:invoke", { type: "settings:prompts:delete", id }),
 	setActivePrompt: (id) => ipcRenderer.invoke("look:invoke", { type: "settings:prompts:set-active", id }),
 

@@ -324,6 +324,9 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			} catch (error) {
 				toast.dismiss(toastId);
 				toast.error(t("chat.forkFailed", { message: error instanceof Error ? error.message : "unknown" }));
+			} finally {
+				// 成功/失败都必须复位：旧实现只在失败路径复位，成功路径残留
+				// entryId，后续所有分支/复刻操作被 if (navigatingEntry || forkingEntry) 静默拦截。
 				appStore.set(forkingEntryAtomFamily(agentId), null);
 			}
 		},

@@ -400,7 +400,11 @@ export class RuntimeLifecycleCoordinator {
 		} catch (error) {
 			errors.push(error);
 		}
-		if (hasPending) attempt(() => this.options.subAgentRuntimeService.finalizeSubSession(sessionId, true));
+		if (hasPending) {
+			// 父会话销毁 → 自身作为子会话被中止（forceAborted，而不是 forceFailed）：
+			// forceFailed 仅用于运行/预检失败，避免“中止”被误报成“失败”。
+			attempt(() => this.options.subAgentRuntimeService.finalizeSubSession(sessionId, false, true));
+		}
 		attempt(() => this.options.subAgentRuntimeService.finalizePendingChildren(sessionId));
 		attempt(() => this.options.subAgentRegistry.unregister(sessionId));
 		if (abort && managed.runtime.session.isStreaming) {

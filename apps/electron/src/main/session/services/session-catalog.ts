@@ -146,10 +146,23 @@ export class SessionCatalog {
 	private readonly sessionsByProject = new Map<string, StoredSession[]>();
 	private readonly sessionsById = new Map<string, StoredSession>();
 	private readonly projectFingerprint = new Map<string, string>();
+	/** 进行中的 refresh（同 project 并发去重，避免指纹/数据提交时序错乱）。 */
+	private readonly refreshInFlight = new Map<string, Promise<StoredSession[]>>();
 
 	constructor(private readonly onSubsessionDiscovered: (metadata: SubsessionMetadata) => void = () => {}) {}
 
 	async refresh(project: ProjectInfo): Promise<StoredSession[]> {
+		const inFlight = this.refreshInFlight.get(project.id);
+		if (inFlight) return inFlight;
+
+		const promise = this.doRefresh(project).finally(() => {
+			this.refreshInFlight.delete(project.id);
+		});
+		this.refreshInFlight.set(project.id, promise);
+		return promise;
+	}
+
+	private async doRefresh(project: ProjectInfo): Promise<StoredSession[]> {
 		if (!project.valid) return [];
 		const sessionsDir = ensureWorkspaceDir(project.id);
 		const subsessionsDir = getWorkspaceSubsessionsDir(project.id);
@@ -168,7 +181,6 @@ export class SessionCatalog {
 		if (cached && this.projectFingerprint.get(project.id) === fingerprint) {
 			return cached;
 		}
-		this.projectFingerprint.set(project.id, fingerprint);
 
 		const sessions = (await scanSessionDirectory(sessionsDir, project.cwd)).map((session) => ({
 			...session,
@@ -201,6 +213,9 @@ export class SessionCatalog {
 				});
 			}
 		}
+		// 扫描完成后再提交指纹+数据（旧实现先 set 指纹再扫描，
+		// 并发刷新时另一个 refresh 会以“指纹已提交但数据未更新”命中旧缓存）。
+		this.projectFingerprint.set(project.id, fingerprint);
 		this.replace(project.id, sessions);
 		return sessions;
 	}

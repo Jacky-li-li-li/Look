@@ -32,6 +32,7 @@ export interface SessionSubagentHost {
 		sessionStartEvent?: SessionStartEvent,
 		options?: { appendSystemPrompt?: string[] },
 	): Promise<ManagedRuntime>;
+	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
 	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
 	reloadSession(sessionId: string): Promise<void>;
 	listRuntimeIds(): IterableIterator<string>;
@@ -225,134 +226,175 @@ export class SessionSubagentService {
 		const session = managed.runtime.session;
 		const childSessionId = session.sessionId;
 
-		const displayName = `Agent：${trimmedTitle}`.slice(0, this.deps.maxNameLength);
-		session.setSessionName(displayName);
+		// delegation entry 提升到 try 外：初始化中途抛错（如 runtimeInfo missing）时，
+		// 外层 catch 需要追加 failed entry，否则侧栏子代理条目永久停留在 running。
+		let delegation:
+			| {
+					delegationId: string;
+					parentSessionId: string;
+					childSessionId: string;
+					agentName: string;
+					status: "running";
+					createdAt: string;
+			  }
+			| undefined;
 
-		// 继承父会话权限：定时任务等后台会话的父会话已设为 always，
-		// 子会话需同步，否则会回退到默认的 ask 模式导致工具调用被阻塞
-		const parentMode = this.deps.permissionService.getMode(parentSessionId);
-		if (parentMode === "always") {
-			this.deps.permissionService.setMode(childSessionId, "always");
-		}
+		try {
+			const displayName = `Agent：${trimmedTitle}`.slice(0, this.deps.maxNameLength);
+			session.setSessionName(displayName);
 
-		if (agent.tools && agent.tools.length > 0) {
-			const configured = new Set(session.getAllTools().map((tool) => tool.name));
-			const allowlisted = agent.tools.filter((name: string) => configured.has(name));
-			if (allowlisted.length === 0) {
-				throw new Error(
-					`Agent "${agent.name}" allowlist contains no valid tools. ` +
-						`Configured tools: ${[...configured].join(", ") || "(none)"}`,
-				);
+			// 继承父会话权限：定时任务等后台会话的父会话已设为 always，
+			// 子会话需同步，否则会回退到默认的 ask 模式导致工具调用被阻塞
+			const parentMode = this.deps.permissionService.getMode(parentSessionId);
+			if (parentMode === "always") {
+				this.deps.permissionService.setMode(childSessionId, "always");
 			}
-			session.setActiveToolsByName(allowlisted);
-		}
 
-		if (agent.model) {
-			try {
-				const slash = agent.model.indexOf("/");
-				if (slash > 0) {
-					const model = this.deps.modelRegistry.find(agent.model.slice(0, slash), agent.model.slice(slash + 1));
-					if (model) {
-						await session.setModel(model);
-						this.deps.host.emitSessionUpdated(childSessionId);
-					}
+			if (agent.tools && agent.tools.length > 0) {
+				const configured = new Set(session.getAllTools().map((tool) => tool.name));
+				const allowlisted = agent.tools.filter((name: string) => configured.has(name));
+				if (allowlisted.length === 0) {
+					throw new Error(
+						`Agent "${agent.name}" allowlist contains no valid tools. ` +
+							`Configured tools: ${[...configured].join(", ") || "(none)"}`,
+					);
 				}
-			} catch (error) {
-				console.warn(`[Look][subagent] Failed to set model ${agent.model}:`, error);
+				session.setActiveToolsByName(allowlisted);
 			}
-		}
 
-		session.sessionManager.appendCustomEntry(SUBAGENT_PARENT_ENTRY_TYPE, {
-			parentSessionId,
-			agentName: displayName,
-		});
-		const delegation = {
-			delegationId: randomUUID(),
-			parentSessionId,
-			childSessionId,
-			agentName: displayName,
-			status: "running" as const,
-			createdAt: new Date().toISOString(),
-		};
-		session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, delegation);
-		this.deps.subAgentRegistry.register(parentSessionId, childSessionId, displayName);
-
-		const childInfo = this.deps.host.runtimeInfo(childSessionId);
-		if (!childInfo) throw new Error(`Subagent runtime info missing for ${childSessionId}`);
-		this.deps.host.emit({
-			type: "agent:created",
-			agentId: childSessionId,
-			agent: childInfo,
-		});
-
-		// AbortSignal delegation: signal is passed to setupSubSessionTracking which
-		// registers an abort listener that calls session.abort() on the child session.
-		const resultPromise = this.deps.subAgentRuntimeService.setupSubSessionTracking(
-			childSessionId,
-			parentSessionId,
-			agent,
-			task,
-			signal,
-			onUpdate,
-			displayName,
-			toolCallId,
-			taskTitle,
-		);
-
-		await new Promise<void>((resolve, reject) => {
-			let accepted = false;
-			void session
-				.prompt(task, {
-					source: "rpc",
-					streamingBehavior: session.isStreaming ? "followUp" : undefined,
-					preflightResult: (success) => {
-						if (!success || accepted) return;
-						accepted = true;
-						resolve();
-					},
-				})
-				.catch((error) => {
-					if (!accepted) {
-						reject(error);
-						return;
+			if (agent.model) {
+				try {
+					const slash = agent.model.indexOf("/");
+					if (slash > 0) {
+						const model = this.deps.modelRegistry.find(agent.model.slice(0, slash), agent.model.slice(slash + 1));
+						if (model) {
+							await session.setModel(model);
+							this.deps.host.emitSessionUpdated(childSessionId);
+						}
 					}
-					this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
-					this.deps.host.emit({
-						type: "error",
-						agentId: childSessionId,
-						message: error instanceof Error ? error.message : String(error),
-					});
-				});
-		}).catch((error) => {
-			this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
-			session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
-				...delegation,
-				status: "failed",
-				finishedAt: new Date().toISOString(),
-				error: error instanceof Error ? error.message : String(error),
-			});
-			throw error;
-		});
+				} catch (error) {
+					console.warn(`[Look][subagent] Failed to set model ${agent.model}:`, error);
+				}
+			}
 
-		return resultPromise.then(
-			(result) => {
+			session.sessionManager.appendCustomEntry(SUBAGENT_PARENT_ENTRY_TYPE, {
+				parentSessionId,
+				agentName: displayName,
+			});
+			delegation = {
+				delegationId: randomUUID(),
+				parentSessionId,
+				childSessionId,
+				agentName: displayName,
+				status: "running" as const,
+				createdAt: new Date().toISOString(),
+			};
+			session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, delegation);
+			this.deps.subAgentRegistry.register(parentSessionId, childSessionId, displayName);
+
+			const childInfo = this.deps.host.runtimeInfo(childSessionId);
+			if (!childInfo) throw new Error(`Subagent runtime info missing for ${childSessionId}`);
+			this.deps.host.emit({
+				type: "agent:created",
+				agentId: childSessionId,
+				agent: childInfo,
+			});
+
+			// AbortSignal delegation: signal is passed to setupSubSessionTracking which
+			// registers an abort listener that calls session.abort() on the child session.
+			const resultPromise = this.deps.subAgentRuntimeService.setupSubSessionTracking(
+				childSessionId,
+				parentSessionId,
+				agent,
+				task,
+				signal,
+				onUpdate,
+				displayName,
+				toolCallId,
+				taskTitle,
+			);
+
+			await new Promise<void>((resolve, reject) => {
+				let accepted = false;
+				void session
+					.prompt(task, {
+						source: "rpc",
+						streamingBehavior: session.isStreaming ? "followUp" : undefined,
+						preflightResult: (success) => {
+							if (!success || accepted) return;
+							accepted = true;
+							resolve();
+						},
+					})
+					.catch((error) => {
+						if (!accepted) {
+							reject(error);
+							return;
+						}
+						this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
+						this.deps.host.emit({
+							type: "error",
+							agentId: childSessionId,
+							message: error instanceof Error ? error.message : String(error),
+						});
+					});
+			}).catch((error) => {
+				this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
 				session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
 					...delegation,
-					status:
-						result.status === "completed" ? "completed" : result.status === "aborted" ? "cancelled" : "failed",
-					finishedAt: new Date().toISOString(),
-				});
-				return result;
-			},
-			(error) => {
-				session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
-					...delegation,
-					status: signal?.aborted ? "cancelled" : "failed",
+					status: "failed",
 					finishedAt: new Date().toISOString(),
 					error: error instanceof Error ? error.message : String(error),
 				});
 				throw error;
-			},
-		);
+			});
+
+			return resultPromise.then(
+				(result) => {
+					session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
+						...delegation,
+						status:
+							result.status === "completed" ? "completed" : result.status === "aborted" ? "cancelled" : "failed",
+						finishedAt: new Date().toISOString(),
+					});
+					return result;
+				},
+				(error) => {
+					session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
+						...delegation,
+						status: signal?.aborted ? "cancelled" : "failed",
+						finishedAt: new Date().toISOString(),
+						error: error instanceof Error ? error.message : String(error),
+					});
+					throw error;
+				},
+			);
+		} catch (error) {
+			// 初始化段（runtime 创建后、setupSubSessionTracking 之前）以及 prompt
+			// preflight 失败重抛路径：子会话 runtime 已创建但无法/尚未建立跟踪时，
+			// 必须清理 runtime，否则产生幽灵子会话常驻内存。
+			// （allowlist 无有效工具、runtimeInfo missing、appendCustomEntry 失败、
+			//   无 API key 等预检失败）
+			console.error(`[Look][subagent] Failed to initialize subagent ${childSessionId}:`, error);
+			if (delegation) {
+				// 若 delegation entry 已写入（runtimeInfo missing 等场景），补写 failed 状态，
+				// 避免侧栏子代理条目永久停留在 running。
+				try {
+					session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
+						...delegation,
+						status: "failed",
+						finishedAt: new Date().toISOString(),
+						error: error instanceof Error ? error.message : String(error),
+					});
+				} catch (entryError) {
+					console.warn("[Look][subagent] failed to write delegation failed entry:", entryError);
+				}
+			}
+			this.deps.subAgentRegistry.unregister(childSessionId);
+			await this.deps.host
+				.disposeRuntime(childSessionId, true)
+				.catch((err: unknown) => console.warn("[Look][subagent] cleanup after init failure failed:", err));
+			throw error;
+		}
 	}
 }

@@ -115,7 +115,7 @@ export class SubAgentRuntimeService {
 	}
 
 	/** 在子会话 agent_end（非 retry）或异常时结算结果并 resolve。 */
-	finalizeSubSession(childSessionId: string, forceFailed = false): void {
+	finalizeSubSession(childSessionId: string, forceFailed = false, forceAborted = false): void {
 		const pending = this.registry.removePending(childSessionId);
 		if (!pending) return;
 		pending.removeAbortListener();
@@ -124,8 +124,13 @@ export class SubAgentRuntimeService {
 		const session = runtime?.session;
 		const finalOutput = session ? this.getFinalAssistantText(session) : "";
 		let status: "completed" | "failed" | "aborted";
-		if (forceFailed || pending.aborted) status = "aborted";
-		else if (pending.stopReason === "error") status = "failed";
+		// 状态优先级：中止（signal 触发、调用方强制，或 SDK 中止产生的 stopReason="aborted"）
+		// > 失败（预检失败/运行错误）> 正常完成。
+		// 注意：直接停止子会话（非父级联）时 pending.aborted 不会被设置，但 SDK 中止后
+		// message_end 的 stopReason 为 "aborted"（见 pi-agent-core agent.js handleRunFailure），
+		// 必须据此判定 aborted，否则中止会被误报成 completed、chain 模式继续跑下一步。
+		if (pending.aborted || forceAborted || pending.stopReason === "aborted") status = "aborted";
+		else if (forceFailed || pending.stopReason === "error") status = "failed";
 		else status = "completed";
 
 		const result: SubagentResult = {
@@ -227,6 +232,11 @@ export class SubAgentRuntimeService {
 		const childIds = this.registry.listChildren(parentSessionId);
 		await Promise.all(
 			childIds.map(async (childId) => {
+				// 先标记 pending.aborted：子会话 agent_end 到达时 finalizeSubSession
+				// 才能报 aborted 而不是 completed。旧实现只调 session.abort() 不标记，
+				// 导致停止父会话时子会话被中止却误报 completed，chain 模式继续跑下一步。
+				const pending = this.registry.getPending(childId);
+				if (pending) pending.aborted = true;
 				const child = this.host.getRuntime(childId);
 				if (child?.session) {
 					await child.session

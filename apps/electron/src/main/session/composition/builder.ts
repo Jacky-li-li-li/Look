@@ -405,6 +405,7 @@ export class CompositionBuilder {
 			host: {
 				createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
 					this.runtimeLifecycle!.createManagedRuntime(cwd, manager, projectId, createdAt, startEvent, options),
+				disposeRuntime: (sessionId, abort) => this.runtimeLifecycle!.disposeRuntime(sessionId, abort),
 				getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
 				reloadSession: async (sessionId) => {
 					const managed = this.runtimeRegistry.get(sessionId);

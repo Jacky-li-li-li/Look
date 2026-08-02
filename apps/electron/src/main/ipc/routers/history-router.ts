@@ -4,6 +4,10 @@
 
 import { guardAgentId, guardOptionalBoolean, guardOptionalString, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
+import { withTimeout } from "../with-timeout.js";
+
+/** 树导航 + summarize 最长等待时间（summarize 走 LLM，可能长时间不返回）。 */
+const NAVIGATE_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const historyRouter: IpcRouter = (ctx, register) => {
 	register("agent:navigate-tree", async (data) => {
@@ -13,11 +17,15 @@ export const historyRouter: IpcRouter = (ctx, register) => {
 		guardOptionalString(data.customInstructions, "customInstructions");
 		guardOptionalString(data.label, "label");
 		try {
-			const result = await ctx.session.history.navigate(_agentId, _entryId, {
-				summarize: data.summarize,
-				customInstructions: data.customInstructions,
-				label: data.label,
-			});
+			const result = await withTimeout(
+				ctx.session.history.navigate(_agentId, _entryId, {
+					summarize: data.summarize,
+					customInstructions: data.customInstructions,
+					label: data.label,
+				}),
+				NAVIGATE_TIMEOUT_MS,
+				"Tree navigation timed out after 10 minutes",
+			);
 			return { success: true, result };
 		} catch (e) {
 			return { success: false, error: e instanceof Error ? e.message : "Failed to navigate tree" };
