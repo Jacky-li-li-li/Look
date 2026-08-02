@@ -17,6 +17,10 @@ import { scanSessionDirectory } from "../scan.js";
 
 export interface StoredSession extends PiSessionInfo {
 	projectId: string;
+	/** 持久化的子会话父标记（来自 look.subagent-parent.v1），生命周期跟随 JSONL 文件本身。 */
+	parentSessionId?: string;
+	/** 子会话的 agent 名称（同上，来自 JSONL），registry 清理后仍可恢复展示。 */
+	subagentAgentName?: string;
 }
 
 export interface SubsessionMetadata {
@@ -182,7 +186,7 @@ export class SessionCatalog {
 			return cached;
 		}
 
-		const sessions = (await scanSessionDirectory(sessionsDir, project.cwd)).map((session) => ({
+		const sessions: StoredSession[] = (await scanSessionDirectory(sessionsDir, project.cwd)).map((session) => ({
 			...session,
 			projectId: project.id,
 		}));
@@ -210,6 +214,8 @@ export class SessionCatalog {
 					projectId: project.id,
 					modified: new Date(metadata.created),
 					allMessagesText: "",
+					parentSessionId: metadata.parentSessionId,
+					subagentAgentName: metadata.agentName,
 				});
 			}
 		}

@@ -2,6 +2,8 @@ import fs from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
+import type { ProjectInfo } from "@look/shared/types";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	SessionCatalog,
@@ -67,6 +69,39 @@ describe("SessionCatalog", () => {
 			parentSessionId: "parent-1",
 			messageCount: 1,
 			firstMessage: "Inspect the change",
+		});
+	});
+
+	it("carries persisted parent/agent markers onto discovered sub-session rows", async () => {
+		const projectId = "proj-catalog-parent-1";
+		const cwd = await mkdtemp(path.join(tmpdir(), "look-catalog-cwd-"));
+		cleanup.push(cwd);
+		const project: ProjectInfo = { id: projectId, name: "proj", cwd, createdAt: 1, valid: true };
+
+		ensureWorkspaceDir(projectId);
+		const subsessionsDir = getWorkspaceSubsessionsDir(projectId);
+		fs.mkdirSync(subsessionsDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(subsessionsDir, "child.jsonl"),
+			[
+				JSON.stringify({ type: "session", id: "child-1", timestamp: "2026-01-02T00:00:00.000Z" }),
+				JSON.stringify({ type: "session_info", name: "Agent：review" }),
+				JSON.stringify({
+					type: "custom",
+					customType: "look.subagent-parent.v1",
+					data: { parentSessionId: "parent-1", agentName: "Agent：review" },
+				}),
+				JSON.stringify({ type: "message", message: { content: "Inspect the change", timestamp: 1 } }),
+			].join("\n"),
+		);
+
+		const catalog = new SessionCatalog();
+		const sessions = await catalog.refresh(project);
+		const child = sessions.find((session) => session.id === "child-1");
+		expect(child).toBeDefined();
+		expect(child).toMatchObject({
+			parentSessionId: "parent-1",
+			subagentAgentName: "Agent：review",
 		});
 	});
 });

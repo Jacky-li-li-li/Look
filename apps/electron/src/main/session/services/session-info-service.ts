@@ -75,7 +75,7 @@ export class SessionInfoService {
 		// Live runtimes can change between calls, so bypass the cache for them.
 		if (managed) return this.runtimeInfo(session.id, managed);
 
-		const cacheKey = `${session.path}:${session.modified.getTime()}:${session.messageCount}:${session.name}:${session.firstMessage}`;
+		const cacheKey = `${session.path}:${session.modified.getTime()}:${session.messageCount}:${session.name}:${session.firstMessage}:${session.parentSessionId ?? ""}`;
 		const cached = this.persistedInfoCache.get(session.id);
 		if (cached && cached.key === cacheKey) return cached.info;
 
@@ -95,7 +95,7 @@ export class SessionInfoService {
 			sessionFilePath: session.path,
 			projectId: session.projectId,
 			contextUsage: undefined,
-			...this.subagentFields(session.id),
+			...this.subagentFields(session),
 		};
 		this.persistedInfoCache.set(session.id, { key: cacheKey, info });
 		return info;
@@ -124,7 +124,7 @@ export class SessionInfoService {
 			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
 			projectId: managed.projectId,
 			contextUsage: session.getContextUsage(),
-			...this.subagentFields(sessionId),
+			...this.subagentFields(this.deps.sessionCatalog.get(sessionId)),
 		};
 	}
 
@@ -136,14 +136,17 @@ export class SessionInfoService {
 	}
 
 	private subagentFields(
-		sessionId: string,
+		session: StoredSession | undefined,
 	): Pick<AgentInfo, "parentSessionId" | "isSubagentSession" | "agentConfigName"> {
-		const meta = this.deps.subAgentRegistry.getMeta(sessionId);
-		if (!meta) return {};
+		// 运行中子会话以 registry 为准（执行态信息最新）；registry 清理后
+		// 回退到 JSONL 持久化的父子标记，保证标记生命周期跟随文件本身。
+		const meta = session ? this.deps.subAgentRegistry.getMeta(session.id) : undefined;
+		const parentSessionId = meta?.parentSessionId ?? session?.parentSessionId;
+		if (!parentSessionId) return {};
 		return {
-			parentSessionId: meta.parentSessionId,
+			parentSessionId,
 			isSubagentSession: true,
-			agentConfigName: meta.agentName,
+			agentConfigName: meta?.agentName ?? session?.subagentAgentName,
 		};
 	}
 }
