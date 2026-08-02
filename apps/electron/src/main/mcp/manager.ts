@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { getLookDir } from "@look/shared/look-storage";
 import { McpClient } from "./client.js";
 import type { McpCallResult, McpServerConfig, McpServerStatus, McpTestResult, McpTool } from "./types.js";
 
@@ -70,7 +71,7 @@ export class MCPManager {
 				merged.set(config.name, { ...config, _source: "project" });
 			}
 		}
-		const userConfigPath = path.join(homedir(), ".look", "mcp.json");
+		const userConfigPath = path.join(getLookDir(), "mcp.json");
 		for (const config of await loadConfigFile(userConfigPath)) {
 			merged.set(config.name, { ...config, _source: "user" });
 		}
@@ -97,7 +98,7 @@ export class MCPManager {
 	}
 
 	async persistConfig(projectId = "global"): Promise<void> {
-		const lookDir = path.join(homedir(), ".look");
+		const lookDir = getLookDir();
 		const configPath = path.join(lookDir, "mcp.json");
 		await mkdir(lookDir, { recursive: true });
 		const prefix = this.projectPrefix(projectId);

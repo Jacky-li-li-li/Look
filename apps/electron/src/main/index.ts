@@ -3,7 +3,7 @@
 // ============================================================
 
 import { app, protocol } from "electron";
-import { Application } from "./application.js";
+import { resolveDevLookHome } from "./system/dev-look-home.js";
 
 // OAuth (Supabase GitHub/Google) redirects to look://auth/callback. Mark the
 // scheme standard + secure so https pages may navigate to it and Chromium
@@ -26,11 +26,24 @@ if (process.env.SANDBOX_GPU_WORKAROUND === "1") {
 	app.commandLine.appendSwitch("in-process-gpu");
 }
 
-const application = new Application();
+// dev（未打包）与正式版业务数据目录隔离：dev 使用独立的 ~/.look-dev，
+// 避免 dev 测试产生的会话/项目/设置污染正式版的 ~/.look。
+// 外部显式设置 LOOK_HOME（CI/测试/用户）优先，不覆盖。
+//
+// 关键时序：look-storage 在模块加载时缓存 LOOK_DIR，因此必须在任何
+// look-storage 依赖模块加载之前设置 LOOK_HOME —— 下方 Application 必须
+// 使用动态 import（不要改回静态 import，否则 LOOK_HOME 设置会失效）。
+const devLookHome = resolveDevLookHome(app.isPackaged, process.env.LOOK_HOME);
+if (devLookHome) process.env.LOOK_HOME = devLookHome;
+
+// Dynamic import ensures LOOK_HOME is set before look-storage evaluates.
 // NOTE: Do NOT use a top-level `await` here. In Electron 42 + ESM main-process
 // entry, awaiting `application.start()` at the module top level deadlocks
 // `app.whenReady()` (the module evaluation is suspended before the ready event
 // can be delivered). Run startup asynchronously instead.
-void application.start().catch((error) => {
-	console.error("[Look] Fatal: Application start failed", error);
+void import("./application.js").then(({ Application }) => {
+	const application = new Application();
+	void application.start().catch((error) => {
+		console.error("[Look] Fatal: Application start failed", error);
+	});
 });
