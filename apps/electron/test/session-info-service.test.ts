@@ -95,4 +95,64 @@ describe("SessionInfoService subagent markers", () => {
 		expect(child?.parentSessionId).toBe("parent-1");
 		expect(child?.isSubagentSession).toBe(true);
 	});
+
+	it("keeps parentSessionId while the child is live even when the catalog has not discovered it yet", async () => {
+		// 回归：子会话创建（runSubSession）时不会触发 sessionCatalog.refresh，
+		// catalog 尚未收录该子会话（catalog.get(childId) === undefined），
+		// 但 SubAgentRegistry 已注册父子关系。此时 runtimeInfo 投影出的
+		// AgentInfo 仍必须带 parentSessionId，侧栏才能把运行中的子会话
+		// 显示为子会话而不是顶层父会话。
+		const projectId = "proj-info-parent-3";
+		const cwd = await mkdtemp(path.join(tmpdir(), "look-info-cwd-"));
+		const project: ProjectInfo = { id: projectId, name: "proj", cwd, createdAt: 1, valid: true };
+		const childId = "child-live-1";
+
+		const catalog = new SessionCatalog(); // 从未 refresh → catalog 不含子会话
+		const registry = new SubAgentRegistry();
+		registry.register("parent-1", childId, "Agent：review");
+
+		const session = {
+			sessionManager: { getSessionName: () => "Agent：review" },
+			getSessionStats: () => ({ totalMessages: 1 }),
+			model: null,
+			thinkingLevel: "off",
+			supportsThinking: () => false,
+			getAvailableThinkingLevels: () => ["off"],
+			isStreaming: true,
+			isRetrying: false,
+			isCompacting: false,
+			getContextUsage: () => undefined,
+			sessionFile: undefined,
+		};
+		const managed = {
+			runtime: { session },
+			projectId,
+			createdAt: 123,
+		};
+		const runtimeMap = new Map<string, typeof managed>([[childId, managed]]);
+
+		const service = new SessionInfoService({
+			runtimeRegistry: {
+				get: (id: string) => (id === childId ? managed : undefined),
+				entries: () => runtimeMap.entries(),
+			},
+			sessionCatalog: catalog,
+			subAgentRegistry: registry,
+			scopeRegistry: { get: () => undefined },
+			maxNameLength: 120,
+			listProjects: () => [project],
+		});
+
+		const agents = service.listAgentsInProject(projectId);
+		const child = agents.find((agent) => agent.id === childId);
+		expect(child).toBeDefined();
+		expect(child?.parentSessionId).toBe("parent-1");
+		expect(child?.isSubagentSession).toBe(true);
+		expect(child?.agentConfigName).toBe("Agent：review");
+
+		// 单个查询路径（getAgentInfo → runtimeInfo）同样必须带标记。
+		const direct = service.getAgentInfo(childId);
+		expect(direct?.parentSessionId).toBe("parent-1");
+		expect(direct?.isSubagentSession).toBe(true);
+	});
 });

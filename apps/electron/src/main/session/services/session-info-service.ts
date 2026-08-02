@@ -95,7 +95,7 @@ export class SessionInfoService {
 			sessionFilePath: session.path,
 			projectId: session.projectId,
 			contextUsage: undefined,
-			...this.subagentFields(session),
+			...this.subagentFields(session.id, session),
 		};
 		this.persistedInfoCache.set(session.id, { key: cacheKey, info });
 		return info;
@@ -124,7 +124,7 @@ export class SessionInfoService {
 			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
 			projectId: managed.projectId,
 			contextUsage: session.getContextUsage(),
-			...this.subagentFields(this.deps.sessionCatalog.get(sessionId)),
+			...this.subagentFields(sessionId, this.deps.sessionCatalog.get(sessionId)),
 		};
 	}
 
@@ -136,11 +136,16 @@ export class SessionInfoService {
 	}
 
 	private subagentFields(
+		sessionId: string,
 		session: StoredSession | undefined,
 	): Pick<AgentInfo, "parentSessionId" | "isSubagentSession" | "agentConfigName"> {
 		// 运行中子会话以 registry 为准（执行态信息最新）；registry 清理后
 		// 回退到 JSONL 持久化的父子标记，保证标记生命周期跟随文件本身。
-		const meta = session ? this.deps.subAgentRegistry.getMeta(session.id) : undefined;
+		// 注意：registry 查询必须无条件执行，不能依赖 sessionCatalog 是否已收录该会话——
+		// 子会话刚创建时 runSubSession 不会触发 catalog refresh，若以 session 是否存在
+		// 作为前置条件，agent:created 的 AgentInfo 会丢失 parentSessionId，侧栏把运行中
+		// 的子会话错误地显示为顶层父会话（完成后 agent_end 刷新 catalog 才“恢复”为子会话）。
+		const meta = this.deps.subAgentRegistry.getMeta(sessionId);
 		const parentSessionId = meta?.parentSessionId ?? session?.parentSessionId;
 		if (!parentSessionId) return {};
 		return {
