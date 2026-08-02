@@ -123,6 +123,8 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 			break;
 
 		// ── Message lifecycle ──
+		// 仅 user/assistant 需要 UI 事件；toolResult/custom 等内容由
+		// toolcall_end / message_end 携带，message_start 无需渲染。
 		case "message_start": {
 			const msg = event.message;
 			if (msg.role === "user") {
@@ -151,6 +153,17 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 			if (!sub) break;
 
 			switch (sub.type) {
+				case "start": {
+					// SDK 在 assistant 流式开始时先发一条 start（携带完整 partial 快照），
+					// 随后总是逐块发 text_start/thinking_start/toolcall_start + delta。
+					// 这里显式忽略 start：内容由增量事件完整重建，消费快照会与 deltas
+					// 重复渲染。仅清空 tracker 确保新 turn 无残留。
+					tracker.activeTextIndices.clear();
+					tracker.activeThinkingIndices.clear();
+					tracker.activeToolCallIndices.clear();
+					break;
+				}
+
 				case "text_start":
 					tracker.activeTextIndices.add(sub.contentIndex);
 					events.push({ type: "assistant_text_start", contentIndex: sub.contentIndex, timestamp: now });

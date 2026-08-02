@@ -200,6 +200,40 @@ describe("translateAgentSessionEvent — assistant deltas", () => {
 		expect(tracker.activeToolCallIndices.has(1)).toBe(true);
 	});
 
+	it("AssistantMessageEvent start clears trackers and emits no UI events (delta-rebuild)", () => {
+		// start 携带完整 partial 快照，但内容由后续增量事件重建——显式忽略，
+		// 仅清空 tracker 确保新 turn 无残留。
+		const tracker = createContentBlockTracker();
+		tracker.activeTextIndices.add(0);
+		tracker.activeThinkingIndices.add(1);
+		tracker.activeToolCallIndices.add(2);
+		const events = translateAgentSessionEvent(
+			eventOf("message_update", {
+				assistantMessageEvent: {
+					type: "start",
+					partial: { role: "assistant", content: [{ type: "text", text: "hello" }] },
+				},
+			}),
+			tracker,
+		);
+		expect(events).toHaveLength(0);
+		expect(tracker.activeTextIndices.size).toBe(0);
+		expect(tracker.activeThinkingIndices.size).toBe(0);
+		expect(tracker.activeToolCallIndices.size).toBe(0);
+	});
+
+	it("message_start with toolResult role emits no UI events", () => {
+		// toolResult 内容由 toolcall_end 携带，message_start 无需渲染。
+		const tracker = createContentBlockTracker();
+		const events = translateAgentSessionEvent(
+			eventOf("message_start", {
+				message: { role: "toolResult", toolCallId: "call-1", content: [{ type: "text", text: "out" }] },
+			}),
+			tracker,
+		);
+		expect(events).toHaveLength(0);
+	});
+
 	it("toolcall_end emits args and clears tracker", () => {
 		const tracker = createContentBlockTracker();
 		tracker.activeToolCallIndices.add(1);
