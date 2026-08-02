@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import i18n from "../i18n";
 import { agentDefinitionsAtom } from "./agentDefinitionsAtoms";
 import { appStore } from "./appStore";
-import { removeAgentAtoms } from "./atomFamilyRegistry";
+import { pruneAtomFamilies, removeAgentAtoms } from "./atomFamilyRegistry";
 import {
 	activeAgentIdAtom,
 	agentsAtom,
@@ -22,6 +22,8 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 			const otherProjects = previous.filter((agent) => agent.projectId !== event.projectId);
 			const next = [...otherProjects, ...event.agents];
 			appStore.set(agentsAtom, next);
+			// Prune atom-family entries for sessions no longer in the agent list.
+			pruneAtomFamilies(new Set(next.map((a) => a.id)));
 			const activeId = appStore.get(activeAgentIdAtom);
 			if (activeId && !next.some((agent) => agent.id === activeId)) appStore.set(activeAgentIdAtom, null);
 			return true;

@@ -107,6 +107,7 @@ export function registerIpcHandlers(
 
 		runtime: {
 			lifecycle: composition.runtimeLifecycle,
+			registry: composition.runtimeRegistry,
 		},
 
 		agent: {

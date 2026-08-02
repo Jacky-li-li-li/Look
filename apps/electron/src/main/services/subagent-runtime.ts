@@ -20,18 +20,22 @@ import type { PendingSubSession, SubAgentRegistry } from "../session/subagent-re
 
 // ── Constants ──
 
-// 注意：不再设置子会话执行超时（曾为 5 分钟硬超时）。并行子会话共享
-// ModelRuntime/LLM 连接，全项目审查类任务实际耗时可达 4~8 分钟，硬超时
-// 会误杀正常执行的子会话；且旧超时结算只 finalize 不 abort，导致被判失败
-// 的子会话继续空跑浪费资源、父会话误判后重复重试（见项目级 Context
-// subagent-parallel-timeout-2026-08-02.md）。子会话中止现在只由 AbortSignal
-// 驱动（父会话中止/用户取消），不再有自动超时兜底。
-// 此设计取舍对 single / parallel / chain 三种模式一致：parallel 有
-// maxWaitMs 汇报点 + subagent_status/cancel 可主动管理；single/chain 卡死时
-// 只能靠用户停止父会话级联中止——这是用户明确拍板的决策，勿擅自加回超时。
+// 子会话中止的主路径：AbortSignal（父会话中止/用户取消）。
+// 不再有短硬超时——旧 5 分钟超时误杀并行任务（全项目审查实际耗时 4~8 分钟），
+// 且只 finalize 不 abort，导致空跑浪费。parallel 模式有 maxWaitMs 汇报点 +
+// subagent_status/cancel 可主动管理；single/chain 卡死由用户停止父会话级联中止。
+//
+// 兜底：30 分钟 SANITY_TIMEOUT 仅在 AbortSignal 永远不会触发时发 alarm 日志，
+// 不强制中止（避免误杀）。父进程崩溃/IPC 断开场景下，OS 会回收子进程连接。
 
 /** 子会话 runtime 完成后的延迟清理时间（5 分钟）。 */
 const SUBAGENT_CLEANUP_DELAY_MS = 5 * 60 * 1000;
+
+/**
+ * 兜底保护：子会话执行超过此阈值时发 alarm 日志。不强制中止——
+ * 中止路径由 AbortSignal 驱动。此值仅用于可观测性，确保运维可见卡死。
+ */
+const SUBAGENT_SANITY_TIMEOUT_MS = 30 * 60 * 1000;
 
 // ── Service ──
 
@@ -106,6 +110,24 @@ export class SubAgentRuntimeService {
 			signal.addEventListener("abort", onAbort, { once: true });
 			pending.removeAbortListener = () => signal.removeEventListener("abort", onAbort);
 		}
+
+		// 兜底 alarm：子会话超过 30 分钟仍未结算时发告警日志（不强制中止）。
+		// AbortSignal 不会触发的情况（父进程崩溃、IPC 断开）由 OS 回收连接。
+		const sanityTimer = setTimeout(() => {
+			if (this.registry.getPending(childSessionId) === pending) {
+				console.error(
+					`[SubAgentRuntime] ALARM: subagent ${childSessionId.slice(0, 8)} ` +
+						`(${pending.displayName}) has been running for >${SUBAGENT_SANITY_TIMEOUT_MS / 60000}min ` +
+						`without settling. Parent: ${parentSessionId.slice(0, 8)}. ` +
+						`This may indicate a stuck LLM call or a lost AbortSignal.`,
+				);
+			}
+		}, SUBAGENT_SANITY_TIMEOUT_MS);
+		const originalResolve = pending.resolve;
+		pending.resolve = (result: SubagentResult) => {
+			clearTimeout(sanityTimer);
+			(originalResolve as (r: SubagentResult) => void)(result);
+		};
 
 		return new Promise<SubagentResult>((resolve) => {
 			pending.resolve = (result: SubagentResult) => {

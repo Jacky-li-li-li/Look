@@ -6,6 +6,7 @@
 import type { AgentInfo, LookUiEvent, LookUiPhase, LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { toast } from "sonner";
 import { appStore } from "./appStore";
+import { trackAgentFamilyKey } from "./atomFamilyRegistry";
 import { agentsAtom, sessionStateAtomFamily } from "./atoms";
 import { subagentCardStatusAtom } from "./subagentAtoms";
 
@@ -19,6 +20,9 @@ let _nextBlockUid = 0;
  */
 export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): void {
 	if (events.length === 0) return;
+
+	// Track this session ID for later atom-family prune cleanup.
+	trackAgentFamilyKey(sessionId);
 
 	if (typeof performance !== "undefined") {
 		performance.mark(`look:ui-events:receive:${sessionId.slice(0, 6)}`);
@@ -379,6 +383,16 @@ function flushToolcallDeltas(
 		const idx = pendingToolcallIndex.get(contentIndex);
 		if (idx != null && idx >= 0) {
 			const existing = blocks[idx]!;
+			// Guard: pendingToolcallIndex should only reference toolcall blocks.
+			// A non-toolcall block here means an event ordering bug corrupted the map.
+			if (existing.kind !== "toolcall") {
+				console.error(
+					`[ui-event-applier] pendingToolcallIndex contentIndex=${contentIndex} ` +
+						`resolves to block[${idx}] with unexpected kind="${existing.kind}". ` +
+						`Skipping delta to avoid state corruption.`,
+				);
+				continue;
+			}
 			mutateBlock(idx, {
 				...existing,
 				argsRaw: (existing.argsRaw ?? "") + delta,

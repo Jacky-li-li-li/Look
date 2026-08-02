@@ -54,9 +54,27 @@ export function isEncryptionAvailable(): boolean {
  * Used by ModelRuntime to persist credentials with at-rest encryption.
  */
 export class EncryptedCredentialStore implements CredentialStore {
+	/** Serialize modify/delete per the pi-ai CredentialStore contract. */
+	private readonly _writeLock = Promise.resolve();
+
 	constructor(private readonly filePath: string) {
 		fs.mkdirSync(path.dirname(filePath), { recursive: true });
 		this.touchFile();
+	}
+
+	/** Acquire the write lock, execute fn, release. */
+	private async _withLock<T>(fn: () => Promise<T>): Promise<T> {
+		const prev = this._writeLock;
+		let release!: () => void;
+		this._writeLock = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await prev;
+		try {
+			return await fn();
+		} finally {
+			release();
+		}
 	}
 
 	private touchFile(): void {
@@ -109,29 +127,29 @@ export class EncryptedCredentialStore implements CredentialStore {
 		providerId: string,
 		fn: (current: Credential | undefined) => Promise<Credential | undefined>,
 	): Promise<Credential | undefined> {
-		const data = this.readData();
-		const current = data[providerId];
-		const decrypted = current ? this.decrypt(current) : undefined;
-		const next = await fn(decrypted);
-		if (next !== undefined) {
-			data[providerId] = this.encrypt(next);
-		} else {
-			// fn returned undefined — caller wants to keep current unchanged
-			// Only delete if fn explicitly returned undefined AND current existed
-			// (meaning the caller wants to remove it). For a no-op (no change),
-			// fn should return `decrypted` (current unchanged).
-			if (decrypted !== undefined && next === undefined) {
-				delete data[providerId];
+		return this._withLock(async () => {
+			const data = this.readData();
+			const current = data[providerId];
+			const decrypted = current ? this.decrypt(current) : undefined;
+			const next = await fn(decrypted);
+			// Align with pi-ai CredentialStore contract:
+			//   - next !== undefined → write the new credential
+			//   - next === undefined → leave the entry unchanged (no-op)
+			// Deletion is a separate path via delete(providerId).
+			if (next !== undefined) {
+				data[providerId] = this.encrypt(next);
+				this.writeData(data);
 			}
-		}
-		this.writeData(data);
-		return next;
+			return next;
+		});
 	}
 
 	async delete(providerId: string): Promise<void> {
-		const data = this.readData();
-		delete data[providerId];
-		this.writeData(data);
+		return this._withLock(async () => {
+			const data = this.readData();
+			delete data[providerId];
+			this.writeData(data);
+		});
 	}
 
 	async list(): Promise<readonly CredentialInfo[]> {

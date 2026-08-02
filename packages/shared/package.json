@@ -38,9 +38,9 @@
     "test": "vitest --run"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "^0.82.0",
-    "@earendil-works/pi-ai": "^0.82.0",
-    "@earendil-works/pi-coding-agent": "^0.82.0",
+    "@earendil-works/pi-agent-core": "^0.83.0",
+    "@earendil-works/pi-ai": "^0.83.0",
+    "@earendil-works/pi-coding-agent": "^0.83.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.6"
   }

@@ -89,10 +89,15 @@ export class PlanService implements IPlanService {
 
 	persistToolSnapshotIfDirty(sessionId: string, manager: SessionManager): void {
 		if (!this.dirtyToolSnapshots.has(sessionId)) return;
+		// Clear dirty before append: see PermissionService.persistIfDirty rationale.
+		this.dirtyToolSnapshots.delete(sessionId);
 		const tools = this.prePlanTools.get(sessionId);
 		if (!tools || !manager.isPersisted()) return;
-		manager.appendCustomEntry(PLAN_STATE_ENTRY_TYPE, { prePlanActiveTools: tools });
-		this.dirtyToolSnapshots.delete(sessionId);
+		try {
+			manager.appendCustomEntry(PLAN_STATE_ENTRY_TYPE, { prePlanActiveTools: tools });
+		} catch (error) {
+			console.error(`[Look][Plan] Failed to persist tool snapshot for ${sessionId}:`, error);
+		}
 	}
 
 	disposeSession(sessionId: string): void {

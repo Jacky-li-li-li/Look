@@ -102,11 +102,19 @@ export class PermissionService implements IPermissionService {
 
 	persistIfDirty(sessionId: string, manager: SessionManager): void {
 		if (!this.dirty.has(sessionId)) return;
+		// Pre-emptively clear dirty before appendCustomEntry: if append throws,
+		// we won't retry on the next persist cycle and produce duplicate entries.
+		// The session write is best-effort — the mode will be re-persisted when
+		// the session is next dirtied (e.g. on the next mode change).
+		this.dirty.delete(sessionId);
 		if (!manager.isPersisted()) return;
 		const mode = this.modes.get(sessionId);
 		if (!mode) return;
-		manager.appendCustomEntry(PERMISSION_MODE_ENTRY_TYPE, { mode });
-		this.dirty.delete(sessionId);
+		try {
+			manager.appendCustomEntry(PERMISSION_MODE_ENTRY_TYPE, { mode });
+		} catch (error) {
+			console.error(`[Look][Permission] Failed to persist mode for ${sessionId}:`, error);
+		}
 	}
 
 	disposeSession(sessionId: string): void {

@@ -635,6 +635,8 @@ export class CompositionBuilder {
 			permissionService: this.permissionService,
 			promptStore: this.promptStore,
 			mcpManager: this.mcpManager,
+			computerUseService: this.computerUseService,
+			browserService: this.browserService,
 			sessionCatalog: this.sessionCatalog,
 			projectRuntimeService: this.projectRuntimeService,
 			sessionInfoService: this.sessionInfoService,

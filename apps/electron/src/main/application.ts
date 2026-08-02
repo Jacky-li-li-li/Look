@@ -200,6 +200,17 @@ export class Application {
 		].join("; ");
 
 		session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+			// Only inject CSP for document-level responses: main frames, sub-frames,
+			// and XHR navigations. Skipping stylesheets, scripts, images, and
+			// streaming API responses (LLM SSE) avoids per-response header overhead.
+			if (
+				details.resourceType !== "mainFrame" &&
+				details.resourceType !== "subFrame" &&
+				details.resourceType !== "xmlhttprequest"
+			) {
+				callback({ responseHeaders: details.responseHeaders });
+				return;
+			}
 			callback({
 				responseHeaders: {
 					...details.responseHeaders,
