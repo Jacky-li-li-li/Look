@@ -1,10 +1,9 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import { cn } from "@look/ui";
-import { Button } from "@look/ui/components/ui/button";
 import type { LookUiToolExecState } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
-import { Check, ChevronDown, ChevronUp, Copy, GitBranch, Loader2, MessageSquare, Undo2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Loader2, MessageSquare } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -31,6 +30,7 @@ import LookMarkdown from "../markdown/LookMarkdown";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
 import { MessageItem } from "./MessageItem";
+import { MessageActions } from "./message-elements/MessageActions";
 import { SessionEntryBubble } from "./SessionEntryBubble";
 
 /** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
@@ -53,7 +53,7 @@ function fmtTokens(n: number): string {
 	return `${n}`;
 }
 
-function fmtUsage(message: AssistantMessage): string {
+function _fmtUsage(message: AssistantMessage): string {
 	const parts = [fmtTokens(message.usage.totalTokens)];
 	if (message.usage.cost.total > 0)
 		parts.push(
@@ -407,98 +407,6 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		[t],
 	);
 
-	const renderMessageActions = useCallback(
-		(item: TimelineItem, reserveOnly: boolean) => {
-			const message = item.message;
-			const role = message?.role;
-			const supportsActions = role === "assistant" || role === "user";
-			if (!reserveOnly && !supportsActions) return null;
-
-			const itemEntryId = item.entryId;
-			const showActions = !reserveOnly && supportsActions && Boolean(itemEntryId);
-			const actionBusy = isBusy || Boolean(navigatingEntry || forkingEntry);
-
-			return (
-				<div
-					data-message-actions=""
-					data-reserved={showActions ? undefined : ""}
-					aria-hidden={!showActions}
-					className={cn(
-						"mt-msg-action-offset flex min-h-6 items-center gap-msg-action opacity-0 transition-opacity",
-						role === "user" ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
-						showActions
-							? "group-hover/message:opacity-100 group-focus-within/message:opacity-100"
-							: "invisible pointer-events-none",
-					)}
-				>
-					{showActions && itemEntryId && message && (
-						<>
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								disabled={actionBusy}
-								aria-label={t("chat.branchFromHere")}
-								onClick={() => handleBranchFromHere(itemEntryId)}
-							>
-								<Undo2 />
-							</Button>
-							{message.role !== "user" && (
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									disabled={actionBusy}
-									aria-label={t("chat.forkToNewChat")}
-									onClick={() => handleForkToNewChat(itemEntryId)}
-								>
-									<GitBranch />
-								</Button>
-							)}
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								aria-label={t("chat.copyMessage")}
-								onClick={() => handleCopyMessage(item.id, message)}
-							>
-								{copiedEntryId === item.id ? <Check /> : <Copy />}
-							</Button>
-							{message.role === "assistant" && (
-								<>
-									{"model" in message && (
-										<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
-											{(message as { model: string }).model}
-										</span>
-									)}
-									{message.usage.totalTokens > 0 && (
-										<span className="ml-1 font-mono text-[10px] text-muted-foreground/60">
-											{fmtUsage(message)}
-										</span>
-									)}
-									{item.turnDurationMs != null && item.turnDurationMs > 0 && (
-										<span className="ml-auto font-mono text-[10px] text-muted-foreground/60 tabular-nums">
-											{item.turnDurationMs >= 60_000
-												? `${(item.turnDurationMs / 60_000).toFixed(1)}m`
-												: `${(item.turnDurationMs / 1_000).toFixed(1)}s`}
-										</span>
-									)}
-								</>
-							)}
-						</>
-					)}
-				</div>
-			);
-		},
-		[
-			copiedEntryId,
-			forkingEntry,
-			handleBranchFromHere,
-			handleCopyMessage,
-			handleForkToNewChat,
-			isBusy,
-			navigatingEntry,
-			t,
-		],
-	);
-
 	// === Render timeline item ===
 	const renderTimelineItem = useCallback(
 		(item: TimelineItem) => {
@@ -546,7 +454,36 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								liveBlocks={live ? item.uiBlocks : undefined}
 								liveToolExecutions={live ? (item.uiTools ?? EMPTY_TOOL_EXECUTIONS) : EMPTY_TOOL_EXECUTIONS}
 							/>
-							{renderMessageActions(item, live)}
+							<MessageActions
+								show={Boolean(itemEntryId) && Boolean(item.message)}
+								isUser={item.message?.role === "user"}
+								busy={isBusy || Boolean(navigatingEntry || forkingEntry)}
+								onBranch={itemEntryId ? () => handleBranchFromHere(itemEntryId) : undefined}
+								onFork={
+									item.message && item.message.role !== "user" && itemEntryId
+										? () => handleForkToNewChat(itemEntryId)
+										: undefined
+								}
+								onCopy={item.message ? () => handleCopyMessage(item.id, item.message!) : undefined}
+								copied={copiedEntryId === item.id}
+								labels={{
+									branch: t("chat.branchFromHere"),
+									fork: t("chat.forkToNewChat"),
+									copy: t("chat.copyMessage"),
+								}}
+								meta={
+									item.message &&
+									item.message.role === "assistant" &&
+									item.turnDurationMs != null &&
+									item.turnDurationMs > 0 ? (
+										<span className="ml-auto font-mono text-[10px] text-muted-foreground/60 tabular-nums">
+											{item.turnDurationMs >= 60_000
+												? `${(item.turnDurationMs / 60_000).toFixed(1)}m`
+												: `${(item.turnDurationMs / 1_000).toFixed(1)}s`}
+										</span>
+									) : undefined
+								}
+							/>
 						</div>
 					</div>
 				);
@@ -554,7 +491,21 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 			return null;
 		},
-		[agentName, autoCollapse, flashEntryId, isBusy, leafId, renderMessageActions, agentId],
+		[
+			agentName,
+			autoCollapse,
+			flashEntryId,
+			isBusy,
+			leafId,
+			copiedEntryId,
+			navigatingEntry,
+			forkingEntry,
+			handleBranchFromHere,
+			handleForkToNewChat,
+			handleCopyMessage,
+			t,
+			agentId,
+		],
 	);
 
 	const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
