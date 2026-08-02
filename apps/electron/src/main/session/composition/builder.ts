@@ -448,6 +448,7 @@ export class CompositionBuilder {
 			openSessionManager: (stored) => SessionManager.open(stored.path),
 			handleSessionEvent: (sessionId, event) => this.eventProcessor!.handle(sessionId, event),
 			setActiveProjectId: (projectId) => this.projectService!.setActiveId(projectId),
+			getActiveProjectId: () => this.projectService!.activeId,
 			refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
 			events: {
 				emit: (event) => host.emit(event),

@@ -51,6 +51,7 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	openSessionManager(stored: StoredSession): SessionManager;
 	handleSessionEvent(sessionId: string, event: AgentSessionEvent): void;
 	setActiveProjectId(projectId: string): void;
+	getActiveProjectId(): string | null;
 	refreshProjectSessions(projectId: string): Promise<unknown>;
 	events: RuntimeLifecycleEvents;
 }
@@ -158,15 +159,23 @@ export class RuntimeLifecycleCoordinator {
 		// 时才可跳过快照重发；若 runtime 是新创建的（从磁盘恢复），渲染端没有可用数据，必须发快照。
 		const hadRuntime = this.options.runtimeRegistry.has(sessionId);
 		const managed = await this.ensureRuntime(sessionId);
-		this.options.setActiveProjectId(managed.projectId);
+		// 同一项目内切换会话：项目列表与会话列表都没有变化，跳过磁盘扫描和
+		// project:list / project:active-changed 事件风暴（快速连点时的卡顿主因）。
+		// 仅跨项目切换才需要刷新项目级状态。
+		const projectChanged = this.options.getActiveProjectId() !== managed.projectId;
 		this.options.selection.setCurrent(sessionId);
 		this.options.subAgentRuntimeService.cancelSubSessionCleanup(sessionId);
-		await this.options.refreshProjectSessions(managed.projectId);
-		this.options.events.emitProjectList();
-		this.options.events.emit({ type: "project:active-changed", projectId: managed.projectId });
+		if (projectChanged) {
+			this.options.setActiveProjectId(managed.projectId);
+			await this.options.refreshProjectSessions(managed.projectId);
+			this.options.events.emitProjectList();
+			this.options.events.emit({ type: "project:active-changed", projectId: managed.projectId });
+		}
 		if (opts?.skipSnapshot && hadRuntime) {
-			// 轻量激活：只刷新侧边栏会话列表，不重发全量快照。
-			this.options.events.emitSessionList(managed.projectId);
+			// 轻量激活：仅跨项目切换时需要刷新新项目的会话列表；同项目内列表没变，跳过。
+			if (projectChanged) {
+				this.options.events.emitSessionList(managed.projectId);
+			}
 		} else {
 			this.options.events.emitSessionState(sessionId);
 		}

@@ -142,10 +142,12 @@ function makeCoordinator(runtimeFixture: RuntimeFixture, stored = storedSession(
 		openSessionManager: vi.fn(() => ({ getSessionId: () => stored.id }) as SessionManager),
 		handleSessionEvent: vi.fn(),
 		setActiveProjectId: vi.fn(),
+		getActiveProjectId: vi.fn(() => null),
 		refreshProjectSessions: vi.fn().mockResolvedValue([]),
 		events: {
 			emit: vi.fn((event) => emitted.push(event)),
 			emitSessionState: vi.fn(),
+			emitSessionList: vi.fn(),
 			emitProjectList: vi.fn(),
 		},
 	} satisfies RuntimeLifecycleCoordinatorOptions;
@@ -455,5 +457,22 @@ describe("RuntimeLifecycleCoordinator", () => {
 		expect(fixture.dependencies.events.emitProjectList).toHaveBeenCalledTimes(1);
 		expect(fixture.emitted).toContainEqual({ type: "project:active-changed", projectId: "project-1" });
 		expect(fixture.dependencies.events.emitSessionState).toHaveBeenLastCalledWith("session-1", "activate");
+	});
+
+	it("skips project-level refresh when switching within the same active project", async () => {
+		const session = makeSession("session-1");
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime);
+		fixture.dependencies.getActiveProjectId = vi.fn(() => "project-1");
+		await fixture.coordinator.createManagedRuntime("/project", session.session.sessionManager, "project-1");
+
+		await fixture.coordinator.activateSession("session-1");
+
+		expect(fixture.selection.currentId).toBe("session-1");
+		expect(fixture.dependencies.setActiveProjectId).not.toHaveBeenCalled();
+		expect(fixture.dependencies.refreshProjectSessions).not.toHaveBeenCalled();
+		expect(fixture.dependencies.events.emitProjectList).not.toHaveBeenCalled();
+		expect(fixture.dependencies.events.emitSessionList).not.toHaveBeenCalled();
+		expect(fixture.dependencies.events.emitSessionState).toHaveBeenCalledTimes(1);
 	});
 });

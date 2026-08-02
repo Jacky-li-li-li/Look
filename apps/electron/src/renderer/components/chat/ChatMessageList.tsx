@@ -662,9 +662,11 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 	useEffect(() => {
 		if (agentId !== prevAgentIdRef.current) {
 			prevAgentIdRef.current = agentId;
-			setReady(false);
+			// 目标会话已加载过快照：直接 ready，跳过 opacity 0→1 防闪烁过渡，
+			// 快速切换已打开会话时避免闪白/抖动。仅首次加载或冷启动才走防闪烁。
+			setReady(sessionState.snapshotLoaded);
 		}
-	}, [agentId]);
+	}, [agentId, sessionState.snapshotLoaded]);
 
 	useEffect(() => {
 		if (ready) return;

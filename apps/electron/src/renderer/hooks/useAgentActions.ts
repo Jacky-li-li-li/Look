@@ -71,10 +71,13 @@ export function useAgentActions() {
 		try {
 			const result = await api.activateSession(agentId, hasSnapshot ? { skipSnapshot: true } : undefined);
 			if (!result?.success) throw new Error(result?.error ?? "Failed to activate session");
-			appStore.set(recentlyActiveSessionIdsAtom, (previous) => {
-				const filtered = previous.filter((id) => id !== agentId);
-				return [agentId, ...filtered];
-			});
+			// 快速连点时多次激活并发返回，只有当前仍激活该会话才更新最近列表，避免乱序覆盖。
+			if (appStore.get(activeAgentIdAtom) === agentId) {
+				appStore.set(recentlyActiveSessionIdsAtom, (previous) => {
+					const filtered = previous.filter((id) => id !== agentId);
+					return [agentId, ...filtered];
+				});
+			}
 		} catch (error) {
 			markSessionSnapshotLoading(agentId, false);
 			// 回滚乐观添加的标签
