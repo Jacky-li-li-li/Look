@@ -154,10 +154,11 @@ export function translateAgentSessionEvent(event: AgentSessionEvent, tracker: Co
 
 			switch (sub.type) {
 				case "start": {
-					// SDK 在 assistant 流式开始时先发一条 start（携带完整 partial 快照），
-					// 随后总是逐块发 text_start/thinking_start/toolcall_start + delta。
-					// 这里显式忽略 start：内容由增量事件完整重建，消费快照会与 deltas
-					// 重复渲染。仅清空 tracker 确保新 turn 无残留。
+					// 防御性分支（当前 SDK 版本不可达）：pi-agent-core 的流协议中
+					// start 走顶层 message_start（见 agent-loop.js），message_update 的
+					// assistantMessageEvent 只携带 text/thinking/toolcall 的 start/delta/end。
+					// 若未来 SDK 改为经 message_update 发 start 且无后续 delta，此处清空
+					// tracker 可防止残留；内容由快照渲染兜底重建。
 					tracker.activeTextIndices.clear();
 					tracker.activeThinkingIndices.clear();
 					tracker.activeToolCallIndices.clear();

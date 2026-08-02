@@ -221,6 +221,11 @@ const mockApi = {
 
 	onEvent: (callback: (event: unknown) => void) => {
 		listeners.add(callback);
+		// 模拟主进程就绪：让 waitForAppReady 立即放行，避免 mock 模式
+		// 白白等待 2s 超时（mock 的 invoke 恒成功，无需真实就绪信号）。
+		queueMicrotask(() => {
+			callback({ type: "app:ready" } as unknown);
+		});
 		return () => {
 			listeners.delete(callback);
 		};

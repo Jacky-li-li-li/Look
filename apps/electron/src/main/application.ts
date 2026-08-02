@@ -245,6 +245,11 @@ export class Application {
 		this.services.mainWindow.on("closed", () => {
 			this.services.mainWindow = null;
 			closeViewerWindow();
+			// 窗口关闭即重置就绪标志：macOS activate 重建窗口时，避免残留的
+			// _rendererLoaded=true 导致 maybeSendAppReady 提前对未加载的新窗口
+			// 发 app:ready（webContents.send 不排队，会静默丢失）。
+			this._rendererLoaded = false;
+			this._ipcRegistered = false;
 		});
 
 		this.services.mainWindow.webContents.on("did-finish-load", () => {
