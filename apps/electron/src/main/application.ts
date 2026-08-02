@@ -52,6 +52,10 @@ export class Application {
 	readonly services: ApplicationServices;
 	private rendererEvents = new BrowserWindowEventTransport(() => this.services.mainWindow);
 	private _disposing = false;
+	/** 主进程 IPC handlers 是否已注册（registerIpcHandlersNow）。 */
+	private _ipcRegistered = false;
+	/** 窗口是否已完成加载（did-finish-load 已触发，渲染进程 onEvent 就绪）。 */
+	private _rendererLoaded = false;
 
 	constructor() {
 		this.services = {
@@ -246,6 +250,9 @@ export class Application {
 		this.services.mainWindow.webContents.on("did-finish-load", () => {
 			replayUpdateStatus();
 			void requestFreshCheck();
+			// 渲染进程已完成加载（onEvent 已注册）→ 若 IPC 已注册则补发就绪信号。
+			this._rendererLoaded = true;
+			this.maybeSendAppReady();
 			// 重放当前全屏状态：渲染进程加载前已进入全屏时 enter-full-screen
 			// 事件已错过，不补发则红绿灯留白一直不收回。
 			this.safeSendEvent({
@@ -343,7 +350,15 @@ export class Application {
 		this.services.schedulerService = this.createSchedulerService();
 		this.services.runtimeManager!.setSchedulerService(this.services.schedulerService);
 
-		// Phase 3: Load persisted data
+		// Phase 3: IM channels (depends on mainWindow + runtimeManager)
+		// 提前到耗时初始化之前：registerIpcHandlers 依赖 lark 服务，
+		// 必须尽早注册，避免渲染进程加载完成后 IPC 尚未就绪的启动竞态。
+		this.bootstrapIM();
+
+		// Phase 4: Register IPC early（渲染进程就绪信号在此之后发出）
+		this.registerIpcHandlersNow();
+
+		// Phase 5: Load persisted data
 		await this.services.runtimeManager!.loadProjects();
 		await this.services.runtimeManager!.recoverOrphanedProjects().catch((error) => {
 			console.error("[Look] Orphaned project recovery failed:", error);
@@ -351,13 +366,10 @@ export class Application {
 
 		if (!this.services.mainWindow) return;
 
-		// Phase 4: IM channels (depends on mainWindow + runtimeManager)
-		this.bootstrapIM();
-
-		// Phase 5: IPC + restore workspace + push initial state
+		// Phase 6: Restore workspace + push initial state
 		await this.bootstrapStartupSequence();
 
-		// Phase 6: Sync built-in skills and agents
+		// Phase 7: Sync built-in skills and agents
 		await this.syncBuiltinResources();
 	}
 
@@ -472,9 +484,19 @@ export class Application {
 		this.services.larkChannelManager.onConnectionClosed = (appId) => this.detachLarkBridge(appId);
 	}
 
-	// ── Phase 5: IPC registration + workspace restore ──
+	// ── Phase 4: IPC registration（提前到耗时初始化之前）──
 
-	private async bootstrapStartupSequence(): Promise<void> {
+	/**
+	 * 两个条件都满足时发 app:ready：IPC 已注册 && 渲染进程已加载（onEvent 就绪）。
+	 * 保证事件不会在渲染进程监听器注册前丢失（webContents.send 不排队）。
+	 */
+	private maybeSendAppReady(): void {
+		if (this._ipcRegistered && this._rendererLoaded) {
+			this.safeSendEvent({ type: "app:ready" as const });
+		}
+	}
+
+	private registerIpcHandlersNow(): void {
 		registerIpcHandlers(
 			this.services.runtimeManager!.composition,
 			this.services.mainWindow!,
@@ -484,9 +506,16 @@ export class Application {
 			this.services.schedulerService!,
 		);
 
-		// 渲染进程等待此信号后才发起首次 IPC 调用（启动竞态防护）。
-		this.safeSendEvent({ type: "app:ready" as const });
+		// IPC 已就绪：若窗口已完成加载（渲染进程 onEvent 已注册），立即发就绪信号；
+		// 否则由 did-finish-load 回调在加载完成时补发。两个标志保证不早发不丢发。
+		this._ipcRegistered = true;
+		this.maybeSendAppReady();
+		console.log("[Look] IPC handlers registered");
+	}
 
+	// ── Phase 5: Workspace restore + service initialize ──
+
+	private async bootstrapStartupSequence(): Promise<void> {
 		this.bootstrapLarkBridge();
 
 		const allProjects = this.services.runtimeManager!.listProjects();
@@ -511,8 +540,6 @@ export class Application {
 		await this.services.schedulerService!.initialize().catch((error) => {
 			console.error("[Look] Failed to initialize scheduled tasks:", error);
 		});
-
-		console.log("[Look] IPC handlers registered");
 	}
 
 	// ── Phase 6: Built-in resources ──
@@ -623,6 +650,8 @@ export class Application {
 						this.services.larkBridgeService ?? undefined,
 						this.services.schedulerService ?? undefined,
 					);
+					this._ipcRegistered = true;
+					this.maybeSendAppReady();
 					this.services.larkChannelManager?.setMainWindow(this.services.mainWindow);
 					const allProjects = this.services.runtimeManager.listProjects();
 					const activeProject = this.services.runtimeManager.getActiveProject();
