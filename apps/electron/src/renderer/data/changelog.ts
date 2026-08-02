@@ -20,6 +20,42 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.7.0",
+		date: "2026-08-03",
+		items: [
+			{
+				zh: "新增 macOS 灵动岛（Look Island）：在灵动岛区域实时展示 Agent 运行状态与关键事件，设置页可开关（默认关闭）",
+				en: "New macOS Look Island: real-time agent status and key events on the Dynamic Island; toggle in Settings (off by default)",
+				ja: "macOS の Look Island を追加：ダイナミックアイランドでエージェントの実行状態と重要イベントをリアルタイム表示、設定ページで切り替え可能（初期状態はオフ）",
+			},
+			{
+				zh: "新增桌面系统通知：应用在后台或最小化时，Agent 完成任务、请求你操作或出错都会通知，可在设置中选择通知级别",
+				en: "New desktop notifications: when the app is in the background, get notified when the agent finishes a task, needs your action, or hits an error; pick the level in Settings",
+				ja: "デスクトップ通知を追加：アプリがバックグラウンドのとき、エージェントのタスク完了・操作要求・エラーを通知、設定で通知レベルを選択可能",
+			},
+			{
+				zh: "开发版与正式版数据目录隔离：开发模式使用独立的 ~/.look-dev，测试数据不再污染正式版",
+				en: "Separate data directories for dev and release builds: dev mode now uses ~/.look-dev so test data never pollutes your real data",
+				ja: "開発版と正式版のデータディレクトリを分離：開発モードは ~/.look-dev を使用し、テストデータが正式版を汚さないように",
+			},
+			{
+				zh: "侧边栏体验优化：创建子会话时自动展开，修复折叠状态在重启间的竞态",
+				en: "Sidebar polish: new subagent sessions expand automatically and collapse state no longer races across restarts",
+				ja: "サイドバー改善：サブセッション作成時に自動展開、再起動時の折りたたみ状態の競合を修正",
+			},
+			{
+				zh: "修复运行中的子会话短暂显示为顶层父会话的问题，会话层级即时准确",
+				en: "Fix subagent sessions briefly showing as top-level sessions while running; hierarchy now reflects correctly immediately",
+				ja: "実行中のサブセッションが一時的にトップレベルとして表示される問題を修正し、階層表示が即時に正しくなるように",
+			},
+			{
+				zh: "重写项目 README，介绍更清晰",
+				en: "Rewrite the project README for a clearer introduction",
+				ja: "プロジェクト README を書き直し、紹介をより明確に",
+			},
+		],
+	},
+	{
 		version: "1.6.0",
 		date: "2026-08-02",
 		items: [
