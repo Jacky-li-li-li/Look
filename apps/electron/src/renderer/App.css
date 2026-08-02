@@ -1217,13 +1217,14 @@ body {
 		}
 	}
 
-	/* Running — animated flowing green border (pseudo-element overlay) */
-	[data-running][data-agent-status]:not([data-agent-status="idle"]) {
+	/* Running — animated flowing green border (pseudo-element overlay).
+		 Subsessions opt out: they signal running state via the Bot icon color instead. */
+	[data-running][data-agent-status]:not([data-agent-status="idle"]):not(.subsession-tree-row) {
 		position: relative;
 		border-color: transparent;
 		z-index: 0;
 	}
-	[data-running][data-agent-status]:not([data-agent-status="idle"])::before {
+	[data-running][data-agent-status]:not([data-agent-status="idle"]):not(.subsession-tree-row)::before {
 		content: "";
 		position: absolute;
 		inset: -1px;
@@ -1247,7 +1248,7 @@ body {
 		z-index: -1;
 	}
 	/* Bright overlay on hover so the flow effect is always visible */
-	[data-running][data-agent-status]:not([data-agent-status="idle"]):hover::before {
+	[data-running][data-agent-status]:not([data-agent-status="idle"]):not(.subsession-tree-row):hover::before {
 		background: conic-gradient(
 			from var(--flow-angle, 0deg),
 			transparent 0deg,
@@ -1256,6 +1257,15 @@ body {
 			oklch(0.65 0.22 150) 270deg,
 			transparent 360deg
 		);
+	}
+
+	/* Sub-session status via Bot icon color:
+		 completed = green, running = sky-blue (default) with a gentle pulse */
+	.subsession-tree-row[data-completed] .subsession-bot-icon {
+		color: oklch(0.65 0.2 150);
+	}
+	.subsession-tree-row[data-running]:not([data-completed]) .subsession-bot-icon {
+		animation: status-pulse 1.2s ease-in-out infinite;
 	}
 
 	/* Completed — static green border (box-shadow avoids layer conflicts) */
@@ -1670,6 +1680,31 @@ body {
 
 	.session-tree-group {
 		position: relative;
+	}
+
+	/* Tree connectors for sub-sessions:
+		 each child row gets a horizontal branch, the group draws a vertical trunk
+		 below the parent row when expanded. */
+	.subsession-tree-row::before {
+		content: "";
+		position: absolute;
+		left: -9px;
+		top: 50%;
+		width: 16px;
+		height: 1px;
+		background: color-mix(in oklch, var(--foreground), transparent 88%);
+		transform: translateY(-50%);
+		pointer-events: none;
+	}
+	.session-tree-group[data-has-children][data-expanded]::before {
+		content: "";
+		position: absolute;
+		left: 10px;
+		top: 40px;
+		bottom: 5px;
+		width: 1px;
+		background: color-mix(in oklch, var(--foreground), transparent 88%);
+		pointer-events: none;
 	}
 
 	.workspace-empty-session,

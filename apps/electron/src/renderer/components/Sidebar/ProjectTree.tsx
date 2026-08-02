@@ -397,6 +397,9 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 									childPhase: sessionPhases.get(child.id) ?? "idle",
 									childRunning: runningAgents.has(child.id),
 									childActive: child.id === activeAgentId,
+									childCompleted:
+										recentlyCompleted.includes(child.id) &&
+										!(child.id === activeAgentId && activeChatAtBottom),
 								}))
 							: EMPTY_CHILDREN;
 						return (

@@ -58,6 +58,7 @@ export interface ChildSessionInfo {
 	childPhase: string;
 	childRunning: boolean;
 	childActive: boolean;
+	childCompleted: boolean;
 }
 
 export interface ProjectTreeProps {

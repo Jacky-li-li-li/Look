@@ -40,7 +40,11 @@ function SessionRowImpl({
 	const hasChildren = childrenList.length > 0;
 	const feishuLabel = t("settings.feishu", "Feishu");
 	return (
-		<div className="session-tree-group" data-has-children={hasChildren || undefined}>
+		<div
+			className="session-tree-group"
+			data-has-children={hasChildren || undefined}
+			data-expanded={hasChildren && !collapsedSubSessions.has(agent.id) ? "" : undefined}
+		>
 			<div
 				data-agent-id={agent.id}
 				data-agent-status={phase}
@@ -75,7 +79,9 @@ function SessionRowImpl({
 								<span className="min-w-0 truncate">
 									{agent.name}
 									{hasChildren && (
-										<span className="ml-1 text-[10px] text-sky-500">({childrenList.length})</span>
+										<span className="ml-1 text-[10px] text-[oklch(0.65_0.2_150)]">
+											({childrenList.length})
+										</span>
 									)}
 								</span>
 							</span>
@@ -155,6 +161,7 @@ function SessionRowImpl({
 						data-agent-status={child.childPhase}
 						data-running={child.childRunning || undefined}
 						data-active={child.childActive || undefined}
+						data-completed={child.childCompleted ? "" : undefined}
 						className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[34px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
 					>
 						<button
@@ -162,7 +169,7 @@ function SessionRowImpl({
 							className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
 							onClick={() => selectSession(child.agent)}
 						>
-							<Bot className="size-3 shrink-0 text-sky-500" />
+							<Bot className="subsession-bot-icon size-3 shrink-0 text-sky-500" />
 							{child.agent.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
 							<span className="min-w-0 flex-1 truncate text-[11.5px] font-medium">
 								{child.agent.name || child.agent.agentConfigName}
