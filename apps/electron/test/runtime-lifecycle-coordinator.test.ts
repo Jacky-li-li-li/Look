@@ -128,6 +128,7 @@ function makeCoordinator(
 			persistToolSnapshotIfDirty: vi.fn(),
 			disposeSession: vi.fn(),
 		},
+		sessionPermissionOrchestrator: { disposeSession: vi.fn() },
 		subAgentRegistry: {
 			hasPending: vi.fn().mockReturnValue(false),
 			unregister: vi.fn(),

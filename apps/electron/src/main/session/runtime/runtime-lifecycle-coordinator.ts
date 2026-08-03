@@ -13,6 +13,7 @@ import type { SessionEventProcessor } from "../events/session-event-processor.js
 import type { SessionNotifier } from "../events/session-notifier.js";
 import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
 import type { StoredSession } from "../services/session-catalog.js";
+import type { SessionPermissionOrchestrator } from "../services/session-permission-orchestrator.js";
 import type { SessionSubagentService } from "../services/session-subagent-service.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
 import type { RuntimeFactoryOptions, SessionRuntimeFactory } from "./runtime-factory.js";
@@ -37,6 +38,7 @@ export interface RuntimeLifecycleCoordinatorOptions {
 		IPlanService,
 		"restoreToolSnapshot" | "syncToolState" | "cancelInteractions" | "persistToolSnapshotIfDirty" | "disposeSession"
 	>;
+	sessionPermissionOrchestrator: Pick<SessionPermissionOrchestrator, "disposeSession">;
 	subAgentRegistry: Pick<SubAgentRegistry, "hasPending" | "unregister">;
 	subAgentRuntimeService: Pick<
 		SubAgentRuntimeService,
@@ -371,6 +373,7 @@ export class RuntimeLifecycleCoordinator {
 		attempt(() => this.options.subAgentRuntimeService.cancelSubSessionCleanup(sessionId));
 		attempt(() => this.options.permissionService.disposeSession(sessionId));
 		attempt(() => this.options.planService.disposeSession(sessionId));
+		attempt(() => this.options.sessionPermissionOrchestrator.disposeSession(sessionId));
 		if (scope) attempt(() => this.options.eventProcessor.dispose(sessionId));
 		attempt(() => this.options.scopeRegistry.release(sessionId));
 		attempt(() => this.options.sessionSubagentService.clearSession(sessionId));
@@ -428,6 +431,7 @@ export class RuntimeLifecycleCoordinator {
 		this.options.runtimeRegistry.delete(sessionId);
 		attempt(() => this.options.permissionService.disposeSession(sessionId));
 		attempt(() => this.options.planService.disposeSession(sessionId));
+		attempt(() => this.options.sessionPermissionOrchestrator.disposeSession(sessionId));
 		if (scope) attempt(() => this.options.eventProcessor.dispose(sessionId));
 		attempt(() => this.options.scopeRegistry.release(sessionId));
 		attempt(() => this.options.sessionSubagentService.clearSession(sessionId));

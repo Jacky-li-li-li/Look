@@ -441,6 +441,9 @@ export class CompositionBuilder {
 			scopeRegistry: this.scopeRegistry,
 			permissionService: this.permissionService!,
 			planService: this.planService,
+			sessionPermissionOrchestrator: {
+				disposeSession: (sessionId) => this.sessionPermissionOrchestrator?.disposeSession(sessionId),
+			},
 			subAgentRegistry: this.subAgentRegistry,
 			subAgentRuntimeService: this.subAgentRuntimeService!,
 			autoTitleService: this.autoTitleService!,
@@ -568,7 +571,10 @@ export class CompositionBuilder {
 		});
 
 		this.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({
-			host: { ensureRuntime: (sessionId) => this.runtimeLifecycle!.ensureRuntime(sessionId) },
+			host: {
+				ensureRuntime: (sessionId) => this.runtimeLifecycle!.ensureRuntime(sessionId),
+				emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
+			},
 			eventBus: this.eventBus!,
 			permissionService: this.permissionService!,
 			planService: this.planService!,
