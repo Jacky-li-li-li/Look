@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.7.2",
+		date: "2026-08-03",
+		items: [
+			{
+				zh: "修复重启后首屏误显示“欢迎页”、提示重新添加项目的问题（项目数据并未丢失）；优化冷启动速度：不再等待模型目录网络刷新（最长 15 秒），侧边栏项目列表秒出",
+				en: "Fix the welcome screen flashing after launch with a prompt to re-add projects (your data was never lost); speed up cold start by not waiting on the model-catalog network refresh (up to 15s) — the project list now appears instantly",
+				ja: "再起動後に「ようこそ画面」が一瞬表示されプロジェクトの再追加を求められる問題を修正（データは失われていません）；モデルカタログのネットワーク更新（最大15秒）を待たずに起動を高速化、プロジェクト一覧が即座に表示されるように",
+			},
+		],
+	},
+	{
 		version: "1.7.1",
 		date: "2026-08-03",
 		items: [
