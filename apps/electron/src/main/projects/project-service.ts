@@ -27,12 +27,25 @@ export class ProjectService {
 	private readonly projects = new Map<string, ProjectInfo>();
 	private readonly projectsIndexPath: string;
 	private activeProjectId: string | null = null;
+	private projectsLoadedResolve!: () => void;
+	private readonly projectsLoaded = new Promise<void>((resolve) => {
+		this.projectsLoadedResolve = resolve;
+	});
 
 	constructor(
 		private readonly trustStore: ProjectTrustStore,
 		private readonly globalSettingsManager: SettingsManager,
 	) {
 		this.projectsIndexPath = getProjectsIndexPath();
+	}
+
+	/**
+	 * Resolves once the persisted project index has finished loading at
+	 * startup. Lets IPC handlers wait for real data instead of answering
+	 * with an empty list while boot is still in flight.
+	 */
+	whenProjectsLoaded(): Promise<void> {
+		return this.projectsLoaded;
 	}
 
 	// ── Persistence ──
@@ -76,6 +89,7 @@ export class ProjectService {
 		}
 
 		this.ensureDefaultProject();
+		this.projectsLoadedResolve();
 
 		return this.listProjects();
 	}

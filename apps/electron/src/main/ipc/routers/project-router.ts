@@ -9,6 +9,9 @@ import { promptForProjectTrust } from "../project-trust.js";
 
 export const projectRouter: IpcRouter = (ctx, register) => {
 	register("project:list", async () => {
+		// 启动早期（Phase 8 之前）的拉取在此挂起到项目索引加载完成，
+		// 避免返回"成功的空列表"让渲染端误判为无项目而闪 Welcome 页。
+		await ctx.project.service.whenProjectsLoaded();
 		const projects = ctx.project.service.listProjects();
 		const activeProject = ctx.project.service.getActiveProject();
 		return { success: true, projects, activeProjectId: activeProject?.id ?? null };

@@ -18,6 +18,7 @@ function makeProjectCtx(): InvokeContext {
 	ctx.project.service = {
 		listProjects: vi.fn().mockReturnValue([]),
 		getActiveProject: vi.fn().mockReturnValue(null),
+		whenProjectsLoaded: vi.fn().mockResolvedValue(undefined),
 	} as never;
 	return ctx;
 }

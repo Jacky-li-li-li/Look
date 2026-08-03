@@ -12,21 +12,25 @@
 // (inherited values are more trustworthy).
 // ============================================================
 
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+
+const execAsync = promisify(exec);
 
 /**
  * Read API-key environment variables from the user's shell rc file
  * and merge them into `process.env` (non-destructive — never
  * overwrites already-set variables).
  *
- * Call once at app startup. Safe to call synchronously if wrapped
- * in a try/catch with a timeout.
+ * Call once at app startup. Runs asynchronously so the main-process
+ * event loop stays responsive while the shell starts up; await the
+ * returned promise before anything that depends on API-key env vars.
  */
-/** Only known-safe shell paths are allowed so execSync cannot be
+/** Only known-safe shell paths are allowed so exec cannot be
  *  hijacked via a malicious $SHELL environment variable. */
 const ALLOWED_SHELLS = /^\/(usr(\/local)?\/)?bin\/(zsh|bash)$/;
 
-export function loadShellEnv(): void {
+export async function loadShellEnv(): Promise<void> {
 	const rawShell = process.env.SHELL || "/bin/zsh";
 	if (!ALLOWED_SHELLS.test(rawShell)) {
 		console.warn("[Look] Skipping shell env: $SHELL not in whitelist:", rawShell);
@@ -44,13 +48,13 @@ export function loadShellEnv(): void {
 	}
 
 	try {
-		const output = execSync(`${shell} -c 'source "${rcFile}" 2>/dev/null; env'`, {
+		const { stdout } = await execAsync(`${shell} -c 'source "${rcFile}" 2>/dev/null; env'`, {
 			encoding: "utf-8",
 			timeout: 5000,
 			env: { ...process.env, DISABLE_AUTO_TITLE: "true" },
 		});
 
-		for (const line of output.split("\n")) {
+		for (const line of stdout.split("\n")) {
 			const eqIdx = line.indexOf("=");
 			if (eqIdx === -1) continue;
 			const key = line.slice(0, eqIdx);

@@ -376,9 +376,12 @@ export class Application {
 	// ============================================================
 
 	private async bootstrapApp(): Promise<void> {
-		loadShellEnv();
+		// 异步加载 shell env：不再 execSync 阻塞事件循环（did-finish-load、
+		// 更新状态回放可正常进行），仅在模型可用性探测（Phase 1）前等待合并完成。
+		const shellEnvPromise = loadShellEnv();
 
 		// Phase 1: Core runtime
+		await shellEnvPromise;
 		await this.bootstrapCoreRuntime();
 
 		// Phase 2: Scheduler (depends on runtimeManager)
@@ -404,6 +407,9 @@ export class Application {
 
 		// Phase 8: Load persisted data
 		await this.services.runtimeManager!.loadProjects();
+		// 项目索引就绪后立即推送：侧边栏项目行不必再等 orphan 恢复和
+		// Phase 9 的会话 JSONL 扫描（冷启动时最明显的"空侧边栏"等待）。
+		this.pushProjectList();
 		await this.services.runtimeManager!.recoverOrphanedProjects().catch((error) => {
 			console.error("[Look] Orphaned project recovery failed:", error);
 		});
@@ -415,6 +421,24 @@ export class Application {
 
 		// Phase 10: Sync built-in skills and agents
 		await this.syncBuiltinResources();
+
+		// 后台补齐模型目录网络刷新（启动时 allowModelNetwork=false 只做本地
+		// 加载），完成后广播 model:updated 让渲染端刷新模型可用性。
+		void this.services
+			.runtimeManager!.composition.modelRuntime.refresh({ allowNetwork: true })
+			.then(() => this.services.runtimeManager?.composition.sessionNotifier.emit({ type: "model:updated" }))
+			.catch((err) => console.warn("[Look] Background model refresh failed:", err));
+	}
+
+	/** 推送当前项目列表到渲染进程（Phase 8 提前推送与 Phase 9 启动推送共用）。 */
+	private pushProjectList(): void {
+		const allProjects = this.services.runtimeManager!.listProjects();
+		const activeProject = this.services.runtimeManager!.getActiveProject();
+		this.safeSendEvent({
+			type: "project:list" as const,
+			projects: allProjects,
+			activeProjectId: activeProject?.id ?? null,
+		});
 	}
 
 	// ── Phase 1: Core runtime ──
@@ -670,13 +694,7 @@ export class Application {
 	private async bootstrapStartupSequence(): Promise<void> {
 		this.bootstrapLarkBridge();
 
-		const allProjects = this.services.runtimeManager!.listProjects();
-		const activeProject = this.services.runtimeManager!.getActiveProject();
-		this.safeSendEvent({
-			type: "project:list" as const,
-			projects: allProjects,
-			activeProjectId: activeProject?.id ?? null,
-		});
+		this.pushProjectList();
 
 		await this.services.runtimeManager!.restoreWorkspace();
 
