@@ -37,6 +37,8 @@ let sendEvent: SendEvent | null = null;
  * 窗口重建后靠 replayUpdateStatus 恢复提示。 */
 let lastStatus: UpdateStatus | null = null;
 let lastCheckAt = 0;
+/** 重启安装是否已触发（侧边栏/设置页双入口幂等守卫）。 */
+let installTriggered = false;
 
 function emit(phase: AppUpdatePhase, extra?: { version?: string; percent?: number; error?: string }): void {
 	lastStatus = { phase, ...extra };
@@ -81,7 +83,11 @@ export function initAppUpdater(send: SendEvent): void {
 	updaterApi.on("checking-for-update", () => emit("checking"));
 	updaterApi.on("update-available", (info) => emit("available", { version: info.version }));
 	updaterApi.on("update-not-available", () => emit("not-available"));
-	updaterApi.on("download-progress", (progress) => emit("downloading", { percent: Math.round(progress.percent) }));
+	updaterApi.on("download-progress", (progress) =>
+		// 保留最近一次的 version：download-progress 事件本身不带版本号，
+		// 否则渲染层 downloading 阶段会丢失 available 阶段的 version。
+		emit("downloading", { percent: Math.round(progress.percent), version: lastStatus?.version }),
+	);
 	updaterApi.on("update-downloaded", (info) => {
 		// 不再自动重启：下载完成仅通知渲染层，等待用户手动点击重启安装。
 		emit("downloaded", { version: info.version });
@@ -120,7 +126,19 @@ export async function downloadUpdate(): Promise<{ success: boolean; error?: stri
 
 export async function installUpdate(): Promise<{ success: boolean; error?: string }> {
 	if (!app.isPackaged) return devError();
-	// 用户手动点击重启更新：延迟到 IPC 响应送达渲染层后再退出安装
-	setImmediate(() => getAutoUpdater().quitAndInstall());
+	// 幂等守卫：侧边栏胶囊与设置页 About 双入口可能先后触发，第二次直接返回
+	// success，避免重复调用 quitAndInstall（electron-updater 对重复调用可能抛错）。
+	if (installTriggered) return { success: true };
+	installTriggered = true;
+	// 用户手动点击重启更新：延迟到 IPC 响应送达渲染层后再退出安装。
+	// quitAndInstall 抛错时通过 error 事件反馈（渲染层据此离开 installing 态），
+	// 避免「应用未退出但按钮永久禁用」的卡死。
+	setImmediate(() => {
+		try {
+			getAutoUpdater().quitAndInstall();
+		} catch (err) {
+			emit("error", { error: err instanceof Error ? err.message : String(err) });
+		}
+	});
 	return { success: true };
 }

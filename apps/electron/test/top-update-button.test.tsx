@@ -14,8 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // useAppUpdate 在模块顶层绑定 window.look，必须在组件模块加载前就位
 const mocks = vi.hoisted(() => {
 	const installUpdate = vi.fn().mockResolvedValue({ success: true });
-	(window as unknown as { look: unknown }).look = { installUpdate };
-	return { installUpdate };
+	const checkForUpdates = vi.fn().mockResolvedValue({ success: true });
+	(window as unknown as { look: unknown }).look = { installUpdate, checkForUpdates };
+	return { installUpdate, checkForUpdates };
 });
 
 import TopUpdateButton from "../src/renderer/components/Sidebar/TopUpdateButton";
@@ -49,8 +50,9 @@ describe("TopUpdateButton", () => {
 	it("available 时显示「更新中」胶囊且不可点击（自动下载已开始）", () => {
 		act(() => appStore.set(appUpdateAtom, { phase: "available", version: "9.9.9" }));
 
+		// aria-label 用带版本号的 autoDownloading 文案，语义更准确
 		const { getByRole } = renderButton();
-		const button = getByRole("button", { name: "正在下载更新" }) as HTMLButtonElement;
+		const button = getByRole("button", { name: "发现新版本 v9.9.9，正在自动下载…" }) as HTMLButtonElement;
 		expect(button.disabled).toBe(true);
 		expect(button.textContent).toContain("更新中");
 	});
@@ -65,7 +67,7 @@ describe("TopUpdateButton", () => {
 		expect(button.textContent).not.toContain("%");
 	});
 
-	it("downloaded 时变为重启按钮，点击触发手动重启安装", () => {
+	it("downloaded 时变为重启按钮，点击后进入安装中 loading 态（防重复点击）", () => {
 		mocks.installUpdate.mockClear();
 		act(() => appStore.set(appUpdateAtom, { phase: "downloaded", version: "9.9.9" }));
 
@@ -75,5 +77,42 @@ describe("TopUpdateButton", () => {
 
 		fireEvent.click(button);
 		expect(mocks.installUpdate).toHaveBeenCalledTimes(1);
+		// 点击后立即禁用并显示「正在重启安装…」，避免重复触发 quitAndInstall
+		const installingButton = getByRole("button", { name: "正在重启安装…" }) as HTMLButtonElement;
+		expect(installingButton.disabled).toBe(true);
+	});
+
+	it("error 时显示「更新失败」胶囊，点击重新检查更新（带防抖 loading）", async () => {
+		mocks.checkForUpdates.mockClear();
+		act(() => appStore.set(appUpdateAtom, { phase: "error", error: "网络错误" }));
+
+		const { getByRole } = renderButton();
+		const button = getByRole("button", { name: "更新失败" }) as HTMLButtonElement;
+		expect(button.disabled).toBe(false);
+
+		fireEvent.click(button);
+		expect(mocks.checkForUpdates).toHaveBeenCalledTimes(1);
+		// 重查期间进入 checking 防抖态（避免开发环境无限点击）
+		const checkingButton = getByRole("button", { name: "正在检查更新..." }) as HTMLButtonElement;
+		expect(checkingButton.disabled).toBe(true);
+		// promise resolve 后恢复可点击
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const restored = getByRole("button", { name: "更新失败" }) as HTMLButtonElement;
+		expect(restored.disabled).toBe(false);
+	});
+
+	it("installUpdate promise reject 时兜底进入 error 阶段", async () => {
+		mocks.installUpdate.mockRejectedValueOnce(new Error("ipc down"));
+		act(() => appStore.set(appUpdateAtom, { phase: "downloaded", version: "9.9.9" }));
+
+		const { getByRole } = renderButton();
+		fireEvent.click(getByRole("button", { name: "重启更新" }));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const errorButton = getByRole("button", { name: "更新失败" }) as HTMLButtonElement;
+		expect(errorButton.disabled).toBe(false);
 	});
 });

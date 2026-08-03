@@ -11,7 +11,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@look/ui/components/ui/card";
 import { CircleCheck, Loader2, RefreshCw, RotateCw, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import appIconUrl from "../../../../assets/icon-1024.png";
 import feishuIconUrl from "../../assets/feishu.png";
@@ -31,6 +31,13 @@ export default function AboutTab() {
 	const phase = update?.phase;
 	const [expanded, setExpanded] = useState<string | null>(null);
 	const [showAllVersions, setShowAllVersions] = useState(false);
+	const [installing, setInstalling] = useState(false);
+
+	// phase 离开 downloaded（如 quitAndInstall 失败进入 error）时复位 installing，
+	// 避免「应用未退出但按钮永久禁用」的卡死。
+	useEffect(() => {
+		if (phase !== "downloaded") setInstalling(false);
+	}, [phase]);
 
 	const visibleChangelog = showAllVersions ? CHANGELOG : CHANGELOG.slice(0, 5);
 	const hasMore = CHANGELOG.length > 5;
@@ -66,11 +73,18 @@ export default function AboutTab() {
 							) : phase === "downloaded" ? (
 								<button
 									type="button"
-									onClick={() => void installUpdate()}
-									className="flex items-center gap-1.5 rounded-md border border-hairline bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									disabled={installing}
+									onClick={() => {
+										if (installing) return; // 防御：即使按钮尚未 disabled 也阻止重复派发
+										setInstalling(true);
+										void installUpdate().then((result) => {
+											if (!result.success) setInstalling(false);
+										});
+									}}
+									className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
 								>
-									<RotateCw className="size-3" />
-									{t("update.restartInstall")}
+									{installing ? <Loader2 className="size-3 animate-spin" /> : <RotateCw className="size-3" />}
+									{installing ? t("update.installing") : t("update.restartInstall")}
 								</button>
 							) : (
 								<button

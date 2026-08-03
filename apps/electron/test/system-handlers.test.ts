@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appStore } from "../src/renderer/store/appStore";
-import { mcpStatusVersionAtom, usageDataAtom, usageVersionAtom } from "../src/renderer/store/atoms";
+import { appUpdateAtom, mcpStatusVersionAtom, usageDataAtom, usageVersionAtom } from "../src/renderer/store/atoms";
 import { handleSystemEvent } from "../src/renderer/store/systemHandlers";
 
 describe("handleSystemEvent", () => {
@@ -8,6 +8,8 @@ describe("handleSystemEvent", () => {
 		appStore.set(mcpStatusVersionAtom, 0);
 		appStore.set(usageVersionAtom, 0);
 		appStore.set(usageDataAtom, null);
+		// merge 语义是跨用例有状态的，必须重置 appUpdateAtom 防止残留影响后续用例
+		appStore.set(appUpdateAtom, null);
 	});
 
 	afterEach(() => {
@@ -50,5 +52,56 @@ describe("handleSystemEvent", () => {
 		handleSystemEvent({ type: "usage:updated" } as unknown as Parameters<typeof handleSystemEvent>[0]);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(appStore.get(usageDataAtom)).toBeNull();
+	});
+
+	it("update:status 合并增量字段，downloading 保留先前 version", () => {
+		const event1 = { type: "update:status", phase: "available", version: "9.9.9" } as Parameters<
+			typeof handleSystemEvent
+		>[0];
+		const event2 = { type: "update:status", phase: "downloading", percent: 42 } as Parameters<
+			typeof handleSystemEvent
+		>[0];
+		handleSystemEvent(event1);
+		handleSystemEvent(event2);
+		expect(appStore.get(appUpdateAtom)).toEqual({ phase: "downloading", version: "9.9.9", percent: 42 });
+	});
+
+	it("update:status 携带完整字段时按阶段白名单重组字段", () => {
+		handleSystemEvent({
+			type: "update:status",
+			phase: "downloaded",
+			version: "9.9.9",
+			percent: 100,
+		} as Parameters<typeof handleSystemEvent>[0]);
+		// downloaded 阶段只保留 version，percent 被白名单清理
+		expect(appStore.get(appUpdateAtom)).toEqual({ phase: "downloaded", version: "9.9.9" });
+	});
+
+	it("update:status 离开 error 阶段后清除 error 字段（防跨周期复活）", () => {
+		handleSystemEvent({
+			type: "update:status",
+			phase: "error",
+			error: "网络错误",
+		} as Parameters<typeof handleSystemEvent>[0]);
+		handleSystemEvent({
+			type: "update:status",
+			phase: "available",
+			version: "9.9.9",
+		} as Parameters<typeof handleSystemEvent>[0]);
+		expect(appStore.get(appUpdateAtom)).toEqual({ phase: "available", version: "9.9.9" });
+	});
+
+	it("update:status not-available 清空历史 version/percent/error", () => {
+		handleSystemEvent({
+			type: "update:status",
+			phase: "downloading",
+			version: "9.9.9",
+			percent: 42,
+		} as Parameters<typeof handleSystemEvent>[0]);
+		handleSystemEvent({
+			type: "update:status",
+			phase: "not-available",
+		} as Parameters<typeof handleSystemEvent>[0]);
+		expect(appStore.get(appUpdateAtom)).toEqual({ phase: "not-available" });
 	});
 });

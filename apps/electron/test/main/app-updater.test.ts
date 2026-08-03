@@ -87,6 +87,13 @@ describe("app-updater", () => {
 		mocks.autoUpdater.emit("download-progress", { percent: 42 });
 		mocks.autoUpdater.emit("update-downloaded", { version: "9.9.9" });
 
+		// download-progress 事件保留先前 version，渲染层 downloading 阶段不丢字段
+		expect(send).toHaveBeenCalledWith({
+			type: "update:status",
+			phase: "downloading",
+			percent: 42,
+			version: "9.9.9",
+		});
 		// 停留在 downloaded 阶段等待用户手动重启，不调用 quitAndInstall
 		expect(mocks.autoUpdater.quitAndInstall).not.toHaveBeenCalled();
 		expect(send).toHaveBeenLastCalledWith({ type: "update:status", phase: "downloaded", version: "9.9.9" });
@@ -98,5 +105,29 @@ describe("app-updater", () => {
 		// quitAndInstall 延迟到 IPC 响应送达后再执行（setImmediate）
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
+	});
+
+	it("installUpdate 幂等：双入口重复触发只执行一次 quitAndInstall", async () => {
+		const send = vi.fn();
+		mod.initAppUpdater(send);
+		await mod.installUpdate();
+		await mod.installUpdate(); // 侧边栏/设置页双入口二次触发
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(mocks.autoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
+	});
+
+	it("downloading 状态重放带 version（窗口重建后进度不丢版本号）", () => {
+		const send = vi.fn();
+		mod.initAppUpdater(send);
+		mocks.autoUpdater.emit("update-available", { version: "9.9.9" });
+		mocks.autoUpdater.emit("download-progress", { percent: 42 });
+		send.mockClear();
+		mod.replayUpdateStatus();
+		expect(send).toHaveBeenCalledWith({
+			type: "update:status",
+			phase: "downloading",
+			percent: 42,
+			version: "9.9.9",
+		});
 	});
 });

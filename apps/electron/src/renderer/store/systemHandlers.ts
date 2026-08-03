@@ -1,6 +1,7 @@
 import type { MainToRendererEvent } from "@shared/types";
 import { appStore } from "./appStore";
 import {
+	type AppUpdateState,
 	appUpdateAtom,
 	loginCompletedAtom,
 	loginPromptAtom,
@@ -61,11 +62,22 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 		}
 
 		case "update:status": {
-			appStore.set(appUpdateAtom, {
-				phase: event.phase,
-				version: event.version,
-				percent: event.percent,
-				error: event.error,
+			// update:status 事件按增量字段设计，各阶段合法字段不同：
+			// available/downloaded 带 version；downloading 带 percent（version 从上一阶段继承）；
+			// error 带 error；checking/not-available 不带业务字段。
+			// 按 phase 白名单重组，避免残留字段跨周期复活（如 error 写入后无法清除、
+			// not-available 后 version/percent 残留）。
+			appStore.set(appUpdateAtom, (prev) => {
+				const base: AppUpdateState = { phase: event.phase };
+				if (event.phase === "available" || event.phase === "downloaded") {
+					base.version = event.version;
+				} else if (event.phase === "downloading") {
+					base.version = event.version ?? prev?.version;
+					base.percent = event.percent ?? 0;
+				} else if (event.phase === "error") {
+					base.error = event.error;
+				}
+				return base;
 			});
 			return true;
 		}

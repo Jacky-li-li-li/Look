@@ -22,22 +22,34 @@ function fallbackError(result: UpdateIpcResult) {
 	return result;
 }
 
+/** IPC 调用统一兜底：promise reject（preload 桥异常、handler 抛错、序列化失败）
+ * 时同样落入 error 阶段，避免调用方 `.then` 无 catch 导致 UI 卡在中间态。 */
+async function safeIpc(call: () => Promise<UpdateIpcResult>): Promise<UpdateIpcResult> {
+	try {
+		return fallbackError(await call());
+	} catch (err) {
+		const error = err instanceof Error ? err.message : String(err);
+		appStore.set(appUpdateAtom, { phase: "error", error });
+		return { success: false, error };
+	}
+}
+
 export function useAppUpdate() {
 	const update = useAtomValue(appUpdateAtom);
 
 	const checkForUpdates = useCallback(async () => {
 		if (!api) return { success: false, error: "Harness API not available" };
-		return fallbackError(await api.checkForUpdates());
+		return safeIpc(() => api.checkForUpdates());
 	}, []);
 
 	const downloadUpdate = useCallback(async () => {
 		if (!api) return { success: false, error: "Harness API not available" };
-		return fallbackError(await api.downloadUpdate());
+		return safeIpc(() => api.downloadUpdate());
 	}, []);
 
 	const installUpdate = useCallback(async () => {
 		if (!api) return { success: false, error: "Harness API not available" };
-		return fallbackError(await api.installUpdate());
+		return safeIpc(() => api.installUpdate());
 	}, []);
 
 	return { update, checkForUpdates, downloadUpdate, installUpdate };
