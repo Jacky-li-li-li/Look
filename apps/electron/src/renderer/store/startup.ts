@@ -60,6 +60,10 @@ function _autoSelectAgent(): void {
 	if (appStore.get(activeAgentIdAtom)) return;
 	const agents = appStore.get(agentsAtom);
 	if (agents.length === 0) return;
+	// 仅当真正发起自动选择（agents 非空可选）时才置位；若此刻 agents 仍为空
+	// （冷启动时 agents:list 可能早于主进程会话扫描返回空），不置位，
+	// 等 agent:list push 到达后由订阅回调再次触发自动选择。
+	_hasAutoSelected = true;
 	let sessionId: string;
 	if (_lastActiveSessionId && agents.some((a) => a.id === _lastActiveSessionId)) {
 		sessionId = _lastActiveSessionId;
@@ -152,15 +156,14 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 	_startupComplete = true;
 
 	// 仅在 agents 首次加载后自动选择一次，后续 IPC agent:list 不再触发
+	// （置位由 _autoSelectAgent 内部完成，agents 为空时不锁死后续重试）
 	appStore.sub(agentsAtom, () => {
 		if (!_startupComplete || _hasAutoSelected) return;
 		const agents = appStore.get(agentsAtom);
 		if (agents.length === 0) return;
-		_hasAutoSelected = true;
 		_autoSelectAgent();
 	});
 
-	_hasAutoSelected = true;
 	_autoSelectAgent();
 
 	// 不阻塞启动：provider settings 错误已静默处理
