@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.7.3",
+		date: "2026-08-04",
+		items: [
+			{
+				zh: "修复启动后消息区不自动加载最近会话的问题：之前冷启动时可能一直停留在空状态，需要手动点击左侧会话才能看到消息，现在启动后会立即自动打开最近会话",
+				en: "Fix the chat area not loading your most recent session after launch: a cold start could leave it stuck on the empty state until you manually clicked a session in the sidebar — now it opens the latest session automatically",
+				ja: "起動後にチャットエリアが最新セッションを自動で読み込まない問題を修正：コールドスタート時に空状態のまま止まり、サイドバーのセッションを手動でクリックするまで表示されないことがあったが、起動後すぐに最新セッションを自動で開くように",
+			},
+		],
+	},
+	{
 		version: "1.7.2",
 		date: "2026-08-03",
 		items: [
