@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.7.1",
+		date: "2026-08-03",
+		items: [
+			{
+				zh: "修复正式版灵动岛不显示的问题：打包流程遗漏了原生 helper 编译，现已补上，更新后灵动岛即可正常使用",
+				en: "Fix Look Island not showing in the release build: the packaging pipeline missed compiling the native helper; now included so the island works after updating",
+				ja: "正式版で Look Island が表示されない問題を修正：パッケージングでネイティブヘルパーのコンパイルが漏れていたため追加、更新後はアイランドが正常に動作",
+			},
+		],
+	},
+	{
 		version: "1.7.0",
 		date: "2026-08-03",
 		items: [
