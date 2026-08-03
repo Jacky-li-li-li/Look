@@ -69,6 +69,13 @@ jobs:
       - name: 构建应用（shared + main + renderer）
         run: npm run build
 
+      # Look Island 原生 helper：electron-builder 的 extraResources 依赖
+      # apps/electron/build/look-island/look-island-helper。漏掉这步会在
+      # 打包时静默跳过，正式包里没有 helper，灵动岛启动即失败（v1.7.0 曾因此缺包）
+      - name: 构建 Look Island 原生 helper
+        working-directory: apps/electron
+        run: npm run build:island-native
+
       # 打包 + 签名 + 公证 + 发布到 GitHub Releases
       # 公证偶发超时，失败重试 3 次（与 Proma 一致）
       - name: 打包并发布 (macOS arm64)
