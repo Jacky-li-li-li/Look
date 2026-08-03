@@ -14,7 +14,12 @@ import { InvokeDispatcher } from "../../src/main/ipc/invoke-context.js";
  */
 export function makeMockContext(overrides?: Partial<InvokeContext>): InvokeContext {
 	return {
-		mainWindow: { isDestroyed: () => false } as never,
+		mainWindow: {
+			isDestroyed: () => false,
+			// Router 注册期会挂窗口生命周期回调（如 settings-router 的 pendingPrompts 清理）
+			once: () => {},
+			on: () => {},
+		} as never,
 		model: { runtime: {} as never, registry: {} as never, credentials: {} as never, customProviders: {} as never },
 		session: {
 			messaging: {} as never,

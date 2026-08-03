@@ -7,7 +7,7 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SharedAreaPanel } from "../src/renderer/components/workspace/SharedAreaPanel";
 import i18n from "../src/renderer/i18n";
-import { appStore } from "../src/renderer/store/ipcHandler";
+import { appStore } from "../src/renderer/store/appStore";
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 

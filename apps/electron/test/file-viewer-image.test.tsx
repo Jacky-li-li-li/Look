@@ -5,8 +5,8 @@ import { Provider } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FileViewerDialog from "../src/renderer/components/dialogs/FileViewerDialog";
 import i18n from "../src/renderer/i18n";
+import { appStore } from "../src/renderer/store/appStore";
 import { viewingFileAtom } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 
 const pngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
 

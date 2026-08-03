@@ -5,8 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { Provider } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PermissionDialog from "../src/renderer/components/dialogs/PermissionDialog";
+import { appStore } from "../src/renderer/store/appStore";
 import { agentsAtom, permissionAskQueueAtom } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 
 const emptyUsage = {
 	inputTokens: 0,

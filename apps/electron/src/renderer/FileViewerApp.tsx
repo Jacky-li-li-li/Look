@@ -10,8 +10,8 @@ import type { MainToRendererEvent } from "@shared/types";
 import { useEffect } from "react";
 import FileViewerDialog from "./components/dialogs/FileViewerDialog";
 import i18n from "./i18n";
+import { appStore } from "./store/appStore";
 import { fileViewerDirtyAtom, viewingFileAtom } from "./store/atoms";
-import { appStore } from "./store/ipcHandler";
 
 export default function FileViewerApp() {
 	useEffect(() => {

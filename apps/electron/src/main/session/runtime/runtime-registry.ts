@@ -7,6 +7,7 @@
 // ============================================================
 
 import type { AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { SerialTail } from "../../utils/serial-tail.js";
 
 /** Stable host-owned identity for the session currently bound to a mutable SDK runtime. */
 export interface RuntimeSessionBinding {
@@ -28,7 +29,8 @@ export interface ManagedRuntime {
 export class RuntimeRegistry {
 	private readonly runtimes = new Map<string, ManagedRuntime>();
 	private readonly initializations = new Map<string, Promise<ManagedRuntime>>();
-	private readonly operationTails = new Map<string, Promise<void>>();
+	/** Per-session exclusive operation lock（serialize 队列操作，如 remove/insert-queued-message）。 */
+	private readonly serial = new SerialTail<string>();
 
 	get(sessionId: string): ManagedRuntime | undefined {
 		return this.runtimes.get(sessionId);
@@ -77,23 +79,10 @@ export class RuntimeRegistry {
 	}
 
 	async withExclusive<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
-		const previous = this.operationTails.get(sessionId) ?? Promise.resolve();
-		let release!: () => void;
-		const gate = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		const tail = previous.then(() => gate);
-		this.operationTails.set(sessionId, tail);
-		await previous;
-		try {
-			return await task();
-		} finally {
-			release();
-			if (this.operationTails.get(sessionId) === tail) this.operationTails.delete(sessionId);
-		}
+		return this.serial.run(sessionId, task);
 	}
 
 	releaseExclusive(sessionId: string): void {
-		this.operationTails.delete(sessionId);
+		this.serial.release(sessionId);
 	}
 }

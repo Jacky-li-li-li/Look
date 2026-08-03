@@ -18,6 +18,15 @@ import { type ChatBinding, loadBindings, saveBindings } from "./im-storage.js";
 import type { LarkChannelManager } from "./lark-channel-manager.js";
 import { LarkReplyPresenter, type ReplyAccumulator } from "./lark-reply-presenter.js";
 
+/**
+ * 消息级跟踪日志。生产默认关闭——飞书消息流每进来一条消息会产生多条
+ * 流水日志，全量 console.log 会把终端刷满；排查消息流问题时置 true。
+ */
+const DEBUG_TRACE = false;
+function trace(...args: unknown[]): void {
+	if (DEBUG_TRACE) console.log("[LarkBridgeService]", ...args);
+}
+
 export class LarkBridgeService {
 	private readonly replyPresenter = new LarkReplyPresenter();
 	/**
@@ -343,13 +352,13 @@ export class LarkBridgeService {
 		}
 		// 忽略 Bot 自身的消息
 		if (this.channelManager.isSelfMessage(appId, msg)) {
-			console.log("[LarkBridgeService] Ignoring self message:", msg.messageId);
+			trace("Ignoring self message:", msg.messageId);
 			return;
 		}
 
 		const text = msg.content?.trim() ?? "";
-		console.log(
-			"[LarkBridgeService] Incoming:",
+		trace(
+			"Incoming:",
 			msg.messageId,
 			"appId:",
 			appId,
@@ -366,15 +375,15 @@ export class LarkBridgeService {
 		);
 
 		if (!text) {
-			console.log("[LarkBridgeService] Skipping empty content message, rawContentType:", msg.rawContentType);
+			trace("Skipping empty content message, rawContentType:", msg.rawContentType);
 			return;
 		}
 
 		if (text.startsWith("/")) {
-			console.log("[LarkBridgeService] Dispatching command:", text.split(/\s+/)[0]);
+			trace("Dispatching command:", text.split(/\s+/)[0]);
 			await this.handleCommand(appId, channel, msg, text);
 		} else {
-			console.log("[LarkBridgeService] Dispatching user message to agent");
+			trace("Dispatching user message to agent");
 			await this.handleUserMessage(appId, channel, msg, text);
 		}
 	}
@@ -713,13 +722,7 @@ export class LarkBridgeService {
 
 		// 自动创建 Session
 		if (!binding) {
-			console.log(
-				"[LarkBridgeService] No binding for chat",
-				chatId,
-				"appId:",
-				appId,
-				"- creating new agent session",
-			);
+			trace("No binding for chat", chatId, "appId:", appId, "- creating new agent session");
 			try {
 				const activeProject = this.runtimeManager.getActiveProject();
 				if (!activeProject) {
@@ -734,7 +737,7 @@ export class LarkBridgeService {
 					senderOpenId: msg.senderId,
 					peerName: msg.senderName,
 				});
-				console.log("[LarkBridgeService] Created session", binding.sessionId, "for chat", chatId, "appId:", appId);
+				trace("Created session", binding.sessionId, "for chat", chatId, "appId:", appId);
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				console.error("[LarkBridgeService] Failed to create agent:", errorMsg);
@@ -767,11 +770,11 @@ export class LarkBridgeService {
 					producer: async (ctrl) => {
 						acc!.controller = ctrl;
 						await this.replyPresenter.flushUpdate(acc!, true);
-						console.log("[LarkBridgeService] Stream producer started for session", sessionId);
+						trace("Stream producer started for session", sessionId);
 						// 发送消息给 Agent
 						try {
 							await this.runtimeManager.sendMessage(sessionId, text);
-							console.log("[LarkBridgeService] Message sent to agent, waiting for reply...");
+							trace("Message sent to agent, waiting for reply...");
 						} catch (err) {
 							const errorMsg = err instanceof Error ? err.message : String(err);
 							console.error("[LarkBridgeService] sendMessage failed:", errorMsg);
@@ -790,7 +793,7 @@ export class LarkBridgeService {
 
 						try {
 							await Promise.race([acc!.donePromise, timeout]);
-							console.log("[LarkBridgeService] Agent reply ready for session", sessionId);
+							trace("Agent reply ready for session", sessionId);
 						} catch (err) {
 							const errorMsg = err instanceof Error ? err.message : String(err);
 							console.warn("[LarkBridgeService] Wait for reply failed:", errorMsg);
@@ -809,7 +812,7 @@ export class LarkBridgeService {
 							if (timeoutId) clearTimeout(timeoutId);
 						}
 
-						console.log("[LarkBridgeService] Reply length:", acc!.text.length, "chars, finalizing card");
+						trace("Reply length:", acc!.text.length, "chars, finalizing card");
 						await this.replyPresenter.flushUpdate(acc!, true);
 					},
 				},

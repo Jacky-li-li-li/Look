@@ -16,7 +16,7 @@ import { getPackagedRendererIndexPath } from "../system/renderer-paths.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const isDev = !app.isPackaged;
+const isDev = (): boolean => !app.isPackaged;
 
 let viewerWindow: BrowserWindow | null = null;
 const viewerEvents = new BrowserWindowEventTransport(() => viewerWindow);
@@ -57,7 +57,7 @@ export function openViewerWindow(absolutePath: string): void {
 		viewerWindow = null;
 	});
 
-	if (isDev) {
+	if (isDev()) {
 		viewerWindow.loadURL(`http://localhost:5174?theme=${tone}&mode=file-viewer`);
 	} else {
 		viewerWindow.loadFile(getPackagedRendererIndexPath(path.join(__dirname, "..")), {

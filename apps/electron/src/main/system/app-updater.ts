@@ -13,7 +13,15 @@ import type { AppUpdatePhase, MainToRendererEvent } from "@look/shared/types";
 import { app } from "electron";
 import updater from "electron-updater";
 
-const { autoUpdater } = updater;
+/**
+ * electron-updater 的 autoUpdater 是惰性 getter，首次访问才会创建
+ * ElectronAppAdapter（内部读 app.getVersion()）。在模块顶层解构会
+ * 把该副作用提前到 import 时，导致非 Electron 环境（vitest）导入
+ * 本模块即崩溃——因此改为按需惰性获取。
+ */
+function getAutoUpdater() {
+	return updater.autoUpdater;
+}
 
 const INITIAL_CHECK_DELAY_MS = 30_000;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -66,18 +74,19 @@ export function initAppUpdater(send: SendEvent): void {
 
 	// 自动下载：checkForUpdates() 发现新版本后立即开始下载，无需用户点击。
 	// 下载完成后停留在 downloaded 阶段，由用户手动触发重启安装。
-	autoUpdater.autoDownload = true;
-	autoUpdater.autoInstallOnAppQuit = false;
+	const updaterApi = getAutoUpdater();
+	updaterApi.autoDownload = true;
+	updaterApi.autoInstallOnAppQuit = false;
 
-	autoUpdater.on("checking-for-update", () => emit("checking"));
-	autoUpdater.on("update-available", (info) => emit("available", { version: info.version }));
-	autoUpdater.on("update-not-available", () => emit("not-available"));
-	autoUpdater.on("download-progress", (progress) => emit("downloading", { percent: Math.round(progress.percent) }));
-	autoUpdater.on("update-downloaded", (info) => {
+	updaterApi.on("checking-for-update", () => emit("checking"));
+	updaterApi.on("update-available", (info) => emit("available", { version: info.version }));
+	updaterApi.on("update-not-available", () => emit("not-available"));
+	updaterApi.on("download-progress", (progress) => emit("downloading", { percent: Math.round(progress.percent) }));
+	updaterApi.on("update-downloaded", (info) => {
 		// 不再自动重启：下载完成仅通知渲染层，等待用户手动点击重启安装。
 		emit("downloaded", { version: info.version });
 	});
-	autoUpdater.on("error", (err) => emit("error", { error: err instanceof Error ? err.message : String(err) }));
+	updaterApi.on("error", (err) => emit("error", { error: err instanceof Error ? err.message : String(err) }));
 
 	setTimeout(() => {
 		void checkForUpdates();
@@ -92,7 +101,7 @@ export async function checkForUpdates(): Promise<{ success: boolean; error?: str
 	if (!app.isPackaged) return devError();
 	lastCheckAt = Date.now();
 	try {
-		await autoUpdater.checkForUpdates();
+		await getAutoUpdater().checkForUpdates();
 		return { success: true };
 	} catch (err) {
 		return { success: false, error: err instanceof Error ? err.message : String(err) };
@@ -102,7 +111,7 @@ export async function checkForUpdates(): Promise<{ success: boolean; error?: str
 export async function downloadUpdate(): Promise<{ success: boolean; error?: string }> {
 	if (!app.isPackaged) return devError();
 	try {
-		await autoUpdater.downloadUpdate();
+		await getAutoUpdater().downloadUpdate();
 		return { success: true };
 	} catch (err) {
 		return { success: false, error: err instanceof Error ? err.message : String(err) };
@@ -112,6 +121,6 @@ export async function downloadUpdate(): Promise<{ success: boolean; error?: stri
 export async function installUpdate(): Promise<{ success: boolean; error?: string }> {
 	if (!app.isPackaged) return devError();
 	// 用户手动点击重启更新：延迟到 IPC 响应送达渲染层后再退出安装
-	setImmediate(() => autoUpdater.quitAndInstall());
+	setImmediate(() => getAutoUpdater().quitAndInstall());
 	return { success: true };
 }

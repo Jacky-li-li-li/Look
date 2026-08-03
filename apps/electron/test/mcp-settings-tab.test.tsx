@@ -6,8 +6,8 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import McpServersTab from "../src/renderer/components/settings/McpServersTab";
 import i18n from "../src/renderer/i18n";
+import { appStore } from "../src/renderer/store/appStore";
 import { mcpStatusVersionAtom } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 
 describe("McpServersTab", () => {
 	const listMcpServers = vi.fn();

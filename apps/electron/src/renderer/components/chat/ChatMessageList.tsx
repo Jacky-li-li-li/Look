@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useScrollPositionManager } from "../../hooks/useScrollPositionMemory";
 import { buildTimeline, type TimelineItem } from "../../lib/timeline";
+import { appStore } from "../../store/appStore";
 import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
@@ -18,7 +19,6 @@ import {
 	sessionStateAtomFamily,
 } from "../../store/atoms";
 import { isLoggedInAtom, userProfileAtom } from "../../store/authAtoms";
-import { appStore } from "../../store/ipcHandler";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
 import { AiAvatar } from "../AiAvatar";
 import {

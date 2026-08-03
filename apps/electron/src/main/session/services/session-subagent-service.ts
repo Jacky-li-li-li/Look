@@ -19,6 +19,7 @@ import { SUBAGENT_TOOL_NAMES } from "../../extensions/subagent/types.js";
 import type { ProjectService } from "../../projects/project-service.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
+import { waitForPromptAccepted } from "../../utils/prompt-accepted.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
 import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
@@ -314,31 +315,22 @@ export class SessionSubagentService {
 				taskTitle,
 			);
 
-			await new Promise<void>((resolve, reject) => {
-				let accepted = false;
-				void session
-					.prompt(task, {
+			await waitForPromptAccepted(
+				(onPreflight) =>
+					session.prompt(task, {
 						source: "rpc",
 						streamingBehavior: session.isStreaming ? "followUp" : undefined,
-						preflightResult: (success) => {
-							if (!success || accepted) return;
-							accepted = true;
-							resolve();
-						},
-					})
-					.catch((error) => {
-						if (!accepted) {
-							reject(error);
-							return;
-						}
-						this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
-						this.deps.host.emit({
-							type: "error",
-							agentId: childSessionId,
-							message: error instanceof Error ? error.message : String(error),
-						});
+						preflightResult: onPreflight,
+					}),
+				(error) => {
+					this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
+					this.deps.host.emit({
+						type: "error",
+						agentId: childSessionId,
+						message: error instanceof Error ? error.message : String(error),
 					});
-			}).catch((error) => {
+				},
+			).catch((error) => {
 				this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
 				session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
 					...delegation,

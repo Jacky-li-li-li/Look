@@ -232,7 +232,6 @@ export function ensureLookDir(): void {
 	const projectsDir = path.join(LOOK_DIR, "projects");
 	fs.mkdirSync(projectsDir, { recursive: true });
 	fs.mkdirSync(getWorkspacesDir(), { recursive: true });
-	fs.mkdirSync(getSessionsDir(), { recursive: true });
 	fs.mkdirSync(getSharedAreasDir(), { recursive: true });
 }
 

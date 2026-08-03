@@ -59,6 +59,7 @@ import { PromptStore } from "../../settings/prompt-store.js";
 import { UserSettingsStore } from "../../settings/store.js";
 import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
+import { MAX_NAME_LENGTH } from "../constants.js";
 import { SessionEventBus } from "../events/session-event-bus.js";
 import { SessionEventEffects } from "../events/session-event-effects.js";
 import { SessionEventProcessor } from "../events/session-event-processor.js";
@@ -83,7 +84,6 @@ import { SkillManagementService } from "../services/skill-management-service.js"
 import { SubAgentRegistry } from "../subagent-registry.js";
 import { CompositionHost } from "./composition-host.js";
 
-const MAX_NAME_LENGTH = 80;
 const MAX_SUBAGENT_DEPTH = 5;
 
 /**

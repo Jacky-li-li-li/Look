@@ -8,8 +8,8 @@
 
 import { useAtomValue } from "jotai";
 import { useCallback } from "react";
+import { appStore } from "../store/appStore";
 import { appUpdateAtom } from "../store/atoms";
-import { appStore } from "../store/ipcHandler";
 
 const api = window.look;
 

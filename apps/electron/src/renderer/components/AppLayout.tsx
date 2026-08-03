@@ -6,7 +6,7 @@ import { ErrorBoundarySection } from "@look/ui/components/ErrorBoundary";
 import { Separator } from "@look/ui/components/ui/separator";
 import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
-import { lazy, memo, Suspense, useEffect } from "react";
+import { lazy, memo, type ReactNode, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { syncTrafficLightPosition } from "../lib/trafficLight";
 import {
@@ -166,6 +166,83 @@ function AppLayout({
 		return () => window.removeEventListener("resize", onResize);
 	}, [setRightPanelCollapsed, setSidebarCollapsed]);
 
+	// 主内容区视图枚举：新增视图只需加一个 case + 分支条件，避免在 JSX 里
+	// 叠嵌套三元（此前是 4 层三元，任何新增视图都要改整串条件）。
+	type MainView = "loading" | "scheduled" | "welcome" | "agent-square" | "chat";
+	const mainView: MainView =
+		appReadyPhase < 1
+			? "loading"
+			: showScheduledTasks
+				? "scheduled"
+				: projects.length === 0
+					? "welcome"
+					: showAgentSquare
+						? "agent-square"
+						: "chat";
+
+	const renderMainView = (): ReactNode => {
+		switch (mainView) {
+			case "loading":
+				return null;
+			case "scheduled":
+				return <ScheduledTasksPage />;
+			case "welcome":
+				return <WelcomeScreen onOpenProject={handleOpenProject} />;
+			case "agent-square":
+				return (
+					<Suspense
+						fallback={
+							<div
+								className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+								role="status"
+							>
+								{t("common.loading")}
+							</div>
+						}
+					>
+						<AgentSquare />
+					</Suspense>
+				);
+			case "chat":
+				return (
+					<>
+						<SessionSheetBar
+							agentIds={openedSessionIds}
+							agents={agents}
+							projects={projects}
+							activeAgentId={activeAgentId}
+							sidebarCollapsed={sidebarCollapsed}
+							rightPanelCollapsed={rightPanelCollapsed}
+							onSelect={handleSelectAgent}
+							onClose={handleCloseSessionSheet}
+							onReorder={handleReorderSessionSheets}
+						/>
+						{activeAgent ? (
+							<ChatPanel
+								agentId={activeAgent.id}
+								agentName={activeAgent.name}
+								sessionState={activeSessionState}
+								queue={activeQueue}
+								phase={activePhase}
+								currentModel={activeAgent.model}
+								currentThinking={activeAgent.thinkingLevel}
+								onSend={handleSendMessage}
+								onThinkingChange={handleThinkingChange}
+								onModelChange={handleModelChanged}
+								onAbort={handleAbortAgent}
+							/>
+						) : agents.length > 0 ? (
+							<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+								选择左侧会话查看消息
+							</div>
+						) : appReadyPhase >= 2 ? (
+							<EmptySessionState handleCreateClick={handleCreateClick} />
+						) : null}
+					</>
+				);
+		}
+	};
+
 	return (
 		<div
 			className="app-shell h-screen overflow-hidden bg-background"
@@ -187,61 +264,7 @@ function AppLayout({
 			<Separator orientation="vertical" className="sidebar-separator bg-transparent" />
 
 			<main className="flex min-w-[340px] flex-col overflow-hidden bg-background">
-				<ErrorBoundarySection>
-					{appReadyPhase < 1 ? null : showScheduledTasks ? (
-						<ScheduledTasksPage />
-					) : projects.length === 0 ? (
-						<WelcomeScreen onOpenProject={handleOpenProject} />
-					) : showAgentSquare ? (
-						<Suspense
-							fallback={
-								<div
-									className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
-									role="status"
-								>
-									{t("common.loading")}
-								</div>
-							}
-						>
-							<AgentSquare />
-						</Suspense>
-					) : (
-						<>
-							<SessionSheetBar
-								agentIds={openedSessionIds}
-								agents={agents}
-								projects={projects}
-								activeAgentId={activeAgentId}
-								sidebarCollapsed={sidebarCollapsed}
-								rightPanelCollapsed={rightPanelCollapsed}
-								onSelect={handleSelectAgent}
-								onClose={handleCloseSessionSheet}
-								onReorder={handleReorderSessionSheets}
-							/>
-							{activeAgent ? (
-								<ChatPanel
-									agentId={activeAgent.id}
-									agentName={activeAgent.name}
-									sessionState={activeSessionState}
-									queue={activeQueue}
-									phase={activePhase}
-									currentModel={activeAgent.model}
-									currentThinking={activeAgent.thinkingLevel}
-									onSend={handleSendMessage}
-									onThinkingChange={handleThinkingChange}
-									onModelChange={handleModelChanged}
-									onAbort={handleAbortAgent}
-								/>
-							) : agents.length > 0 ? (
-								<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-									选择左侧会话查看消息
-								</div>
-							) : appReadyPhase >= 2 ? (
-								<EmptySessionState handleCreateClick={handleCreateClick} />
-							) : null}
-						</>
-					)}
-				</ErrorBoundarySection>
+				<ErrorBoundarySection>{renderMainView()}</ErrorBoundarySection>
 			</main>
 
 			<RightPanel />

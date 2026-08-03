@@ -8,6 +8,7 @@
 
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
+import { waitForPromptAccepted } from "../../utils/prompt-accepted.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionMessagingHost {
@@ -46,23 +47,15 @@ export class SessionMessagingService {
 			}
 		}
 
-		await new Promise<void>((resolve, reject) => {
-			let accepted = false;
-			void session
-				.prompt(text, {
+		await waitForPromptAccepted(
+			(onPreflight) =>
+				session.prompt(text, {
 					images,
 					source: "rpc",
 					streamingBehavior: session.isStreaming ? (sendMode ?? "followUp") : undefined,
-					preflightResult: (success) => {
-						if (!success || accepted) return;
-						accepted = true;
-						resolve();
-					},
-				})
-				.catch((error) => {
-					if (!accepted) reject(error);
-					else this.host.emitError(error, sessionId);
-				});
-		});
+					preflightResult: onPreflight,
+				}),
+			(error) => this.host.emitError(error, sessionId),
+		);
 	}
 }

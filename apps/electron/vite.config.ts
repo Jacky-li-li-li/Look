@@ -43,7 +43,10 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
+			// 统一走源码而非 dist：与 tsconfig paths / vitest 对齐，
+			// 避免「类型看 src、运行跑 dist」的失同步（改包源码后 dev 即时生效）。
 			"@shared": path.resolve(__dirname, "../../packages/shared/src"),
+			"@look/ui": path.resolve(__dirname, "../../packages/ui/src"),
 		},
 	},
 	server: {

@@ -75,13 +75,15 @@ export function registerIpcHandlers(
 	ipcMain.removeAllListeners("look:event");
 
 	const workspaceFileService = composition.workspaceFileService;
+	if (!workspaceFileService) throw new Error("Workspace file service is not initialized");
 	// 重建窗口时先清旧 callback,避免 chokidar emit 同时打到新/旧 window(M-7)。
-	workspaceFileService?.clearEmitCallback();
-	workspaceFileService?.setEmitCallback((event) => rendererEvents.send(event));
+	workspaceFileService.clearEmitCallback();
+	workspaceFileService.setEmitCallback((event) => rendererEvents.send(event));
 
 	const workspaceTreeService = composition.workspaceTreeService;
-	workspaceTreeService?.clearEmitCallback();
-	workspaceTreeService?.setEmitCallback((event) => rendererEvents.send(event));
+	if (!workspaceTreeService) throw new Error("Workspace tree service is not initialized");
+	workspaceTreeService.clearEmitCallback();
+	workspaceTreeService.setEmitCallback((event) => rendererEvents.send(event));
 
 	// Forward session-scoped runtime events to the renderer.
 	const unsubscribeEvents = composition.eventBus.onEvent((event) => rendererEvents.send(event));
@@ -156,7 +158,7 @@ export function registerIpcHandlers(
 		scheduler: schedulerService,
 		skill: composition.skillManagementService,
 		settings: { prompts: composition.promptStore },
-	} as InvokeContext;
+	} satisfies InvokeContext;
 
 	// Build the dispatcher from all domain routers
 	const dispatcher = new InvokeDispatcher();

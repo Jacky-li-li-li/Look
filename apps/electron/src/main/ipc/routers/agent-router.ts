@@ -2,6 +2,7 @@
 // Agent router — session send/activate/create/destroy/abort
 // ============================================================
 
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@look/shared/types";
 import { guardAgentId, guardEnum, guardOptionalString, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
@@ -10,6 +11,35 @@ import { withTimeout } from "../with-timeout.js";
 
 /** 压缩最长等待时间（SDK compact 内部可能因 LLM 卡死而永不返回）。 */
 const COMPRESS_TIMEOUT_MS = 15 * 60 * 1000;
+
+/**
+ * ThinkingLevel 的合法取值（与 @look/shared 的 ThinkingLevel 类型同源）。
+ * 用 satisfies 从类型推导，避免字面量数组与类型重复漂移。
+ */
+const THINKING_LEVELS = [
+	"off",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max",
+] as const satisfies readonly ThinkingLevel[];
+
+/**
+ * 清空队列并按原顺序重放除 excludeText 外的消息。
+ * remove-queued-message 与 insert-queued-message 共用：insert 在重放后
+ * 再以 steer 插入新消息，保证队列顺序正确。
+ */
+async function replayQueue(session: AgentSession, excludeText?: string): Promise<void> {
+	const { steering, followUp } = session.clearQueue();
+	for (const t of steering) {
+		if (t !== excludeText) await session.steer(t);
+	}
+	for (const t of followUp) {
+		if (t !== excludeText) await session.followUp(t);
+	}
+}
 
 export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:send-message", async (data) => {
@@ -28,14 +58,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		return ctx.runtime.registry.withExclusive(_agentId, async () => {
 			const managed = ctx.session.info.getManagedRuntime(_agentId);
 			if (!managed) return { success: false, error: "Session not found" };
-			const session = managed.runtime.session;
-			const { steering, followUp } = session.clearQueue();
-			for (const t of steering) {
-				if (t !== data.text) await session.steer(t);
-			}
-			for (const t of followUp) {
-				if (t !== data.text) await session.followUp(t);
-			}
+			await replayQueue(managed.runtime.session, data.text);
 			return { success: true };
 		});
 	});
@@ -47,13 +70,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 			const managed = ctx.session.info.getManagedRuntime(_agentId);
 			if (!managed) return { success: false, error: "Session not found" };
 			const session = managed.runtime.session;
-			const { steering, followUp } = session.clearQueue();
-			for (const t of steering) {
-				if (t !== data.text) await session.steer(t);
-			}
-			for (const t of followUp) {
-				if (t !== data.text) await session.followUp(t);
-			}
+			await replayQueue(session, data.text);
 			await session.prompt(data.text, { streamingBehavior: "steer" });
 			return { success: true };
 		});
@@ -108,16 +125,8 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 
 	register("agent:update-thinking", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
-		const _level = guardEnum(data.level, "level", [
-			"off",
-			"minimal",
-			"low",
-			"medium",
-			"high",
-			"xhigh",
-			"max",
-		] as const);
-		await ctx.session.control.setThinkingLevel(_agentId, _level as ThinkingLevel);
+		const level = guardEnum(data.level, "level", THINKING_LEVELS);
+		await ctx.session.control.setThinkingLevel(_agentId, level);
 		return { success: true };
 	});
 

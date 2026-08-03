@@ -7,6 +7,7 @@
 import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useCallback } from "react";
 import { toast } from "sonner";
+import { appStore } from "../store/appStore";
 import {
 	activeAgentIdAtom,
 	openedSessionIdsAtom,
@@ -14,7 +15,6 @@ import {
 	sessionStateAtomFamily,
 	userPreferredModelAtom,
 } from "../store/atoms";
-import { appStore } from "../store/ipcHandler";
 import { markSessionSnapshotLoading } from "../store/snapshot";
 
 const api = window.look;

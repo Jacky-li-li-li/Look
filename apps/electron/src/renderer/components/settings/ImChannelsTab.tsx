@@ -502,33 +502,112 @@ function RecentMessageCard({ message }: { message: IncomingMessage }) {
 
 // ─── Main Component ─────────────────────────────────────────────
 
+// ─── grouped state types ────────────────────────────────────────
+
+interface ListState {
+	channels: ImChannelInfo[];
+	loading: boolean;
+	selectedChannelId: string | null;
+	sendingTest: boolean;
+	testResult: { success: boolean; message: string } | null;
+	recentMessage: IncomingMessage | null;
+}
+
+interface QrState {
+	showPanel: boolean;
+	registration: RegistrationState | null;
+	qrSvg: { viewBox?: string; nodes: ReactNode[] } | null;
+}
+
+interface ManualState {
+	connecting: boolean;
+	showPanel: boolean;
+	name: string;
+	form: { appId: string; appSecret: string };
+	showSecret: boolean;
+	testing: boolean;
+	testResult: { success: boolean; message: string } | null;
+	testPassed: boolean;
+}
+
+interface DetailState {
+	editName: string;
+	showSecret: boolean;
+	saving: boolean;
+}
+
 export default function ImChannelsTab() {
 	const { t } = useTranslation();
-	const [channels, setChannels] = useState<ImChannelInfo[]>([]);
-	const [loading, setLoading] = useState(false);
-	const [manualConnecting, setManualConnecting] = useState(false);
-	const [showQrPanel, setShowQrPanel] = useState(false);
-	const [showManualPanel, setShowManualPanel] = useState(false);
-	const [registration, setRegistration] = useState<RegistrationState | null>(null);
-	const [qrSvg, setQrSvg] = useState<{ viewBox?: string; nodes: ReactNode[] } | null>(null);
-	const [manualName, setManualName] = useState("");
-	const [manualForm, setManualForm] = useState({ appId: "", appSecret: "" });
-	const [showManualSecret, setShowManualSecret] = useState(false);
-	const [manualTesting, setManualTesting] = useState(false);
-	const [manualTestResult, setManualTestResult] = useState<{ success: boolean; message: string } | null>(null);
-	const [manualTestPassed, setManualTestPassed] = useState(false);
-	const [recentMessage, setRecentMessage] = useState<IncomingMessage | null>(null);
-	const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-	const [sendingTest, setSendingTest] = useState(false);
-	const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-	const [detailEditName, setDetailEditName] = useState("");
-	const [showDetailSecret, setShowDetailSecret] = useState(false);
-	const [saving, setSaving] = useState(false);
+
+	// ── grouped state (20 → 4 useState) ──
+	const [list, setList] = useState<ListState>({
+		channels: [],
+		loading: false,
+		selectedChannelId: null,
+		sendingTest: false,
+		testResult: null,
+		recentMessage: null,
+	});
+	const [qr, setQr] = useState<QrState>({
+		showPanel: false,
+		registration: null,
+		qrSvg: null,
+	});
+	const [manual, setManual] = useState<ManualState>({
+		connecting: false,
+		showPanel: false,
+		name: "",
+		form: { appId: "", appSecret: "" },
+		showSecret: false,
+		testing: false,
+		testResult: null,
+		testPassed: false,
+	});
+	const [detail, setDetail] = useState<DetailState>({
+		editName: "",
+		showSecret: false,
+		saving: false,
+	});
+
+	// ── patch helpers ──
+	// 支持函数式更新：patch(key, prev => ...) 时把 value 当函数调用，语义与 setX((prev) => ...) 一致
+	const patchList = useCallback(
+		<K extends keyof ListState>(key: K, value: ListState[K] | ((prev: ListState[K]) => ListState[K])) =>
+			setList((prev) => ({
+				...prev,
+				[key]: typeof value === "function" ? value(prev[key]) : value,
+			})),
+		[],
+	);
+	const patchQr = useCallback(
+		<K extends keyof QrState>(key: K, value: QrState[K] | ((prev: QrState[K]) => QrState[K])) =>
+			setQr((prev) => ({
+				...prev,
+				[key]: typeof value === "function" ? value(prev[key]) : value,
+			})),
+		[],
+	);
+	const patchManual = useCallback(
+		<K extends keyof ManualState>(key: K, value: ManualState[K] | ((prev: ManualState[K]) => ManualState[K])) =>
+			setManual((prev) => ({
+				...prev,
+				[key]: typeof value === "function" ? value(prev[key]) : value,
+			})),
+		[],
+	);
+	const patchDetail = useCallback(
+		<K extends keyof DetailState>(key: K, value: DetailState[K] | ((prev: DetailState[K]) => DetailState[K])) =>
+			setDetail((prev) => ({
+				...prev,
+				[key]: typeof value === "function" ? value(prev[key]) : value,
+			})),
+		[],
+	);
 
 	const qrUrlRef = useRef<string | undefined>(undefined);
 
-	const selectedChannel = selectedChannelId
-		? (channels.find((ch) => `${ch.provider}-${ch.appId}` === selectedChannelId) ?? null)
+	const selectedChannel = list.selectedChannelId
+		? (list.channels.find((ch) => `${ch.provider}-${ch.appId}` === list.selectedChannelId) ?? null)
 		: null;
 
 	const loadChannels = useCallback(async () => {
@@ -536,12 +615,12 @@ export default function ImChannelsTab() {
 		try {
 			const result = await api.getImChannels();
 			if (result?.success && Array.isArray(result.channels)) {
-				setChannels(result.channels as ImChannelInfo[]);
+				patchList("channels", result.channels as ImChannelInfo[]);
 			}
 		} catch (_err) {
 			toast.error(t("settings.imConnectionError"));
 		}
-	}, [t]);
+	}, [patchList, t]);
 
 	useEffect(() => {
 		loadChannels();
@@ -565,7 +644,7 @@ export default function ImChannelsTab() {
 					error?: string;
 					appId?: string;
 				};
-				setRegistration({
+				patchQr("registration", {
 					registrationId: update.registrationId,
 					phase: update.phase,
 					url: update.url,
@@ -576,9 +655,9 @@ export default function ImChannelsTab() {
 				if (update.phase === "success") {
 					toast.success(t("settings.feishuConnected"));
 					loadChannels();
-					setRegistration(null);
-					setQrSvg(null);
-					setShowQrPanel(false);
+					patchQr("registration", null);
+					patchQr("qrSvg", null);
+					patchQr("showPanel", false);
 				} else if (update.phase === "error") {
 					toast.error(update.error || t("settings.imConnectionError"));
 				}
@@ -590,7 +669,7 @@ export default function ImChannelsTab() {
 					appId?: string;
 					error?: string;
 				};
-				setChannels((prev) =>
+				patchList("channels", (prev) =>
 					prev.map((ch) =>
 						ch.provider === statusEvent.provider && ch.appId === statusEvent.appId
 							? {
@@ -604,114 +683,114 @@ export default function ImChannelsTab() {
 				);
 			} else if (type === "im:message-received") {
 				const msg = e as unknown as IncomingMessage & { type: string };
-				setRecentMessage(msg);
+				patchList("recentMessage", msg);
 			}
 		});
 		return unsubscribe;
-	}, [loadChannels, t]);
+	}, [loadChannels, patchList, patchQr, t]);
 
 	// Generate QR code when registration URL changes
 	useEffect(() => {
-		if (!registration?.url || registration.url === qrUrlRef.current) return;
-		qrUrlRef.current = registration.url;
+		if (!qr.registration?.url || qr.registration.url === qrUrlRef.current) return;
+		qrUrlRef.current = qr.registration.url;
 		let cancelled = false;
-		QRCode.toString(registration.url, {
+		QRCode.toString(qr.registration.url, {
 			type: "svg",
 			width: 200,
 			margin: 2,
 			color: { dark: "#000000", light: "#ffffff" },
 		})
 			.then((svg) => {
-				if (!cancelled) setQrSvg(_parseQrSvg(svg));
+				if (!cancelled) patchQr("qrSvg", _parseQrSvg(svg));
 			})
 			.catch((err) => {
 				console.error("[ImChannelsTab] Failed to generate QR code:", err);
-				if (!cancelled) setQrSvg(null);
+				if (!cancelled) patchQr("qrSvg", null);
 			});
 		return () => {
 			cancelled = true;
 		};
-	}, [registration?.url]);
+	}, [patchQr, qr.registration?.url]);
 
 	// QR countdown timer
 	useEffect(() => {
-		if (registration?.expireIn == null || registration.phase !== "qr") return;
+		if (qr.registration?.expireIn == null || qr.registration.phase !== "qr") return;
 		const interval = setInterval(() => {
-			setRegistration((prev) => {
+			patchQr("registration", (prev) => {
 				if (!prev || prev.expireIn == null || prev.expireIn <= 0) return prev;
 				return { ...prev, expireIn: prev.expireIn - 1 };
 			});
 		}, 1000);
 		return () => clearInterval(interval);
-	}, [registration?.expireIn, registration?.phase]);
+	}, [patchQr, qr.registration?.expireIn, qr.registration?.phase]);
 
 	// ─── Handlers ───────────────────────────────────────────
 
 	const handleQrConnect = async () => {
 		if (!api) return;
-		setLoading(true);
-		setShowQrPanel(true);
-		setShowManualPanel(false);
-		setRegistration(null);
-		setQrSvg(null);
+		patchList("loading", true);
+		patchQr("showPanel", true);
+		patchManual("showPanel", false);
+		patchQr("registration", null);
+		patchQr("qrSvg", null);
 		try {
 			const result = await api.connectFeishuChannel({
 				appName: "Look",
 				description: t("settings.defaultDesc"),
 			});
 			if (result?.success && result.registrationId) {
-				setRegistration({ registrationId: result.registrationId, phase: "polling" });
+				patchQr("registration", { registrationId: result.registrationId, phase: "polling" });
 			} else {
 				toast.error(t("settings.imConnectionError"));
-				setShowQrPanel(false);
+				patchQr("showPanel", false);
 			}
 		} catch (_err) {
 			toast.error(t("settings.imConnectionError"));
-			setShowQrPanel(false);
+			patchQr("showPanel", false);
 		} finally {
-			setLoading(false);
+			patchList("loading", false);
 		}
 	};
 
 	const handleManualTest = async () => {
 		if (!api) return;
-		setManualTesting(true);
-		setManualTestResult(null);
-		setManualTestPassed(false);
+		patchManual("testing", true);
+		patchManual("testResult", null);
+		patchManual("testPassed", false);
 		try {
-			const result = await api.testImConnectionDirect(manualForm.appId.trim(), manualForm.appSecret.trim());
+			const result = await api.testImConnectionDirect(manual.form.appId.trim(), manual.form.appSecret.trim());
 			if (result) {
-				setManualTestResult({
+				patchManual("testResult", {
 					success: result.success,
 					message: result.message ?? result.error ?? t("settings.testFailed"),
 				});
-				if (result.success) setManualTestPassed(true);
+				if (result.success) patchManual("testPassed", true);
 			}
 		} catch (_err) {
-			setManualTestResult({ success: false, message: t("settings.testFailed") });
+			patchManual("testResult", { success: false, message: t("settings.testFailed") });
 		} finally {
-			setManualTesting(false);
+			patchManual("testing", false);
 		}
 	};
 
 	const handleManualConnect = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!api) return;
-		setManualConnecting(true);
+		patchManual("connecting", true);
 		try {
-			const name = manualName.trim() || "Feishu";
+			const name = manual.name.trim() || "Feishu";
 			const result = await api.connectFeishuManualChannel({
-				appId: manualForm.appId.trim(),
-				appSecret: manualForm.appSecret.trim(),
+				appId: manual.form.appId.trim(),
+				appSecret: manual.form.appSecret.trim(),
 				name,
 			});
 			if (result?.success) {
 				toast.success(t("settings.feishuConnected"));
-				setManualForm({ appId: "", appSecret: "" });
-				setManualName("");
-				setManualTestResult(null);
-				setManualTestPassed(false);
-				setShowManualPanel(false);
+				patchManual("form", { appId: "", appSecret: "" });
+				patchManual("name", "");
+				patchManual("testResult", null);
+				patchManual("testPassed", false);
+				patchManual("showPanel", false);
 				await loadChannels();
 			} else {
 				toast.error(result?.error || t("settings.imConnectionError"));
@@ -719,7 +798,7 @@ export default function ImChannelsTab() {
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : t("settings.imConnectionError"));
 		} finally {
-			setManualConnecting(false);
+			patchManual("connecting", false);
 		}
 	};
 
@@ -742,7 +821,7 @@ export default function ImChannelsTab() {
 		if (!window.confirm(t("settings.confirmRemoveDesc"))) return;
 		try {
 			await api.removeImChannel(selectedChannel.provider, selectedChannel.appId);
-			setSelectedChannelId(null);
+			patchList("selectedChannelId", null);
 			await loadChannels();
 		} catch (_err) {
 			toast.error(t("settings.imConnectionError"));
@@ -751,33 +830,33 @@ export default function ImChannelsTab() {
 
 	const handleTestChannel = async () => {
 		if (!api || !selectedChannel) return;
-		setTestResult(null);
-		setSendingTest(true);
+		patchList("testResult", null);
+		patchList("sendingTest", true);
 		try {
 			const result = await api.testImConnection(selectedChannel.appId);
 			if (result) {
-				setTestResult({
+				patchList("testResult", {
 					success: result.success,
 					message: result.message ?? result.error ?? t("settings.testNoResponse"),
 				});
 			} else {
-				setTestResult({ success: false, message: t("settings.testNoResponse") });
+				patchList("testResult", { success: false, message: t("settings.testNoResponse") });
 			}
 		} catch (_err) {
-			setTestResult({ success: false, message: t("settings.connectionTestError") });
+			patchList("testResult", { success: false, message: t("settings.connectionTestError") });
 		} finally {
-			setSendingTest(false);
+			patchList("sendingTest", false);
 		}
 	};
 
 	const handleSaveChannel = async () => {
 		if (!api || !selectedChannel) return;
-		const newName = detailEditName.trim();
+		const newName = detail.editName.trim();
 		if (!newName) {
 			toast.error(t("settings.appNameRequired"));
 			return;
 		}
-		setSaving(true);
+		patchDetail("saving", true);
 		try {
 			await api.updateImChannel(selectedChannel.appId, { name: newName });
 			toast.success(t("settings.saved"));
@@ -785,37 +864,37 @@ export default function ImChannelsTab() {
 		} catch (_err) {
 			toast.error(t("settings.saveFailed"));
 		} finally {
-			setSaving(false);
+			patchDetail("saving", false);
 		}
 	};
 
 	const handleCancelRegistration = async () => {
-		if (!api || !registration?.registrationId) return;
+		if (!api || !qr.registration?.registrationId) return;
 		try {
-			await api.cancelFeishuRegistration(registration.registrationId);
+			await api.cancelFeishuRegistration(qr.registration.registrationId);
 		} catch (_err) {
 			// ignore
 		} finally {
-			setRegistration(null);
-			setQrSvg(null);
-			setShowQrPanel(false);
+			patchQr("registration", null);
+			patchQr("qrSvg", null);
+			patchQr("showPanel", false);
 		}
 	};
 
 	const openManualPanel = () => {
-		setShowManualPanel((prev) => !prev);
-		setShowQrPanel(false);
-		setRegistration(null);
-		setQrSvg(null);
-		setManualTestResult(null);
-		setManualTestPassed(false);
+		patchManual("showPanel", (prev) => !prev);
+		patchQr("showPanel", false);
+		patchQr("registration", null);
+		patchQr("qrSvg", null);
+		patchManual("testResult", null);
+		patchManual("testPassed", false);
 	};
 
 	const openDetail = (ch: ImChannelInfo) => {
 		const key = `${ch.provider}-${ch.appId}`;
-		setSelectedChannelId((prev) => (prev === key ? null : key));
-		setDetailEditName(ch.name ?? "");
-		setTestResult(null);
+		patchList("selectedChannelId", (prev) => (prev === key ? null : key));
+		patchDetail("editName", ch.name ?? "");
+		patchList("testResult", null);
 	};
 
 	return (
@@ -827,11 +906,11 @@ export default function ImChannelsTab() {
 					<p className="text-[11px] text-muted-foreground">{t("settings.imChannelsDescription")}</p>
 				</div>
 				<div className="flex items-center gap-2">
-					<Button size="sm" className="h-7 gap-1.5 text-[11px]" onClick={handleQrConnect} disabled={loading}>
-						{loading ? <Loader2 className="size-3.5 animate-spin" /> : <QrCode className="size-3.5" />}
+					<Button size="sm" className="h-7 gap-1.5 text-[11px]" onClick={handleQrConnect} disabled={list.loading}>
+						{list.loading ? <Loader2 className="size-3.5 animate-spin" /> : <QrCode className="size-3.5" />}
 						{t("settings.scanCreateFeishu")}
 					</Button>
-					<Button size="sm" className="h-7 gap-1.5 text-[11px]" onClick={openManualPanel} disabled={loading}>
+					<Button size="sm" className="h-7 gap-1.5 text-[11px]" onClick={openManualPanel} disabled={list.loading}>
 						<KeyRound className="size-3.5" />
 						{t("settings.manualConnectFeishu")}
 					</Button>
@@ -839,36 +918,36 @@ export default function ImChannelsTab() {
 			</div>
 
 			{/* ── QR Connect Panel (inline) ── */}
-			{showQrPanel && registration && (
-				<QrRegisterPanel registration={registration} qrSvg={qrSvg} onCancel={handleCancelRegistration} />
+			{qr.showPanel && qr.registration && (
+				<QrRegisterPanel registration={qr.registration} qrSvg={qr.qrSvg} onCancel={handleCancelRegistration} />
 			)}
 
 			{/* ── Manual Connect Panel (inline) ── */}
-			{showManualPanel && (
+			{manual.showPanel && (
 				<ManualConnectForm
-					appName={manualName}
-					onAppNameChange={setManualName}
-					appId={manualForm.appId}
-					onAppIdChange={(v) => setManualForm((prev) => ({ ...prev, appId: v }))}
-					appSecret={manualForm.appSecret}
-					onAppSecretChange={(v) => setManualForm((prev) => ({ ...prev, appSecret: v }))}
-					showSecret={showManualSecret}
-					onToggleSecret={() => setShowManualSecret((prev) => !prev)}
-					connecting={manualConnecting}
-					disabled={loading}
+					appName={manual.name}
+					onAppNameChange={(v) => patchManual("name", v)}
+					appId={manual.form.appId}
+					onAppIdChange={(v) => patchManual("form", (prev) => ({ ...prev, appId: v }))}
+					appSecret={manual.form.appSecret}
+					onAppSecretChange={(v) => patchManual("form", (prev) => ({ ...prev, appSecret: v }))}
+					showSecret={manual.showSecret}
+					onToggleSecret={() => patchManual("showSecret", (prev) => !prev)}
+					connecting={manual.connecting}
+					disabled={list.loading}
 					onSubmit={handleManualConnect}
-					onCancel={() => setShowManualPanel(false)}
+					onCancel={() => patchManual("showPanel", false)}
 					onTest={handleManualTest}
-					testing={manualTesting}
-					testResult={manualTestResult}
-					testPassed={manualTestPassed}
+					testing={manual.testing}
+					testResult={manual.testResult}
+					testPassed={manual.testPassed}
 				/>
 			)}
 
 			{/* ── Channel cards list ── */}
-			{channels.map((ch) => {
+			{list.channels.map((ch) => {
 				const cardKey = `${ch.provider}-${ch.appId}`;
-				const isDetailOpen = selectedChannelId === cardKey;
+				const isDetailOpen = list.selectedChannelId === cardKey;
 				return (
 					<div key={cardKey} className="space-y-2">
 						<ChannelCard
@@ -881,17 +960,17 @@ export default function ImChannelsTab() {
 						{isDetailOpen && selectedChannel && (
 							<ChannelDetailPanel
 								channel={selectedChannel}
-								onClose={() => setSelectedChannelId(null)}
+								onClose={() => patchList("selectedChannelId", null)}
 								onRemove={handleRemoveChannel}
 								onTest={handleTestChannel}
-								sendingTest={sendingTest}
-								testResult={testResult}
-								editName={detailEditName}
-								onNameChange={setDetailEditName}
-								showSecret={showDetailSecret}
-								onToggleSecret={() => setShowDetailSecret((prev) => !prev)}
+								sendingTest={list.sendingTest}
+								testResult={list.testResult}
+								editName={detail.editName}
+								onNameChange={(v) => patchDetail("editName", v)}
+								showSecret={detail.showSecret}
+								onToggleSecret={() => patchDetail("showSecret", (prev) => !prev)}
 								onSave={handleSaveChannel}
-								saving={saving}
+								saving={detail.saving}
 							/>
 						)}
 					</div>
@@ -899,7 +978,7 @@ export default function ImChannelsTab() {
 			})}
 
 			{/* ── Recent message ── */}
-			{recentMessage && <RecentMessageCard message={recentMessage} />}
+			{list.recentMessage && <RecentMessageCard message={list.recentMessage} />}
 		</div>
 	);
 }

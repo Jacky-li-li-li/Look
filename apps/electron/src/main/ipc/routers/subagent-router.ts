@@ -2,8 +2,14 @@
 // Subagent router — sub-session queries, agent definitions, skill toggles
 // ============================================================
 
-import { guardAgentDefinitionInput, guardAgentId, guardBoolean, guardString } from "../guards.js";
+import { guardAgentDefinitionInput, guardAgentId, guardBoolean, guardEnum, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
+
+/**
+ * agent-definitions:install 的合法安装来源（与 renderer-to-main 契约同步）。
+ * 目前仅支持内置来源；扩展其他来源时在此追加枚举即可。
+ */
+const INSTALL_SOURCES = ["builtin"] as const;
 
 export const subagentRouter: IpcRouter = (ctx, register) => {
 	register("agent:list-subagents", async (data) => {
@@ -47,6 +53,9 @@ export const subagentRouter: IpcRouter = (ctx, register) => {
 
 	register("agent-definitions:install", async (data) => {
 		guardString(data.name, "name");
+		// 安装来源目前仅支持内置（builtin）；字段由 renderer-to-main 契约强制携带，
+		// handler 必须校验而不是静默忽略——为将来扩展其他 source（npm/marketplace）留出枚举点。
+		guardEnum(data.source, "source", INSTALL_SOURCES);
 		const agent = await ctx.agent.definitions.installDefinition(data.name);
 		return { success: true, agent };
 	});

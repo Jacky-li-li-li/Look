@@ -15,12 +15,11 @@ import type { IPermissionService, IPlanService } from "../../core/contracts.js";
 import type { ProjectService } from "../../projects/project-service.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
+import { MAX_NAME_LENGTH } from "../constants.js";
 import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { StoredSession } from "./session-catalog.js";
 import type { SessionInfoService } from "./session-info-service.js";
-
-const MAX_NAME_LENGTH = 80;
 
 type AvailableModel = {
 	provider: string;

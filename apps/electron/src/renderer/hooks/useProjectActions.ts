@@ -6,8 +6,8 @@ import type { ProjectInfo } from "@shared/types";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { appStore } from "../store/appStore";
 import { activeAgentIdAtom, activeProjectIdAtom, pendingDeleteProjectAtom, projectsAtom } from "../store/atoms";
-import { appStore } from "../store/ipcHandler";
 
 const api = window.look;
 

@@ -143,8 +143,17 @@ export type IpcRouter = (ctx: InvokeContext, register: RegisterHandler) => void;
 export class InvokeDispatcher {
 	private handlers = new Map<string, InvokeHandler>();
 
+	/**
+	 * Every event type that has been registered. The contract-exhaustiveness
+	 * test (test/ipc-exhaustiveness.test.ts) installs all routers and asserts
+	 * this set covers the full RendererToMainEvent union, so a newly added
+	 * event without a handler fails CI instead of failing silently at runtime.
+	 */
+	readonly registeredTypes = new Set<string>();
+
 	register<T extends RendererToMainEvent["type"]>(type: T, handler: InvokeHandler<T>): void {
 		this.handlers.set(type, handler as unknown as InvokeHandler);
+		this.registeredTypes.add(type);
 	}
 
 	dispatch(data: RendererToMainEvent): unknown {

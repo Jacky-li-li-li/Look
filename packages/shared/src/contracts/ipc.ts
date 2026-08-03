@@ -16,6 +16,7 @@ import type {
 	ScheduledTaskRunLog,
 	ScheduledTaskTestResult,
 	TestCustomProviderResult,
+	ThinkingLevel,
 	UserProfile,
 	UserSettings,
 } from "../types.js";
@@ -102,7 +103,7 @@ export interface LookAPI {
 		timezone?: string,
 	): Promise<IpcResult<{ valid: boolean; error?: string; nextRunAt?: string }>>;
 	switchModel(agentId: string, model: string): Promise<IpcResult>;
-	updateThinking(agentId: string, level: string): Promise<IpcResult>;
+	updateThinking(agentId: string, level: ThinkingLevel): Promise<IpcResult>;
 	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
 	setEntryLabel(agentId: string, entryId: string, label: string | null): Promise<IpcResult>;
 	renameAgent(agentId: string, name: string): Promise<IpcResult>;
@@ -230,7 +231,9 @@ export interface LookAPI {
 	/** Open an OAuth URL in a controlled browser window, returns the final redirect URL. */
 	openOAuthUrl(url: string, redirectTo: string): Promise<IpcResult<{ redirectUrl: string }>>;
 	getUserProfile(): Promise<IpcResult<{ profile: UserProfile | null }>>;
-	updateUserProfile(patch: unknown): Promise<IpcResult>;
+	updateUserProfile(
+		patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>,
+	): Promise<IpcResult>;
 	resetUserProfile(): Promise<IpcResult>;
 	logout(): Promise<IpcResult>;
 	// ---- Shared area ----
@@ -363,11 +366,11 @@ export interface LookAPI {
 	setProjectActivePrompt(projectId: string, id: string): Promise<IpcResult>;
 	listMcpServers(): Promise<IpcResult<{ servers: unknown[] }>>;
 	listMcpTools(name: string): Promise<IpcResult<{ tools: unknown[] }>>;
-	addMcpServer(config: unknown): Promise<IpcResult>;
+	addMcpServer(config: Record<string, unknown>): Promise<IpcResult>;
 	removeMcpServer(name: string): Promise<IpcResult>;
 	testMcpServer(name: string): Promise<IpcResult<{ tools: unknown[]; error?: string }>>;
 	toggleMcpServer(name: string, enabled: boolean): Promise<IpcResult>;
-	updateMcpServer(name: string, config: unknown): Promise<IpcResult>;
+	updateMcpServer(name: string, config: Record<string, unknown>): Promise<IpcResult>;
 
 	// ---- Auto Updater ----
 	// 状态变化通过 onEvent 的 "update:status" 事件推送（AppUpdatePhase）

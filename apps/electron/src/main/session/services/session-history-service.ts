@@ -9,6 +9,7 @@
 import fs, { existsSync } from "node:fs";
 import { type AgentSessionRuntime, SessionManager, type SessionStartEvent } from "@earendil-works/pi-coding-agent";
 import type { ForkedSessionResult, NavigateTreeResult, SessionSnapshotEnvelope } from "@look/shared/types";
+import { MAX_NAME_LENGTH } from "../constants.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionHistoryHost {
@@ -76,7 +77,7 @@ export class SessionHistoryService {
 					{ type: "session_start", reason: "fork", previousSessionFile: sourceFile },
 				);
 				const session = forkedManaged.runtime.session;
-				if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, 80));
+				if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, MAX_NAME_LENGTH));
 				else this.host.markSessionDefaultName(session.sessionId);
 				if (!session.sessionFile) throw new Error("Forked session was not persisted");
 				await this.host.refreshProjectSessions(managed.projectId);

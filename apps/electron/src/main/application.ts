@@ -390,19 +390,19 @@ export class Application {
 		// 必须尽早注册，避免渲染进程加载完成后 IPC 尚未就绪的启动竞态。
 		this.bootstrapIM();
 
-		// Phase 3.5: Look Island controller（IPC 注册需要它，提前到 Phase 4 之前）
+		// Phase 4: Look Island controller（IPC 注册需要它，先于 Phase 5）
 		this.bootstrapLookIslandController();
 
-		// Phase 4: Register IPC early（渲染进程就绪信号在此之后发出）
+		// Phase 5: Register IPC early（渲染进程就绪信号在此之后发出）
 		this.registerIpcHandlersNow();
 
-		// Phase 4.5: Desktop notifications (after event bus + IPC are ready)
+		// Phase 6: Desktop notifications (after event bus + IPC are ready)
 		this.bootstrapDesktopNotifier();
 
-		// Phase 4.6: Look Island (macOS native notch panel; safe no-op elsewhere)
+		// Phase 7: Look Island (macOS native notch panel; safe no-op elsewhere)
 		this.bootstrapLookIsland();
 
-		// Phase 5: Load persisted data
+		// Phase 8: Load persisted data
 		await this.services.runtimeManager!.loadProjects();
 		await this.services.runtimeManager!.recoverOrphanedProjects().catch((error) => {
 			console.error("[Look] Orphaned project recovery failed:", error);
@@ -410,10 +410,10 @@ export class Application {
 
 		if (!this.services.mainWindow) return;
 
-		// Phase 6: Restore workspace + push initial state
+		// Phase 9: Restore workspace + push initial state
 		await this.bootstrapStartupSequence();
 
-		// Phase 7: Sync built-in skills and agents
+		// Phase 10: Sync built-in skills and agents
 		await this.syncBuiltinResources();
 	}
 
@@ -519,7 +519,7 @@ export class Application {
 		};
 	}
 
-	// ── Phase 4: IM channels ──
+	// ── Phase 3: IM channels ──
 
 	private bootstrapIM(): void {
 		this.services.larkChannelManager = new LarkChannelManager(this.rendererEvents);
@@ -528,7 +528,7 @@ export class Application {
 		this.services.larkChannelManager.onConnectionClosed = (appId) => this.detachLarkBridge(appId);
 	}
 
-	// ── Phase 4: IPC registration（提前到耗时初始化之前）──
+	// ── Phase 5: IPC registration（提前到耗时初始化之前）──
 
 	/**
 	 * 两个条件都满足时发 app:ready：IPC 已注册 && 渲染进程已加载（onEvent 就绪）。
@@ -558,7 +558,35 @@ export class Application {
 		console.log("[Look] IPC handlers registered");
 	}
 
-	// ── Phase 4.5: Desktop notifications ──
+	/**
+	 * 窗口重建后的 IPC/状态恢复（macOS activate 关窗后重开时调用）。
+	 * 复用 registerIpcHandlersNow 的注册+就绪信号，并重放当前项目/会话
+	 * 状态到新窗口——此前这段逻辑在 activate 回调里整段复制了一份，
+	 * 与首次启动路径存在漂移风险。
+	 */
+	private rebindWindowAndIpc(): void {
+		this.registerIpcHandlersNow();
+		this.services.larkChannelManager?.setMainWindow(this.services.mainWindow!);
+		const allProjects = this.services.runtimeManager!.listProjects();
+		const activeProject = this.services.runtimeManager!.getActiveProject();
+		this.safeSendEvent({
+			type: "project:list" as const,
+			projects: allProjects,
+			activeProjectId: activeProject?.id ?? null,
+		});
+		for (const project of allProjects) {
+			const agents = this.services.runtimeManager!.listAgentsInProject(project.id);
+			if (agents.length > 0) {
+				this.safeSendEvent({
+					type: "agent:list" as const,
+					projectId: project.id,
+					agents,
+				});
+			}
+		}
+	}
+
+	// ── Phase 6: Desktop notifications ──
 
 	private bootstrapDesktopNotifier(): void {
 		if (!this.services.runtimeManager || this.services.desktopNotifier) return;
@@ -637,7 +665,7 @@ export class Application {
 		}
 	}
 
-	// ── Phase 5: Workspace restore + service initialize ──
+	// ── Phase 9: Workspace restore + service initialize ──
 
 	private async bootstrapStartupSequence(): Promise<void> {
 		this.bootstrapLarkBridge();
@@ -666,7 +694,7 @@ export class Application {
 		});
 	}
 
-	// ── Phase 6: Built-in resources ──
+	// ── Phase 10: Built-in resources ──
 
 	private async syncBuiltinResources(): Promise<void> {
 		const bundledResourceRoot = getBundledResourceRoot({
@@ -792,35 +820,7 @@ export class Application {
 			if (BrowserWindow.getAllWindows().length === 0) {
 				this.createWindow();
 				if (this.services.mainWindow && this.services.runtimeManager) {
-					registerIpcHandlers(
-						this.services.runtimeManager.composition,
-						this.services.mainWindow,
-						this.rendererEvents,
-						this.services.larkChannelManager ?? undefined,
-						this.services.larkBridgeService ?? undefined,
-						this.services.schedulerService ?? undefined,
-						this.lookIslandController,
-					);
-					this._ipcRegistered = true;
-					this.maybeSendAppReady();
-					this.services.larkChannelManager?.setMainWindow(this.services.mainWindow);
-					const allProjects = this.services.runtimeManager.listProjects();
-					const activeProject = this.services.runtimeManager.getActiveProject();
-					this.safeSendEvent({
-						type: "project:list" as const,
-						projects: allProjects,
-						activeProjectId: activeProject?.id ?? null,
-					});
-					for (const project of allProjects) {
-						const agents = this.services.runtimeManager.listAgentsInProject(project.id);
-						if (agents.length > 0) {
-							this.safeSendEvent({
-								type: "agent:list" as const,
-								projectId: project.id,
-								agents,
-							});
-						}
-					}
+					this.rebindWindowAndIpc();
 				}
 			}
 		});

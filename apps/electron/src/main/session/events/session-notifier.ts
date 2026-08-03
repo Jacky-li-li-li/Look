@@ -108,7 +108,12 @@ export class SessionNotifier {
 			};
 
 			// On activation, send the most recent messages first so the chat area
-			// renders quickly, then follow up with the full history.
+			// renders quickly, then follow up with the full history. The deferred
+			// full snapshot deliberately reuses the SAME sequence: the renderer
+			// (snapshot.ts) drops only strictly-older sequences (`<`), so the
+			// equal-sequence full snapshot is applied and replaces the partial.
+			// Do NOT bump the sequence here or "fix" the renderer to `<=` —
+			// that would drop the full history and leave the chat stuck at 100.
 			const PARTIAL_SIZE = 100;
 			const usePartial = reason === "activate" && allEntries.length > PARTIAL_SIZE;
 			const entries = usePartial ? allEntries.slice(-PARTIAL_SIZE) : allEntries;

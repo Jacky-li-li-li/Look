@@ -6,6 +6,7 @@ import { Provider, useAtomValue } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PlanApprovalDialog from "../src/renderer/components/dialogs/PlanApprovalDialog";
 import PlanQuestionDialog from "../src/renderer/components/dialogs/PlanQuestionDialog";
+import { appStore } from "../src/renderer/store/appStore";
 import {
 	activeAgentIdAtom,
 	agentsAtom,
@@ -15,7 +16,6 @@ import {
 	planQuestionDraftAtomFamily,
 	planQuestionRequestAtomFamily,
 } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 
 const usage = {
 	inputTokens: 0,

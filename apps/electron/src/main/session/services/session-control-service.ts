@@ -8,6 +8,7 @@
 import type { ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { SessionSnapshotEnvelope, ThinkingLevel } from "@look/shared/types";
 import type { ISessionScopeRegistry } from "../../core/contracts.js";
+import { MAX_NAME_LENGTH } from "../constants.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionControlHost {
@@ -26,7 +27,7 @@ export class SessionControlService {
 		private readonly host: SessionControlHost,
 		private readonly modelRegistry: Pick<ModelRegistry, "find">,
 		private readonly scopeRegistry: Pick<ISessionScopeRegistry, "get">,
-		private readonly maxNameLength = 80,
+		private readonly maxNameLength = MAX_NAME_LENGTH,
 	) {}
 
 	async setModel(sessionId: string, modelKey: string): Promise<void> {

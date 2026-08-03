@@ -9,6 +9,7 @@ import { ChevronsDownUp, ChevronsUpDown, Plus } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { appStore } from "../../store/appStore";
 import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
@@ -23,7 +24,6 @@ import {
 	showScheduledTasksAtom,
 	showSettingsAtom,
 } from "../../store/atoms";
-import { appStore } from "../../store/ipcHandler";
 import ProjectHeader from "./ProjectHeader";
 import SessionRow from "./SessionRow";
 import type { ChildSessionInfo, ProjectTreeProps } from "./types";

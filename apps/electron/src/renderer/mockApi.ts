@@ -6,6 +6,9 @@
 // 让渲染层能独立运行以便前端开发调试。
 // ============================================================
 
+import type { IpcResult, LookAPI } from "@shared/contracts/ipc";
+import type { MainToRendererEvent, ScheduledTask } from "@shared/types";
+
 const noop = () => {};
 
 const mockScenario = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mock") : null;
@@ -17,15 +20,15 @@ const MOCK_SESSION_ID = "dev-chat-session";
 let mockSnapshotSequence = 0;
 
 /** 泛型成功响应 */
-function success<T>(data: T) {
+function success<T extends object>(data: T): Promise<IpcResult<T>> {
 	return Promise.resolve({ success: true, ...data });
 }
 
 /** 空成功响应 */
-const ok = Promise.resolve({ success: true });
+const ok = Promise.resolve({ success: true }) as Promise<IpcResult>;
 
 /** IPC 事件监听器 */
-const listeners = new Set<(event: unknown) => void>();
+const listeners = new Set<(event: MainToRendererEvent) => void>();
 
 const mockUsage = {
 	input: 640,
@@ -92,7 +95,7 @@ let mockEntries: unknown[] = [
 	},
 ];
 
-function emit(event: unknown): void {
+function emit(event: MainToRendererEvent): void {
 	for (const listener of listeners) listener(event);
 }
 
@@ -111,6 +114,7 @@ function mockRuntime() {
 }
 
 function emitMockSnapshot(reason: "activate" | "agent_end" = "activate"): void {
+	// DEV-only mock：entries/runtime 用 unknown 填充，绕过会话快照的完整类型约束
 	emit({
 		type: "session:snapshot",
 		sessionId: MOCK_SESSION_ID,
@@ -119,11 +123,11 @@ function emitMockSnapshot(reason: "activate" | "agent_end" = "activate"): void {
 		leafId: "mock-assistant-1",
 		entries: mockEntries,
 		runtime: mockRuntime(),
-	});
+	} as unknown as MainToRendererEvent);
 }
 
 function emitUiEvents(events: unknown[]): void {
-	emit({ type: "session:ui-event", sessionId: MOCK_SESSION_ID, events });
+	emit({ type: "session:ui-event", sessionId: MOCK_SESSION_ID, events } as unknown as MainToRendererEvent);
 }
 
 function runMockStream(message: string): void {
@@ -212,19 +216,20 @@ function runMockStream(message: string): void {
 	}, doneAt + 180);
 }
 
-const mockApi = {
-	homedir: "/Users/jacky",
+const mockApi: LookAPI = {
+	homedir: "",
+	platform: "darwin",
 
 	send: noop,
 
 	invoke: () => Promise.resolve({ success: true }),
 
-	onEvent: (callback: (event: unknown) => void) => {
+	onEvent: (callback: (event: MainToRendererEvent) => void) => {
 		listeners.add(callback);
 		// 模拟主进程就绪：让 waitForAppReady 立即放行，避免 mock 模式
 		// 白白等待 2s 超时（mock 的 invoke 恒成功，无需真实就绪信号）。
 		queueMicrotask(() => {
-			callback({ type: "app:ready" } as unknown);
+			callback({ type: "app:ready" } as MainToRendererEvent);
 		});
 		return () => {
 			listeners.delete(callback);
@@ -241,11 +246,13 @@ const mockApi = {
 		if (mockScenario === "chat") runMockStream(message);
 		return ok;
 	},
+	removeQueuedMessage: () => ok,
+	insertQueuedMessage: () => ok,
 	activateSession: (sessionId: string) => {
 		if (mockScenario === "chat" && sessionId === MOCK_SESSION_ID) queueMicrotask(() => emitMockSnapshot());
 		return ok;
 	},
-	createAgent: () => ok,
+	createAgent: () => success({ agentId: MOCK_SESSION_ID }),
 	destroyAgent: () => ok,
 	abortAgent: () => ok,
 	switchModel: () => ok,
@@ -258,11 +265,11 @@ const mockApi = {
 
 	// ---- Scheduled tasks ----
 	listScheduledTasks: () => success({ tasks: [] }),
-	createScheduledTask: () => success({ task: null }),
-	updateScheduledTask: () => success({ task: null }),
-	startScheduledTask: () => success({ task: null }),
-	pauseScheduledTask: () => success({ task: null }),
-	resumeScheduledTask: () => success({ task: null }),
+	createScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
+	updateScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
+	startScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
+	pauseScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
+	resumeScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
 	deleteScheduledTask: () => ok,
 	runScheduledTaskNow: () => success({ accepted: true }),
 	testScheduledTask: () =>
@@ -314,14 +321,15 @@ const mockApi = {
 			customProviders: [],
 			customStats: { configured: 0, totalModels: 0 },
 		}),
-	getApiKey: (_provider?: string, _opts?: { reveal?: boolean }) =>
-		Promise.resolve({ success: true, key: "", masked: false }),
-	testApiKey: () => Promise.resolve({ success: true, valid: false }),
-	testEnvKey: () => Promise.resolve({ success: true, valid: false }),
-	setApiKey: () => ok,
+	getApiKey: (_provider?: string, _opts?: { reveal?: boolean }) => success({ key: "", masked: false }),
+	testApiKey: () => Promise.resolve({ success: true, result: { ok: true } }),
+	testEnvKey: () => success({ result: {} }),
+	setApiKey: () => success({ providers: [], customProviders: [], customStats: { configured: 0, totalModels: 0 } }),
 	getGeneralSettings: () =>
 		success({
-			settings: mockScenario === "chat" ? { openedSessionIds: [MOCK_SESSION_ID], themeTone: mockTone } : {},
+			settings: (mockScenario === "chat"
+				? { openedSessionIds: [MOCK_SESSION_ID], themeTone: mockTone }
+				: {}) as unknown as import("@shared/types").UserSettings,
 		}),
 	setGeneralSettings: () => ok,
 	resetGeneralSettings: () => ok,
@@ -329,13 +337,13 @@ const mockApi = {
 	// ---- Custom providers ----
 	addCustomProvider: () => ok,
 	updateCustomProvider: () => ok,
-	removeCustomProvider: () => ok,
+	removeCustomProvider: () => success({ removed: true }),
 	listCustomProviders: () => success({ providers: [] }),
-	testCustomProvider: () => ok,
+	testCustomProvider: () => success({ result: {} as unknown as import("@shared/types").TestCustomProviderResult }),
 
 	// ---- Skills ----
 	listSkills: () => success({ skills: [] }),
-	importSkillPaths: () => ok,
+	importSkillPaths: () => Promise.resolve({ success: true, importedCount: 0 }),
 	detectCommonSkillPaths: () => success({ paths: [] }),
 
 	// ---- MCP ----
@@ -344,7 +352,7 @@ const mockApi = {
 	listMcpTools: () => success({ tools: [] }),
 	addMcpServer: () => ok,
 	removeMcpServer: () => ok,
-	testMcpServer: () => ok,
+	testMcpServer: () => success({ tools: [] }),
 	toggleMcpServer: () => ok,
 	updateMcpServer: () => ok,
 
@@ -373,16 +381,26 @@ const mockApi = {
 			],
 			activeProjectId: "dev-browser",
 		}),
-	createProject: () => ok,
+	createProject: () =>
+		success({
+			project: {
+				id: "dev-browser",
+				name: "pi (浏览器预览)",
+				cwd: "/Users/jacky/Desktop/pi",
+				createdAt: Date.now(),
+				valid: true,
+			},
+			isDuplicate: false,
+		}),
 	switchProject: () => ok,
 	renameProject: () => ok,
 	deleteProject: () => ok,
 	confirmDeleteProject: () => ok,
-	getActiveProject: () => success({ projectId: "dev-browser" }),
+	getActiveProject: () => success({ project: null }),
 
 	// ---- Session tree ----
-	navigateTree: () => ok,
-	createFork: () => ok,
+	navigateTree: () => success({ result: { cancelled: true } }),
+	createFork: () => success({ agentId: MOCK_SESSION_ID, sessionFilePath: "" }),
 	setEntryLabel: () => ok,
 
 	// ---- Shared area ----
@@ -424,7 +442,7 @@ const mockApi = {
 	setSkillEnabled: () => ok,
 
 	// ---- User Profile ----
-	getUserProfile: () => Promise.resolve({ success: true, profile: null }),
+	getUserProfile: () => success({ profile: null }),
 	updateUserProfile: () => ok,
 	resetUserProfile: () => ok,
 	logout: () => ok,
@@ -457,6 +475,25 @@ const mockApi = {
 	updateProjectPrompt: () => ok,
 	deleteProjectPrompt: () => ok,
 	setProjectActivePrompt: () => ok,
+
+	// ---- 补齐的 LookAPI 契约方法（DEV mock 桩，与 preload 保持同构） ----
+	abortCompressSession: () => ok,
+	getLookIslandSettings: () => Promise.resolve({ success: true }),
+	setLookIslandEnabled: () => Promise.resolve({ success: true }),
+	openOAuthUrl: () => success({ redirectUrl: "" }),
+	readFileContent: () => success({ kind: "binary", sizeBytes: 0 }),
+	writeFileContent: () => success({ sizeBytes: 0 }),
+	statFilePath: () => success({ kind: "missing" }),
+	openFileViewer: () => Promise.resolve({ success: true }),
+	fileViewerReady: () => Promise.resolve({ success: true, path: null }),
+	providerLogin: () => success({ providers: [], customProviders: [], customStats: { configured: 0, totalModels: 0 } }),
+	respondLoginPrompt: () => ok,
+	cancelLoginPrompt: () => ok,
+	providerLogout: () =>
+		success({ providers: [], customProviders: [], customStats: { configured: 0, totalModels: 0 } }),
+	checkForUpdates: () => Promise.resolve({ success: true }),
+	downloadUpdate: () => Promise.resolve({ success: true }),
+	installUpdate: () => Promise.resolve({ success: true }),
 };
 
 // 模块导入时自动注入，确保在 App.tsx 等模块加载前 window.look 已就绪
@@ -465,6 +502,3 @@ if (import.meta.env.DEV && typeof window !== "undefined" && !window.look) {
 	(window as unknown as Record<string, unknown>).look = mockApi;
 	console.log("[Look Mock] 浏览器开发模式：window.look mock 已注入");
 }
-
-// 确保 TypeScript 将此文件视为模块（必须有至少一个 export）
-export {};

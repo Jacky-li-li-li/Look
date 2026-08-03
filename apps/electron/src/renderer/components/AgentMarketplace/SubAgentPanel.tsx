@@ -22,13 +22,13 @@ import {
 	agentSearchTextAtom,
 	subagentSourceTabAtom,
 } from "../../store/agentDefinitionsAtoms";
+import { appStore } from "../../store/appStore";
 import {
 	chatInputInsertRequestAtom,
 	enabledAgentDefinitionsAtom,
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
 } from "../../store/atoms";
-import { appStore } from "../../store/ipcHandler";
 import AgentCard from "./AgentCard";
 import AgentEditor from "./AgentEditor";
 import { useToggleEnabled } from "./useToggleEnabled";

@@ -23,6 +23,10 @@ import {
  * that follows a partial one must not clobber streaming state produced by a
  * newer turn, so any snapshot whose sequence is older than the last applied
  * one is dropped.
+ *
+ * NOTE: comparison is strict `<` (equal sequence IS applied). SessionNotifier
+ * emits the partial and the deferred full snapshot with the SAME sequence —
+ * the equal-sequence full snapshot must replace the partial, not be dropped.
  */
 const lastAppliedSnapshotSequence = new Map<string, number>();
 

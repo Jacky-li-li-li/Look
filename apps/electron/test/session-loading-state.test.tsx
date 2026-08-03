@@ -16,8 +16,8 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatMessageList from "../src/renderer/components/chat/ChatMessageList";
 import i18n from "../src/renderer/i18n";
+import { appStore } from "../src/renderer/store/appStore";
 import { sessionStateAtomFamily } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 import { emptyRendererSessionState, type RendererSessionPhase } from "../src/renderer/store/sessionTypes";
 import { applySnapshot, markSessionSnapshotLoading } from "../src/renderer/store/snapshot";
 

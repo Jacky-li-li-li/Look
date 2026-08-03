@@ -6,8 +6,8 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ScheduledTasksPage from "../src/renderer/components/scheduler/ScheduledTasksPage";
 import i18n from "../src/renderer/i18n";
+import { appStore } from "../src/renderer/store/appStore";
 import { showScheduledTasksAtom } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 
 describe("ScheduledTasksPage", () => {
 	const listScheduledTasks = vi.fn();

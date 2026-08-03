@@ -11,6 +11,7 @@ import { Bot, Clock3, FolderOpen, MessageSquarePlus, PanelLeftClose, PanelLeftOp
 import { memo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { appStore } from "../../store/appStore";
 import {
 	activeProjectAtom,
 	rightPanelCollapsedAtom,
@@ -21,7 +22,6 @@ import {
 	sidebarCollapsedAtom,
 } from "../../store/atoms";
 import { userProfileAtom } from "../../store/authAtoms";
-import { appStore } from "../../store/ipcHandler";
 import ProjectTree from "./ProjectTree";
 import TopUpdateButton from "./TopUpdateButton";
 import type { SidebarProps } from "./types";

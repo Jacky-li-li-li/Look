@@ -14,6 +14,7 @@ import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Sidebar from "../src/renderer/components/Sidebar";
 import i18n from "../src/renderer/i18n";
+import { appStore } from "../src/renderer/store/appStore";
 import {
 	activeAgentIdAtom,
 	activeProjectIdAtom,
@@ -24,7 +25,6 @@ import {
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
 } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 
 class ResizeObserverMock {
 	observe(): void {}

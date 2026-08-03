@@ -8,6 +8,7 @@ import { PanelRightClose } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { appStore } from "../../store/appStore";
 import {
 	activeProjectAtom,
 	rightPanelCollapsedAtom,
@@ -15,7 +16,6 @@ import {
 	sharedFilesAtomFamily,
 	sharedFilesLoadingAtomFamily,
 } from "../../store/atoms";
-import { appStore } from "../../store/ipcHandler";
 import { SharedAreaPanel } from "./SharedAreaPanel";
 import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
 

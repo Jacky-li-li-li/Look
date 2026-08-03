@@ -1,5 +1,5 @@
 import type { LookAPI } from "@look/shared/contracts/ipc" with { "resolution-mode": "import" };
-import type { MainToRendererEvent } from "@look/shared/types" with { "resolution-mode": "import" };
+import type { MainToRendererEvent, RendererToMainEvent } from "@look/shared/types" with { "resolution-mode": "import" };
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 // ============================================================
@@ -9,6 +9,14 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 // No legacy `window.harness` alias remains; all renderer code
 // must consume the API through `window.look`.
 // ============================================================
+
+/**
+ * 类型化 invoke：载荷按 RendererToMainEvent union 做编译期校验。
+ * 方法体内拼错/漏传字段会在构建时报错，而不是运行期静默失败。
+ * （`api: LookAPI` 只校验方法签名，校验不了方法体里的载荷。）
+ */
+const invoke = <T extends RendererToMainEvent["type"]>(payload: Extract<RendererToMainEvent, { type: T }>) =>
+	ipcRenderer.invoke("look:invoke", payload);
 
 const api: LookAPI = {
 	// User home directory, exposed as a sync constant so the renderer can
@@ -33,128 +41,114 @@ const api: LookAPI = {
 	},
 
 	sendMessage: (agentId, message, images, sendMode) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent:send-message", agentId, message, images, sendMode }),
+		invoke({ type: "agent:send-message", agentId, message, images, sendMode }),
 
-	removeQueuedMessage: (agentId, text) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent:remove-queued-message", agentId, text }),
+	removeQueuedMessage: (agentId, text) => invoke({ type: "agent:remove-queued-message", agentId, text }),
 
-	insertQueuedMessage: (agentId, text) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent:insert-queued-message", agentId, text }),
+	insertQueuedMessage: (agentId, text) => invoke({ type: "agent:insert-queued-message", agentId, text }),
 
 	activateSession: (sessionId, opts) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "agent:activate",
 			agentId: sessionId,
 			skipSnapshot: opts?.skipSnapshot,
 		}),
 
 	createAgent: (input) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "agent:create",
 			name: typeof input === "string" ? input : input?.name,
 			projectId: typeof input === "object" ? input?.projectId : undefined,
 			imProvider: typeof input === "object" ? input?.imProvider : undefined,
 		}),
 
-	destroyAgent: (agentId) => ipcRenderer.invoke("look:invoke", { type: "agent:destroy", agentId }),
+	destroyAgent: (agentId) => invoke({ type: "agent:destroy", agentId }),
 
-	abortAgent: (agentId) => ipcRenderer.invoke("look:invoke", { type: "agent:abort", agentId }),
+	abortAgent: (agentId) => invoke({ type: "agent:abort", agentId }),
 
-	getModels: () => ipcRenderer.invoke("look:invoke", { type: "model:list" }),
+	getModels: () => invoke({ type: "model:list" }),
 
-	getProviders: () => ipcRenderer.invoke("look:invoke", { type: "model:providers" }),
+	getProviders: () => invoke({ type: "model:providers" }),
 
-	getAgents: () => ipcRenderer.invoke("look:invoke", { type: "agents:list" }),
+	getAgents: () => invoke({ type: "agents:list" }),
 
 	// ---- Scheduled tasks ----
-	listScheduledTasks: () => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:list" }),
-	createScheduledTask: (task) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:create", task }),
-	updateScheduledTask: (taskId, patch) =>
-		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:update", taskId, patch }),
-	startScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:start", taskId }),
-	pauseScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:pause", taskId }),
-	resumeScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:resume", taskId }),
-	deleteScheduledTask: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:delete", taskId }),
-	runScheduledTaskNow: (taskId) => ipcRenderer.invoke("look:invoke", { type: "scheduled-task:run-now", taskId }),
-	testScheduledTask: (task, taskId) =>
-		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:test", task, taskId }),
-	listScheduledTaskLogs: (taskId, limit) =>
-		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:logs", taskId, limit }),
-	validateCron: (cron, timezone) =>
-		ipcRenderer.invoke("look:invoke", { type: "scheduled-task:validate-cron", cron, timezone }),
+	listScheduledTasks: () => invoke({ type: "scheduled-task:list" }),
+	createScheduledTask: (task) => invoke({ type: "scheduled-task:create", task }),
+	updateScheduledTask: (taskId, patch) => invoke({ type: "scheduled-task:update", taskId, patch }),
+	startScheduledTask: (taskId) => invoke({ type: "scheduled-task:start", taskId }),
+	pauseScheduledTask: (taskId) => invoke({ type: "scheduled-task:pause", taskId }),
+	resumeScheduledTask: (taskId) => invoke({ type: "scheduled-task:resume", taskId }),
+	deleteScheduledTask: (taskId) => invoke({ type: "scheduled-task:delete", taskId }),
+	runScheduledTaskNow: (taskId) => invoke({ type: "scheduled-task:run-now", taskId }),
+	testScheduledTask: (task, taskId) => invoke({ type: "scheduled-task:test", task, taskId }),
+	listScheduledTaskLogs: (taskId, limit) => invoke({ type: "scheduled-task:logs", taskId, limit }),
+	validateCron: (cron, timezone) => invoke({ type: "scheduled-task:validate-cron", cron, timezone }),
 
-	switchModel: (agentId, model) => ipcRenderer.invoke("look:invoke", { type: "agent:switch-model", agentId, model }),
+	switchModel: (agentId, model) => invoke({ type: "agent:switch-model", agentId, model }),
 
-	updateThinking: (agentId, level) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent:update-thinking", agentId, level }),
+	updateThinking: (agentId, level) => invoke({ type: "agent:update-thinking", agentId, level }),
 
-	getSettings: () => ipcRenderer.invoke("look:invoke", { type: "settings:get" }),
+	getSettings: () => invoke({ type: "settings:get" }),
 
-	getApiKey: (provider, opts) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:get-api-key", provider, reveal: opts?.reveal }),
+	getApiKey: (provider, opts) => invoke({ type: "settings:get-api-key", provider, reveal: opts?.reveal }),
 
-	testApiKey: (provider, key) => ipcRenderer.invoke("look:invoke", { type: "settings:test-api-key", provider, key }),
+	testApiKey: (provider, key) => invoke({ type: "settings:test-api-key", provider, key }),
 
 	// Test the env-var credential for a provider (no key arg — the
 	// main process reads it from process.env itself, so the renderer
 	// never has to know the variable name).
-	testEnvKey: (provider) => ipcRenderer.invoke("look:invoke", { type: "settings:test-env-key", provider }),
+	testEnvKey: (provider) => invoke({ type: "settings:test-env-key", provider }),
 
 	// ---- Provider OAuth login ----
-	providerLogin: (provider) => ipcRenderer.invoke("look:invoke", { type: "settings:provider-login", provider }),
+	providerLogin: (provider) => invoke({ type: "settings:provider-login", provider }),
 
-	providerLogout: (provider) => ipcRenderer.invoke("look:invoke", { type: "settings:provider-logout", provider }),
+	providerLogout: (provider) => invoke({ type: "settings:provider-logout", provider }),
 
-	respondLoginPrompt: (promptId, value) =>
-		ipcRenderer.invoke("look:invoke", { type: "login:prompt-respond", promptId, value }),
+	respondLoginPrompt: (promptId, value) => invoke({ type: "login:prompt-respond", promptId, value }),
 
-	cancelLoginPrompt: (promptId) => ipcRenderer.invoke("look:invoke", { type: "login:prompt-cancel", promptId }),
+	cancelLoginPrompt: (promptId) => invoke({ type: "login:prompt-cancel", promptId }),
 
 	// ---- Custom providers ----
-	addCustomProvider: (input) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:add-custom-provider", payload: input }),
-	updateCustomProvider: (name, patch) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:update-custom-provider", payload: { name, patch } }),
-	removeCustomProvider: (name) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:remove-custom-provider", payload: { name } }),
-	listCustomProviders: () => ipcRenderer.invoke("look:invoke", { type: "settings:list-custom-providers" }),
-	testCustomProvider: (input) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:test-custom-provider", payload: input }),
+	addCustomProvider: (input) => invoke({ type: "settings:add-custom-provider", payload: input }),
+	updateCustomProvider: (name, patch) => invoke({ type: "settings:update-custom-provider", payload: { name, patch } }),
+	removeCustomProvider: (name) => invoke({ type: "settings:remove-custom-provider", payload: { name } }),
+	listCustomProviders: () => invoke({ type: "settings:list-custom-providers" }),
+	testCustomProvider: (input) => invoke({ type: "settings:test-custom-provider", payload: input }),
 
-	setApiKey: (provider, key) => ipcRenderer.invoke("look:invoke", { type: "settings:set-api-key", provider, key }),
+	setApiKey: (provider, key) => invoke({ type: "settings:set-api-key", provider, key }),
 
-	getGeneralSettings: () => ipcRenderer.invoke("look:invoke", { type: "settings:general:get" }),
+	getGeneralSettings: () => invoke({ type: "settings:general:get" }),
 
-	setGeneralSettings: (settings) => ipcRenderer.invoke("look:invoke", { type: "settings:general:set", settings }),
+	setGeneralSettings: (settings) => invoke({ type: "settings:general:set", settings }),
 
-	resetGeneralSettings: () => ipcRenderer.invoke("look:invoke", { type: "settings:general:reset" }),
+	resetGeneralSettings: () => invoke({ type: "settings:general:reset" }),
 
-	getLookIslandSettings: () => ipcRenderer.invoke("look:invoke", { type: "look-island:get-settings" }),
+	getLookIslandSettings: () => invoke({ type: "look-island:get-settings" }),
 
-	setLookIslandEnabled: (enabled) => ipcRenderer.invoke("look:invoke", { type: "look-island:set-enabled", enabled }),
+	setLookIslandEnabled: (enabled) => invoke({ type: "look-island:set-enabled", enabled }),
 
-	compressSession: (agentId, customInstructions) =>
-		ipcRenderer.invoke("look:invoke", { type: "session:compress", agentId, customInstructions }),
+	compressSession: (agentId, customInstructions) => invoke({ type: "session:compress", agentId, customInstructions }),
 
-	abortCompressSession: (agentId) => ipcRenderer.invoke("look:invoke", { type: "session:abort-compress", agentId }),
+	abortCompressSession: (agentId) => invoke({ type: "session:abort-compress", agentId }),
 
-	renameAgent: (agentId, name) => ipcRenderer.invoke("look:invoke", { type: "agent:rename", agentId, name }),
+	renameAgent: (agentId, name) => invoke({ type: "agent:rename", agentId, name }),
 
 	// ---- v0.3 skills ----
-	listSkills: () => ipcRenderer.invoke("look:invoke", { type: "skills:list" }),
+	listSkills: () => invoke({ type: "skills:list" }),
 
-	importSkillPaths: (paths) => ipcRenderer.invoke("look:invoke", { type: "skills:import-paths", paths }),
-	detectCommonSkillPaths: () => ipcRenderer.invoke("look:invoke", { type: "skills:detect-common" }),
+	importSkillPaths: (paths) => invoke({ type: "skills:import-paths", paths }),
+	detectCommonSkillPaths: () => invoke({ type: "skills:detect-common" }),
 
 	// ---- MCP tools ----
-	listAllMcpTools: () => ipcRenderer.invoke("look:invoke", { type: "mcp:list-all-tools" }),
+	listAllMcpTools: () => invoke({ type: "mcp:list-all-tools" }),
 
 	// ---- OS native dialogs ----
 	// Returns { success, path?, canceled?, error? }. The renderer
 	// is sandboxed, so it can't call `dialog.showOpenDialog` itself.
-	openDirectoryDialog: (title) => ipcRenderer.invoke("look:invoke", { type: "dialog:open-directory", title }),
+	openDirectoryDialog: (title) => invoke({ type: "dialog:open-directory", title }),
 	openFileDialog: (options) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "dialog:open-files",
 			title: options?.title,
 			allowDirectories: options?.allowDirectories,
@@ -176,21 +170,20 @@ const api: LookAPI = {
 
 	// ---- OS shell ----
 	// Reveal a file in the OS file manager (Finder / Explorer / etc).
-	revealInFinder: (path) => ipcRenderer.invoke("look:invoke", { type: "shell:reveal-in-finder", path }),
+	revealInFinder: (path) => invoke({ type: "shell:reveal-in-finder", path }),
 
 	// Opens a project's canonical cwd in the OS file manager.
-	openProjectFolder: (projectId) =>
-		ipcRenderer.invoke("look:invoke", { type: "shell:open-project-folder", projectId }),
+	openProjectFolder: (projectId) => invoke({ type: "shell:open-project-folder", projectId }),
 
 	// ---- Project CRUD ----
-	listProjects: () => ipcRenderer.invoke("look:invoke", { type: "project:list" }),
-	createProject: (cwd, name) => ipcRenderer.invoke("look:invoke", { type: "project:create", cwd, name }),
-	switchProject: (projectId) => ipcRenderer.invoke("look:invoke", { type: "project:switch", projectId }),
-	renameProject: (projectId, name) => ipcRenderer.invoke("look:invoke", { type: "project:rename", projectId, name }),
-	deleteProject: (projectId) => ipcRenderer.invoke("look:invoke", { type: "project:delete", projectId }),
+	listProjects: () => invoke({ type: "project:list" }),
+	createProject: (cwd, name) => invoke({ type: "project:create", cwd, name }),
+	switchProject: (projectId) => invoke({ type: "project:switch", projectId }),
+	renameProject: (projectId, name) => invoke({ type: "project:rename", projectId, name }),
+	deleteProject: (projectId) => invoke({ type: "project:delete", projectId }),
 	confirmDeleteProject: (projectId, confirmed) =>
-		ipcRenderer.invoke("look:invoke", { type: "project:confirm-delete-response", projectId, confirmed }),
-	getActiveProject: () => ipcRenderer.invoke("look:invoke", { type: "project:get-active" }),
+		invoke({ type: "project:confirm-delete-response", projectId, confirmed }),
+	getActiveProject: () => invoke({ type: "project:get-active" }),
 
 	// ---- v0.4 Session tree / branching ----
 	// `window.look.*` API surface for the tree-view UI and the
@@ -200,7 +193,7 @@ const api: LookAPI = {
 	// opts: { summarize?, customInstructions?, label? }
 	// returns: { editorText?, cancelled: boolean, aborted?: boolean }
 	navigateTree: (agentId, entryId, opts) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "agent:navigate-tree",
 			agentId,
 			entryId,
@@ -211,7 +204,7 @@ const api: LookAPI = {
 	// opts: { name? } — defaults to `${parentName} · fork`
 	// returns: { agentId, sessionFilePath }
 	createFork: (agentId, entryId, opts) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "agent:create-fork",
 			agentId,
 			entryId,
@@ -219,7 +212,7 @@ const api: LookAPI = {
 		}),
 	// label: string | null — null/empty clears
 	setEntryLabel: (agentId, entryId, label) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "agent:set-entry-label",
 			agentId,
 			entryId,
@@ -227,191 +220,176 @@ const api: LookAPI = {
 		}),
 
 	// ---- Shared area ----
-	listSharedFiles: (projectId) => ipcRenderer.invoke("look:invoke", { type: "shared:list", projectId }),
-	startSharedWatch: (projectId) => ipcRenderer.invoke("look:invoke", { type: "shared:watch", projectId }),
-	stopSharedWatch: (projectId) => ipcRenderer.invoke("look:invoke", { type: "shared:unwatch", projectId }),
-	writeSharedFile: (projectId, path, content) =>
-		ipcRenderer.invoke("look:invoke", { type: "shared:write", projectId, path, content }),
-	createSharedDir: (projectId, path) => ipcRenderer.invoke("look:invoke", { type: "shared:mkdir", projectId, path }),
-	deleteSharedItem: (projectId, path) => ipcRenderer.invoke("look:invoke", { type: "shared:delete", projectId, path }),
-	importToShared: (projectId, sources, targetDir) =>
-		ipcRenderer.invoke("look:invoke", { type: "shared:import", projectId, sources, targetDir }),
-	exportFromShared: (projectId, paths, destDir) =>
-		ipcRenderer.invoke("look:invoke", { type: "shared:export", projectId, paths, destDir }),
+	listSharedFiles: (projectId) => invoke({ type: "shared:list", projectId }),
+	startSharedWatch: (projectId) => invoke({ type: "shared:watch", projectId }),
+	stopSharedWatch: (projectId) => invoke({ type: "shared:unwatch", projectId }),
+	writeSharedFile: (projectId, path, content) => invoke({ type: "shared:write", projectId, path, content }),
+	createSharedDir: (projectId, path) => invoke({ type: "shared:mkdir", projectId, path }),
+	deleteSharedItem: (projectId, path) => invoke({ type: "shared:delete", projectId, path }),
+	importToShared: (projectId, sources, targetDir) => invoke({ type: "shared:import", projectId, sources, targetDir }),
+	exportFromShared: (projectId, paths, destDir) => invoke({ type: "shared:export", projectId, paths, destDir }),
 	// Drag-drop fallback: write base64/utf8 content when no absolute path
 	// is available (e.g. dropped into a sandboxed renderer).
 	writeSharedContent: (projectId, path, content, encoding = "utf8") =>
-		ipcRenderer.invoke("look:invoke", { type: "shared:write-content", projectId, path, content, encoding }),
+		invoke({ type: "shared:write-content", projectId, path, content, encoding }),
 
 	// ---- Workspace tree (v0.6) ----
 	listWorkspaceChildren: (projectId, relativePath, showHiddenFiles = true) =>
-		ipcRenderer.invoke("look:invoke", { type: "workspace:list-children", projectId, relativePath, showHiddenFiles }),
-	statWorkspaceNode: (projectId, relativePath) =>
-		ipcRenderer.invoke("look:invoke", { type: "workspace:stat", projectId, relativePath }),
-	startWorkspaceWatch: (projectId, relativePath) =>
-		ipcRenderer.invoke("look:invoke", { type: "workspace:watch", projectId, relativePath }),
-	stopWorkspaceWatch: (projectId, relativePath) =>
-		ipcRenderer.invoke("look:invoke", { type: "workspace:unwatch", projectId, relativePath }),
+		invoke({ type: "workspace:list-children", projectId, relativePath, showHiddenFiles }),
+	statWorkspaceNode: (projectId, relativePath) => invoke({ type: "workspace:stat", projectId, relativePath }),
+	startWorkspaceWatch: (projectId, relativePath) => invoke({ type: "workspace:watch", projectId, relativePath }),
+	stopWorkspaceWatch: (projectId, relativePath) => invoke({ type: "workspace:unwatch", projectId, relativePath }),
 
 	// ---- File read/write ----
-	readFileContent: (path) => ipcRenderer.invoke("look:invoke", { type: "file:read", path }),
-	writeFileContent: (path, content) => ipcRenderer.invoke("look:invoke", { type: "file:write", path, content }),
-	statFilePath: (path) => ipcRenderer.invoke("look:invoke", { type: "file:stat", path }),
+	readFileContent: (path) => invoke({ type: "file:read", path }),
+	writeFileContent: (path, content) => invoke({ type: "file:write", path, content }),
+	statFilePath: (path) => invoke({ type: "file:stat", path }),
 
 	// ---- File viewer window ----
-	openFileViewer: (path) => ipcRenderer.invoke("look:invoke", { type: "fileViewer:open", path }),
-	fileViewerReady: () => ipcRenderer.invoke("look:invoke", { type: "fileViewer:ready" }),
+	openFileViewer: (path) => invoke({ type: "fileViewer:open", path }),
+	fileViewerReady: () => invoke({ type: "fileViewer:ready" }),
 
 	// ---- Auto Updater ----
-	checkForUpdates: () => ipcRenderer.invoke("look:invoke", { type: "update:check" }),
-	downloadUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:download" }),
-	installUpdate: () => ipcRenderer.invoke("look:invoke", { type: "update:install" }),
+	checkForUpdates: () => invoke({ type: "update:check" }),
+	downloadUpdate: () => invoke({ type: "update:download" }),
+	installUpdate: () => invoke({ type: "update:install" }),
 
 	// ---- Permission management ----
 	setPermissionMode: (agentId, mode, updateDefault) =>
-		ipcRenderer.invoke("look:invoke", { type: "permission:set-mode", agentId, mode, updateDefault }),
-	getPermissionMode: (agentId) => ipcRenderer.invoke("look:invoke", { type: "permission:get-mode", agentId }),
-	respondPermission: (payload) => ipcRenderer.invoke("look:invoke", { type: "permission:respond", payload }),
-	respondPlanQuestion: (payload) => ipcRenderer.invoke("look:invoke", { type: "plan:question-respond", payload }),
-	respondPlanApproval: (payload) => ipcRenderer.invoke("look:invoke", { type: "plan:approval-respond", payload }),
+		invoke({ type: "permission:set-mode", agentId, mode, updateDefault }),
+	getPermissionMode: (agentId) => invoke({ type: "permission:get-mode", agentId }),
+	respondPermission: (payload) => invoke({ type: "permission:respond", payload }),
+	respondPlanQuestion: (payload) => invoke({ type: "plan:question-respond", payload }),
+	respondPlanApproval: (payload) => invoke({ type: "plan:approval-respond", payload }),
 
 	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
-	listSubSessions: (parentSessionId) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent:list-subagents", parentSessionId }),
-	getParentSession: (childSessionId) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent:get-parent-session", childSessionId }),
+	listSubSessions: (parentSessionId) => invoke({ type: "agent:list-subagents", parentSessionId }),
+	getParentSession: (childSessionId) => invoke({ type: "agent:get-parent-session", childSessionId }),
 
 	// ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
-	listAgentDefinitions: () => ipcRenderer.invoke("look:invoke", { type: "agent-definitions:list" }),
-	createAgentDefinition: (input) => ipcRenderer.invoke("look:invoke", { type: "agent-definitions:create", input }),
-	updateAgentDefinition: (name, input) =>
-		ipcRenderer.invoke("look:invoke", { type: "agent-definitions:update", name, input }),
-	deleteAgentDefinition: (name) => ipcRenderer.invoke("look:invoke", { type: "agent-definitions:delete", name }),
-	installAgentDefinition: (name) => ipcRenderer.invoke("look:invoke", { type: "agent-definitions:install", name }),
+	listAgentDefinitions: () => invoke({ type: "agent-definitions:list" }),
+	createAgentDefinition: (input) => invoke({ type: "agent-definitions:create", input }),
+	updateAgentDefinition: (name, input) => invoke({ type: "agent-definitions:update", name, input }),
+	deleteAgentDefinition: (name) => invoke({ type: "agent-definitions:delete", name }),
+	installAgentDefinition: (name) => invoke({ type: "agent-definitions:install", name, source: "builtin" }),
 
 	// ---- SubAgent：Agent 开关（Stage 2，应用到所有活动会话 + 持久化为默认） ----
-	setSubagentEnabled: (enabled) => ipcRenderer.invoke("look:invoke", { type: "agent:set-subagent-enabled", enabled }),
+	setSubagentEnabled: (enabled) => invoke({ type: "agent:set-subagent-enabled", enabled }),
 
 	// ---- SubAgent：单个 Agent 定义 / Skill 的启用开关（Agent 广场） ----
 	setAgentDefinitionEnabled: (name, enabled) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "agent-definitions:set-enabled",
 			name,
 			enabled,
 		}),
 	setSkillEnabled: (name, enabled) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "skills:set-enabled",
 			name,
 			enabled,
 		}),
 
 	// ---- User Profile ----
-	openOAuthUrl: (url, redirectTo) =>
-		ipcRenderer.invoke("look:invoke", { type: "auth:open-oauth-url", url, redirectTo }),
+	openOAuthUrl: (url, redirectTo) => invoke({ type: "auth:open-oauth-url", url, redirectTo }),
 
-	getUserProfile: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:get" }),
-	updateUserProfile: (patch) => ipcRenderer.invoke("look:invoke", { type: "user-profile:update", patch }),
-	resetUserProfile: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:reset" }),
-	logout: () => ipcRenderer.invoke("look:invoke", { type: "user-profile:logout" }),
+	getUserProfile: () => invoke({ type: "user-profile:get" }),
+	updateUserProfile: (patch) => invoke({ type: "user-profile:update", patch }),
+	resetUserProfile: () => invoke({ type: "user-profile:reset" }),
+	logout: () => invoke({ type: "user-profile:logout" }),
 
 	// ---- Usage heatmap ----
-	getUsage: () => ipcRenderer.invoke("look:invoke", { type: "usage:get" }),
+	getUsage: () => invoke({ type: "usage:get" }),
 
 	// ---- IM Channels ----
-	getImChannels: () => ipcRenderer.invoke("look:invoke", { type: "im:get-channels" }),
-	getImBindings: () => ipcRenderer.invoke("look:invoke", { type: "im:get-bindings" }),
+	getImChannels: () => invoke({ type: "im:get-channels" }),
+	getImBindings: () => invoke({ type: "im:get-bindings" }),
 	connectFeishuChannel: (options) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "im:connect-feishu",
 			appName: options?.appName,
 			description: options?.description,
 		}),
 	connectFeishuManualChannel: (input) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "im:connect-feishu-manual",
 			appId: input.appId,
 			appSecret: input.appSecret,
 			name: input.name,
 		}),
 	cancelFeishuRegistration: (registrationId) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "im:cancel-registration",
 			registrationId,
 		}),
-	disconnectImChannel: (provider, appId) =>
-		ipcRenderer.invoke("look:invoke", { type: "im:disconnect-channel", provider, appId }),
-	removeImChannel: (provider, appId) =>
-		ipcRenderer.invoke("look:invoke", { type: "im:remove-channel", provider, appId }),
-	reconnectImChannel: (provider, appId) =>
-		ipcRenderer.invoke("look:invoke", { type: "im:reconnect-channel", provider, appId }),
+	disconnectImChannel: (provider, appId) => invoke({ type: "im:disconnect-channel", provider, appId }),
+	removeImChannel: (provider, appId) => invoke({ type: "im:remove-channel", provider, appId }),
+	reconnectImChannel: (provider, appId) => invoke({ type: "im:reconnect-channel", provider, appId }),
 	sendImTestMessage: (input) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "im:send-test-message",
 			receiveIdType: input.receiveIdType,
 			receiveId: input.receiveId,
 			text: input.text,
 		}),
 	testImConnection: (appId) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "im:test-connection",
 			appId,
 		}),
 	testImConnectionDirect: (appId, appSecret) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "im:test-connection-direct",
 			appId,
 			appSecret,
 		}),
 	updateImChannel: (appId, updates) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "im:update-channel",
 			appId,
 			name: updates.name,
 		}),
 
 	// ---- Custom System Prompts ----
-	listPrompts: () => ipcRenderer.invoke("look:invoke", { type: "settings:prompts:list" }),
-	createPrompt: (name, content) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:prompts:create", name, content }),
+	listPrompts: () => invoke({ type: "settings:prompts:list" }),
+	createPrompt: (name, content) => invoke({ type: "settings:prompts:create", name, content }),
 	updatePrompt: (id, patch) => {
 		// 显式提取 patch 字段，禁止 patch 展开覆盖信封字段（type/id）：
 		// 恶意/错误 patch 不能把更新静默变成删除或改到其他 prompt。
-		const payload: Record<string, unknown> = { type: "settings:prompts:update", id };
 		const p = patch as Record<string, unknown>;
-		if ("name" in p && p.name !== undefined) payload.name = p.name;
-		if ("content" in p && p.content !== undefined) payload.content = p.content;
-		return ipcRenderer.invoke("look:invoke", payload);
+		return invoke({
+			type: "settings:prompts:update",
+			id,
+			name: "name" in p && p.name !== undefined ? (p.name as string) : undefined,
+			content: "content" in p && p.content !== undefined ? (p.content as string) : undefined,
+		});
 	},
-	deletePrompt: (id) => ipcRenderer.invoke("look:invoke", { type: "settings:prompts:delete", id }),
-	setActivePrompt: (id) => ipcRenderer.invoke("look:invoke", { type: "settings:prompts:set-active", id }),
+	deletePrompt: (id) => invoke({ type: "settings:prompts:delete", id }),
+	setActivePrompt: (id) => invoke({ type: "settings:prompts:set-active", id }),
 
 	// ---- Project-level Prompts ----
-	listProjectPrompts: (projectId) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:list", projectId }),
+	listProjectPrompts: (projectId) => invoke({ type: "settings:project-prompts:list", projectId }),
 	createProjectPrompt: (projectId, name, content) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:create", projectId, name, content }),
+		invoke({ type: "settings:project-prompts:create", projectId, name, content }),
 	updateProjectPrompt: (projectId, id, patch) =>
-		ipcRenderer.invoke("look:invoke", {
+		invoke({
 			type: "settings:project-prompts:update",
 			projectId,
 			id,
-			name: "name" in patch ? (patch as Record<string, unknown>).name : undefined,
-			content: "content" in patch ? (patch as Record<string, unknown>).content : undefined,
+			name: "name" in patch ? ((patch as Record<string, unknown>).name as string | undefined) : undefined,
+			content: "content" in patch ? ((patch as Record<string, unknown>).content as string | undefined) : undefined,
 		}),
-	deleteProjectPrompt: (projectId, id) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:delete", projectId, id }),
-	setProjectActivePrompt: (projectId, id) =>
-		ipcRenderer.invoke("look:invoke", { type: "settings:project-prompts:set-active", projectId, id }),
+	deleteProjectPrompt: (projectId, id) => invoke({ type: "settings:project-prompts:delete", projectId, id }),
+	setProjectActivePrompt: (projectId, id) => invoke({ type: "settings:project-prompts:set-active", projectId, id }),
 
 	// MCP server management
-	listMcpServers: () => ipcRenderer.invoke("look:invoke", { type: "mcp:list-servers" }),
-	listMcpTools: (name) => ipcRenderer.invoke("look:invoke", { type: "mcp:list-tools", name }),
-	addMcpServer: (config) => ipcRenderer.invoke("look:invoke", { type: "mcp:add-server", config }),
-	removeMcpServer: (name) => ipcRenderer.invoke("look:invoke", { type: "mcp:remove-server", name }),
-	testMcpServer: (name) => ipcRenderer.invoke("look:invoke", { type: "mcp:test-server", name }),
-	toggleMcpServer: (name, enabled) => ipcRenderer.invoke("look:invoke", { type: "mcp:toggle-server", name, enabled }),
-	updateMcpServer: (name, config) => ipcRenderer.invoke("look:invoke", { type: "mcp:update-server", name, config }),
+	listMcpServers: () => invoke({ type: "mcp:list-servers" }),
+	listMcpTools: (name) => invoke({ type: "mcp:list-tools", name }),
+	addMcpServer: (config) => invoke({ type: "mcp:add-server", config }),
+	removeMcpServer: (name) => invoke({ type: "mcp:remove-server", name }),
+	testMcpServer: (name) => invoke({ type: "mcp:test-server", name }),
+	toggleMcpServer: (name, enabled) => invoke({ type: "mcp:toggle-server", name, enabled }),
+	updateMcpServer: (name, config) => invoke({ type: "mcp:update-server", name, config }),
 };
 
 contextBridge.exposeInMainWorld("look", api);

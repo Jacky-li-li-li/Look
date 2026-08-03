@@ -12,7 +12,8 @@ import { ErrorBoundary } from "@look/ui/components/ErrorBoundary";
 import FileViewerApp from "./FileViewerApp";
 import { useLookTheme } from "./hooks/useLookTheme";
 import i18n from "./i18n";
-import { appStore, initAppData, initIpcHandlers } from "./store/ipcHandler";
+import { appStore } from "./store/appStore";
+import { initAppData, initIpcHandlers } from "./store/ipcHandler";
 
 // React Scan is intentionally opt-in: its highlight overlays make the normal
 // development build visually unusable and distort screenshot-based UI review.

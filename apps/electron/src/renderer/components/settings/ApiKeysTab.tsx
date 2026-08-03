@@ -16,7 +16,7 @@ import {
 import { Input } from "@look/ui/components/ui/input";
 import type { TFunction } from "i18next";
 import { AlertCircle, ChevronRight, Copy, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ProviderIcon } from "../ProviderIcon";
@@ -25,9 +25,6 @@ import CustomProvidersSection from "./CustomProvidersSection";
 import type { CustomProviderInput, CustomProviderStats, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
 
 const api = window.look;
-
-// 保存触发编辑按钮的引用，用于关闭编辑后恢复焦点
-const editTriggerRef = { current: null as HTMLElement | null };
 
 type ForceSaveState = { provider: string; key: string; reason: string; status: number } | null;
 
@@ -457,6 +454,8 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 	const { t } = useTranslation();
 
 	// ── grouped state (13 → 4 useState) ──
+	// 保存触发编辑按钮的引用，用于关闭编辑后恢复焦点（组件实例级，避免跨实例共享）
+	const editTriggerRef = useRef<HTMLElement | null>(null);
 	const [keyEdit, setKeyEdit] = useState<KeyEditState>({
 		editing: null,
 		input: "",

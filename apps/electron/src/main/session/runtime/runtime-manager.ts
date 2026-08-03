@@ -284,25 +284,6 @@ export class SessionRuntimeManager
 		this.emitSessionList(projectId);
 	}
 
-	async deleteProject(projectId: string): Promise<void> {
-		const project = this.composition.projectService.getProjectInfo(projectId);
-		if (!project) return;
-		const persisted = this.composition.sessionCatalog.listByProject(projectId);
-		const runtimeIds = Array.from(this.composition.runtimeRegistry.entries()).flatMap(([sessionId, managed]) =>
-			managed.projectId === projectId ? [sessionId] : [],
-		);
-		this.emit({
-			type: "project:confirm-delete",
-			projectId,
-			projectName: project.name,
-			agentCount: new Set([...persisted.map((session) => session.id), ...runtimeIds]).size,
-			runningCount: runtimeIds.filter((sessionId) => {
-				const session = this.composition.runtimeRegistry.get(sessionId)?.runtime.session;
-				return Boolean(session && (session.isStreaming || session.isRetrying || session.isCompacting));
-			}).length,
-		});
-	}
-
 	async executeDeleteProject(projectId: string): Promise<void> {
 		return this.composition.projectDeletionService.executeDelete(projectId);
 	}

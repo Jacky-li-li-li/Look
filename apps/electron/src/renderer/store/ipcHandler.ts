@@ -16,7 +16,6 @@ import { subagentCardStatusAtom } from "./subagentAtoms";
 import { handleSystemEvent } from "./systemHandlers";
 import { enqueueUiEvent } from "./ui-event-processor";
 
-export { appStore };
 export { initAppData, isStartupComplete } from "./startup";
 
 const sharedRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();

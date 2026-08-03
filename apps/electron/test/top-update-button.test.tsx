@@ -20,8 +20,8 @@ const mocks = vi.hoisted(() => {
 
 import TopUpdateButton from "../src/renderer/components/Sidebar/TopUpdateButton";
 import i18n from "../src/renderer/i18n";
+import { appStore } from "../src/renderer/store/appStore";
 import { appUpdateAtom } from "../src/renderer/store/atoms";
-import { appStore } from "../src/renderer/store/ipcHandler";
 
 function renderButton() {
 	return render(

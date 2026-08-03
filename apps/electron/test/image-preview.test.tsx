@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import ToolCallCard from "../src/renderer/components/chat/ToolCallCard";
 import ImagePreviewDialog from "../src/renderer/components/dialogs/ImagePreviewDialog";
 import i18n from "../src/renderer/i18n";
-import { appStore } from "../src/renderer/store/ipcHandler";
+import { appStore } from "../src/renderer/store/appStore";
 import { imagePreviewAtom } from "../src/renderer/store/projectAtoms";
 
 const pngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");

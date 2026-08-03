@@ -20,6 +20,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { getProjectSharedDir, getProjectSystemPromptPath } from "@look/shared/look-storage";
+import { SerialTail } from "../../utils/serial-tail.js";
 
 export interface RuntimeFactoryOptions {
 	appendSystemPrompt?: string[];
@@ -34,7 +35,8 @@ export interface SessionRuntimeFactoryDependencies {
 }
 
 export class SessionRuntimeFactory {
-	private resourceInitializationTail: Promise<void> = Promise.resolve();
+	/** 资源初始化串行化：同一时刻只有一个 cwd 的 SettingsManager/ResourceLoader 构建在跑。 */
+	private readonly serial = new SerialTail<"resource">();
 
 	constructor(private readonly dependencies: SessionRuntimeFactoryDependencies) {}
 
@@ -98,20 +100,7 @@ export class SessionRuntimeFactory {
 		};
 	}
 
-	private async withResourceInitialization<T>(task: () => Promise<T>): Promise<T> {
-		const previous = this.resourceInitializationTail;
-		let release!: () => void;
-		const gate = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		const tail = previous.then(() => gate);
-		this.resourceInitializationTail = tail;
-		await previous;
-		try {
-			return await task();
-		} finally {
-			release();
-			if (this.resourceInitializationTail === tail) this.resourceInitializationTail = Promise.resolve();
-		}
+	private withResourceInitialization<T>(task: () => Promise<T>): Promise<T> {
+		return this.serial.run("resource", task);
 	}
 }
