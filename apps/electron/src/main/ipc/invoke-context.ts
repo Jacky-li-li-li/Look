@@ -11,6 +11,7 @@ import type { LookIslandSettings, RendererToMainEvent } from "@look/shared/types
 import type { BrowserWindow } from "electron";
 import type { AgentDefinitionService } from "../agents/definition-service.js";
 import type { IProjectTrustManager } from "../core/contracts.js";
+import type { GitService } from "../git/git-service.js";
 import type { MCPManager } from "../mcp/manager.js";
 import type { PlanService } from "../permissions/plan.js";
 import type { PermissionService } from "../permissions/service.js";
@@ -98,6 +99,11 @@ export interface InvokeContext {
 	permission: {
 		service: PermissionService;
 		plan: PlanService;
+	};
+
+	// ── Git (read-only repo detection) ──
+	git: {
+		service: GitService;
 	};
 
 	// ── Workspace ──

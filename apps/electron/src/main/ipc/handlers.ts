@@ -11,6 +11,7 @@
 
 import type { LookIslandSettings, RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
+import { GitService } from "../git/git-service.js";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
 import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../system/traffic-light.js";
 import { ensureIpcEnvelopeShape } from "../utils/ipc-envelope.js";
@@ -86,6 +87,9 @@ export function registerIpcHandlers(
 	workspaceTreeService.clearEmitCallback();
 	workspaceTreeService.setEmitCallback((event) => rendererEvents.send(event));
 
+	// Read-only git repo detection (recreated on window re-create; cache TTL is short).
+	const gitService = new GitService();
+
 	// Forward session-scoped runtime events to the renderer.
 	const unsubscribeEvents = composition.eventBus.onEvent((event) => rendererEvents.send(event));
 
@@ -138,6 +142,10 @@ export function registerIpcHandlers(
 				setProjectTrust: (projectId: string, trusted: boolean) =>
 					composition.projectRuntimeService.setProjectTrust(projectId, trusted),
 			},
+		},
+
+		git: {
+			service: gitService,
 		},
 
 		permission: {

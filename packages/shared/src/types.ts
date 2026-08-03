@@ -46,6 +46,7 @@ export type {
 export { DEFAULT_PROJECT_ID, LOOK_MESSAGE_DURATION_ENTRY_TYPE } from "./types/constants.js";
 // Domain DTOs
 export type { AgentDefinitionInfo, AgentDefinitionInput, AgentDefinitionSource, AgentInfo } from "./types/dto/agent.js";
+export type { GitRepoInfo } from "./types/dto/git.js";
 export type {
 	AppUpdatePhase,
 	FileTreeNode,

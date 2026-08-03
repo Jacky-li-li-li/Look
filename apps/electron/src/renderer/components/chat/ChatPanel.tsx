@@ -17,6 +17,7 @@ import { TodoPanel } from "../workspace/TodoPanel";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
 import ChatMessageList from "./ChatMessageList";
 import ChatQueueDrawer from "./ChatQueueDrawer";
+import GitStatusBar from "./GitStatusBar";
 
 interface ChatPanelProps {
 	agentId: string;
@@ -100,6 +101,8 @@ const ChatPanel = memo(function ChatPanel({
 				onRequestApiKeys={handleRequestApiKeys}
 				onAbort={handleAbort}
 			/>
+			{/* Git 状态栏在输入框下方，内容紧凑上移，不改变输入框位置 */}
+			<GitStatusBar projectId={activeAgent?.projectId ?? ""} />
 		</div>
 	);
 });

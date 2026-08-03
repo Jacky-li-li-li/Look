@@ -5,6 +5,7 @@ import type {
 	AvailableModel,
 	CustomProviderInput,
 	FileTreeNode,
+	GitRepoInfo,
 	ImageContent,
 	LookIslandSettings,
 	MainToRendererEvent,
@@ -144,6 +145,7 @@ export interface LookAPI {
 	renameProject(projectId: string, name: string): Promise<IpcResult>;
 	switchProject(projectId: string): Promise<IpcResult>;
 	getActiveProject(): Promise<IpcResult<{ project: ProjectInfo | null }>>;
+	getProjectGitInfo(projectId: string): Promise<IpcResult<{ info: GitRepoInfo | null }>>;
 	deleteProject(projectId: string): Promise<IpcResult>;
 	confirmDeleteProject(projectId: string, confirmed: boolean): Promise<IpcResult>;
 	getSettings(): Promise<IpcResult<ProviderSettingsData>>;

@@ -1,4 +1,4 @@
-import type { FileTreeNode, ProjectInfo } from "@shared/types";
+import type { FileTreeNode, GitRepoInfo, ProjectInfo } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
 import { toast } from "sonner";
@@ -69,6 +69,9 @@ export const loadedWorkspaceChildrenAtomFamily = atomFamily((projectId: string) 
 
 export const selectedSharedPathAtomFamily = atomFamily((projectId: string) => atom<string | null>(null));
 
+/** 每个项目的 git 只读信息（GitStatusBar 订阅；null = 未加载/未知）。 */
+export const projectGitInfoAtomFamily = atomFamily((projectId: string) => atom<GitRepoInfo | null>(null));
+
 export const sharedFilesAtomFamily = atomFamily((projectId: string) => atom<FileTreeNode[]>([]));
 
 export const sharedFilesLoadingAtomFamily = atomFamily((projectId: string) => atom(false));
@@ -81,6 +84,8 @@ export function removeProjectAtoms(projectId: string): void {
 	expandedWorkspacePathsAtomFamily.remove(projectId);
 	loadedWorkspaceChildrenAtomFamily.remove(projectId);
 	selectedSharedPathAtomFamily.remove(projectId);
+	projectGitInfoAtomFamily.remove(projectId);
+	projectGitInfoAtomFamily.remove("");
 	sharedFilesAtomFamily.remove(projectId);
 	sharedFilesLoadingAtomFamily.remove(projectId);
 	workspaceTreeLoadingAtomFamily.remove(projectId);

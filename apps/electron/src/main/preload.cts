@@ -184,6 +184,7 @@ const api: LookAPI = {
 	confirmDeleteProject: (projectId, confirmed) =>
 		invoke({ type: "project:confirm-delete-response", projectId, confirmed }),
 	getActiveProject: () => invoke({ type: "project:get-active" }),
+	getProjectGitInfo: (projectId) => invoke({ type: "project:git-info", projectId }),
 
 	// ---- v0.4 Session tree / branching ----
 	// `window.look.*` API surface for the tree-view UI and the

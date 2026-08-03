@@ -78,6 +78,7 @@ export type RendererToMainEvent =
 	| { type: "project:delete"; projectId: string }
 	| { type: "project:confirm-delete-response"; projectId: string; confirmed: boolean }
 	| { type: "project:get-active" }
+	| { type: "project:git-info"; projectId: string }
 	| {
 			type: "agent:navigate-tree";
 			agentId: string;

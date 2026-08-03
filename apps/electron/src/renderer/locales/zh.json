@@ -600,7 +600,11 @@
     "characters": "{{count}} 字符",
     "copied": "已复制",
     "copyFailed": "复制失败：{{message}}",
-    "welcomeNoProject": "选择项目文件夹以开始。所有对话将限定在该文件夹内。"
+    "welcomeNoProject": "选择项目文件夹以开始。所有对话将限定在该文件夹内。",
+    "gitBranch": "分支",
+    "gitRemote": "远程仓库",
+    "gitRepoRoot": "仓库根目录",
+    "gitDetachedHead": "游离 HEAD"
   },
   "context": {
     "compressing": "压缩中…",

@@ -133,6 +133,7 @@ const EXHAUSTIVE = {
 	"project:delete": true,
 	"project:confirm-delete-response": true,
 	"project:get-active": true,
+	"project:git-info": true,
 	"agent:navigate-tree": true,
 	"agent:create-fork": true,
 	"agent:set-entry-label": true,

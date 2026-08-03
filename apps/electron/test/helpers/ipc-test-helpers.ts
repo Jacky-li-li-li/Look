@@ -43,6 +43,7 @@ export function makeMockContext(overrides?: Partial<InvokeContext>): InvokeConte
 				listProjects: () => [],
 			} as never,
 		},
+		git: { service: {} as never },
 		permission: { service: {} as never, plan: {} as never },
 		workspace: { fileService: {} as never, treeService: {} as never },
 		im: {},

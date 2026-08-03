@@ -600,7 +600,11 @@
     "characters": "{{count}} chars",
     "copied": "Copied",
     "copyFailed": "Copy failed: {{message}}",
-    "welcomeNoProject": "Select a project folder to get started. All conversations will be scoped to this folder."
+    "welcomeNoProject": "Select a project folder to get started. All conversations will be scoped to this folder.",
+    "gitBranch": "Branch",
+    "gitRemote": "Remote",
+    "gitRepoRoot": "Repository root",
+    "gitDetachedHead": "Detached HEAD"
   },
   "context": {
     "compressing": "Compressing…",

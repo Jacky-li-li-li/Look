@@ -600,7 +600,11 @@
     "characters": "{{count}} 文字",
     "copied": "コピーしました",
     "copyFailed": "コピーに失敗しました：{{message}}",
-    "welcomeNoProject": "プロジェクトフォルダを選択して開始してください。すべての会話はこのフォルダに限定されます。"
+    "welcomeNoProject": "プロジェクトフォルダを選択して開始してください。すべての会話はこのフォルダに限定されます。",
+    "gitBranch": "ブランチ",
+    "gitRemote": "リモート",
+    "gitRepoRoot": "リポジトリルート",
+    "gitDetachedHead": "デタッチド HEAD"
   },
   "context": {
     "compressing": "圧縮中…",

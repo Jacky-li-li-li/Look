@@ -69,4 +69,15 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 		const active = ctx.project.service.getActiveProject();
 		return { success: true, project: active };
 	});
+
+	register("project:git-info", async (data) => {
+		// 与 project:list 一致：等待项目索引加载完成，避免启动早期 getProjectInfo
+		// 返回 null 让渲染端状态栏永久空白（effect 不会自动重跑）。
+		await ctx.project.service.whenProjectsLoaded();
+		const projectId = guardString(data.projectId, "projectId");
+		const project = ctx.project.service.getProjectInfo(projectId);
+		if (!project?.valid) return { success: true, info: null };
+		const info = await ctx.git.service.getRepoInfo(project.cwd);
+		return { success: true, info };
+	});
 };

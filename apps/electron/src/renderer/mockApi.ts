@@ -397,6 +397,18 @@ const mockApi: LookAPI = {
 	deleteProject: () => ok,
 	confirmDeleteProject: () => ok,
 	getActiveProject: () => success({ project: null }),
+	// 浏览器 dev 模式返回固定假 git 信息，便于预览状态栏（真实环境由主进程探测）。
+	getProjectGitInfo: () =>
+		success({
+			info: {
+				isRepo: true,
+				repoRoot: "/mock/project",
+				branch: "main",
+				headShort: null,
+				remoteName: "origin",
+				remoteUrl: "https://github.com/mock/repo.git",
+			},
+		}),
 
 	// ---- Session tree ----
 	navigateTree: () => success({ result: { cancelled: true } }),
@@ -442,7 +454,16 @@ const mockApi: LookAPI = {
 	setSkillEnabled: () => ok,
 
 	// ---- User Profile ----
-	getUserProfile: () => success({ profile: null }),
+	// 返回非空 mock profile，使浏览器 mock 模式能进入主界面（否则被登录页拦截）。
+	getUserProfile: () =>
+		success({
+			profile: {
+				userId: "mock-user",
+				email: "mock@look.local",
+				userName: "Mock Dev",
+				avatar: "",
+			},
+		}),
 	updateUserProfile: () => ok,
 	resetUserProfile: () => ok,
 	logout: () => ok,
