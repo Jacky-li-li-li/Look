@@ -50,6 +50,10 @@ export interface LookIslandSessionSnapshot {
 	subagents?: LookIslandSubagentSnapshot[];
 	/** Context window usage percent (0-100), when known. */
 	usagePercent?: number | null;
+	/** Context window tokens consumed, when known (live-updating). */
+	usageTokens?: number | null;
+	/** Full context window size in tokens, when known. */
+	usageContextWindow?: number | null;
 	startedAt: number;
 	lastActivityAt: number;
 }

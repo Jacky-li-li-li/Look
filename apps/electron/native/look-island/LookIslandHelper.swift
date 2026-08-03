@@ -50,6 +50,24 @@ private let lookIslandUnreadGreen = Color(red: 0.133, green: 0.773, blue: 0.369)
 private let lookIslandIdleGray = Color(white: 0.45)
 private let lookIslandWarningOrange = Color(red: 0.98, green: 0.67, blue: 0.22) // context near limit
 
+// MARK: - Formatting helpers
+
+/// Token count formatting, kept in sync with the main window's ContextRing.
+enum LookIslandFormat {
+  static func tokens(_ value: Double) -> String {
+    if value >= 1_000_000 {
+      // Match JS toFixed(1) (round half away from zero). printf %.1f uses
+      // round-half-to-even and would render 1_250_000 as "1.2M" vs "1.3M".
+      let tenths = Int((value / 1_000_000 * 10).rounded())
+      return "\(tenths / 10).\(tenths % 10)M"
+    }
+    if value >= 1_000 {
+      return "\(Int((value / 1_000).rounded()))K"
+    }
+    return "\(Int(value))"
+  }
+}
+
 // MARK: - Wire types (Codable mirrors of the TS contract)
 
 struct LookIslandRect: Codable, Equatable {
@@ -88,6 +106,8 @@ struct LookIslandSessionSnapshot: Codable, Equatable, Identifiable {
   var activityLines: [LookIslandActivityLine]
   var subagents: [LookIslandSubagentSnapshot]?
   var usagePercent: Double?
+  var usageTokens: Double?
+  var usageContextWindow: Double?
   var startedAt: Double
   var lastActivityAt: Double
 
@@ -778,19 +798,24 @@ private struct LookIslandSessionRow: View {
 
       Spacer(minLength: 8)
 
-      if let usage = session.usagePercent, usage >= 85 {
-        Text("\(Int(usage))%")
+      if let usageTokens = session.usageTokens, usageTokens > 0 {
+        let usageText = LookIslandFormat.tokens(usageTokens)
+          + (session.usageContextWindow.map { " / " + LookIslandFormat.tokens($0) } ?? " / —")
+        let warning = (session.usagePercent ?? 0) >= 85
+        Text(usageText)
           .font(.system(size: 9, weight: .semibold, design: .monospaced))
-          .foregroundColor(lookIslandWarningOrange)
+          .foregroundColor(warning ? lookIslandWarningOrange : Color.white.opacity(0.55))
+          .lineLimit(1)
           .padding(.horizontal, 5)
           .padding(.vertical, 2)
-          .background(Capsule().fill(lookIslandWarningOrange.opacity(0.16)))
+          .background(Capsule().fill(warning ? lookIslandWarningOrange.opacity(0.16) : Color.white.opacity(0.08)))
       }
 
       if let model = session.modelLabel, !model.isEmpty {
         Text(model)
           .font(.system(size: 9, weight: .semibold))
           .foregroundColor(.white.opacity(0.75))
+          .lineLimit(1)
           .padding(.horizontal, 6)
           .padding(.vertical, 2)
           .background(Capsule().fill(Color.white.opacity(0.12)))

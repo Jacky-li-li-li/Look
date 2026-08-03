@@ -34,6 +34,8 @@ interface LookIslandSessionState {
 	activityLines: LookIslandActivityLine[];
 	subagents: Map<string, LookIslandSubagentSnapshot>;
 	usagePercent: number | null;
+	usageTokens: number | null;
+	usageContextWindow: number | null;
 	destroyedAt: number | null;
 	startedAt: number;
 	lastActivityAt: number;
@@ -41,6 +43,9 @@ interface LookIslandSessionState {
 
 export interface LookIslandState {
 	sessions: Map<string, LookIslandSessionState>;
+	/** Completed sessions the user already viewed — tombstone so late/replayed
+	 * activate snapshots cannot revive them as running ghosts. */
+	viewedCompleted: Set<string>;
 	appFocused: boolean;
 	visibleSessionId: string | null;
 	/** Whether the island is manually expanded (clicked the pill). */
@@ -54,6 +59,7 @@ export interface LookIslandState {
 export function createLookIslandState(): LookIslandState {
 	return {
 		sessions: new Map(),
+		viewedCompleted: new Set(),
 		appFocused: true,
 		visibleSessionId: null,
 		expanded: false,
@@ -64,6 +70,7 @@ export function createLookIslandState(): LookIslandState {
 
 export function resetLookIslandState(state: LookIslandState): void {
 	state.sessions.clear();
+	state.viewedCompleted.clear();
 	state.appFocused = true;
 	state.visibleSessionId = null;
 	state.expanded = false;
@@ -110,6 +117,16 @@ const LOOK_ISLAND_MAX_SESSIONS = 20;
 export function applyLookIslandEvent(state: LookIslandState, event: MainToRendererEvent, now: number): boolean {
 	switch (event.type) {
 		case "session:snapshot": {
+			// A completed session the user already viewed must not be revived by
+			// late/replayed activate snapshots (e.g. the partial + deferred full
+			// snapshot pair for long sessions). Only a genuinely new run (streaming
+			// snapshot) or a fresh agent_end re-establishes it on the island.
+			if (state.viewedCompleted.has(event.sessionId) && !state.sessions.has(event.sessionId)) {
+				if (!event.runtime.isStreaming && event.reason !== "agent_end") {
+					return false;
+				}
+				state.viewedCompleted.delete(event.sessionId);
+			}
 			const session = getOrCreateSession(state, event.sessionId, now);
 			const streaming = event.runtime.isStreaming;
 			const detail = streamingDetailFromSnapshot(event);
@@ -126,18 +143,35 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 				if (label) session.modelLabel = label;
 			}
 			const usage = event.runtime.contextUsage;
-			if (usage && typeof usage.percent === "number" && Number.isFinite(usage.percent)) {
-				session.usagePercent = usage.percent;
+			// contextUsage fields may be null after compaction (SDK returns null
+			// until the next LLM response) — clear instead of keeping stale values.
+			if (usage) {
+				session.usagePercent = finiteOrNull(usage.percent);
+				session.usageTokens = finiteOrNull(usage.tokens);
+				session.usageContextWindow = finiteOrNull(usage.contextWindow);
 			}
 			session.lastActivityAt = now;
 			if (event.reason === "agent_end") {
 				session.phase = "completed";
 				session.detail = session.detail || "Completed";
+				// User is actively watching this session (activated + app focused) —
+				// completion is already "read", drop it so it never surfaces as an
+				// unread badge later (tombstoned against activate-snapshot revival).
+				if (state.visibleSessionId === event.sessionId && state.appFocused) {
+					state.sessions.delete(event.sessionId);
+					state.viewedCompleted.add(event.sessionId);
+					if (state.sessions.size === 0 && state.expanded) {
+						state.expanded = false;
+					}
+					return true;
+				}
 				session.attention = true;
 			}
-			// User opened this session in the main window — clear unread badge.
+			// User opened this session — viewed. Completed sessions leave the
+			// island entirely; live sessions just drop their unread flag.
 			if (event.reason === "activate") {
-				session.attention = false;
+				state.visibleSessionId = event.sessionId;
+				return markLookIslandSessionViewed(state, event.sessionId);
 			}
 			return true;
 		}
@@ -263,34 +297,27 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 
 		case "agent:context-usage": {
 			const session = getOrCreateSession(state, event.agentId, now);
-			const percent = event.contextUsage.percent;
-			if (typeof percent === "number" && Number.isFinite(percent)) {
-				session.usagePercent = percent;
-			}
+			const usage = event.contextUsage;
+			// Same null-clearing semantics as the snapshot path (compaction resets).
+			session.usagePercent = finiteOrNull(usage.percent);
+			session.usageTokens = finiteOrNull(usage.tokens);
+			session.usageContextWindow = finiteOrNull(usage.contextWindow);
 			session.lastActivityAt = now;
 			return true;
 		}
 
 		case "session:activated": {
-			const session = state.sessions.get(event.agentId);
-			if (!session) return false;
-			// User opened this session — mark as read (drop from unread badge).
-			if (session.attention) {
-				session.attention = false;
-				return true;
-			}
-			return false;
+			// Track the session the user is actively viewing (read semantics
+			// for agent_end). Completed sessions leave the island entirely;
+			// live sessions just drop their unread flag.
+			state.visibleSessionId = event.agentId;
+			return markLookIslandSessionViewed(state, event.agentId);
 		}
 
 		case "notification:activate-session": {
-			const session = state.sessions.get(event.agentId);
-			if (!session) return false;
-			// Island jump / notification click — mark as viewed.
-			if (session.attention) {
-				session.attention = false;
-				return true;
-			}
-			return false;
+			// Island jump / notification click — same "user opened this" semantics.
+			state.visibleSessionId = event.agentId;
+			return markLookIslandSessionViewed(state, event.agentId);
 		}
 
 		case "error": {
@@ -319,6 +346,8 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 
 		case "agent:destroyed": {
 			const session = state.sessions.get(event.agentId);
+			// Session lifecycle is over — its viewed tombstone is no longer needed.
+			state.viewedCompleted.delete(event.agentId);
 			if (session) {
 				if (session.phase !== "error") {
 					session.phase = "completed";
@@ -378,6 +407,8 @@ function getOrCreateSession(state: LookIslandState, sessionId: string, now: numb
 		activityLines: [],
 		subagents: new Map(),
 		usagePercent: null,
+		usageTokens: null,
+		usageContextWindow: null,
 		destroyedAt: null,
 		startedAt: now,
 		lastActivityAt: now,
@@ -386,11 +417,44 @@ function getOrCreateSession(state: LookIslandState, sessionId: string, now: numb
 	return session;
 }
 
+/**
+ * User actually opened this session. The island only represents live
+ * sessions plus unread completed ones — once a completed session has been
+ * viewed it no longer needs island representation, so drop it entirely.
+ * A plain "read" flag would leave the stale session visible whenever the
+ * app loses focus. Live sessions (running / needs-interaction / error)
+ * stay on the island.
+ */
+function markLookIslandSessionViewed(state: LookIslandState, sessionId: string): boolean {
+	const session = state.sessions.get(sessionId);
+	if (!session) return false;
+	if (session.phase === "completed") {
+		state.sessions.delete(sessionId);
+		// Tombstone the session so a replayed/duplicate activate snapshot cannot
+		// resurrect it as a running ghost (see session:snapshot guard).
+		state.viewedCompleted.add(sessionId);
+		if (state.sessions.size === 0 && state.expanded) {
+			state.expanded = false;
+		}
+		return true;
+	}
+	if (session.attention) {
+		session.attention = false;
+		return true;
+	}
+	return false;
+}
+
 function pushActivityLine(session: LookIslandSessionState, line: LookIslandActivityLine): void {
 	session.activityLines.push(line);
 	if (session.activityLines.length > MAX_ACTIVITY_LINES) {
 		session.activityLines = session.activityLines.slice(-MAX_ACTIVITY_LINES);
 	}
+}
+
+/** Coerce a context-usage field to a finite number, or null when absent/invalid. */
+function finiteOrNull(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function streamingDetailFromSnapshot(event: Extract<MainToRendererEvent, { type: "session:snapshot" }>): string | null {
@@ -547,6 +611,8 @@ export function buildLookIslandDisplayState(
 		activityLines: session.activityLines,
 		...(session.subagents.size > 0 ? { subagents: [...session.subagents.values()] } : {}),
 		...(session.usagePercent != null ? { usagePercent: session.usagePercent } : {}),
+		...(session.usageTokens != null ? { usageTokens: session.usageTokens } : {}),
+		...(session.usageContextWindow != null ? { usageContextWindow: session.usageContextWindow } : {}),
 		startedAt: session.startedAt,
 		lastActivityAt: session.lastActivityAt,
 	}));

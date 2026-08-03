@@ -425,32 +425,105 @@ describe("LookIslandReducer", () => {
 		expect(state.sessions.has("s1")).toBe(false);
 	});
 
-	it("clears unread attention when the user activates a completed session", () => {
+	it("drops a completed session from the island once activated (snapshot activate)", () => {
 		const state = createLookIslandState();
 		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
 		expect(state.sessions.get("s1")?.attention).toBe(true);
 		applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 2000);
-		expect(state.sessions.get("s1")?.attention).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
 		const pill = buildLookIslandPillSnapshot(state.sessions.values());
 		expect(pill.unreadCompletedCount).toBe(0);
+		expect(pill.sessionCount).toBe(0);
 	});
 
-	it("clears unread attention on session:activated (any activation path)", () => {
+	it("drops a completed session on session:activated (any activation path)", () => {
 		const state = createLookIslandState();
 		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
 		expect(state.sessions.get("s1")?.attention).toBe(true);
 		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
-		expect(state.sessions.get("s1")?.attention).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
 		const pill = buildLookIslandPillSnapshot(state.sessions.values());
 		expect(pill.unreadCompletedCount).toBe(0);
 	});
 
-	it("clears unread attention on notification:activate-session (island jump)", () => {
+	it("drops a completed session on notification:activate-session (island jump)", () => {
 		const state = createLookIslandState();
 		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
 		expect(state.sessions.get("s1")?.attention).toBe(true);
 		applyLookIslandEvent(state, { type: "notification:activate-session", agentId: "s1" }, 2000);
-		expect(state.sessions.get("s1")?.attention).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
+	});
+
+	it("keeps a running session on the island after the user views it", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 1000);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
+		const session = state.sessions.get("s1");
+		expect(session?.phase).toBe("running");
+		expect(state.sessions.has("s1")).toBe(true);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 2000);
+		expect(display.visible).toBe(true);
+		expect(display.currentSessionId).toBe("s1");
+	});
+
+	it("hides the island once a completed session has been viewed", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 2000);
+		expect(display.visible).toBe(false);
+		expect(display.displayPolicy).toBe("closed");
+		expect(display.sessions).toHaveLength(0);
+	});
+
+	it("records consumed tokens from agent:context-usage for live display", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(
+			state,
+			{
+				type: "agent:context-usage",
+				agentId: "s1",
+				contextUsage: { tokens: 12_480, contextWindow: 128_000, percent: 9.75 },
+			},
+			1000,
+		);
+		expect(state.sessions.get("s1")?.usageTokens).toBe(12_480);
+		expect(state.sessions.get("s1")?.usageContextWindow).toBe(128_000);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 1000);
+		expect(display.sessions[0].usageTokens).toBe(12_480);
+		expect(display.sessions[0].usageContextWindow).toBe(128_000);
+		expect(display.sessions[0].usagePercent).toBe(9.75);
+	});
+
+	it("records consumed tokens from a snapshot's runtime contextUsage", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(
+			state,
+			{
+				type: "session:snapshot",
+				sessionId: "s1",
+				reason: "initial",
+				sequence: 1,
+				leafId: null,
+				entries: [],
+				runtime: {
+					model: undefined,
+					thinkingLevel: "off",
+					isStreaming: true,
+					isRetrying: false,
+					isCompacting: false,
+					retryAttempt: 0,
+					steering: [],
+					followUp: [],
+					stats: { messageCount: 0, toolCallCount: 0, totalTokens: 0 },
+					contextUsage: { tokens: 40_000, contextWindow: 200_000, percent: 20 },
+				},
+			},
+			1000,
+		);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 1000);
+		expect(display.sessions[0].usageTokens).toBe(40_000);
+		expect(display.sessions[0].usageContextWindow).toBe(200_000);
 	});
 
 	it("caps the session map to avoid payload growth", () => {
@@ -461,5 +534,127 @@ describe("LookIslandReducer", () => {
 		}
 		pruneLookIslandSessions(state, 10_000);
 		expect(state.sessions.size).toBeLessThanOrEqual(20);
+	});
+
+	it("does not revive a viewed completed session on a replayed activate snapshot", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		// First activate snapshot (e.g. partial) drops the completed session.
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 2000);
+		expect(state.sessions.has("s1")).toBe(false);
+		// Deferred full snapshot with the same reason must NOT revive it as running.
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 2100);
+		expect(state.sessions.has("s1")).toBe(false);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 2100);
+		expect(display.visible).toBe(false);
+	});
+
+	it("does not revive after session:activated followed by an activate snapshot", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
+		expect(state.sessions.has("s1")).toBe(false);
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 2100);
+		expect(state.sessions.has("s1")).toBe(false);
+	});
+
+	it("re-establishes a viewed completed session on a fresh agent_end when not actively viewing", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 2000);
+		expect(state.sessions.has("s1")).toBe(false);
+		// User switches to another session — s1 is no longer actively viewed.
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s2" }, 2500);
+		// A new completion event for the same session is fresh info — show again.
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 3000);
+		expect(state.sessions.get("s1")?.phase).toBe("completed");
+		expect(state.sessions.get("s1")?.attention).toBe(true);
+	});
+
+	it("lets a newly streaming session replace a viewed completed tombstone", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 2000);
+		expect(state.sessions.has("s1")).toBe(false);
+		// The session restarts (retry) — a streaming snapshot clears the tombstone.
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 3000);
+		expect(state.sessions.get("s1")?.phase).toBe("running");
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 3000);
+		expect(display.visible).toBe(true);
+	});
+
+	it("clears usage fields when contextUsage reports null (post-compaction)", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(
+			state,
+			{
+				type: "agent:context-usage",
+				agentId: "s1",
+				contextUsage: { tokens: 12_480, contextWindow: 128_000, percent: 9.75 },
+			},
+			1000,
+		);
+		expect(state.sessions.get("s1")?.usageTokens).toBe(12_480);
+		// Compaction resets context usage to null until the next LLM response.
+		applyLookIslandEvent(
+			state,
+			{
+				type: "agent:context-usage",
+				agentId: "s1",
+				contextUsage: { tokens: null, contextWindow: 128_000, percent: null },
+			},
+			2000,
+		);
+		expect(state.sessions.get("s1")?.usageTokens).toBeNull();
+		expect(state.sessions.get("s1")?.usagePercent).toBeNull();
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 2000);
+		expect(display.sessions[0].usageTokens).toBeUndefined();
+	});
+
+	it("collapses the island when the last session is removed", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		requestLookIslandExpand(state);
+		expect(state.expanded).toBe(true);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
+		expect(state.sessions.size).toBe(0);
+		expect(state.expanded).toBe(false);
+		const display = buildLookIslandDisplayState(state, { appFocused: true }, 2000);
+		expect(display.mode).toBe("compact");
+	});
+
+	it("treats agent_end as read when the user is actively viewing the session", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 1000);
+		// User activates s1 (running) — it stays, and becomes the viewed session.
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 1100);
+		expect(state.visibleSessionId).toBe("s1");
+		// Completion while the user watches it → read, dropped from the island.
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 2000);
+		expect(state.sessions.has("s1")).toBe(false);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 2000);
+		expect(display.visible).toBe(false);
+	});
+
+	it("keeps unread attention when a non-viewed session completes", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 1000);
+		// User is viewing s2, not s1.
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s2" }, 1100);
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 2000);
+		const session = state.sessions.get("s1");
+		expect(session?.phase).toBe("completed");
+		expect(session?.attention).toBe(true);
+	});
+
+	it("marks unread when the app is not focused even for the viewed session", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 1000);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 1100);
+		setLookIslandAppFocused(state, false);
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 2000);
+		const session = state.sessions.get("s1");
+		expect(session?.phase).toBe("completed");
+		expect(session?.attention).toBe(true);
 	});
 });

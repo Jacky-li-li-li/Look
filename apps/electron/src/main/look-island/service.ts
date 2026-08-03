@@ -293,7 +293,12 @@ function clampWidth(value: number | null, min: number, max: number): number {
 }
 
 function sessionFingerprint(sessions: LookIslandDisplayState["sessions"]): string {
-	return sessions.map((s) => `${s.sessionId}:${s.phase}:${s.lastActivityAt}:${s.detail}`).join("|");
+	return sessions
+		.map(
+			(s) =>
+				`${s.sessionId}:${s.phase}:${s.lastActivityAt}:${s.detail}:${s.usageTokens ?? ""}:${s.usageContextWindow ?? ""}:${s.usagePercent ?? ""}`,
+		)
+		.join("|");
 }
 
 function sameDisplayState(a: LookIslandDisplayState, b: LookIslandDisplayState): boolean {
