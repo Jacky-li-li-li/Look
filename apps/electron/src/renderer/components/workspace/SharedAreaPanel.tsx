@@ -230,7 +230,10 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 				allowDirectories: true,
 				allowMultiple: true,
 			});
+			// 取消是成功分支的业务字段（success:true + canceled）：先判真失败，
+			// 再判取消——取消时直接返回不报错。
 			if (!result?.success) throw new Error(result?.error ?? t("sharedArea.importFailed"));
+			if (result.canceled) return;
 			if (!result.paths || result.paths.length === 0) return;
 			ensureSuccess(await window.look.importToShared(projectId, result.paths), t("sharedArea.importFailed"));
 			await onAfterChange();
@@ -248,7 +251,9 @@ export function SharedAreaPanel({ projectId, files, isLoading, onAfterChange }: 
 		setOperation("export");
 		try {
 			const dir = await window.look.openDirectoryDialog(t("sharedArea.exportDialogTitle"));
+			// 取消是成功分支的业务字段：先判真失败，再判取消。
 			if (!dir?.success) throw new Error(dir?.error ?? t("sharedArea.exportFailed"));
+			if (dir.canceled) return;
 			if (!dir.path) return;
 			ensureSuccess(
 				await window.look.exportFromShared(projectId, [node.path], dir.path),

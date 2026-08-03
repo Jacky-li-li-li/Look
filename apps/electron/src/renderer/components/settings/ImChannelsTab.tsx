@@ -762,7 +762,9 @@ export default function ImChannelsTab() {
 			if (result) {
 				patchManual("testResult", {
 					success: result.success,
-					message: result.message ?? result.error ?? t("settings.testFailed"),
+					message: result.success
+						? (result.message ?? t("settings.testFailed"))
+						: (result.error ?? t("settings.testFailed")),
 				});
 				if (result.success) patchManual("testPassed", true);
 			}
@@ -837,7 +839,9 @@ export default function ImChannelsTab() {
 			if (result) {
 				patchList("testResult", {
 					success: result.success,
-					message: result.message ?? result.error ?? t("settings.testNoResponse"),
+					message: result.success
+						? (result.message ?? t("settings.testNoResponse"))
+						: (result.error ?? t("settings.testNoResponse")),
 				});
 			} else {
 				patchList("testResult", { success: false, message: t("settings.testNoResponse") });

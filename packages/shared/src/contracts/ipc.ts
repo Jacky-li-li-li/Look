@@ -21,8 +21,17 @@ import type {
 	UserSettings,
 } from "../types.js";
 
-export type IpcResult<T extends object = Record<string, never>> =
-	| ({ success: true } & T)
+/**
+ * IPC 边界统一信封。对齐 pi SDK 的领域规范（方法返回业务值、错误 throw），
+ * 错误序列化只在 IPC 边界做一次：领域服务 throw → handlers.ts 的
+ * `look:invoke` 统一 catch 并产出失败分支（error/errorCode/errorStack）。
+ *
+ * 成功分支的 `error?: never` 是兼容位：让渲染端 `result?.error ?? fallback`
+ * 的无收窄读法继续成立（成功时类型为 undefined），同时保证失败分支必须
+ * 携带 error。
+ */
+export type IpcResult<T extends object = object> =
+	| ({ success: true } & T & { error?: never })
 	| { success: false; error: string; errorCode?: string | null; errorStack?: string | null };
 
 /**
@@ -87,7 +96,7 @@ export interface LookAPI {
 	destroyAgent(agentId: string): Promise<IpcResult>;
 	getModels(): Promise<IpcResult<{ models: AvailableModel[] }>>;
 	getProviders(): Promise<IpcResult<{ providers: ProviderInfo[] }>>;
-	getAgents(): Promise<{ success: boolean; agents?: AgentInfo[]; error?: string }>;
+	getAgents(): Promise<IpcResult<{ agents?: AgentInfo[] }>>;
 	listScheduledTasks(): Promise<IpcResult<{ tasks: ScheduledTask[] }>>;
 	createScheduledTask(task: ScheduledTaskInput): Promise<IpcResult<{ task: ScheduledTask }>>;
 	updateScheduledTask(taskId: string, patch: Partial<ScheduledTaskInput>): Promise<IpcResult<{ task: ScheduledTask }>>;
@@ -104,7 +113,7 @@ export interface LookAPI {
 	): Promise<IpcResult<{ valid: boolean; error?: string; nextRunAt?: string }>>;
 	switchModel(agentId: string, model: string): Promise<IpcResult>;
 	updateThinking(agentId: string, level: ThinkingLevel): Promise<IpcResult>;
-	abortAgent(agentId: string): Promise<{ success: boolean; error?: string }>;
+	abortAgent(agentId: string): Promise<IpcResult>;
 	setEntryLabel(agentId: string, entryId: string, label: string | null): Promise<IpcResult>;
 	renameAgent(agentId: string, name: string): Promise<IpcResult>;
 	compressSession(agentId: string, customInstructions?: string): Promise<IpcResult>;
@@ -119,19 +128,17 @@ export interface LookAPI {
 		entryId: string,
 		options?: { name?: string },
 	): Promise<IpcResult<{ agentId: string; sessionFilePath: string }>>;
-	openDirectoryDialog(
-		title?: string,
-	): Promise<{ success: boolean; path?: string; canceled?: boolean; error?: string }>;
+	openDirectoryDialog(title?: string): Promise<IpcResult<{ path?: string; canceled?: boolean }>>;
 	openFileDialog(options?: {
 		title?: string;
 		allowDirectories?: boolean;
 		allowMultiple?: boolean;
-	}): Promise<{ success: boolean; paths?: string[]; canceled?: boolean; error?: string }>;
+	}): Promise<IpcResult<{ paths?: string[]; canceled?: boolean }>>;
 	/** Recover the absolute filesystem path from a File object dropped into
 	 *  the sandboxed renderer. Returns null when the File has no recoverable
 	 *  path (e.g. dropped directories in HTML5 dataTransfer). */
 	getPathForFile(file: unknown): string | null;
-	openProjectFolder(projectId?: string): Promise<{ success: boolean; path?: string; error?: string }>;
+	openProjectFolder(projectId?: string): Promise<IpcResult<{ path?: string }>>;
 	listProjects(): Promise<IpcResult<{ projects: ProjectInfo[]; activeProjectId?: string | null }>>;
 	createProject(cwd: string, name?: string): Promise<IpcResult<{ project: ProjectInfo; isDuplicate: boolean }>>;
 	renameProject(projectId: string, name: string): Promise<IpcResult>;
@@ -144,10 +151,9 @@ export interface LookAPI {
 	testApiKey(
 		provider: string,
 		key: string,
-	): Promise<{
-		success: boolean;
-		result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string };
-	}>;
+	): Promise<
+		IpcResult<{ result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } }>
+	>;
 	getApiKey(
 		provider: string,
 		opts?: { reveal?: boolean },
@@ -162,72 +168,58 @@ export interface LookAPI {
 	removeCustomProvider(name: string): Promise<IpcResult<{ removed: boolean }>>;
 	listCustomProviders(): Promise<IpcResult<{ providers: CustomProviderInput[] }>>;
 	testCustomProvider(input: CustomProviderInput): Promise<IpcResult<{ result: TestCustomProviderResult }>>;
-	getGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
-	setGeneralSettings(
-		settings: Partial<GeneralSettings>,
-	): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
-	resetGeneralSettings(): Promise<{ success: boolean; settings?: GeneralSettings; error?: string }>;
+	getGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
+	setGeneralSettings(settings: Partial<GeneralSettings>): Promise<IpcResult<{ settings?: GeneralSettings }>>;
+	resetGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
 	// ---- Look Island (macOS notch panel) ----
-	getLookIslandSettings(): Promise<{ success: boolean; settings?: LookIslandSettings; error?: string }>;
-	setLookIslandEnabled(enabled: boolean): Promise<{ success: boolean; settings?: LookIslandSettings; error?: string }>;
+	getLookIslandSettings(): Promise<IpcResult<{ settings?: LookIslandSettings }>>;
+	setLookIslandEnabled(enabled: boolean): Promise<IpcResult<{ settings?: LookIslandSettings }>>;
 	// ---- v0.3 skills ----
-	listSkills(): Promise<{
-		success: boolean;
-		skills?: SkillEntry[];
-		diagnostics?: SkillDiagnostic[];
-		importedPaths?: string[];
-		error?: string;
-	}>;
-	importSkillPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }>;
-	detectCommonSkillPaths(): Promise<{
-		success: boolean;
-		detected?: Array<{ tool: string; path: string; exists: boolean; skillCount: number }>;
-	}>;
+	listSkills(): Promise<
+		IpcResult<{ skills?: SkillEntry[]; diagnostics?: SkillDiagnostic[]; importedPaths?: string[] }>
+	>;
+	importSkillPaths(paths: string[]): Promise<IpcResult<{ importedCount: number }>>;
+	detectCommonSkillPaths(): Promise<
+		IpcResult<{ detected?: Array<{ tool: string; path: string; exists: boolean; skillCount: number }> }>
+	>;
 	setPermissionMode(
 		agentId: string,
 		mode: "always" | "ask" | "plan",
 		/** 默认 true：连带更新用户全局默认模式；会话内临时提升传 false */
 		updateDefault?: boolean,
-	): Promise<{ success: boolean; mode?: "always" | "ask" | "plan"; error?: string }>;
-	getPermissionMode(agentId: string): Promise<{ success: boolean; mode?: "always" | "ask" | "plan"; error?: string }>;
-	respondPermission(payload: {
-		requestId: string;
-		action: "allow" | "deny" | "allow_always";
-	}): Promise<{ success: boolean; error?: string }>;
+	): Promise<IpcResult<{ mode?: "always" | "ask" | "plan" }>>;
+	getPermissionMode(agentId: string): Promise<IpcResult<{ mode?: "always" | "ask" | "plan" }>>;
+	respondPermission(payload: { requestId: string; action: "allow" | "deny" | "allow_always" }): Promise<IpcResult>;
 	respondPlanQuestion(payload: {
 		requestId: string;
 		sessionId: string;
 		answers: Record<string, string>;
 		cancelled?: boolean;
-	}): Promise<{ success: boolean; error?: string }>;
+	}): Promise<IpcResult>;
 	respondPlanApproval(payload: {
 		requestId: string;
 		sessionId: string;
 		action: "approve" | "reject";
-	}): Promise<{ success: boolean; error?: string }>;
+	}): Promise<IpcResult>;
 	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
-	listSubSessions(parentSessionId: string): Promise<{ success: boolean; childSessionIds?: string[]; error?: string }>;
-	getParentSession(
-		childSessionId: string,
-	): Promise<{ success: boolean; parentSessionId?: string | null; error?: string }>;
+	listSubSessions(parentSessionId: string): Promise<IpcResult<{ childSessionIds?: string[] }>>;
+	getParentSession(childSessionId: string): Promise<IpcResult<{ parentSessionId?: string | null }>>;
 	// ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
-	listAgentDefinitions(): Promise<{ success: boolean; agents?: AgentDefinitionInfo[]; error?: string }>;
-	createAgentDefinition(
-		input: AgentDefinitionInput,
-	): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
+	listAgentDefinitions(): Promise<IpcResult<{ agents?: AgentDefinitionInfo[] }>>;
+	createAgentDefinition(input: AgentDefinitionInput): Promise<IpcResult<{ agent?: AgentDefinitionInfo }>>;
 	updateAgentDefinition(
 		name: string,
 		input: AgentDefinitionInput,
-	): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
-	deleteAgentDefinition(name: string): Promise<{ success: boolean; error?: string }>;
-	installAgentDefinition(name: string): Promise<{ success: boolean; agent?: AgentDefinitionInfo; error?: string }>;
+	): Promise<IpcResult<{ agent?: AgentDefinitionInfo }>>;
+	deleteAgentDefinition(name: string): Promise<IpcResult>;
+	installAgentDefinition(name: string): Promise<IpcResult<{ agent?: AgentDefinitionInfo }>>;
 	// ---- SubAgent：Agent 开关（Stage 2） ----
-	setSubagentEnabled(enabled: boolean): Promise<{ success: boolean; enabled?: boolean; error?: string }>;
+	setSubagentEnabled(enabled: boolean): Promise<IpcResult<{ enabled?: boolean }>>;
 	// ---- SubAgent：Agent 定义开关 ----
-	setAgentDefinitionEnabled(name: string, enabled: boolean): Promise<{ success: boolean; error?: string }>;
+	setAgentDefinitionEnabled(name: string, enabled: boolean): Promise<IpcResult>;
 	// ---- Skills：Skill 开关 ----
-	setSkillEnabled(name: string, enabled: boolean): Promise<{ success: boolean; error?: string }>;
-	revealInFinder(path: string): Promise<{ success: boolean; error?: string }>;
+	setSkillEnabled(name: string, enabled: boolean): Promise<IpcResult>;
+	revealInFinder(path: string): Promise<IpcResult>;
 	/** Open an OAuth URL in a controlled browser window, returns the final redirect URL. */
 	openOAuthUrl(url: string, redirectTo: string): Promise<IpcResult<{ redirectUrl: string }>>;
 	getUserProfile(): Promise<IpcResult<{ profile: UserProfile | null }>>;
@@ -237,18 +229,14 @@ export interface LookAPI {
 	resetUserProfile(): Promise<IpcResult>;
 	logout(): Promise<IpcResult>;
 	// ---- Shared area ----
-	listSharedFiles(projectId: string): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
-	startSharedWatch(projectId: string): Promise<{ success: boolean; error?: string }>;
-	stopSharedWatch(projectId: string): Promise<{ success: boolean; error?: string }>;
-	writeSharedFile(projectId: string, path: string, content: string): Promise<{ success: boolean; error?: string }>;
-	createSharedDir(projectId: string, path: string): Promise<{ success: boolean; error?: string }>;
-	deleteSharedItem(projectId: string, path: string): Promise<{ success: boolean; error?: string }>;
-	importToShared(
-		projectId: string,
-		sources: string[],
-		targetDir?: string,
-	): Promise<{ success: boolean; error?: string }>;
-	exportFromShared(projectId: string, paths: string[], destDir: string): Promise<{ success: boolean; error?: string }>;
+	listSharedFiles(projectId: string): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
+	startSharedWatch(projectId: string): Promise<IpcResult>;
+	stopSharedWatch(projectId: string): Promise<IpcResult>;
+	writeSharedFile(projectId: string, path: string, content: string): Promise<IpcResult>;
+	createSharedDir(projectId: string, path: string): Promise<IpcResult>;
+	deleteSharedItem(projectId: string, path: string): Promise<IpcResult>;
+	importToShared(projectId: string, sources: string[], targetDir?: string): Promise<IpcResult>;
+	exportFromShared(projectId: string, paths: string[], destDir: string): Promise<IpcResult>;
 	/** Drag-drop fallback: write base64/utf8 content to shared area when
 	 *  absolute path is unavailable. */
 	writeSharedContent(
@@ -256,19 +244,16 @@ export interface LookAPI {
 		path: string,
 		content: string,
 		encoding?: "base64" | "utf8",
-	): Promise<{ success: boolean; error?: string }>;
+	): Promise<IpcResult>;
 	// ---- Workspace tree (v0.6) ----
 	listWorkspaceChildren(
 		projectId: string,
 		relativePath: string,
 		showHiddenFiles?: boolean,
-	): Promise<{ success: boolean; nodes?: FileTreeNode[]; error?: string }>;
-	statWorkspaceNode(
-		projectId: string,
-		relativePath: string,
-	): Promise<{ success: boolean; node?: FileTreeNode | null; error?: string }>;
-	startWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
-	stopWorkspaceWatch(projectId: string, relativePath: string): Promise<{ success: boolean; error?: string }>;
+	): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
+	statWorkspaceNode(projectId: string, relativePath: string): Promise<IpcResult<{ node?: FileTreeNode | null }>>;
+	startWorkspaceWatch(projectId: string, relativePath: string): Promise<IpcResult>;
+	stopWorkspaceWatch(projectId: string, relativePath: string): Promise<IpcResult>;
 	// ---- File content ----
 	readFileContent(
 		path: string,
@@ -282,60 +267,49 @@ export interface LookAPI {
 	writeFileContent(path: string, content: string): Promise<IpcResult<{ sizeBytes: number }>>;
 	statFilePath(path: string): Promise<IpcResult<{ kind: "file" | "directory" | "other" | "missing" }>>;
 	// ---- File viewer window ----
-	openFileViewer(path: string): Promise<{ success: boolean; error?: string }>;
-	fileViewerReady(): Promise<{ success: boolean; path?: string | null; error?: string }>;
+	openFileViewer(path: string): Promise<IpcResult>;
+	fileViewerReady(): Promise<IpcResult<{ path?: string | null }>>;
 	// ---- IM Channels ----
-	getImChannels(): Promise<{
-		success: boolean;
-		channels?: Array<{
-			provider: string;
-			appId: string;
-			name?: string;
-			status: string;
-			connected: boolean;
-			enabled: boolean;
-			error?: string;
-		}>;
-		error?: string;
-	}>;
-	getImBindings(): Promise<{
-		success: boolean;
-		bindings?: Array<{
-			chatId: string;
-			sessionId: string;
-			projectId: string;
-			createdAt: number;
-			appId?: string;
-			chatType?: "p2p" | "group";
-			senderOpenId?: string;
-			peerName?: string;
-		}>;
-		error?: string;
-	}>;
+	getImChannels(): Promise<
+		IpcResult<{
+			channels?: Array<{
+				provider: string;
+				appId: string;
+				name?: string;
+				status: string;
+				connected: boolean;
+				enabled: boolean;
+				error?: string;
+			}>;
+		}>
+	>;
+	getImBindings(): Promise<
+		IpcResult<{
+			bindings?: Array<{
+				chatId: string;
+				sessionId: string;
+				projectId: string;
+				createdAt: number;
+				appId?: string;
+				chatType?: "p2p" | "group";
+				senderOpenId?: string;
+				peerName?: string;
+			}>;
+		}>
+	>;
 	connectFeishuChannel(options?: {
 		appName?: string;
 		description?: string;
-	}): Promise<{ success: boolean; registrationId?: string; error?: string }>;
-	connectFeishuManualChannel(input: {
-		appId: string;
-		appSecret: string;
-		name?: string;
-	}): Promise<{ success: boolean; error?: string }>;
-	cancelFeishuRegistration(registrationId: string): Promise<{ success: boolean; error?: string }>;
-	disconnectImChannel(provider: string, appId?: string): Promise<{ success: boolean; error?: string }>;
-	removeImChannel(provider: string, appId: string): Promise<{ success: boolean; error?: string }>;
-	reconnectImChannel(provider: string, appId: string): Promise<{ success: boolean; error?: string }>;
-	sendImTestMessage(input: {
-		receiveIdType: string;
-		receiveId: string;
-		text: string;
-	}): Promise<{ success: boolean; error?: string }>;
-	testImConnection(appId: string): Promise<{ success: boolean; message?: string; error?: string }>;
-	testImConnectionDirect(
-		appId: string,
-		appSecret: string,
-	): Promise<{ success: boolean; message?: string; error?: string }>;
-	updateImChannel(appId: string, updates: { name?: string }): Promise<{ success: boolean; error?: string }>;
+	}): Promise<IpcResult<{ registrationId?: string }>>;
+	connectFeishuManualChannel(input: { appId: string; appSecret: string; name?: string }): Promise<IpcResult>;
+	cancelFeishuRegistration(registrationId: string): Promise<IpcResult>;
+	disconnectImChannel(provider: string, appId?: string): Promise<IpcResult>;
+	removeImChannel(provider: string, appId: string): Promise<IpcResult>;
+	reconnectImChannel(provider: string, appId: string): Promise<IpcResult>;
+	sendImTestMessage(input: { receiveIdType: string; receiveId: string; text: string }): Promise<IpcResult>;
+	testImConnection(appId: string): Promise<IpcResult<{ message?: string }>>;
+	testImConnectionDirect(appId: string, appSecret: string): Promise<IpcResult<{ message?: string }>>;
+	updateImChannel(appId: string, updates: { name?: string }): Promise<IpcResult>;
 	// ---- Provider OAuth login ----
 	/** Initiate an OAuth login flow for a provider (e.g. OpenRouter, Kimi Code). */
 	providerLogin(provider: string): Promise<IpcResult<ProviderSettingsData>>;
@@ -347,11 +321,9 @@ export interface LookAPI {
 	providerLogout(provider: string): Promise<IpcResult<ProviderSettingsData>>;
 
 	// ---- MCP tools ----
-	listAllMcpTools(): Promise<{
-		success: boolean;
-		tools?: Array<{ server: string; tool: { name: string; description?: string } }>;
-		error?: string;
-	}>;
+	listAllMcpTools(): Promise<
+		IpcResult<{ tools?: Array<{ server: string; tool: { name: string; description?: string } }> }>
+	>;
 	// ---- Usage ----
 	getUsage(): Promise<IpcResult<{ usage: unknown }>>;
 	listPrompts(): Promise<IpcResult<{ prompts: unknown[] }>>;
@@ -374,9 +346,9 @@ export interface LookAPI {
 
 	// ---- Auto Updater ----
 	// 状态变化通过 onEvent 的 "update:status" 事件推送（AppUpdatePhase）
-	checkForUpdates(): Promise<{ success: boolean; error?: string }>;
-	downloadUpdate(): Promise<{ success: boolean; error?: string }>;
-	installUpdate(): Promise<{ success: boolean; error?: string }>;
+	checkForUpdates(): Promise<IpcResult>;
+	downloadUpdate(): Promise<IpcResult>;
+	installUpdate(): Promise<IpcResult>;
 }
 
 interface SkillEntry {

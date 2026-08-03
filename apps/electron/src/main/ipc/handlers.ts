@@ -13,6 +13,7 @@ import type { LookIslandSettings, RendererToMainEvent } from "@look/shared/types
 import { type BrowserWindow, ipcMain } from "electron";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
 import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../system/traffic-light.js";
+import { ensureIpcEnvelopeShape } from "../utils/ipc-envelope.js";
 import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
 import {
@@ -188,7 +189,9 @@ export function registerIpcHandlers(
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
 		try {
-			return await dispatcher.dispatch(data);
+			// 信封守卫：handler 返回类型是 unknown，typecheck 覆盖不到返回值形状，
+			// 这里运行时校验失败分支必须带 error（违反时抛错走统一 catch）。
+			return ensureIpcEnvelopeShape(await dispatcher.dispatch(data));
 		} catch (err) {
 			return {
 				success: false,

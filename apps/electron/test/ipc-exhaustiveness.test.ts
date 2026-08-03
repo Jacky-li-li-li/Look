@@ -34,6 +34,7 @@ import {
 	updaterRouter,
 	workspaceRouter,
 } from "../src/main/ipc/routers/index.js";
+import { ensureIpcEnvelopeShape } from "../src/main/utils/ipc-envelope.js";
 import { makeMockContext } from "./helpers/ipc-test-helpers.js";
 
 /** Same router list as handlers.ts `domainRouters` — keep in sync. */
@@ -219,5 +220,32 @@ describe("IPC contract exhaustiveness", () => {
 		const registered = new Set([...dispatcher.registeredTypes, ...EVENT_CHANNEL_TYPES]);
 		const expected = new Set(Object.keys(EXHAUSTIVE));
 		expect(registered).toEqual(expected);
+	});
+});
+
+describe("IpcResult envelope shape", () => {
+	it("rejects a failure branch without an error message", () => {
+		expect(() => ensureIpcEnvelopeShape({ success: false })).toThrow(
+			"IPC handler returned success:false without an error message",
+		);
+		expect(() => ensureIpcEnvelopeShape({ success: false, canceled: true })).toThrow();
+	});
+
+	it("passes a well-formed failure branch", () => {
+		expect(ensureIpcEnvelopeShape({ success: false, error: "boom" })).toEqual({
+			success: false,
+			error: "boom",
+		});
+	});
+
+	it("passes success branches including business results like cancel", () => {
+		expect(ensureIpcEnvelopeShape({ success: true })).toEqual({ success: true });
+		expect(ensureIpcEnvelopeShape({ success: true, canceled: true })).toEqual({ success: true, canceled: true });
+		expect(ensureIpcEnvelopeShape({ success: true, agents: [] })).toEqual({ success: true, agents: [] });
+	});
+
+	it("passes non-object results untouched", () => {
+		expect(ensureIpcEnvelopeShape(undefined)).toBeUndefined();
+		expect(ensureIpcEnvelopeShape("ok")).toBe("ok");
 	});
 });

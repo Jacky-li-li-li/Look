@@ -20,7 +20,9 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 			properties: ["openDirectory", "createDirectory"],
 		});
 		if (result.canceled || result.filePaths.length === 0) {
-			return { success: false, canceled: true };
+			// 用户取消是正常业务结果（SDK 风格：业务值返回、错误 throw），
+			// 不是失败——IpcResult 失败分支要求 error，取消不能走失败分支。
+			return { success: true, canceled: true };
 		}
 		return { success: true, path: result.filePaths[0] };
 	});
@@ -40,7 +42,8 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 			properties,
 		});
 		if (result.canceled || result.filePaths.length === 0) {
-			return { success: false, canceled: true };
+			// 用户取消是正常业务结果，不是失败（见 dialog:open-directory 注释）。
+			return { success: true, canceled: true };
 		}
 		return { success: true, paths: result.filePaths };
 	});

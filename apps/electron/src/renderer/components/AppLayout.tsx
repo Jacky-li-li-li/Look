@@ -12,8 +12,12 @@ import { syncTrafficLightPosition } from "../lib/trafficLight";
 import {
 	appReadyPhaseAtom,
 	type ProviderSettingsData,
+	pendingDeleteProjectAtom,
 	rightPanelCollapsedAtom,
-	type SettingsTab,
+	settingsTabAtom,
+	showAgentSquareAtom,
+	showScheduledTasksAtom,
+	showSettingsAtom,
 	sidebarCollapsedAtom,
 	windowFullscreenAtom,
 } from "../store/atoms";
@@ -36,8 +40,6 @@ import { RightPanel } from "./workspace/RightPanel";
 const AgentSquare = lazy(() => import("./AgentMarketplace/AgentSquare"));
 
 interface AppLayoutProps {
-	sidebarCollapsed: boolean;
-	rightPanelCollapsed: boolean;
 	agents: AgentInfo[];
 	openedSessionIds: string[];
 	activeAgent: AgentInfo | null;
@@ -46,13 +48,8 @@ interface AppLayoutProps {
 	activeQueue: { steering: string[]; followUp: string[] };
 	activePhase: RendererSessionPhase;
 	projects: ProjectInfo[];
-	showAgentSquare: boolean;
-	showScheduledTasks: boolean;
 	newProjectCwd: string | null;
 	setNewProjectCwd: (v: string | null) => void;
-	pendingDelete: { projectId: string; projectName: string; agentCount: number; runningCount: number } | null;
-	showSettings: boolean;
-	settingsTab?: SettingsTab;
 	providerSettings: ProviderSettingsData;
 	handleSendMessage: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
 	handleSelectAgent: (agentId: string) => void;
@@ -74,8 +71,6 @@ interface AppLayoutProps {
 }
 
 function AppLayout({
-	sidebarCollapsed,
-	rightPanelCollapsed,
 	agents,
 	openedSessionIds,
 	activeAgent,
@@ -84,13 +79,8 @@ function AppLayout({
 	activeQueue,
 	activePhase,
 	projects,
-	showAgentSquare,
-	showScheduledTasks,
 	newProjectCwd,
 	setNewProjectCwd,
-	pendingDelete,
-	showSettings,
-	settingsTab,
 	providerSettings,
 	handleSendMessage,
 	handleSelectAgent,
@@ -112,6 +102,14 @@ function AppLayout({
 }: AppLayoutProps) {
 	const { t } = useTranslation();
 	const appReadyPhase = useAtomValue(appReadyPhaseAtom);
+	// 布局/视图开关等纯 UI 状态直接从原子读取，App.tsx 无需再逐层传递（Props Drilling 收敛）。
+	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
+	const showAgentSquare = useAtomValue(showAgentSquareAtom);
+	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
+	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
+	const showSettings = useAtomValue(showSettingsAtom);
+	const settingsTab = useAtomValue(settingsTabAtom);
 	const setSidebarCollapsed = useSetAtom(sidebarCollapsedAtom);
 	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
 	const windowFullscreen = useAtomValue(windowFullscreenAtom);

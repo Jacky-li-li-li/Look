@@ -19,15 +19,10 @@ import {
 	activeAgentIdAtom,
 	agentsAtom,
 	openedSessionIdsAtom,
-	pendingDeleteProjectAtom,
 	projectsAtom,
 	providerSettingsAtom,
 	rightPanelCollapsedAtom,
 	sessionStateAtomFamily,
-	settingsTabAtom,
-	showAgentSquareAtom,
-	showScheduledTasksAtom,
-	showSettingsAtom,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
 import { deriveSessionPhase } from "./store/sessionTypes";
@@ -40,13 +35,10 @@ export default function App() {
 
 	// ── Atom reads ──
 	const activeAgent = useAtomValue(activeAgentAtom);
-	const showSettings = useAtomValue(showSettingsAtom);
-	const settingsTab = useAtomValue(settingsTabAtom);
 	const providerSettings = useAtomValue(providerSettingsAtom);
+	// sidebarCollapsed/rightPanelCollapsed 保留在此：切换时持久化到 GeneralSettings。
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
-	const [showAgentSquare] = useAtom(showAgentSquareAtom);
-	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? ""));
 	const activeQueue = useMemo(() => {
@@ -71,7 +63,6 @@ export default function App() {
 	const agents = useAtomValue(agentsAtom);
 	const [openedSessionIds] = useAtom(openedSessionIdsAtom);
 	const projects = useAtomValue(projectsAtom);
-	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
 
 	// ── Hooks ──
 	const agentActions = useAgentActions();
@@ -110,8 +101,6 @@ export default function App() {
 	// ── Main layout ──
 	return (
 		<AppLayout
-			sidebarCollapsed={sidebarCollapsed}
-			rightPanelCollapsed={rightPanelCollapsed}
 			agents={agents}
 			openedSessionIds={openedSessionIds}
 			activeAgent={activeAgent}
@@ -120,13 +109,8 @@ export default function App() {
 			activeQueue={activeQueue}
 			activePhase={activePhase}
 			projects={projects}
-			showAgentSquare={showAgentSquare}
-			showScheduledTasks={showScheduledTasks}
 			newProjectCwd={projectActions.newProjectCwd}
 			setNewProjectCwd={projectActions.setNewProjectCwd}
-			pendingDelete={pendingDelete}
-			showSettings={showSettings}
-			settingsTab={settingsTab}
 			providerSettings={providerSettings}
 			handleSendMessage={agentActions.handleSendMessage}
 			handleSelectAgent={agentActions.handleSelectAgent}
