@@ -127,6 +127,18 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 				}
 				state.viewedCompleted.delete(event.sessionId);
 			}
+			// The tombstone is memory-only, so after an app restart restoring a
+			// finished historical session arrives as an idle activate snapshot
+			// with no tombstone. The island only represents live sessions plus
+			// unread completions — an idle, non-streaming, non-agent_end snapshot
+			// for a session we don't track yet must not create a running entry
+			// (it would linger forever because viewing a running session keeps it).
+			// Note: transmitted isStreaming already folds in isRetrying, so this is
+			// the authoritative "agent actively executing" signal — SDK isIdle is
+			// its exact inverse and adds no discrimination.
+			if (!state.sessions.has(event.sessionId) && !event.runtime.isStreaming && event.reason !== "agent_end") {
+				return false;
+			}
 			const session = getOrCreateSession(state, event.sessionId, now);
 			const streaming = event.runtime.isStreaming;
 			const detail = streamingDetailFromSnapshot(event);
@@ -151,7 +163,10 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 				session.usageContextWindow = finiteOrNull(usage.contextWindow);
 			}
 			session.lastActivityAt = now;
-			if (event.reason === "agent_end") {
+			if (event.reason === "agent_end" && !event.runtime.isStreaming) {
+				// A fresh completion is new information — clear any earlier tombstone
+				// (e.g. after a resumed run) so the Set cannot grow unboundedly.
+				state.viewedCompleted.delete(event.sessionId);
 				session.phase = "completed";
 				session.detail = session.detail || "Completed";
 				// User is actively watching this session (activated + app focused) —
@@ -167,10 +182,11 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 				}
 				session.attention = true;
 			}
-			// User opened this session — viewed. Completed sessions leave the
-			// island entirely; live sessions just drop their unread flag.
+			// Reason "activate" is reused by compaction_start snapshots, so it must
+			// NOT set visibleSessionId (that would hijack the read tracking for a
+			// background session and silently swallow its completion notification).
+			// Only explicit session:activated / notification:activate-session do.
 			if (event.reason === "activate") {
-				state.visibleSessionId = event.sessionId;
 				return markLookIslandSessionViewed(state, event.sessionId);
 			}
 			return true;
@@ -276,7 +292,11 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 
 		case "session:subagent-progress":
 		case "session:subagent-completed": {
-			const session = getOrCreateSession(state, event.parentSessionId, now);
+			const session = state.sessions.get(event.parentSessionId);
+			// Update-only: a live parent already has an island entry from its
+			// snapshot; a late subagent event must not resurrect a viewed/removed
+			// parent as a running ghost.
+			if (!session) return false;
 			const status = event.type === "session:subagent-completed" ? event.result.status : event.status;
 			const model = event.type === "session:subagent-completed" ? event.result.model : event.model;
 			const agentName = event.agentName;
@@ -296,7 +316,11 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 		}
 
 		case "agent:context-usage": {
-			const session = getOrCreateSession(state, event.agentId, now);
+			const session = state.sessions.get(event.agentId);
+			// Usage update only — never create an island entry. A live session
+			// always has a snapshot first; a finished historical session that
+			// happens to emit usage must not be surfaced as running.
+			if (!session) return false;
 			const usage = event.contextUsage;
 			// Same null-clearing semantics as the snapshot path (compaction resets).
 			session.usagePercent = finiteOrNull(usage.percent);
@@ -322,7 +346,12 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 
 		case "error": {
 			if (!event.agentId) return false;
-			const session = getOrCreateSession(state, event.agentId, now);
+			const session = state.sessions.get(event.agentId);
+			// Update-only: restoring a historical session emits runtime diagnostics
+			// as error events; creating an entry here would park a permanent error
+			// badge (phase error never gets completed/removed). Live sessions have
+			// an entry already.
+			if (!session) return false;
 			session.phase = "error";
 			session.detail = event.message || "Error";
 			session.attention = true;
@@ -330,15 +359,14 @@ export function applyLookIslandEvent(state: LookIslandState, event: MainToRender
 			return true;
 		}
 
-		case "agent:created": {
-			const session = getOrCreateSession(state, event.agentId, now);
-			const name = event.agent.name?.trim();
-			if (name) session.title = name;
-			return true;
-		}
-
+		case "agent:created":
 		case "agent:updated": {
-			const session = getOrCreateSession(state, event.agentId, now);
+			// Metadata only — never create an island entry. Activating/restoring a
+			// finished historical session emits agent:updated; creating a running
+			// entry here would make it linger forever. Live sessions already have
+			// an entry from their snapshot; we only refresh the title.
+			const session = state.sessions.get(event.agentId);
+			if (!session) return false;
 			const name = event.agent.name?.trim();
 			if (name) session.title = name;
 			return true;

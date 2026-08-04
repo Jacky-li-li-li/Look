@@ -15,7 +15,7 @@ import {
 function snapshotEvent(
 	sessionId: string,
 	streaming: boolean,
-	reason: "initial" | "agent_end" = "initial",
+	reason: "initial" | "agent_end" | "activate" = "initial",
 ): MainToRendererEvent {
 	return {
 		type: "session:snapshot",
@@ -164,6 +164,7 @@ describe("LookIslandReducer", () => {
 
 	it("marks error sessions", () => {
 		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
 		applyLookIslandEvent(state, { type: "error", agentId: "s1", message: "LLM request failed" }, 1000);
 		expect(state.sessions.get("s1")?.phase).toBe("error");
 	});
@@ -239,6 +240,7 @@ describe("LookIslandReducer", () => {
 
 	it("tracks sub-agent progress on the parent session", () => {
 		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
 		applyLookIslandEvent(
 			state,
 			{
@@ -268,6 +270,7 @@ describe("LookIslandReducer", () => {
 
 	it("updates sub-agent status on completion", () => {
 		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
 		applyLookIslandEvent(
 			state,
 			{
@@ -346,6 +349,7 @@ describe("LookIslandReducer", () => {
 
 	it("raises a usage warning when a session approaches the context limit", () => {
 		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
 		applyLookIslandEvent(
 			state,
 			{
@@ -393,6 +397,7 @@ describe("LookIslandReducer", () => {
 
 	it("marks sessions destroyed and clears their sub-agents", () => {
 		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
 		applyLookIslandEvent(
 			state,
 			{
@@ -478,6 +483,8 @@ describe("LookIslandReducer", () => {
 
 	it("records consumed tokens from agent:context-usage for live display", () => {
 		const state = createLookIslandState();
+		// A live session already has a snapshot entry; context-usage only updates it.
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
 		applyLookIslandEvent(
 			state,
 			{
@@ -585,6 +592,7 @@ describe("LookIslandReducer", () => {
 
 	it("clears usage fields when contextUsage reports null (post-compaction)", () => {
 		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
 		applyLookIslandEvent(
 			state,
 			{
@@ -656,5 +664,145 @@ describe("LookIslandReducer", () => {
 		const session = state.sessions.get("s1");
 		expect(session?.phase).toBe("completed");
 		expect(session?.attention).toBe(true);
+	});
+
+	it("does not create an island entry when a finished historical session is opened", () => {
+		const state = createLookIslandState();
+		// Non-streaming activate snapshot = restoring/opening a finished
+		// historical session (e.g. cold-start restore) — must not surface it.
+		const changed = applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 1000);
+		expect(changed).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 1000);
+		expect(display.visible).toBe(false);
+	});
+
+	it("does not surface finished sessions after an app restart (cold-start restore)", () => {
+		// Session completed and was viewed before the restart.
+		const previous = createLookIslandState();
+		applyLookIslandEvent(previous, snapshotEvent("s1", false, "agent_end"), 1000);
+		applyLookIslandEvent(previous, { type: "session:activated", agentId: "s1" }, 2000);
+		expect(previous.sessions.has("s1")).toBe(false);
+		// App restarts: the in-memory tombstone is gone. The idle activate
+		// snapshot that restores the session must not re-surface it.
+		const state = createLookIslandState();
+		const changed = applyLookIslandEvent(state, snapshotEvent("s1", false, "activate"), 1000);
+		expect(changed).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 1000);
+		expect(display.visible).toBe(false);
+	});
+
+	it("does not create an island entry from agent:updated for a historical session", () => {
+		// Activating/restoring a finished session emits agent:updated (metadata
+		// only) — it must not create a running island entry.
+		const state = createLookIslandState();
+		const changed = applyLookIslandEvent(
+			state,
+			{ type: "agent:updated", agentId: "s1", agent: { id: "s1", name: "Historical" } as never },
+			1000,
+		);
+		expect(changed).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
+	});
+
+	it("does not create an island entry from agent:created for a silent session", () => {
+		const state = createLookIslandState();
+		const changed = applyLookIslandEvent(
+			state,
+			{ type: "agent:created", agentId: "s1", agent: { id: "s1", name: "Silent" } as never },
+			1000,
+		);
+		expect(changed).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
+	});
+
+	it("refreshes the title of an existing live session from agent:updated", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 900);
+		applyLookIslandEvent(
+			state,
+			{ type: "agent:updated", agentId: "s1", agent: { id: "s1", name: "New Title" } as never },
+			1000,
+		);
+		expect(state.sessions.get("s1")?.title).toBe("New Title");
+	});
+
+	it("does not hijack visibleSessionId from a compaction_start activate snapshot", () => {
+		const state = createLookIslandState();
+		// User is actively viewing s1.
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 1000);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 1100);
+		expect(state.visibleSessionId).toBe("s1");
+		// Background session s2 compacts → snapshot arrives with reason="activate".
+		applyLookIslandEvent(state, snapshotEvent("s2", true, "activate"), 1200);
+		// visibleSessionId must stay on s1 — compaction must not hijack read
+		// tracking and silently swallow s2's later completion notification.
+		expect(state.visibleSessionId).toBe("s1");
+	});
+
+	it("keeps a retrying session running on agent_end with willRetry", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 1000);
+		// agent_end with willRetry → transmitted isStreaming stays true.
+		applyLookIslandEvent(state, snapshotEvent("s1", true, "agent_end"), 2000);
+		const session = state.sessions.get("s1");
+		expect(session?.phase).toBe("running");
+		expect(session?.attention).toBe(false);
+		const display = buildLookIslandDisplayState(state, { appFocused: false }, 2000);
+		expect(display.pillSnapshot.activeSessionCount).toBe(1);
+	});
+
+	it("does not create an island entry from error for an untracked session", () => {
+		const state = createLookIslandState();
+		// Restoring a historical session emits runtime diagnostics as error
+		// events — must not park a permanent error badge.
+		const changed = applyLookIslandEvent(
+			state,
+			{ type: "error", agentId: "s1", message: "diagnostic warning" },
+			1000,
+		);
+		expect(changed).toBe(false);
+		expect(state.sessions.has("s1")).toBe(false);
+	});
+
+	it("does not resurrect a removed parent from a late subagent event", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
+		expect(state.sessions.has("s1")).toBe(false);
+		// A late subagent event for the viewed/removed parent must not rebuild it.
+		applyLookIslandEvent(
+			state,
+			{
+				type: "session:subagent-progress",
+				parentSessionId: "s1",
+				childSessionId: "s1-1",
+				agentName: "Worker",
+				toolCallId: "tool-1",
+				taskTitle: "task",
+				task: "...",
+				status: "running",
+				partialOutput: "",
+				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 },
+			},
+			2000,
+		);
+		expect(state.sessions.has("s1")).toBe(false);
+	});
+
+	it("clears the tombstone on a fresh agent_end after a resumed run", () => {
+		const state = createLookIslandState();
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 1000);
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s1" }, 2000);
+		expect(state.viewedCompleted.has("s1")).toBe(true);
+		// User switches to s2; s1 resumes (streaming snapshot clears the tombstone).
+		applyLookIslandEvent(state, { type: "session:activated", agentId: "s2" }, 2500);
+		applyLookIslandEvent(state, snapshotEvent("s1", true), 3000);
+		expect(state.viewedCompleted.has("s1")).toBe(false);
+		// s1 completes again (not being viewed) — no stale tombstone accumulation.
+		applyLookIslandEvent(state, snapshotEvent("s1", false, "agent_end"), 4000);
+		expect(state.sessions.get("s1")?.phase).toBe("completed");
+		expect(state.viewedCompleted.has("s1")).toBe(false);
 	});
 });
