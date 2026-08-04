@@ -12,10 +12,7 @@ export default defineConfig({
 			provider: "v8",
 			reporter: ["text", "lcov"],
 			include: ["src/**/*.{ts,tsx}"],
-			exclude: [
-				"src/**/*.d.ts",
-				"test/**",
-			],
+			exclude: ["src/**/*.d.ts", "test/**"],
 		},
 	},
 	resolve: {
@@ -24,6 +21,10 @@ export default defineConfig({
 			"@look/shared": path.resolve(__dirname, "../../packages/shared/src"),
 			"@look/ui": path.resolve(__dirname, "../../packages/ui/src"),
 			"@look/ui/components": path.resolve(__dirname, "../../packages/ui/src/components"),
+			"@pierre/diffs/dist/components/web-components.js": path.resolve(
+				__dirname,
+				"../../node_modules/@pierre/diffs/dist/components/web-components.js",
+			),
 		},
 	},
 });

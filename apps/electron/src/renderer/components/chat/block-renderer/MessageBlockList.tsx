@@ -128,7 +128,13 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 						callId: block.toolCallId ?? "",
 						toolName: block.toolName ?? "unknown",
 						args: block.args ?? {},
-						status: "running",
+						status: toolExecution
+							? toolExecution.phase === "running"
+								? "running"
+								: toolExecution.isError
+									? "error"
+									: "success"
+							: "running",
 						result: toolExecution?.result ?? toolExecution?.partialResult,
 						isError: toolExecution?.isError,
 					}}
@@ -201,9 +207,7 @@ export const MessageBlockList = memo(function MessageBlockList({
 	defaultToolStatus,
 }: MessageBlockListProps) {
 	// 单次分段：连续 thinking/toolcall 组成折叠组；subagent 类单独成组。
-	// 注意：toolcall 恒被归入 group（含 group of 1）或 subagent 段，
-	// "single" 分支只会有 text/image/thinking——因此不需要预计算
-	// toolCall 视图模型，UnifiedBlockView 的 toolcall 分支仅是防御性兜底。
+	// 编辑类工具也归入折叠组（展开后卡内展示 diff 预览）。
 	const segments = segmentExecutionBlocks(
 		blocks,
 		(b) => b.kind === "thinking" || b.kind === "toolcall",

@@ -47,6 +47,11 @@ export default defineConfig({
 			// 避免「类型看 src、运行跑 dist」的失同步（改包源码后 dev 即时生效）。
 			"@shared": path.resolve(__dirname, "../../packages/shared/src"),
 			"@look/ui": path.resolve(__dirname, "../../packages/ui/src"),
+			// @pierre/diffs 未在 exports 暴露 web-components 子路径，alias 到实际文件绕过。
+			"@pierre/diffs/dist/components/web-components.js": path.resolve(
+				__dirname,
+				"../../node_modules/@pierre/diffs/dist/components/web-components.js",
+			),
 		},
 	},
 	server: {

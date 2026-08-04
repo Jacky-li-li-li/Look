@@ -67,6 +67,20 @@ let mockEntries: unknown[] = [
 					arguments: { path: "src/renderer/App.css", line_start: 505, line_end: 610 },
 				},
 				{
+					type: "toolCall",
+					id: "mock-edit-tool-1",
+					name: "edit",
+					arguments: {
+						path: "src/renderer/App.css",
+						edits: [
+							{
+								oldText: ".message-prose { max-width: 70ch; }",
+								newText: ".message-prose { max-width: 72ch; }\n.message-prose strong { color: var(--accent); }",
+							},
+						],
+					},
+				},
+				{
 					type: "text",
 					text: '## 消息渲染示例\n\n正文应该保持稳定的阅读节奏，并支持 `inline code`、[链接](https://example.com) 与文件引用 @src/renderer/App.css。\n\n| 项目 | 状态 |\n| --- | --- |\n| Markdown | 正常 |\n| 流式光标 | 待验证 |\n\n```\n┌────────────────────────┐\n│ Renderer (React)       │\n├────────────────────────┤\n│ Main Process (Electron)│\n└────────────────────────┘\n```\n\n```typescript\napp.on("before-quit", async () => schedulerService?.dispose()); // abort active runs and release timers safely\n```\n\n> 动效应提示状态，而不是抢夺注意力。\n\n```mermaid\ngraph LR\n  A[Markdown] --> B[稳定渲染]\n```',
 				},
@@ -91,6 +105,20 @@ let mockEntries: unknown[] = [
 			content: [{ type: "text", text: "Loaded message typography styles." }],
 			isError: false,
 			timestamp: Date.now() - 9_000,
+		},
+	},
+	{
+		type: "message",
+		id: "mock-edit-result-1",
+		parentId: "mock-assistant-1",
+		timestamp: new Date(Date.now() - 8_500).toISOString(),
+		message: {
+			role: "toolResult",
+			toolCallId: "mock-edit-tool-1",
+			toolName: "edit",
+			content: [{ type: "text", text: "Edited src/renderer/App.css." }],
+			isError: false,
+			timestamp: Date.now() - 8_500,
 		},
 	},
 ];

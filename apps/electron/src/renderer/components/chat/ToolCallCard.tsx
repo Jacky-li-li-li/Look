@@ -23,6 +23,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { imagePreviewAtom } from "../../store/atoms";
 import LookMarkdown from "../markdown/LookMarkdown";
+import EditDiffPreview, { extractEditPatch, isEditTool } from "./message-elements/EditDiffPreview";
 
 export interface ToolCallViewModel {
 	callId: string;
@@ -192,7 +193,23 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 	const extracted = React.useMemo(() => extractToolResult(toolCall.result), [toolCall.result]);
 	const resultStr = extracted.text;
 	const resultImages = extracted.images;
-	const hasBody = resultStr.length > 0 || resultImages.length > 0 || argsPreview.length > 0;
+	// 编辑类工具：展开只展示 diff，不再展示 arguments/result
+	const isEdit = isEditTool(toolCall.toolName);
+	const editPatch = React.useMemo(
+		() =>
+			isEdit
+				? extractEditPatch(
+						toolCall.toolName,
+						toolCall.args,
+						toolCall.result,
+						argStr(toolCall.args, "path", "file_path") || undefined,
+					)
+				: null,
+		[isEdit, toolCall.toolName, toolCall.args, toolCall.result],
+	);
+	const hasBody = isEdit
+		? editPatch !== null
+		: resultStr.length > 0 || resultImages.length > 0 || argsPreview.length > 0;
 
 	const toolSummary = formatToolSummary(toolCall);
 	const statSuffix = !open ? formatStatSuffix(toolCall, t) : "";
@@ -230,6 +247,16 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					<span className="shrink-0 font-mono text-[11px] font-medium text-foreground">{toolCall.toolName}</span>
 					<span className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground">
 						{toolSummary || argsPreview || t("tool.noArgs")}
+						{editPatch && (editPatch.added > 0 || editPatch.deleted > 0) && (
+							<span className="font-mono text-[10px]">
+								{editPatch.added > 0 && (
+									<span className="text-emerald-600 dark:text-emerald-400"> +{editPatch.added}</span>
+								)}
+								{editPatch.deleted > 0 && (
+									<span className="text-red-600 dark:text-red-400"> -{editPatch.deleted}</span>
+								)}
+							</span>
+						)}
 					</span>
 					{statSuffix && (
 						<span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{statSuffix}</span>
@@ -252,56 +279,65 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 					>
 						<div className="overflow-hidden">
 							<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
-								<div className="flex flex-col gap-1 text-[10px] leading-[1.4]">
-									<section className="flex flex-col gap-0.5">
-										<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
-											{t("tool.arguments")}
-										</span>
-										<pre className="whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
-											{argsJson || "{}"}
-										</pre>
-									</section>
-									{resultStr && (
+								{isEdit ? (
+									<EditDiffPreview
+										toolName={toolCall.toolName}
+										path={argStr(toolCall.args, "path", "file_path") || undefined}
+										args={toolCall.args}
+										result={toolCall.result}
+									/>
+								) : (
+									<div className="flex flex-col gap-1 text-[10px] leading-[1.4]">
 										<section className="flex flex-col gap-0.5">
 											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
-												{toolCall.isError ? t("tool.error") : t("tool.result")}
-												{resultTooLong && (
-													<span className="ml-1 text-[9px] text-muted-foreground">
-														({resultStr.length} 字符)
-													</span>
-												)}
+												{t("tool.arguments")}
 											</span>
-											<LookMarkdown content={resultStr} />
+											<pre className="whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
+												{argsJson || "{}"}
+											</pre>
 										</section>
-									)}
-									{resultImages.length > 0 && (
-										<section className="flex flex-col gap-0.5">
-											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
-												{t("tool.result")}
-											</span>
-											<div className="flex flex-wrap gap-2">
-												{resultImages.map((img, i) => {
-													const src = `data:${img.mimeType};base64,${img.data}`;
-													return (
-														<button
-															key={`result-img-${i}`}
-															type="button"
-															className="cursor-zoom-in"
-															aria-label={`View tool result image ${i + 1}`}
-															onClick={() => setImagePreview({ src, alt: `Tool result ${i + 1}` })}
-														>
-															<img
-																src={src}
-																alt={`Tool result ${i + 1}`}
-																className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
-															/>
-														</button>
-													);
-												})}
-											</div>
-										</section>
-									)}
-								</div>
+										{resultStr && (
+											<section className="flex flex-col gap-0.5">
+												<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
+													{toolCall.isError ? t("tool.error") : t("tool.result")}
+													{resultTooLong && (
+														<span className="ml-1 text-[9px] text-muted-foreground">
+															({resultStr.length} 字符)
+														</span>
+													)}
+												</span>
+												<LookMarkdown content={resultStr} />
+											</section>
+										)}
+										{resultImages.length > 0 && (
+											<section className="flex flex-col gap-0.5">
+												<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
+													{t("tool.result")}
+												</span>
+												<div className="flex flex-wrap gap-2">
+													{resultImages.map((img, i) => {
+														const src = `data:${img.mimeType};base64,${img.data}`;
+														return (
+															<button
+																key={`result-img-${i}`}
+																type="button"
+																className="cursor-zoom-in"
+																aria-label={`View tool result image ${i + 1}`}
+																onClick={() => setImagePreview({ src, alt: `Tool result ${i + 1}` })}
+															>
+																<img
+																	src={src}
+																	alt={`Tool result ${i + 1}`}
+																	className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
+																/>
+															</button>
+														);
+													})}
+												</div>
+											</section>
+										)}
+									</div>
+								)}
 							</div>
 						</div>
 					</div>

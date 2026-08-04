@@ -122,22 +122,13 @@ const GitStatusBar = memo(function GitStatusBar({ projectId }: GitStatusBarProps
 					<span className="shrink-0 font-mono text-[10px] leading-none text-muted-foreground/40" aria-hidden>
 						·
 					</span>
-					{dirtyAddedLabel && (
-						<span
-							className="shrink-0 font-mono text-[10px] leading-none text-emerald-500/80"
-							title={`${t("chat.gitDirtyCount")}: ${info.dirtyCount} (${dirtyLabel})`}
-						>
-							{dirtyAddedLabel}
-						</span>
-					)}
-					{dirtyDeletedLabel && (
-						<span
-							className="shrink-0 font-mono text-[10px] leading-none text-red-500/80"
-							title={`${t("chat.gitDirtyCount")}: ${info.dirtyCount} (${dirtyLabel})`}
-						>
-							{dirtyDeletedLabel}
-						</span>
-					)}
+					<span
+						className="shrink-0 rounded px-0.5 font-mono text-[10px] leading-none"
+						title={`${t("chat.gitDirtyCount")}: ${info.dirtyCount} (${dirtyLabel})`}
+					>
+						{dirtyAddedLabel && <span className="text-emerald-500/80">{dirtyAddedLabel}</span>}
+						{dirtyDeletedLabel && <span className="text-red-500/80">{dirtyDeletedLabel}</span>}
+					</span>
 				</>
 			)}
 		</div>
