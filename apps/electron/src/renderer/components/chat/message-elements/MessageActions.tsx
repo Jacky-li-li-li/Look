@@ -55,12 +55,12 @@ export function MessageActions({
 				className,
 			)}
 		>
-			{/* 按钮区：hover 消息时淡入；无可用操作时不可见但保留高度（几何稳定） */}
+			{/* 按钮区：默认隐藏；悬停消息（group/message hover）时淡入。无可用操作时不可见但保留高度（几何稳定） */}
 			<div
 				aria-hidden={!show}
 				className={cn(
 					"flex items-center gap-msg-action transition-opacity",
-					show ? "opacity-100" : "invisible pointer-events-none opacity-0",
+					show ? "opacity-0 group-hover/message:opacity-100" : "invisible pointer-events-none opacity-0",
 				)}
 			>
 				{onBranch && (
@@ -79,8 +79,8 @@ export function MessageActions({
 					</Button>
 				)}
 			</div>
-			{/* 常驻 meta：运行时间等，不随 hover 隐藏 */}
-			{meta}
+			{/* meta（运行时间等）：与按钮一致，悬停消息时淡入 */}
+			{meta && <span className="transition-opacity opacity-0 group-hover/message:opacity-100">{meta}</span>}
 		</div>
 	);
 }
