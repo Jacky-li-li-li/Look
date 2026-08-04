@@ -26,6 +26,12 @@ if (process.env.SANDBOX_GPU_WORKAROUND === "1") {
 	app.commandLine.appendSwitch("in-process-gpu");
 }
 
+// 禁用 macOS 系统 overlay 滚动条：让消息区（look-message-scrollbar）的
+// 自定义 2px 样式完全接管，hover 滚动条轨道时不再被系统膨胀（系统会把
+// thumb 放大到可拖动尺寸）。副作用：所有滚动区域变为传统常显模式
+// （侧栏等本就常显，不受影响）；消息区仍由 CSS 控制静止隐藏/滚动显示。
+app.commandLine.appendSwitch("disable-features", "OverlayScrollbar");
+
 // dev（未打包）与正式版业务数据目录隔离：dev 使用独立的 ~/.look-dev，
 // 避免 dev 测试产生的会话/项目/设置污染正式版的 ~/.look。
 // 外部显式设置 LOOK_HOME（CI/测试/用户）优先，不覆盖。
