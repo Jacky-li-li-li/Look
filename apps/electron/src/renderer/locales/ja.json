@@ -553,6 +553,8 @@
     "stop": "停止",
     "you": "あなた",
     "agent": "Agent",
+    "userTicks": "ユーザーメッセージ目盛り",
+    "userTicksImageOnly": "🖼️ 画像メッセージ",
     "queued": "キュー",
     "queuedSteering": "ステアリング",
     "queuedFollowUp": "フォローアップ",

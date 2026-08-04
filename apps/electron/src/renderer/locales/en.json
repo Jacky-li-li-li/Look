@@ -553,6 +553,8 @@
     "stop": "Stop",
     "you": "You",
     "agent": "Agent",
+    "userTicks": "User message ticks",
+    "userTicksImageOnly": "🖼️ Image message",
     "queued": "Queued",
     "queuedSteering": "Steering",
     "queuedFollowUp": "Follow-up",

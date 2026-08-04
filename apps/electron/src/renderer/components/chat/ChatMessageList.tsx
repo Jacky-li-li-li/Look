@@ -30,6 +30,7 @@ import LookMarkdown from "../markdown/LookMarkdown";
 import type { ChatInputHandle } from "./ChatInput";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
 import { MessageItem } from "./MessageItem";
+import { MessageTicks, userMessagePreview } from "./MessageTicks";
 import { MessageActions } from "./message-elements/MessageActions";
 import { SessionEntryBubble } from "./SessionEntryBubble";
 
@@ -374,6 +375,25 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		[pendingBranchEntryId, pendingConfirm, inputRef, onSend, agentId, t, scrollToMessage],
 	);
 
+	// === User message ticks（右侧垂直刻度：悬停预览 + 点击跳转）===
+	const userTicks = useMemo(
+		() =>
+			timeline
+				.filter((it) => it.message?.role === "user" && !it.isLive)
+				.map((it) => ({ id: it.id, preview: userMessagePreview(it.message!) })),
+		[timeline],
+	);
+
+	const handleTickNavigate = useCallback(
+		(entryId: string) => {
+			scrollToMessage(entryId);
+			setFlashEntryId(entryId);
+			if (flashTimer.current) clearTimeout(flashTimer.current);
+			flashTimer.current = setTimeout(() => setFlashEntryId(null), 900);
+		},
+		[scrollToMessage],
+	);
+
 	// === Copy message ===
 	const [copiedEntryId, setCopiedEntryId] = useState<string | null>(null);
 	const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -541,6 +561,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 					timeline.map((item) => renderTimelineItem(item))
 				)}
 			</ConversationContent>
+			<MessageTicks items={userTicks} onNavigate={handleTickNavigate} />
 			<ConversationScrollButton className={cn(isAgentRunning && "flowing-border")} />
 			<BranchConfirmDialog request={pendingConfirm} onResolve={handleConfirmResolve} />
 		</>

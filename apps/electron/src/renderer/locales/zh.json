@@ -553,6 +553,8 @@
     "stop": "停止",
     "you": "你",
     "agent": "Agent",
+    "userTicks": "用户消息刻度",
+    "userTicksImageOnly": "🖼️ 图片消息",
     "queued": "队列",
     "queuedSteering": "引导",
     "queuedFollowUp": "跟进",
