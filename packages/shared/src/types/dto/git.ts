@@ -18,8 +18,8 @@ export interface GitRepoInfo {
 	remoteUrl: string | null;
 	/** 未提交改动文件总数（git status --porcelain 行数）；非仓库或探测失败时为 0 */
 	dirtyCount: number;
-	/** 有新增/修改内容的文件数（状态码含 A/?/R/M，diff 风格 +N） */
-	dirtyAdded: number;
-	/** 被删除的文件数（状态码含 D，diff 风格 -N） */
-	dirtyDeleted: number;
+	/** 新增行数（tracked numstat add + untracked 文件行数，diff 风格 +N） */
+	dirtyAddedLines: number;
+	/** 删除行数（tracked numstat del，diff 风格 -N） */
+	dirtyDeletedLines: number;
 }

@@ -195,8 +195,8 @@ describe("GitStatusBar", () => {
 				remoteName: "origin",
 				remoteUrl: "https://github.com/foo/bar.git",
 				dirtyCount: 4,
-				dirtyAdded: 3,
-				dirtyDeleted: 1,
+				dirtyAddedLines: 3,
+				dirtyDeletedLines: 1,
 			},
 		});
 
@@ -221,8 +221,8 @@ describe("GitStatusBar", () => {
 				remoteName: null,
 				remoteUrl: null,
 				dirtyCount: 2,
-				dirtyAdded: 0,
-				dirtyDeleted: 2,
+				dirtyAddedLines: 0,
+				dirtyDeletedLines: 2,
 			},
 		});
 
@@ -242,8 +242,8 @@ describe("GitStatusBar", () => {
 				remoteName: null,
 				remoteUrl: null,
 				dirtyCount: 0,
-				dirtyAdded: 0,
-				dirtyDeleted: 0,
+				dirtyAddedLines: 0,
+				dirtyDeletedLines: 0,
 			},
 		});
 

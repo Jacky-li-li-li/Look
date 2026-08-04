@@ -408,8 +408,8 @@ const mockApi: LookAPI = {
 				remoteName: "origin",
 				remoteUrl: "https://github.com/mock/repo.git",
 				dirtyCount: 2,
-				dirtyAdded: 2,
-				dirtyDeleted: 1,
+				dirtyAddedLines: 2,
+				dirtyDeletedLines: 1,
 			},
 		}),
 

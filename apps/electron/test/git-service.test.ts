@@ -207,27 +207,31 @@ describeGit("GitService", () => {
 		}
 	});
 
-	it("dirtyCount 拆分 +added / -deleted（未跟踪/修改/新增/删除）", async () => {
-		const dir = makeRepo("dirty");
+	it("行级 diff：+新增行 -删除行（含 untracked）", async () => {
+		const dir = makeRepo("lines");
 		const service = new GitService();
-		expect((await service.getRepoInfo(dir))?.dirtyCount).toBe(0);
+		expect((await service.getRepoInfo(dir))?.dirtyAddedLines).toBe(0);
 
-		// 未跟踪 + 修改 + 暂存新增 + 删除 = 4 行 porcelain
-		fs.writeFileSync(path.join(dir, "untracked.txt"), "x\n");
-		fs.writeFileSync(path.join(dir, "a.txt"), "hello-modified\n");
-		fs.writeFileSync(path.join(dir, "staged.txt"), "s\n");
-		git(dir, ["add", "staged.txt"]);
-		fs.rmSync(path.join(dir, "deleted.txt"), { force: true });
-		fs.writeFileSync(path.join(dir, "deleted.txt"), "to-be-deleted\n");
+		// deleted.txt：先作为已提交文件存在（供后续删除）
+		fs.writeFileSync(path.join(dir, "deleted.txt"), "gone\n");
 		git(dir, ["add", "deleted.txt"]);
-		fs.rmSync(path.join(dir, "deleted.txt"), { force: true });
+		git(dir, ["commit", "-q", "-m", "add deleted"]);
+		// 修改 a.txt：1 行 → 4 行（numstat +3 -0）
+		fs.writeFileSync(path.join(dir, "a.txt"), "hello\nl1\nl2\nl3\n");
+		// 新增 staged.txt（git add → A，numstat +2 -0）
+		fs.writeFileSync(path.join(dir, "staged.txt"), "s1\ns2\n");
+		git(dir, ["add", "staged.txt"]);
+		// 删除 deleted.txt（unstaged D，numstat +0 -1）
+		fs.rmSync(path.join(dir, "deleted.txt"));
+		// untracked.txt（3 行，计入 +3）
+		fs.writeFileSync(path.join(dir, "untracked.txt"), "u1\nu2\nu3\n");
 
 		// 缓存 TTL 内不会自动刷新，显式失效后重新探测
 		service.invalidate(dir);
 		const info = await service.getRepoInfo(dir);
 		expect(info?.dirtyCount).toBe(4);
-		expect(info?.dirtyAdded).toBe(3); // ?? + M + A
-		expect(info?.dirtyDeleted).toBe(1); // D（staged 删除）
+		expect(info?.dirtyAddedLines).toBe(8); // 3(修改) + 2(新增) + 3(untracked)
+		expect(info?.dirtyDeletedLines).toBe(1);
 	});
 
 	it("ensureWatcher：外部切换分支触发 onChange 并失效缓存", async () => {

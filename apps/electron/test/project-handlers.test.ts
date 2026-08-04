@@ -111,8 +111,8 @@ describe("handleProjectEvent", () => {
 			remoteName: "origin",
 			remoteUrl: "https://github.com/a/b.git",
 			dirtyCount: 3,
-			dirtyAdded: 2,
-			dirtyDeleted: 1,
+			dirtyAddedLines: 2,
+			dirtyDeletedLines: 1,
 		};
 		handleProjectEvent(
 			{ type: "project:git-info", projectId, info: gitInfo } as unknown as Parameters<typeof handleProjectEvent>[0],
@@ -131,8 +131,8 @@ describe("handleProjectEvent", () => {
 			remoteName: null,
 			remoteUrl: null,
 			dirtyCount: 0,
-			dirtyAdded: 0,
-			dirtyDeleted: 0,
+			dirtyAddedLines: 0,
+			dirtyDeletedLines: 0,
 		});
 		handleProjectEvent(
 			{ type: "project:git-info", projectId, info: null } as unknown as Parameters<typeof handleProjectEvent>[0],

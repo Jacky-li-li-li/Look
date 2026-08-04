@@ -35,8 +35,8 @@ const NOT_A_REPO: GitRepoInfo = Object.freeze({
 	remoteName: null,
 	remoteUrl: null,
 	dirtyCount: 0,
-	dirtyAdded: 0,
-	dirtyDeleted: 0,
+	dirtyAddedLines: 0,
+	dirtyDeletedLines: 0,
 });
 
 /** git 环境变量：继承宿主 env 时显式清掉会改变仓库解析/索引/配置来源的 key。 */
@@ -163,23 +163,40 @@ export class GitService {
 			}
 		}
 
-		// 4. Dirty — one porcelain line per changed/untracked path; split into
-		//    +added (A/?/R/M) and -deleted (D) for the diff-style badge.
+		// 4. Dirty — 文件总数（porcelain 行数）+ 行级增删（numstat）。
 		let dirtyCount = 0;
-		let dirtyAdded = 0;
-		let dirtyDeleted = 0;
 		const porcelain = await this.git(projectCwd, ["status", "--porcelain"]);
 		if (porcelain !== null) {
-			for (const line of porcelain.split(/\r?\n/)) {
-				if (!line.trim()) continue;
-				dirtyCount++;
-				const codes = line.slice(0, 2);
-				if (codes.includes("D")) dirtyDeleted++;
-				else dirtyAdded++; // A/?/R/M/T/C/U 等非删除状态均视为正向变动
-			}
+			dirtyCount = porcelain.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
 		}
 
-		return { isRepo: true, repoRoot, branch, headShort, remoteName, remoteUrl, dirtyCount, dirtyAdded, dirtyDeleted };
+		// 5. 行级 diff：tracked 增删行（git diff HEAD --numstat）+ untracked 文件行数。
+		let dirtyAddedLines = 0;
+		let dirtyDeletedLines = 0;
+		const numstat = await this.git(projectCwd, ["diff", "HEAD", "--numstat"]);
+		if (numstat !== null) {
+			for (const line of numstat.split(/\r?\n/)) {
+				const [added, deleted] = line.trim().split(/\s+/);
+				if (!added || !deleted || added === "-" || deleted === "-") continue;
+				const a = Number.parseInt(added, 10);
+				const d = Number.parseInt(deleted, 10);
+				if (Number.isFinite(a)) dirtyAddedLines += a;
+				if (Number.isFinite(d)) dirtyDeletedLines += d;
+			}
+		}
+		dirtyAddedLines += await this.countUntrackedLines(projectCwd);
+
+		return {
+			isRepo: true,
+			repoRoot,
+			branch,
+			headShort,
+			remoteName,
+			remoteUrl,
+			dirtyCount,
+			dirtyAddedLines,
+			dirtyDeletedLines,
+		};
 	}
 
 	/**
@@ -198,6 +215,35 @@ export class GitService {
 		} catch {
 			return null;
 		}
+	}
+
+	/**
+	 * 统计未跟踪文件的行数（加入 +N）。上限保护：最多统计 200 个文件、
+	 * 单文件最大 2MB，超出部分按 0 计，避免大仓库/巨型文件拖慢探测。
+	 */
+	private async countUntrackedLines(projectCwd: string): Promise<number> {
+		const MAX_FILES = 200;
+		const MAX_FILE_BYTES = 2 * 1024 * 1024;
+		const list = (await this.git(projectCwd, ["ls-files", "--others", "--exclude-standard"])) ?? "";
+		let total = 0;
+		let counted = 0;
+		for (const file of list.split(/\r?\n/)) {
+			if (!file.trim() || counted >= MAX_FILES) continue;
+			try {
+				const full = path.join(projectCwd, file.trim());
+				const stat = statSync(full);
+				if (!stat.isFile() || stat.size > MAX_FILE_BYTES) continue;
+				const content = readFileSync(full, "utf8");
+				const lines = content.split(/\r?\n/);
+				// 末尾换行不算额外一行（与 git diff 语义一致）
+				if (lines.at(-1) === "") lines.pop();
+				total += lines.length;
+				counted++;
+			} catch {
+				// 文件消失/无权限 → 跳过
+			}
+		}
+		return total;
 	}
 
 	/** Run a read-only git command; returns stdout (trimmed of trailing newline) or null on failure. */

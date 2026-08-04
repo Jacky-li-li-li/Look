@@ -84,9 +84,9 @@ const GitStatusBar = memo(function GitStatusBar({ projectId }: GitStatusBarProps
 
 	const remote = info.remoteUrl ? shortenRemoteUrl(info.remoteUrl) : null;
 	const dirty = info.dirtyCount > 0;
-	// diff 风格：+新增/修改（绿），-删除（红）；只显示非零侧
-	const dirtyAddedLabel = info.dirtyAdded > 0 ? `+${info.dirtyAdded}` : null;
-	const dirtyDeletedLabel = info.dirtyDeleted > 0 ? `-${info.dirtyDeleted}` : null;
+	// diff 风格：+新增/修改行（绿），-删除行（红）；只显示非零侧
+	const dirtyAddedLabel = info.dirtyAddedLines > 0 ? `+${info.dirtyAddedLines}` : null;
+	const dirtyDeletedLabel = info.dirtyDeletedLines > 0 ? `-${info.dirtyDeletedLines}` : null;
 	const dirtyLabel = [dirtyAddedLabel, dirtyDeletedLabel].filter(Boolean).join(" ");
 	const headLabel = info.branch
 		? `${t("chat.gitBranch")}: ${info.branch}`
