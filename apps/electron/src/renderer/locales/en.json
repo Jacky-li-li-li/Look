@@ -604,7 +604,8 @@
     "gitBranch": "Branch",
     "gitRemote": "Remote",
     "gitRepoRoot": "Repository root",
-    "gitDetachedHead": "Detached HEAD"
+    "gitDetachedHead": "Detached HEAD",
+    "gitDirtyCount": "Uncommitted changes"
   },
   "context": {
     "compressing": "Compressing…",

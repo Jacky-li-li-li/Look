@@ -6,12 +6,18 @@
 // for the status bar. All commands are read-only; failures degrade
 // to null fields instead of throwing. Results are cached per cwd
 // with a short TTL so frequent renderer polls don't spawn git.
+//
+// Also exposes a lightweight HEAD watcher (ensureWatcher) so branch
+// switches outside the app invalidate the cache and push fresh info
+// to the renderer immediately instead of waiting for the next poll.
 // ============================================================
 
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import { promisify } from "node:util";
 import type { GitRepoInfo } from "@look/shared/types";
+import chokidar, { type FSWatcher } from "chokidar";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,6 +34,9 @@ const NOT_A_REPO: GitRepoInfo = Object.freeze({
 	headShort: null,
 	remoteName: null,
 	remoteUrl: null,
+	dirtyCount: 0,
+	dirtyAdded: 0,
+	dirtyDeleted: 0,
 });
 
 /** git 环境变量：继承宿主 env 时显式清掉会改变仓库解析/索引/配置来源的 key。 */
@@ -47,8 +56,14 @@ interface CacheEntry {
 	info: GitRepoInfo | null;
 }
 
+interface WatchEntry {
+	watcher: FSWatcher;
+	onChange: () => void;
+}
+
 export class GitService {
 	private readonly cache = new Map<string, CacheEntry>();
+	private readonly watchers = new Map<string, WatchEntry>();
 
 	/** Resolve git info for a project cwd. Returns null when the directory does not exist. */
 	async getRepoInfo(projectCwd: string): Promise<GitRepoInfo | null> {
@@ -66,6 +81,47 @@ export class GitService {
 	}
 
 	clear(): void {
+		this.cache.clear();
+	}
+
+	/**
+	 * Ensure a HEAD watcher for a repo (idempotent). Listens to the resolved
+	 * gitdir's HEAD/config so external `git checkout` / remote changes are
+	 * picked up instantly: cache invalidated then `onChange()` called.
+	 * Returns true when a watcher was newly created.
+	 */
+	ensureWatcher(projectCwd: string, onChange: () => void): boolean {
+		if (this.watchers.has(projectCwd)) return false;
+		const gitdir = this.resolveGitDir(projectCwd);
+		if (!gitdir) return false;
+
+		const watchPaths = [path.join(gitdir, "HEAD"), path.join(gitdir, "config")].filter((p) => existsSync(p));
+		if (watchPaths.length === 0) return false;
+
+		const handler = () => {
+			this.invalidate(projectCwd);
+			onChange();
+		};
+		const watcher = chokidar.watch(watchPaths, {
+			ignoreInitial: true,
+			awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 30 },
+		});
+		watcher.on("change", handler).on("add", handler).on("unlink", handler);
+		this.watchers.set(projectCwd, { watcher, onChange: handler });
+		return true;
+	}
+
+	/** Stop the watcher for a cwd (if any). */
+	stopWatcher(projectCwd: string): void {
+		const entry = this.watchers.get(projectCwd);
+		if (!entry) return;
+		entry.watcher.close().catch(() => {});
+		this.watchers.delete(projectCwd);
+	}
+
+	/** Close all watchers (call when the app/window is torn down to avoid leaks). */
+	dispose(): void {
+		for (const cwd of [...this.watchers.keys()]) this.stopWatcher(cwd);
 		this.cache.clear();
 	}
 
@@ -107,7 +163,41 @@ export class GitService {
 			}
 		}
 
-		return { isRepo: true, repoRoot, branch, headShort, remoteName, remoteUrl };
+		// 4. Dirty — one porcelain line per changed/untracked path; split into
+		//    +added (A/?/R/M) and -deleted (D) for the diff-style badge.
+		let dirtyCount = 0;
+		let dirtyAdded = 0;
+		let dirtyDeleted = 0;
+		const porcelain = await this.git(projectCwd, ["status", "--porcelain"]);
+		if (porcelain !== null) {
+			for (const line of porcelain.split(/\r?\n/)) {
+				if (!line.trim()) continue;
+				dirtyCount++;
+				const codes = line.slice(0, 2);
+				if (codes.includes("D")) dirtyDeleted++;
+				else dirtyAdded++; // A/?/R/M/T/C/U 等非删除状态均视为正向变动
+			}
+		}
+
+		return { isRepo: true, repoRoot, branch, headShort, remoteName, remoteUrl, dirtyCount, dirtyAdded, dirtyDeleted };
+	}
+
+	/**
+	 * Resolve the gitdir for a cwd: `.git` may be a directory (normal repo) or
+	 * a file containing `gitdir: <path>` (worktree/submodule).
+	 */
+	private resolveGitDir(projectCwd: string): string | null {
+		const gitPath = path.join(projectCwd, ".git");
+		if (!existsSync(gitPath)) return null;
+		try {
+			if (statSync(gitPath).isDirectory()) return gitPath;
+			const content = readFileSync(gitPath, "utf8").trim();
+			const match = content.match(/^gitdir:\s*(.+)$/);
+			if (match) return path.resolve(projectCwd, match[1].trim());
+			return null;
+		} catch {
+			return null;
+		}
 	}
 
 	/** Run a read-only git command; returns stdout (trimmed of trailing newline) or null on failure. */

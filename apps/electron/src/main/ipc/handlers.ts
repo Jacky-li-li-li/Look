@@ -38,6 +38,9 @@ import {
 	workspaceRouter,
 } from "./routers/index.js";
 
+/** 模块级 GitService：窗口重建（registerIpcHandlers 重跑）时先 dispose 旧实例的 watcher。 */
+let gitService: GitService | null = null;
+
 const domainRouters = [
 	agentRouter,
 	fileRouter,
@@ -88,7 +91,9 @@ export function registerIpcHandlers(
 	workspaceTreeService.setEmitCallback((event) => rendererEvents.send(event));
 
 	// Read-only git repo detection (recreated on window re-create; cache TTL is short).
-	const gitService = new GitService();
+	// Module-level so the previous instance's HEAD watchers are disposed on re-create.
+	gitService?.dispose();
+	gitService = new GitService();
 
 	// Forward session-scoped runtime events to the renderer.
 	const unsubscribeEvents = composition.eventBus.onEvent((event) => rendererEvents.send(event));

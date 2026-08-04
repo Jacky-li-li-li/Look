@@ -7,6 +7,7 @@ import {
 	loadedWorkspaceChildrenAtomFamily,
 	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
+	projectGitInfoAtomFamily,
 	projectsAtom,
 	removeProjectAtoms,
 	sharedFilesAtomFamily,
@@ -47,6 +48,12 @@ export function handleProjectEvent(
 		case "project:active-changed":
 			appStore.set(activeProjectIdAtom, event.projectId);
 			return true;
+
+		case "project:git-info": {
+			// 主进程 HEAD watcher 推送（外部 git checkout 等）：直接更新 atom，无需重新 invoke。
+			appStore.set(projectGitInfoAtomFamily(event.projectId), event.info);
+			return true;
+		}
 
 		case "project:confirm-delete":
 			appStore.set(pendingDeleteProjectAtom, {

@@ -63,6 +63,7 @@ describeGit("GitService", () => {
 		expect(info?.headShort).toBeNull();
 		expect(info?.remoteName).toBe("origin");
 		expect(info?.remoteUrl).toBe("https://github.com/foo/bar.git");
+		expect(info?.dirtyCount).toBe(0);
 	});
 
 	it("非仓库目录 → isRepo=false，其余字段为 null", async () => {
@@ -78,6 +79,7 @@ describeGit("GitService", () => {
 		expect(info?.headShort).toBeNull();
 		expect(info?.remoteName).toBeNull();
 		expect(info?.remoteUrl).toBeNull();
+		expect(info?.dirtyCount).toBe(0);
 	});
 
 	it("不存在的目录 → null", async () => {
@@ -203,5 +205,71 @@ describeGit("GitService", () => {
 			if (oldWt === undefined) delete process.env.GIT_WORK_TREE;
 			else process.env.GIT_WORK_TREE = oldWt;
 		}
+	});
+
+	it("dirtyCount 拆分 +added / -deleted（未跟踪/修改/新增/删除）", async () => {
+		const dir = makeRepo("dirty");
+		const service = new GitService();
+		expect((await service.getRepoInfo(dir))?.dirtyCount).toBe(0);
+
+		// 未跟踪 + 修改 + 暂存新增 + 删除 = 4 行 porcelain
+		fs.writeFileSync(path.join(dir, "untracked.txt"), "x\n");
+		fs.writeFileSync(path.join(dir, "a.txt"), "hello-modified\n");
+		fs.writeFileSync(path.join(dir, "staged.txt"), "s\n");
+		git(dir, ["add", "staged.txt"]);
+		fs.rmSync(path.join(dir, "deleted.txt"), { force: true });
+		fs.writeFileSync(path.join(dir, "deleted.txt"), "to-be-deleted\n");
+		git(dir, ["add", "deleted.txt"]);
+		fs.rmSync(path.join(dir, "deleted.txt"), { force: true });
+
+		// 缓存 TTL 内不会自动刷新，显式失效后重新探测
+		service.invalidate(dir);
+		const info = await service.getRepoInfo(dir);
+		expect(info?.dirtyCount).toBe(4);
+		expect(info?.dirtyAdded).toBe(3); // ?? + M + A
+		expect(info?.dirtyDeleted).toBe(1); // D（staged 删除）
+	});
+
+	it("ensureWatcher：外部切换分支触发 onChange 并失效缓存", async () => {
+		const dir = makeRepo("watch");
+		const service = new GitService();
+
+		const onChange = vi.fn();
+		expect(service.ensureWatcher(dir, onChange)).toBe(true);
+		// 幂等：重复 ensure 不重复挂
+		expect(service.ensureWatcher(dir, onChange)).toBe(false);
+
+		// 预填充缓存
+		const first = await service.getRepoInfo(dir);
+		expect(first?.branch).toBe(git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]));
+
+		// 外部切到新分支：HEAD 变化 → watcher 触发
+		git(dir, ["checkout", "-q", "-b", "feature/x"]);
+		await vi.waitFor(() => expect(onChange).toHaveBeenCalled(), { timeout: 5_000 });
+
+		// 缓存已失效：新分支名被重新探测到（不再返回旧对象）
+		const fresh = await service.getRepoInfo(dir);
+		expect(fresh).not.toBe(first);
+		expect(fresh?.branch).toBe("feature/x");
+
+		service.stopWatcher(dir);
+	});
+
+	it("ensureWatcher：非仓库目录不挂 watcher", () => {
+		const plain = path.join(tmpRoot, "plain-watch");
+		fs.mkdirSync(plain, { recursive: true });
+		expect(new GitService().ensureWatcher(plain, vi.fn())).toBe(false);
+	});
+
+	it("dispose 关闭所有 watcher", async () => {
+		const dir = makeRepo("dispose");
+		const service = new GitService();
+		const onChange = vi.fn();
+		service.ensureWatcher(dir, onChange);
+		service.dispose();
+
+		git(dir, ["checkout", "-q", "-b", "after-dispose"]);
+		await new Promise((r) => setTimeout(r, 500));
+		expect(onChange).not.toHaveBeenCalled();
 	});
 });

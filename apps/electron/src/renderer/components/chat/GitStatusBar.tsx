@@ -83,17 +83,25 @@ const GitStatusBar = memo(function GitStatusBar({ projectId }: GitStatusBarProps
 	if (!head) return null;
 
 	const remote = info.remoteUrl ? shortenRemoteUrl(info.remoteUrl) : null;
+	const dirty = info.dirtyCount > 0;
+	// diff 风格：+新增/修改（绿），-删除（红）；只显示非零侧
+	const dirtyAddedLabel = info.dirtyAdded > 0 ? `+${info.dirtyAdded}` : null;
+	const dirtyDeletedLabel = info.dirtyDeleted > 0 ? `-${info.dirtyDeleted}` : null;
+	const dirtyLabel = [dirtyAddedLabel, dirtyDeletedLabel].filter(Boolean).join(" ");
 	const headLabel = info.branch
 		? `${t("chat.gitBranch")}: ${info.branch}`
 		: `${t("chat.gitDetachedHead")}: ${info.headShort ?? ""}`;
 	const titleParts: string[] = [headLabel];
 	if (info.repoRoot) titleParts.push(`${t("chat.gitRepoRoot")}: ${info.repoRoot}`);
 	if (info.remoteUrl) titleParts.push(`${t("chat.gitRemote")}: ${info.remoteUrl}`);
+	if (dirty) titleParts.push(`${t("chat.gitDirtyCount")}: ${info.dirtyCount} (${dirtyLabel})`);
+
+	const visible = [head, remote, dirtyLabel].filter(Boolean);
 
 	return (
 		<div
 			role="status"
-			aria-label={[head, remote].filter(Boolean).join(" · ")}
+			aria-label={visible.join(" · ")}
 			className="flex h-5 shrink-0 items-start gap-1.5 overflow-hidden px-3 pt-[3px] text-muted-foreground/70"
 			title={titleParts.join("\n")}
 		>
@@ -107,6 +115,29 @@ const GitStatusBar = memo(function GitStatusBar({ projectId }: GitStatusBarProps
 						·
 					</span>
 					<span className="truncate font-mono text-[10px] leading-none">{remote}</span>
+				</>
+			)}
+			{dirty && dirtyLabel && (
+				<>
+					<span className="shrink-0 font-mono text-[10px] leading-none text-muted-foreground/40" aria-hidden>
+						·
+					</span>
+					{dirtyAddedLabel && (
+						<span
+							className="shrink-0 font-mono text-[10px] leading-none text-emerald-500/80"
+							title={`${t("chat.gitDirtyCount")}: ${info.dirtyCount} (${dirtyLabel})`}
+						>
+							{dirtyAddedLabel}
+						</span>
+					)}
+					{dirtyDeletedLabel && (
+						<span
+							className="shrink-0 font-mono text-[10px] leading-none text-red-500/80"
+							title={`${t("chat.gitDirtyCount")}: ${info.dirtyCount} (${dirtyLabel})`}
+						>
+							{dirtyDeletedLabel}
+						</span>
+					)}
 				</>
 			)}
 		</div>

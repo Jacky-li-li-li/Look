@@ -2,7 +2,7 @@
 // Project router — project CRUD and trust prompts
 // ============================================================
 
-import { DEFAULT_PROJECT_ID } from "@look/shared/types";
+import { DEFAULT_PROJECT_ID, type MainToRendererEvent } from "@look/shared/types";
 import { guardBoolean, guardOptionalString, guardPath, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 import { promptForProjectTrust } from "../project-trust.js";
@@ -78,6 +78,23 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 		const project = ctx.project.service.getProjectInfo(projectId);
 		if (!project?.valid) return { success: true, info: null };
 		const info = await ctx.git.service.getRepoInfo(project.cwd);
+
+		// 挂 HEAD watcher：外部切分支/改 remote 时失效缓存并主动推送新信息，
+		// 渲染端无需等 30s 轮询即可即时刷新状态栏。
+		ctx.git.service.ensureWatcher(project.cwd, () => {
+			void ctx.git.service.getRepoInfo(project.cwd).then((fresh) => {
+				if (!fresh) return;
+				const event: MainToRendererEvent = { type: "project:git-info", projectId, info: fresh };
+				try {
+					if (!ctx.mainWindow.isDestroyed() && !ctx.mainWindow.webContents.isDestroyed()) {
+						ctx.mainWindow.webContents.send("look:event", event);
+					}
+				} catch {
+					// 窗口已关闭，忽略推送失败
+				}
+			});
+		});
+
 		return { success: true, info };
 	});
 };

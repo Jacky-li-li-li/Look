@@ -6,6 +6,7 @@ import {
 	loadedWorkspaceChildrenAtomFamily,
 	openProjectIdsAtom,
 	pendingDeleteProjectAtom,
+	projectGitInfoAtomFamily,
 	projectsAtom,
 	removeProjectAtoms,
 	sharedFilesAtomFamily,
@@ -99,6 +100,45 @@ describe("handleProjectEvent", () => {
 			sharedRefreshTimers,
 		);
 		expect(appStore.get(activeProjectIdAtom)).toBe(projectId);
+	});
+
+	it("project:git-info 更新对应项目的 git 信息 atom", () => {
+		const gitInfo = {
+			isRepo: true,
+			repoRoot: "/tmp/a",
+			branch: "main",
+			headShort: null,
+			remoteName: "origin",
+			remoteUrl: "https://github.com/a/b.git",
+			dirtyCount: 3,
+			dirtyAdded: 2,
+			dirtyDeleted: 1,
+		};
+		handleProjectEvent(
+			{ type: "project:git-info", projectId, info: gitInfo } as unknown as Parameters<typeof handleProjectEvent>[0],
+			sharedRefreshTimers,
+		);
+		expect(appStore.get(projectGitInfoAtomFamily(projectId))).toEqual(gitInfo);
+		expect(appStore.get(projectGitInfoAtomFamily(otherProjectId))).toBeNull();
+	});
+
+	it("project:git-info 可推送 null 清空（仓库被删除）", () => {
+		appStore.set(projectGitInfoAtomFamily(projectId), {
+			isRepo: true,
+			repoRoot: "/tmp/a",
+			branch: "main",
+			headShort: null,
+			remoteName: null,
+			remoteUrl: null,
+			dirtyCount: 0,
+			dirtyAdded: 0,
+			dirtyDeleted: 0,
+		});
+		handleProjectEvent(
+			{ type: "project:git-info", projectId, info: null } as unknown as Parameters<typeof handleProjectEvent>[0],
+			sharedRefreshTimers,
+		);
+		expect(appStore.get(projectGitInfoAtomFamily(projectId))).toBeNull();
 	});
 
 	it("project:confirm-delete sets pending delete state", () => {

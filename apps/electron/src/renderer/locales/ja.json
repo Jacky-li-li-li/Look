@@ -604,7 +604,8 @@
     "gitBranch": "ブランチ",
     "gitRemote": "リモート",
     "gitRepoRoot": "リポジトリルート",
-    "gitDetachedHead": "デタッチド HEAD"
+    "gitDetachedHead": "デタッチド HEAD",
+    "gitDirtyCount": "未コミット変更"
   },
   "context": {
     "compressing": "圧縮中…",

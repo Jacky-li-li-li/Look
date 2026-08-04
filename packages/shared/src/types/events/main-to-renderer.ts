@@ -2,6 +2,7 @@ import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "../../contracts/permission.js";
 import type { SessionUiEventEnvelope } from "../../types/ui-events.js";
 import type { AgentInfo } from "../dto/agent.js";
+import type { GitRepoInfo } from "../dto/git.js";
 import type { AppUpdatePhase, TodoItem } from "../dto/misc.js";
 import type { PermissionAskEvent, PlanApprovalRequest, PlanQuestionRequest } from "../dto/permission.js";
 import type { ProjectInfo } from "../dto/project.js";
@@ -37,6 +38,7 @@ export type MainToRendererEvent =
 	| ({ type: "session:subagent-completed" } & SubagentCompletedEvent)
 	| { type: "project:list"; projects: ProjectInfo[]; activeProjectId: string | null }
 	| { type: "project:active-changed"; projectId: string }
+	| { type: "project:git-info"; projectId: string; info: GitRepoInfo | null }
 	| {
 			type: "project:confirm-delete";
 			projectId: string;

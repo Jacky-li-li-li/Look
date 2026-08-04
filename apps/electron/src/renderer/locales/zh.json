@@ -604,7 +604,8 @@
     "gitBranch": "分支",
     "gitRemote": "远程仓库",
     "gitRepoRoot": "仓库根目录",
-    "gitDetachedHead": "游离 HEAD"
+    "gitDetachedHead": "游离 HEAD",
+    "gitDirtyCount": "未提交改动"
   },
   "context": {
     "compressing": "压缩中…",

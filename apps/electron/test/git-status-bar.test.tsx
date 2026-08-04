@@ -184,6 +184,76 @@ describe("GitStatusBar", () => {
 		await waitFor(() => expect(mocks.getProjectGitInfo).toHaveBeenCalledWith("p2"));
 	});
 
+	it("dirtyCount > 0 时显示 +N -M（amber），tooltip 含未提交改动数", async () => {
+		mocks.getProjectGitInfo.mockResolvedValue({
+			success: true,
+			info: {
+				isRepo: true,
+				repoRoot: "/tmp/repo",
+				branch: "main",
+				headShort: null,
+				remoteName: "origin",
+				remoteUrl: "https://github.com/foo/bar.git",
+				dirtyCount: 4,
+				dirtyAdded: 3,
+				dirtyDeleted: 1,
+			},
+		});
+
+		const { getByText, getByRole } = renderBar("p1");
+
+		await waitFor(() => expect(getByText("main")).toBeTruthy());
+		expect(getByText("+3")).toBeTruthy();
+		expect(getByText("-1")).toBeTruthy();
+		const status = getByRole("status");
+		expect(status.getAttribute("aria-label")).toBe("main · github.com/foo/bar · +3 -1");
+		expect(status.getAttribute("title")).toContain("未提交改动");
+	});
+
+	it("只有删除时显示 -N", async () => {
+		mocks.getProjectGitInfo.mockResolvedValue({
+			success: true,
+			info: {
+				isRepo: true,
+				repoRoot: "/tmp/repo",
+				branch: "main",
+				headShort: null,
+				remoteName: null,
+				remoteUrl: null,
+				dirtyCount: 2,
+				dirtyAdded: 0,
+				dirtyDeleted: 2,
+			},
+		});
+
+		const { getByText } = renderBar("p2");
+
+		await waitFor(() => expect(getByText("-2")).toBeTruthy());
+	});
+
+	it("dirtyCount 为 0 时不显示 dirty 徽标", async () => {
+		mocks.getProjectGitInfo.mockResolvedValue({
+			success: true,
+			info: {
+				isRepo: true,
+				repoRoot: "/tmp/repo",
+				branch: "main",
+				headShort: null,
+				remoteName: null,
+				remoteUrl: null,
+				dirtyCount: 0,
+				dirtyAdded: 0,
+				dirtyDeleted: 0,
+			},
+		});
+
+		const { queryByText } = renderBar("p3");
+
+		await waitFor(() => expect(mocks.getProjectGitInfo).toHaveBeenCalledWith("p3"));
+		expect(queryByText(/\+/)).toBeNull();
+		expect(queryByText(/-/)).toBeNull();
+	});
+
 	it("IPC 返回 success:false 时不更新状态", async () => {
 		mocks.getProjectGitInfo.mockResolvedValue({ success: false, error: "boom" });
 		const { container } = renderBar("p1");

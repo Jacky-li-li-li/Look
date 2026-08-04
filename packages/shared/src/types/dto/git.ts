@@ -16,4 +16,10 @@ export interface GitRepoInfo {
 	remoteName: string | null;
 	/** 远程 URL（https/git@ 原样），无 remote 时 null */
 	remoteUrl: string | null;
+	/** 未提交改动文件总数（git status --porcelain 行数）；非仓库或探测失败时为 0 */
+	dirtyCount: number;
+	/** 有新增/修改内容的文件数（状态码含 A/?/R/M，diff 风格 +N） */
+	dirtyAdded: number;
+	/** 被删除的文件数（状态码含 D，diff 风格 -N） */
+	dirtyDeleted: number;
 }
