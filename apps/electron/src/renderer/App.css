@@ -316,9 +316,15 @@ body {
    Conversation 滚动容器专用（conversation.tsx scrollClassName 加
    look-message-scrollbar）：静止时 thumb 透明，滚动时（look-scrolling
    class，由 scroll 事件 + 600ms debounce 控制）或悬停容器时显示。
+   宽度 3px 比全局 5px 更细，悬停/拖动时不占视觉重量。
    scrollbar-gutter: stable both-edges 仍保留，隐藏时内容宽度不变。 */
 .look-message-scrollbar {
+	scrollbar-width: thin;
 	scrollbar-color: transparent transparent;
+}
+.look-message-scrollbar::-webkit-scrollbar {
+	width: 3px;
+	height: 3px;
 }
 .look-message-scrollbar::-webkit-scrollbar-thumb {
 	background: transparent;
