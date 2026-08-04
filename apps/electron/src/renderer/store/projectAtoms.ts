@@ -12,8 +12,6 @@ export const openProjectIdsAtom = atom<string[]>([]);
 
 export const openedSessionIdsAtom = atom<string[]>([]);
 
-export const recentlyActiveSessionIdsAtom = atom<string[]>([]);
-
 export const pendingDeleteProjectAtom = atom<{
 	projectId: string;
 	projectName: string;

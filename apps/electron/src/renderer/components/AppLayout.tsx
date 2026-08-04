@@ -31,17 +31,16 @@ import NewProjectDialog from "./dialogs/NewProjectDialog";
 import OAuthLoginDialog from "./dialogs/OAuthLoginDialog";
 import PermissionDialog from "./dialogs/PermissionDialog";
 import PlanApprovalDialog from "./dialogs/PlanApprovalDialog";
-import SessionSheetBar from "./SessionSheetBar";
 import Sidebar from "./Sidebar";
 import ScheduledTasksPage from "./scheduler/ScheduledTasksPage";
 import SettingsPage from "./settings/SettingsPage";
+import TopSessionBar from "./TopSessionBar";
 import { RightPanel } from "./workspace/RightPanel";
 
 const AgentSquare = lazy(() => import("./AgentMarketplace/AgentSquare"));
 
 interface AppLayoutProps {
 	agents: AgentInfo[];
-	openedSessionIds: string[];
 	activeAgent: AgentInfo | null;
 	activeAgentId: string | null;
 	activeSessionState: RendererSessionState;
@@ -53,8 +52,6 @@ interface AppLayoutProps {
 	providerSettings: ProviderSettingsData;
 	handleSendMessage: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
 	handleSelectAgent: (agentId: string) => void;
-	handleCloseSessionSheet: (agentId: string) => void;
-	handleReorderSessionSheets: (nextIds: string[]) => void;
 	handleDestroyAgent: (agentId: string) => void;
 	handleAbortAgent: () => void;
 	handleThinkingChange: (level: ThinkingLevel) => void;
@@ -72,7 +69,6 @@ interface AppLayoutProps {
 
 function AppLayout({
 	agents,
-	openedSessionIds,
 	activeAgent,
 	activeAgentId,
 	activeSessionState,
@@ -84,8 +80,6 @@ function AppLayout({
 	providerSettings,
 	handleSendMessage,
 	handleSelectAgent,
-	handleCloseSessionSheet,
-	handleReorderSessionSheets,
 	handleDestroyAgent,
 	handleAbortAgent,
 	handleThinkingChange,
@@ -204,17 +198,7 @@ function AppLayout({
 			case "chat":
 				return (
 					<>
-						<SessionSheetBar
-							agentIds={openedSessionIds}
-							agents={agents}
-							projects={projects}
-							activeAgentId={activeAgentId}
-							sidebarCollapsed={sidebarCollapsed}
-							rightPanelCollapsed={rightPanelCollapsed}
-							onSelect={handleSelectAgent}
-							onClose={handleCloseSessionSheet}
-							onReorder={handleReorderSessionSheets}
-						/>
+						<TopSessionBar activeAgent={activeAgent} />
 						{activeAgent ? (
 							<ChatPanel
 								agentId={activeAgent.id}

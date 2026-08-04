@@ -2,7 +2,7 @@
 // App — Thin orchestrator: 组合 hooks，处理登录态守卫，渲染 AppLayout
 // ============================================================
 
-import { useAtom, useAtomValue } from "jotai";
+import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo } from "react";
 import AppLayout from "./components/AppLayout";
 import { BrandMark } from "./components/BrandMark";
@@ -18,7 +18,6 @@ import {
 	activeAgentAtom,
 	activeAgentIdAtom,
 	agentsAtom,
-	openedSessionIdsAtom,
 	projectsAtom,
 	providerSettingsAtom,
 	rightPanelCollapsedAtom,
@@ -61,7 +60,6 @@ export default function App() {
 	]);
 	const activePhase = deriveSessionPhase(activeSessionState);
 	const agents = useAtomValue(agentsAtom);
-	const [openedSessionIds] = useAtom(openedSessionIdsAtom);
 	const projects = useAtomValue(projectsAtom);
 
 	// ── Hooks ──
@@ -102,7 +100,6 @@ export default function App() {
 	return (
 		<AppLayout
 			agents={agents}
-			openedSessionIds={openedSessionIds}
 			activeAgent={activeAgent}
 			activeAgentId={activeAgentId}
 			activeSessionState={activeSessionState}
@@ -114,8 +111,6 @@ export default function App() {
 			providerSettings={providerSettings}
 			handleSendMessage={agentActions.handleSendMessage}
 			handleSelectAgent={agentActions.handleSelectAgent}
-			handleCloseSessionSheet={agentActions.handleCloseSessionSheet}
-			handleReorderSessionSheets={agentActions.handleReorderSessionSheets}
 			handleDestroyAgent={agentActions.handleDestroyAgent}
 			handleAbortAgent={agentActions.handleAbortAgent}
 			handleThinkingChange={agentActions.handleThinkingChange}

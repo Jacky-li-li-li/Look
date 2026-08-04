@@ -11,7 +11,6 @@ import { appStore } from "../store/appStore";
 import {
 	activeAgentIdAtom,
 	openedSessionIdsAtom,
-	recentlyActiveSessionIdsAtom,
 	sessionStateAtomFamily,
 	userPreferredModelAtom,
 } from "../store/atoms";
@@ -45,7 +44,7 @@ export function useAgentActions() {
 		// 点击已激活的会话：直接短路。主进程即使命中 current 短路，仍会把整段
 		// 会话历史序列化重发 session:snapshot，渲染端 entries 换新引用后会重算
 		// 整条 timeline 并重渲染所有消息，长会话下就是卡顿来源。仅需保证该会话
-		// 出现在顶部标签列表（启动恢复等边界场景）。
+		// 保留在已打开会话集合（供持久化/启动恢复）。
 		if (previousActiveId === agentId) {
 			appStore.set(openedSessionIdsAtom, (previous) => {
 				if (previous.includes(agentId)) return previous;
@@ -54,7 +53,7 @@ export function useAgentActions() {
 			return;
 		}
 		const alreadyOpened = appStore.get(openedSessionIdsAtom).includes(agentId);
-		// 点击已在顶部打开且渲染端已持有完整快照的会话：同样跳过全量快照重发，
+		// 点击已打开且渲染端已持有完整快照的会话：同样跳过全量快照重发，
 		// 直接切换 active + 轻量同步主进程 selection（不再重发整段历史）。
 		// 只有 snapshotLoaded 才可能跳过：若渲染端没有该会话数据（如冷启动恢复），
 		// 必须走完整 activateSession 拉取快照。
@@ -63,24 +62,17 @@ export function useAgentActions() {
 		if (!hasSnapshot) {
 			markSessionSnapshotLoading(agentId, true);
 		}
-		// 乐观更新顶部标签：activateSession 需要等主进程构建并发出全量快照才 resolve，
-		// 若放在 await 之后，切换会话时顶部列表会明显滞后。
+		// 乐观记录已打开会话：activateSession 需要等主进程构建并发出全量快照才 resolve，
+		// 若放在 await 之后，已打开会话集合会滞后。
 		if (!alreadyOpened) {
 			appStore.set(openedSessionIdsAtom, (previous) => [...previous, agentId]);
 		}
 		try {
 			const result = await api.activateSession(agentId, hasSnapshot ? { skipSnapshot: true } : undefined);
 			if (!result?.success) throw new Error(result?.error ?? "Failed to activate session");
-			// 快速连点时多次激活并发返回，只有当前仍激活该会话才更新最近列表，避免乱序覆盖。
-			if (appStore.get(activeAgentIdAtom) === agentId) {
-				appStore.set(recentlyActiveSessionIdsAtom, (previous) => {
-					const filtered = previous.filter((id) => id !== agentId);
-					return [agentId, ...filtered];
-				});
-			}
 		} catch (error) {
 			markSessionSnapshotLoading(agentId, false);
-			// 回滚乐观添加的标签
+			// 回滚乐观添加的会话
 			if (!alreadyOpened) {
 				appStore.set(openedSessionIdsAtom, (previous) => previous.filter((id) => id !== agentId));
 			}
@@ -90,43 +82,6 @@ export function useAgentActions() {
 			}
 			toast.error(error instanceof Error ? error.message : "Failed to activate session");
 		}
-	}, []);
-
-	const handleCloseSessionSheet = useCallback((agentId: string) => {
-		const currentIds = appStore.get(openedSessionIdsAtom);
-		const nextIds = currentIds.filter((id) => id !== agentId);
-		appStore.set(openedSessionIdsAtom, nextIds);
-		appStore.set(recentlyActiveSessionIdsAtom, (previous) => previous.filter((id) => id !== agentId));
-		if (appStore.get(activeAgentIdAtom) === agentId) {
-			const activationOrder = appStore.get(recentlyActiveSessionIdsAtom);
-			const fallbackId = activationOrder.find((id) => nextIds.includes(id)) ?? nextIds[0] ?? null;
-			if (fallbackId && api) {
-				appStore.set(activeAgentIdAtom, fallbackId);
-				const fallbackHasSnapshot = appStore.get(sessionStateAtomFamily(fallbackId)).snapshotLoaded;
-				if (!fallbackHasSnapshot) {
-					markSessionSnapshotLoading(fallbackId, true);
-				}
-				api.activateSession(fallbackId, fallbackHasSnapshot ? { skipSnapshot: true } : undefined)
-					.then((result) => {
-						if (result?.success) {
-							appStore.set(activeAgentIdAtom, fallbackId);
-						} else {
-							markSessionSnapshotLoading(fallbackId, false);
-							appStore.set(activeAgentIdAtom, null);
-						}
-					})
-					.catch(() => {
-						markSessionSnapshotLoading(fallbackId, false);
-						if (appStore.get(activeAgentIdAtom) === fallbackId) appStore.set(activeAgentIdAtom, null);
-					});
-			} else {
-				appStore.set(activeAgentIdAtom, null);
-			}
-		}
-	}, []);
-
-	const handleReorderSessionSheets = useCallback((nextIds: string[]) => {
-		appStore.set(openedSessionIdsAtom, nextIds);
 	}, []);
 
 	const handleDestroyAgent = useCallback(async (agentId: string) => {
@@ -167,10 +122,6 @@ export function useAgentActions() {
 				if (previous.includes(result.agentId)) return previous;
 				return [...previous, result.agentId];
 			});
-			appStore.set(recentlyActiveSessionIdsAtom, (previous) => [
-				result.agentId,
-				...previous.filter((id) => id !== result.agentId),
-			]);
 			return result.agentId;
 		}
 		return null;
@@ -179,8 +130,6 @@ export function useAgentActions() {
 	return {
 		handleSendMessage,
 		handleSelectAgent,
-		handleCloseSessionSheet,
-		handleReorderSessionSheets,
 		handleDestroyAgent,
 		handleAbortAgent,
 		handleThinkingChange,

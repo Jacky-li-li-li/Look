@@ -209,10 +209,8 @@
     "planDesc": "読み取り専用で調査し、質問して計画の承認を待ちます",
     "switchFailed": "権限モードを変更できませんでした"
   },
-  "sheet": {
-    "close": "セッションシートを閉じる",
-    "emptyHint": "サイドバーからセッションを選択",
-    "unknownSession": "不明なセッション"
+  "topBar": {
+    "emptyHint": "サイドバーからセッションを選択"
   },
   "session": {
     "draft": "下書き",

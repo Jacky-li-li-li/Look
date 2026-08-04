@@ -6,6 +6,7 @@
 import { UserAvatar } from "@look/ui/components/UserAvatar";
 import { Button } from "@look/ui/components/ui/button";
 import { ScrollArea } from "@look/ui/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Bot, Clock3, FolderOpen, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { memo } from "react";
@@ -131,42 +132,61 @@ export default function Sidebar(props: SidebarProps) {
 	// 折叠/展开时完全不跟随面板移动；折叠时折叠按钮变展开按钮，其余按钮保持显示。
 	const headerActions = (
 		<div className="sidebar-header-actions" data-collapsed={collapsed || undefined}>
-			<Button
-				variant="line-ghost"
-				size="icon"
-				onClick={() => appStore.set(sidebarCollapsedAtom, !collapsed)}
-				aria-label={collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
-				title={collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
-			>
-				{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-			</Button>
-			<Button
-				variant="line-ghost"
-				size="icon"
-				className="relative"
-				onClick={props.onCreateProject}
-				aria-label={t("project.openProject", "Add project folder")}
-				title={t("project.openProject", "Add project folder")}
-			>
-				<FolderOpen className="size-4" />
-				<Plus className="absolute ml-3 mt-3 size-2.5 rounded-full bg-sidebar" />
-			</Button>
-			<Button
-				variant="line-ghost"
-				size="icon"
-				onClick={() => {
-					if (activeProject) props.onCreateClick(activeProject.id);
-				}}
-				disabled={!canCreateSession}
-				aria-label={t("sidebar.newSession", "New session")}
-				title={
-					canCreateSession
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="line-ghost"
+						size="icon"
+						onClick={() => appStore.set(sidebarCollapsedAtom, !collapsed)}
+						aria-label={
+							collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")
+						}
+					>
+						{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					{collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
+				</TooltipContent>
+			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="line-ghost"
+						size="icon"
+						className="relative"
+						onClick={props.onCreateProject}
+						aria-label={t("project.openProject", "Add project folder")}
+					>
+						<FolderOpen className="size-4" />
+						<Plus className="absolute ml-3 mt-3 size-2.5 rounded-full bg-sidebar" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">{t("project.openProject", "Add project folder")}</TooltipContent>
+			</Tooltip>
+			<Tooltip>
+				{/* disabled 按钮不派发 pointer 事件，span 包裹保证悬停提示仍可触发 */}
+				<TooltipTrigger asChild>
+					<span className="inline-flex">
+						<Button
+							variant="line-ghost"
+							size="icon"
+							onClick={() => {
+								if (activeProject) props.onCreateClick(activeProject.id);
+							}}
+							disabled={!canCreateSession}
+							aria-label={t("sidebar.newSession", "New session")}
+						>
+							<MessageSquarePlus className="size-4" />
+						</Button>
+					</span>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					{canCreateSession
 						? t("sidebar.newSession", "New session")
-						: t("workspace.noActiveProject", "Open a project first")
-				}
-			>
-				<MessageSquarePlus className="size-4" />
-			</Button>
+						: t("workspace.noActiveProject", "Open a project first")}
+				</TooltipContent>
+			</Tooltip>
 
 			{/* 顶部最右侧：更新胶囊（available/downloading 自动下载进度，downloaded 手动重启） */}
 			<TopUpdateButton />

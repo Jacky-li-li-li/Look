@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Button } from "@look/ui/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { PanelRightClose } from "lucide-react";
 import { useEffect } from "react";
@@ -125,16 +126,20 @@ export function RightPanel() {
 						{t("rightPanel.shared")}
 					</button>
 				</div>
-				<Button
-					size="icon-sm"
-					variant="ghost"
-					className="shrink-0 rounded-md border border-hairline"
-					onClick={() => setCollapsed(true)}
-					aria-label={t("rightPanel.collapse")}
-					title={t("rightPanel.collapse")}
-				>
-					<PanelRightClose className="size-3.5" />
-				</Button>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							size="icon-sm"
+							variant="ghost"
+							className="shrink-0 rounded-md border border-hairline"
+							onClick={() => setCollapsed(true)}
+							aria-label={t("rightPanel.collapse")}
+						>
+							<PanelRightClose className="size-3.5" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">{t("rightPanel.collapse")}</TooltipContent>
+				</Tooltip>
 			</header>
 			{tab === "workspace" && activeProject && (
 				<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />

@@ -209,10 +209,8 @@
     "planDesc": "Explore read-only, ask questions, and wait for plan approval",
     "switchFailed": "Failed to change permission mode"
   },
-  "sheet": {
-    "close": "Close session sheet",
-    "emptyHint": "Select a session from the sidebar",
-    "unknownSession": "Unknown"
+  "topBar": {
+    "emptyHint": "Select a session from the sidebar"
   },
   "session": {
     "draft": "draft",

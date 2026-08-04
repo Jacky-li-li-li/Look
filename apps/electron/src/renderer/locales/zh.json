@@ -209,10 +209,8 @@
     "planDesc": "只读探索、提问并等待计划批准",
     "switchFailed": "权限模式切换失败"
   },
-  "sheet": {
-    "close": "关闭会话标签",
-    "emptyHint": "从侧边栏选择会话",
-    "unknownSession": "未知会话"
+  "topBar": {
+    "emptyHint": "从侧边栏选择会话"
   },
   "session": {
     "draft": "草稿",

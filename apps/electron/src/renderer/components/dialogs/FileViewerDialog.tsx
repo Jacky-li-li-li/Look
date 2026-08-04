@@ -9,6 +9,7 @@
 
 import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom } from "jotai";
 import { ArrowLeft, Copy, Eye, FileWarning, FolderOpen, Pencil, RefreshCw, Save, X } from "lucide-react";
@@ -479,16 +480,23 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 				onPointerDown={windowMode ? undefined : handleDragStart}
 			>
 				<div className="flex items-center gap-2">
-					<Button
-						variant="ghost"
-						size="icon-xs"
-						onClick={handleBack}
-						disabled={backStack.length === 0}
-						aria-label={t("fileViewer.back")}
-						title={t("fileViewer.back")}
-					>
-						<ArrowLeft className="size-3.5" />
-					</Button>
+					{/* disabled 按钮不派发 pointer 事件，span 包裹保证悬停提示仍可触发 */}
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<span className="inline-flex">
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={handleBack}
+									disabled={backStack.length === 0}
+									aria-label={t("fileViewer.back")}
+								>
+									<ArrowLeft className="size-3.5" />
+								</Button>
+							</span>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">{t("fileViewer.back")}</TooltipContent>
+					</Tooltip>
 					<FileIcon node={iconNode} className="size-4 shrink-0" />
 					<h2 className="truncate font-heading text-sm leading-none font-medium">{basename}</h2>
 					{dirty && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />}
