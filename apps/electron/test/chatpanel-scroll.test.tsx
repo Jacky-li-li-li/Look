@@ -318,3 +318,51 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 		expect(SRC).not.toMatch(/StickToBottom/);
 	});
 });
+
+// ── 消息区滚动条可见性（静止隐藏、滚动显示）──
+
+describe("message scrollbar visibility", () => {
+	it("scroll container carries the look-message-scrollbar class", async () => {
+		const { scroller } = await renderHarness();
+		expect(scroller.classList.contains("look-message-scrollbar")).toBe(true);
+	});
+
+	it("adds look-scrolling while scrolling and removes it after idle", async () => {
+		const { scroller } = await renderHarness();
+		expect(scroller.classList.contains("look-scrolling")).toBe(false);
+
+		act(() => {
+			fireEvent.scroll(scroller);
+		});
+		expect(scroller.classList.contains("look-scrolling")).toBe(true);
+
+		act(() => {
+			vi.advanceTimersByTime(600);
+		});
+		expect(scroller.classList.contains("look-scrolling")).toBe(false);
+	});
+
+	it("resets the idle timer on repeated scroll events (debounce)", async () => {
+		const { scroller } = await renderHarness();
+		act(() => {
+			fireEvent.scroll(scroller);
+		});
+		act(() => {
+			vi.advanceTimersByTime(400);
+			fireEvent.scroll(scroller);
+		});
+		expect(scroller.classList.contains("look-scrolling")).toBe(true);
+
+		// 距第二次滚动 400ms：仍在 600ms 窗口内 → 保持显示
+		act(() => {
+			vi.advanceTimersByTime(400);
+		});
+		expect(scroller.classList.contains("look-scrolling")).toBe(true);
+
+		// 再 300ms（累计 700ms）→ 过期隐藏
+		act(() => {
+			vi.advanceTimersByTime(300);
+		});
+		expect(scroller.classList.contains("look-scrolling")).toBe(false);
+	});
+});

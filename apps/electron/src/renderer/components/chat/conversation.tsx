@@ -11,7 +11,7 @@ import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { ArrowDown } from "lucide-react";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
@@ -70,6 +70,24 @@ export function Conversation({ className, children, ...props }: ConversationProp
 function ConversationContextBridge({ children }: { children: ReactNode }): ReactElement {
 	const lib = useStickToBottomContext();
 
+	// 滚动条可见性：滚动时显示（look-scrolling class），静止 600ms 后隐藏；
+	// 悬停容器由 CSS :hover 显示（见 App.css .look-message-scrollbar）。
+	useEffect(() => {
+		const el = lib.scrollRef.current;
+		if (!el) return;
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		const showWhileScrolling = (): void => {
+			el.classList.add("look-scrolling");
+			if (timer) clearTimeout(timer);
+			timer = setTimeout(() => el.classList.remove("look-scrolling"), 600);
+		};
+		el.addEventListener("scroll", showWhileScrolling, { passive: true });
+		return () => {
+			el.removeEventListener("scroll", showWhileScrolling);
+			if (timer) clearTimeout(timer);
+		};
+	}, [lib.scrollRef]);
+
 	const value = useMemo<ConversationContextValue>(
 		() => ({
 			scrollRef: lib.scrollRef,
@@ -89,7 +107,6 @@ function ConversationContextBridge({ children }: { children: ReactNode }): React
 		// 贴底状态翻转时变化。不依赖 lib 整体对象，避免 escapedFromLock 等
 		// 内部状态翻转（用户滚动穿过 70px 边界时高频发生）触发全体消费方
 		// （CEG / SubagentToolGroup / ThinkingPanel）无谓重渲染。
-		// biome-ignore lint/correctness/useExhaustiveDependencies: 见上方注释，仅订阅稳定成员
 		[lib.scrollRef, lib.contentRef, lib.isAtBottom, lib.scrollToBottom, lib.stopScroll],
 	);
 
@@ -103,7 +120,7 @@ export type ConversationContentProps = ComponentProps<"div">;
 export function ConversationContent({ className, children, ...props }: ConversationContentProps): ReactElement {
 	return (
 		<StickToBottom.Content
-			scrollClassName="overflow-auto"
+			scrollClassName="overflow-auto look-message-scrollbar"
 			className={cn("flex flex-col gap-msg-row py-msg-list-y", className)}
 			aria-live="polite"
 			aria-atomic="false"

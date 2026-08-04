@@ -312,6 +312,34 @@ body {
 	background: color-mix(in oklch, var(--foreground), transparent 42%);
 }
 
+/* ── 消息区滚动条：静止隐藏、滚动/悬停显示 ──
+   Conversation 滚动容器专用（conversation.tsx scrollClassName 加
+   look-message-scrollbar）：静止时 thumb 透明，滚动时（look-scrolling
+   class，由 scroll 事件 + 600ms debounce 控制）或悬停容器时显示。
+   scrollbar-gutter: stable both-edges 仍保留，隐藏时内容宽度不变。 */
+.look-message-scrollbar {
+	scrollbar-color: transparent transparent;
+}
+.look-message-scrollbar::-webkit-scrollbar-thumb {
+	background: transparent;
+}
+.look-message-scrollbar:hover,
+.look-message-scrollbar.look-scrolling {
+	scrollbar-color: color-mix(in oklch, var(--foreground), transparent 58%) transparent;
+}
+.look-message-scrollbar:hover::-webkit-scrollbar-thumb,
+.look-message-scrollbar.look-scrolling::-webkit-scrollbar-thumb {
+	background: color-mix(in oklch, var(--foreground), transparent 58%);
+}
+.tone-dark .look-message-scrollbar:hover,
+.tone-dark .look-message-scrollbar.look-scrolling {
+	scrollbar-color: color-mix(in oklch, var(--foreground), transparent 42%) transparent;
+}
+.tone-dark .look-message-scrollbar:hover::-webkit-scrollbar-thumb,
+.tone-dark .look-message-scrollbar.look-scrolling::-webkit-scrollbar-thumb {
+	background: color-mix(in oklch, var(--foreground), transparent 42%);
+}
+
 /* ============================================================
 	 Application Shell — Marginal Wash
 	 Pure background with gutter shadow at sidebar seam
@@ -2216,14 +2244,14 @@ html[style*="--theme-transitioning:1"] *::after {
 /* ── 窗口拖拽区(macOS hiddenInset 标题栏)──
 	 主进程 titleBarStyle:"hiddenInset" 隐藏原生标题栏后,顶部各 header
 	 通过 .app-drag 承担窗口拖拽;交互元素(按钮/链接/tab)必须排除,
-	 否则会吞掉点击与 dnd-kit 拖拽排序。非 macOS 平台无 hiddenInset,
+	 否则会吞掉点击。非 macOS 平台无 hiddenInset,
 	 app-region 不生效,类名加上也无副作用。 */
 .app-drag {
 	-webkit-app-region: drag;
 }
 /* padding-left 的 transition 必须在始终匹配的 .app-drag 上,
    不能放在 .mac-titlebar-pad 上——展开侧栏时该类被移除,transition 也会消失,
-   导致 padding 瞬间跳变,会话标签闪现到应用最左侧。 */
+   导致 padding 瞬间跳变。 */
 html[data-platform="darwin"]:not([data-fullscreen="true"]) .app-drag {
 	transition: padding-left 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
