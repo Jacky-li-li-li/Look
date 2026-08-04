@@ -517,9 +517,7 @@
     "selectProjectHint": "Please select a project to configure.",
     "noProjectPrompts": "No project-specific prompts",
     "noPrompts": "No prompts",
-    "noProjects": "No projects opened yet",
-    "lookIsland": "Look Island",
-    "lookIslandDesc": "Show agent activity and approval cards in the macOS notch area (requires macOS 14+ and a notched display)"
+    "noProjects": "No projects opened yet"
   },
   "agent": {
     "model": "Model",

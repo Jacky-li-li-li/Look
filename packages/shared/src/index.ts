@@ -10,8 +10,6 @@ export {
 	getCustomProvidersPath,
 	getDefaultWorkspaceCwd,
 	getLookDir,
-	getLookIslandLayoutPath,
-	getLookIslandSettingsPath,
 	getModelsPath,
 	getProjectDir,
 	getProjectSettingsPath,

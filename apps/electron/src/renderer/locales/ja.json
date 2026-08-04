@@ -517,9 +517,7 @@
     "selectProjectHint": "設定するプロジェクトを選択してください。",
     "noProjectPrompts": "プロジェクト固有のプロンプトはありません",
     "noPrompts": "プロンプトはありません",
-    "noProjects": "開いているプロジェクトはありません",
-    "lookIsland": "Look Island",
-    "lookIslandDesc": "macOS ノッチ領域にエージェントの状態と承認カードを表示します（macOS 14+、ノッチ付きディスプレイが必要）"
+    "noProjects": "開いているプロジェクトはありません"
   },
   "agent": {
     "model": "モデル",

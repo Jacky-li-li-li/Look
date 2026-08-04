@@ -49,8 +49,6 @@ export type RendererToMainEvent =
 	| { type: "settings:provider-login"; provider: string }
 	| { type: "settings:provider-logout"; provider: string }
 	| { type: "settings:general:get" }
-	| { type: "look-island:get-settings" }
-	| { type: "look-island:set-enabled"; enabled: boolean }
 	| { type: "settings:add-custom-provider"; payload: CustomProviderInput }
 	| { type: "settings:update-custom-provider"; payload: { name: string; patch: Partial<CustomProviderInput> } }
 	| { type: "settings:remove-custom-provider"; payload: { name: string } }

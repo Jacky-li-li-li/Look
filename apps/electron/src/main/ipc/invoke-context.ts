@@ -7,7 +7,7 @@
 
 import type { CredentialStore } from "@earendil-works/pi-ai";
 import type { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
-import type { LookIslandSettings, RendererToMainEvent } from "@look/shared/types";
+import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { AgentDefinitionService } from "../agents/definition-service.js";
 import type { IProjectTrustManager } from "../core/contracts.js";
@@ -45,12 +45,6 @@ import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.j
 export interface InvokeContext {
 	// ── Transport (kept flat — used across most routers) ──
 	mainWindow: BrowserWindow;
-
-	// ── Look Island (macOS notch panel; null when unsupported) ──
-	lookIsland: {
-		getSettings(): LookIslandSettings;
-		setEnabled(enabled: boolean): LookIslandSettings;
-	} | null;
 
 	// ── Model ──
 	model: {

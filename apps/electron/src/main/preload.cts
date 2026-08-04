@@ -124,10 +124,6 @@ const api: LookAPI = {
 
 	resetGeneralSettings: () => invoke({ type: "settings:general:reset" }),
 
-	getLookIslandSettings: () => invoke({ type: "look-island:get-settings" }),
-
-	setLookIslandEnabled: (enabled) => invoke({ type: "look-island:set-enabled", enabled }),
-
 	compressSession: (agentId, customInstructions) => invoke({ type: "session:compress", agentId, customInstructions }),
 
 	abortCompressSession: (agentId) => invoke({ type: "session:abort-compress", agentId }),

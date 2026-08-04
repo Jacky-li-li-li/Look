@@ -9,7 +9,7 @@
 // keeps IPC routing decoupled from the bootstrap facade.
 // ============================================================
 
-import type { LookIslandSettings, RendererToMainEvent } from "@look/shared/types";
+import type { RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
 import { GitService } from "../git/git-service.js";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
@@ -23,7 +23,6 @@ import {
 	fileViewerRouter,
 	historyRouter,
 	imRouter,
-	lookIslandRouter,
 	mcpRouter,
 	modelRouter,
 	permissionRouter,
@@ -59,7 +58,6 @@ const domainRouters = [
 	imRouter,
 	mcpRouter,
 	updaterRouter,
-	lookIslandRouter,
 ];
 
 export function registerIpcHandlers(
@@ -69,10 +67,6 @@ export function registerIpcHandlers(
 	larkChannelManager?: import("../im/lark-channel-manager.js").LarkChannelManager,
 	larkBridgeService?: import("../im/lark-bridge-service.js").LarkBridgeService,
 	schedulerService?: import("../scheduler/scheduler-service.js").SchedulerService,
-	lookIslandController?: {
-		getSettings(): LookIslandSettings;
-		setEnabled(enabled: boolean): LookIslandSettings;
-	} | null,
 ): void {
 	if (!schedulerService) throw new Error("Scheduler service is not initialized");
 	// Clean up previous registrations to support macOS activate re-creation
@@ -104,8 +98,6 @@ export function registerIpcHandlers(
 
 	const ctx = {
 		mainWindow,
-
-		lookIsland: lookIslandController ?? null,
 
 		model: {
 			runtime: composition.modelRuntime,

@@ -530,8 +530,6 @@ const mockApi: LookAPI = {
 
 	// ---- 补齐的 LookAPI 契约方法（DEV mock 桩，与 preload 保持同构） ----
 	abortCompressSession: () => ok,
-	getLookIslandSettings: () => Promise.resolve({ success: true }),
-	setLookIslandEnabled: () => Promise.resolve({ success: true }),
 	openOAuthUrl: () => success({ redirectUrl: "" }),
 	readFileContent: () => success({ kind: "binary", sizeBytes: 0 }),
 	writeFileContent: () => success({ sizeBytes: 0 }),

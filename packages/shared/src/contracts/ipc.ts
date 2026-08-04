@@ -7,7 +7,6 @@ import type {
 	FileTreeNode,
 	GitRepoInfo,
 	ImageContent,
-	LookIslandSettings,
 	MainToRendererEvent,
 	ProjectInfo,
 	ProviderInfo,
@@ -173,9 +172,6 @@ export interface LookAPI {
 	getGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
 	setGeneralSettings(settings: Partial<GeneralSettings>): Promise<IpcResult<{ settings?: GeneralSettings }>>;
 	resetGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
-	// ---- Look Island (macOS notch panel) ----
-	getLookIslandSettings(): Promise<IpcResult<{ settings?: LookIslandSettings }>>;
-	setLookIslandEnabled(enabled: boolean): Promise<IpcResult<{ settings?: LookIslandSettings }>>;
 	// ---- v0.3 skills ----
 	listSkills(): Promise<
 		IpcResult<{ skills?: SkillEntry[]; diagnostics?: SkillDiagnostic[]; importedPaths?: string[] }>

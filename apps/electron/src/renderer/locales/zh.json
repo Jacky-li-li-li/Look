@@ -517,9 +517,7 @@
     "selectProjectHint": "请先选择要配置的项目。",
     "noProjectPrompts": "暂无项目专属提示词",
     "noPrompts": "暂无提示词",
-    "noProjects": "暂无已打开的项目",
-    "lookIsland": "灵动岛",
-    "lookIslandDesc": "在 macOS 刘海区域显示 Agent 运行状态与审批卡片（需要 macOS 14+ 与刘海屏）"
+    "noProjects": "暂无已打开的项目"
   },
   "agent": {
     "model": "模型",

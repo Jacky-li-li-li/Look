@@ -20,7 +20,6 @@ import {
 	fileViewerRouter,
 	historyRouter,
 	imRouter,
-	lookIslandRouter,
 	mcpRouter,
 	modelRouter,
 	permissionRouter,
@@ -56,7 +55,6 @@ const ALL_ROUTERS: IpcRouter[] = [
 	imRouter,
 	mcpRouter,
 	updaterRouter,
-	lookIslandRouter,
 ];
 
 /**
@@ -104,8 +102,6 @@ const EXHAUSTIVE = {
 	"settings:provider-login": true,
 	"settings:provider-logout": true,
 	"settings:general:get": true,
-	"look-island:get-settings": true,
-	"look-island:set-enabled": true,
 	"settings:add-custom-provider": true,
 	"settings:update-custom-provider": true,
 	"settings:remove-custom-provider": true,
