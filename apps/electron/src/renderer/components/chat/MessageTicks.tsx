@@ -7,10 +7,9 @@
 //   - 悬停刻度 → 左侧小窗展示该 user 消息的文本预览
 //   - 点击刻度 → 调用 onNavigate（由 ChatMessagesInner 负责
 //     stopScroll + 平滑滚动到该消息 + 闪烁高亮）
-//   - 滚动时视口中心所在的那条 user 消息刻度高亮为深色
+//   - 滚动时视口内所有可见的 user 消息刻度高亮为深色
 //
-// 高亮取舍：按“消息中心距视口中心最近”判定，高于视口的长
-// 消息（如整段代码）中心恒远，可能不高亮（设计取舍）。
+// 高亮取舍：按“消息矩形与视口有交集”判定（部分可见也算可见）。
 // 刻度条最多 280px，消息超过 ~23 条后间距被压缩为等密；
 // 极端长会话（>90 条）刻度可能视觉重叠（集中式设计的固有
 // 限制）。
@@ -66,7 +65,7 @@ export const MessageTicks = memo(function MessageTicks({ items, onNavigate }: Me
 	const { scrollRef, contentRef } = useConversationContext();
 
 	const [canScroll, setCanScroll] = useState(false);
-	const [currentId, setCurrentId] = useState<string | null>(null);
+	const [currentIds, setCurrentIds] = useState<ReadonlySet<string>>(new Set());
 	const [hoveredId, setHoveredId] = useState<string | null>(null);
 	const [popupTop, setPopupTop] = useState(0);
 
@@ -96,37 +95,31 @@ export const MessageTicks = memo(function MessageTicks({ items, onNavigate }: Me
 	}, [items, canScroll]);
 
 	// ── 当前消息跟踪 ──
-	// 视口中心落在哪条 user 消息（按消息中心距离）就高亮哪个刻度；
-	// 滚动时动态更新。数据来自 DOM 位置（data-message-id 节点）。
+	// 视口内所有可见的 user 消息刻度都高亮为深色（消息矩形与视口
+	// 有交集即算可见），滚动时动态更新。数据来自 DOM 位置
+	// （data-message-id 节点）。
 	const updateCurrent = useCallback(() => {
 		const el = scrollRef.current;
-		if (!el || items.length === 0) {
-			setCurrentId(null);
-			return;
-		}
-		const containerRect = el.getBoundingClientRect();
-		const viewportCenter = el.scrollTop + el.clientHeight / 2;
-		const byId = new Map<string, { top: number; bottom: number }>();
-		for (const node of el.querySelectorAll<HTMLElement>("[data-message-id]")) {
-			const id = node.getAttribute("data-message-id");
-			if (!id) continue;
-			const r = node.getBoundingClientRect();
-			const top = r.top - containerRect.top + el.scrollTop;
-			byId.set(id, { top, bottom: top + r.height });
-		}
-		let bestId: string | null = null;
-		let bestDist = Number.POSITIVE_INFINITY;
-		for (const item of items) {
-			const pos = byId.get(item.id);
-			if (!pos) continue;
-			const center = (pos.top + pos.bottom) / 2;
-			const dist = Math.abs(center - viewportCenter);
-			if (dist < bestDist) {
-				bestDist = dist;
-				bestId = item.id;
+		const next = new Set<string>();
+		if (el && items.length > 0) {
+			const containerRect = el.getBoundingClientRect();
+			const viewportTop = el.scrollTop;
+			const viewportBottom = viewportTop + el.clientHeight;
+			const wanted = new Set(items.map((item) => item.id));
+			for (const node of el.querySelectorAll<HTMLElement>("[data-message-id]")) {
+				const id = node.getAttribute("data-message-id");
+				if (!id || !wanted.has(id)) continue;
+				const r = node.getBoundingClientRect();
+				const top = r.top - containerRect.top + el.scrollTop;
+				const bottom = top + r.height;
+				if (bottom > viewportTop && top < viewportBottom) next.add(id);
 			}
 		}
-		setCurrentId(bestId);
+		// 集合内容不变时不触发重渲染（React 对 Set 恒为新引用，需手动比较）
+		setCurrentIds((prev) => {
+			if (prev.size === next.size && [...prev].every((id) => next.has(id))) return prev;
+			return next;
+		});
 	}, [scrollRef, items]);
 
 	// 用 ref 持有最新 handler：measurement effect 只依赖 scrollRef/contentRef，
@@ -236,7 +229,7 @@ export const MessageTicks = memo(function MessageTicks({ items, onNavigate }: Me
 						data-tick-id={item.id}
 						className={cn(
 							"pointer-events-auto absolute right-1 h-[3px] w-4 cursor-pointer rounded-full transition-colors hover:scale-y-150 hover:bg-foreground",
-							item.id === currentId ? "bg-foreground" : "bg-foreground/25",
+							currentIds.has(item.id) ? "bg-foreground" : "bg-foreground/25",
 						)}
 						style={{ top: `calc(${((i + 0.5) / items.length) * 100}% - 1.5px)` }}
 						onMouseEnter={() => handleEnter(item.id)}

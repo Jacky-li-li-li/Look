@@ -207,19 +207,20 @@ describe("MessageTicks bar sizing", () => {
 	});
 });
 
-// ── 当前消息高亮（视口中心最近）──
+// ── 当前消息高亮（视口内可见）──
 
 describe("MessageTicks current highlight", () => {
-	it("highlights the tick nearest the viewport center and updates on scroll", () => {
+	it("highlights all user messages visible in the viewport and updates on scroll", () => {
 		const { container } = renderTicks(userItems);
 		const t1 = container.querySelector('[data-tick-id="m1"]') as HTMLElement;
 		const t2 = container.querySelector('[data-tick-id="m2"]') as HTMLElement;
 
-		// scrollTop=0 → 视口中心 400；m1 中心 120（dist 280）< m2 中心 1520（dist 1120）→ m1 高亮
+		// scrollTop=0，视口 [0, 800]：m1（100-140）可见 → 高亮；m2（1500-1540）不可见 → 不高亮
 		expect(t1.classList.contains("bg-foreground")).toBe(true);
 		expect(t2.classList.contains("bg-foreground")).toBe(false);
 
-		// 滚动到接近底部 → 视口中心 1600；m2 更近 → 高亮切到 m2（scroll 走 rAF 节流，需 flush 一帧）
+		// 滚动到接近底部 → 视口 [1200, 2000]：m2 可见、m1 不可见 → 高亮切到 m2
+		// （scroll 走 rAF 节流，需 flush 一帧）
 		act(() => {
 			metrics.scrollTop = 1200;
 			const scroller = container.querySelector('[class*="overflow-auto"]') as HTMLElement;
@@ -230,12 +231,22 @@ describe("MessageTicks current highlight", () => {
 		expect(t1.classList.contains("bg-foreground")).toBe(false);
 	});
 
-	it("does not highlight ticks far from the viewport center", () => {
-		messageTops.m1 = 10_000; // 把 m1 放到内容之外，远离视口中心
+	it("highlights multiple ticks when several user messages are visible at once", () => {
+		// m2 移到视口内（500-540 < 800）→ 与 m1 同时可见，两个刻度都高亮
+		messageTops.m2 = 500;
 		const { container } = renderTicks(userItems);
 		const t1 = container.querySelector('[data-tick-id="m1"]') as HTMLElement;
 		const t2 = container.querySelector('[data-tick-id="m2"]') as HTMLElement;
-		// 视口中心 400；m1 中心 10020（远离）、m2 中心 1520 仍是最近 → m1 不高亮、m2 高亮
+		expect(t1.classList.contains("bg-foreground")).toBe(true);
+		expect(t2.classList.contains("bg-foreground")).toBe(true);
+	});
+
+	it("does not highlight ticks outside the viewport", () => {
+		messageTops.m1 = 10_000; // 把 m1 放到视口外
+		messageTops.m2 = 100; // m2 留在视口内
+		const { container } = renderTicks(userItems);
+		const t1 = container.querySelector('[data-tick-id="m1"]') as HTMLElement;
+		const t2 = container.querySelector('[data-tick-id="m2"]') as HTMLElement;
 		expect(t1.classList.contains("bg-foreground")).toBe(false);
 		expect(t2.classList.contains("bg-foreground")).toBe(true);
 	});
