@@ -21,6 +21,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@look/ui/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom, useStore } from "jotai";
 import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
@@ -279,15 +280,21 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 					<ChevronsDownUp className="size-3.5" />
 				</Button>
 				<div className="flex-1" />
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					onClick={handleToggleShowHidden}
-					aria-label={t(showHiddenFiles ? "workspaceTree.hideHidden" : "workspaceTree.showHidden")}
-					title={t(showHiddenFiles ? "workspaceTree.hideHidden" : "workspaceTree.showHidden")}
-				>
-					{showHiddenFiles ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-				</Button>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							onClick={handleToggleShowHidden}
+							aria-label={t(showHiddenFiles ? "workspaceTree.hideHidden" : "workspaceTree.showHidden")}
+						>
+							{showHiddenFiles ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">
+						{t(showHiddenFiles ? "workspaceTree.hideHidden" : "workspaceTree.showHidden")}
+					</TooltipContent>
+				</Tooltip>
 			</div>
 			<div className="min-h-0 flex-1" role="tree" aria-label={t("workspaceTree.label")}>
 				{isLoading ? (

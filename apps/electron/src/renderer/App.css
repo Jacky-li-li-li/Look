@@ -1629,9 +1629,11 @@ body {
 		min-width: 0;
 		transform: translateX(0);
 		opacity: 1;
+		contain: layout paint style;
+		will-change: transform, opacity;
 		transition:
 			transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-			opacity 200ms ease,
+			opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
 			border-radius 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
@@ -1644,38 +1646,37 @@ body {
 
 	.right-panel-separator {
 		opacity: 1;
-		transition: opacity 200ms ease;
+		transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.app-shell[data-right-panel-collapsed="true"] .right-panel-separator {
 		opacity: 0;
 	}
 
-	.expand-right-panel-btn {
-		opacity: 0;
-		width: 0;
-		padding-left: 0;
-		padding-right: 0;
-		transform: translateX(4px);
-		pointer-events: none;
-		transition:
-			opacity 200ms ease,
-			width 220ms cubic-bezier(0.22, 1, 0.36, 1),
-			transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-			padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
-	}
-
-	.app-shell[data-right-panel-collapsed="true"] .expand-right-panel-btn {
-		opacity: 1;
-		width: 1.75rem;
-		padding-left: 0;
-		padding-right: 0;
-		transform: translateX(0);
-		pointer-events: auto;
-	}
-
 	.app-shell[data-right-panel-collapsed="true"] {
 		box-shadow: none;
+	}
+
+	/* 展开右侧面板按钮：等面板收起动画(260ms)结束后再淡入，避免点击折叠按钮时
+	   按钮在面板滑出期间提前闪现；absolute 定位不占位，顶栏标题区宽度在折叠/
+	   展开时保持稳定，不会出现布局跳动。 */
+	.expand-right-panel-btn {
+		position: absolute;
+		top: 50%;
+		right: 8px;
+		transform: translateY(-50%);
+		animation: right-panel-expand-btn-in 160ms ease 260ms backwards;
+	}
+
+	@keyframes right-panel-expand-btn-in {
+		from {
+			opacity: 0;
+			transform: translateY(-50%) scale(0.92);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(-50%) scale(1);
+		}
 	}
 
 	.workspace-folder-mark {

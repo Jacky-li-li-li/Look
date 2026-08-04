@@ -1,6 +1,7 @@
 import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Input } from "@look/ui/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { PlanQuestion } from "@shared/types";
 import { useAtom } from "jotai";
 import { CircleHelp, Send, X } from "lucide-react";
@@ -327,14 +328,18 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 							</p>
 						</div>
 					</div>
-					<button
-						type="button"
-						className="flex size-5 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-foreground"
-						onClick={dismiss}
-						title={t("planDialogs.closeCancel")}
-					>
-						<X className="size-3.5" />
-					</button>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								className="flex size-5 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-foreground"
+								onClick={dismiss}
+							>
+								<X className="size-3.5" />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">{t("planDialogs.closeCancel")}</TooltipContent>
+					</Tooltip>
 				</div>
 
 				{questions.length > 1 && (

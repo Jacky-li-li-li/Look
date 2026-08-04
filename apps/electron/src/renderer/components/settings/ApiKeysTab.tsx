@@ -14,6 +14,7 @@ import {
 	DialogTitle,
 } from "@look/ui/components/ui/dialog";
 import { Input } from "@look/ui/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { TFunction } from "i18next";
 import { AlertCircle, ChevronRight, Copy, Cpu, Eye, EyeOff, Key, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -357,16 +358,20 @@ function BuiltInProviderRow({
 							/>
 							{/* 显示明文后出现复制按钮，方便一键复制完整 key */}
 							{editor.showKey && !editor.masked && editor.input && (
-								<Button
-									variant="ghost"
-									size="icon"
-									className="absolute right-8 top-0 size-8"
-									onClick={editor.onCopyKey}
-									aria-label={t("settings.copyKey")}
-									title={t("settings.copyKey")}
-								>
-									<Copy data-icon="inline-start" aria-hidden="true" className="size-3.5" />
-								</Button>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Button
+											variant="ghost"
+											size="icon"
+											className="absolute right-8 top-0 size-8"
+											onClick={editor.onCopyKey}
+											aria-label={t("settings.copyKey")}
+										>
+											<Copy data-icon="inline-start" aria-hidden="true" className="size-3.5" />
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent side="bottom">{t("settings.copyKey")}</TooltipContent>
+								</Tooltip>
 							)}
 							<Button
 								variant="ghost"

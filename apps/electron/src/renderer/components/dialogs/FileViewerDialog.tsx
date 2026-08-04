@@ -513,54 +513,77 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 									{editMode ? <Eye className="size-3" /> : <Pencil className="size-3" />}
 									{editMode ? t("fileViewer.preview") : t("fileViewer.edit")}
 								</Button>
+								{/* disabled 按钮不派发 pointer 事件，span 包裹保证悬停提示仍可触发 */}
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<span className="inline-flex">
+											<Button
+												variant="ghost"
+												size="icon-xs"
+												onClick={() => void handleSave()}
+												disabled={!dirty || saving}
+												aria-label={t("fileViewer.save")}
+											>
+												<Save className="size-3.5" />
+											</Button>
+										</span>
+									</TooltipTrigger>
+									<TooltipContent side="bottom">{t("fileViewer.save")}</TooltipContent>
+								</Tooltip>
+							</>
+						)}
+						<Tooltip>
+							<TooltipTrigger asChild>
 								<Button
 									variant="ghost"
 									size="icon-xs"
-									onClick={() => void handleSave()}
-									disabled={!dirty || saving}
-									aria-label={t("fileViewer.save")}
-									title={t("fileViewer.save")}
+									onClick={handleCopyPath}
+									aria-label={t("fileViewer.copyPath")}
 								>
-									<Save className="size-3.5" />
+									<Copy className="size-3.5" />
 								</Button>
-							</>
-						)}
-						<Button
-							variant="ghost"
-							size="icon-xs"
-							onClick={handleCopyPath}
-							aria-label={t("fileViewer.copyPath")}
-							title={t("fileViewer.copyPath")}
-						>
-							<Copy className="size-3.5" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon-xs"
-							onClick={handleReveal}
-							aria-label={t("fileViewer.revealInFinder")}
-							title={t("fileViewer.revealInFinder")}
-						>
-							<FolderOpen className="size-3.5" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon-xs"
-							onClick={handleRefresh}
-							aria-label={t("fileViewer.refresh")}
-							title={t("fileViewer.refresh")}
-						>
-							<RefreshCw className="size-3.5" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon-xs"
-							onClick={requestClose}
-							aria-label={t("fileViewer.close")}
-							title={t("fileViewer.close")}
-						>
-							<X className="size-3.5" />
-						</Button>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">{t("fileViewer.copyPath")}</TooltipContent>
+						</Tooltip>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={handleReveal}
+									aria-label={t("fileViewer.revealInFinder")}
+								>
+									<FolderOpen className="size-3.5" />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">{t("fileViewer.revealInFinder")}</TooltipContent>
+						</Tooltip>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={handleRefresh}
+									aria-label={t("fileViewer.refresh")}
+								>
+									<RefreshCw className="size-3.5" />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">{t("fileViewer.refresh")}</TooltipContent>
+						</Tooltip>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={requestClose}
+									aria-label={t("fileViewer.close")}
+								>
+									<X className="size-3.5" />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">{t("fileViewer.close")}</TooltipContent>
+						</Tooltip>
 					</div>
 				</div>
 				<p className="truncate font-mono text-[11px] text-muted-foreground" title={absolutePath ?? undefined}>

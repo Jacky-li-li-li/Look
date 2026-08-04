@@ -83,7 +83,7 @@ export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 	return (
 		<header
 			className={cn(
-				"session-sheet-bar app-drag flex h-12 shrink-0 items-center gap-2 border-b border-hairline",
+				"session-sheet-bar app-drag relative flex h-12 shrink-0 items-center gap-2 border-b border-hairline",
 				rightPanelCollapsed ? "px-2" : "pl-2",
 				// 侧栏折叠时红绿灯会压到左侧，macOS 非全屏时让出左侧位置；
 				// 展开入口由侧边栏按钮组（fixed 左上角）提供，此处不再渲染展开按钮。
@@ -123,7 +123,7 @@ export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 						<Button
 							size="icon-sm"
 							variant="ghost"
-							className="expand-right-panel-btn shrink-0 rounded-md border border-hairline"
+							className="expand-right-panel-btn rounded-md border border-hairline"
 							onClick={() => setRightPanelCollapsed(false)}
 							aria-label={t("rightPanel.expand", "展开右侧面板")}
 						>

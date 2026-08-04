@@ -4,6 +4,7 @@
 
 import { Button } from "@look/ui/components/ui/button";
 import SimplePopover from "@look/ui/components/ui/simple-popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { AgentDefinitionInfo, PermissionMode, ThinkingLevel } from "@shared/types";
 import { Send, Square, Wrench } from "lucide-react";
 import { memo } from "react";
@@ -109,16 +110,20 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 					{/* During compaction the CompactionStatusCard cancel button handles abortCompaction,
 					    so the Square stop button (abortAgent) is hidden to avoid confusion. */}
 					{!isCompacting && (
-						<Button
-							variant="line-ghost"
-							size="icon-sm"
-							onClick={onAbort}
-							aria-label={t("chat.stop")}
-							title={t("chat.stop")}
-							className="text-muted-foreground hover:text-destructive"
-						>
-							<Square data-icon="inline-start" className="size-3 fill-current" />
-						</Button>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="line-ghost"
+									size="icon-sm"
+									onClick={onAbort}
+									aria-label={t("chat.stop")}
+									className="text-muted-foreground hover:text-destructive"
+								>
+									<Square data-icon="inline-start" className="size-3 fill-current" />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">{t("chat.stop")}</TooltipContent>
+						</Tooltip>
 					)}
 					<Button
 						variant={hasContent ? "line-filled" : "line-ghost"}
