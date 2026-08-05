@@ -100,9 +100,10 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 	switch (block.kind) {
 		case "text": {
 			if (!block.text) return null;
+			const streaming = isTextStreaming(block, isStreaming);
 			return (
 				<div className="message-prose">
-					<SkillAwareContent content={block.text} isStreaming={isTextStreaming(block, isStreaming)} />
+					<SkillAwareContent content={block.text} isStreaming={streaming} />
 				</div>
 			);
 		}

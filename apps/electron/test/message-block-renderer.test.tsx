@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { toUnifiedFromPiAi, toUnifiedFromStream } from "../src/renderer/components/chat/block-renderer/blockTypes";
 import { MessageBlockList } from "../src/renderer/components/chat/block-renderer/MessageBlockList";
 import { StreamingBlocksBubble } from "../src/renderer/components/chat/StreamingBlocksBubble";
+import { streamingPhase } from "../src/renderer/components/chat/StreamingStatusBar";
 import { showToolExecutionAtom } from "../src/renderer/store/settingsAtoms";
 
 afterEach(cleanup);
@@ -335,5 +336,120 @@ describe("MessageBlockList showToolExecution toggle", () => {
 			</Provider>,
 		);
 		expect(container.innerHTML).toBe("");
+	});
+});
+
+describe("StreamingStatusBar — streamingPhase 阶段判定", () => {
+	it("no blocks while streaming → thinking", () => {
+		expect(streamingPhase([], true)).toBe("thinking");
+	});
+
+	it("not streaming → null", () => {
+		expect(streamingPhase([], false)).toBeNull();
+	});
+
+	it("incomplete toolcall → tool", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{
+				contentIndex: 0,
+				kind: "toolcall",
+				text: "",
+				thinking: "",
+				toolCallId: "t1",
+				toolName: "read",
+				completed: false,
+				uid: 1,
+			},
+		];
+		expect(streamingPhase(blocks, true)).toBe("tool");
+	});
+
+	it("incomplete thinking wins over completed text → thinking", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{ contentIndex: 0, kind: "thinking", text: "", thinking: "step", completed: false, uid: 1 },
+			{ contentIndex: 1, kind: "text", text: "done", thinking: "", completed: true, uid: 2 },
+		];
+		expect(streamingPhase(blocks, true)).toBe("thinking");
+	});
+
+	it("streaming text with content → text", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{ contentIndex: 0, kind: "text", text: "hello", thinking: "", completed: false, uid: 1 },
+		];
+		expect(streamingPhase(blocks, true)).toBe("text");
+	});
+
+	it("all completed and no text → thinking fallback", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{
+				contentIndex: 0,
+				kind: "toolcall",
+				text: "",
+				thinking: "",
+				toolCallId: "t1",
+				toolName: "read",
+				completed: true,
+				uid: 1,
+			},
+		];
+		expect(streamingPhase(blocks, true)).toBe("thinking");
+	});
+});
+
+describe("StreamingStatusBar — 九宫格状态行渲染", () => {
+	it("renders thinking status bar with cube loader and elapsed", () => {
+		const { container } = render(
+			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
+		);
+		// en i18n 默认 → "Thinking…"
+		expect(container.textContent).toContain("Thinking…");
+		// 九宫格 3×3 = 9 个方块
+		expect(container.querySelectorAll(".look-cube-loader__cube")).toHaveLength(9);
+		// 计时显示（0s 或 1s）
+		expect(container.textContent).toMatch(/\d+s/);
+	});
+
+	it("renders tool status bar while toolcall is running", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{
+				contentIndex: 0,
+				kind: "toolcall",
+				text: "",
+				thinking: "",
+				toolCallId: "t1",
+				toolName: "read",
+				completed: false,
+				uid: 1,
+			},
+		];
+		const { container } = render(
+			<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
+		);
+		expect(container.textContent).toContain("Calling tool");
+	});
+});
+
+describe("StreamingStatusBar — 位置：跟随输出内容之后", () => {
+	it("keeps status bar after the output content (not on top)", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{ contentIndex: 0, kind: "text", text: "hello", thinking: "", completed: false, uid: 1 },
+		];
+		const { container } = render(
+			<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
+		);
+		const prose = container.querySelector(".message-prose");
+		const loader = container.querySelector(".look-cube-loader");
+		expect(prose).toBeTruthy();
+		expect(loader).toBeTruthy();
+		// 正文在前，状态行在其后（DOCUMENT_POSITION_FOLLOWING = 4）
+		expect(prose!.compareDocumentPosition(loader!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+	});
+
+	it("renders only the status bar when there are no blocks yet", () => {
+		const { container } = render(
+			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
+		);
+		expect(container.querySelector(".look-cube-loader")).toBeTruthy();
+		expect(container.querySelector(".message-prose")).toBeNull();
 	});
 });
