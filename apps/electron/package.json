@@ -17,6 +17,7 @@
     "start": "electron dist/src/main/index.js",
     "package": "npm run build && electron-builder --mac --publish never",
     "test": "vitest --run",
+    "test:quick": "vitest --run --changed",
     "test:coverage": "vitest --run --coverage",
     "test:e2e:llm": "LOOK_E2E_LLM=1 vitest --run subagent-e2e-llm subagent-toggle-e2e-llm --reporter=verbose",
     "test:watch": "vitest",

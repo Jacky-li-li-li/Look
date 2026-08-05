@@ -24,6 +24,7 @@
     "start": "npm run start --workspace=@look/electron",
     "package": "npm run build && npm run package --workspace=@look/electron",
     "test": "npm test --workspaces --if-present",
+    "test:quick": "npm run test:quick --workspaces --if-present",
     "test:watch": "npm run test:watch --workspace=@look/electron",
     "lint": "biome check apps/electron/src apps/electron/test packages",
     "lint:fix": "biome check --write --unsafe apps/electron/src apps/electron/test packages",

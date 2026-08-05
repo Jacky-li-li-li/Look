@@ -48,10 +48,14 @@ npm run check                        # Full CI check: lint + both tsc --noEmit +
 
 Vitest 3 with `environment: "node"`. App config lives in `apps/electron/vitest.config.ts`.
 
+**本地开发默认只跑相关测试，不要每次全量回归**：全量守门是 CI 的职责（`.github/workflows/ci.yml` 在 push/PR 到 main 时全量 `npm test`），本地重复全量 ≈946 个用例成本高、收益低。只有**提交前 / 改动跨模块 / 影响面大 / 被明确要求**时才跑全量。
+
 ```bash
-npm test                             # Run all vitest-managed tests (vitest --run)
-npm run test:watch                   # Watch mode
-npx vitest --run <name-fragment>     # Run a single test file by name fragment
+npx vitest --run <name-fragment>     # 默认方式：只跑匹配片段的相关测试文件
+npx vitest --run --changed           # 只跑与 git 变更相关的测试
+npm run test:quick                   # test:quick = vitest --run --changed 的别名
+npm run test:watch                   # Watch 模式
+npm test                             # 全量测试（vitest --run）：仅提交前/跨模块/被要求时使用
 ```
 
 ### Development Startup Notes

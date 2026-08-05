@@ -7,7 +7,6 @@ export default defineConfig({
 		setupFiles: ["test/setup-look-home.ts"],
 		environment: "node",
 		testTimeout: 30_000,
-		fileParallelism: false,
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "lcov"],
