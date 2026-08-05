@@ -132,23 +132,14 @@ export default function Sidebar(props: SidebarProps) {
 	// 折叠/展开时完全不跟随面板移动；折叠时折叠按钮变展开按钮，其余按钮保持显示。
 	const headerActions = (
 		<div className="sidebar-header-actions" data-collapsed={collapsed || undefined}>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button
-						variant="line-ghost"
-						size="icon"
-						onClick={() => appStore.set(sidebarCollapsedAtom, !collapsed)}
-						aria-label={
-							collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")
-						}
-					>
-						{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent side="bottom">
-					{collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
-				</TooltipContent>
-			</Tooltip>
+			<Button
+				variant="line-ghost"
+				size="icon"
+				onClick={() => appStore.set(sidebarCollapsedAtom, !collapsed)}
+				aria-label={collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
+			>
+				{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+			</Button>
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<Button

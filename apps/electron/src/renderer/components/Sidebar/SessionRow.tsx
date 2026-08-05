@@ -10,7 +10,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@look/ui/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
+
 import { Bot, ChevronDown, ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
@@ -105,27 +105,18 @@ function SessionRowImpl({
 					</span>
 				</button>
 				{hasChildren && (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
-								onClick={(e) => toggleSubSessions(agent.id, e)}
-								aria-label={
-									isCollapsed
-										? t("sidebar.expandSubSessions", "展开子会话")
-										: t("sidebar.collapseSubSessions", "折叠子会话")
-								}
-							>
-								{isCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
-							</button>
-						</TooltipTrigger>
-						<TooltipContent side="bottom">
-							{isCollapsed
+					<button
+						type="button"
+						className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
+						onClick={(e) => toggleSubSessions(agent.id, e)}
+						aria-label={
+							isCollapsed
 								? t("sidebar.expandSubSessions", "展开子会话")
-								: t("sidebar.collapseSubSessions", "折叠子会话")}
-						</TooltipContent>
-					</Tooltip>
+								: t("sidebar.collapseSubSessions", "折叠子会话")
+						}
+					>
+						{isCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+					</button>
 				)}
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>

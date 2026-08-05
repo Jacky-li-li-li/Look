@@ -312,38 +312,17 @@ body {
 	background: color-mix(in oklch, var(--foreground), transparent 42%);
 }
 
-/* ── 消息区滚动条：静止隐藏、滚动/悬停显示 ──
-   Conversation 滚动容器专用（conversation.tsx scrollClassName 加
-   look-message-scrollbar）：静止时 thumb 透明，滚动时（look-scrolling
-   class，由 scroll 事件 + 600ms debounce 控制）或悬停容器时显示。
-   宽度 2px 极细，悬停/拖动时不占视觉重量。
-   scrollbar-gutter: stable both-edges 仍保留，隐藏时内容宽度不变。 */
+/* ── 消息区滚动条：完全隐藏 ──
+   Conversation 滚动容器专用。scrollbar-gutter 保留，内容宽度不变。 */
 .look-message-scrollbar {
 	scrollbar-width: thin;
 	scrollbar-color: transparent transparent;
 }
+.look-message-scrollbar {
+	scrollbar-width: none;
+}
 .look-message-scrollbar::-webkit-scrollbar {
-	width: 2px;
-	height: 2px;
-}
-.look-message-scrollbar::-webkit-scrollbar-thumb {
-	background: transparent;
-}
-.look-message-scrollbar:hover,
-.look-message-scrollbar.look-scrolling {
-	scrollbar-color: color-mix(in oklch, var(--foreground), transparent 72%) transparent;
-}
-.look-message-scrollbar:hover::-webkit-scrollbar-thumb,
-.look-message-scrollbar.look-scrolling::-webkit-scrollbar-thumb {
-	background: color-mix(in oklch, var(--foreground), transparent 72%);
-}
-.tone-dark .look-message-scrollbar:hover,
-.tone-dark .look-message-scrollbar.look-scrolling {
-	scrollbar-color: color-mix(in oklch, var(--foreground), transparent 58%) transparent;
-}
-.tone-dark .look-message-scrollbar:hover::-webkit-scrollbar-thumb,
-.tone-dark .look-message-scrollbar.look-scrolling::-webkit-scrollbar-thumb {
-	background: color-mix(in oklch, var(--foreground), transparent 58%);
+	display: none;
 }
 
 /* ============================================================
