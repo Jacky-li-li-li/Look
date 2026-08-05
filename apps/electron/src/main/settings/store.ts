@@ -22,7 +22,14 @@
 // callers see a single `UserSettings` object.
 // ============================================================
 
-import type { DesktopNotificationMode, LookTone, PermissionMode, UILanguage, UserSettings } from "@look/shared/types";
+import type {
+	DesktopNotificationMode,
+	LookTone,
+	PermissionMode,
+	ShowToolExecution,
+	UILanguage,
+	UserSettings,
+} from "@look/shared/types";
 import fs from "fs";
 import { writeJsonFile } from "../utils/atomic-writer.js";
 
@@ -50,6 +57,7 @@ const DEFAULTS: UserSettings = {
 	rightPanelCollapsed: false,
 	aiAvatar: null,
 	desktopNotifications: "all",
+	showToolExecution: true,
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -91,6 +99,8 @@ interface UiSettings {
 	aiAvatar: string | null;
 	/** OS 桌面通知模式（off / needs-action / all）。 */
 	desktopNotifications: DesktopNotificationMode;
+	/** 消息流中是否显示工具执行细节（思考 + 工具调用）。 */
+	showToolExecution: ShowToolExecution;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -112,6 +122,7 @@ const UI_DEFAULTS: UiSettings = {
 	rightPanelCollapsed: false,
 	aiAvatar: null,
 	desktopNotifications: "all",
+	showToolExecution: DEFAULTS.showToolExecution,
 };
 
 /** Synchronously read the persisted tone from disk without instantiating the
@@ -261,6 +272,7 @@ export class UserSettingsStore {
 		if (partial.rightPanelCollapsed !== undefined) uiPartial.rightPanelCollapsed = partial.rightPanelCollapsed;
 		if (partial.aiAvatar !== undefined) uiPartial.aiAvatar = partial.aiAvatar;
 		if (partial.desktopNotifications !== undefined) uiPartial.desktopNotifications = partial.desktopNotifications;
+		if (partial.showToolExecution !== undefined) uiPartial.showToolExecution = partial.showToolExecution;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

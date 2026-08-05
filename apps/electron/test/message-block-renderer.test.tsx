@@ -8,10 +8,12 @@
 import type { ToolCall } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { cleanup, render } from "@testing-library/react";
+import { createStore, Provider } from "jotai";
 import { afterEach, describe, expect, it } from "vitest";
 import { toUnifiedFromPiAi, toUnifiedFromStream } from "../src/renderer/components/chat/block-renderer/blockTypes";
 import { MessageBlockList } from "../src/renderer/components/chat/block-renderer/MessageBlockList";
 import { StreamingBlocksBubble } from "../src/renderer/components/chat/StreamingBlocksBubble";
+import { showToolExecutionAtom } from "../src/renderer/store/settingsAtoms";
 
 afterEach(cleanup);
 
@@ -249,5 +251,89 @@ describe("MessageBlockList dual-source equivalence", () => {
 		);
 		// 不再渲染 data:image/png;base64, 坏图
 		expect(container.querySelector("img")).toBeNull();
+	});
+});
+
+describe("MessageBlockList showToolExecution toggle", () => {
+	const mixedBlocks = () =>
+		toUnifiedFromPiAi([
+			{ type: "text", text: "hello" },
+			{ type: "thinking", thinking: "step" },
+			{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "/tmp/a" } },
+			{ type: "toolCall", id: "sa1", name: "delegate_agent", arguments: { task: "x" } },
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>);
+
+	it("default (true) renders thinking + tool groups", () => {
+		const { container } = render(
+			<MessageBlockList
+				blocks={mixedBlocks()}
+				isStreaming={false}
+				autoCollapse={false}
+				toolExecutions={{
+					tc1: { toolCallId: "tc1", toolName: "read", args: {}, phase: "completed", result: "file content" },
+					sa1: { toolCallId: "sa1", toolName: "delegate_agent", args: {}, phase: "completed" },
+				}}
+				defaultToolStatus="pending"
+			/>,
+		);
+		expect(container.textContent).toContain("hello");
+		expect(container.textContent).toContain("read");
+		expect(container.textContent).toContain("delegate_agent");
+	});
+
+	it("off hides thinking and tool calls, keeps text", () => {
+		const store = createStore();
+		store.set(showToolExecutionAtom, false);
+		const { container } = render(
+			<Provider store={store}>
+				<MessageBlockList
+					blocks={mixedBlocks()}
+					isStreaming={false}
+					autoCollapse={false}
+					toolExecutions={{
+						tc1: { toolCallId: "tc1", toolName: "read", args: {}, phase: "completed", result: "file content" },
+						sa1: { toolCallId: "sa1", toolName: "delegate_agent", args: {}, phase: "completed" },
+					}}
+					defaultToolStatus="pending"
+				/>
+			</Provider>,
+		);
+		expect(container.textContent).toContain("hello");
+		expect(container.textContent).not.toContain("read");
+		expect(container.textContent).not.toContain("file content");
+		expect(container.textContent).not.toContain("delegate_agent");
+		expect(container.textContent).not.toContain("step");
+		expect(container.querySelector("[data-execution-group]")).toBeNull();
+		expect(container.querySelector("[data-thinking-panel]")).toBeNull();
+	});
+
+	it("off with only execution blocks renders nothing", () => {
+		const store = createStore();
+		store.set(showToolExecutionAtom, false);
+		const { container } = render(
+			<Provider store={store}>
+				<MessageBlockList
+					blocks={toUnifiedFromPiAi([
+						{ type: "thinking", thinking: "step" },
+						{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "/tmp/a" } },
+					] as unknown as Array<
+						| import("@earendil-works/pi-ai").TextContent
+						| import("@earendil-works/pi-ai").ThinkingContent
+						| import("@earendil-works/pi-ai").ImageContent
+						| ToolCall
+					>)}
+					isStreaming={false}
+					autoCollapse={false}
+					toolExecutions={{}}
+					defaultToolStatus="pending"
+				/>
+			</Provider>,
+		);
+		expect(container.innerHTML).toBe("");
 	});
 });

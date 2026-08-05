@@ -40,6 +40,7 @@ function persistSettings(partial: {
 	planModel?: string | null;
 	aiAvatar?: string | null;
 	desktopNotifications?: "off" | "needs-action" | "all";
+	showToolExecution?: boolean;
 }) {
 	if (!api) return;
 	api.setGeneralSettings(partial).catch((err) => console.warn("[GeneralTab] setGeneralSettings failed:", err));
@@ -121,6 +122,8 @@ interface GeneralSettingsState {
 	planModel: string | null;
 	aiAvatar: string | null;
 	desktopNotifications: "off" | "needs-action" | "all";
+	/** 消息流中是否显示工具执行细节（思考 + 工具调用）。 */
+	showToolExecution: boolean;
 	availableModels: Array<{ provider: string; id: string; name: string }>;
 }
 
@@ -139,6 +142,7 @@ export default function GeneralTab() {
 		planModel: null,
 		aiAvatar: null,
 		desktopNotifications: "all",
+		showToolExecution: true,
 		availableModels: [],
 	});
 	const setAiAvatar = useSetAtom(aiAvatarAtom);
@@ -155,6 +159,7 @@ export default function GeneralTab() {
 		planModel,
 		aiAvatar,
 		desktopNotifications,
+		showToolExecution,
 		availableModels,
 	} = state;
 	// 预览区跟随悬停（试穿），未悬停时跟随已选项
@@ -194,6 +199,9 @@ export default function GeneralTab() {
 							? {
 									desktopNotifications: settings.desktopNotifications as "off" | "needs-action" | "all",
 								}
+							: {}),
+						...("showToolExecution" in settings
+							? { showToolExecution: settings.showToolExecution as boolean }
 							: {}),
 					}));
 				}
@@ -402,6 +410,21 @@ export default function GeneralTab() {
 							onCheckedChange={(v) => {
 								setState((prev) => ({ ...prev, autoCollapse: v }));
 								persistSettings({ autoCollapse: v });
+							}}
+						/>
+					</SettingRow>
+					<SettingRow
+						id="tool-exec"
+						label={t("settings.showToolExecution")}
+						desc={t("settings.showToolExecutionDesc")}
+					>
+						<Switch
+							id="tool-exec"
+							size="sm"
+							checked={showToolExecution}
+							onCheckedChange={(v) => {
+								setState((prev) => ({ ...prev, showToolExecution: v }));
+								persistSettings({ showToolExecution: v });
 							}}
 						/>
 					</SettingRow>

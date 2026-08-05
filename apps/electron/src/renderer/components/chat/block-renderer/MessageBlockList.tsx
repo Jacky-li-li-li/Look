@@ -16,8 +16,10 @@
 
 import type { ThinkingContent, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { LookUiToolExecState } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { memo } from "react";
 import { segmentExecutionBlocks } from "../../../lib/executionSegments";
+import { showToolExecutionAtom } from "../../../store/settingsAtoms";
 import CollapsibleExecutionGroup from "../CollapsibleExecutionGroup";
 import SkillAwareContent from "../SkillAwareContent";
 import { isSubagentTool } from "../SubagentArgsCards";
@@ -206,10 +208,17 @@ export const MessageBlockList = memo(function MessageBlockList({
 	toolResultMap,
 	defaultToolStatus,
 }: MessageBlockListProps) {
+	// 设置「显示工具组」关闭时：完全隐藏工具调用与思考块，只保留文本/图片。
+	// 用户选择关闭后消息流只显示最终回答，不展示任何执行细节。
+	const showToolExecution = useAtomValue(showToolExecutionAtom);
+	const visibleBlocks = showToolExecution ? blocks : blocks.filter((b) => b.kind === "text" || b.kind === "image");
+
+	if (visibleBlocks.length === 0) return null;
+
 	// 单次分段：连续 thinking/toolcall 组成折叠组；subagent 类单独成组。
 	// 编辑类工具也归入折叠组（展开后卡内展示 diff 预览）。
 	const segments = segmentExecutionBlocks(
-		blocks,
+		visibleBlocks,
 		(b) => b.kind === "thinking" || b.kind === "toolcall",
 		(b) => b.kind === "toolcall" && isSubagentTool(b.toolName ?? ""),
 	);

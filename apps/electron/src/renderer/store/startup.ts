@@ -22,6 +22,7 @@ import {
 	projectsAtom,
 	providerSettingsAtom,
 	rightPanelCollapsedAtom,
+	showToolExecutionAtom,
 	sidebarCollapsedAtom,
 	userPreferredModelAtom,
 } from "./atoms";
@@ -117,6 +118,7 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		writeLookThemeToDom(themeFromSettings(settings));
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
 		if (settings.aiAvatar !== undefined) appStore.set(aiAvatarAtom, settings.aiAvatar);
+		if (settings.showToolExecution !== undefined) appStore.set(showToolExecutionAtom, settings.showToolExecution);
 		if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
 		if (settings.rightPanelCollapsed !== undefined)
 			appStore.set(rightPanelCollapsedAtom, settings.rightPanelCollapsed);

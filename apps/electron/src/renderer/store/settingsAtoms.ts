@@ -32,6 +32,8 @@ export const enabledSkillsAtom = atom<string[] | null>(null);
 
 export const aiAvatarAtom = atom<string | null>(null);
 
+export const showToolExecutionAtom = atom(true);
+
 export const providerSettingsAtom = atom<ProviderSettingsData>({
 	providers: [],
 	customProviders: [],

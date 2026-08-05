@@ -12,6 +12,12 @@ export type LookTone = "light" | "dark";
  */
 export type DesktopNotificationMode = "off" | "needs-action" | "all";
 
+/** Whether tool execution details (thinking + tool calls) are shown in the message stream.
+ *  - true (default): render thinking panels, tool groups, subagent groups as usual
+ *  - false: hide all thinking / tool-call blocks — messages show only text, images, etc.
+ */
+export type ShowToolExecution = boolean;
+
 /** Canonical settings contract shared by main, preload IPC, and renderer. */
 export interface UserSettings {
 	language: UILanguage;
@@ -41,4 +47,6 @@ export interface UserSettings {
 	aiAvatar: string | null;
 	/** OS desktop notification mode. UI preference, persisted in ui-settings.json. */
 	desktopNotifications: DesktopNotificationMode;
+	/** Show tool execution details (thinking + tool calls) in the message stream. Default true. */
+	showToolExecution: ShowToolExecution;
 }

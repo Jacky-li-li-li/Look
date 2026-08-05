@@ -372,6 +372,9 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 				"all",
 			] as const);
 		}
+		if ("showToolExecution" in settings) {
+			guardBoolean(settings.showToolExecution, "settings.showToolExecution");
+		}
 		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
 			ctx.mainWindow.setBackgroundColor(settings.themeTone === "light" ? "#fbfbfa" : "#030202");
 		}
