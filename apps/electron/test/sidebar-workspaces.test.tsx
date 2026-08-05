@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { TooltipProvider } from "@look/ui/components/ui/tooltip";
 import type { AgentInfo, ProjectInfo } from "@shared/types";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "jotai";
@@ -78,7 +79,9 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof Sidebar>> 
 	const result = render(
 		<I18nextProvider i18n={i18n}>
 			<Provider store={appStore}>
-				<Sidebar {...props} />
+				<TooltipProvider>
+					<Sidebar {...props} />
+				</TooltipProvider>
 			</Provider>
 		</I18nextProvider>,
 	);

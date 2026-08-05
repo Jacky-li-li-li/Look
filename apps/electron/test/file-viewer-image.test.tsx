@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { TooltipProvider } from "@look/ui/components/ui/tooltip";
 import { cleanup, render, screen } from "@testing-library/react";
 import { Provider } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,7 +43,9 @@ describe("FileViewerDialog 图片预览", () => {
 	it("renders image content inline instead of the binary fallback", async () => {
 		render(
 			<Provider store={appStore}>
-				<FileViewerDialog />
+				<TooltipProvider>
+					<FileViewerDialog />
+				</TooltipProvider>
 			</Provider>,
 		);
 		const img = await screen.findByAltText("shot.png");
@@ -54,7 +57,9 @@ describe("FileViewerDialog 图片预览", () => {
 		readFileContent.mockResolvedValue({ success: true, kind: "binary", sizeBytes: 16 });
 		render(
 			<Provider store={appStore}>
-				<FileViewerDialog />
+				<TooltipProvider>
+					<FileViewerDialog />
+				</TooltipProvider>
 			</Provider>,
 		);
 		await screen.findByText("二进制文件无法预览。");

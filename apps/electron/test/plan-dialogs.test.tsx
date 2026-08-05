@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { TooltipProvider } from "@look/ui/components/ui/tooltip";
 import type { AgentInfo, PlanApprovalRequest, PlanQuestionRequest } from "@shared/types";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider, useAtomValue } from "jotai";
@@ -61,7 +62,11 @@ const approvalRequest: PlanApprovalRequest = {
 };
 
 function renderWithStore(component: React.ReactNode) {
-	return render(<Provider store={appStore}>{component}</Provider>);
+	return render(
+		<Provider store={appStore}>
+			<TooltipProvider>{component}</TooltipProvider>
+		</Provider>,
+	);
 }
 
 function ActivePlanQuestionDialog() {

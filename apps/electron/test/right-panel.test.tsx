@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { TooltipProvider } from "@look/ui/components/ui/tooltip";
 import type { ProjectInfo } from "@shared/types";
 import { act, render, waitFor } from "@testing-library/react";
 import { Provider } from "jotai";
@@ -37,7 +38,9 @@ function renderPanel() {
 	return render(
 		<Provider store={appStore}>
 			<I18nextProvider i18n={i18n}>
-				<RightPanel />
+				<TooltipProvider>
+					<RightPanel />
+				</TooltipProvider>
 			</I18nextProvider>
 		</Provider>,
 	);

@@ -6,6 +6,7 @@
 // or network calls are made.
 // ============================================================
 
+import { TooltipProvider } from "@look/ui/components/ui/tooltip";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -83,12 +84,14 @@ describe("ApiKeysTab", () => {
 	function renderTab() {
 		return render(
 			<I18nextProvider i18n={i18n}>
-				<ApiKeysTab
-					providers={providers}
-					customProviders={[]}
-					customStats={customStats}
-					onProvidersChange={onProvidersChange}
-				/>
+				<TooltipProvider>
+					<ApiKeysTab
+						providers={providers}
+						customProviders={[]}
+						customStats={customStats}
+						onProvidersChange={onProvidersChange}
+					/>
+				</TooltipProvider>
 			</I18nextProvider>,
 		);
 	}

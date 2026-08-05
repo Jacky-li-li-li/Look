@@ -111,6 +111,11 @@ function SessionRowImpl({
 								type="button"
 								className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
 								onClick={(e) => toggleSubSessions(agent.id, e)}
+								aria-label={
+									isCollapsed
+										? t("sidebar.expandSubSessions", "展开子会话")
+										: t("sidebar.collapseSubSessions", "折叠子会话")
+								}
 							>
 								{isCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
 							</button>
