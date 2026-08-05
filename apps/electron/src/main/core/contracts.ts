@@ -89,7 +89,7 @@ export interface ISessionEventHost {
 	onMessageEnd(sessionId: string, message: AgentMessage): Promise<void>;
 	onSubSessionAgentEnd(sessionId: string): void;
 	emitSessionUpdated(sessionId: string): void;
-	emitSessionState(sessionId: string, reason: SessionSnapshotEnvelope["reason"], willRetry?: boolean): void;
+	emitSessionState(sessionId: string, reason: SessionSnapshotEnvelope["reason"]): void;
 	emitTodoUpdate(sessionId: string): void;
 	emitContextUsage(sessionId: string): void;
 }

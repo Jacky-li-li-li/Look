@@ -45,15 +45,28 @@ describe("extractEditPatch", () => {
 		expect(out?.patch).toBe(result.patch);
 	});
 
-	it("edit 工具 result 无 patch 时 fallback 到 diff", () => {
-		const out = extractEditPatch(
-			"edit",
-			{ path: "/tmp/x.ts", edits: [] },
-			{ diff: "--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@\n-old\n+new" },
-		);
-		expect(out?.patch).toContain("--- a/x.ts");
-		expect(out?.added).toBe(1);
+	it("SDK 形状 result.details.patch（EditToolDetails 嵌套在 details 下）", () => {
+		const patch = "--- /tmp/x.ts\n+++ /tmp/x.ts\n@@ -1,2 +1,3 @@\n const a = 1;\n-old line\n+new line\n+extra line";
+		const result = {
+			content: [{ type: "text", text: "Successfully replaced 1 block(s) in x.ts." }],
+			details: { diff: " 1 old line\n 2 new line", patch, firstChangedLine: 2 },
+		};
+		const out = extractEditPatch("edit", { path: "/tmp/x.ts", edits: [] }, result);
+		expect(out?.patch).toBe(patch);
+		expect(out?.added).toBe(2);
 		expect(out?.deleted).toBe(1);
+	});
+
+	it("非法的显示型 diff（无 hunk）被拒绝，回退到 args 构造", () => {
+		// generateDiffString 输出的 display diff 不是 unified patch，不能喂给 PatchDiff
+		const result = {
+			content: [{ type: "text", text: "ok" }],
+			details: { diff: " 1 const a = 1;\n-2 old\n+2 new", firstChangedLine: 2 },
+		};
+		const out = extractEditPatch("edit", { path: "/tmp/x.ts", edits: [{ oldText: "old", newText: "new" }] }, result);
+		expect(out?.patch).toContain("--- /tmp/x.ts");
+		expect(out?.patch).toContain("-old");
+		expect(out?.patch).toContain("+new");
 	});
 
 	it("edit 工具无 result 时从 args.edits 构造标准 patch", () => {
@@ -62,7 +75,7 @@ describe("extractEditPatch", () => {
 			{ path: "/tmp/x.ts", edits: [{ oldText: "const a = 1;", newText: "const a = 2;" }] },
 			undefined,
 		);
-		expect(out?.patch).toContain("--- a//tmp/x.ts");
+		expect(out?.patch).toContain("--- /tmp/x.ts");
 		expect(out?.patch).toContain("-const a = 1;");
 		expect(out?.patch).toContain("+const a = 2;");
 		expect(out?.added).toBe(1);

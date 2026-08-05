@@ -64,10 +64,18 @@ export class SessionEventProcessor {
 			case "agent_end":
 				// 正向时序：先完成 turn 收尾（持久化权限/计划状态与 duration 时长），
 				// 再发 agent_end 快照——保证快照 entries 已包含本轮 duration custom entry，
-				// 渲染端一次拿到时长，无需事后补发。
+				// 渲染端一次拿到时长，无需事后补发。注意 agent_end 并不代表 SDK 已空闲：
+				// compaction 判定/排队消息续跑/retry 准备都在 agent_end 之后才执行，
+				// 快照的 runtime.isStreaming 会如实反映（仍为 true），
+				// 真正的终态由 agent_settled 快照通知（见下）。
 				await this.host.onAgentEnd(sessionId, event.willRetry);
-				this.host.emitSessionState(sessionId, "agent_end", event.willRetry);
+				this.host.emitSessionState(sessionId, "agent_end");
 				if (!event.willRetry) this.host.onSubSessionAgentEnd(sessionId);
+				break;
+			case "agent_settled":
+				// SDK 已真正空闲（_isAgentRunActive=false）——这是唯一的"turn 彻底结束"
+				// 信号。重发终态快照：isStreaming 如实为 false，渲染端据此进入 idle。
+				this.host.emitSessionState(sessionId, "agent_end");
 				break;
 			case "agent_start":
 				scope.turnStartedAt = Date.now();
@@ -93,9 +101,9 @@ export class SessionEventProcessor {
 				break;
 			case "compaction_end":
 				if (event.willRetry) {
-					this.host.emitSessionState(sessionId, "compaction_end", event.willRetry);
+					this.host.emitSessionState(sessionId, "compaction_end");
 				} else {
-					this.host.emitSessionState(sessionId, "agent_end", event.willRetry);
+					this.host.emitSessionState(sessionId, "agent_end");
 				}
 				this.host.emitTodoUpdate(sessionId);
 				break;

@@ -98,7 +98,17 @@ describe("SessionEventProcessor", () => {
 		await processor.handle("session-1", eventOf("agent_end", { willRetry: false }));
 		expect(host.onAgentEnd).toHaveBeenCalledWith("session-1", false);
 		expect(host.onSubSessionAgentEnd).toHaveBeenCalledWith("session-1");
-		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "agent_end", false);
+		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "agent_end");
+	});
+
+	it("agent_settled emits the terminal idle snapshot (agent_end reason)", async () => {
+		// agent_end 只表示 turn 主体结束；SDK 在 agent_end 之后还要做 compaction
+		// 判定/排队消息续跑/retry 准备，期间 isStreaming 仍为 true。唯一"彻底结束"
+		// 的信号是 agent_settled——它触发的终态快照让渲染端进入 idle。
+		const { processor, scopeRegistry, host } = makeProcessor();
+		scopeRegistry.acquire("session-1", "project-1");
+		await processor.handle("session-1", eventOf("agent_settled"));
+		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "agent_end");
 	});
 
 	it("agent_end 正向时序：先持久化 duration（onAgentEnd）再发快照（emitSessionState）", async () => {

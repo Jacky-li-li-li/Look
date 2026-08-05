@@ -491,15 +491,10 @@ export class SessionRuntimeManager
 	}
 
 	// ISessionEventHost — public for interface compatibility
-	emitSessionState(
-		targetSessionId?: string,
-		reason: SessionSnapshotEnvelope["reason"] = "activate",
-		willRetry?: boolean,
-	): void {
+	emitSessionState(targetSessionId?: string, reason: SessionSnapshotEnvelope["reason"] = "activate"): void {
 		this.composition.sessionNotifier.emitSessionState(
 			targetSessionId ?? this.composition.activeSessionSelection.currentId,
 			reason,
-			willRetry,
 		);
 	}
 

@@ -79,6 +79,27 @@ export function deriveSessionPhase(state: RendererSessionState | null | undefine
 	return "idle";
 }
 
+/**
+ * Queue data shown in ChatQueueDrawer — single source of truth is the
+ * discrete-event path (uiSteering / uiFollowUp from `queue_update` events,
+ * seeded by snapshots in snapshot.ts).
+ *
+ * Do NOT fall back to runtime.steering / runtime.followUp here: snapshot
+ * runtime values are only refreshed on discrete snapshots (agent_end /
+ * activate / compaction_start), so after a `queue_update` clears the event
+ * path they can be stale and would resurrect already-delivered messages in
+ * the queue drawer (message shows as queued while it was also sent).
+ */
+export function deriveActiveQueue(state: RendererSessionState | null | undefined): {
+	steering: string[];
+	followUp: string[];
+} {
+	return {
+		steering: [...(state?.uiSteering ?? [])],
+		followUp: [...(state?.uiFollowUp ?? [])],
+	};
+}
+
 export function deriveAgentPhase(agent: AgentInfo | null | undefined): RendererSessionPhase {
 	// Note: isCompacting is intentionally excluded — it's carried only by
 	// sessionState.runtime (from session:snapshot), not by agent:updated/agent:list.

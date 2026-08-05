@@ -127,15 +127,10 @@ export class CompositionHost implements ICompositionHost, IRuntimeStore, ISubAge
 		this.requireService(this.sessionEventEffects, "session event effects").onSubSessionAgentEnd(sessionId);
 	}
 
-	emitSessionState(
-		sessionId: string | undefined,
-		reason: SessionSnapshotEnvelope["reason"],
-		willRetry?: boolean,
-	): void {
+	emitSessionState(sessionId: string | undefined, reason: SessionSnapshotEnvelope["reason"]): void {
 		this.requireService(this.sessionNotifier, "session notifier").emitSessionState(
 			sessionId ?? this.activeSessionSelection.currentId,
 			reason,
-			willRetry,
 		);
 	}
 

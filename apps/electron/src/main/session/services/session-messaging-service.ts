@@ -52,7 +52,14 @@ export class SessionMessagingService {
 				session.prompt(text, {
 					images,
 					source: "rpc",
-					streamingBehavior: session.isStreaming ? (sendMode ?? "followUp") : undefined,
+					// Always pass the send-mode behavior instead of reading session.isStreaming
+					// here: the SDK's prompt() re-checks isStreaming internally and decides
+					// whether to queue. Reading it here too creates a TOCTOU window where
+					// the session becomes streaming between the two reads — prompt() then
+					// throws "Agent is already processing" and the message is lost. Passing
+					// sendMode unconditionally is safe: it is ignored on the direct path
+					// (idle → normal send) and used to queue when the SDK is actually busy.
+					streamingBehavior: sendMode ?? "followUp",
 					preflightResult: onPreflight,
 				}),
 			(error) => this.host.emitError(error, sessionId),

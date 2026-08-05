@@ -27,6 +27,7 @@ function createQueries(runtime: ManagedRuntime | undefined): SessionNotifierQuer
 	} as unknown as SessionInfoService;
 	return {
 		sessionInfoService,
+		scopeRegistry: { get: () => undefined },
 		listProjects: () => [],
 		getActiveProjectId: () => "project-a",
 	};
@@ -63,5 +64,39 @@ describe("SessionNotifier", () => {
 		notifier.emitSessionUpdated("session-a");
 
 		expect(received).toEqual(["session-a"]);
+	});
+
+	it("snapshot isStreaming mirrors the SDK live state even on agent_end", () => {
+		// agent_end 快照必须如实反映 session.isStreaming：SDK 在 agent_end 之后
+		// 仍可能处于收尾（compaction 判定/排队续跑），若此时强制 isStreaming=false，
+		// 渲染端会短暂显示 idle，用户在这窗口发送的消息会被意外排队。
+		// 真正的 idle 由 agent_settled 触发的终态快照通知。
+		const bus = new SessionEventBus();
+		const snapshots: Array<{ isStreaming: boolean }> = [];
+		bus.onEvent((event) => {
+			if (event.type === "session:snapshot") snapshots.push({ isStreaming: event.runtime.isStreaming });
+		});
+		const session = {
+			sessionManager: {
+				getBranch: () => [],
+				getLeafId: () => null,
+			},
+			getSteeringMessages: () => [],
+			getFollowUpMessages: () => [],
+			getSessionStats: () => ({ totalMessages: 1 }),
+			getContextUsage: () => undefined,
+			isCompacting: false,
+			isRetrying: false,
+			isStreaming: true, // SDK 仍忙（agent_end 后收尾中）
+			model: undefined,
+			thinkingLevel: "off",
+			retryAttempt: 0,
+		} as unknown as ManagedRuntime["runtime"]["session"];
+		const notifier = new SessionNotifier(bus, createQueries({ runtime: { session } } as unknown as ManagedRuntime));
+
+		notifier.emitSessionState("session-a", "agent_end");
+
+		expect(snapshots).toHaveLength(1);
+		expect(snapshots[0]!.isStreaming).toBe(true);
 	});
 });

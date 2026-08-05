@@ -40,6 +40,38 @@ describe("SessionMessagingService", () => {
 		expect(prompt).toHaveBeenCalledWith("hello", expect.objectContaining({ source: "rpc" }));
 	});
 
+	// Regression: the queue decision must be left entirely to the SDK's prompt()
+	// internal isStreaming check. Reading session.isStreaming here too creates a
+	// TOCTOU where the session becomes streaming between the two reads and the SDK
+	// throws "Agent is already processing" (message lost). The sendMode-derived
+	// behavior is passed unconditionally — it is ignored on the direct (idle) path
+	// and only used to queue when the SDK is actually busy.
+	it("passes streamingBehavior unconditionally (ignored by the SDK when idle)", async () => {
+		const prompt = mockPrompt();
+		const session = { prompt, isStreaming: false } as unknown as AgentSession;
+
+		const service = new SessionMessagingService({
+			ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(session))),
+			emitError: vi.fn(),
+		});
+
+		await service.sendMessage("s1", "hello", undefined, "steer");
+		expect(prompt).toHaveBeenCalledWith("hello", expect.objectContaining({ streamingBehavior: "steer" }));
+	});
+
+	it("defaults the streaming behavior to followUp when sendMode is omitted", async () => {
+		const prompt = mockPrompt();
+		const session = { prompt, isStreaming: false } as unknown as AgentSession;
+
+		const service = new SessionMessagingService({
+			ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(session))),
+			emitError: vi.fn(),
+		});
+
+		await service.sendMessage("s1", "hello");
+		expect(prompt).toHaveBeenCalledWith("hello", expect.objectContaining({ streamingBehavior: "followUp" }));
+	});
+
 	it("prepends a subagent hint when /agent:name is present", async () => {
 		const prompt = mockPrompt();
 		const session = { prompt, isStreaming: false } as unknown as AgentSession;

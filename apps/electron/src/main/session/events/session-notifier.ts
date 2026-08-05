@@ -66,7 +66,7 @@ export class SessionNotifier {
 		private readonly queries: SessionNotifierQueries,
 	) {}
 
-	emitSessionState(sessionId: string | null, reason: SessionSnapshotEnvelope["reason"], willRetry?: boolean): void {
+	emitSessionState(sessionId: string | null, reason: SessionSnapshotEnvelope["reason"]): void {
 		if (!sessionId) return;
 		const sequence = (this.snapshotSequences.get(sessionId) ?? 0) + 1;
 		this.snapshotSequences.set(sessionId, sequence);
@@ -87,16 +87,18 @@ export class SessionNotifier {
 			// so the renderer doesn't show a stale compacting indicator.
 			// @see ARCHITECTURE: pi SDK workaround #2
 			const isCompactingFinal = reason === "compaction_end" || reason === "agent_end" ? false : session.isCompacting;
-			// Read compactionEstimatedTokensAfter from scope (set after session.compact() returns).
 			const scope = this.queries.scopeRegistry.get(sessionId);
-			// SDK workaround: when agent_end carries willRetry=true, the renderer streaming state
-			// is set to willRetry (truthy) instead of false, preventing the UI from flashing back
-			// to idle between retry attempts.
-			// @see ARCHITECTURE: pi SDK workaround #4
+			// isStreaming always mirrors the SDK's live state (single source of truth).
+			// The SDK stays busy (session.isStreaming === true) between agent_end and the
+			// final agent_settled — compaction decision, queued-message continuation and
+			// retry preparation all run inside _runAgentPrompt after agent_end was emitted.
+			// Reporting it truthfully keeps the UI busy through the whole turn lifecycle;
+			// the terminal idle snapshot is emitted by SessionEventProcessor on
+			// agent_settled, when the SDK has actually settled.
 			const runtime = {
 				model: session.model,
 				thinkingLevel: session.thinkingLevel,
-				isStreaming: willRetry !== undefined ? willRetry : (info?.isStreaming ?? session.isStreaming),
+				isStreaming: session.isStreaming,
 				isRetrying: session.isRetrying,
 				isCompacting: isCompactingFinal,
 				retryAttempt: session.retryAttempt,

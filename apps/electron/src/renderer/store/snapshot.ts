@@ -90,8 +90,15 @@ export function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 		uiBlocks: isAgentEnd || snapshot.reason === "navigate" ? [] : previous.uiBlocks,
 		uiTools: isAgentEnd || snapshot.reason === "navigate" ? {} : previous.uiTools,
 		uiPhase: isAgentEnd || snapshot.reason === "navigate" ? "idle" : previous.uiPhase,
-		uiSteering: isAgentEnd || snapshot.reason === "navigate" ? [] : previous.uiSteering,
-		uiFollowUp: isAgentEnd || snapshot.reason === "navigate" ? [] : previous.uiFollowUp,
+		// Queue state is seeded from the snapshot runtime (authoritative at snapshot
+		// time) and afterwards owned exclusively by `queue_update` events. This
+		// covers activation recovery (a session re-activated with pending queued
+		// messages) and the "orphan" case where a steer/followUp message is queued
+		// in the agent loop's final drain-to-agent_end window: the message is still
+		// genuinely pending at agent_end, so the drawer must keep showing it until
+		// its delivery `queue_update` removes it.
+		uiSteering: [...snapshot.runtime.steering],
+		uiFollowUp: [...snapshot.runtime.followUp],
 		// Always clear the pending user message after a snapshot — the snapshot
 		// entries are now the source of truth for message history.
 		pendingUserMessage: null,

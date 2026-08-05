@@ -4,7 +4,7 @@ import { appStore } from "../src/renderer/store/appStore";
 import { removeAgentAtoms } from "../src/renderer/store/atomFamilyRegistry";
 import { agentsAtom, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { initIpcHandlers } from "../src/renderer/store/ipcHandler";
-import { deriveSessionPhase } from "../src/renderer/store/sessionTypes";
+import { deriveActiveQueue, deriveSessionPhase } from "../src/renderer/store/sessionTypes";
 import { flushAllUiEvents } from "../src/renderer/store/ui-event-processor";
 
 const sessionId = "ui-store-a";
@@ -352,6 +352,99 @@ describe("UI event canonical store (session:ui-event)", () => {
 
 		flushReceive(receive, uiEvent({ type: "retry_status", status: "end", attempt: 1, success: true, timestamp: 3 }));
 	});
+
+	// ── Regression: stale queue display — message shown as queued while also sent ──
+	// A snapshot taken while a steer/followUp message is genuinely pending carries
+	// that message in runtime.steering. The snapshot must seed uiSteering so the
+	// drawer keeps showing it; the delivery queue_update([]) is what actually
+	// removes it — the runtime values must NOT resurrect it afterwards.
+	it("seeds uiSteering from a snapshot that captured a pending queued message, then clears on delivery", () => {
+		let receive!: (event: MainToRendererEvent) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: MainToRendererEvent) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		// agent_end snapshot: the steer message is still genuinely queued (the
+		// agent loop's final drain already ran, so it will be delivered by the
+		// post-agent-run continuation).
+		receive({
+			type: "session:snapshot",
+			sessionId,
+			reason: "agent_end",
+			sequence: 1,
+			leafId: null,
+			entries: [],
+			runtime: {
+				model: undefined,
+				thinkingLevel: "off",
+				isStreaming: false,
+				isRetrying: false,
+				isCompacting: false,
+				retryAttempt: 0,
+				steering: ["stale-message"],
+				followUp: [],
+				stats: { totalMessages: 1 },
+			},
+		});
+		const seeded = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(seeded.uiSteering).toEqual(["stale-message"]);
+
+		// Delivery: the continuation run emits message_start for the queued text,
+		// the SDK removes it and emits queue_update with empty arrays.
+		flushReceive(receive, uiEvent({ type: "queue_update", steering: [], followUp: [], timestamp: 2 }));
+		const cleared = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(cleared.uiSteering).toEqual([]);
+		// The drawer must not resurrect the stale runtime snapshot value.
+		expect(deriveActiveQueue(cleared)).toEqual({ steering: [], followUp: [] });
+	});
+
+	it("keeps uiSteering after a mid-stream snapshot, and queue_update delivery clears it", () => {
+		let receive!: (event: MainToRendererEvent) => void;
+		dispose = initIpcHandlers({
+			onEvent(callback: (event: MainToRendererEvent) => void) {
+				receive = callback;
+				return () => {};
+			},
+		});
+
+		// compaction_start emits an "activate" snapshot while a steer message is queued.
+		receive({
+			type: "session:snapshot",
+			sessionId,
+			reason: "activate",
+			sequence: 1,
+			leafId: null,
+			entries: [],
+			runtime: {
+				model: undefined,
+				thinkingLevel: "off",
+				isStreaming: true,
+				isRetrying: false,
+				isCompacting: false,
+				retryAttempt: 0,
+				steering: ["queued-1"],
+				followUp: [],
+				stats: { totalMessages: 1 },
+			},
+		});
+		expect(appStore.get(sessionStateAtomFamily(sessionId)).uiSteering).toEqual(["queued-1"]);
+
+		// queue_update arrives first: another message was queued.
+		flushReceive(
+			receive,
+			uiEvent({ type: "queue_update", steering: ["queued-1", "queued-2"], followUp: [], timestamp: 2 }),
+		);
+		expect(appStore.get(sessionStateAtomFamily(sessionId)).uiSteering).toEqual(["queued-1", "queued-2"]);
+
+		// Delivery of both: queue_update([]) must fully clear the drawer.
+		flushReceive(receive, uiEvent({ type: "queue_update", steering: [], followUp: [], timestamp: 3 }));
+		const state = appStore.get(sessionStateAtomFamily(sessionId));
+		expect(state.uiSteering).toEqual([]);
+		expect(deriveActiveQueue(state)).toEqual({ steering: [], followUp: [] });
+	});
 });
 
 describe("deriveSessionPhase", () => {
@@ -419,5 +512,35 @@ describe("deriveSessionPhase", () => {
 			>[0]),
 		).toBe("idle");
 		expect(deriveSessionPhase(null)).toBe("idle");
+	});
+
+	describe("deriveActiveQueue", () => {
+		it("returns the event-path queue state", () => {
+			expect(
+				deriveActiveQueue({
+					uiSteering: ["a"],
+					uiFollowUp: ["b"],
+					runtime: { steering: ["stale"], followUp: ["stale"] },
+				} as unknown as Parameters<typeof deriveActiveQueue>[0]),
+			).toEqual({ steering: ["a"], followUp: ["b"] });
+		});
+
+		it("regression: does NOT fall back to stale runtime.steering when the event path is empty", () => {
+			// A message that was already delivered (and appears in the chat) must not
+			// show as queued just because an older snapshot still carried it in
+			// runtime.steering.
+			expect(
+				deriveActiveQueue({
+					uiSteering: [],
+					uiFollowUp: [],
+					runtime: { steering: ["delivered-message"], followUp: [] },
+				} as unknown as Parameters<typeof deriveActiveQueue>[0]),
+			).toEqual({ steering: [], followUp: [] });
+		});
+
+		it("handles null/undefined state", () => {
+			expect(deriveActiveQueue(null)).toEqual({ steering: [], followUp: [] });
+			expect(deriveActiveQueue(undefined)).toEqual({ steering: [], followUp: [] });
+		});
 	});
 });

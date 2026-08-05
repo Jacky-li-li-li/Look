@@ -24,7 +24,7 @@ import {
 	sessionStateAtomFamily,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
-import { deriveSessionPhase } from "./store/sessionTypes";
+import { deriveActiveQueue, deriveSessionPhase } from "./store/sessionTypes";
 
 const api = window.look;
 
@@ -40,24 +40,7 @@ export default function App() {
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? ""));
-	const activeQueue = useMemo(() => {
-		// 优先使用 UI 事件路径（流式期间实时更新），
-		// 回退到 runtime snapshot（持久化状态）
-		const uiSteering = activeSessionState.uiSteering ?? [];
-		const uiFollowUp = activeSessionState.uiFollowUp ?? [];
-		if (uiSteering.length > 0 || uiFollowUp.length > 0) {
-			return { steering: [...uiSteering], followUp: [...uiFollowUp] };
-		}
-		return {
-			steering: [...(activeSessionState.runtime?.steering ?? [])],
-			followUp: [...(activeSessionState.runtime?.followUp ?? [])],
-		};
-	}, [
-		activeSessionState.uiSteering,
-		activeSessionState.uiFollowUp,
-		activeSessionState.runtime?.steering,
-		activeSessionState.runtime?.followUp,
-	]);
+	const activeQueue = useMemo(() => deriveActiveQueue(activeSessionState), [activeSessionState]);
 	const activePhase = deriveSessionPhase(activeSessionState);
 	const agents = useAtomValue(agentsAtom);
 	const projects = useAtomValue(projectsAtom);
