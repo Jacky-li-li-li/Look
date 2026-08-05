@@ -191,14 +191,14 @@ describe("MessageTicks bar sizing", () => {
 	it("clamps bar height to minimum when few messages", () => {
 		const { container } = renderTicks([{ id: "m1", preview: "one" }]);
 		const bar = container.querySelector(".message-ticks-bar") as HTMLElement;
-		expect(bar.style.height).toBe("72px");
+		expect(bar.style.height).toBe("32px");
 	});
 
 	it("grows with message count up to max height", () => {
 		const items = Array.from({ length: 10 }, (_, i) => ({ id: `m${i}`, preview: `msg ${i}` }));
 		const { container } = renderTicks(items);
 		const bar = container.querySelector(".message-ticks-bar") as HTMLElement;
-		expect(bar.style.height).toBe("120px");
+		expect(bar.style.height).toBe("100px");
 
 		const many = Array.from({ length: 100 }, (_, i) => ({ id: `m${i}`, preview: `msg ${i}` }));
 		const { container: c2 } = renderTicks(many);

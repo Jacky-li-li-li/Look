@@ -42,9 +42,9 @@ interface MessageTicksProps {
 /** 鼠标离开刻度/小窗后多久关闭小窗（给鼠标留出滑入小窗的桥接时间） */
 const CLOSE_DELAY_MS = 120;
 /** 刻度间距（px）：消息少时按此间距排布 */
-const TICK_SPACING_PX = 12;
-/** 刻度条最小高度（px）：消息很少时仍保持可读的紧凑条 */
-const MIN_BAR_HEIGHT = 72;
+const TICK_SPACING_PX = 10;
+/** 刻度条最小高度（px）：消息很少时仍保持紧凑（避免 2 条消息时刻度被拉开） */
+const MIN_BAR_HEIGHT = 32;
 /** 刻度条最大高度（px）：消息很多时封顶，保持“集中”形态 */
 const MAX_BAR_HEIGHT = 280;
 
