@@ -372,6 +372,9 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 				"all",
 			] as const);
 		}
+		if ("messageAlignment" in settings) {
+			guardEnum(settings.messageAlignment, "settings.messageAlignment", ["left", "left-right"] as const);
+		}
 		if ("showToolExecution" in settings) {
 			guardBoolean(settings.showToolExecution, "settings.showToolExecution");
 		}

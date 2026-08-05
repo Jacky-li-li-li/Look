@@ -16,6 +16,7 @@ import { useAtomValue } from "jotai";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../../store/authAtoms";
+import { messageAlignmentAtom } from "../../store/settingsAtoms";
 import { MessageAvatar, MessageContent, MessageHeader, MessageRoot } from "./message-elements/MessageElements";
 import { StreamingBlocksBubble } from "./StreamingBlocksBubble";
 
@@ -61,6 +62,7 @@ export const MessageItem = memo(function MessageItem({
 }: MessageItemProps) {
 	const { t } = useTranslation();
 	const userProfile = useAtomValue(userProfileAtom);
+	const messageAlignment = useAtomValue(messageAlignmentAtom);
 
 	const isUser = message?.role === "user";
 	const assistant = message?.role === "assistant" ? (message as AssistantMessage) : null;
@@ -71,10 +73,16 @@ export const MessageItem = memo(function MessageItem({
 	const hasLive = liveBlocks !== undefined;
 
 	return (
-		<MessageRoot from={isUser ? "user" : "assistant"}>
+		<MessageRoot from={isUser ? "user" : "assistant"} alignment={messageAlignment}>
 			<MessageAvatar from={isUser ? "user" : "assistant"} userAvatar={userProfile.avatar} />
 			<div className="min-w-0 flex-1">
-				<MessageHeader sender={sender} isStreaming={isStreaming} isActiveLeaf={isActiveLeaf} isUser={isUser} />
+				<MessageHeader
+					sender={sender}
+					isStreaming={isStreaming}
+					isActiveLeaf={isActiveLeaf}
+					isUser={isUser}
+					alignment={messageAlignment}
+				/>
 				<MessageContent isUser={isUser} flash={flash}>
 					{hasLive ? (
 						<StreamingBlocksBubble

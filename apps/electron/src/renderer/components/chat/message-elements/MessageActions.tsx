@@ -13,8 +13,10 @@ import type { ReactNode } from "react";
 export interface MessageActionsProps {
 	/** 是否有可用操作（否则按钮区只保留占位高度，hover 不显示）。 */
 	show: boolean;
-	/** 是否 user 消息（右对齐）。 */
+	/** 是否 user 消息（默认右对齐；left 对齐模式下随气泡左对齐）。 */
 	isUser: boolean;
+	/** 气泡对齐模式：left 时 user 消息操作按钮也左对齐。 */
+	alignment?: "left" | "left-right";
 	/** 操作是否忙碌（禁用分支/复刻按钮）。 */
 	busy?: boolean;
 	/** 分支按钮点击。 */
@@ -36,6 +38,7 @@ export interface MessageActionsProps {
 export function MessageActions({
 	show,
 	isUser,
+	alignment = "left-right",
 	busy = false,
 	onBranch,
 	onFork,
@@ -51,7 +54,7 @@ export function MessageActions({
 			data-reserved={show ? undefined : ""}
 			className={cn(
 				"mt-msg-action-offset flex min-h-6 items-center gap-msg-action",
-				isUser ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
+				isUser && alignment !== "left" ? "self-end mr-msg-action-inset" : "ml-msg-action-inset",
 				className,
 			)}
 		>

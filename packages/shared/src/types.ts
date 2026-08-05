@@ -30,6 +30,7 @@ export type { PermissionMode } from "./contracts/permission.js";
 export type {
 	DesktopNotificationMode,
 	LookTone,
+	MessageAlignment,
 	ShowToolExecution,
 	UILanguage,
 	UserSettings,

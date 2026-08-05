@@ -25,6 +25,7 @@
 import type {
 	DesktopNotificationMode,
 	LookTone,
+	MessageAlignment,
 	PermissionMode,
 	ShowToolExecution,
 	UILanguage,
@@ -57,6 +58,7 @@ const DEFAULTS: UserSettings = {
 	rightPanelCollapsed: false,
 	aiAvatar: null,
 	desktopNotifications: "all",
+	messageAlignment: "left-right",
 	showToolExecution: true,
 };
 
@@ -99,6 +101,8 @@ interface UiSettings {
 	aiAvatar: string | null;
 	/** OS 桌面通知模式（off / needs-action / all）。 */
 	desktopNotifications: DesktopNotificationMode;
+	/** 消息气泡排列（left=全部靠左 / left-right=用户右、AI 左）。 */
+	messageAlignment: MessageAlignment;
 	/** 消息流中是否显示工具执行细节（思考 + 工具调用）。 */
 	showToolExecution: ShowToolExecution;
 }
@@ -122,6 +126,7 @@ const UI_DEFAULTS: UiSettings = {
 	rightPanelCollapsed: false,
 	aiAvatar: null,
 	desktopNotifications: "all",
+	messageAlignment: "left-right",
 	showToolExecution: DEFAULTS.showToolExecution,
 };
 
@@ -272,6 +277,7 @@ export class UserSettingsStore {
 		if (partial.rightPanelCollapsed !== undefined) uiPartial.rightPanelCollapsed = partial.rightPanelCollapsed;
 		if (partial.aiAvatar !== undefined) uiPartial.aiAvatar = partial.aiAvatar;
 		if (partial.desktopNotifications !== undefined) uiPartial.desktopNotifications = partial.desktopNotifications;
+		if (partial.messageAlignment !== undefined) uiPartial.messageAlignment = partial.messageAlignment;
 		if (partial.showToolExecution !== undefined) uiPartial.showToolExecution = partial.showToolExecution;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };

@@ -12,6 +12,12 @@ export type LookTone = "light" | "dark";
  */
 export type DesktopNotificationMode = "off" | "needs-action" | "all";
 
+/** Chat bubble alignment mode.
+ *  - "left": all bubbles align to the left (compact list style)
+ *  - "left-right": user bubbles right, assistant bubbles left (default chat view)
+ */
+export type MessageAlignment = "left" | "left-right";
+
 /** Whether tool execution details (thinking + tool calls) are shown in the message stream.
  *  - true (default): render thinking panels, tool groups, subagent groups as usual
  *  - false: hide all thinking / tool-call blocks — messages show only text, images, etc.
@@ -47,6 +53,8 @@ export interface UserSettings {
 	aiAvatar: string | null;
 	/** OS desktop notification mode. UI preference, persisted in ui-settings.json. */
 	desktopNotifications: DesktopNotificationMode;
+	/** Chat bubble alignment: "left" (all left) or "left-right" (user right / assistant left). */
+	messageAlignment: MessageAlignment;
 	/** Show tool execution details (thinking + tool calls) in the message stream. Default true. */
 	showToolExecution: ShowToolExecution;
 }

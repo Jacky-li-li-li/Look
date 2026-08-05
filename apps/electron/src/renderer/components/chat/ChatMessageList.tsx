@@ -20,6 +20,7 @@ import {
 } from "../../store/atoms";
 import { isLoggedInAtom, userProfileAtom } from "../../store/authAtoms";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
+import { messageAlignmentAtom } from "../../store/settingsAtoms";
 import { AiAvatar } from "../AiAvatar";
 import {
 	BranchConfirmDialog,
@@ -230,6 +231,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	// === Sync isAtBottom to global atom (debounced to avoid state churn while scrolling) ===
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	const messageAlignment = useAtomValue(messageAlignmentAtom);
 	// 只订阅 uiPhase，避免 streaming 期间全量 sessionState 变化触发 re-render
 	const activeUiPhaseAtom = useMemo(
 		() => atom((get) => get(sessionStateAtomFamily(activeAgentId ?? "__none__")).uiPhase),
@@ -481,6 +483,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 									(item.message?.role === "assistant" || item.message?.role === "user")
 								}
 								isUser={item.message?.role === "user"}
+								alignment={messageAlignment}
 								busy={isBusy || Boolean(navigatingEntry || forkingEntry)}
 								onBranch={itemEntryId ? () => handleBranchFromHere(itemEntryId) : undefined}
 								onFork={
@@ -529,6 +532,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			handleCopyMessage,
 			t,
 			agentId,
+			messageAlignment,
 		],
 	);
 

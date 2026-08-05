@@ -1,6 +1,6 @@
 // ============================================================
-// ProfileEditor — 名刺式身份卡：方形「印章」头像 + 字段表
-// Used inside SettingsPage
+// ProfileEditor — 名刺式身份编辑：方形「印章」头像 + 字段表
+// Used inside ProfileTab（外层由 Card 提供边框容器，本组件不再自带）
 //
 // 设计意图：头像不用圆形模板，而是与 About 页应用图标同圆角率
 // （22%）的方形印章；右侧是 hairline 分隔的字段行（微标签 +
@@ -119,7 +119,7 @@ export default function ProfileEditor() {
 	}
 
 	return (
-		<div className="flex items-stretch gap-5 rounded-xl border border-hairline p-5">
+		<div className="flex items-stretch gap-5">
 			{/* 印章：方形头像，hover 显示更换入口 */}
 			<button
 				type="button"

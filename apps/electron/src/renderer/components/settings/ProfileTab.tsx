@@ -1,6 +1,10 @@
 // ============================================================
-// ProfileTab — User profile editing
+// ProfileTab — 个人信息 + 使用活跃度
+// 布局与其他设置 Tab 一致（GeneralTab/PromptTab 同款）：
+// 全宽 p-4 + 卡片堆叠，宽窗口下不再收窄成居中列留白
 // ============================================================
+import { Card, CardContent, CardHeader, CardTitle } from "@look/ui/components/ui/card";
+import { UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ProfileEditor from "../dialogs/ProfileEditor";
 import UsageHeatmap from "./UsageHeatmap";
@@ -9,31 +13,29 @@ export default function ProfileTab() {
 	const { t } = useTranslation();
 
 	return (
-		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
-			{/* Profile section — 居中最大宽度列：热力图是固定宽度网格，宽窗口下左对齐会在右侧留大片空白 */}
-			<div className="mx-auto w-full max-w-[1000px] px-4 pt-4 pb-2">
-				<span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
-					{t("profile.title")}
-				</span>
-			</div>
-			<div className="mx-auto w-full max-w-[1000px] px-4 pb-2">
-				<ProfileEditor />
-			</div>
+		<div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-4">
+			{/* 个人信息卡：名刺式身份编辑（头像 + 字段表） */}
+			<Card size="sm" className="overflow-visible">
+				<CardHeader className="border-b border-hairline px-4 py-2.5">
+					<CardTitle className="flex items-center gap-1.5 text-[13px]">
+						<UserRound className="size-3.5 text-muted-foreground" />
+						{t("profile.title")}
+					</CardTitle>
+				</CardHeader>
+				<CardContent className="px-4 py-3.5">
+					<ProfileEditor />
+				</CardContent>
+			</Card>
 
-			{/* Separator */}
-			<div className="mx-auto w-full max-w-[1000px] px-4">
-				<div className="border-t border-hairline" />
-			</div>
-
-			{/* Activity section */}
-			<div className="mx-auto w-full max-w-[1000px] px-4 pt-4 pb-2">
-				<span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/70">
-					{t("profile.activity")}
-				</span>
-			</div>
-			<div className="mx-auto w-full min-w-0 max-w-[1000px] px-4 pb-6">
-				<UsageHeatmap />
-			</div>
+			{/* 使用活跃度卡：年度热力图 + 模型用量堆叠图 */}
+			<Card size="sm" className="overflow-visible">
+				<CardHeader className="border-b border-hairline px-4 py-2.5">
+					<CardTitle className="text-[13px] font-medium">{t("profile.activity")}</CardTitle>
+				</CardHeader>
+				<CardContent className="min-w-0 px-4 py-3.5">
+					<UsageHeatmap />
+				</CardContent>
+			</Card>
 		</div>
 	);
 }

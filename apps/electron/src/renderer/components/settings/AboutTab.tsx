@@ -2,11 +2,11 @@
 // AboutTab — 应用身份卡（图标 + 名称 + 版本 + 更新控件）
 //            + 版本志卡（墨迹时间线）
 //
-// 设计意图：与 Profile 页一致，收进居中 max-w-[1000px] 列，
-// 使用设置页的卡片语言消除宽窗口下的空白。版本列表保留竖向
-// 时间线：当前版本实心墨点，历史版本空心，点击展开更新内容。
-// 更新控件收敛为身份卡右侧的按钮，状态反馈（进度/结果）以
-// 按钮下方的轻量文本呈现。
+// 设计意图：与 Profile 页一致，全宽 p-4 + 卡片堆叠布局（与
+// GeneralTab/PromptTab 同款），宽窗口下不保留居中列留白。
+// 版本列表保留竖向时间线：当前版本实心墨点，历史版本空心，
+// 点击展开更新内容。更新控件收敛为身份卡右侧的按钮，状态
+// 反馈（进度/结果）以按钮下方的轻量文本呈现。
 // ============================================================
 
 import { Card, CardContent, CardHeader, CardTitle } from "@look/ui/components/ui/card";
@@ -44,7 +44,7 @@ export default function AboutTab() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
-			<div className="mx-auto flex w-full max-w-[1000px] flex-col gap-4 px-4 py-5">
+			<div className="flex min-h-0 flex-col gap-3 p-4">
 				{/* ── 身份卡：图标 + 名称 + 版本，更新控件与状态反馈右对齐 ── */}
 				<Card size="sm">
 					<CardContent className="flex items-center gap-4 px-4 py-3.5">
@@ -151,7 +151,9 @@ export default function AboutTab() {
 						<CardTitle className="text-[13px] font-medium">{t("about.releaseNotes")}</CardTitle>
 					</CardHeader>
 					<CardContent className="relative px-4 py-3.5">
-						<div className="relative ml-[5px] border-l border-hairline pl-5">
+						<div
+							className={`relative ml-[5px] border-l border-hairline pl-5 ${showAllVersions && hasMore ? "pb-10" : ""}`}
+						>
 							{visibleChangelog.map((entry) => {
 								const isCurrent = entry.version === appVersion;
 								const isOpen = expanded === entry.version;
@@ -212,23 +214,35 @@ export default function AboutTab() {
 							})}
 						</div>
 
-						{/* 模糊渐变遮罩：提示还有更多版本 */}
+						{/* 半透明遮罩：提示还有更多版本（底部半透明确保内容隐约可见，向上渐隐） */}
 						{!showAllVersions && hasMore && (
-							<div className="pointer-events-none absolute bottom-0 left-0 right-0 flex flex-col items-center">
+							<div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center">
 								<div
-									className="h-16 w-full"
+									className="h-24 w-full"
 									style={{
-										background: "linear-gradient(to top, var(--popover), transparent)",
-										maskImage: "linear-gradient(to top, black 0%, transparent 100%)",
-										WebkitMaskImage: "linear-gradient(to top, black 0%, transparent 100%)",
+										background:
+											"linear-gradient(to top, color-mix(in oklch, var(--popover) 92%, transparent) 0%, color-mix(in oklch, var(--popover) 55%, transparent) 55%, transparent 100%)",
 									}}
 								/>
 								<button
 									type="button"
 									onClick={() => setShowAllVersions(true)}
-									className="pointer-events-auto relative -mt-8 rounded-full border border-hairline bg-popover px-3 py-1 text-[11px] text-muted-foreground shadow-sm transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									className="pointer-events-auto relative -mt-8 rounded-full border border-hairline/70 bg-popover/70 px-3 py-1 text-[11px] text-muted-foreground/70 shadow-none backdrop-blur-sm transition-colors hover:bg-popover/95 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								>
 									{t("about.showAll")}
+								</button>
+							</div>
+						)}
+
+						{/* 收起按钮：展开后固定在卡片底部（与「查看全部版本」同位置），随时可折叠回最近版本 */}
+						{showAllVersions && hasMore && (
+							<div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+								<button
+									type="button"
+									onClick={() => setShowAllVersions(false)}
+									className="pointer-events-auto rounded-full border border-hairline/70 bg-popover/70 px-3 py-1 text-[11px] text-muted-foreground/70 shadow-none backdrop-blur-sm transition-colors hover:bg-popover/95 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								>
+									{t("about.showLess")}
 								</button>
 							</div>
 						)}

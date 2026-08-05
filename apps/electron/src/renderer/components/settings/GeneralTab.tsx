@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LOCALES } from "../../i18n";
 import { AI_AVATARS, getAiAvatarUrl } from "../../lib/aiAvatars";
-import { aiAvatarAtom } from "../../store/settingsAtoms";
+import { aiAvatarAtom, messageAlignmentAtom } from "../../store/settingsAtoms";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import { ThemePicker } from "./ThemePicker";
 
@@ -40,6 +40,7 @@ function persistSettings(partial: {
 	planModel?: string | null;
 	aiAvatar?: string | null;
 	desktopNotifications?: "off" | "needs-action" | "all";
+	messageAlignment?: "left" | "left-right";
 	showToolExecution?: boolean;
 }) {
 	if (!api) return;
@@ -110,6 +111,81 @@ function AvatarTile({
 	);
 }
 
+/** 微缩气泡预览：模拟一条 AI 消息 + 一条用户消息的气泡排列。
+ *  注意对比度：accent 在 dark 主题下是深灰、muted-foreground 太淡，
+ *  用户气泡用 foreground 主色（跟随主题明暗），AI 气泡用 muted 中灰，
+ *  保证在两个主题下都清晰可辨。 */
+function BubblePreview({ mode }: { mode: "left" | "left-right" }) {
+	const rows: Array<{ side: "left" | "right"; tone: "assistant" | "user" }> =
+		mode === "left"
+			? [
+					{ side: "left", tone: "assistant" },
+					{ side: "left", tone: "user" },
+				]
+			: [
+					{ side: "left", tone: "assistant" },
+					{ side: "right", tone: "user" },
+				];
+	return (
+		<div className="flex w-[84px] flex-col gap-2">
+			{rows.map((row, i) => (
+				<div key={i} className={cn("flex items-center gap-1.5", row.side === "right" && "flex-row-reverse")}>
+					<span
+						className={cn(
+							"size-2 shrink-0 rounded-full",
+							row.tone === "user" ? "bg-foreground/80" : "bg-muted-foreground/50",
+						)}
+					/>
+					<span
+						className={cn(
+							"h-3.5 rounded-[6px]",
+							row.tone === "user" ? "w-11 bg-foreground/80" : "w-14 bg-muted-foreground/45",
+						)}
+					/>
+				</div>
+			))}
+		</div>
+	);
+}
+
+/** 会话显示模式磁贴：radio 语义，选中带 accent 对勾徽章，内嵌微缩气泡预览。 */
+function MessageLayoutTile({
+	selected,
+	label,
+	mode,
+	onSelect,
+}: {
+	selected: boolean;
+	label: string;
+	mode: "left" | "left-right";
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			role="radio"
+			aria-checked={selected}
+			aria-label={label}
+			title={label}
+			onClick={onSelect}
+			className={cn(
+				"relative flex h-16 w-28 flex-col items-center justify-center gap-1 rounded-md border transition-all duration-150",
+				"hover:-translate-y-px hover:bg-accent/5",
+				"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+				selected ? "border-accent bg-accent/10" : "border-hairline bg-card/40",
+			)}
+		>
+			<BubblePreview mode={mode} />
+			<span className="text-[9px] leading-none text-muted-foreground">{label}</span>
+			{selected && (
+				<span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-accent text-accent-foreground ring-1 ring-background">
+					<Check className="size-2.5" strokeWidth={3} />
+				</span>
+			)}
+		</button>
+	);
+}
+
 interface GeneralSettingsState {
 	language: string;
 	autoCollapse: boolean;
@@ -122,6 +198,8 @@ interface GeneralSettingsState {
 	planModel: string | null;
 	aiAvatar: string | null;
 	desktopNotifications: "off" | "needs-action" | "all";
+	/** 消息气泡排列（left=全部靠左 / left-right=用户右、AI 左）。 */
+	messageAlignment: "left" | "left-right";
 	/** 消息流中是否显示工具执行细节（思考 + 工具调用）。 */
 	showToolExecution: boolean;
 	availableModels: Array<{ provider: string; id: string; name: string }>;
@@ -142,10 +220,12 @@ export default function GeneralTab() {
 		planModel: null,
 		aiAvatar: null,
 		desktopNotifications: "all",
+		messageAlignment: "left-right",
 		showToolExecution: true,
 		availableModels: [],
 	});
 	const setAiAvatar = useSetAtom(aiAvatarAtom);
+	const setMessageAlignment = useSetAtom(messageAlignmentAtom);
 	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 	// 三态：undefined=未悬停（预览跟随已选项），null=悬停在默认像素头像上
 	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
@@ -159,6 +239,7 @@ export default function GeneralTab() {
 		planModel,
 		aiAvatar,
 		desktopNotifications,
+		messageAlignment,
 		showToolExecution,
 		availableModels,
 	} = state;
@@ -171,6 +252,13 @@ export default function GeneralTab() {
 		setState((prev) => ({ ...prev, aiAvatar: next }));
 		persistSettings({ aiAvatar: next });
 		setAiAvatar(next);
+	};
+
+	// 选择会话显示模式：更新本地 state、持久化并同步全局 atom
+	const selectMessageAlignment = (next: "left" | "left-right") => {
+		setState((prev) => ({ ...prev, messageAlignment: next }));
+		persistSettings({ messageAlignment: next });
+		setMessageAlignment(next);
 	};
 
 	useEffect(() => {
@@ -199,6 +287,9 @@ export default function GeneralTab() {
 							? {
 									desktopNotifications: settings.desktopNotifications as "off" | "needs-action" | "all",
 								}
+							: {}),
+						...("messageAlignment" in settings
+							? { messageAlignment: settings.messageAlignment as "left" | "left-right" }
 							: {}),
 						...("showToolExecution" in settings
 							? { showToolExecution: settings.showToolExecution as boolean }
@@ -235,6 +326,35 @@ export default function GeneralTab() {
 				<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
 					<div className="py-2.5">
 						<ThemePicker />
+					</div>
+					{/* 会话显示模式：两个带图示的磁贴（左对齐 / 左右对齐） */}
+					<div className="py-2.5">
+						<div className="flex items-start justify-between gap-4">
+							<div className="flex min-w-0 flex-col gap-0.5">
+								<span className="text-[13px] font-medium leading-snug">{t("settings.messageLayout")}</span>
+								<span className="text-[11px] leading-tight text-muted-foreground">
+									{t("settings.messageLayoutDesc")}
+								</span>
+							</div>
+							<div
+								className="flex shrink-0 items-center gap-2"
+								role="radiogroup"
+								aria-label={t("settings.messageLayout")}
+							>
+								<MessageLayoutTile
+									selected={messageAlignment === "left"}
+									label={t("settings.messageLayoutLeft")}
+									mode="left"
+									onSelect={() => selectMessageAlignment("left")}
+								/>
+								<MessageLayoutTile
+									selected={messageAlignment === "left-right"}
+									label={t("settings.messageLayoutLeftRight")}
+									mode="left-right"
+									onSelect={() => selectMessageAlignment("left-right")}
+								/>
+							</div>
+						</div>
 					</div>
 					<SettingRow id="ai-avatar" label={t("settings.aiAvatar")} desc={t("settings.aiAvatarDesc")}>
 						{/* 头像选择浮层用 Radix Popover：portal 到 body，焦点与点击由 Radix 管理，

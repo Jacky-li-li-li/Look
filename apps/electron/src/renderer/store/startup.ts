@@ -17,6 +17,7 @@ import {
 	aiAvatarAtom,
 	appReadyPhaseAtom,
 	autoCollapseAtom,
+	messageAlignmentAtom,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
 	projectsAtom,
@@ -118,6 +119,7 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		writeLookThemeToDom(themeFromSettings(settings));
 		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
 		if (settings.aiAvatar !== undefined) appStore.set(aiAvatarAtom, settings.aiAvatar);
+		if (settings.messageAlignment !== undefined) appStore.set(messageAlignmentAtom, settings.messageAlignment);
 		if (settings.showToolExecution !== undefined) appStore.set(showToolExecutionAtom, settings.showToolExecution);
 		if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
 		if (settings.rightPanelCollapsed !== undefined)

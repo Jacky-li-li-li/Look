@@ -2,10 +2,12 @@
 // message-elements — 消息渲染原语层（对标 Proma ai-elements）
 //
 // 无业务逻辑、可组合的视觉原语。组装只发生在 MessageItem。
+// 气泡对齐由调用方传入 alignment（left / left-right）。
 // ============================================================
 
 import { cn } from "@look/ui";
 import { UserAvatar } from "@look/ui/components/UserAvatar";
+import type { MessageAlignment } from "@shared/types";
 import type { ReactNode } from "react";
 import { AiAvatar } from "../../AiAvatar";
 
@@ -13,16 +15,21 @@ import { AiAvatar } from "../../AiAvatar";
 
 interface MessageRootProps {
 	from: "user" | "assistant";
+	/** 气泡对齐：left=全部靠左 / left-right=用户右、助手左（默认）。 */
+	alignment?: MessageAlignment;
 	children: ReactNode;
 	className?: string;
 }
 
-/** 消息根容器：user 右对齐 + 气泡限宽（user 90% / assistant 98%）。 */
-export function MessageRoot({ from, children, className }: MessageRootProps): ReactNode {
+/** 消息根容器：
+ *  - left-right（默认）：user 右对齐 + 气泡限宽（user 90% / assistant 98%）
+ *  - left：全部靠左，统一 98% 限宽，用户/助手靠头像与气泡底色区分。 */
+export function MessageRoot({ from, alignment = "left-right", children, className }: MessageRootProps): ReactNode {
+	const rightAligned = alignment === "left-right" && from === "user";
 	return (
 		<div
-			className={cn("flex gap-msg-bubble", from === "user" && "flex-row-reverse self-end", className)}
-			style={{ maxWidth: from === "user" ? "90%" : "98%" }}
+			className={cn("flex gap-msg-bubble", rightAligned && "flex-row-reverse self-end", className)}
+			style={{ maxWidth: rightAligned ? "90%" : "98%" }}
 		>
 			{children}
 		</div>
@@ -54,11 +61,19 @@ interface MessageHeaderProps {
 	isStreaming: boolean;
 	isActiveLeaf: boolean;
 	isUser: boolean;
+	/** 气泡对齐：left 时用户消息头也左对齐。 */
+	alignment?: MessageAlignment;
 }
 
 /** 消息头部：发送者名称 + streaming 标记。
  *  isActiveLeaf 保留为参数以匹配原签名（当前不使用）。 */
-export function MessageHeader({ sender, isStreaming, isActiveLeaf, isUser }: MessageHeaderProps): ReactNode {
+export function MessageHeader({
+	sender,
+	isStreaming,
+	isActiveLeaf,
+	isUser,
+	alignment = "left-right",
+}: MessageHeaderProps): ReactNode {
 	void isActiveLeaf;
 	return (
 		<div
@@ -66,7 +81,7 @@ export function MessageHeader({ sender, isStreaming, isActiveLeaf, isUser }: Mes
 				// h-[30px] = 头像总高（mt-msg-avatar 2px + size-sm 28px）：名称行占满头像高度，
 				// 名称垂直居中，正文第一行从头像底部水平线开始。
 				"mb-msg-header flex h-[30px] items-center gap-2 text-[10px] text-muted-foreground",
-				isUser && "justify-end",
+				isUser && alignment !== "left" && "justify-end",
 			)}
 		>
 			<span className="font-medium uppercase tracking-wider">{sender}</span>
