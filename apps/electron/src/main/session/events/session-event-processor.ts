@@ -62,19 +62,17 @@ export class SessionEventProcessor {
 		// 3. Side-effect dispatch
 		switch (event.type) {
 			case "agent_end":
-				// 正向时序：先完成 turn 收尾（持久化权限/计划状态与 duration 时长），
-				// 再发 agent_end 快照——保证快照 entries 已包含本轮 duration custom entry，
-				// 渲染端一次拿到时长，无需事后补发。注意 agent_end 并不代表 SDK 已空闲：
-				// compaction 判定/排队消息续跑/retry 准备都在 agent_end 之后才执行，
-				// 快照的 runtime.isStreaming 会如实反映（仍为 true），
-				// 真正的终态由 agent_settled 快照通知（见下）。
+				// agent_end 只做副作用（持久化权限/计划/duration），不发快照。
+				// SDK 在 agent_end 之后还要执行 compaction 判定、排队消息续跑、
+				// retry 准备 — _isAgentRunActive 仍为 true，session 状态未最终确定。
+				// 终态快照由 agent_settled 统一发出，保证 isStreaming=false、
+				// entries 包含延迟 bash 消息等全部数据。
 				await this.host.onAgentEnd(sessionId, event.willRetry);
-				this.host.emitSessionState(sessionId, "agent_end");
 				if (!event.willRetry) this.host.onSubSessionAgentEnd(sessionId);
 				break;
 			case "agent_settled":
-				// SDK 已真正空闲（_isAgentRunActive=false）——这是唯一的"turn 彻底结束"
-				// 信号。重发终态快照：isStreaming 如实为 false，渲染端据此进入 idle。
+				// SDK 已真正空闲（_isAgentRunActive=false，所有 compaction/retry/
+				// 排队消息续跑均已完成）。这是每轮 turn 唯一的终态快照发射点。
 				this.host.emitSessionState(sessionId, "agent_end");
 				break;
 			case "agent_start":
@@ -100,10 +98,10 @@ export class SessionEventProcessor {
 				this.host.emitTodoUpdate(sessionId);
 				break;
 			case "compaction_end":
+				// willRetry: SDK 将用 compacted context 重试 → 立即快照反映压缩后状态。
+				// !willRetry: agent_settled 紧随其后发终态快照，此处无需重复。
 				if (event.willRetry) {
 					this.host.emitSessionState(sessionId, "compaction_end");
-				} else {
-					this.host.emitSessionState(sessionId, "agent_end");
 				}
 				this.host.emitTodoUpdate(sessionId);
 				break;

@@ -66,11 +66,9 @@ describe("SessionNotifier", () => {
 		expect(received).toEqual(["session-a"]);
 	});
 
-	it("snapshot isStreaming mirrors the SDK live state even on agent_end", () => {
-		// agent_end 快照必须如实反映 session.isStreaming：SDK 在 agent_end 之后
-		// 仍可能处于收尾（compaction 判定/排队续跑），若此时强制 isStreaming=false，
-		// 渲染端会短暂显示 idle，用户在这窗口发送的消息会被意外排队。
-		// 真正的 idle 由 agent_settled 触发的终态快照通知。
+	it("emitSessionState reads session.isStreaming from the SDK's live state", () => {
+		// emitSessionState 直接读取 session.isStreaming（映射到 _isAgentRunActive），
+		// 不做任何覆写。此处 mock session.isStreaming = true，验证快照如实传递该值。
 		const bus = new SessionEventBus();
 		const snapshots: Array<{ isStreaming: boolean }> = [];
 		bus.onEvent((event) => {

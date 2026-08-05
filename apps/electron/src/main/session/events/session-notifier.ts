@@ -88,13 +88,9 @@ export class SessionNotifier {
 			// @see ARCHITECTURE: pi SDK workaround #2
 			const isCompactingFinal = reason === "compaction_end" || reason === "agent_end" ? false : session.isCompacting;
 			const scope = this.queries.scopeRegistry.get(sessionId);
-			// isStreaming always mirrors the SDK's live state (single source of truth).
-			// The SDK stays busy (session.isStreaming === true) between agent_end and the
-			// final agent_settled — compaction decision, queued-message continuation and
-			// retry preparation all run inside _runAgentPrompt after agent_end was emitted.
-			// Reporting it truthfully keeps the UI busy through the whole turn lifecycle;
-			// the terminal idle snapshot is emitted by SessionEventProcessor on
-			// agent_settled, when the SDK has actually settled.
+			// isStreaming mirrors the SDK's live _isAgentRunActive. The terminal
+			// snapshot is emitted on agent_settled (after _isAgentRunActive=false),
+			// so isStreaming is always false at this point.
 			const runtime = {
 				model: session.model,
 				thinkingLevel: session.thinkingLevel,

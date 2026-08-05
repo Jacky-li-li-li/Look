@@ -92,39 +92,37 @@ describe("SessionEventProcessor", () => {
 		expect(host.emitSessionUpdated).toHaveBeenCalledTimes(1); // agent_start only
 	});
 
-	it("agent_end dispatches onAgentEnd and sub-session finalize when not retrying", async () => {
+	it("agent_end 只做副作用，不发快照", async () => {
 		const { processor, scopeRegistry, host } = makeProcessor();
 		scopeRegistry.acquire("session-1", "project-1");
 		await processor.handle("session-1", eventOf("agent_end", { willRetry: false }));
 		expect(host.onAgentEnd).toHaveBeenCalledWith("session-1", false);
 		expect(host.onSubSessionAgentEnd).toHaveBeenCalledWith("session-1");
-		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "agent_end");
+		expect(host.emitSessionState).not.toHaveBeenCalled();
 	});
 
-	it("agent_settled emits the terminal idle snapshot (agent_end reason)", async () => {
-		// agent_end 只表示 turn 主体结束；SDK 在 agent_end 之后还要做 compaction
-		// 判定/排队消息续跑/retry 准备，期间 isStreaming 仍为 true。唯一"彻底结束"
-		// 的信号是 agent_settled——它触发的终态快照让渲染端进入 idle。
+	it("agent_settled 发出唯一终态快照", async () => {
 		const { processor, scopeRegistry, host } = makeProcessor();
 		scopeRegistry.acquire("session-1", "project-1");
 		await processor.handle("session-1", eventOf("agent_settled"));
 		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "agent_end");
 	});
 
-	it("agent_end 正向时序：先持久化 duration（onAgentEnd）再发快照（emitSessionState）", async () => {
-		// 回归锁定：快照必须包含 duration custom entry，故 onAgentEnd（写入时长）
-		// 必须先于 emitSessionState 完成，否则渲染端永远拿不到本条消息的时长。
+	it("agent_end 先完成 onAgentEnd 再 finalize sub-session", async () => {
+		// agent_end 只做副作用，不发送快照。终态快照由 agent_settled 发出，
+		// duration entry 在 onAgentEnd 中写入，agent_settled 快照自然包含它。
 		const { processor, scopeRegistry, host } = makeProcessor();
 		scopeRegistry.acquire("session-1", "project-1");
 		const order: string[] = [];
 		vi.mocked(host.onAgentEnd).mockImplementation(async () => {
 			order.push("onAgentEnd");
 		});
-		vi.mocked(host.emitSessionState).mockImplementation(() => {
-			order.push("emitSessionState");
+		vi.mocked(host.onSubSessionAgentEnd).mockImplementation(() => {
+			order.push("onSubSessionAgentEnd");
 		});
 		await processor.handle("session-1", eventOf("agent_end", { willRetry: false }));
-		expect(order).toEqual(["onAgentEnd", "emitSessionState"]);
+		expect(order).toEqual(["onAgentEnd", "onSubSessionAgentEnd"]);
+		expect(host.emitSessionState).not.toHaveBeenCalled();
 	});
 
 	it("agent_end with willRetry does not finalize sub-session", async () => {
@@ -149,6 +147,22 @@ describe("SessionEventProcessor", () => {
 		processor.handle("session-1", eventOf("compaction_start"));
 		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "activate");
 		expect(host.emitSessionUpdated).toHaveBeenCalledWith("session-1");
+		expect(host.emitTodoUpdate).toHaveBeenCalledWith("session-1");
+	});
+
+	it("compaction_end with willRetry emits compaction_end snapshot", () => {
+		const { processor, scopeRegistry, host } = makeProcessor();
+		scopeRegistry.acquire("session-1", "project-1");
+		processor.handle("session-1", eventOf("compaction_end", { willRetry: true }));
+		expect(host.emitSessionState).toHaveBeenCalledWith("session-1", "compaction_end");
+		expect(host.emitTodoUpdate).toHaveBeenCalledWith("session-1");
+	});
+
+	it("compaction_end with willRetry=false does not emit snapshot (agent_settled follows)", () => {
+		const { processor, scopeRegistry, host } = makeProcessor();
+		scopeRegistry.acquire("session-1", "project-1");
+		processor.handle("session-1", eventOf("compaction_end", { willRetry: false }));
+		expect(host.emitSessionState).not.toHaveBeenCalled();
 		expect(host.emitTodoUpdate).toHaveBeenCalledWith("session-1");
 	});
 
