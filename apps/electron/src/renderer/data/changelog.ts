@@ -20,6 +20,52 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "1.8.0",
+		date: "2026-08-05",
+		items: [
+			{
+				zh: "新增会话底部 Git 状态栏：自动识别当前项目的仓库与分支，实时显示文件修改状态（+新增行 -删除行），非 Git 项目自动隐藏",
+				en: "New Git status bar at the bottom of the chat: auto-detects your project's repository and branch and shows live file-change status (+added lines -deleted lines); hidden automatically for non-Git projects",
+				ja: "チャット下部に Git ステータスバーを追加：プロジェクトのリポジトリとブランチを自動検出し、ファイル変更状態（+追加行 -削除行）をリアルタイム表示。Git でないプロジェクトでは自動的に非表示",
+			},
+			{
+				zh: "消息区体验升级：右侧新增垂直刻度条，可快速定位任意用户消息；滚动条静止时自动隐藏、滚动或悬停时显示，更窄更美观",
+				en: "Chat area polish: a new vertical tick ruler on the right lets you jump to any user message; the scrollbar now auto-hides when idle and reappears on scroll or hover, slimmer and cleaner",
+				ja: "メッセージエリアを改善：右側に縦の目盛りバーを追加し、任意のユーザーメッセージへ素早く移動可能。スクロールバーは静止時に自動で隠れ、スクロール/ホバーで表示、よりスリムに",
+			},
+			{
+				zh: "Agent 运行状态显示升级：3×3 九宫格顺时针动画配合阶段状态（思考中 / 调用工具 / 输出中）与已等待时长，运行过程一目了然",
+				en: "Upgraded agent progress display: a 3×3 clockwise scanning animation with the current phase (thinking / running tool / streaming) and elapsed time, so you always know what the agent is doing",
+				ja: "エージェントの実行表示を刷新：3×3 グリッドの時計回りアニメーションと現在のフェーズ（思考中/ツール実行中/出力中）、経過時間を表示",
+			},
+			{
+				zh: "新增「显示工具组」开关（设置 → 通用）：关闭后对话中只显示文本与图片，工具调用和思考过程被隐藏，界面更清爽",
+				en: "New “Show tool execution” toggle (Settings → General): turn it off to hide tool calls and thinking from the conversation, keeping only text and images",
+				ja: "「ツール実行を表示」トグルを追加（設定 → 一般）：オフにすると会話にはテキストと画像のみが表示され、ツール呼び出しや思考プロセスが隠れてすっきり",
+			},
+			{
+				zh: "新增「会话显示模式」设置（通用 → 外观）：支持消息气泡左对齐或左右对齐（用户右侧 / AI 左侧），选择即时生效",
+				en: "New “Message alignment” setting (General → Appearance): left-aligned bubbles or left/right split (user right / AI left); changes apply instantly",
+				ja: "「メッセージ表示モード」設定を追加（一般 → 外観）：吹き出しを左揃えにするか左右分割（ユーザー右/AI 左）にするかを選択可能、即時反映",
+			},
+			{
+				zh: "会话栏移到窗口顶部，按钮悬停提示统一为 Tooltip；编辑工具卡新增 Proma 同款的 diff 预览，改动前后对比更直观",
+				en: "The session bar moved to the top of the window with unified hover tooltips; editing tool cards now show a Proma-style diff preview for clearer before/after comparison",
+				ja: "セッションバーをウィンドウ上部に移動し、ボタンのホバー表示を統一。ツールカード編集時に Proma と同じ diff プレビューを表示し、変更前後の比較が分かりやすく",
+			},
+			{
+				zh: "移除 macOS 灵动岛（Look Island）功能：该方案不再维护，升级后不再显示；桌面通知等其他功能不受影响",
+				en: "Removed the macOS Look Island feature: it is no longer maintained and disappears after upgrading; desktop notifications and other features are unaffected",
+				ja: "macOS の Look Island 機能を削除：今後はメンテナンスされず、アップデート後は表示されません。デスクトップ通知などの他の機能には影響ありません",
+			},
+			{
+				zh: "修复多项问题：Plan 模式切换模型不生效、应用更新后重启偶尔失败、消息区悬停布局膨胀、显示工具组开关关闭不生效等",
+				en: "Various fixes: Plan-mode model switching not applying, occasional app-update restart failures, message area layout expanding on hover, the Show tool execution toggle not applying, and more",
+				ja: "複数の問題を修正：Plan モードでのモデル切り替えが反映されない、アプリ更新後の再起動が失敗することがある、ホバー時にメッセージ領域が膨張する、「ツール実行を表示」トグルが効かない等",
+			},
+		],
+	},
+	{
 		version: "1.7.3",
 		date: "2026-08-04",
 		items: [
