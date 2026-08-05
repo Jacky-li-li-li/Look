@@ -27,6 +27,7 @@ import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
 import { requestViewFileAtom, selectedSharedPathAtomFamily } from "../../store/atoms";
+import { FileIcon } from "./FileIcon";
 
 interface SharedAreaPanelProps {
 	projectId: string;
@@ -532,11 +533,12 @@ function FileCreationInput({
 }) {
 	const { t } = useTranslation();
 	return (
-		<div className="flex items-center gap-2 px-2 py-1">
+		<div className="flex h-6 items-center gap-1 pl-[24px] pr-2">
+			<span className="size-4 shrink-0" />
 			{creating === "file" ? (
-				<File className="size-4 text-muted-foreground" />
+				<File className="size-3.5 shrink-0 text-muted-foreground" />
 			) : (
-				<Folder className="size-4 text-muted-foreground" />
+				<Folder className="size-3.5 shrink-0 text-muted-foreground" />
 			)}
 			<Input
 				ref={inputRef}
@@ -547,7 +549,7 @@ function FileCreationInput({
 				onKeyDown={onKeyDown}
 				onBlur={onBlur}
 				placeholder={creating === "file" ? t("sharedArea.fileName") : t("sharedArea.folderName")}
-				className="h-6 text-xs"
+				className="h-5 text-xs"
 			/>
 		</div>
 	);
@@ -578,11 +580,17 @@ interface SharedAreaNodeProps {
 function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: SharedAreaNodeProps) {
 	const { t } = useTranslation();
 	const requestViewFile = useSetAtom(requestViewFileAtom);
-	const Icon = node.type === "directory" ? Folder : File;
+
+	const handleSelect = () => {
+		onSelect(node.path);
+		if (node.type === "file") requestViewFile(node.absolutePath);
+	};
+
 	const revealInFinder = async () => {
 		const result = await window.look.revealInFinder(node.absolutePath);
 		if (!result?.success) toast.error(result?.error ?? t("sharedArea.revealFailed"));
 	};
+
 	const copyAbsolutePath = async () => {
 		try {
 			await navigator.clipboard.writeText(node.absolutePath);
@@ -591,39 +599,32 @@ function SharedAreaNode({ node, selected, onSelect, onDelete, onExport }: Shared
 			toast.error(t("sharedArea.copyFailed"));
 		}
 	};
-	// 单击文件行 → 打开文件查看器;目录只选中(双击文件仍在 Finder 中打开)
-	const handleSelect = () => {
-		onSelect(node.path);
-		if (node.type === "file") requestViewFile(node.absolutePath);
-	};
+
 	return (
 		<div
-			className={`group flex h-7 w-full items-center rounded-md text-sm ${
-				selected ? "bg-accent text-accent-foreground" : "text-foreground hover:bg-muted"
+			tabIndex={0}
+			aria-label={t(node.type === "directory" ? "sharedArea.folderLabel" : "sharedArea.fileLabel", {
+				name: node.name,
+			})}
+			className={`group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none ${
+				selected ? "bg-accent text-accent-foreground" : "text-foreground"
 			}`}
+			onClick={handleSelect}
+			onDoubleClick={() => node.type === "file" && void revealInFinder()}
 		>
-			<button
-				type="button"
-				aria-label={t(node.type === "directory" ? "sharedArea.folderLabel" : "sharedArea.fileLabel", {
-					name: node.name,
-				})}
-				className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				onClick={handleSelect}
-				onDoubleClick={() => node.type === "file" && void revealInFinder()}
-			>
-				<Icon className="size-4 shrink-0 text-muted-foreground" />
-				<span className="truncate">{node.name}</span>
-			</button>
+			<span className="size-4 shrink-0" />
+			<FileIcon node={node} className="size-3.5 shrink-0" />
+			<span className="min-w-0 flex-1 truncate">{node.name}</span>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
 						variant="ghost"
 						size="icon-xs"
-						className="mr-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+						className="size-5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
 						onClick={(e) => e.stopPropagation()}
 						aria-label={t("sharedArea.moreActions")}
 					>
-						<MoreHorizontal className="size-3.5" />
+						<MoreHorizontal className="size-3" />
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">

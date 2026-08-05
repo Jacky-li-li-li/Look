@@ -6,7 +6,7 @@ import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { PanelRightClose } from "lucide-react";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { appStore } from "../../store/appStore";
@@ -38,42 +38,51 @@ export function RightPanel() {
 	const isLoading = useAtomValue(loadingAtom);
 	const setIsLoading = useSetAtom(loadingAtom);
 
-	// 切换项目时拉取新文件树(占位 projectId 时跳过)。
-	// 缓存非空时跳过主动拉取;watcher 按项目常驻,shared:updated 事件会持续刷新缓存(M-1)。
-	useEffect(() => {
-		if (projectId === PLACEHOLDER_PROJECT_ID) return;
-		const pid = projectId;
-		// 缓存非空时跳过 — 切回已加载过的项目不会重复 fetch
-		// (常驻 watcher 保证离开期间的改动也会通过 shared:updated 写入缓存,不会过期)
-		if (appStore.get(sharedFilesAtomFamily(pid)).length > 0) return;
-		let cancelled = false;
-		setIsLoading(true);
-		window.look
-			.listSharedFiles(pid)
-			.then((result) => {
-				if (cancelled) return;
+	const refreshSharedFiles = useCallback(
+		async (pid: string, cancelled: { current: boolean }) => {
+			setIsLoading(true);
+			try {
+				const result = await window.look.listSharedFiles(pid);
+				if (cancelled.current) return;
 				if (result?.success) {
 					appStore.set(sharedFilesAtomFamily(pid), result.nodes ?? []);
 				} else {
 					toast.error(result?.error ?? t("rightPanel.loadFailed"));
 				}
-			})
-			.catch((error: unknown) => {
-				if (cancelled) return;
+			} catch (error: unknown) {
+				if (cancelled.current) return;
 				const message = error instanceof Error ? error.message : t("rightPanel.loadFailed");
 				toast.error(message);
-			})
-			.finally(() => {
-				if (!cancelled) setIsLoading(false);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [projectId, setIsLoading, t]);
+			} finally {
+				if (!cancelled.current) setIsLoading(false);
+			}
+		},
+		[setIsLoading, t],
+	);
 
-	// 启动共享区 watcher。watcher 按项目常驻,切项目时不在此处 stop:
-	// 主进程 startWatching 幂等,离开期间的改动仍会通过 shared:updated 刷新缓存,
-	// 项目删除时由主进程 project-deletion-service 统一 stopWatching(H-2)。
+	// 切换项目时拉取新文件树（占位 projectId 时跳过）。
+	useEffect(() => {
+		if (projectId === PLACEHOLDER_PROJECT_ID) return;
+		const cancelled = { current: false };
+		void refreshSharedFiles(projectId, cancelled);
+		return () => {
+			cancelled.current = true;
+		};
+	}, [projectId, refreshSharedFiles]);
+
+	// 切换到共享区 tab 时主动刷新：watcher 实时推送在部分环境下可能
+	// 未触发（chokidar 跨进程/跨卷限制），切 tab 时补偿拉取保证数据新鲜。
+	useEffect(() => {
+		if (tab !== "shared" || projectId === PLACEHOLDER_PROJECT_ID) return;
+		const cancelled = { current: false };
+		void refreshSharedFiles(projectId, cancelled);
+		return () => {
+			cancelled.current = true;
+		};
+	}, [tab, projectId, refreshSharedFiles]);
+
+	// 启动共享区 watcher。切项目时显式 stop 旧 watcher 避免资源泄漏；
+	// 主进程 startWatching 幂等，重新进入同一项目无副作用。
 	useEffect(() => {
 		if (projectId === PLACEHOLDER_PROJECT_ID) return;
 		const pid = projectId;
@@ -86,6 +95,9 @@ export function RightPanel() {
 				const message = error instanceof Error ? error.message : t("rightPanel.watchFailed");
 				toast.error(message);
 			});
+		return () => {
+			window.look.stopSharedWatch(pid).catch(() => {});
+		};
 	}, [projectId, t]);
 
 	if (!activeProject) return null;
