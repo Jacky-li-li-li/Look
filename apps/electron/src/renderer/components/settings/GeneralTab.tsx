@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LOCALES } from "../../i18n";
 import { AI_AVATARS, getAiAvatarUrl } from "../../lib/aiAvatars";
-import { aiAvatarAtom, messageAlignmentAtom } from "../../store/settingsAtoms";
+import { aiAvatarAtom, messageAlignmentAtom, showToolExecutionAtom } from "../../store/settingsAtoms";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import { ThemePicker } from "./ThemePicker";
 
@@ -226,6 +226,7 @@ export default function GeneralTab() {
 	});
 	const setAiAvatar = useSetAtom(aiAvatarAtom);
 	const setMessageAlignment = useSetAtom(messageAlignmentAtom);
+	const setShowToolExecution = useSetAtom(showToolExecutionAtom);
 	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 	// 三态：undefined=未悬停（预览跟随已选项），null=悬停在默认像素头像上
 	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
@@ -545,6 +546,8 @@ export default function GeneralTab() {
 							onCheckedChange={(v) => {
 								setState((prev) => ({ ...prev, showToolExecution: v }));
 								persistSettings({ showToolExecution: v });
+								// 同步全局 atom：MessageBlockList 实时过滤，无需重启生效
+								setShowToolExecution(v);
 							}}
 						/>
 					</SettingRow>
