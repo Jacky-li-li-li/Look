@@ -331,13 +331,11 @@ export class SessionSubagentService {
 					});
 				},
 			).catch((error) => {
+				// Preflight / prompt rejection: finalize tracking and let the outer
+				// catch write the delegation entry and clean up the runtime.
+				// Do NOT write delegation here — the outer catch owns that to
+				// prevent duplicate "failed" entries in the session JSONL.
 				this.deps.subAgentRuntimeService.finalizeSubSession(childSessionId, true);
-				session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
-					...delegation,
-					status: "failed",
-					finishedAt: new Date().toISOString(),
-					error: error instanceof Error ? error.message : String(error),
-				});
 				throw error;
 			});
 

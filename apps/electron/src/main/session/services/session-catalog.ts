@@ -11,9 +11,9 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { ProjectInfo } from "@look/shared/types";
-import { scanSessionDirectory } from "../scan.js";
 
 export interface StoredSession extends PiSessionInfo {
 	projectId: string;
@@ -123,27 +123,15 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 	}
 }
 
-async function directoryFingerprint(dir: string): Promise<string> {
-	let files: string[];
-	try {
-		files = await fsp.readdir(dir);
-	} catch {
-		return "";
-	}
-	const entries = await Promise.all(
-		files
-			.filter((file) => file.endsWith(".jsonl"))
-			.map(async (file) => {
-				try {
-					const stat = await fsp.stat(path.join(dir, file));
-					return `${file}:${stat.mtimeMs}`;
-				} catch {
-					return `${file}:?`;
-				}
-			}),
-	);
-	entries.sort();
-	return entries.join(";");
+/**
+ * Lightweight fingerprint for cache invalidation.
+ * Uses session count + max modified time — fast and doesn't require file system directory reads.
+ * If session count or max modified time changes, the cache is invalidated.
+ */
+function sessionsFingerprint(sessions: PiSessionInfo[]): string {
+	if (sessions.length === 0) return "0";
+	const maxModified = Math.max(...sessions.map((s) => s.modified.getTime()));
+	return `${sessions.length}:${maxModified}`;
 }
 
 export class SessionCatalog {
@@ -171,25 +159,13 @@ export class SessionCatalog {
 		const sessionsDir = ensureWorkspaceDir(project.id);
 		const subsessionsDir = getWorkspaceSubsessionsDir(project.id);
 
-		const fingerprintParts: string[] = [];
-		try {
-			fingerprintParts.push(await directoryFingerprint(sessionsDir));
-		} catch {
-			fingerprintParts.push("");
-		}
-		if (existsSync(subsessionsDir)) {
-			fingerprintParts.push(await directoryFingerprint(subsessionsDir));
-		}
-		const fingerprint = fingerprintParts.join("|");
-		const cached = this.sessionsByProject.get(project.id);
-		if (cached && this.projectFingerprint.get(project.id) === fingerprint) {
-			return cached;
-		}
+		// Use pi SDK SessionManager.list() for main sessions instead of custom JSONL scanning.
+		const mainSessions = await SessionManager.list(project.cwd, sessionsDir);
+		const mainFingerprint = sessionsFingerprint(mainSessions);
 
-		const sessions: StoredSession[] = (await scanSessionDirectory(sessionsDir, project.cwd)).map((session) => ({
-			...session,
-			projectId: project.id,
-		}));
+		// Collect subsession metadata (Look custom entries not visible to SessionManager.list()).
+		let subsessionFingerprint = "0";
+		const subsessionMetas: SubsessionMetadata[] = [];
 		if (existsSync(subsessionsDir)) {
 			let files: string[] = [];
 			try {
@@ -197,37 +173,64 @@ export class SessionCatalog {
 			} catch {
 				// A deleted folder during refresh is equivalent to an empty folder.
 			}
+			const mtimes: number[] = [];
 			for (const file of files) {
 				const filePath = path.join(subsessionsDir, file);
 				const metadata = await scanSubsessionMetadata(filePath);
 				if (!metadata) continue;
 				this.onSubsessionDiscovered(metadata);
-				if (sessions.some((session) => session.id === metadata.sessionId)) continue;
-				sessions.push({
-					id: metadata.sessionId,
-					name: metadata.displayName || metadata.firstMessage || "",
-					firstMessage: metadata.firstMessage || "",
-					messageCount: metadata.messageCount,
-					created: new Date(metadata.created),
-					path: filePath,
-					cwd: project.cwd,
-					projectId: project.id,
-					modified: new Date(metadata.created),
-					allMessagesText: "",
-					parentSessionId: metadata.parentSessionId,
-					subagentAgentName: metadata.agentName,
-				});
+				subsessionMetas.push(metadata);
+				mtimes.push(metadata.created);
 			}
+			subsessionFingerprint = mtimes.length > 0 ? `${mtimes.length}:${Math.max(...mtimes)}` : "0";
 		}
-		// 扫描完成后再提交指纹+数据（旧实现先 set 指纹再扫描，
-		// 并发刷新时另一个 refresh 会以“指纹已提交但数据未更新”命中旧缓存）。
-		this.projectFingerprint.set(project.id, fingerprint);
-		this.replace(project.id, sessions);
+
+		const fingerprint = `${mainFingerprint}|${subsessionFingerprint}`;
+		const cached = this.sessionsByProject.get(project.id);
+		if (cached && this.projectFingerprint.get(project.id) === fingerprint) {
+			return cached;
+		}
+
+		const sessions: StoredSession[] = mainSessions.map((session) => ({
+			...session,
+			projectId: project.id,
+		}));
+		for (const metadata of subsessionMetas) {
+			if (sessions.some((session) => session.id === metadata.sessionId)) continue;
+			sessions.push({
+				id: metadata.sessionId,
+				name: metadata.displayName || metadata.firstMessage || "",
+				firstMessage: metadata.firstMessage || "",
+				messageCount: metadata.messageCount,
+				created: new Date(metadata.created),
+				path: path.join(subsessionsDir, `${metadata.sessionId}.jsonl`),
+				cwd: project.cwd,
+				projectId: project.id,
+				modified: new Date(metadata.created),
+				allMessagesText: "",
+				parentSessionId: metadata.parentSessionId,
+				subagentAgentName: metadata.agentName,
+			});
+		}
+		this.replace(project.id, sessions, fingerprint);
 		return sessions;
 	}
 
-	replace(projectId: string, sessions: StoredSession[]): void {
+	/**
+	 * Replace all sessions for a project.
+	 *
+	 * When `fingerprint` is provided, it commits the directory fingerprint atomically
+	 * with session data so concurrent readers never see a stale fingerprint pointing
+	 * at not-yet-committed sessions. Omit `fingerprint` to clear the fingerprint
+	 * (e.g. when resetting a project's session list).
+	 */
+	replace(projectId: string, sessions: StoredSession[], fingerprint?: string): void {
 		this.sessionsByProject.set(projectId, sessions);
+		if (fingerprint !== undefined) {
+			this.projectFingerprint.set(projectId, fingerprint);
+		} else {
+			this.projectFingerprint.delete(projectId);
+		}
 		this.rebuildIndex();
 	}
 

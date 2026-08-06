@@ -58,6 +58,14 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	events: RuntimeLifecycleEvents;
 }
 
+/** Which bindings to clean up when `rebindRuntime` fails partway through. */
+enum RebindErrorAction {
+	/** Collision or cwd mismatch before the old binding was torn down — keep the new binding. */
+	CleanupPrevious = "previous",
+	/** `bindExtensions` failed on the new binding — rollback to the old one. */
+	CleanupNext = "next",
+}
+
 /**
  * Owns every mutation of the live runtime registry and the lifecycle-bound
  * permission, plan, scope, subscription, and selection state around it.
@@ -249,17 +257,11 @@ export class RuntimeLifecycleCoordinator {
 		}
 		const collision = this.options.runtimeRegistry.get(session.sessionId);
 		if (session.sessionId !== previousSessionId && collision) {
-			await this.discardReboundRuntime(previousBinding, nextBinding, managed, {
-				cleanupPrevious: true,
-				cleanupNext: false,
-			});
+			await this.discardReboundRuntime(previousBinding, nextBinding, managed, RebindErrorAction.CleanupPrevious);
 			throw new Error(`Session ${session.sessionId} already has a live runtime`);
 		}
 		if (runtime.cwd !== managed.cwd) {
-			await this.discardReboundRuntime(previousBinding, nextBinding, managed, {
-				cleanupPrevious: true,
-				cleanupNext: false,
-			});
+			await this.discardReboundRuntime(previousBinding, nextBinding, managed, RebindErrorAction.CleanupPrevious);
 			throw new Error(`Runtime cwd cannot change during session replacement: ${managed.cwd} -> ${runtime.cwd}`);
 		}
 
@@ -281,10 +283,7 @@ export class RuntimeLifecycleCoordinator {
 			this.options.planService.syncToolState(session.sessionId);
 			this.options.sessionSubagentService.applyDefaultOnBind(session.sessionId, session);
 		} catch (error) {
-			await this.discardReboundRuntime(previousBinding, nextBinding, managed, {
-				cleanupPrevious: false,
-				cleanupNext: true,
-			});
+			await this.discardReboundRuntime(previousBinding, nextBinding, managed, RebindErrorAction.CleanupNext);
 			throw error;
 		}
 		this.options.selection.replaceIfCurrent(previousSessionId, session.sessionId);
@@ -323,7 +322,7 @@ export class RuntimeLifecycleCoordinator {
 		previousBinding: RuntimeSessionBinding,
 		nextBinding: RuntimeSessionBinding,
 		managed: ManagedRuntime,
-		cleanup: { cleanupPrevious: boolean; cleanupNext: boolean },
+		action: RebindErrorAction,
 	): Promise<void> {
 		const previousSessionId = previousBinding.sessionId;
 		const nextSessionId = nextBinding.sessionId;
@@ -332,20 +331,23 @@ export class RuntimeLifecycleCoordinator {
 		if (this.options.runtimeRegistry.get(nextSessionId)?.runtime === managed.runtime) {
 			this.options.runtimeRegistry.delete(nextSessionId);
 		}
-		if (cleanup.cleanupPrevious) {
+		if (action === RebindErrorAction.CleanupPrevious) {
 			this.reportCleanupErrors(
 				previousSessionId,
 				this.cleanupSessionState(previousBinding, "Runtime replacement failed", true),
 			);
 		}
-		if (cleanup.cleanupNext) {
+		if (action === RebindErrorAction.CleanupNext) {
 			this.reportCleanupErrors(
 				nextSessionId,
 				this.cleanupSessionState(nextBinding, "Runtime replacement failed", false),
 			);
 		}
+		// The previous binding is always being torn down — clear it from selection.
 		this.options.selection.clearIfCurrent(previousSessionId);
-		if (cleanup.cleanupNext) this.options.selection.clearIfCurrent(nextSessionId);
+		if (action === RebindErrorAction.CleanupNext) {
+			this.options.selection.clearIfCurrent(nextSessionId);
+		}
 		await managed.runtime.dispose().catch((error) => {
 			console.error("[Look] Failed to dispose invalid rebound runtime:", error);
 		});
