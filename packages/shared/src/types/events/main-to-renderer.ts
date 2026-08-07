@@ -32,6 +32,8 @@ export type MainToRendererEvent =
 	| { type: "plan:approval-resolved"; agentId: string; requestId: string }
 	// ---- File viewer window ----
 	| { type: "fileViewer:open-path"; path: string }
+	// 独立查看器窗口请求合并后，主进程通知主窗口打开右侧 Dock 面板。
+	| { type: "fileViewer:docked"; path: string }
 	// ---- SubAgent events ----
 	| { type: "subagent:definitions-updated" }
 	| ({ type: "session:subagent-progress" } & SubagentProgressEvent)

@@ -57,6 +57,19 @@ export function guardOptionalBoolean(x: unknown, label: string): boolean | undef
 	return guardBoolean(x, label);
 }
 
+export function guardNumber(x: unknown, label: string, opts?: { min?: number; max?: number }): number {
+	if (typeof x !== "number" || !Number.isFinite(x)) {
+		throw new Error(`Invalid ${label}: expected finite number, got ${typeof x}`);
+	}
+	if (opts?.min !== undefined && x < opts.min) {
+		throw new Error(`Invalid ${label}: must be >= ${opts.min}`);
+	}
+	if (opts?.max !== undefined && x > opts.max) {
+		throw new Error(`Invalid ${label}: must be <= ${opts.max}`);
+	}
+	return x;
+}
+
 export function guardObject(x: unknown, label: string): Record<string, unknown> {
 	if (typeof x !== "object" || x === null || Array.isArray(x)) {
 		throw new Error(

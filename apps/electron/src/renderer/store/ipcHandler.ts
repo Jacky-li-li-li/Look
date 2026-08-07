@@ -3,6 +3,7 @@ import { handleAgentEvent } from "./agentHandlers";
 import { appStore } from "./appStore";
 import { appReadyPhaseAtom } from "./atoms";
 import { handlePermissionEvent } from "./permissionHandlers";
+import { dockedFileAtom } from "./projectAtoms";
 import { handleProjectEvent } from "./projectHandlers";
 import { applySnapshot } from "./snapshot";
 // ============================================================
@@ -41,6 +42,11 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 				void window.look.activateSession(event.agentId).catch((err: unknown) => {
 					console.warn("[ipcHandler] activateSession from notification failed:", err);
 				});
+				break;
+
+			case "fileViewer:docked":
+				// 独立查看器窗口请求合并：主窗口右侧打开 Dock 面板展示该文件。
+				appStore.set(dockedFileAtom, { absolutePath: event.path });
 				break;
 
 			case "session:ui-event":

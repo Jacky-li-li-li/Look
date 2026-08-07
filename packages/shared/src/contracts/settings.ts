@@ -50,6 +50,10 @@ export interface UserSettings {
 	enabledSkills: string[] | null;
 	sidebarCollapsed: boolean;
 	rightPanelCollapsed: boolean;
+	/** Right panel width in px, adjustable via drag handle. Default 260. */
+	rightPanelWidth: number;
+	/** Dock file panel width in px, adjustable via drag handle. Default 420. */
+	dockPanelWidth: number;
 	aiAvatar: string | null;
 	/** OS desktop notification mode. UI preference, persisted in ui-settings.json. */
 	desktopNotifications: DesktopNotificationMode;

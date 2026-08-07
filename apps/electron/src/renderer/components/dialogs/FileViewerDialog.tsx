@@ -12,7 +12,21 @@ import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom } from "jotai";
-import { ArrowLeft, Copy, Eye, FileWarning, FolderOpen, Pencil, RefreshCw, Save, X } from "lucide-react";
+import {
+	ArrowLeft,
+	Copy,
+	ExternalLink,
+	Eye,
+	FileWarning,
+	FolderOpen,
+	PanelLeftClose,
+	PanelLeftOpen,
+	PanelRightOpen,
+	Pencil,
+	RefreshCw,
+	Save,
+	X,
+} from "lucide-react";
 import {
 	type KeyboardEvent,
 	lazy,
@@ -84,12 +98,40 @@ type LoadState =
 interface FileViewerDialogProps {
 	/** 独立原生窗口模式:铺满整个窗口,禁用拖动/缩放,关闭即关窗。 */
 	windowMode?: boolean;
+	/** 主窗口右侧 Dock 面板模式:占满父容器,禁用拖动/缩放,关闭/导航回调由父组件处理。 */
+	dockMode?: boolean;
+	/** Dock 模式当前文件路径(替代 viewingFileAtom 驱动)。 */
+	dockPath?: string | null;
+	/** Dock 模式内返回栈跳转新文件时回调(更新 dockedFileAtom)。 */
+	onDockNavigate?: (path: string) => void;
+	/** Dock 模式关闭回调(清空 dockedFileAtom)。 */
+	onDockClose?: () => void;
+	/** Dock 模式"弹出为独立窗口"回调。 */
+	onDockUndock?: () => void;
 }
 
-export default function FileViewerDialog({ windowMode = false }: FileViewerDialogProps) {
+export default function FileViewerDialog({
+	windowMode = false,
+	dockMode = false,
+	dockPath,
+	onDockNavigate,
+	onDockClose,
+	onDockUndock,
+}: FileViewerDialogProps) {
 	const { t } = useTranslation();
 	const [viewingFile, setViewingFile] = useAtom(viewingFileAtom);
-	const absolutePath = viewingFile?.absolutePath ?? null;
+	// 路径来源抽象:Dock 模式由 dockPath 驱动,其余由 viewingFileAtom 驱动
+	const absolutePath = dockMode ? (dockPath ?? null) : (viewingFile?.absolutePath ?? null);
+	const hasFile = dockMode ? !!dockPath : !!viewingFile;
+
+	// 路径写入抽象:返回栈跳转等场景统一入口(Dock 模式回调给父组件更新 dockedFileAtom)
+	const setCurrentFile = useCallback(
+		(path: string) => {
+			if (dockMode) onDockNavigate?.(path);
+			else setViewingFile({ absolutePath: path });
+		},
+		[dockMode, onDockNavigate, setViewingFile],
+	);
 
 	const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
 	const [reloadTick, setReloadTick] = useState(0);
@@ -197,6 +239,8 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 
 	// 目录栏宽度可拖拽:夹住右缘分隔条左右拖动,限制在 140–360px
 	const [tocWidth, setTocWidth] = useState(176);
+	// 目录栏折叠/展开状态(跨文件保持,直到用户切换)
+	const [tocCollapsed, setTocCollapsed] = useState(false);
 	const handleTocResizeStart = useCallback(
 		(event: ReactPointerEvent<HTMLDivElement>) => {
 			event.preventDefault();
@@ -362,15 +406,33 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 		};
 	}, [textData, isMarkdown, language]);
 
-	// 关闭(含 Escape / 关闭按钮):有未保存修改时先确认;独立窗口模式直接关窗
+	// 关闭(含 Escape / 关闭按钮):有未保存修改时先确认;独立窗口模式直接关窗;Dock 模式回调父组件
 	const requestClose = useCallback(() => {
 		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
 		if (windowMode) {
 			window.close();
 			return;
 		}
+		if (dockMode) {
+			onDockClose?.();
+			return;
+		}
 		setViewingFile(null);
-	}, [dirty, windowMode, setViewingFile, t]);
+	}, [dirty, windowMode, dockMode, onDockClose, setViewingFile, t]);
+
+	// 独立窗口模式:合并到主窗口右侧 Dock 面板(主进程淡出本窗口并通知主窗口滑入面板)
+	const handleDockToMain = useCallback(() => {
+		if (!absolutePath) return;
+		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
+		void window.look.dockFileViewer(absolutePath);
+	}, [absolutePath, dirty, t]);
+
+	// Dock 模式:弹出为独立窗口(父组件打开独立窗口并清空面板,面板滑出与窗口淡入同步)
+	const handleUndock = useCallback(() => {
+		if (!absolutePath) return;
+		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
+		onDockUndock?.();
+	}, [absolutePath, dirty, onDockUndock, t]);
 
 	// 独立窗口模式:原生标题栏同步当前文件名
 	useEffect(() => {
@@ -386,7 +448,7 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 
 	// Esc:仅当焦点在浮窗内时关闭,不劫持聊天输入的 Esc
 	useEffect(() => {
-		if (!viewingFile) return;
+		if (!hasFile) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent) => {
 			if (event.key === "Escape" && panelRef.current?.contains(document.activeElement)) {
 				requestClose();
@@ -394,7 +456,7 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [viewingFile, requestClose]);
+	}, [hasFile, requestClose]);
 
 	const handleRefresh = useCallback(() => {
 		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
@@ -408,8 +470,8 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
 		backNavRef.current = true;
 		setBackStack((s) => s.slice(0, -1));
-		setViewingFile({ absolutePath: target });
-	}, [backStack, dirty, setViewingFile, t]);
+		setCurrentFile(target);
+	}, [backStack, dirty, setCurrentFile, t]);
 
 	const handleCopyPath = useCallback(() => {
 		if (!absolutePath) return;
@@ -444,7 +506,7 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 		}
 	};
 
-	if (!viewingFile) {
+	if (!hasFile) {
 		if (!windowMode) return null;
 		// 独立窗口模式的空态:等待主窗口发来第一个文件
 		return (
@@ -462,22 +524,24 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 			className={
 				windowMode
 					? "fixed inset-0 flex flex-col overflow-hidden bg-popover text-sm text-popover-foreground"
-					: "fixed z-50 flex flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+					: dockMode
+						? "flex h-full min-w-0 flex-col overflow-hidden bg-popover text-sm text-popover-foreground"
+						: "fixed z-50 flex flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10"
 			}
 			style={
-				windowMode
+				windowMode || dockMode
 					? undefined
 					: { left: panelPos.x, top: panelPos.y, width: panelSize.width, height: panelSize.height }
 			}
 		>
-			{/* 标题栏:浮窗模式为拖动把手(按钮等交互元素除外);独立窗口模式由原生标题栏负责拖动 */}
+			{/* 标题栏:浮窗模式为拖动把手(按钮等交互元素除外);独立窗口模式由原生标题栏负责拖动;Dock 模式固定布局 */}
 			<div
 				className={
-					windowMode
+					windowMode || dockMode
 						? "flex shrink-0 select-none flex-col gap-1 border-b px-4 py-3"
 						: "flex shrink-0 cursor-move touch-none select-none flex-col gap-1 border-b px-4 py-3"
 				}
-				onPointerDown={windowMode ? undefined : handleDragStart}
+				onPointerDown={windowMode || dockMode ? undefined : handleDragStart}
 			>
 				<div className="flex items-center gap-2">
 					{/* disabled 按钮不派发 pointer 事件，span 包裹保证悬停提示仍可触发 */}
@@ -571,6 +635,36 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 							</TooltipTrigger>
 							<TooltipContent side="bottom">{t("fileViewer.refresh")}</TooltipContent>
 						</Tooltip>
+						{windowMode && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										onClick={handleDockToMain}
+										aria-label={t("fileViewer.dockToMain")}
+									>
+										<PanelRightOpen className="size-3.5" />
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent side="bottom">{t("fileViewer.dockToMain")}</TooltipContent>
+							</Tooltip>
+						)}
+						{dockMode && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button
+										variant="ghost"
+										size="icon-xs"
+										onClick={handleUndock}
+										aria-label={t("fileViewer.undock")}
+									>
+										<ExternalLink className="size-3.5" />
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent side="bottom">{t("fileViewer.undock")}</TooltipContent>
+							</Tooltip>
+						)}
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<Button
@@ -623,16 +717,31 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 					</div>
 				) : textData && isMarkdown && !editMode ? (
 					<div className="flex min-h-0 flex-1">
-						{showToc && (
+						{showToc && !tocCollapsed && (
 							<>
 								<nav
 									className="shrink-0 overflow-y-auto py-3 pl-3 pr-1"
 									style={{ width: tocWidth }}
 									aria-label={t("fileViewer.contents")}
 								>
-									<p className="px-2 pb-2 text-[11px] font-medium text-muted-foreground">
-										{t("fileViewer.contents")}
-									</p>
+									<div className="flex items-center justify-between px-2 pb-2">
+										<p className="text-[11px] font-medium text-muted-foreground">
+											{t("fileViewer.contents")}
+										</p>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Button
+													variant="ghost"
+													size="icon-xs"
+													onClick={() => setTocCollapsed(true)}
+													aria-label={t("fileViewer.collapseContents")}
+												>
+													<PanelLeftClose className="size-3.5" />
+												</Button>
+											</TooltipTrigger>
+											<TooltipContent side="bottom">{t("fileViewer.collapseContents")}</TooltipContent>
+										</Tooltip>
+									</div>
 									<ul className="space-y-0.5">
 										{tocHeadings.map((h) => (
 											<li key={h.slug}>
@@ -665,16 +774,37 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 								</div>
 							</>
 						)}
-						<div ref={previewRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-							<Suspense
-								fallback={
-									<div className="flex h-full items-center justify-center">
-										<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-									</div>
-								}
-							>
-								<LookMarkdown content={textData.content} docs />
-							</Suspense>
+						<div className="flex min-h-0 flex-1 flex-col">
+							{/* 折叠态：目录栏完全隐藏；展开按钮占正文顶部一条工具条，内容在其下方滚动不重叠 */}
+							{showToc && tocCollapsed && (
+								<div className="flex shrink-0 items-center border-b px-2 py-1">
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => setTocCollapsed(false)}
+												aria-label={t("fileViewer.expandContents")}
+											>
+												<PanelLeftOpen className="size-3.5" />
+												<span className="text-xs">{t("fileViewer.contents")}</span>
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent side="bottom">{t("fileViewer.expandContents")}</TooltipContent>
+									</Tooltip>
+								</div>
+							)}
+							<div ref={previewRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+								<Suspense
+									fallback={
+										<div className="flex h-full items-center justify-center">
+											<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+										</div>
+									}
+								>
+									<LookMarkdown content={textData.content} docs />
+								</Suspense>
+							</div>
 						</div>
 					</div>
 				) : textData && isMarkdown && editMode ? (
@@ -709,8 +839,8 @@ export default function FileViewerDialog({ windowMode = false }: FileViewerDialo
 					</div>
 				)}
 			</div>
-			{/* 右下角缩放把手(仅浮窗模式;独立窗口由原生窗口边框缩放) */}
-			{!windowMode && (
+			{/* 右下角缩放把手(仅浮窗模式;独立窗口由原生窗口边框缩放,Dock 模式固定布局) */}
+			{!windowMode && !dockMode && (
 				<div
 					className="absolute right-0 bottom-0 size-4 cursor-nwse-resize touch-none"
 					onPointerDown={handleResizeStart}

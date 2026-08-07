@@ -27,6 +27,7 @@ import {
 	sidebarCollapsedAtom,
 	userPreferredModelAtom,
 } from "./atoms";
+import { dockPanelWidthAtom, rightPanelWidthAtom } from "./projectAtoms";
 import { markSessionSnapshotLoading } from "./snapshot";
 
 let _lastActiveSessionId: string | null = null;
@@ -124,6 +125,10 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 		if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
 		if (settings.rightPanelCollapsed !== undefined)
 			appStore.set(rightPanelCollapsedAtom, settings.rightPanelCollapsed);
+		if (typeof settings.rightPanelWidth === "number")
+			appStore.set(rightPanelWidthAtom, Math.min(480, Math.max(200, settings.rightPanelWidth)));
+		if (typeof settings.dockPanelWidth === "number")
+			appStore.set(dockPanelWidthAtom, Math.min(720, Math.max(320, settings.dockPanelWidth)));
 		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
 		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);

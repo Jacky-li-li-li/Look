@@ -8,6 +8,7 @@ import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@share
 import { useAtomValue, useSetAtom } from "jotai";
 import { lazy, memo, type ReactNode, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useViewportWidth } from "../hooks/useViewportWidth";
 import { syncTrafficLightPosition } from "../lib/trafficLight";
 import {
 	appReadyPhaseAtom,
@@ -21,6 +22,7 @@ import {
 	sidebarCollapsedAtom,
 	windowFullscreenAtom,
 } from "../store/atoms";
+import { dockedFileAtom, dockPanelWidthAtom, rightPanelWidthAtom } from "../store/projectAtoms";
 import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatPanel from "./chat/ChatPanel";
 import EmptySessionState from "./chat/EmptySessionState";
@@ -35,6 +37,7 @@ import Sidebar from "./Sidebar";
 import ScheduledTasksPage from "./scheduler/ScheduledTasksPage";
 import SettingsPage from "./settings/SettingsPage";
 import TopSessionBar from "./TopSessionBar";
+import { DockFilePanel } from "./workspace/DockFilePanel";
 import { RightPanel } from "./workspace/RightPanel";
 
 const AgentSquare = lazy(() => import("./AgentMarketplace/AgentSquare"));
@@ -99,6 +102,28 @@ function AppLayout({
 	// 布局/视图开关等纯 UI 状态直接从原子读取，App.tsx 无需再逐层传递（Props Drilling 收敛）。
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
+	const dockedFile = useAtomValue(dockedFileAtom);
+	const rightPanelWidth = useAtomValue(rightPanelWidthAtom);
+	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
+	const viewportWidth = useViewportWidth();
+
+	// 显示宽度钳制：main 最小 340px，面板宽度不得把它挤出视口（避免 grid 溢出裁剪 Dock 右缘）
+	const sidebarWidth = sidebarCollapsed ? 0 : 280;
+	const rightTrackPx = rightPanelCollapsed
+		? 0
+		: Math.min(
+				rightPanelWidth,
+				Math.min(480, Math.max(200, viewportWidth - sidebarWidth - (dockedFile ? dockPanelWidth : 0) - 340)),
+			);
+	const dockTrackPx = dockedFile
+		? Math.min(
+				dockPanelWidth,
+				Math.min(
+					720,
+					Math.max(320, viewportWidth - sidebarWidth - (rightPanelCollapsed ? 0 : rightPanelWidth) - 340),
+				),
+			)
+		: 0;
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
 	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
 	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
@@ -230,6 +255,14 @@ function AppLayout({
 			className="app-shell h-screen overflow-hidden bg-background"
 			data-sidebar-collapsed={sidebarCollapsed}
 			data-right-panel-collapsed={rightPanelCollapsed}
+			data-dock-open={!!dockedFile}
+			style={
+				{
+					// 面板宽度由拖拽把手调整的 atom 驱动，显示时钳制到可用空间；折叠/收起时归 0
+					"--right-panel-track": `${rightTrackPx}px`,
+					"--dock-track": `${dockTrackPx}px`,
+				} as React.CSSProperties
+			}
 		>
 			<ErrorBoundarySection>
 				<Sidebar
@@ -250,6 +283,9 @@ function AppLayout({
 			</main>
 
 			<RightPanel />
+
+			{/* 文件查看器 Dock 面板：位于右侧面板右侧，grid 第 5 列 --dock-track 控制滑入/出 */}
+			<DockFilePanel />
 
 			{newProjectCwd && (
 				<NewProjectDialog

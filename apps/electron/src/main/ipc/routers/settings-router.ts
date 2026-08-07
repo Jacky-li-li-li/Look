@@ -15,6 +15,7 @@ import {
 	guardCustomProviderInput,
 	guardEnum,
 	guardNullableString,
+	guardNumber,
 	guardObject,
 	guardProvider,
 	guardString,
@@ -364,6 +365,12 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		}
 		if ("rightPanelCollapsed" in settings) {
 			guardBoolean(settings.rightPanelCollapsed, "settings.rightPanelCollapsed");
+		}
+		if ("rightPanelWidth" in settings) {
+			guardNumber(settings.rightPanelWidth, "settings.rightPanelWidth", { min: 200, max: 480 });
+		}
+		if ("dockPanelWidth" in settings) {
+			guardNumber(settings.dockPanelWidth, "settings.dockPanelWidth", { min: 320, max: 720 });
 		}
 		if ("desktopNotifications" in settings) {
 			guardEnum(settings.desktopNotifications, "settings.desktopNotifications", [

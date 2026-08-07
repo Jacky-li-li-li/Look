@@ -56,6 +56,7 @@
     "shared": "共有",
     "collapse": "右パネルを折りたたむ",
     "expand": "右パネルを展開",
+    "resize": "ドラッグでパネル幅を調整",
     "loadFailed": "共有ファイルを読み込めませんでした",
     "watchFailed": "共有ファイルの監視を開始できませんでした"
   },
@@ -867,10 +868,15 @@
     "unsavedConfirm": "保存されていない変更があります。閉じますか？",
     "viewFile": "ファイルを表示",
     "contents": "目次",
+    "expandContents": "目次を展開",
+    "collapseContents": "目次を折りたたむ",
     "back": "戻る",
     "windowTitle": "ファイルビューア",
     "emptyHint": "Look メインウィンドウでファイルをクリックすると表示します",
-    "close": "閉じる"
+    "close": "閉じる",
+    "dockToMain": "メインウィンドウにドッキング",
+    "undock": "独立ウィンドウで開く",
+    "resize": "ドラッグでパネル幅を調整"
   },
   "planDialogs": {
     "toolConfirmTitle": "ツール実行の確認",

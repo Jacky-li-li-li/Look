@@ -1488,6 +1488,11 @@ body {
 		initial-value: 260px;
 		inherits: false;
 	}
+	@property --dock-track {
+		syntax: "<length>";
+		initial-value: 0px;
+		inherits: false;
+	}
 
 	/* Grid-based shell replaces flex layout. Track widths animate
    via registered custom properties; the 1fr main track fills
@@ -1498,11 +1503,15 @@ body {
 		--sidebar-track: 280px;
 		--sidebar-sep-track: 1px;
 		--right-panel-track: 260px;
-		grid-template-columns: var(--sidebar-track) var(--sidebar-sep-track) 1fr var(--right-panel-track);
+		--dock-track: 0px;
+		grid-template-columns: var(--sidebar-track) var(--sidebar-sep-track) 1fr var(--right-panel-track) var(
+				--dock-track
+			);
 		transition:
 			--sidebar-track 260ms cubic-bezier(0.22, 1, 0.36, 1),
 			--sidebar-sep-track 260ms cubic-bezier(0.22, 1, 0.36, 1),
-			--right-panel-track 260ms cubic-bezier(0.22, 1, 0.36, 1);
+			--right-panel-track 260ms cubic-bezier(0.22, 1, 0.36, 1),
+			--dock-track 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.app-shell[data-sidebar-collapsed="true"] {
@@ -1510,8 +1519,61 @@ body {
 		--sidebar-sep-track: 0px;
 	}
 
-	.app-shell[data-right-panel-collapsed="true"] {
-		--right-panel-track: 0px;
+	/* 拖拽面板调宽期间禁用 grid track 动画，保证拖动即时跟手（拖完恢复动画） */
+	.app-shell[data-resizing="true"] {
+		transition: none;
+	}
+
+	.dock-panel-wrapper {
+		width: 100%;
+		min-width: 0;
+		contain: layout paint style;
+	}
+
+	/* 面板拖拽调宽把手：绝对定位于面板内左侧，悬停/拖动时显示竖线提示
+	   （面板自身 overflow-hidden，把手不得越出面板边界） */
+	.panel-resize-handle {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 8px;
+		z-index: 30;
+		cursor: col-resize;
+		touch-action: none;
+	}
+
+	/* 高亮线对齐面板左边缘（覆盖 border 位置），hover 时只有一条线变亮 */
+	.panel-resize-handle::before {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 2px;
+		background: transparent;
+		transition: background-color 150ms ease;
+	}
+
+	.panel-resize-handle:hover::before,
+	.panel-resize-handle:active::before {
+		background: color-mix(in oklab, var(--primary) 30%, transparent);
+	}
+
+	/* Dock 面板内容入场：track 展开动画进行到一半左右再淡入内容，避免内容抢先闪现 */
+	.dock-panel-wrapper[data-open="true"] {
+		animation: dock-panel-content-in 220ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards;
+	}
+
+	@keyframes dock-panel-content-in {
+		from {
+			opacity: 0;
+			transform: translateX(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
 	}
 	/* ============================================================
 		 Collapsible Sidebar — uses translateX slide so internal
@@ -1604,7 +1666,9 @@ body {
 		 ============================================================ */
 
 	.right-panel-wrapper {
-		width: 260px;
+		/* 宽度填满 grid cell：cell 由可拖拽的 --right-panel-track 控制，
+		   写死像素会让拖宽后面板右侧露出空白（2026-08-07 修复） */
+		width: 100%;
 		min-width: 0;
 		transform: translateX(0);
 		opacity: 1;

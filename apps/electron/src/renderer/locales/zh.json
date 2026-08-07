@@ -56,6 +56,7 @@
     "shared": "共享区",
     "collapse": "折叠右侧面板",
     "expand": "展开右侧面板",
+    "resize": "拖拽调整面板宽度",
     "loadFailed": "加载共享区失败",
     "watchFailed": "启动共享区监听失败"
   },
@@ -867,10 +868,15 @@
     "unsavedConfirm": "有未保存的修改，确定关闭吗？",
     "viewFile": "查看文件",
     "contents": "目录",
+    "expandContents": "展开目录",
+    "collapseContents": "折叠目录",
     "back": "返回",
     "windowTitle": "文件查看器",
     "emptyHint": "在 Look 主窗口中点击文件以查看",
-    "close": "关闭"
+    "close": "关闭",
+    "dockToMain": "合并到主窗口",
+    "undock": "弹出为独立窗口",
+    "resize": "拖拽调整面板宽度"
   },
   "planDialogs": {
     "toolConfirmTitle": "工具调用确认",

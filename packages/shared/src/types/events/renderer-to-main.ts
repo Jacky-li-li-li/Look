@@ -111,8 +111,9 @@ export type RendererToMainEvent =
 	| { type: "file:read"; path: string }
 	| { type: "file:write"; path: string; content: string }
 	| { type: "file:stat"; path: string }
-	| { type: "fileViewer:open"; path: string }
+	| { type: "fileViewer:open"; path: string; fadeIn?: boolean }
 	| { type: "fileViewer:ready" }
+	| { type: "fileViewer:dock"; path: string }
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode; updateDefault?: boolean }
 	| { type: "permission:get-mode"; agentId: string }
 	| { type: "permission:respond"; payload: PermissionRespondPayload }

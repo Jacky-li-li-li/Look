@@ -243,7 +243,8 @@ const api: LookAPI = {
 	statFilePath: (path) => invoke({ type: "file:stat", path }),
 
 	// ---- File viewer window ----
-	openFileViewer: (path) => invoke({ type: "fileViewer:open", path }),
+	openFileViewer: (path, fadeIn) => invoke({ type: "fileViewer:open", path, fadeIn }),
+	dockFileViewer: (path) => invoke({ type: "fileViewer:dock", path }),
 	fileViewerReady: () => invoke({ type: "fileViewer:ready" }),
 
 	// ---- Auto Updater ----

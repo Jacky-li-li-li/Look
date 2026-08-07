@@ -24,6 +24,7 @@ import {
 	sessionStateAtomFamily,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
+import { dockPanelWidthAtom, rightPanelWidthAtom } from "./store/projectAtoms";
 import { deriveActiveQueue, deriveSessionPhase } from "./store/sessionTypes";
 
 const api = window.look;
@@ -38,6 +39,8 @@ export default function App() {
 	// sidebarCollapsed/rightPanelCollapsed 保留在此：切换时持久化到 GeneralSettings。
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
+	const rightPanelWidth = useAtomValue(rightPanelWidthAtom);
+	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? ""));
 	const activeQueue = useMemo(() => deriveActiveQueue(activeSessionState), [activeSessionState]);
@@ -55,10 +58,10 @@ export default function App() {
 
 	useEffect(() => {
 		if (!api) return;
-		api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed }).catch((err) =>
+		api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth }).catch((err) =>
 			console.warn("[App] setGeneralSettings failed:", err),
 		);
-	}, [sidebarCollapsed, rightPanelCollapsed]);
+	}, [sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth]);
 
 	// ── Early return guards ──
 	if (!api) {

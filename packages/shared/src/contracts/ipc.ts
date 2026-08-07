@@ -265,7 +265,9 @@ export interface LookAPI {
 	writeFileContent(path: string, content: string): Promise<IpcResult<{ sizeBytes: number }>>;
 	statFilePath(path: string): Promise<IpcResult<{ kind: "file" | "directory" | "other" | "missing" }>>;
 	// ---- File viewer window ----
-	openFileViewer(path: string): Promise<IpcResult>;
+	openFileViewer(path: string, fadeIn?: boolean): Promise<IpcResult>;
+	/** 独立查看器窗口请求合并到主窗口右侧 Dock 面板。 */
+	dockFileViewer(path: string): Promise<IpcResult>;
 	fileViewerReady(): Promise<IpcResult<{ path?: string | null }>>;
 	// ---- IM Channels ----
 	getImChannels(): Promise<

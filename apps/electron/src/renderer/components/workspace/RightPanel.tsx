@@ -9,14 +9,20 @@ import { PanelRightClose } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { appStore } from "../../store/appStore";
 import {
 	activeProjectAtom,
+	dockedFileAtom,
+	dockPanelWidthAtom,
 	rightPanelCollapsedAtom,
 	rightPanelTabAtom,
+	rightPanelWidthAtom,
 	sharedFilesAtomFamily,
 	sharedFilesLoadingAtomFamily,
+	sidebarCollapsedAtom,
 } from "../../store/atoms";
+import { PanelResizeHandle } from "./PanelResizeHandle";
 import { SharedAreaPanel } from "./SharedAreaPanel";
 import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
 
@@ -29,6 +35,11 @@ export function RightPanel() {
 	const collapsed = useAtomValue(rightPanelCollapsedAtom);
 	const [tab, setTab] = useAtom(rightPanelTabAtom);
 	const setCollapsed = useSetAtom(rightPanelCollapsedAtom);
+	const [rightPanelWidth, setRightPanelWidth] = useAtom(rightPanelWidthAtom);
+	const dockedFile = useAtomValue(dockedFileAtom);
+	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
+	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const viewportWidth = useViewportWidth();
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
 
 	// 始终调用 hooks;在 effect 内判断 projectId 是否有效
@@ -102,13 +113,29 @@ export function RightPanel() {
 
 	if (!activeProject) return null;
 
+	// 动态上限：不能让 main（最小 340px）被挤出去；至少保留 200px 可拖拽空间
+	const sidebarWidth = sidebarCollapsed ? 0 : 280;
+	const dockTrack = dockedFile ? dockPanelWidth : 0;
+	const rightMax = Math.min(480, Math.max(200, viewportWidth - sidebarWidth - dockTrack - 340));
+
 	return (
 		<aside
-			className="right-panel-wrapper flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
+			className="right-panel-wrapper relative flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
 			data-collapsed={collapsed}
 			aria-label={t("rightPanel.label")}
 			inert={collapsed || undefined}
 		>
+			{/* 拖拽调宽把手：面板左侧边缘，折叠时不可用 */}
+			{!collapsed && (
+				<PanelResizeHandle
+					cssVar="--right-panel-track"
+					width={rightPanelWidth}
+					min={200}
+					max={rightMax}
+					onCommit={setRightPanelWidth}
+					ariaLabel={t("rightPanel.resize")}
+				/>
+			)}
 			<header className="flex h-12 shrink-0 items-center gap-1 border-b px-2">
 				<div role="tablist" className="flex flex-1 gap-1" aria-label={t("rightPanel.tabsLabel")}>
 					<button

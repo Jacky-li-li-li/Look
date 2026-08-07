@@ -56,6 +56,8 @@ const DEFAULTS: UserSettings = {
 	enabledSkills: null,
 	sidebarCollapsed: false,
 	rightPanelCollapsed: false,
+	rightPanelWidth: 260,
+	dockPanelWidth: 420,
 	aiAvatar: null,
 	desktopNotifications: "all",
 	messageAlignment: "left-right",
@@ -97,6 +99,10 @@ interface UiSettings {
 	sidebarCollapsed: boolean;
 	/** 右侧面板是否折叠 */
 	rightPanelCollapsed: boolean;
+	/** Right panel width in px. */
+	rightPanelWidth: number;
+	/** Dock file panel width in px. */
+	dockPanelWidth: number;
 	/** AI 消息头像 ID（avatar-01…avatar-24）。null=使用默认像素头像。 */
 	aiAvatar: string | null;
 	/** OS 桌面通知模式（off / needs-action / all）。 */
@@ -124,6 +130,8 @@ const UI_DEFAULTS: UiSettings = {
 	enabledSkills: null,
 	sidebarCollapsed: false,
 	rightPanelCollapsed: false,
+	rightPanelWidth: 260,
+	dockPanelWidth: 420,
 	aiAvatar: null,
 	desktopNotifications: "all",
 	messageAlignment: "left-right",
@@ -222,6 +230,15 @@ export class UserSettingsStore {
 					parsed.themeTone = UI_DEFAULTS.themeTone;
 					migrated = true;
 				}
+				// 数值字段防御：手工改坏 ui-settings.json（字符串/null/NaN）时回退默认值
+				if (typeof parsed.rightPanelWidth !== "number" || !Number.isFinite(parsed.rightPanelWidth)) {
+					parsed.rightPanelWidth = UI_DEFAULTS.rightPanelWidth;
+					migrated = true;
+				}
+				if (typeof parsed.dockPanelWidth !== "number" || !Number.isFinite(parsed.dockPanelWidth)) {
+					parsed.dockPanelWidth = UI_DEFAULTS.dockPanelWidth;
+					migrated = true;
+				}
 				// Merge with defaults so newly-added fields get sane values
 				// when loading an older file.
 				return { settings: { ...UI_DEFAULTS, ...parsed }, migrated };
@@ -275,6 +292,8 @@ export class UserSettingsStore {
 			uiPartial.enabledSkills = partial.enabledSkills === null ? null : [...partial.enabledSkills];
 		if (partial.sidebarCollapsed !== undefined) uiPartial.sidebarCollapsed = partial.sidebarCollapsed;
 		if (partial.rightPanelCollapsed !== undefined) uiPartial.rightPanelCollapsed = partial.rightPanelCollapsed;
+		if (partial.rightPanelWidth !== undefined) uiPartial.rightPanelWidth = partial.rightPanelWidth;
+		if (partial.dockPanelWidth !== undefined) uiPartial.dockPanelWidth = partial.dockPanelWidth;
 		if (partial.aiAvatar !== undefined) uiPartial.aiAvatar = partial.aiAvatar;
 		if (partial.desktopNotifications !== undefined) uiPartial.desktopNotifications = partial.desktopNotifications;
 		if (partial.messageAlignment !== undefined) uiPartial.messageAlignment = partial.messageAlignment;

@@ -27,12 +27,21 @@ export const activeProjectAtom = atom((get) => {
 
 export const rightPanelCollapsedAtom = atom(false);
 
+/** 右侧面板宽度（px），可拖拽把手调整，持久化到 ui-settings.json。默认 260。 */
+export const rightPanelWidthAtom = atom(260);
+
+/** Dock 文件面板宽度（px），可拖拽把手调整，持久化到 ui-settings.json。默认 420。 */
+export const dockPanelWidthAtom = atom(420);
+
 export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
 
 export const showHiddenFilesAtom = atom(true);
 
 /** 文件查看器当前目标；非 null 时 FileViewerDialog 打开。全局同时只查看一个文件。 */
 export const viewingFileAtom = atom<{ absolutePath: string } | null>(null);
+
+/** 主窗口右侧 Dock 面板当前展示的文件；非 null 时 DockFilePanel 打开。 */
+export const dockedFileAtom = atom<{ absolutePath: string } | null>(null);
 
 /** 聊天图片放大预览当前目标；非 null 时 ImagePreviewDialog 打开。 */
 export const imagePreviewAtom = atom<{ src: string; alt: string } | null>(null);
@@ -43,8 +52,9 @@ export const fileViewerDirtyAtom = atom(false);
 /**
  * 打开文件的统一入口:先 stat 再分流——目录在 Finder 中展示(不打开查看器),
  * 文件才在独立的原生查看器窗口中打开;脏确认由查看器窗口自理。
+ * Dock 面板已打开时直接更新面板内容(合并模式心智),不再弹出新独立窗口。
  */
-export const requestViewFileAtom = atom(null, async (_get, _set, absolutePath: string) => {
+export const requestViewFileAtom = atom(null, async (get, set, absolutePath: string) => {
 	const stat = await window.look.statFilePath(absolutePath).catch(() => null);
 	// 安全 guard 拒绝（路径在项目根之外）时 stat 返回 success:false，
 	// 点击处直接 toast，不再打开一个只会显示 IPC 错误的查看器窗口。
@@ -54,6 +64,10 @@ export const requestViewFileAtom = atom(null, async (_get, _set, absolutePath: s
 	}
 	if (stat?.success && stat.kind === "directory") {
 		void window.look.revealInFinder(absolutePath);
+		return;
+	}
+	if (get(dockedFileAtom)) {
+		set(dockedFileAtom, { absolutePath });
 		return;
 	}
 	void window.look.openFileViewer(absolutePath);

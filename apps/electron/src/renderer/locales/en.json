@@ -56,6 +56,7 @@
     "shared": "Shared",
     "collapse": "Collapse right panel",
     "expand": "Expand right panel",
+    "resize": "Drag to resize panel",
     "loadFailed": "Failed to load shared files",
     "watchFailed": "Failed to watch shared files"
   },
@@ -867,10 +868,15 @@
     "unsavedConfirm": "You have unsaved changes. Close anyway?",
     "viewFile": "View file",
     "contents": "Contents",
+    "expandContents": "Expand contents",
+    "collapseContents": "Collapse contents",
     "back": "Back",
     "windowTitle": "File viewer",
     "emptyHint": "Click a file in the main Look window to view it",
-    "close": "Close"
+    "close": "Close",
+    "dockToMain": "Dock to main window",
+    "undock": "Open in separate window",
+    "resize": "Drag to resize panel"
   },
   "planDialogs": {
     "toolConfirmTitle": "Tool approval required",
