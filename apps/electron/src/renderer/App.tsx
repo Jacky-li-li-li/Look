@@ -24,7 +24,7 @@ import {
 	sessionStateAtomFamily,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
-import { dockPanelWidthAtom, rightPanelWidthAtom } from "./store/projectAtoms";
+import { dockPanelWidthAtom, generalSettingsHydratedAtom, rightPanelWidthAtom } from "./store/projectAtoms";
 import { deriveActiveQueue, deriveSessionPhase } from "./store/sessionTypes";
 
 const api = window.look;
@@ -41,6 +41,7 @@ export default function App() {
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 	const rightPanelWidth = useAtomValue(rightPanelWidthAtom);
 	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
+	const generalSettingsHydrated = useAtomValue(generalSettingsHydratedAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? ""));
 	const activeQueue = useMemo(() => deriveActiveQueue(activeSessionState), [activeSessionState]);
@@ -57,11 +58,13 @@ export default function App() {
 	const onProvidersChange = useCallback((data: ProviderSettingsData) => appStore.set(providerSettingsAtom, data), []);
 
 	useEffect(() => {
-		if (!api) return;
+		// 设置加载完成前不持久化布局值：避免启动首帧把默认宽度/折叠态写回
+		// 设置覆盖用户已存值（2026-08-07）
+		if (!api || !generalSettingsHydrated) return;
 		api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth }).catch((err) =>
 			console.warn("[App] setGeneralSettings failed:", err),
 		);
-	}, [sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth]);
+	}, [sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth, generalSettingsHydrated]);
 
 	// ── Early return guards ──
 	if (!api) {

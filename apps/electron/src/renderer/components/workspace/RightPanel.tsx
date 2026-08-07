@@ -2,6 +2,7 @@
 // RightPanel — 右侧边栏容器(v0.6:共享区 + 工作区 双 tab)
 // ============================================================
 
+import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
@@ -10,6 +11,7 @@ import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
+import { PANEL_LAYOUT, resolvePanelTracks } from "../../lib/panelLayout";
 import { appStore } from "../../store/appStore";
 import {
 	activeProjectAtom,
@@ -113,25 +115,37 @@ export function RightPanel() {
 
 	if (!activeProject) return null;
 
-	// 动态上限：不能让 main（最小 340px）被挤出去；至少保留 200px 可拖拽空间
-	const sidebarWidth = sidebarCollapsed ? 0 : 280;
-	const dockTrack = dockedFile ? dockPanelWidth : 0;
-	const rightMax = Math.min(480, Math.max(200, viewportWidth - sidebarWidth - dockTrack - 340));
+	// 面板宽度解析统一走 resolvePanelTracks（单一事实源）
+	const layout = resolvePanelTracks({
+		viewportWidth,
+		sidebarCollapsed,
+		rightPanelCollapsed: collapsed,
+		rightPanelWidth,
+		dockOpen: !!dockedFile,
+		dockPanelWidth,
+	});
+	// 显示宽度被 Dock/空间压缩（显示 != 用户宽度）时隐藏调宽把手，避免“拖了没反应”
+	const rightClamped = layout.rightTrack !== rightPanelWidth;
 
 	return (
 		<aside
-			className="right-panel-wrapper relative flex h-full shrink-0 flex-col overflow-hidden rounded-xl border bg-background"
+			className={cn(
+				"right-panel-wrapper relative flex h-full shrink-0 flex-col overflow-hidden bg-background",
+				// Dock 打开时右栏右侧与 Dock 相接：右侧直角 + 去掉右边框（Dock 自带 border-l 作单线分隔），
+				// 左缘保留卡片圆角；Dock 关闭时恢复全圆角全边框
+				dockedFile ? "rounded-l-xl border-y border-l" : "rounded-xl border",
+			)}
 			data-collapsed={collapsed}
 			aria-label={t("rightPanel.label")}
-			inert={collapsed || undefined}
+			inert={collapsed || layout.rightTrack === 0 || undefined}
 		>
-			{/* 拖拽调宽把手：面板左侧边缘，折叠时不可用 */}
-			{!collapsed && (
+			{/* 拖拽调宽把手：面板左侧边缘，折叠或显示被压缩时不可用 */}
+			{!collapsed && !rightClamped && layout.rightTrack > 0 && (
 				<PanelResizeHandle
 					cssVar="--right-panel-track"
-					width={rightPanelWidth}
-					min={200}
-					max={rightMax}
+					width={layout.rightTrack}
+					min={PANEL_LAYOUT.RIGHT_MIN}
+					max={layout.rightMax}
 					onCommit={setRightPanelWidth}
 					ariaLabel={t("rightPanel.resize")}
 				/>

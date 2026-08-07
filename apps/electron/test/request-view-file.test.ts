@@ -2,7 +2,12 @@
 
 import { createStore } from "jotai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { dockedFileAtom, requestViewFileAtom } from "../src/renderer/store/projectAtoms";
+import {
+	confirmDockFileSwapIfDirty,
+	dockedFileAtom,
+	fileViewerDirtyAtom,
+	requestViewFileAtom,
+} from "../src/renderer/store/projectAtoms";
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 
@@ -45,23 +50,29 @@ describe("requestViewFileAtom", () => {
 		expect(toastError).not.toHaveBeenCalled();
 	});
 
-	it("opens regular files in the viewer", async () => {
+	it("opens regular files in the main-window dock by default", async () => {
+		const store = createStore();
 		statFilePath.mockResolvedValue({ success: true, kind: "file" });
-		await createStore().set(requestViewFileAtom, "/tmp/a.md");
-		expect(openFileViewer).toHaveBeenCalledWith("/tmp/a.md");
+		await store.set(requestViewFileAtom, "/tmp/a.md");
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/a.md" });
+		expect(openFileViewer).not.toHaveBeenCalled();
 	});
 
-	it("still opens the viewer for missing files so the viewer shows its own error", async () => {
+	it("still opens missing files in the dock so the viewer shows its own error", async () => {
+		const store = createStore();
 		statFilePath.mockResolvedValue({ success: true, kind: "missing" });
-		await createStore().set(requestViewFileAtom, "/tmp/none.md");
-		expect(openFileViewer).toHaveBeenCalledWith("/tmp/none.md");
+		await store.set(requestViewFileAtom, "/tmp/none.md");
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/none.md" });
+		expect(openFileViewer).not.toHaveBeenCalled();
 		expect(toastError).not.toHaveBeenCalled();
 	});
 
-	it("keeps the original behavior when stat fails for non-guard reasons", async () => {
+	it("still opens in the dock when stat fails for non-guard reasons", async () => {
+		const store = createStore();
 		statFilePath.mockRejectedValue(new Error("ipc broken"));
-		await createStore().set(requestViewFileAtom, "/tmp/a.md");
-		expect(openFileViewer).toHaveBeenCalledWith("/tmp/a.md");
+		await store.set(requestViewFileAtom, "/tmp/a.md");
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/a.md" });
+		expect(openFileViewer).not.toHaveBeenCalled();
 		expect(toastError).not.toHaveBeenCalled();
 	});
 
@@ -97,5 +108,49 @@ describe("requestViewFileAtom", () => {
 		expect(toastError).toHaveBeenCalledTimes(1);
 		expect(openFileViewer).not.toHaveBeenCalled();
 		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/docked.md" });
+	});
+
+	// ---- Dock 脏确认：外部跳转不得静默覆盖未保存修改（2026-08-07 修复） ----
+
+	it("declines replacing the dock file when the dock has unsaved edits (confirm=false)", async () => {
+		const store = createStore();
+		store.set(dockedFileAtom, { absolutePath: "/tmp/docked.md" });
+		store.set(fileViewerDirtyAtom, true);
+		const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+		statFilePath.mockResolvedValue({ success: true, kind: "file" });
+		await store.set(requestViewFileAtom, "/tmp/b.md");
+		expect(openFileViewer).not.toHaveBeenCalled();
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/docked.md" });
+		expect(confirmSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("replaces the dock file after confirming when the dock has unsaved edits (confirm=true)", async () => {
+		const store = createStore();
+		store.set(dockedFileAtom, { absolutePath: "/tmp/docked.md" });
+		store.set(fileViewerDirtyAtom, true);
+		const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+		statFilePath.mockResolvedValue({ success: true, kind: "file" });
+		await store.set(requestViewFileAtom, "/tmp/b.md");
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/b.md" });
+		expect(confirmSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not confirm when the dock has no unsaved edits", async () => {
+		const store = createStore();
+		store.set(dockedFileAtom, { absolutePath: "/tmp/docked.md" });
+		store.set(fileViewerDirtyAtom, false);
+		const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+		statFilePath.mockResolvedValue({ success: true, kind: "file" });
+		await store.set(requestViewFileAtom, "/tmp/b.md");
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/b.md" });
+		expect(confirmSpy).not.toHaveBeenCalled();
+	});
+
+	it("confirmDockFileSwapIfDirty skips the prompt when not dirty", () => {
+		const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+		expect(confirmDockFileSwapIfDirty(() => false)).toBe(true);
+		expect(confirmSpy).not.toHaveBeenCalled();
+		expect(confirmDockFileSwapIfDirty(() => true)).toBe(false);
+		expect(confirmSpy).toHaveBeenCalledTimes(1);
 	});
 });

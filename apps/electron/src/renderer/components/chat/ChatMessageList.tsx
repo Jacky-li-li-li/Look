@@ -221,6 +221,35 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 }: ChatMessagesInnerProps) {
 	const { t } = useTranslation();
 
+	// === 冷加载分批渲染：刷新/切换会话时 timeline 一次性出现大量消息，
+	// 按小批（每帧 CHUNK 条）渲染，避免单帧提交数百条 markdown 高亮阻塞主线程。
+	// 流式输出（逐条追加、ready 已 true）不启动分批，保持实时追加。
+	const CHUNK_SIZE = 6;
+	const [renderCount, setRenderCount] = useState(CHUNK_SIZE);
+	const [chunking, setChunking] = useState(false);
+
+	useEffect(() => {
+		if (chunking || ready || timeline.length <= CHUNK_SIZE) return;
+		setChunking(true);
+		setRenderCount(CHUNK_SIZE);
+	}, [chunking, ready, timeline.length]);
+
+	useEffect(() => {
+		if (!chunking) return;
+		if (renderCount >= timeline.length) {
+			setChunking(false);
+			setRenderCount(timeline.length);
+			return;
+		}
+		const raf = requestAnimationFrame(() => {
+			setRenderCount((n) => Math.min(timeline.length, n + CHUNK_SIZE));
+		});
+		return () => cancelAnimationFrame(raf);
+	}, [chunking, renderCount, timeline.length]);
+
+	// 分批中渲染前 renderCount 条；分批完成后全量（流式增量直接可见）
+	const visibleTimeline = chunking ? timeline.slice(0, renderCount) : timeline;
+
 	// === Conversation context (now safe — we're inside Conversation) ===
 	const { isAtBottom, followToBottom, stopScroll, scrollRef } = useConversationContext();
 
@@ -562,7 +591,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						<p className="max-w-xs text-xs text-muted-foreground">{t("chat.emptyReassurance")}</p>
 					</div>
 				) : (
-					timeline.map((item) => renderTimelineItem(item))
+					visibleTimeline.map((item) => renderTimelineItem(item))
 				)}
 			</ConversationContent>
 			<MessageTicks items={userTicks} onNavigate={handleTickNavigate} />

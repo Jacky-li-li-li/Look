@@ -87,7 +87,8 @@ describe("SharedAreaPanel", () => {
 
 	it("keeps file selection and the row action menu as separate interactive controls", () => {
 		const { container } = renderPanel();
-		expect(screen.getByRole("button", { name: "File: notes.md" })).toBeTruthy();
+		// 行本身是可点击的选中区域（文件名文本），操作菜单是独立的按钮，两者不得嵌套
+		expect(screen.getByText("notes.md")).toBeTruthy();
 		expect(screen.getByRole("button", { name: "More actions" })).toBeTruthy();
 		expect(container.querySelector("button button")).toBeNull();
 	});

@@ -77,22 +77,22 @@ describe("RightPanel 共享区 watcher", () => {
 		document.body.replaceChildren();
 	});
 
-	it("切换项目时启动新项目 watcher,但不停止旧 watcher(watcher 按项目常驻)", async () => {
+	it("切换项目时停止旧项目 watcher,并启动新项目 watcher", async () => {
 		renderPanel();
 		await waitFor(() => expect(startSharedWatch).toHaveBeenCalledWith("project-1"));
 
 		act(() => appStore.set(activeProjectIdAtom, "project-2"));
 
 		await waitFor(() => expect(startSharedWatch).toHaveBeenCalledWith("project-2"));
-		expect(stopSharedWatch).not.toHaveBeenCalled();
+		expect(stopSharedWatch).toHaveBeenCalledWith("project-1");
 	});
 
-	it("组件卸载时也不调用 stopSharedWatch(项目删除时由主进程统一清理)", async () => {
+	it("组件卸载时停止当前项目 watcher", async () => {
 		const { unmount } = renderPanel();
 		await waitFor(() => expect(startSharedWatch).toHaveBeenCalledWith("project-1"));
 
 		unmount();
 
-		expect(stopSharedWatch).not.toHaveBeenCalled();
+		expect(stopSharedWatch).toHaveBeenCalledWith("project-1");
 	});
 });

@@ -33,6 +33,10 @@ export const rightPanelWidthAtom = atom(260);
 /** Dock 文件面板宽度（px），可拖拽把手调整，持久化到 ui-settings.json。默认 420。 */
 export const dockPanelWidthAtom = atom(420);
 
+/** 通用设置（含面板宽度/折叠态）是否已从主进程加载完成；完成前 App 不持久化布局值，
+ *  避免启动首帧把默认宽度写回设置覆盖用户已存值（2026-08-07）。 */
+export const generalSettingsHydratedAtom = atom(false);
+
 export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
 
 export const showHiddenFilesAtom = atom(true);
@@ -49,10 +53,19 @@ export const imagePreviewAtom = atom<{ src: string; alt: string } | null>(null);
 /** 查看器内 md 编辑的脏状态镜像（由 FileViewerDialog 写入）。 */
 export const fileViewerDirtyAtom = atom(false);
 
+/** 外部入口替换 Dock 面板文件前的脏确认：有未保存修改时弹原生确认，取消返回 false。
+ *  覆盖 requestViewFileAtom 与 fileViewer:docked 这两条不经过 FileViewerDialog
+ *  requestClose/返回栈的跳转路径，杜绝静默丢草稿（2026-08-07 修复）。 */
+export function confirmDockFileSwapIfDirty(getDirty: () => boolean): boolean {
+	if (!getDirty()) return true;
+	return window.confirm(i18n.t("fileViewer.unsavedConfirm"));
+}
+
 /**
  * 打开文件的统一入口:先 stat 再分流——目录在 Finder 中展示(不打开查看器),
- * 文件才在独立的原生查看器窗口中打开;脏确认由查看器窗口自理。
- * Dock 面板已打开时直接更新面板内容(合并模式心智),不再弹出新独立窗口。
+ * 文件默认在主窗口右侧 Dock 面板中打开(2026-08-08 起不再默认弹独立窗口);
+ * 需要独立窗口时用 Dock 面板的“弹出为独立窗口”或 dockFileViewer。
+ * Dock 面板已有内容且存在未保存修改时先确认,避免静默覆盖。
  */
 export const requestViewFileAtom = atom(null, async (get, set, absolutePath: string) => {
 	const stat = await window.look.statFilePath(absolutePath).catch(() => null);
@@ -66,11 +79,9 @@ export const requestViewFileAtom = atom(null, async (get, set, absolutePath: str
 		void window.look.revealInFinder(absolutePath);
 		return;
 	}
-	if (get(dockedFileAtom)) {
-		set(dockedFileAtom, { absolutePath });
-		return;
-	}
-	void window.look.openFileViewer(absolutePath);
+	// Dock 面板已有未保存编辑时先确认，避免静默覆盖（2026-08-07）
+	if (get(dockedFileAtom) && !confirmDockFileSwapIfDirty(() => get(fileViewerDirtyAtom))) return;
+	set(dockedFileAtom, { absolutePath });
 });
 
 export const expandedWorkspacePathsAtomFamily = atomFamily((projectId: string) => atom<Set<string>>(new Set<string>()));

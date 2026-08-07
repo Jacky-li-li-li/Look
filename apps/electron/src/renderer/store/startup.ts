@@ -27,7 +27,7 @@ import {
 	sidebarCollapsedAtom,
 	userPreferredModelAtom,
 } from "./atoms";
-import { dockPanelWidthAtom, rightPanelWidthAtom } from "./projectAtoms";
+import { dockPanelWidthAtom, generalSettingsHydratedAtom, rightPanelWidthAtom } from "./projectAtoms";
 import { markSessionSnapshotLoading } from "./snapshot";
 
 let _lastActiveSessionId: string | null = null;
@@ -110,32 +110,38 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 	// Apply the persisted theme as soon as general settings arrive. Previously
 	// this result waited behind projects, sessions and agent definitions in the
 	// Promise.all below, stretching any boot-time mismatch to the slowest request.
-	const generalSettingsPromise = invokeStartup(() => api.getGeneralSettings()).then(async (result) => {
-		if (!result?.success || !result.settings) {
-			console.warn("[initAppData] general settings not available, keeping boot theme");
-			return result;
-		}
+	const generalSettingsPromise = invokeStartup(() => api.getGeneralSettings())
+		.then(async (result) => {
+			if (!result?.success || !result.settings) {
+				console.warn("[initAppData] general settings not available, keeping boot theme");
+				return result;
+			}
 
-		const settings = result.settings;
-		writeLookThemeToDom(themeFromSettings(settings));
-		if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
-		if (settings.aiAvatar !== undefined) appStore.set(aiAvatarAtom, settings.aiAvatar);
-		if (settings.messageAlignment !== undefined) appStore.set(messageAlignmentAtom, settings.messageAlignment);
-		if (settings.showToolExecution !== undefined) appStore.set(showToolExecutionAtom, settings.showToolExecution);
-		if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
-		if (settings.rightPanelCollapsed !== undefined)
-			appStore.set(rightPanelCollapsedAtom, settings.rightPanelCollapsed);
-		if (typeof settings.rightPanelWidth === "number")
-			appStore.set(rightPanelWidthAtom, Math.min(480, Math.max(200, settings.rightPanelWidth)));
-		if (typeof settings.dockPanelWidth === "number")
-			appStore.set(dockPanelWidthAtom, Math.min(720, Math.max(320, settings.dockPanelWidth)));
-		if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
-		if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
-		if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
-		if (Array.isArray(settings.openedSessionIds)) appStore.set(openedSessionIdsAtom, settings.openedSessionIds);
-		if (settings.language) await i18n.changeLanguage(settings.language);
-		return result;
-	});
+			const settings = result.settings;
+			writeLookThemeToDom(themeFromSettings(settings));
+			if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
+			if (settings.aiAvatar !== undefined) appStore.set(aiAvatarAtom, settings.aiAvatar);
+			if (settings.messageAlignment !== undefined) appStore.set(messageAlignmentAtom, settings.messageAlignment);
+			if (settings.showToolExecution !== undefined) appStore.set(showToolExecutionAtom, settings.showToolExecution);
+			if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
+			if (settings.rightPanelCollapsed !== undefined)
+				appStore.set(rightPanelCollapsedAtom, settings.rightPanelCollapsed);
+			if (typeof settings.rightPanelWidth === "number")
+				appStore.set(rightPanelWidthAtom, Math.min(480, Math.max(200, settings.rightPanelWidth)));
+			if (typeof settings.dockPanelWidth === "number")
+				appStore.set(dockPanelWidthAtom, Math.min(720, Math.max(320, settings.dockPanelWidth)));
+			if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
+			if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
+			if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);
+			if (Array.isArray(settings.openedSessionIds)) appStore.set(openedSessionIdsAtom, settings.openedSessionIds);
+			if (settings.language) await i18n.changeLanguage(settings.language);
+			return result;
+		})
+		.finally(() => {
+			// 无论成功与否都标记已加载：App 的布局持久化自此生效，
+			// 避免启动首帧用默认宽度覆盖用户已存值（2026-08-07）
+			appStore.set(generalSettingsHydratedAtom, true);
+		});
 
 	// Start all independent startup requests concurrently.
 	const [, projectResult, agentsResult, agentDefsResult] = await Promise.all([

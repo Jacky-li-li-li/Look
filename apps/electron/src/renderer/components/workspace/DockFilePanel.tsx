@@ -11,6 +11,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
+import { PANEL_LAYOUT, resolvePanelTracks } from "../../lib/panelLayout";
 import { appStore } from "../../store/appStore";
 import {
 	dockedFileAtom,
@@ -21,9 +22,6 @@ import {
 } from "../../store/atoms";
 import FileViewerDialog from "../dialogs/FileViewerDialog";
 import { PanelResizeHandle } from "./PanelResizeHandle";
-
-/** 主内容区（main）最小宽度，与 App.css / Tailwind min-w-[340px] 保持一致。 */
-const MAIN_MIN_WIDTH = 340;
 
 export function DockFilePanel() {
 	const { t } = useTranslation();
@@ -48,10 +46,17 @@ export function DockFilePanel() {
 	const handleDockNavigate = useCallback((path: string) => setDockedFile({ absolutePath: path }), [setDockedFile]);
 	const handleDockClose = useCallback(() => setDockedFile(null), [setDockedFile]);
 
-	// 动态上限：不能让 main（最小 340px）被挤出去；至少保留 320px 可拖拽空间
-	const sidebarWidth = sidebarCollapsed ? 0 : 280;
-	const rightPanelTrack = rightPanelCollapsed ? 0 : rightPanelWidth;
-	const dockMax = Math.min(720, Math.max(320, viewportWidth - sidebarWidth - rightPanelTrack - MAIN_MIN_WIDTH));
+	// 面板宽度解析统一走 resolvePanelTracks（单一事实源）
+	const layout = resolvePanelTracks({
+		viewportWidth,
+		sidebarCollapsed,
+		rightPanelCollapsed,
+		rightPanelWidth,
+		dockOpen: !!dockedFile,
+		dockPanelWidth,
+	});
+	// 显示宽度被空间压缩（显示 != 用户宽度）时隐藏调宽把手，避免“拖了没反应”
+	const dockClamped = layout.dockTrack !== dockPanelWidth;
 
 	return (
 		<aside
@@ -60,13 +65,13 @@ export function DockFilePanel() {
 			aria-label={t("fileViewer.windowTitle")}
 			inert={!dockedFile || undefined}
 		>
-			{/* 拖拽调宽把手：面板左侧边缘，收起时不可用 */}
-			{dockedFile && (
+			{/* 拖拽调宽把手：面板左侧边缘，收起或显示被压缩时不可用 */}
+			{dockedFile && !dockClamped && layout.dockTrack > 0 && (
 				<PanelResizeHandle
 					cssVar="--dock-track"
-					width={dockPanelWidth}
-					min={320}
-					max={dockMax}
+					width={layout.dockTrack}
+					min={PANEL_LAYOUT.DOCK_MIN}
+					max={layout.dockMax}
 					onCommit={setDockPanelWidth}
 					ariaLabel={t("fileViewer.resize")}
 				/>
