@@ -6,7 +6,7 @@ import type { GitRepoInfo } from "../dto/git.js";
 import type { AppUpdatePhase, TodoItem } from "../dto/misc.js";
 import type { PermissionAskEvent, PlanApprovalRequest, PlanQuestionRequest } from "../dto/permission.js";
 import type { ProjectInfo } from "../dto/project.js";
-import type { SessionSnapshotEnvelope } from "../dto/session.js";
+import type { SessionHistoryPreviewEnvelope, SessionSnapshotEnvelope } from "../dto/session.js";
 import type { SubagentCompletedEvent, SubagentProgressEvent } from "../dto/subagent.js";
 
 type WithAgentId<T> = T & { agentId: string };
@@ -15,6 +15,7 @@ type WithAgentId<T> = T & { agentId: string };
 export type MainToRendererEvent =
 	| SessionUiEventEnvelope
 	| SessionSnapshotEnvelope
+	| SessionHistoryPreviewEnvelope
 	// ---- Look-specific events (no pi equivalent) ----
 	| { type: "agent:list"; projectId: string; agents: AgentInfo[] }
 	| WithAgentId<{ type: "agent:created"; agent: AgentInfo }>

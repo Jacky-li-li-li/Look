@@ -171,20 +171,36 @@ export class SessionCatalog {
 		// 2) 磁盘索引命中（应用重启后的快速恢复）
 		const diskIndex = await this.indexStore.load(project.id);
 		if (diskIndex && diskIndex.fingerprint === fingerprint) {
+			this.replayIndexedSubsessionLinks(diskIndex.sessions);
 			this.replace(project.id, diskIndex.sessions, fingerprint);
 			return diskIndex.sessions;
 		}
 
 		// 3) 全量扫描（首次 / 指纹变化 / 索引缺失损坏），完成后重建索引。
-		// save 同步等待（全扫已耗时 30ms+，多 1ms 写盘无感），保证
-		// refresh 返回时索引已就绪（重启恢复路径的时序一致性）。
+		// 索引是下次启动的恢复基线；等待原子写入完成，避免旧后台写入覆盖
+		// 损坏索引后的自愈结果。
 		const sessions = await this.scanProjectSessions(project, sessionsDir, subsessionsDir);
 		await this.indexStore.save(project.id, { fingerprint, sessions });
 		this.replace(project.id, sessions, fingerprint);
 		return sessions;
 	}
 
-	/** 全量扫描：SDK 列表 + 子会话元数据，合并为项目的 StoredSession 列表。 */
+	private replayIndexedSubsessionLinks(sessions: readonly StoredSession[]): void {
+		for (const session of sessions) {
+			if (!session.parentSessionId) continue;
+			this.onSubsessionDiscovered({
+				sessionId: session.id,
+				displayName: session.name,
+				parentSessionId: session.parentSessionId,
+				agentName: session.subagentAgentName,
+				firstMessage: session.firstMessage,
+				messageCount: session.messageCount,
+				created: session.created.getTime(),
+			});
+		}
+	}
+
+	/** Full scan: SDK list + child-session metadata, merged into project rows. */
 	private async scanProjectSessions(
 		project: ProjectInfo,
 		sessionsDir: string,

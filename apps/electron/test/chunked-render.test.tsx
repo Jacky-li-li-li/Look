@@ -1,13 +1,4 @@
 // @vitest-environment jsdom
-//
-// 消息区冷加载分批渲染测试（全量渲染 + 分批追赶）。
-//
-// 聊天列表采用原生 DOM 全量渲染（StickToBottom），刷新/切换会话时
-// timeline 一次性出现大量消息 → 按小批（每帧 CHUNK 条）渲染，避免
-// 单帧提交数百条 markdown 高亮阻塞主线程。本文件验证：
-//   - 冷加载：大批量消息首帧只渲染一小批，逐帧追赶至全量
-//   - partial→full 快照：同一 sequence 的 full 替换 partial 后分批继续
-//   - 小数据量直接完整渲染（不启动分批）
 
 class ResizeObserverMock {
 	observe(): void {}
@@ -16,7 +7,8 @@ class ResizeObserverMock {
 }
 vi.stubGlobal("ResizeObserver", ResizeObserverMock);
 
-import type { LookSessionEntry, SessionSnapshotEnvelope } from "@look/shared/types";
+import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { LookSessionEntry, SessionHistoryWindow, SessionSnapshotEnvelope } from "@look/shared/types";
 import { act, cleanup, render } from "@testing-library/react";
 import { Provider } from "jotai";
 import { createRef } from "react";
@@ -27,14 +19,32 @@ import i18n from "../src/renderer/i18n";
 import { appStore } from "../src/renderer/store/appStore";
 import { sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { emptyRendererSessionState, type RendererSessionState } from "../src/renderer/store/sessionTypes";
-import { applySnapshot } from "../src/renderer/store/snapshot";
+import { applySnapshot, prependHistoryPage, resetSnapshotSequences } from "../src/renderer/store/snapshot";
+
+const assistantMessage = (text: string): AssistantMessage => ({
+	role: "assistant",
+	content: [{ type: "text", text }],
+	api: "openai-responses",
+	provider: "openai",
+	model: "gpt-4o",
+	usage: {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 0,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	},
+	stopReason: "stop",
+	timestamp: Date.now(),
+});
 
 function entry(id: string, role: "user" | "assistant"): LookSessionEntry {
-	return {
-		type: "message",
-		id,
-		message: { role, content: role === "user" ? `user msg ${id}` : `assistant reply ${id}` },
-	} as LookSessionEntry;
+	const message: UserMessage | AssistantMessage =
+		role === "user"
+			? { role, content: [{ type: "text", text: `user msg ${id}` }], timestamp: Date.now() }
+			: assistantMessage(`assistant reply ${id}`);
+	return { type: "message", id, message };
 }
 
 function makeEntries(count: number): LookSessionEntry[] {
@@ -48,13 +58,17 @@ function snapshot(
 	sequence: number,
 	entries: LookSessionEntry[],
 	reason: SessionSnapshotEnvelope["reason"] = "activate",
+	partial = false,
+	history?: SessionHistoryWindow,
 ): SessionSnapshotEnvelope {
 	return {
 		type: "session:snapshot",
 		sessionId,
 		reason,
 		sequence,
-		leafId: null,
+		partial,
+		history,
+		leafId: entries.at(-1)?.id ?? null,
 		entries,
 		runtime: {
 			thinkingLevel: "off",
@@ -92,9 +106,14 @@ function listUi(state: RendererSessionState) {
 	);
 }
 
-function renderWithSnapshot(entries: LookSessionEntry[], sequence = 1) {
+function renderWithSnapshot(
+	entries: LookSessionEntry[],
+	sequence = 1,
+	partial = false,
+	history?: SessionHistoryWindow,
+) {
 	act(() => {
-		applySnapshot(snapshot("session-a", sequence, entries));
+		applySnapshot(snapshot("session-a", sequence, entries, "activate", partial, history));
 	});
 	const state = appStore.get(sessionStateAtomFamily("session-a"));
 	return render(listUi(state));
@@ -109,6 +128,7 @@ describe("chunked cold render", () => {
 		await i18n.changeLanguage("en");
 		vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "setTimeout", "clearTimeout"] });
 		appStore.set(sessionStateAtomFamily("session-a"), emptyRendererSessionState());
+		resetSnapshotSequences();
 	});
 
 	afterEach(() => {
@@ -116,15 +136,15 @@ describe("chunked cold render", () => {
 		vi.useRealTimers();
 	});
 
-	it("renders a large cold history in small per-frame chunks instead of one burst", () => {
+	it("renders a large cold history tail first, then expands in small per-frame chunks", () => {
 		renderWithSnapshot(makeEntries(60));
 
-		// 首批只提交一帧的 CHUNK 条，而不是全量 60 条。
 		const first = countMessages();
 		expect(first).toBeGreaterThan(0);
 		expect(first).toBeLessThan(60);
+		expect(document.querySelector('[data-message-id="entry-59"]')).not.toBeNull();
+		expect(document.querySelector('[data-message-id="entry-0"]')).toBeNull();
 
-		// 推进若干帧，分批逐步追上全量。
 		for (let i = 0; i < 30 && countMessages() < 60; i += 1) {
 			act(() => {
 				vi.advanceTimersByTime(16);
@@ -133,20 +153,25 @@ describe("chunked cold render", () => {
 		expect(countMessages()).toBe(60);
 	});
 
-	it("keeps chunking when a deferred full snapshot replaces the partial one", () => {
-		const { rerender } = renderWithSnapshot(makeEntries(40), 2);
+	it("keeps the newest tail visible while a partial window grows into a complete snapshot", () => {
+		const fullEntries = makeEntries(120);
+		const partialEntries = fullEntries.slice(-40);
+		const { rerender } = renderWithSnapshot(partialEntries, 2, true, {
+			cursor: "entry-80",
+			hasMore: true,
+			revision: "entry-119",
+		});
 		const afterPartial = countMessages();
 		expect(afterPartial).toBeGreaterThan(0);
 		expect(afterPartial).toBeLessThan(40);
+		expect(document.querySelector('[data-message-id="entry-119"]')).not.toBeNull();
 
-		// full：同一 sequence 的全量 120 条随后到达，分批必须继续而不是单帧全量提交。
 		act(() => {
-			applySnapshot(snapshot("session-a", 2, makeEntries(120), "activate"));
+			applySnapshot(snapshot("session-a", 2, fullEntries, "activate", false));
 		});
 		rerender(listUi(appStore.get(sessionStateAtomFamily("session-a"))));
-		const afterFull = countMessages();
-		expect(afterFull).toBeGreaterThan(0);
-		expect(afterFull).toBeLessThan(120);
+		expect(countMessages()).toBeLessThan(120);
+		expect(document.querySelector('[data-message-id="entry-119"]')).not.toBeNull();
 
 		for (let i = 0; i < 40 && countMessages() < 120; i += 1) {
 			act(() => {
@@ -154,6 +179,48 @@ describe("chunked cold render", () => {
 			});
 		}
 		expect(countMessages()).toBe(120);
+	});
+
+	it("preserves the loaded tail while older pages are prepended", () => {
+		const fullEntries = makeEntries(80);
+		const tailEntries = fullEntries.slice(-40);
+		const { rerender } = renderWithSnapshot(tailEntries, 4, true, {
+			cursor: "entry-40",
+			hasMore: true,
+			revision: "entry-79",
+		});
+
+		for (let i = 0; i < 30 && countMessages() < 40; i += 1) {
+			act(() => {
+				vi.advanceTimersByTime(16);
+			});
+		}
+		expect(countMessages()).toBe(40);
+
+		act(() => {
+			const accepted = prependHistoryPage(
+				"session-a",
+				{
+					entries: fullEntries.slice(0, 40),
+					leafId: "entry-79",
+					history: { cursor: "entry-0", hasMore: false, revision: "entry-79" },
+				},
+				"entry-40",
+			);
+			expect(accepted).toBe(true);
+		});
+		rerender(listUi(appStore.get(sessionStateAtomFamily("session-a"))));
+		expect(document.querySelector('[data-message-id="entry-79"]')).not.toBeNull();
+		// The prepend must not reset the visible window back to a tiny newest-only
+		// slice; the previously rendered tail remains the user's anchor.
+		expect(countMessages()).toBeGreaterThanOrEqual(40);
+
+		for (let i = 0; i < 30 && countMessages() < 80; i += 1) {
+			act(() => {
+				vi.advanceTimersByTime(16);
+			});
+		}
+		expect(countMessages()).toBe(80);
 	});
 
 	it("renders small histories immediately without chunking", () => {

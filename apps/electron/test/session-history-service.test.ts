@@ -40,6 +40,26 @@ describe("SessionHistoryService", () => {
 		expect(emitSessionState).toHaveBeenCalledWith("session-a", "navigate");
 	});
 
+	it("loads an older page from the current branch and returns a stable cursor", async () => {
+		const branch = [
+			{ id: "m1", type: "message" },
+			{ id: "m2", type: "message" },
+			{ id: "m3", type: "message" },
+			{ id: "m4", type: "message" },
+		] as unknown as ReturnType<SessionManager["getBranch"]>;
+		const manager = {
+			getBranch: () => branch,
+			getLeafId: () => "m4",
+		} as unknown as SessionManager;
+		const runtime = { runtime: { session: { sessionManager: manager } } } as unknown as ManagedRuntime;
+		const service = new SessionHistoryService(createHost({ ensureRuntime: async () => runtime }));
+
+		const page = await service.loadPage("session-a", "m3", "m4", 2);
+
+		expect(page.entries.map((entry) => entry.id)).toEqual(["m1", "m2"]);
+		expect(page.history).toEqual({ cursor: "m1", hasMore: false, revision: "m4" });
+	});
+
 	it("updates an entry label and preserves the current branch leaf", () => {
 		const appendLabelChange = vi.fn();
 		const branch = vi.fn();

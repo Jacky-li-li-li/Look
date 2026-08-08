@@ -22,7 +22,7 @@ describe("聊天图片放大预览", () => {
 	});
 
 	it("sets the preview atom when a tool result image is clicked", () => {
-		render(
+		const { container } = render(
 			<Provider store={appStore}>
 				<ToolCallCard
 					toolCall={{
@@ -35,6 +35,9 @@ describe("聊天图片放大预览", () => {
 				/>
 			</Provider>,
 		);
+		// ToolCallCard lazily mounts the result body only after the panel is expanded.
+		const trigger = container.querySelector("[data-tool-panel-trigger]");
+		if (trigger) fireEvent.click(trigger);
 		fireEvent.click(screen.getByRole("button", { name: "View tool result image 1" }));
 		expect(appStore.get(imagePreviewAtom)).toEqual({
 			src: `data:image/png;base64,${pngBase64}`,

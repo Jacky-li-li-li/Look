@@ -13,18 +13,22 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { userProfileAtom } from "../../store/authAtoms";
 import { messageAlignmentAtom } from "../../store/settingsAtoms";
+import { toUnifiedFromPiAi } from "./block-renderer/blockTypes";
+import { MessageBlockList } from "./block-renderer/MessageBlockList";
 import { MessageAvatar, MessageContent, MessageHeader, MessageRoot } from "./message-elements/MessageElements";
 import { StreamingBlocksBubble } from "./StreamingBlocksBubble";
 
 export interface MessageItemProps {
 	/** 持久化消息（纯 live 时为 undefined）。 */
 	message?: AgentMessage;
-	/** 持久化条目的稳定 ID（live 消息为 undefined），用于跨快照重建的渲染缓存。 */
+	/** 持久化条目的稳定 ID（纯 live 时为 undefined）。 */
 	entryId?: string;
+	/** Scope-aware aggregate key for the persisted block cache. */
+	blockCacheKey?: string;
 	agentName?: string;
 	isStreaming?: boolean;
 	autoCollapse: boolean;
@@ -53,6 +57,7 @@ function senderFor(
 export const MessageItem = memo(function MessageItem({
 	message,
 	entryId,
+	blockCacheKey,
 	agentName,
 	isStreaming = false,
 	autoCollapse,
@@ -97,7 +102,7 @@ export const MessageItem = memo(function MessageItem({
 					) : message ? (
 						<MessageBlockListForMessage
 							message={message}
-							entryId={entryId}
+							cacheKey={blockCacheKey ?? entryId}
 							isStreaming={isStreaming}
 							autoCollapse={autoCollapse}
 							toolExecutions={toolExecutions}
@@ -122,61 +127,124 @@ export const MessageItem = memo(function MessageItem({
 			</div>
 		</MessageRoot>
 	);
-});
+}, areMessageItemPropsEqual);
 
-// 保持与 MessageBubble 相同的内容块渲染：快照路径用 MessageBlockList。
-import { memo as memoize, useMemo } from "react";
-import { toUnifiedFromPiAi } from "./block-renderer/blockTypes";
-import { MessageBlockList } from "./block-renderer/MessageBlockList";
+// MessageBlockList memoizes each unified block; keep conversion separate from the row.
+const messageSignatureCache = new WeakMap<object, string>();
 
-/**
- * 快照消息的块转换缓存：按持久化条目 ID 缓存 UnifiedBlock 数组。
- *
- * 快照替换（partial→full、agent_end、分支导航）会整体换掉 entries 引用，
- * 导致已挂载消息的 message 对象引用全部变化、MessageItem/MessageBlockList
- * 的 memo 同时失效。此时整棵子树重渲染，本缓存让「内容没变的旧消息」
- * 复用同一份 UnifiedBlock 数组 → MessageBlockList 的 props 引用稳定 →
- * per-block memo（UnifiedBlockView）恢复生效，重渲染退化为纯函数执行。
- *
- * 历史消息不可变，缓存按 entryId（全局唯一、内容恒定的持久化条目 ID）
- * 索引是安全的；live 消息无 entryId，不进入缓存。
- */
-const unifiedBlocksByEntryId = new Map<string, ReturnType<typeof toUnifiedFromPiAi>>();
-const UNIFIED_CACHE_MAX = 800;
+function messageSignature(message: AgentMessage | undefined): string {
+	if (!message) return "";
+	const cached = messageSignatureCache.get(message);
+	if (cached) return cached;
+	let value: unknown = message;
+	if (message.role === "assistant") {
+		value = {
+			role: message.role,
+			content: message.content,
+			errorMessage: message.errorMessage,
+			stopReason: message.stopReason,
+			diagnostics: message.diagnostics,
+		};
+	} else if (message.role === "user" || message.role === "custom") {
+		value = { role: message.role, content: message.content };
+	}
+	let signature: string;
+	try {
+		signature = JSON.stringify(value) ?? message.role;
+	} catch {
+		signature = `${message.role}:${String(message.timestamp ?? "")}`;
+	}
+	messageSignatureCache.set(message, signature);
+	return signature;
+}
 
-function cachedUnifiedBlocks(entryId: string | undefined, blocks: Parameters<typeof toUnifiedFromPiAi>[0]) {
-	if (entryId) {
-		const cached = unifiedBlocksByEntryId.get(entryId);
-		if (cached) return cached;
+function recordsEqual(left: Record<string, unknown> | undefined, right: Record<string, unknown> | undefined): boolean {
+	if (left === right) return true;
+	if (!left || !right) return !left && !right;
+	const leftKeys = Object.keys(left);
+	const rightKeys = Object.keys(right);
+	if (leftKeys.length !== rightKeys.length) return false;
+	return leftKeys.every((key) => left[key] === right[key]);
+}
+
+function areMessageItemPropsEqual(previous: MessageItemProps, next: MessageItemProps): boolean {
+	if (
+		previous.entryId !== next.entryId ||
+		previous.blockCacheKey !== next.blockCacheKey ||
+		previous.agentName !== next.agentName ||
+		previous.isStreaming !== next.isStreaming ||
+		previous.autoCollapse !== next.autoCollapse ||
+		previous.isActiveLeaf !== next.isActiveLeaf ||
+		previous.flash !== next.flash ||
+		previous.liveBlocks !== next.liveBlocks ||
+		previous.liveToolExecutions !== next.liveToolExecutions
+	) {
+		return false;
+	}
+	if (previous.message !== next.message && messageSignature(previous.message) !== messageSignature(next.message))
+		return false;
+	return (
+		recordsEqual(previous.toolExecutions, next.toolExecutions) &&
+		recordsEqual(previous.toolResultMap, next.toolResultMap)
+	);
+}
+
+interface CachedUnifiedBlocks {
+	signature: string;
+	blocks: ReturnType<typeof toUnifiedFromPiAi>;
+}
+
+/** Scope-aware, content-validated LRU. A single entry ID is insufficient for
+ * merged assistant bubbles and can collide across forked sessions. */
+const unifiedBlocksByKey = new Map<string, CachedUnifiedBlocks>();
+const UNIFIED_CACHE_MAX = 512;
+
+function blocksSignature(blocks: Parameters<typeof toUnifiedFromPiAi>[0]): string {
+	try {
+		return JSON.stringify(blocks) ?? "";
+	} catch {
+		return blocks.map((block, index) => `${index}:${block.type}`).join("|");
+	}
+}
+
+function cachedUnifiedBlocks(cacheKey: string | undefined, blocks: Parameters<typeof toUnifiedFromPiAi>[0]) {
+	if (!cacheKey) return toUnifiedFromPiAi(blocks);
+	const signature = blocksSignature(blocks);
+	// Avoid retaining large images/tool payloads in a process-wide cache.
+	if (signature.length > 256_000) return toUnifiedFromPiAi(blocks);
+	const cached = unifiedBlocksByKey.get(cacheKey);
+	if (cached?.signature === signature) {
+		// Map insertion order is the LRU order.
+		unifiedBlocksByKey.delete(cacheKey);
+		unifiedBlocksByKey.set(cacheKey, cached);
+		return cached.blocks;
 	}
 	const unified = toUnifiedFromPiAi(blocks);
-	if (entryId) {
-		if (unifiedBlocksByEntryId.size >= UNIFIED_CACHE_MAX) {
-			const oldest = unifiedBlocksByEntryId.keys().next().value;
-			if (oldest !== undefined) unifiedBlocksByEntryId.delete(oldest);
-		}
-		unifiedBlocksByEntryId.set(entryId, unified);
+	if (unifiedBlocksByKey.size >= UNIFIED_CACHE_MAX) {
+		const oldest = unifiedBlocksByKey.keys().next().value;
+		if (oldest !== undefined) unifiedBlocksByKey.delete(oldest);
 	}
+	unifiedBlocksByKey.set(cacheKey, { signature, blocks: unified });
 	return unified;
 }
 
-const MessageBlockListForMessage = memoize(function MessageBlockListForMessage({
+const MessageBlockListForMessage = memo(function MessageBlockListForMessage({
 	message,
-	entryId,
+	cacheKey,
 	isStreaming,
 	autoCollapse,
 	toolExecutions,
 	toolResultMap,
 }: {
 	message: AgentMessage;
-	entryId?: string;
+	cacheKey?: string;
 	isStreaming: boolean;
 	autoCollapse: boolean;
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
 	const blocks = useMemo(() => messageBlocks(message), [message]);
-	const unified = useMemo(() => cachedUnifiedBlocks(entryId, blocks), [blocks, entryId]);
+	const unified = useMemo(() => cachedUnifiedBlocks(cacheKey, blocks), [blocks, cacheKey]);
 	return (
 		<MessageBlockList
 			blocks={unified}

@@ -53,13 +53,12 @@ export function useAgentActions() {
 			return;
 		}
 		const alreadyOpened = appStore.get(openedSessionIdsAtom).includes(agentId);
-		// 点击已打开且渲染端已持有完整快照的会话：同样跳过全量快照重发，
-		// 直接切换 active + 轻量同步主进程 selection（不再重发整段历史）。
-		// 只有 snapshotLoaded 才可能跳过：若渲染端没有该会话数据（如冷启动恢复），
-		// 必须走完整 activateSession 拉取快照。
-		const hasSnapshot = appStore.get(sessionStateAtomFamily(agentId)).snapshotLoaded;
+		// 点击已打开且 renderer 至少持有一个有效历史窗口的会话：跳过重复快照，
+		// 直接切换 active + 轻量同步主进程 selection。旧历史按需加载即可。
+		const sessionState = appStore.get(sessionStateAtomFamily(agentId));
+		const hasAuthoritativeHistory = sessionState.snapshotLoaded;
 		appStore.set(activeAgentIdAtom, agentId);
-		if (!hasSnapshot) {
+		if (!hasAuthoritativeHistory) {
 			markSessionSnapshotLoading(agentId, true);
 		}
 		// 乐观记录已打开会话：activateSession 需要等主进程构建并发出全量快照才 resolve，
@@ -68,7 +67,10 @@ export function useAgentActions() {
 			appStore.set(openedSessionIdsAtom, (previous) => [...previous, agentId]);
 		}
 		try {
-			const result = await api.activateSession(agentId, hasSnapshot ? { skipSnapshot: true } : undefined);
+			const result = await api.activateSession(
+				agentId,
+				hasAuthoritativeHistory ? { skipSnapshot: true } : undefined,
+			);
 			if (!result?.success) throw new Error(result?.error ?? "Failed to activate session");
 		} catch (error) {
 			markSessionSnapshotLoading(agentId, false);

@@ -15,6 +15,7 @@ import type {
 	ScheduledTaskInput,
 	ScheduledTaskRunLog,
 	ScheduledTaskTestResult,
+	SessionHistoryPage,
 	TestCustomProviderResult,
 	ThinkingLevel,
 	UserProfile,
@@ -114,6 +115,12 @@ export interface LookAPI {
 	switchModel(agentId: string, model: string): Promise<IpcResult>;
 	updateThinking(agentId: string, level: ThinkingLevel): Promise<IpcResult>;
 	abortAgent(agentId: string): Promise<IpcResult>;
+	loadHistoryPage(
+		sessionId: string,
+		beforeEntryId: string | null,
+		revision: string,
+		limit?: number,
+	): Promise<IpcResult<SessionHistoryPage>>;
 	setEntryLabel(agentId: string, entryId: string, label: string | null): Promise<IpcResult>;
 	renameAgent(agentId: string, name: string): Promise<IpcResult>;
 	compressSession(agentId: string, customInstructions?: string): Promise<IpcResult>;

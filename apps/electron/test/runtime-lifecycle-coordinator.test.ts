@@ -144,6 +144,7 @@ function makeCoordinator(
 		sessionNotifier: { disposeSession: vi.fn() },
 		selection,
 		getStoredSession: vi.fn((sessionId: string) => (sessionId === stored.id ? stored : undefined)),
+		emitSessionPreview: vi.fn().mockResolvedValue(undefined),
 		openSessionManager: vi.fn(() => ({ getSessionId: () => stored.id }) as SessionManager),
 		handleSessionEvent: vi.fn(),
 		setActiveProjectId: vi.fn(),
@@ -167,6 +168,24 @@ function makeCoordinator(
 }
 
 describe("RuntimeLifecycleCoordinator", () => {
+	it("emits a bounded preview before synchronously opening a cold session", async () => {
+		const session = makeSession("session-1");
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime);
+		const order: string[] = [];
+		vi.mocked(fixture.dependencies.emitSessionPreview).mockImplementation(async () => {
+			order.push("preview");
+		});
+		vi.mocked(fixture.dependencies.openSessionManager).mockImplementation(() => {
+			order.push("open");
+			return session.session.sessionManager;
+		});
+
+		await fixture.coordinator.activateSession("session-1");
+
+		expect(order).toEqual(["preview", "open"]);
+	});
+
 	it("deduplicates ensureRuntime and binds all session-local state once", async () => {
 		const session = makeSession("session-1");
 		const runtime = makeRuntime(session);
@@ -482,6 +501,41 @@ describe("RuntimeLifecycleCoordinator", () => {
 		expect(fixture.dependencies.events.emitProjectList).not.toHaveBeenCalled();
 		expect(fixture.dependencies.events.emitSessionList).not.toHaveBeenCalled();
 		expect(fixture.dependencies.events.emitSessionState).toHaveBeenCalledTimes(1);
+	});
+
+	it("lets the newest activation win when an older runtime opens slowly", async () => {
+		const sessionA = makeSession("session-a");
+		const sessionB = makeSession("session-b");
+		const runtimeA = makeRuntime(sessionA);
+		const runtimeB = makeRuntime(sessionB);
+		const storedA = storedSession("session-a");
+		const storedB = storedSession("session-b");
+		const fixture = makeCoordinator(runtimeA, storedA, "project-1");
+		vi.mocked(fixture.dependencies.getStoredSession).mockImplementation((id) =>
+			id === storedA.id ? storedA : id === storedB.id ? storedB : undefined,
+		);
+		vi.mocked(fixture.dependencies.openSessionManager).mockImplementation((stored) =>
+			stored.id === storedA.id ? sessionA.session.sessionManager : sessionB.session.sessionManager,
+		);
+		let releaseA!: () => void;
+		const gateA = new Promise<void>((resolve) => {
+			releaseA = resolve;
+		});
+		vi.mocked(fixture.dependencies.runtimeFactory.create).mockImplementation(async (_cwd, manager) => {
+			if (manager.getSessionId() === storedA.id) await gateA;
+			return manager.getSessionId() === storedA.id ? runtimeA.runtime : runtimeB.runtime;
+		});
+
+		const activationA = fixture.coordinator.activateSession(storedA.id);
+		await Promise.resolve();
+		const activationB = fixture.coordinator.activateSession(storedB.id);
+		await activationB;
+		releaseA();
+		await activationA;
+
+		expect(fixture.selection.currentId).toBe(storedB.id);
+		expect(fixture.dependencies.events.emitSessionState).toHaveBeenCalledTimes(1);
+		expect(fixture.dependencies.events.emitSessionState).toHaveBeenCalledWith(storedB.id);
 	});
 
 	it("re-broadcasts project:active-changed when internal active project changed silently (createAgent path)", async () => {

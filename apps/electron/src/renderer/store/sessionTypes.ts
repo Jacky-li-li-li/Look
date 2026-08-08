@@ -8,6 +8,8 @@ import type {
 	SessionRuntimeSnapshot,
 } from "@shared/types";
 
+export type RendererHistoryStatus = "unloaded" | "partial" | "complete";
+
 export interface RendererSessionState {
 	entries: LookSessionEntry[];
 	leafId: string | null;
@@ -15,6 +17,12 @@ export interface RendererSessionState {
 	snapshotLoaded: boolean;
 	/** True while the main process is opening the runtime and sending the first snapshot. */
 	loadingSnapshot: boolean;
+	/** Whether the renderer owns no history, a tail window, or the complete branch. */
+	historyStatus: RendererHistoryStatus;
+	/** Oldest loaded entry on the current branch; null means there is no older page. */
+	historyCursor: string | null;
+	/** Branch revision used to reject stale page responses. */
+	historyRevision: string | null;
 	/** Non-streaming runtime metadata (model, thinkingLevel, stats, contextUsage). */
 	runtime: SessionRuntimeSnapshot | null;
 	/** Per-entry finalized turn durations. Keyed by LookSessionEntry.id for persisted assistant messages. */
@@ -42,6 +50,9 @@ export const emptyRendererSessionState = (): RendererSessionState => ({
 	leafId: null,
 	snapshotLoaded: false,
 	loadingSnapshot: false,
+	historyStatus: "unloaded",
+	historyCursor: null,
+	historyRevision: null,
 	runtime: null,
 	messageDurations: {},
 	uiBlocks: [],

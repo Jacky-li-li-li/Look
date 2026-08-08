@@ -278,67 +278,69 @@ function ToolCallCard({ toolCall }: ToolCallCardProps) {
 						}}
 					>
 						<div className="overflow-hidden">
-							<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
-								{isEdit ? (
-									<EditDiffPreview
-										toolName={toolCall.toolName}
-										path={argStr(toolCall.args, "path", "file_path") || undefined}
-										args={toolCall.args}
-										result={toolCall.result}
-									/>
-								) : (
-									<div className="flex flex-col gap-1 text-[10px] leading-[1.4]">
-										<section className="flex flex-col gap-0.5">
-											<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
-												{t("tool.arguments")}
-											</span>
-											<pre className="whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
-												{argsJson || "{}"}
-											</pre>
-										</section>
-										{resultStr && (
+							{open ? (
+								<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
+									{isEdit ? (
+										<EditDiffPreview
+											toolName={toolCall.toolName}
+											path={argStr(toolCall.args, "path", "file_path") || undefined}
+											args={toolCall.args}
+											result={toolCall.result}
+										/>
+									) : (
+										<div className="flex flex-col gap-1 text-[10px] leading-[1.4]">
 											<section className="flex flex-col gap-0.5">
 												<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
-													{toolCall.isError ? t("tool.error") : t("tool.result")}
-													{resultTooLong && (
-														<span className="ml-1 text-[9px] text-muted-foreground">
-															({resultStr.length} 字符)
-														</span>
-													)}
+													{t("tool.arguments")}
 												</span>
-												<LookMarkdown content={resultStr} />
+												<pre className="whitespace-pre-wrap break-all text-[10px] text-muted-foreground">
+													{argsJson || "{}"}
+												</pre>
 											</section>
-										)}
-										{resultImages.length > 0 && (
-											<section className="flex flex-col gap-0.5">
-												<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
-													{t("tool.result")}
-												</span>
-												<div className="flex flex-wrap gap-2">
-													{resultImages.map((img, i) => {
-														const src = `data:${img.mimeType};base64,${img.data}`;
-														return (
-															<button
-																key={`result-img-${i}`}
-																type="button"
-																className="cursor-zoom-in"
-																aria-label={`View tool result image ${i + 1}`}
-																onClick={() => setImagePreview({ src, alt: `Tool result ${i + 1}` })}
-															>
-																<img
-																	src={src}
-																	alt={`Tool result ${i + 1}`}
-																	className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
-																/>
-															</button>
-														);
-													})}
-												</div>
-											</section>
-										)}
-									</div>
-								)}
-							</div>
+											{resultStr && (
+												<section className="flex flex-col gap-0.5">
+													<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
+														{toolCall.isError ? t("tool.error") : t("tool.result")}
+														{resultTooLong && (
+															<span className="ml-1 text-[9px] text-muted-foreground">
+																({resultStr.length} 字符)
+															</span>
+														)}
+													</span>
+													<LookMarkdown content={resultStr} />
+												</section>
+											)}
+											{resultImages.length > 0 && (
+												<section className="flex flex-col gap-0.5">
+													<span className="text-[10px] font-semibold uppercase tracking-wide text-foreground">
+														{t("tool.result")}
+													</span>
+													<div className="flex flex-wrap gap-2">
+														{resultImages.map((img, i) => {
+															const src = `data:${img.mimeType};base64,${img.data}`;
+															return (
+																<button
+																	key={`result-img-${i}`}
+																	type="button"
+																	className="cursor-zoom-in"
+																	aria-label={`View tool result image ${i + 1}`}
+																	onClick={() => setImagePreview({ src, alt: `Tool result ${i + 1}` })}
+																>
+																	<img
+																		src={src}
+																		alt={`Tool result ${i + 1}`}
+																		className="max-h-48 max-w-64 rounded-md border border-hairline object-contain"
+																	/>
+																</button>
+															);
+														})}
+													</div>
+												</section>
+											)}
+										</div>
+									)}
+								</div>
+							) : null}
 						</div>
 					</div>
 				)}

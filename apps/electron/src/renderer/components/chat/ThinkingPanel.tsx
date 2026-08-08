@@ -28,12 +28,16 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 	// Collapsed by default (like tool-call cards); a boolean manualOpen
 	// means the user has taken control, null means "follow autoCollapse".
 	const [manualOpen, setManualOpen] = React.useState<boolean | null>(null);
+	const [hasRenderedBody, setHasRenderedBody] = React.useState(() => !autoCollapse);
 	const open = manualOpen ?? !autoCollapse;
 
 	const handleToggle = React.useCallback(() => {
 		// 展开时脱离“贴底”锁定：防止 stick-to-bottom 的 resize 跟随把视口拽到
 		// 展开后内容的底部（与 CollapsibleExecutionGroup 同一问题的 thinking 版本）。
-		if (!open) ctx?.stopScroll();
+		if (!open) {
+			ctx?.stopScroll();
+			setHasRenderedBody(true);
+		}
 		setManualOpen((prev) => !(prev ?? !autoCollapse));
 	}, [autoCollapse, open, ctx]);
 
@@ -59,6 +63,7 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 			<button
 				type="button"
 				className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] text-muted-foreground outline-none transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted/50 focus-visible:text-foreground"
+				aria-expanded={open}
 				onClick={handleToggle}
 			>
 				<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
@@ -77,9 +82,11 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 				}}
 			>
 				<div className="overflow-hidden">
-					<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
-						<div className="whitespace-pre-wrap break-words">{thinking}</div>
-					</div>
+					{hasRenderedBody || open ? (
+						<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
+							<div className="whitespace-pre-wrap break-words">{thinking}</div>
+						</div>
+					) : null}
 				</div>
 			</div>
 		</div>

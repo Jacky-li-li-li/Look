@@ -7,7 +7,7 @@
 
 import type { ToolCall } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import { afterEach, describe, expect, it } from "vitest";
 import { toUnifiedFromPiAi, toUnifiedFromStream } from "../src/renderer/components/chat/block-renderer/blockTypes";
@@ -50,6 +50,24 @@ function streamBlocks(): LookUiStreamBlock[] {
 	];
 }
 
+function expandExecutionGroups(container: HTMLElement): void {
+	for (const button of container.querySelectorAll<HTMLButtonElement>(
+		'[data-execution-group] button[aria-expanded="false"]',
+	)) {
+		fireEvent.click(button);
+	}
+	for (const button of container.querySelectorAll<HTMLButtonElement>(
+		'[data-thinking-panel] button[aria-expanded="false"]',
+	)) {
+		fireEvent.click(button);
+	}
+	for (const button of container.querySelectorAll<HTMLButtonElement>(
+		'[data-tool-panel-trigger][aria-expanded="false"]',
+	)) {
+		if (!button.disabled) fireEvent.click(button);
+	}
+}
+
 describe("toUnifiedFromStream cache", () => {
 	it("returns the same UnifiedBlock for the same source reference", () => {
 		const blocks = streamBlocks();
@@ -78,6 +96,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 				defaultToolStatus="pending"
 			/>,
 		);
+		expandExecutionGroups(container);
 		expect(container.textContent).toContain("hello");
 		expect(container.textContent).toContain("read");
 		expect(container.textContent).toContain("file content");
@@ -94,6 +113,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 				defaultToolStatus="running"
 			/>,
 		);
+		expandExecutionGroups(container);
 		expect(container.textContent).toContain("hello");
 		expect(container.textContent).toContain("read");
 		expect(container.textContent).toContain("file content");
@@ -120,6 +140,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 				defaultToolStatus="pending"
 			/>,
 		);
+		expandExecutionGroups(container);
 		expect(container.textContent).toContain("first");
 		expect(container.textContent).toContain("read");
 		// thinking + toolCall 组成折叠组：组头会显示工具计数徽标
@@ -149,6 +170,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 				defaultToolStatus="running"
 			/>,
 		);
+		expandExecutionGroups(container);
 		// thinking 未完成 → ThinkingPanel 显示 reasoning 骨架/内容
 		expect(container.textContent).toContain("step 1");
 		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
@@ -205,6 +227,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 		);
 		expect(container.textContent).toContain("before");
 		expect(container.textContent).toContain("after");
+		expandExecutionGroups(container);
 		expect(container.textContent).toContain("delegate_agent");
 	});
 
@@ -233,6 +256,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 				defaultToolStatus="running"
 			/>,
 		);
+		expandExecutionGroups(container);
 		expect(container.textContent).toContain("delegate_agent");
 	});
 
@@ -282,6 +306,7 @@ describe("MessageBlockList showToolExecution toggle", () => {
 				defaultToolStatus="pending"
 			/>,
 		);
+		expandExecutionGroups(container);
 		expect(container.textContent).toContain("hello");
 		expect(container.textContent).toContain("read");
 		expect(container.textContent).toContain("delegate_agent");

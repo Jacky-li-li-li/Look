@@ -19,20 +19,46 @@ export interface SessionRuntimeSnapshot {
 	compactionEstimatedTokensAfter?: number;
 }
 
+export interface SessionHistoryWindow {
+	/** The oldest entry currently present in the renderer window. */
+	cursor: string | null;
+	/** Whether entries exist before `cursor` on the current branch. */
+	hasMore: boolean;
+	/** Branch identity used to reject pages from a stale navigation. */
+	revision: string;
+}
+
+export interface SessionHistoryPreviewEnvelope {
+	type: "session:history-preview";
+	sessionId: string;
+	/** Shares the per-session sequence with normal snapshots. */
+	sequence: number;
+	leafId: string | null;
+	entries: LookSessionEntry[];
+	history: SessionHistoryWindow;
+}
+
+export interface SessionHistoryPage {
+	/** Revision supplied by the renderer when this request was made. */
+	requestRevision?: string;
+	entries: LookSessionEntry[];
+	leafId: string | null;
+	history: SessionHistoryWindow;
+}
+
 export interface SessionSnapshotEnvelope {
 	type: "session:snapshot";
 	sessionId: string;
 	reason: "initial" | "activate" | "agent_end" | "navigate" | "compaction_end";
 	/**
-	 * Monotonically increasing snapshot version per session. The main process
-	 * bumps this on every emitSessionState; the renderer drops snapshots whose
-	 * sequence is older than the last applied one. This prevents a deferred
-	 * full-history snapshot (setImmediate) from clobbering streaming state
-	 * produced by a newer turn.
+	 * Monotonically increasing snapshot version per session. The renderer drops
+	 * snapshots and previews whose sequence is older than the last applied one.
 	 */
 	sequence: number;
-	/** When true, this snapshot carries only a subset of the persisted history. */
+	/** When true, this snapshot carries only a history window, not the full branch. */
 	partial?: boolean;
+	/** Cursor metadata is present for partial snapshots and absent for complete ones. */
+	history?: SessionHistoryWindow;
 	leafId: string | null;
 	/** Renderer-optimized entries. Translated from pi SDK SessionEntry[] in SessionNotifier. */
 	entries: LookSessionEntry[];

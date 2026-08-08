@@ -15,9 +15,12 @@ import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useConversationContext } from "../components/chat/conversation";
 import { navigatingEntryAtomFamily } from "../store/atoms";
+import type { RendererHistoryStatus } from "../store/sessionTypes";
 
 /** 模块级缓存：会话 ID → 距底部像素距离 */
 const scrollPositionCache = new Map<string, number>();
+/** 模块级缓存：会话 ID → 加载 partial 尾窗时距底部的比例（0=顶部,1=底部） */
+const pendingRestoreRatio = new Map<string, number>();
 
 const DEBUG = false;
 
@@ -27,7 +30,11 @@ const DEBUG = false;
  * @param id     会话/Agent ID，用作缓存 key
  * @param ready  防闪烁 ready 状态，为 true 时才恢复位置
  */
-export function useScrollPositionManager(id: string, ready: boolean): void {
+export function useScrollPositionManager(
+	id: string,
+	ready: boolean,
+	historyStatus: RendererHistoryStatus = "complete",
+): void {
 	const { scrollRef, stopScroll } = useConversationContext();
 	const restoredRef = useRef(false);
 	const prevIdRef = useRef(id);
@@ -66,7 +73,12 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 			if (!container) return;
 
 			stopScroll();
-			const target = container.querySelector(`[data-message-id="${entryId}"]`);
+			const target =
+				container.querySelector(`[data-message-id="${entryId}"]`) ??
+				Array.from(container.querySelectorAll<HTMLElement>("[data-entry-ids]")).find((element) =>
+					element.dataset.entryIds?.split(" ").includes(entryId),
+				) ??
+				null;
 			if (target) {
 				(target as HTMLElement).scrollIntoView({ block: "center", behavior });
 			}
@@ -80,10 +92,12 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 	//
 	// 注意：刷新/首次加载时无保存位置 → 不做任何滚动操作，
 	// Conversation 默认已在底部，额外的 scrollToBottom 反而造成可见跳动。
+	//
+	// partial 加载时无法按像素恢复（old document height 缺失）：会先记录一个
+	// 近似距底部比例，待 historyStatus 变为 complete 且布局稳定后按比例近似恢复。
 	useLayoutEffect(() => {
 		if (!ready || restoredRef.current) return;
-		restoredRef.current = true;
-
+		const savedDistance = scrollPositionCache.get(id);
 		const el = scrollRef.current;
 		if (!el) {
 			DEBUG && console.log("[ScrollPos] ready but no scrollRef, id=", id);
@@ -92,12 +106,40 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 
 		// Branch 导航优先
 		if (navigatingEntry) {
+			restoredRef.current = true;
 			DEBUG && console.log("[ScrollPos] branch nav to", navigatingEntry);
 			scrollToMessage(navigatingEntry, "instant");
 			return;
 		}
 
-		const savedDistance = scrollPositionCache.get(id);
+		// A partial tail does not have the old document height. Record an
+		// approximate distance-from-bottom ratio and defer the actual restore
+		// until the complete branch/pages arrive. Without this, a partial switch-
+		// back would silently stay pinned to the bottom.
+		if (historyStatus !== "complete") {
+			if (savedDistance != null && savedDistance > 5) {
+				const ratio =
+					el.scrollHeight > el.clientHeight ? Math.min(1, savedDistance / (el.scrollHeight - el.clientHeight)) : 1;
+				pendingRestoreRatio.set(id, ratio);
+			}
+			return;
+		}
+
+		restoredRef.current = true;
+
+		// Restore from a deferred partial ratio if the user was not at the bottom.
+		const deferredRatio = pendingRestoreRatio.get(id);
+		if (deferredRatio != null && deferredRatio < 1) {
+			pendingRestoreRatio.delete(id);
+			stopScroll();
+			requestAnimationFrame(() => {
+				const reachable = el.scrollHeight - el.clientHeight;
+				if (reachable > 0) el.scrollTop = Math.max(0, reachable - reachable * deferredRatio);
+			});
+			return;
+		}
+		pendingRestoreRatio.delete(id);
+
 		DEBUG &&
 			console.log(
 				"[ScrollPos] ready, id=",
@@ -124,7 +166,22 @@ export function useScrollPositionManager(id: string, ready: boolean): void {
 		}
 		// 无保存位置时（刷新/首次加载）不调用 scrollToBottom：
 		// Conversation 组件在挂载时默认已在底部，额外的滚动调用反而造成可见跳动
-	}, [ready, id, navigatingEntry, scrollRef, stopScroll, scrollToMessage]);
+	}, [ready, id, historyStatus, navigatingEntry, scrollRef, stopScroll, scrollToMessage]);
+
+	// historyStatus 从 partial 变 complete 但 ready 早已 true（分页填满后、
+	// 组件重挂载后）时，消费 deferred 比例并近似恢复。
+	useLayoutEffect(() => {
+		if (!ready || !restoredRef.current) return;
+		if (historyStatus !== "complete") return;
+		const ratio = pendingRestoreRatio.get(id);
+		if (ratio == null || ratio >= 1) return;
+		const el = scrollRef.current;
+		if (!el) return;
+		pendingRestoreRatio.delete(id);
+		stopScroll();
+		const reachable = el.scrollHeight - el.clientHeight;
+		el.scrollTop = Math.max(0, reachable - reachable * ratio);
+	}, [ready, id, historyStatus, scrollRef, stopScroll]);
 }
 
-export { scrollPositionCache };
+export { scrollPositionCache, pendingRestoreRatio };

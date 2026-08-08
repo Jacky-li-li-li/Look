@@ -66,6 +66,9 @@ const api: LookAPI = {
 
 	abortAgent: (agentId) => invoke({ type: "agent:abort", agentId }),
 
+	loadHistoryPage: (sessionId, beforeEntryId, revision, limit) =>
+		invoke({ type: "session:history-page", sessionId, beforeEntryId, revision, limit }),
+
 	getModels: () => invoke({ type: "model:list" }),
 
 	getProviders: () => invoke({ type: "model:providers" }),

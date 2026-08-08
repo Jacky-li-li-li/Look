@@ -5,7 +5,7 @@ import { appReadyPhaseAtom } from "./atoms";
 import { handlePermissionEvent } from "./permissionHandlers";
 import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "./projectAtoms";
 import { handleProjectEvent } from "./projectHandlers";
-import { applySnapshot } from "./snapshot";
+import { applyHistoryPreview, applySnapshot } from "./snapshot";
 // ============================================================
 // IPC Handler — thin routing entry point for main→renderer events
 //
@@ -32,6 +32,11 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 		if (handleSystemEvent(event)) return;
 
 		switch (event.type) {
+			case "session:history-preview":
+				applyHistoryPreview(event);
+				if (appStore.get(appReadyPhaseAtom) < 3) appStore.set(appReadyPhaseAtom, 3);
+				break;
+
 			case "session:snapshot":
 				applySnapshot(event);
 				if (appStore.get(appReadyPhaseAtom) < 3) appStore.set(appReadyPhaseAtom, 3);

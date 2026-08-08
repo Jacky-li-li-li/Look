@@ -8,9 +8,16 @@
 
 import fs, { existsSync } from "node:fs";
 import { type AgentSessionRuntime, SessionManager, type SessionStartEvent } from "@earendil-works/pi-coding-agent";
-import type { ForkedSessionResult, NavigateTreeResult, SessionSnapshotEnvelope } from "@look/shared/types";
+import type {
+	ForkedSessionResult,
+	NavigateTreeResult,
+	SessionHistoryPage,
+	SessionSnapshotEnvelope,
+} from "@look/shared/types";
 import { MAX_NAME_LENGTH } from "../constants.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import { toLookSessionEntries } from "./session-entry-projection.js";
+import { DEFAULT_HISTORY_PAGE_SIZE } from "./session-history-reader.js";
 
 export interface SessionHistoryHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
@@ -43,6 +50,41 @@ export class SessionHistoryService {
 		const result = await session.navigateTree(entryId, opts);
 		if (!result.cancelled) this.host.emitSessionState(sessionId, "navigate");
 		return result;
+	}
+
+	async loadPage(
+		sessionId: string,
+		beforeEntryId: string | null,
+		revision: string,
+		limit = DEFAULT_HISTORY_PAGE_SIZE,
+	): Promise<SessionHistoryPage> {
+		const managed = await this.host.ensureRuntime(sessionId);
+		const manager = managed.runtime.session.sessionManager;
+		const branch = manager.getBranch();
+		const leafId = manager.getLeafId();
+		const currentRevision = leafId ?? branch.at(-1)?.id ?? "root";
+		const revisionIsOnCurrentBranch = revision === "root" || branch.some((entry) => entry.id === revision);
+		if (revision !== currentRevision && !revisionIsOnCurrentBranch) {
+			throw new Error("Session history changed; reload the current conversation");
+		}
+
+		const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+		const end = beforeEntryId === null ? branch.length : branch.findIndex((entry) => entry.id === beforeEntryId);
+		if (beforeEntryId !== null && end < 0) {
+			throw new Error("History cursor is no longer valid; reload the current conversation");
+		}
+		const start = Math.max(0, end - safeLimit);
+		const entries = branch.slice(start, end);
+		return {
+			requestRevision: revision,
+			entries: toLookSessionEntries(entries),
+			leafId,
+			history: {
+				cursor: entries[0]?.id ?? null,
+				hasMore: start > 0,
+				revision: currentRevision,
+			},
+		};
 	}
 
 	async fork(sessionId: string, entryId: string, opts?: { name?: string }): Promise<ForkedSessionResult> {

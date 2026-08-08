@@ -22,7 +22,7 @@ export interface TimelineItem {
 	compactionPhase?: "compacting" | "done";
 	/** The compaction summary Markdown text (when phase is "done"). */
 	compactionSummary?: string;
-	/** Tokens before compaction (from SDK CompactionEntry.tokensBefore). */
+	/** Tokens before compaction (from CompactionEntry.tokensBefore). */
 	compactionTokensBefore?: number;
 	/** Estimated tokens after compaction (from CompactionResult.estimatedTokensAfter). */
 	compactionEstimatedTokensAfter?: number;
@@ -43,13 +43,13 @@ function mergeAssistantContent(target: AssistantMessage, source: AssistantMessag
 	};
 }
 
-export function buildTimeline(
+/**
+ * Build only immutable persisted rows. Live UI events should not force this
+ * O(history) pass; ChatMessageList overlays them with applyLiveTimeline().
+ */
+export function buildPersistedTimeline(
 	entries: LookSessionEntry[],
 	messageDurations: Record<string, number> = {},
-	uiBlocks: LookUiStreamBlock[] = [],
-	uiTools: Record<string, LookUiToolExecState> = {},
-	uiPhase: LookUiPhase = "idle",
-	pendingUserMessage: { text: string; images?: ImageContent[] } | null = null,
 	compactionEstimatedTokensAfter?: number,
 ): TimelineItem[] {
 	const items: TimelineItem[] = [];
@@ -78,15 +78,10 @@ export function buildTimeline(
 
 			if (isAssistantMessage(msg)) {
 				if (currentAssistant?.message && isAssistantMessage(currentAssistant.message)) {
-					// Same assistant output chain: merge content so thinking/toolCall/text
-					// blocks all live under one bubble (one avatar) as individual cards.
 					currentAssistant.message = mergeAssistantContent(currentAssistant.message, msg);
 					currentAssistant.secondaryEntryIds ??= [];
 					currentAssistant.secondaryEntryIds.push(entry.id);
-					// If the merged entry carries the finalized duration, attach it to the bubble.
-					if (messageDurations[entry.id] != null) {
-						currentAssistant.turnDurationMs = messageDurations[entry.id];
-					}
+					if (messageDurations[entry.id] != null) currentAssistant.turnDurationMs = messageDurations[entry.id];
 					flushToolResults();
 				} else {
 					closeAssistantContext();
@@ -97,14 +92,12 @@ export function buildTimeline(
 						isLive: false,
 						turnDurationMs: messageDurations[entry.id],
 					};
-					flushToolResults();
 					currentAssistant = item;
 					items.push(item);
 				}
 				continue;
 			}
 
-			// user, custom, bashExecution, branchSummary, compactionSummary, etc.
 			closeAssistantContext();
 			items.push({ id: entry.id, entryId: entry.id, message: msg, isLive: false });
 			continue;
@@ -117,7 +110,6 @@ export function buildTimeline(
 			continue;
 		}
 
-		// pi SDK compaction entry — special UI treatment (horizontal status card).
 		if (entry.type === "compaction") {
 			closeAssistantContext();
 			items.push({
@@ -133,7 +125,6 @@ export function buildTimeline(
 			continue;
 		}
 
-		// Look-specific system entries are not shown in the chat timeline.
 		const isLookSystemEntry =
 			entry.type === "model_change" ||
 			entry.type === "thinking_level_change" ||
@@ -143,14 +134,9 @@ export function buildTimeline(
 			(entry.type === "custom" && entry.customType?.startsWith("look."));
 
 		if (isLookSystemEntry) continue;
-
 		items.push({ id: entry.id, entryId: entry.id, entry, isLive: false });
 	}
 
-	// Attach any trailing tool results to the final persisted assistant. If no
-	// assistant exists, they will be orphaned; this preserves existing behavior
-	// for normal streams (toolResult always follows assistant immediately) but
-	// may lose results after tree navigation reorders entries.
 	if (pendingToolResults.length > 0 && !currentAssistant) {
 		console.warn(
 			"[Look][Timeline] Orphaned tool results (no preceding assistant):",
@@ -158,59 +144,62 @@ export function buildTimeline(
 		);
 	}
 	flushToolResults();
+	return items;
+}
 
-	// Show the pending user message so the user sees their own message
-	// immediately, before the snapshot with persisted entries arrives.
-	// Kept visible even when uiPhase transitions to "idle" before the
-	// snapshot arrives — the snapshot atomically clears pendingUserMessage
-	// and updates entries, so there is no visual duplicate.
+/** Overlay pending user/live/compaction state without rebuilding persisted rows. */
+export function applyLiveTimeline(
+	base: readonly TimelineItem[],
+	uiBlocks: LookUiStreamBlock[] = [],
+	uiTools: Record<string, LookUiToolExecState> = {},
+	uiPhase: LookUiPhase = "idle",
+	pendingUserMessage: { text: string; images?: ImageContent[] } | null = null,
+): TimelineItem[] {
+	const items = base.length > 0 ? [...base] : [];
+
 	if (pendingUserMessage) {
-		// A pending user message means a new turn has started. Any preceding
-		// persisted assistant belongs to a previous turn, so close it before
-		// showing the pending message and its streaming response.
-		closeAssistantContext();
 		const textBlock: TextContent[] = pendingUserMessage.text ? [{ type: "text", text: pendingUserMessage.text }] : [];
 		const imageBlocks: ImageContent[] = pendingUserMessage.images ?? [];
 		items.push({
 			id: "pending-user",
 			isLive: false,
-			message: {
-				role: "user",
-				content: [...textBlock, ...imageBlocks],
-			} as AgentMessage,
+			message: { role: "user", content: [...textBlock, ...imageBlocks] } as AgentMessage,
 		});
 	}
 
-	// ── Live compaction indicator ──
-	// Show a "compacting" status line while compaction is in progress.
-	// Only shown when no persisted compaction entry already exists (race guard).
 	const hasCompactionEntry = items.some((item) => item.compactionPhase === "done");
 	if (uiPhase === "compacting" && !hasCompactionEntry) {
-		closeAssistantContext();
 		items.push({ id: "compacting-live", isLive: true, compactionPhase: "compacting" });
 	} else if (uiPhase !== "idle" || uiBlocks.length > 0) {
-		// Within a single assistant turn, multiple assistant messages (and the
-		// tool results between them) are merged into one bubble. If a persisted
-		// assistant bubble already exists for this turn, attach the live blocks
-		// to it instead of creating a second avatar. This prevents duplicates
-		// both in normal sessions and in subagent sessions, where the snapshot
-		// may already contain the current assistant entry while it is streaming.
-		// Only fall back to a standalone streaming bubble when there is no
-		// preceding assistant to attach to (e.g., the very first message of a
-		// new turn that has not been persisted yet).
-		if (currentAssistant?.message && isAssistantMessage(currentAssistant.message)) {
-			currentAssistant.isLive = true;
-			currentAssistant.uiBlocks = uiBlocks;
-			currentAssistant.uiTools = uiTools;
+		const canAttachToPersisted = !pendingUserMessage && items.at(-1)?.message?.role === "assistant";
+		if (canAttachToPersisted) {
+			const last = items.at(-1);
+			if (last) {
+				items[items.length - 1] = { ...last, isLive: true, uiBlocks, uiTools };
+			}
 		} else {
-			items.push({
-				id: "streaming-live",
-				isLive: true,
-				uiBlocks,
-				uiTools,
-			});
+			items.push({ id: "streaming-live", isLive: true, uiBlocks, uiTools });
 		}
 	}
 
 	return items;
+}
+
+/** Backward-compatible composition helper used by unit tests and callers. */
+export function buildTimeline(
+	entries: LookSessionEntry[],
+	messageDurations: Record<string, number> = {},
+	uiBlocks: LookUiStreamBlock[] = [],
+	uiTools: Record<string, LookUiToolExecState> = {},
+	uiPhase: LookUiPhase = "idle",
+	pendingUserMessage: { text: string; images?: ImageContent[] } | null = null,
+	compactionEstimatedTokensAfter?: number,
+): TimelineItem[] {
+	return applyLiveTimeline(
+		buildPersistedTimeline(entries, messageDurations, compactionEstimatedTokensAfter),
+		uiBlocks,
+		uiTools,
+		uiPhase,
+		pendingUserMessage,
+	);
 }

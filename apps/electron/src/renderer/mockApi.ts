@@ -283,6 +283,8 @@ const mockApi: LookAPI = {
 	createAgent: () => success({ agentId: MOCK_SESSION_ID }),
 	destroyAgent: () => ok,
 	abortAgent: () => ok,
+	loadHistoryPage: () =>
+		success({ entries: [], leafId: null, history: { cursor: null, hasMore: false, revision: "root" } }),
 	switchModel: () => ok,
 	updateThinking: () => ok,
 	renameAgent: () => ok,

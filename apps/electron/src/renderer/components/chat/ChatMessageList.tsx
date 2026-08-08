@@ -4,11 +4,11 @@ import { cn } from "@look/ui";
 import type { LookUiToolExecState } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { Check, ChevronDown, ChevronUp, Loader2, MessageSquare } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useScrollPositionManager } from "../../hooks/useScrollPositionMemory";
-import { buildTimeline, type TimelineItem } from "../../lib/timeline";
+import { applyLiveTimeline, buildPersistedTimeline, type TimelineItem } from "../../lib/timeline";
 import { appStore } from "../../store/appStore";
 import {
 	activeAgentIdAtom,
@@ -21,6 +21,7 @@ import {
 import { isLoggedInAtom, userProfileAtom } from "../../store/authAtoms";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
 import { messageAlignmentAtom } from "../../store/settingsAtoms";
+import { prependHistoryPage } from "../../store/snapshot";
 import { AiAvatar } from "../AiAvatar";
 import {
 	BranchConfirmDialog,
@@ -37,6 +38,9 @@ import { SessionEntryBubble } from "./SessionEntryBubble";
 
 /** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
 const EMPTY_TOOL_EXECUTIONS: Record<string, LookUiToolExecState> = {};
+
+/** Progressive cold-render chunk size, shared by the outer shell and inner. */
+const CHUNK_SIZE = 6;
 
 interface ChatMessageListProps {
 	agentId: string;
@@ -195,12 +199,16 @@ interface ChatMessagesInnerProps {
 	agentName?: string;
 	sessionState: RendererSessionState;
 	timeline: TimelineItem[];
+	persistedTimeline: TimelineItem[];
 	leafId: string | null;
 	autoCollapse: boolean;
 	phase: RendererSessionPhase;
 	isBusy: boolean;
 	ready: boolean;
 	transitioning: boolean;
+	/** Notifies the outer shell when the progressive cold-render chunking phase
+	 * starts/stops so the Conversation container can switch resize mode. */
+	onChunkingChange?: (chunking: boolean) => void;
 	inputRef: React.RefObject<ChatInputHandle | null>;
 	onSend: (text: string) => Promise<boolean>;
 }
@@ -210,55 +218,95 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	agentName,
 	sessionState,
 	timeline,
+	persistedTimeline,
 	leafId,
 	autoCollapse,
 	phase,
 	isBusy,
 	ready,
 	transitioning,
+	onChunkingChange,
 	inputRef,
 	onSend,
 }: ChatMessagesInnerProps) {
 	const { t } = useTranslation();
 
-	// === 冷加载分批渲染：刷新/切换会话时 timeline 一次性出现大量消息，
-	// 按小批（每帧 CHUNK 条）渲染，避免单帧提交数百条 markdown 高亮阻塞主线程。
-	// 触发条件与 ready 解耦，按「timeline 长度增量」判定：
-	//   - 冷加载：首次出现（prevLen === 0）且超过一批 → 启动分批；
-	//   - 大批量增量：partial→full 快照、分支导航、agent_end 快照等一次性
-	//     timeline 大幅增长 → 重启分批（旧实现被 ready 短路，单帧全量提交卡死）；
-	//   - 流式输出：逐条追加（增量 ≤ CHUNK）不启动分批，保持实时追加。
-	const CHUNK_SIZE = 6;
+	// === 尾部优先的渐进渲染 ===
+	// 首次 render 就只提交最新窗口；旧消息从上方逐帧补入。这样 Markdown/
+	// Shiki/Mermaid 的重活不会挡住用户看到刚刚的对话结果。
 	const [renderCount, setRenderCount] = useState(CHUNK_SIZE);
 	const [chunking, setChunking] = useState(false);
 	const lastTimelineLengthRef = useRef(0);
+	const historyKeyRef = useRef<string | null>(null);
+
+	const lastPersistedTimelineId = persistedTimeline.at(-1)?.id ?? "";
+	const historyKey = `${agentId}:${sessionState.historyRevision ?? "unloaded"}:${lastPersistedTimelineId}`;
 
 	useEffect(() => {
-		const prevLen = lastTimelineLengthRef.current;
-		const curLen = timeline.length;
-		lastTimelineLengthRef.current = curLen;
+		const previousHistoryKey = historyKeyRef.current;
+		const historyChanged = previousHistoryKey !== null && previousHistoryKey !== historyKey;
+		historyKeyRef.current = historyKey;
 
-		if (!chunking && curLen > CHUNK_SIZE && (prevLen === 0 || curLen - prevLen > CHUNK_SIZE)) {
-			// 冷加载或一次性大批量增量：从 prevLen（已渲染基线）继续，分批追赶。
-			setChunking(true);
-			setRenderCount(Math.min(curLen, prevLen + CHUNK_SIZE));
+		const previousLength = lastTimelineLengthRef.current;
+		const currentLength = timeline.length;
+		lastTimelineLengthRef.current = currentLength;
+
+		if (historyChanged) {
+			setChunking(currentLength > CHUNK_SIZE);
+			setRenderCount(Math.min(currentLength, CHUNK_SIZE * 2));
 			return;
 		}
-		if (!chunking) return;
-
-		if (renderCount >= curLen) {
+		if (currentLength <= CHUNK_SIZE) {
 			setChunking(false);
-			setRenderCount(curLen);
+			setRenderCount(currentLength);
 			return;
 		}
-		const raf = requestAnimationFrame(() => {
-			setRenderCount((n) => Math.min(curLen, n + CHUNK_SIZE));
-		});
-		return () => cancelAnimationFrame(raf);
-	}, [chunking, renderCount, timeline.length]);
+		if (previousLength === 0) {
+			setChunking(true);
+			setRenderCount(CHUNK_SIZE);
+			return;
+		}
+		if (!chunking && currentLength - previousLength > CHUNK_SIZE) {
+			setChunking(true);
+			setRenderCount((count) => Math.min(currentLength, Math.max(count, previousLength + CHUNK_SIZE)));
+			return;
+		}
+		if (!chunking) {
+			if (renderCount !== currentLength) setRenderCount(currentLength);
+			return;
+		}
+		if (renderCount >= currentLength) {
+			setChunking(false);
+			setRenderCount(currentLength);
+			return;
+		}
 
-	// 分批中渲染前 renderCount 条；分批完成后全量（流式增量直接可见）
-	const visibleTimeline = chunking ? timeline.slice(0, renderCount) : timeline;
+		let settled = false;
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		const advance = () => {
+			if (settled) return;
+			settled = true;
+			if (timeoutId !== undefined) clearTimeout(timeoutId);
+			setRenderCount((count) => Math.min(currentLength, count + CHUNK_SIZE));
+		};
+		const frameId = requestAnimationFrame(advance);
+		timeoutId = setTimeout(advance, 120);
+		return () => {
+			settled = true;
+			cancelAnimationFrame(frameId);
+			if (timeoutId !== undefined) clearTimeout(timeoutId);
+		};
+	}, [chunking, historyKey, renderCount, timeline.length]);
+
+	const isProgressive = timeline.length > CHUNK_SIZE && renderCount < timeline.length;
+	const visibleTimeline = isProgressive ? timeline.slice(-renderCount) : timeline;
+
+	// Report the progressive cold-render phase to the outer shell so the
+	// Conversation container can disable smooth-resize animation while chunks
+	// are mounting. Only meaningful when not streaming (cold load / refresh).
+	useEffect(() => {
+		onChunkingChange?.(isProgressive && !isBusy);
+	}, [isProgressive, isBusy, onChunkingChange]);
 
 	// === Conversation context (now safe — we're inside Conversation) ===
 	const { isAtBottom, followToBottom, stopScroll, scrollRef } = useConversationContext();
@@ -266,6 +314,94 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	// 使用 ref 追踪 isAtBottom 最新值，避免 stale closure
 	const isAtBottomRef = useRef(isAtBottom);
 	isAtBottomRef.current = isAtBottom;
+	const renderMetricsRef = useRef<{ scrollHeight: number; renderedCount: number } | null>(null);
+
+	// === 按需加载更早历史 ===
+	const [historyLoading, setHistoryLoading] = useState(false);
+	const historyRequestRef = useRef<string | null>(null);
+	const historyErrorRef = useRef<string | null>(null);
+	const prependAnchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+
+	const requestOlderHistory = useCallback(async () => {
+		if (historyLoading || sessionState.historyStatus !== "partial") return;
+		const cursor = sessionState.historyCursor;
+		const revision = sessionState.historyRevision;
+		if (!cursor || !revision) return;
+		const requestKey = `${revision}:${cursor}`;
+		if (historyRequestRef.current === requestKey || historyErrorRef.current === requestKey) return;
+		const loadHistoryPage = window.look?.loadHistoryPage;
+		if (typeof loadHistoryPage !== "function") return;
+		historyRequestRef.current = requestKey;
+		setHistoryLoading(true);
+		try {
+			const result = await loadHistoryPage(agentId, cursor, revision);
+			if (!result?.success) {
+				historyErrorRef.current = requestKey;
+				return;
+			}
+			// Re-sample the scroll anchor immediately before applying the page: the
+			// user may have kept scrolling while the request was in flight, so the
+			// anchor captured at request time would be stale and cause a jump.
+			const scrollElNow = scrollRef.current;
+			if (scrollElNow) {
+				prependAnchorRef.current = { scrollTop: scrollElNow.scrollTop, scrollHeight: scrollElNow.scrollHeight };
+			}
+			const accepted = prependHistoryPage(agentId, result, cursor, revision);
+			if (!accepted) prependAnchorRef.current = null;
+			historyErrorRef.current = null;
+		} catch (error) {
+			console.warn(`[ChatMessageList] failed to load older history for ${agentId}:`, error);
+		} finally {
+			historyRequestRef.current = null;
+			setHistoryLoading(false);
+		}
+	}, [
+		agentId,
+		historyLoading,
+		scrollRef,
+		sessionState.historyCursor,
+		sessionState.historyRevision,
+		sessionState.historyStatus,
+	]);
+
+	// When older rows are inserted above the viewport, retain the user's visual
+	// anchor. At the bottom use-stick-to-bottom remains the source of truth.
+	useLayoutEffect(() => {
+		const scrollEl = scrollRef.current;
+		if (!scrollEl) return;
+		const pageAnchor = prependAnchorRef.current;
+		const previousMetrics = renderMetricsRef.current;
+		if (pageAnchor) {
+			prependAnchorRef.current = null;
+			if (!isAtBottomRef.current) {
+				const delta = scrollEl.scrollHeight - pageAnchor.scrollHeight;
+				if (delta > 0) scrollEl.scrollTop = pageAnchor.scrollTop + delta;
+			}
+		} else if (previousMetrics && visibleTimeline.length > previousMetrics.renderedCount && !isAtBottomRef.current) {
+			const delta = scrollEl.scrollHeight - previousMetrics.scrollHeight;
+			if (delta > 0) scrollEl.scrollTop += delta;
+		}
+		renderMetricsRef.current = { scrollHeight: scrollEl.scrollHeight, renderedCount: visibleTimeline.length };
+	}, [scrollRef, visibleTimeline.length]);
+
+	useEffect(() => {
+		const scrollEl = scrollRef.current;
+		if (!scrollEl) return;
+		const onScroll = (): void => {
+			if (scrollEl.scrollTop < 180) void requestOlderHistory();
+		};
+		scrollEl.addEventListener("scroll", onScroll, { passive: true });
+		return () => scrollEl.removeEventListener("scroll", onScroll);
+	}, [requestOlderHistory, scrollRef]);
+
+	// A short tail may not fill the viewport. Pull another page until the user
+	// has a meaningful scroll surface or the branch is exhausted.
+	useLayoutEffect(() => {
+		const scrollEl = scrollRef.current;
+		if (!scrollEl || sessionState.historyStatus !== "partial" || historyLoading) return;
+		const renderedLength = visibleTimeline.length;
+		if (scrollEl.scrollHeight <= scrollEl.clientHeight + 24 || renderedLength === 0) void requestOlderHistory();
+	}, [historyLoading, requestOlderHistory, scrollRef, sessionState.historyStatus, visibleTimeline.length]);
 
 	// === Sync isAtBottom to global atom (debounced to avoid state churn while scrolling) ===
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
@@ -312,7 +448,16 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	const [pendingBranchEntryId, setPendingBranchEntryId] = useState<string | null>(null);
 
 	// === Scroll position memory ===
-	useScrollPositionManager(agentId, ready);
+	useScrollPositionManager(agentId, ready, sessionState.historyStatus);
+
+	// Clean up pending-scroll deadline timer on unmount so a deferred·
+	// approximate-restore callback can never fire into a disposed component.
+	useEffect(
+		() => () => {
+			if (pendingScrollDeadlineRef.current) clearTimeout(pendingScrollDeadlineRef.current);
+		},
+		[],
+	);
 
 	// === Flash entry highlight ===
 	const [flashEntryId, setFlashEntryId] = useState<string | null>(null);
@@ -325,20 +470,71 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	);
 
 	// === Scroll to specific message ===
+	const pendingScrollTargetRef = useRef<string | null>(null);
+	const pendingScrollDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const tryScrollToPendingTarget = useCallback(() => {
+		const entryId = pendingScrollTargetRef.current;
+		const container = scrollRef.current;
+		if (!entryId || !container) return;
+		const target =
+			container.querySelector(`[data-message-id="${entryId}"]`) ??
+			Array.from(container.querySelectorAll<HTMLElement>("[data-entry-ids]")).find((element) =>
+				element.dataset.entryIds?.split(" ").includes(entryId),
+			) ??
+			null;
+		if (target) {
+			pendingScrollTargetRef.current = null;
+			if (pendingScrollDeadlineRef.current) clearTimeout(pendingScrollDeadlineRef.current);
+			pendingScrollDeadlineRef.current = null;
+			(target as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
+			return;
+		}
+
+		// 目标可能在内存里但还在渐进递增窗口之外：检查是否尚未挂载。
+		if (sessionState.historyStatus !== "complete") {
+			void requestOlderHistory();
+			return;
+		}
+		const timelineIndex = timeline.findIndex(
+			(item) => item.id === entryId || item.entryId === entryId || item.secondaryEntryIds?.includes(entryId),
+		);
+		const progressivelyMounted = timelineIndex >= 0 && timeline.length - timelineIndex <= visibleTimeline.length;
+		if (timelineIndex >= 0 && !progressivelyMounted) {
+			// 仍在渐进窗口之外：等下一帧 chunk 推进重试，并设超时兆底近似恢复。
+			if (pendingScrollDeadlineRef.current == null) {
+				pendingScrollDeadlineRef.current = setTimeout(() => {
+					if (pendingScrollTargetRef.current !== entryId) return;
+					tryScrollToPendingTarget();
+				}, 400);
+			}
+			return;
+		}
+		// Either the target isn't in the branch at all, or the progressive window
+		// has covered it but the DOM node hasn't mounted yet. Give up the exact·
+		// anchor and approximate by scrolling to bottom so the user is not stuck.
+		pendingScrollTargetRef.current = null;
+		if (pendingScrollDeadlineRef.current) {
+			clearTimeout(pendingScrollDeadlineRef.current);
+			pendingScrollDeadlineRef.current = null;
+		}
+	}, [requestOlderHistory, scrollRef, sessionState.historyStatus, timeline, visibleTimeline.length]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: visibleTimeline.length drives re-mount retry
+	useEffect(() => {
+		if (!pendingScrollTargetRef.current || (timeline.length === 0 && !sessionState.historyCursor)) return;
+		const frameId = requestAnimationFrame(tryScrollToPendingTarget);
+		return () => cancelAnimationFrame(frameId);
+	}, [timeline.length, visibleTimeline.length, sessionState.historyCursor, tryScrollToPendingTarget]);
+
 	const scrollToMessage = useCallback(
 		(entryId: string) => {
-			const container = scrollRef.current;
-			if (!container) return;
-
 			stopScroll();
-			requestAnimationFrame(() => {
-				const target = container.querySelector(`[data-message-id="${entryId}"]`);
-				if (target) {
-					(target as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
-				}
-			});
+			pendingScrollTargetRef.current = entryId;
+			if (pendingScrollDeadlineRef.current) clearTimeout(pendingScrollDeadlineRef.current);
+			pendingScrollDeadlineRef.current = null;
+			requestAnimationFrame(tryScrollToPendingTarget);
 		},
-		[scrollRef, stopScroll],
+		[stopScroll, tryScrollToPendingTarget],
 	);
 
 	const handleBranchFromHere = useCallback(
@@ -419,10 +615,10 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	// === User message ticks（右侧垂直刻度：悬停预览 + 点击跳转）===
 	const userTicks = useMemo(
 		() =>
-			timeline
+			persistedTimeline
 				.filter((it) => it.message?.role === "user" && !it.isLive)
 				.map((it) => ({ id: it.id, preview: userMessagePreview(it.message!) })),
-		[timeline],
+		[persistedTimeline],
 	);
 
 	const handleTickNavigate = useCallback(
@@ -496,19 +692,32 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			// 由 StreamingBlocksBubble 显示 loading 指示（与旧行为一致）。
 			if (item.message || (item.isLive && item.uiBlocks)) {
 				const itemEntryId = item.entryId;
+				const actionEntryId = item.secondaryEntryIds?.at(-1) ?? itemEntryId;
+				const anchorEntryIds = [item.id, itemEntryId, ...(item.secondaryEntryIds ?? [])].filter(
+					(id): id is string => Boolean(id),
+				);
 				const live = item.isLive;
 				return (
 					<div key={item.id} className="px-msg-item-x py-msg-item-y">
-						<div data-message-id={item.id} className="group/message flex flex-col">
+						<div
+							data-message-id={item.id}
+							data-entry-ids={anchorEntryIds.join(" ")}
+							className="group/message flex flex-col"
+						>
 							<MessageItem
 								message={item.message}
 								entryId={itemEntryId}
+								blockCacheKey={
+									itemEntryId
+										? `${agentId}:${[itemEntryId, ...(item.secondaryEntryIds ?? [])].join("|")}`
+										: undefined
+								}
 								agentName={agentName}
 								isStreaming={live ? isBusy : false}
 								autoCollapse={autoCollapse}
 								toolExecutions={EMPTY_TOOL_EXECUTIONS}
 								toolResultMap={item.toolResultMap}
-								isActiveLeaf={Boolean(itemEntryId && itemEntryId === leafId)}
+								isActiveLeaf={Boolean(actionEntryId && actionEntryId === leafId)}
 								flash={flashEntryId === item.id}
 								liveBlocks={live ? item.uiBlocks : undefined}
 								liveToolExecutions={live ? (item.uiTools ?? EMPTY_TOOL_EXECUTIONS) : EMPTY_TOOL_EXECUTIONS}
@@ -525,10 +734,10 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								isUser={item.message?.role === "user"}
 								alignment={messageAlignment}
 								busy={isBusy || Boolean(navigatingEntry || forkingEntry)}
-								onBranch={itemEntryId ? () => handleBranchFromHere(itemEntryId) : undefined}
+								onBranch={actionEntryId ? () => handleBranchFromHere(actionEntryId) : undefined}
 								onFork={
-									item.message && item.message.role !== "user" && itemEntryId
-										? () => handleForkToNewChat(itemEntryId)
+									item.message && item.message.role !== "user" && actionEntryId
+										? () => handleForkToNewChat(actionEntryId)
 										: undefined
 								}
 								onCopy={item.message ? () => handleCopyMessage(item.id, item.message!) : undefined}
@@ -576,8 +785,13 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		],
 	);
 
-	const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
+	const isLoading =
+		(sessionState.loadingSnapshot && sessionState.historyStatus === "unloaded") ||
+		(sessionState.historyStatus === "unloaded" && !sessionState.snapshotLoaded && sessionState.runtime === null);
+	const canShowEmpty =
+		sessionState.historyStatus === "complete" || sessionState.snapshotLoaded || sessionState.runtime !== null;
 	const showLoading = isLoading && timeline.length === 0;
+	const showEmpty = timeline.length === 0 && !isBusy && canShowEmpty;
 
 	const isAgentRunning = activeAgentId ? activeUiPhase !== "idle" : false;
 
@@ -592,7 +806,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						</div>
 						<h3 className="text-[13px] font-semibold text-foreground">{t("common.loading")}</h3>
 					</div>
-				) : timeline.length === 0 && !isBusy ? (
+				) : showEmpty ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-3 text-center py-8">
 						<div className="relative">
 							<AiAvatar status={phase} size="lg" />
@@ -602,7 +816,14 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						<p className="max-w-xs text-xs text-muted-foreground">{t("chat.emptyReassurance")}</p>
 					</div>
 				) : (
-					visibleTimeline.map((item) => renderTimelineItem(item))
+					<>
+						{sessionState.historyStatus === "partial" && (
+							<div data-history-sentinel className="flex min-h-5 items-center justify-center" aria-hidden="true">
+								{historyLoading && <Loader2 className="size-3 animate-spin text-muted-foreground/50" />}
+							</div>
+						)}
+						{visibleTimeline.map((item) => renderTimelineItem(item))}
+					</>
 				)}
 			</ConversationContent>
 			<MessageTicks items={userTicks} onNavigate={handleTickNavigate} />
@@ -620,30 +841,51 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProps) {
 	const { agentId, sessionState, isBusy } = props;
 
-	// === Timeline ===
-	const timeline = useMemo<TimelineItem[]>(
+	// Persisted history is the expensive, immutable half. Build it only when
+	// entries/durations change; streaming UI events are a cheap overlay.
+	const persistedTimeline = useMemo<TimelineItem[]>(
 		() =>
-			buildTimeline(
+			buildPersistedTimeline(
 				sessionState.entries,
 				sessionState.messageDurations,
+				sessionState.runtime?.compactionEstimatedTokensAfter,
+			),
+		[sessionState.entries, sessionState.messageDurations, sessionState.runtime?.compactionEstimatedTokensAfter],
+	);
+	const timeline = useMemo<TimelineItem[]>(
+		() =>
+			applyLiveTimeline(
+				persistedTimeline,
 				sessionState.uiBlocks,
 				sessionState.uiTools,
 				sessionState.uiPhase,
 				sessionState.pendingUserMessage,
-				sessionState.runtime?.compactionEstimatedTokensAfter,
 			),
 		[
-			sessionState.entries,
-			sessionState.messageDurations,
+			persistedTimeline,
 			sessionState.uiBlocks,
 			sessionState.uiTools,
 			sessionState.uiPhase,
 			sessionState.pendingUserMessage,
-			sessionState.runtime?.compactionEstimatedTokensAfter,
 		],
 	);
 
 	const { leafId } = sessionState;
+
+	// Progressive cold-render chunking phase, reported by ChatMessagesInner.
+	// While true the Conversation container uses instant resize so the chunked
+	// mount of older rows above the viewport never animates a visible scroll.
+	// Initial value is derived from the timeline length so the FIRST render
+	// frame already uses instant resize — the inner effect only reports later
+	// transitions, leaving the first frame smooth would animate once.
+	const [chunking, setChunking] = useState(() => timeline.length > CHUNK_SIZE);
+	const prevChunkAgentRef = useRef(agentId);
+	useEffect(() => {
+		if (agentId !== prevChunkAgentRef.current) {
+			prevChunkAgentRef.current = agentId;
+			setChunking(false);
+		}
+	}, [agentId]);
 
 	// === Anti-flash ready state ===
 	const [ready, setReady] = useState(false);
@@ -654,22 +896,27 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 			prevAgentIdRef.current = agentId;
 			// 目标会话已加载过快照：直接 ready，跳过 opacity 0→1 防闪烁过渡，
 			// 快速切换已打开会话时避免闪白/抖动。仅首次加载或冷启动才走防闪烁。
-			setReady(sessionState.snapshotLoaded);
+			setReady(sessionState.historyStatus !== "unloaded" || sessionState.snapshotLoaded);
 		}
-	}, [agentId, sessionState.snapshotLoaded]);
+	}, [agentId, sessionState.historyStatus, sessionState.snapshotLoaded]);
 
 	useEffect(() => {
 		if (ready) return;
 
 		// 必须等快照加载完毕或 runtime 已创建，否则 sessionState 可能处于中间状态
 		// （loadingSnapshot 已完成但 snapshot entries 尚未应用）
-		const isLoading = sessionState.loadingSnapshot || (!sessionState.snapshotLoaded && sessionState.runtime === null);
+		const isLoading =
+			(sessionState.loadingSnapshot && sessionState.historyStatus === "unloaded") ||
+			(sessionState.historyStatus === "unloaded" && !sessionState.snapshotLoaded && sessionState.runtime === null);
 		if (isLoading) return;
 
 		// 关键修复：空消息判断必须确认 snapshot 已加载或 runtime 已就绪，
 		// 防止在中间状态（runtime 已创建但 entries 还未应用）时过早 setReady(true)
-		const dataReady = sessionState.snapshotLoaded || sessionState.runtime !== null;
-		if (timeline.length === 0 && !isBusy && dataReady) {
+		const dataReady =
+			sessionState.historyStatus !== "unloaded" || sessionState.snapshotLoaded || sessionState.runtime !== null;
+		const emptyStateReady =
+			sessionState.historyStatus === "complete" || sessionState.snapshotLoaded || sessionState.runtime !== null;
+		if (timeline.length === 0 && !isBusy && emptyStateReady) {
 			setReady(true);
 			return;
 		}
@@ -689,6 +936,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 	}, [
 		ready,
 		sessionState.loadingSnapshot,
+		sessionState.historyStatus,
 		sessionState.snapshotLoaded,
 		sessionState.runtime,
 		timeline.length,
@@ -696,18 +944,24 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 	]);
 
 	return (
-		<Conversation key={agentId} className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}>
+		<Conversation
+			key={agentId}
+			resize={!chunking || !ready ? "instant" : "smooth"}
+			className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}
+		>
 			<ChatMessagesInner
 				agentId={props.agentId}
 				agentName={props.agentName}
 				sessionState={sessionState}
 				timeline={timeline}
+				persistedTimeline={persistedTimeline}
 				leafId={leafId}
 				autoCollapse={props.autoCollapse}
 				phase={props.phase}
 				isBusy={isBusy}
 				ready={ready}
 				transitioning={false}
+				onChunkingChange={setChunking}
 				inputRef={props.inputRef}
 				onSend={props.onSend}
 			/>

@@ -99,6 +99,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	const label = React.useMemo(() => renderRollingLabel(summary), [summary]);
 
 	const [expanded, setExpanded] = React.useState(false);
+	const [hasRenderedBody, setHasRenderedBody] = React.useState(false);
 
 	const isOpen = expanded;
 
@@ -109,7 +110,10 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	// 用户会看到空白并被迫等待动画滚到底部。
 	// 折叠时不需要 stopScroll（负 resize 在近底部时会自动恢复贴底）。
 	const handleBadgeClick = React.useCallback(() => {
-		if (!expanded) ctx?.stopScroll();
+		if (!expanded) {
+			ctx?.stopScroll();
+			setHasRenderedBody(true);
+		}
 		setExpanded((prev) => !prev);
 	}, [expanded, ctx]);
 
@@ -169,32 +173,34 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 				}}
 			>
 				<div className="overflow-hidden">
-					<div className="flex flex-col">
-						{interleaved.map((node, i) => {
-							// 封顶 stagger 延迟：工具很多时末尾卡片不再需要等 i*20ms 才出现，
-							// 空白窗口（reveal 前 opacity 仍为 0）有上限，避免任何路径被拽到
-							// 底部时长时间看到空白。
-							const revealDelay = Math.min(i * 20, 200);
-							return node.kind === "text" ? (
-								<div
-									key={`note-${hashKey(node.text)}`}
-									data-tool-group-item=""
-									className="message-prose text-[10px] text-muted-foreground"
-									style={{ animationDelay: `${revealDelay}ms` }}
-								>
-									<SkillAwareContent content={node.text} isStreaming={isStreaming} />
-								</div>
-							) : (
-								<div
-									key={node.kind === "block" ? `item-${node.index}` : `node-${i}`}
-									data-tool-group-item=""
-									style={{ animationDelay: `${revealDelay}ms` }}
-								>
-									{renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)}
-								</div>
-							);
-						})}
-					</div>
+					{hasRenderedBody ? (
+						<div className="flex flex-col">
+							{interleaved.map((node, i) => {
+								// 封顶 stagger 延迟：工具很多时末尾卡片不再需要等 i*20ms 才出现，
+								// 空白窗口（reveal 前 opacity 仍为 0）有上限，避免任何路径被拽到
+								// 底部时长时间看到空白。
+								const revealDelay = Math.min(i * 20, 200);
+								return node.kind === "text" ? (
+									<div
+										key={`note-${i}-${hashKey(node.text)}`}
+										data-tool-group-item=""
+										className="message-prose text-[10px] text-muted-foreground"
+										style={{ animationDelay: `${revealDelay}ms` }}
+									>
+										<SkillAwareContent content={node.text} isStreaming={isStreaming} />
+									</div>
+								) : (
+									<div
+										key={`item-${node.index}`}
+										data-tool-group-item=""
+										style={{ animationDelay: `${revealDelay}ms` }}
+									>
+										{renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)}
+									</div>
+								);
+							})}
+						</div>
+					) : null}
 				</div>
 			</div>
 		</div>

@@ -219,6 +219,7 @@ function AppLayout({
 						<TopSessionBar activeAgent={activeAgent} />
 						{activeAgent ? (
 							<ChatPanel
+								key={activeAgent.id}
 								agentId={activeAgent.id}
 								agentName={activeAgent.name}
 								sessionState={activeSessionState}

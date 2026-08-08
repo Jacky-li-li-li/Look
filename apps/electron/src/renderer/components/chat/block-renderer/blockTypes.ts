@@ -59,20 +59,22 @@ export function toUnifiedFromPiAi(
 	return blocks.map((block, index) => {
 		switch (block.type) {
 			case "text":
-				return { key: `text-${hashKey(block.text)}`, kind: "text", text: block.text, sourceIndex: index };
+				return { key: `text-${index}-${hashKey(block.text)}`, kind: "text", text: block.text, sourceIndex: index };
 			case "thinking":
 				return {
-					key: `thinking-${hashKey(block.thinking)}`,
+					key: `thinking-${index}-${hashKey(block.thinking)}`,
 					kind: "thinking",
 					thinking: block.thinking,
 					thinkingSignature: block.thinkingSignature,
 					sourceIndex: index,
 				};
 			case "image":
-				return { key: `image-${hashKey(block.data)}`, kind: "image", image: block, sourceIndex: index };
+				return { key: `image-${index}-${hashKey(block.data)}`, kind: "image", image: block, sourceIndex: index };
 			case "toolCall":
 				return {
-					key: block.id || `tool-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`,
+					key: block.id
+						? `tool-${block.id}`
+						: `tool-${index}-${block.name}-${hashKey(JSON.stringify(block.arguments ?? {}))}`,
 					kind: "toolcall",
 					toolCallId: block.id,
 					toolName: block.name,

@@ -55,6 +55,13 @@ export type RendererToMainEvent =
 	| { type: "settings:list-custom-providers" }
 	| { type: "settings:test-custom-provider"; payload: CustomProviderInput }
 	| { type: "session:compress"; agentId: string; customInstructions?: string }
+	| {
+			type: "session:history-page";
+			sessionId: string;
+			beforeEntryId: string | null;
+			revision: string;
+			limit?: number;
+	  }
 	| { type: "session:abort-compress"; agentId: string }
 	| { type: "agent:rename"; agentId: string; name: string }
 	| { type: "agent:abort"; agentId: string }

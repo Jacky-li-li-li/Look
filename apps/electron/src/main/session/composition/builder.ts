@@ -452,6 +452,7 @@ export class CompositionBuilder {
 			sessionNotifier: this.sessionNotifier!,
 			selection: this.activeSessionSelection,
 			getStoredSession: (sessionId) => this.sessionCatalog!.get(sessionId),
+			emitSessionPreview: (sessionId, stored) => this.sessionNotifier!.emitSessionPreview(sessionId, stored),
 			openSessionManager: (stored) => SessionManager.open(stored.path),
 			handleSessionEvent: (sessionId, event) => this.eventProcessor!.handle(sessionId, event),
 			setActiveProjectId: (projectId) => this.projectService!.setActiveId(projectId),

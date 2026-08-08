@@ -108,6 +108,7 @@ const EXHAUSTIVE = {
 	"settings:list-custom-providers": true,
 	"settings:test-custom-provider": true,
 	"session:compress": true,
+	"session:history-page": true,
 	"session:abort-compress": true,
 	"agent:rename": true,
 	"agent:abort": true,

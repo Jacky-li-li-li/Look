@@ -67,25 +67,20 @@ describe("SessionNotifier", () => {
 	});
 
 	it("emitSessionState reads session.isStreaming from the SDK's live state", () => {
-		// emitSessionState 直接读取 session.isStreaming（映射到 _isAgentRunActive），
-		// 不做任何覆写。此处 mock session.isStreaming = true，验证快照如实传递该值。
 		const bus = new SessionEventBus();
 		const snapshots: Array<{ isStreaming: boolean }> = [];
 		bus.onEvent((event) => {
 			if (event.type === "session:snapshot") snapshots.push({ isStreaming: event.runtime.isStreaming });
 		});
 		const session = {
-			sessionManager: {
-				getBranch: () => [],
-				getLeafId: () => null,
-			},
+			sessionManager: { getBranch: () => [], getLeafId: () => null },
 			getSteeringMessages: () => [],
 			getFollowUpMessages: () => [],
 			getSessionStats: () => ({ totalMessages: 1 }),
 			getContextUsage: () => undefined,
 			isCompacting: false,
 			isRetrying: false,
-			isStreaming: true, // SDK 仍忙（agent_end 后收尾中）
+			isStreaming: true,
 			model: undefined,
 			thinkingLevel: "off",
 			retryAttempt: 0,
@@ -95,6 +90,79 @@ describe("SessionNotifier", () => {
 		notifier.emitSessionState("session-a", "agent_end");
 
 		expect(snapshots).toHaveLength(1);
-		expect(snapshots[0]!.isStreaming).toBe(true);
+		expect(snapshots[0]?.isStreaming).toBe(true);
+	});
+
+	it("sends only a bounded tail window for large recovery snapshots", () => {
+		const bus = new SessionEventBus();
+		const snapshots: Extract<import("@look/shared/types").MainToRendererEvent, { type: "session:snapshot" }>[] = [];
+		bus.onEvent((event) => {
+			if (event.type === "session:snapshot") snapshots.push(event);
+		});
+		const branch = Array.from({ length: 120 }, (_, index) => ({
+			type: "message",
+			id: `entry-${index}`,
+			parentId: null,
+			timestamp: new Date(index).toISOString(),
+			message: { role: "user", content: `message ${index}`, timestamp: index },
+		}));
+		const session = {
+			sessionManager: { getBranch: () => branch, getLeafId: () => "entry-119" },
+			getSteeringMessages: () => [],
+			getFollowUpMessages: () => [],
+			getSessionStats: () => ({ totalMessages: 120 }),
+			getContextUsage: () => undefined,
+			isCompacting: false,
+			isRetrying: false,
+			isStreaming: false,
+			model: undefined,
+			thinkingLevel: "off",
+			retryAttempt: 0,
+		} as unknown as ManagedRuntime["runtime"]["session"];
+		const notifier = new SessionNotifier(bus, createQueries({ runtime: { session } } as unknown as ManagedRuntime));
+
+		notifier.emitSessionState("session-a", "activate");
+
+		expect(snapshots).toHaveLength(1);
+		expect(snapshots[0]?.partial).toBe(true);
+		expect(snapshots[0]?.entries).toHaveLength(80);
+		expect(snapshots[0]?.entries[0]?.id).toBe("entry-40");
+		expect(snapshots[0]?.history).toEqual({ cursor: "entry-40", hasMore: true, revision: "entry-119" });
+	});
+
+	it("sends a bounded tail window for navigate snapshots too", () => {
+		const bus = new SessionEventBus();
+		const snapshots: Extract<import("@look/shared/types").MainToRendererEvent, { type: "session:snapshot" }>[] = [];
+		bus.onEvent((event) => {
+			if (event.type === "session:snapshot") snapshots.push(event);
+		});
+		const branch = Array.from({ length: 120 }, (_, index) => ({
+			type: "message",
+			id: `entry-${index}`,
+			parentId: null,
+			timestamp: new Date(index).toISOString(),
+			message: { role: "user", content: `message ${index}`, timestamp: index },
+		}));
+		const session = {
+			sessionManager: { getBranch: () => branch, getLeafId: () => "entry-119" },
+			getSteeringMessages: () => [],
+			getFollowUpMessages: () => [],
+			getSessionStats: () => ({ totalMessages: 120 }),
+			getContextUsage: () => undefined,
+			isCompacting: false,
+			isRetrying: false,
+			isStreaming: false,
+			model: undefined,
+			thinkingLevel: "off",
+			retryAttempt: 0,
+		} as unknown as ManagedRuntime["runtime"]["session"];
+		const notifier = new SessionNotifier(bus, createQueries({ runtime: { session } } as unknown as ManagedRuntime));
+
+		notifier.emitSessionState("session-a", "navigate");
+
+		expect(snapshots).toHaveLength(1);
+		expect(snapshots[0]?.partial).toBe(true);
+		expect(snapshots[0]?.entries).toHaveLength(80);
+		expect(snapshots[0]?.history?.hasMore).toBe(true);
 	});
 });

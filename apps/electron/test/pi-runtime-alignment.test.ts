@@ -63,7 +63,10 @@ describe("pi runtime architecture regressions", () => {
 		expect(eventProcessor).toContain("events: uiEvents");
 		expect(sessionNotifier).toContain("const allEntries = session.sessionManager.getBranch()");
 		// entries are translated through toLookSessionEntry() before crossing IPC
-		expect(sessionNotifier).toContain("entries.map(toLookSessionEntry)");
+		expect(
+			sessionNotifier.includes("entries.map(toLookSessionEntry)") ||
+				sessionNotifier.includes("toLookSessionEntries(entries)"),
+		).toBe(true);
 		expect(runtime).not.toContain("streamId");
 		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
 		expect(existsSync(resolve(repositoryRoot, "packages/shared/src/message-convert.ts"))).toBe(false);

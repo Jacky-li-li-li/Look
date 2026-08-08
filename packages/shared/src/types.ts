@@ -88,6 +88,9 @@ export type {
 	ForkedSessionResult,
 	LookSessionEntry,
 	NavigateTreeResult,
+	SessionHistoryPage,
+	SessionHistoryPreviewEnvelope,
+	SessionHistoryWindow,
 	SessionRuntimeSnapshot,
 	SessionSnapshotEnvelope,
 } from "./types/dto/session.js";

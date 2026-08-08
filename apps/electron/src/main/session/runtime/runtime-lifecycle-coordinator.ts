@@ -50,12 +50,18 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	sessionNotifier: Pick<SessionNotifier, "disposeSession">;
 	selection: ActiveSessionSelection;
 	getStoredSession(sessionId: string): StoredSession | undefined;
+	/** Optional cold-start fast path; runtime activation remains authoritative. */
+	emitSessionPreview?(sessionId: string, stored: StoredSession): Promise<void>;
 	openSessionManager(stored: StoredSession): SessionManager;
 	handleSessionEvent(sessionId: string, event: AgentSessionEvent): Promise<void>;
 	setActiveProjectId(projectId: string): void;
 	getActiveProjectId(): string | null;
 	refreshProjectSessions(projectId: string): Promise<unknown>;
 	events: RuntimeLifecycleEvents;
+}
+
+function yieldToRenderer(): Promise<void> {
+	return new Promise((resolve) => setImmediate(resolve));
 }
 
 /** Which bindings to clean up when `rebindRuntime` fails partway through. */
@@ -73,6 +79,8 @@ enum RebindErrorAction {
 export class RuntimeLifecycleCoordinator {
 	private readonly disposals = new Map<string, Promise<void>>();
 	private readonly creationTargets = new Map<string, { cwd: string; projectId: string }>();
+	/** Latest activation request wins for selection and renderer-facing broadcasts. */
+	private activationEpoch = 0;
 	/** 最近一次向渲染端广播过 active project 的项目 id（用于 projectChanged 判定）。 */
 	private lastBroadcastProjectId: string | null;
 
@@ -160,7 +168,10 @@ export class RuntimeLifecycleCoordinator {
 	}
 
 	async activateSession(sessionId: string, opts?: { skipSnapshot?: boolean }): Promise<void> {
+		const activationEpoch = ++this.activationEpoch;
+		const isLatestActivation = (): boolean => activationEpoch === this.activationEpoch;
 		if (this.options.selection.isCurrent(sessionId) && this.options.runtimeRegistry.has(sessionId)) {
+			if (!isLatestActivation()) return;
 			// 渲染端已在顶部打开且持有快照时（skipSnapshot），只确认 selection 已是最新，
 			// 不重发全量会话历史。避免渲染端 entries 换新引用 → timeline 重算 → 全部消息重渲染。
 			if (opts?.skipSnapshot) {
@@ -173,9 +184,22 @@ export class RuntimeLifecycleCoordinator {
 			return;
 		}
 		// 记录调用前是否已有 live runtime：仅当 runtime 可复用且渲染端持有快照（skipSnapshot）
-		// 时才可跳过快照重发；若 runtime 是新创建的（从磁盘恢复），渲染端没有可用数据，必须发快照。
+		// 时才可跳过快照重发；若 runtime 是新创建的（从磁盘恢复），先发一个有界尾部
+		// 预览，让 renderer 在同步 SessionManager.open() 阻塞前已有可见内容。
 		const hadRuntime = this.options.runtimeRegistry.has(sessionId);
+		const stored = this.options.getStoredSession(sessionId);
+		if (!hadRuntime && stored && this.options.emitSessionPreview) {
+			try {
+				await this.options.emitSessionPreview(sessionId, stored);
+				await yieldToRenderer();
+			} catch (error) {
+				console.warn(`[Look][RuntimeLifecycle] preview failed for ${sessionId}:`, error);
+			}
+		}
 		const managed = await this.ensureRuntime(sessionId);
+		// A slower activation may still finish runtime warm-up, but it must not
+		// roll selection or renderer state back after a newer click.
+		if (!isLatestActivation()) return;
 		// 同一项目内切换会话：项目列表与会话列表都没有变化，跳过磁盘扫描和
 		// project:list / project:active-changed 事件风暴（快速连点时的卡顿主因）。
 		// 仅跨项目切换才需要刷新项目级状态。
@@ -189,6 +213,7 @@ export class RuntimeLifecycleCoordinator {
 		if (projectChanged) {
 			this.options.setActiveProjectId(managed.projectId);
 			await this.options.refreshProjectSessions(managed.projectId);
+			if (!isLatestActivation()) return;
 			this.options.events.emitProjectList();
 			this.options.events.emit({ type: "project:active-changed", projectId: managed.projectId });
 			this.lastBroadcastProjectId = managed.projectId;

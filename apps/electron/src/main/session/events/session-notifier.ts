@@ -6,47 +6,33 @@
 // IEventBus and all data is read through a narrow query port.
 // ============================================================
 
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { LookSessionEntry, MainToRendererEvent, ProjectInfo, SessionSnapshotEnvelope } from "@look/shared/types";
+import type {
+	MainToRendererEvent,
+	ProjectInfo,
+	SessionHistoryPreviewEnvelope,
+	SessionHistoryWindow,
+	SessionSnapshotEnvelope,
+} from "@look/shared/types";
 import type { IEventBus, ISessionScopeRegistry } from "../../core/contracts.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { StoredSession } from "../services/session-catalog.js";
+import { toLookSessionEntries } from "../services/session-entry-projection.js";
+import { DEFAULT_HISTORY_WINDOW_SIZE, readSessionTail } from "../services/session-history-reader.js";
 import type { SessionInfoService } from "../services/session-info-service.js";
 import { parseTodoFile } from "../services/todo-parser.js";
 
-/**
- * Translate pi SDK SessionEntry[] to renderer-optimized LookSessionEntry[].
- * Only fields the renderer actually uses are retained — this decouples the
- * renderer from pi SDK internals and reduces IPC payload size.
- *
- * @see ARCHITECTURE: .trae/documents/look-project-architecture-review.md #3
- */
-function toLookSessionEntry(entry: SessionEntry): LookSessionEntry {
-	switch (entry.type) {
-		case "message":
-			return { type: "message", id: entry.id, message: entry.message };
-		case "compaction":
-			return { type: "compaction", id: entry.id, summary: entry.summary, tokensBefore: entry.tokensBefore };
-		case "branch_summary":
-			return { type: "branch_summary", id: entry.id, summary: entry.summary };
-		case "custom":
-			return { type: "custom", id: entry.id, customType: entry.customType, data: entry.data };
-		case "custom_message":
-			return {
-				type: "custom_message",
-				id: entry.id,
-				customType: entry.customType,
-				content: entry.content,
-				display: entry.display,
-			};
-		case "model_change":
-			return { type: "model_change", id: entry.id, provider: entry.provider, modelId: entry.modelId };
-		case "thinking_level_change":
-			return { type: "thinking_level_change", id: entry.id, thinkingLevel: entry.thinkingLevel };
-		case "label":
-			return { type: "label", id: entry.id, label: entry.label };
-		case "session_info":
-			return { type: "session_info", id: entry.id, name: entry.name };
-	}
+const HISTORY_WINDOW_SIZE = DEFAULT_HISTORY_WINDOW_SIZE;
+
+function historyWindow(
+	entriesLength: number,
+	entries: readonly { id: string }[],
+	leafId: string | null,
+): SessionHistoryWindow {
+	return {
+		cursor: entries[0]?.id ?? null,
+		hasMore: entriesLength > entries.length,
+		revision: leafId ?? entries.at(-1)?.id ?? "root",
+	};
 }
 
 export interface SessionNotifierQueries {
@@ -66,10 +52,28 @@ export class SessionNotifier {
 		private readonly queries: SessionNotifierQueries,
 	) {}
 
+	async emitSessionPreview(sessionId: string, stored: StoredSession): Promise<void> {
+		const sequence = this.nextSequence(sessionId);
+		try {
+			const preview = await readSessionTail(stored.path, HISTORY_WINDOW_SIZE);
+			const event: SessionHistoryPreviewEnvelope = {
+				type: "session:history-preview",
+				sessionId,
+				sequence,
+				leafId: preview.leafId,
+				entries: toLookSessionEntries(preview.entries),
+				history: preview.history,
+			};
+			this.eventBus.emit(event);
+		} catch (error) {
+			// Preview is an optimization. Runtime activation remains authoritative.
+			console.warn(`[Look][SessionNotifier] history preview failed for ${sessionId}:`, error);
+		}
+	}
+
 	emitSessionState(sessionId: string | null, reason: SessionSnapshotEnvelope["reason"]): void {
 		if (!sessionId) return;
-		const sequence = (this.snapshotSequences.get(sessionId) ?? 0) + 1;
-		this.snapshotSequences.set(sessionId, sequence);
+		const sequence = this.nextSequence(sessionId);
 		const info = this.queries.sessionInfoService.getAgentInfo(sessionId);
 		const projectId = info?.projectId;
 		if (projectId) this.emitSessionList(projectId);
@@ -105,40 +109,25 @@ export class SessionNotifier {
 				compactionEstimatedTokensAfter: scope?.compactionEstimatedTokensAfter,
 			};
 
-			// On activation, send the most recent messages first so the chat area
-			// renders quickly, then follow up with the full history. The deferred
-			// full snapshot deliberately reuses the SAME sequence: the renderer
-			// (snapshot.ts) drops only strictly-older sequences (`<`), so the
-			// equal-sequence full snapshot is applied and replaces the partial.
-			// Do NOT bump the sequence here or "fix" the renderer to `<=` —
-			// that would drop the full history and leave the chat stuck at 100.
-			const PARTIAL_SIZE = 100;
-			const usePartial = reason === "activate" && allEntries.length > PARTIAL_SIZE;
-			const entries = usePartial ? allEntries.slice(-PARTIAL_SIZE) : allEntries;
-			const lookEntries = entries.map(toLookSessionEntry);
+			// Large recovery snapshots are windowed. The renderer requests older entries
+			// by cursor; sending the full branch here defeats the fast path. Navigate is
+			// windowed too: after tree navigation the branch is rebuilt from disk and the
+			// renderer re-paginates, avoiding a full-history broadcast on every jump.
+			const windowableReason = reason === "activate" || reason === "agent_end" || reason === "navigate";
+			const usePartial = windowableReason && allEntries.length > HISTORY_WINDOW_SIZE;
+			const entries = usePartial ? allEntries.slice(-HISTORY_WINDOW_SIZE) : allEntries;
+			const lookEntries = toLookSessionEntries(entries);
 			this.eventBus.emit({
 				type: "session:snapshot",
 				sessionId,
 				reason,
 				sequence,
-				partial: usePartial,
+				partial: usePartial || undefined,
+				history: usePartial ? historyWindow(allEntries.length, entries, leafId) : undefined,
 				leafId,
 				entries: lookEntries,
 				runtime,
 			});
-			if (usePartial) {
-				setImmediate(() => {
-					this.eventBus.emit({
-						type: "session:snapshot",
-						sessionId,
-						reason,
-						sequence,
-						leafId,
-						entries: allEntries.map(toLookSessionEntry),
-						runtime,
-					});
-				});
-			}
 		}
 		this.emitSessionUpdated(sessionId);
 	}
@@ -205,6 +194,13 @@ export class SessionNotifier {
 
 	clear(): void {
 		this.contextUsageLastEmit.clear();
+		this.snapshotSequences.clear();
+	}
+
+	private nextSequence(sessionId: string): number {
+		const sequence = (this.snapshotSequences.get(sessionId) ?? 0) + 1;
+		this.snapshotSequences.set(sessionId, sequence);
+		return sequence;
 	}
 
 	private getManagedRuntime(sessionId: string): ManagedRuntime | undefined {
