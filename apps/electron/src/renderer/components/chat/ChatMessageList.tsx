@@ -223,26 +223,36 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 	// === 冷加载分批渲染：刷新/切换会话时 timeline 一次性出现大量消息，
 	// 按小批（每帧 CHUNK 条）渲染，避免单帧提交数百条 markdown 高亮阻塞主线程。
-	// 流式输出（逐条追加、ready 已 true）不启动分批，保持实时追加。
+	// 触发条件与 ready 解耦，按「timeline 长度增量」判定：
+	//   - 冷加载：首次出现（prevLen === 0）且超过一批 → 启动分批；
+	//   - 大批量增量：partial→full 快照、分支导航、agent_end 快照等一次性
+	//     timeline 大幅增长 → 重启分批（旧实现被 ready 短路，单帧全量提交卡死）；
+	//   - 流式输出：逐条追加（增量 ≤ CHUNK）不启动分批，保持实时追加。
 	const CHUNK_SIZE = 6;
 	const [renderCount, setRenderCount] = useState(CHUNK_SIZE);
 	const [chunking, setChunking] = useState(false);
+	const lastTimelineLengthRef = useRef(0);
 
 	useEffect(() => {
-		if (chunking || ready || timeline.length <= CHUNK_SIZE) return;
-		setChunking(true);
-		setRenderCount(CHUNK_SIZE);
-	}, [chunking, ready, timeline.length]);
+		const prevLen = lastTimelineLengthRef.current;
+		const curLen = timeline.length;
+		lastTimelineLengthRef.current = curLen;
 
-	useEffect(() => {
+		if (!chunking && curLen > CHUNK_SIZE && (prevLen === 0 || curLen - prevLen > CHUNK_SIZE)) {
+			// 冷加载或一次性大批量增量：从 prevLen（已渲染基线）继续，分批追赶。
+			setChunking(true);
+			setRenderCount(Math.min(curLen, prevLen + CHUNK_SIZE));
+			return;
+		}
 		if (!chunking) return;
-		if (renderCount >= timeline.length) {
+
+		if (renderCount >= curLen) {
 			setChunking(false);
-			setRenderCount(timeline.length);
+			setRenderCount(curLen);
 			return;
 		}
 		const raf = requestAnimationFrame(() => {
-			setRenderCount((n) => Math.min(timeline.length, n + CHUNK_SIZE));
+			setRenderCount((n) => Math.min(curLen, n + CHUNK_SIZE));
 		});
 		return () => cancelAnimationFrame(raf);
 	}, [chunking, renderCount, timeline.length]);
@@ -492,6 +502,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 						<div data-message-id={item.id} className="group/message flex flex-col">
 							<MessageItem
 								message={item.message}
+								entryId={itemEntryId}
 								agentName={agentName}
 								isStreaming={live ? isBusy : false}
 								autoCollapse={autoCollapse}

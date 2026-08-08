@@ -14,6 +14,7 @@ import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-age
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { ProjectInfo } from "@look/shared/types";
+import { computeSessionsFingerprint, SessionIndexStore } from "./session-index-store.js";
 
 export interface StoredSession extends PiSessionInfo {
 	projectId: string;
@@ -124,15 +125,10 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 }
 
 /**
- * Lightweight fingerprint for cache invalidation.
- * Uses session count + max modified time — fast and doesn't require file system directory reads.
- * If session count or max modified time changes, the cache is invalidated.
+ * 目录指纹由 SessionIndexStore.computeSessionsFingerprint 统一计算
+ * （readdir + stat，`count:maxMtimeMs`），内存缓存与磁盘索引共用，
+ * 见 session-index-store.ts。
  */
-function sessionsFingerprint(sessions: PiSessionInfo[]): string {
-	if (sessions.length === 0) return "0";
-	const maxModified = Math.max(...sessions.map((s) => s.modified.getTime()));
-	return `${sessions.length}:${maxModified}`;
-}
 
 export class SessionCatalog {
 	private readonly sessionsByProject = new Map<string, StoredSession[]>();
@@ -140,6 +136,8 @@ export class SessionCatalog {
 	private readonly projectFingerprint = new Map<string, string>();
 	/** 进行中的 refresh（同 project 并发去重，避免指纹/数据提交时序错乱）。 */
 	private readonly refreshInFlight = new Map<string, Promise<StoredSession[]>>();
+	/** 持久化会话索引（Proma 式）：应用重启后跳过逐文件扫描，从索引秒恢复。 */
+	private readonly indexStore = new SessionIndexStore();
 
 	constructor(private readonly onSubsessionDiscovered: (metadata: SubsessionMetadata) => void = () => {}) {}
 
@@ -159,12 +157,43 @@ export class SessionCatalog {
 		const sessionsDir = ensureWorkspaceDir(project.id);
 		const subsessionsDir = getWorkspaceSubsessionsDir(project.id);
 
+		// 轻量目录指纹（readdir + stat，不打开 JSONL 内容）：
+		// 应用重启后内存缓存丢失，但指纹匹配磁盘索引即可秒恢复侧边栏，
+		// 不必逐个解析会话文件（30+ 会话的项目可省 30ms+）。
+		const fingerprint = await computeSessionsFingerprint(sessionsDir, subsessionsDir);
+
+		// 1) 内存缓存命中（运行期热路径）
+		const cached = this.sessionsByProject.get(project.id);
+		if (cached && this.projectFingerprint.get(project.id) === fingerprint) {
+			return cached;
+		}
+
+		// 2) 磁盘索引命中（应用重启后的快速恢复）
+		const diskIndex = await this.indexStore.load(project.id);
+		if (diskIndex && diskIndex.fingerprint === fingerprint) {
+			this.replace(project.id, diskIndex.sessions, fingerprint);
+			return diskIndex.sessions;
+		}
+
+		// 3) 全量扫描（首次 / 指纹变化 / 索引缺失损坏），完成后重建索引。
+		// save 同步等待（全扫已耗时 30ms+，多 1ms 写盘无感），保证
+		// refresh 返回时索引已就绪（重启恢复路径的时序一致性）。
+		const sessions = await this.scanProjectSessions(project, sessionsDir, subsessionsDir);
+		await this.indexStore.save(project.id, { fingerprint, sessions });
+		this.replace(project.id, sessions, fingerprint);
+		return sessions;
+	}
+
+	/** 全量扫描：SDK 列表 + 子会话元数据，合并为项目的 StoredSession 列表。 */
+	private async scanProjectSessions(
+		project: ProjectInfo,
+		sessionsDir: string,
+		subsessionsDir: string,
+	): Promise<StoredSession[]> {
 		// Use pi SDK SessionManager.list() for main sessions instead of custom JSONL scanning.
 		const mainSessions = await SessionManager.list(project.cwd, sessionsDir);
-		const mainFingerprint = sessionsFingerprint(mainSessions);
 
 		// Collect subsession metadata (Look custom entries not visible to SessionManager.list()).
-		let subsessionFingerprint = "0";
 		const subsessionMetas: SubsessionMetadata[] = [];
 		if (existsSync(subsessionsDir)) {
 			let files: string[] = [];
@@ -173,22 +202,13 @@ export class SessionCatalog {
 			} catch {
 				// A deleted folder during refresh is equivalent to an empty folder.
 			}
-			const mtimes: number[] = [];
 			for (const file of files) {
 				const filePath = path.join(subsessionsDir, file);
 				const metadata = await scanSubsessionMetadata(filePath);
 				if (!metadata) continue;
 				this.onSubsessionDiscovered(metadata);
 				subsessionMetas.push(metadata);
-				mtimes.push(metadata.created);
 			}
-			subsessionFingerprint = mtimes.length > 0 ? `${mtimes.length}:${Math.max(...mtimes)}` : "0";
-		}
-
-		const fingerprint = `${mainFingerprint}|${subsessionFingerprint}`;
-		const cached = this.sessionsByProject.get(project.id);
-		if (cached && this.projectFingerprint.get(project.id) === fingerprint) {
-			return cached;
 		}
 
 		const sessions: StoredSession[] = mainSessions.map((session) => ({
@@ -212,7 +232,6 @@ export class SessionCatalog {
 				subagentAgentName: metadata.agentName,
 			});
 		}
-		this.replace(project.id, sessions, fingerprint);
 		return sessions;
 	}
 

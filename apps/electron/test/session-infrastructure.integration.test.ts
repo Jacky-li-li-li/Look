@@ -10,6 +10,7 @@ const storage = vi.hoisted(() => ({ sessionsDir: "", subsessionsDir: "" }));
 vi.mock("@look/shared/look-storage", () => ({
 	ensureWorkspaceDir: () => storage.sessionsDir,
 	getWorkspaceSubsessionsDir: () => storage.subsessionsDir,
+	getWorkspaceDir: () => path.dirname(storage.sessionsDir),
 }));
 
 import { SessionCatalog } from "../src/main/session/services/session-catalog.js";

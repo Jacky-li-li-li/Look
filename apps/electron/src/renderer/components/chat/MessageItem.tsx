@@ -23,6 +23,8 @@ import { StreamingBlocksBubble } from "./StreamingBlocksBubble";
 export interface MessageItemProps {
 	/** 持久化消息（纯 live 时为 undefined）。 */
 	message?: AgentMessage;
+	/** 持久化条目的稳定 ID（live 消息为 undefined），用于跨快照重建的渲染缓存。 */
+	entryId?: string;
 	agentName?: string;
 	isStreaming?: boolean;
 	autoCollapse: boolean;
@@ -50,6 +52,7 @@ function senderFor(
 
 export const MessageItem = memo(function MessageItem({
 	message,
+	entryId,
 	agentName,
 	isStreaming = false,
 	autoCollapse,
@@ -94,6 +97,7 @@ export const MessageItem = memo(function MessageItem({
 					) : message ? (
 						<MessageBlockListForMessage
 							message={message}
+							entryId={entryId}
 							isStreaming={isStreaming}
 							autoCollapse={autoCollapse}
 							toolExecutions={toolExecutions}
@@ -121,25 +125,58 @@ export const MessageItem = memo(function MessageItem({
 });
 
 // 保持与 MessageBubble 相同的内容块渲染：快照路径用 MessageBlockList。
-import { useMemo } from "react";
+import { memo as memoize, useMemo } from "react";
 import { toUnifiedFromPiAi } from "./block-renderer/blockTypes";
 import { MessageBlockList } from "./block-renderer/MessageBlockList";
 
-function MessageBlockListForMessage({
+/**
+ * 快照消息的块转换缓存：按持久化条目 ID 缓存 UnifiedBlock 数组。
+ *
+ * 快照替换（partial→full、agent_end、分支导航）会整体换掉 entries 引用，
+ * 导致已挂载消息的 message 对象引用全部变化、MessageItem/MessageBlockList
+ * 的 memo 同时失效。此时整棵子树重渲染，本缓存让「内容没变的旧消息」
+ * 复用同一份 UnifiedBlock 数组 → MessageBlockList 的 props 引用稳定 →
+ * per-block memo（UnifiedBlockView）恢复生效，重渲染退化为纯函数执行。
+ *
+ * 历史消息不可变，缓存按 entryId（全局唯一、内容恒定的持久化条目 ID）
+ * 索引是安全的；live 消息无 entryId，不进入缓存。
+ */
+const unifiedBlocksByEntryId = new Map<string, ReturnType<typeof toUnifiedFromPiAi>>();
+const UNIFIED_CACHE_MAX = 800;
+
+function cachedUnifiedBlocks(entryId: string | undefined, blocks: Parameters<typeof toUnifiedFromPiAi>[0]) {
+	if (entryId) {
+		const cached = unifiedBlocksByEntryId.get(entryId);
+		if (cached) return cached;
+	}
+	const unified = toUnifiedFromPiAi(blocks);
+	if (entryId) {
+		if (unifiedBlocksByEntryId.size >= UNIFIED_CACHE_MAX) {
+			const oldest = unifiedBlocksByEntryId.keys().next().value;
+			if (oldest !== undefined) unifiedBlocksByEntryId.delete(oldest);
+		}
+		unifiedBlocksByEntryId.set(entryId, unified);
+	}
+	return unified;
+}
+
+const MessageBlockListForMessage = memoize(function MessageBlockListForMessage({
 	message,
+	entryId,
 	isStreaming,
 	autoCollapse,
 	toolExecutions,
 	toolResultMap,
 }: {
 	message: AgentMessage;
+	entryId?: string;
 	isStreaming: boolean;
 	autoCollapse: boolean;
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
 	const blocks = useMemo(() => messageBlocks(message), [message]);
-	const unified = useMemo(() => toUnifiedFromPiAi(blocks), [blocks]);
+	const unified = useMemo(() => cachedUnifiedBlocks(entryId, blocks), [blocks, entryId]);
 	return (
 		<MessageBlockList
 			blocks={unified}
@@ -150,7 +187,7 @@ function MessageBlockListForMessage({
 			defaultToolStatus="pending"
 		/>
 	);
-}
+});
 
 function messageBlocks(
 	message: AgentMessage,
