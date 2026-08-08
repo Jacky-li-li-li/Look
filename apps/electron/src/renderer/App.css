@@ -1610,6 +1610,10 @@ body {
 
 	/* 面板拖拽调宽把手：绝对定位于面板内左侧，悬停/拖动时显示竖线提示
 	   （面板自身 overflow-hidden，把手不得越出面板边界） */
+	/* 分隔条把手:位于两面板之间的边界上(左缘对齐边界线)。
+	   常驻弱线提示"这里可拖",hover/拖动时整条命中区淡色块 + 线变亮——
+	   视觉语义是"分隔条"而非"面板边框",用户按分隔条直觉拖动:
+	   拖向右 = 左面板变宽、右面板变窄(与 VSCode/Proma 一致)。 */
 	.panel-resize-handle {
 		position: absolute;
 		top: 0;
@@ -1619,9 +1623,11 @@ body {
 		z-index: 30;
 		cursor: col-resize;
 		touch-action: none;
+		background: transparent;
+		transition: background-color 150ms ease;
 	}
 
-	/* 高亮线对齐面板左边缘（覆盖 border 位置），hover 时只有一条线变亮 */
+	/* 常驻弱分隔线:对齐面板左边缘(覆盖 border 位置),始终可见 */
 	.panel-resize-handle::before {
 		content: "";
 		position: absolute;
@@ -1629,13 +1635,22 @@ body {
 		bottom: 0;
 		left: 0;
 		width: 2px;
-		background: transparent;
+		background: color-mix(in oklab, var(--primary) 10%, transparent);
 		transition: background-color 150ms ease;
+	}
+
+	/* hover/拖动:命中区淡色块 + 线变亮,明确"这是一条可拖的分隔条" */
+	.panel-resize-handle:hover {
+		background: color-mix(in oklab, var(--primary) 6%, transparent);
 	}
 
 	.panel-resize-handle:hover::before,
 	.panel-resize-handle:active::before {
-		background: color-mix(in oklab, var(--primary) 30%, transparent);
+		background: color-mix(in oklab, var(--primary) 35%, transparent);
+	}
+
+	.panel-resize-handle:active {
+		background: color-mix(in oklab, var(--primary) 10%, transparent);
 	}
 
 	/* Dock 面板内容入场：track 展开动画进行到一半左右再淡入内容，避免内容抢先闪现 */
