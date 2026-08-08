@@ -6,21 +6,27 @@ import { describe, expect, it, vi } from "vitest";
 import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
 import type { StoredSession } from "../src/main/session/services/session-catalog.js";
 import type { SessionLifecycleHost } from "../src/main/session/services/session-lifecycle-service.js";
-import { SessionLifecycleService } from "../src/main/session/services/session-lifecycle-service.js";
+import { ensureSessionModel, SessionLifecycleService } from "../src/main/session/services/session-lifecycle-service.js";
 
 describe("SessionLifecycleService", () => {
-	function makeSession(id = "session-1") {
+	function makeSession(id = "session-1", model?: unknown) {
 		return {
 			sessionId: id,
+			model,
 			setSessionName: vi.fn(),
 			setModel: vi.fn().mockResolvedValue(undefined),
 			abort: vi.fn().mockResolvedValue(undefined),
 		};
 	}
 
-	function makeManagedRuntime(sessionId: string, projectId = "project-1", cwd = "/project"): ManagedRuntime {
+	function makeManagedRuntime(
+		sessionId: string,
+		projectId = "project-1",
+		cwd = "/project",
+		model?: unknown,
+	): ManagedRuntime {
 		return {
-			runtime: { session: makeSession(sessionId), cwd } as unknown as AgentSessionRuntime,
+			runtime: { session: makeSession(sessionId, model), cwd } as unknown as AgentSessionRuntime,
 			projectId,
 			cwd,
 			createdAt: Date.now(),
@@ -32,6 +38,10 @@ describe("SessionLifecycleService", () => {
 		activeProjectId?: string | null;
 		runtime?: ManagedRuntime | null;
 		stored?: StoredSession | null;
+		availableModels?: Array<{ provider: string; id: string }>;
+		preferredModel?: string | null;
+		findResult?: unknown;
+		hasAuth?: boolean;
 	}) {
 		const projectId = overrides?.activeProjectId ?? "project-1";
 		const runtime = overrides?.runtime ?? makeManagedRuntime("session-1");
@@ -77,13 +87,13 @@ describe("SessionLifecycleService", () => {
 					cancelInteractions: vi.fn(),
 				} as unknown as import("../src/main/core/contracts.js").IPlanService,
 				userSettings: {
-					getAll: vi.fn().mockReturnValue({}),
+					getAll: vi.fn().mockReturnValue({ preferredModel: overrides?.preferredModel ?? null }),
 				} as unknown as import("../src/main/settings/store.js").UserSettingsStore,
 				modelRegistry: {
-					find: vi.fn(),
-					hasConfiguredAuth: vi.fn(),
+					find: vi.fn().mockReturnValue(overrides?.findResult ?? null),
+					hasConfiguredAuth: vi.fn().mockReturnValue(overrides?.hasAuth ?? true),
 				} as unknown as import("@earendil-works/pi-coding-agent").ModelRegistry,
-				getAvailableModelsSync: vi.fn().mockReturnValue([]),
+				getAvailableModelsSync: vi.fn().mockReturnValue(overrides?.availableModels ?? []),
 			}),
 			host,
 			runtime,
@@ -147,5 +157,88 @@ describe("SessionLifecycleService", () => {
 		await service.abortAgent("session-1");
 
 		expect(runtime.runtime.session.abort).toHaveBeenCalled();
+	});
+
+	describe("ensureSessionModel 模型兜底（2026-08-08）", () => {
+		const makeDeps = (overrides?: {
+			model?: unknown;
+			available?: Array<{ provider: string; id: string }>;
+			findResult?: unknown;
+			preferredModel?: string | null;
+			setModelImpl?: () => Promise<void>;
+		}) => {
+			const setModel = overrides?.setModelImpl ?? vi.fn().mockImplementation(async () => {});
+			const update = vi.fn().mockResolvedValue(undefined);
+			const session = {
+				model: overrides?.model,
+				setModel,
+			};
+			const deps = {
+				getAvailableModelsSync: vi.fn().mockReturnValue(overrides?.available ?? []),
+				modelRegistry: { find: vi.fn().mockReturnValue(overrides?.findResult ?? null) },
+				userSettings: {
+					getAll: vi.fn().mockReturnValue({ preferredModel: overrides?.preferredModel ?? null }),
+					update,
+				},
+			};
+			return { session, setModel, update, deps };
+		};
+
+		it("SDK 未解析出模型时用首个可用模型兜底 setModel", async () => {
+			const { session, setModel, deps } = makeDeps({
+				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+			});
+			await ensureSessionModel(session, deps);
+			expect(setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-v4-flash" });
+		});
+
+		it("已解析出模型时跳过(即使有可用模型)", async () => {
+			const { session, setModel, deps } = makeDeps({
+				model: { provider: "anthropic", id: "claude-opus-4-8" },
+				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
+			});
+			await ensureSessionModel(session, deps);
+			expect(setModel).not.toHaveBeenCalled();
+		});
+
+		it("兜底 setModel 抛错时不向上抛", async () => {
+			const { session, deps } = makeDeps({
+				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+				setModelImpl: async () => {
+					throw new Error("No API key for provider/model");
+				},
+			});
+			await expect(ensureSessionModel(session, deps)).resolves.toBeUndefined();
+		});
+
+		it("无可用模型时不 setModel(保持空模型,由渲染层显示占位文案)", async () => {
+			const { session, setModel, deps } = makeDeps({ available: [] });
+			await ensureSessionModel(session, deps);
+			expect(setModel).not.toHaveBeenCalled();
+		});
+
+		it("兜底模型与用户全局默认不同时恢复原默认(防污染)", async () => {
+			const { session, setModel, update, deps } = makeDeps({
+				preferredModel: "anthropic/claude-opus-4-8",
+				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+			});
+			await ensureSessionModel(session, deps);
+			expect(setModel).toHaveBeenCalledTimes(1);
+			// setModel 的 SDK 副作用会覆盖默认模型,兜底后恢复用户设置
+			expect(update).toHaveBeenCalledWith({ preferredModel: "anthropic/claude-opus-4-8" });
+		});
+
+		it("兜底模型与用户默认一致时不恢复", async () => {
+			const { session, update, deps } = makeDeps({
+				preferredModel: "deepseek/deepseek-v4-flash",
+				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+			});
+			await ensureSessionModel(session, deps);
+			expect(update).not.toHaveBeenCalled();
+		});
 	});
 });

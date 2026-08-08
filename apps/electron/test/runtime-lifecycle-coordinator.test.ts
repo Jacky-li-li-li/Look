@@ -143,6 +143,7 @@ function makeCoordinator(
 		sessionSubagentService: { applyDefaultOnBind: vi.fn(), clearSession: vi.fn() },
 		sessionNotifier: { disposeSession: vi.fn() },
 		selection,
+		ensureSessionModel: vi.fn().mockResolvedValue(undefined),
 		getStoredSession: vi.fn((sessionId: string) => (sessionId === stored.id ? stored : undefined)),
 		emitSessionPreview: vi.fn().mockResolvedValue(undefined),
 		openSessionManager: vi.fn(() => ({ getSessionId: () => stored.id }) as SessionManager),
@@ -555,5 +556,28 @@ describe("RuntimeLifecycleCoordinator", () => {
 		expect(fixture.dependencies.setActiveProjectId).toHaveBeenCalledWith("project-B");
 		expect(fixture.dependencies.events.emitProjectList).toHaveBeenCalledTimes(1);
 		expect(fixture.emitted).toContainEqual({ type: "project:active-changed", projectId: "project-B" });
+	});
+});
+
+describe("RuntimeLifecycleCoordinator 模型兜底（ensureSessionModel）", () => {
+	it("bindRuntime 时调用 ensureSessionModel 并推送 UI 刷新", async () => {
+		const session = makeSession("session-1");
+		const runtime = makeRuntime(session);
+		const { coordinator, dependencies } = makeCoordinator(runtime);
+		const ensure = vi.mocked(dependencies.ensureSessionModel).mockResolvedValue(undefined);
+
+		await coordinator.ensureRuntime("session-1");
+
+		expect(ensure).toHaveBeenCalledWith(session.session);
+	});
+
+	it("ensureSessionModel 抛错时不阻塞运行时绑定", async () => {
+		const session = makeSession("session-1");
+		const runtime = makeRuntime(session);
+		const { coordinator, dependencies, runtimeRegistry } = makeCoordinator(runtime);
+		vi.mocked(dependencies.ensureSessionModel).mockRejectedValue(new Error("boom"));
+
+		await expect(coordinator.ensureRuntime("session-1")).resolves.toBeDefined();
+		expect(runtimeRegistry.get("session-1")).toBeDefined();
 	});
 });

@@ -276,6 +276,22 @@ export class SessionSubagentService {
 				} catch (error) {
 					console.warn(`[Look][subagent] Failed to set model ${agent.model}:`, error);
 				}
+			} else {
+				// 设计意图:子会话继承父会话当前模型(含用户中途切换)。
+				// agent.model 未显式配置时,SDK 会按 settings 默认解析(不跟随父会话),
+				// 这里显式继承;父会话也无模型则保持现状(bindRuntime 已有 ensureSessionModel 兜底)。
+				const parentModel = parentManaged.runtime.session.model;
+				if (parentModel) {
+					try {
+						await session.setModel(parentModel);
+						this.deps.host.emitSessionUpdated(childSessionId);
+					} catch (error) {
+						console.warn(
+							`[Look][subagent] Failed to inherit parent model ${parentModel.provider}/${parentModel.id}:`,
+							error,
+						);
+					}
+				}
 			}
 
 			session.sessionManager.appendCustomEntry(SUBAGENT_PARENT_ENTRY_TYPE, {

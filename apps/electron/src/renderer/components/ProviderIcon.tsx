@@ -52,11 +52,18 @@ interface ProviderIconProps {
  * Falls back to a 1-char monogram tile if the id isn't in the
  * mapping (e.g. a brand-new provider id from a future pi SDK
  * release we haven't curated yet).
+ *
+ * Empty ids (session has no model yet) render nothing at all —
+ * deriveInitial("") would produce a confusing "?" placeholder.
  */
 export function ProviderIcon({ id, className, "data-icon": dataIcon }: ProviderIconProps) {
 	const iconId = resolveIconId(id);
 	const svg = ICONS[iconId];
 	const initial = useMemo(() => deriveInitial(id), [id]);
+
+	// 空 id(如会话尚未解析出模型)不渲染占位图标:deriveInitial("") 会返回 "?",
+	// 让模型按钮出现莫名问号。无模型时由调用方显示占位文案/隐藏图标。
+	if (!id.trim()) return null;
 
 	if (!svg) {
 		return (

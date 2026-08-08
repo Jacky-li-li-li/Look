@@ -50,6 +50,8 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	sessionNotifier: Pick<SessionNotifier, "disposeSession">;
 	selection: ActiveSessionSelection;
 	getStoredSession(sessionId: string): StoredSession | undefined;
+	/** 会话模型兜底(新建/历史恢复/子会话统一入口,见 ensureSessionModel)。 */
+	ensureSessionModel(session: AgentSession): Promise<void>;
 	/** Optional cold-start fast path; runtime activation remains authoritative. */
 	emitSessionPreview?(sessionId: string, stored: StoredSession): Promise<void>;
 	openSessionManager(stored: StoredSession): SessionManager;
@@ -265,6 +267,15 @@ export class RuntimeLifecycleCoordinator {
 		this.options.runtimeRegistry.set(session.sessionId, managed);
 		this.options.planService.syncToolState(session.sessionId);
 		this.options.sessionSubagentService.applyDefaultOnBind(session.sessionId, session);
+		// 模型兜底:SDK 解析失败(快照失真等)时填充首个可用模型,统一覆盖
+		// 新建/历史恢复/子会话三条路径。await 保证后续 agent:created/snapshot
+		// 推送时模型已就位(内部已 catch,失败不阻塞绑定;不额外推送,
+		// 避免改变激活路径的事件计数语义)。
+		try {
+			await this.options.ensureSessionModel(session);
+		} catch {
+			// 兜底失败不阻塞运行时绑定(发送时会报明确错误)
+		}
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 		return managed;
 	}

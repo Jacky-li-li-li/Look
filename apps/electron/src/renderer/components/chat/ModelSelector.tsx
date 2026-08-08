@@ -116,7 +116,8 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
 	// 切换中不换文案（避免按钮宽度一缩一放的抖动），只把图标换成 spinner
-	const label = currentModelObj?.name ?? currentModel?.split("/").pop() ?? t("agent.model");
+	// 注意:"".split("/").pop() 返回空串而非 undefined,?? 不会兜底 → 必须用 || 兜底到翻译文案
+	const label = currentModelObj?.name ?? (currentModel?.split("/").pop() || t("agent.model"));
 
 	// Default the active tab to whichever side has content. If the
 	// user only configured env-var credentials, the "API Keys" tab

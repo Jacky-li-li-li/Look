@@ -61,8 +61,48 @@ export interface SessionLifecycleServiceDependencies {
 	permissionService: IPermissionService;
 	planService: IPlanService;
 	userSettings: UserSettingsStore;
-	modelRegistry: Pick<ModelRegistry, "find" | "hasConfiguredAuth">;
+	modelRegistry: Pick<ModelRegistry, "find">;
 	getAvailableModelsSync(): AvailableModel[];
+}
+
+export interface EnsureSessionModelDeps {
+	getAvailableModelsSync(): AvailableModel[];
+	modelRegistry: Pick<ModelRegistry, "find">;
+	userSettings: Pick<UserSettingsStore, "getAll" | "update">;
+}
+
+/**
+ * 确保会话有模型 —— 新建/历史恢复/子会话统一入口(由 runtime-lifecycle-coordinator
+ * 的 bindRuntime 调用)。
+ *
+ * - 已解析出模型 → 跳过
+ * - 未解析(SDK findInitialModel 在快照失真/无可用时静默返回 undefined) →
+ *   取首个可用模型 setModel;setModel 内部用实时 checkAuth 校验凭据
+ *   (agent-session.js),失败 throw → 忽略,保持现状(发送时会报明确错误)
+ * - setModel 副作用:持久化 defaultProvider/defaultModel 到 settings.json
+ *   (agent-session.js setDefaultModelAndProvider)。若用户已设置全局默认模型
+ *   且与兜底模型不同,恢复原默认 —— 与 plan 模式切换的防污染机制一致。
+ */
+export async function ensureSessionModel(
+	session: { model: unknown; setModel(model: unknown): Promise<unknown> },
+	deps: EnsureSessionModelDeps,
+): Promise<void> {
+	if (session.model) return;
+	const savedPreferred = deps.userSettings.getAll().preferredModel;
+	try {
+		const available = deps.getAvailableModelsSync();
+		if (available.length === 0) return;
+		const first = available[0];
+		const model = deps.modelRegistry.find(first.provider, first.id);
+		if (!model) return;
+		await session.setModel(model);
+		// 防污染:兜底模型与用户全局默认不同时恢复原默认
+		if (savedPreferred && savedPreferred !== `${model.provider}/${model.id}`) {
+			await deps.userSettings.update({ preferredModel: savedPreferred });
+		}
+	} catch {
+		// 兜底失败保持现状,不阻断
+	}
 }
 
 export class SessionLifecycleService {
@@ -85,17 +125,6 @@ export class SessionLifecycleService {
 		);
 		const session = managed.runtime.session;
 		session.setSessionName((input.name?.trim() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH));
-
-		if (!this.deps.userSettings.getAll().preferredModel) {
-			const available = this.deps.getAvailableModelsSync();
-			if (available.length > 0) {
-				const first = available[0];
-				const model = this.deps.modelRegistry.find(first.provider, first.id);
-				if (model && this.deps.modelRegistry.hasConfiguredAuth(model)) {
-					await session.setModel(model);
-				}
-			}
-		}
 
 		const scope = this.deps.scopeRegistry.get(session.sessionId);
 		if (scope) scope.isDefaultName = true;

@@ -23,7 +23,10 @@ function makeSession(sessionId: string, activeTools: string[] = [], allTools: st
 		getActiveToolNames: vi.fn(() => activeTools),
 		getAllTools: vi.fn(() => allTools.map((name) => ({ name }))),
 		sessionManager: { appendCustomEntry: vi.fn() },
-		prompt: vi.fn(() => Promise.resolve()),
+		prompt: vi.fn(async (_task: string, opts?: { preflightResult?: (success: boolean) => void }) => {
+			opts?.preflightResult?.(true);
+			return { messages: [] };
+		}),
 		isStreaming: false,
 		setModel: vi.fn(),
 	} as unknown as AgentSession;
@@ -206,5 +209,70 @@ describe("SessionSubagentService", () => {
 		await expect(service.runSubSession("parent", agent, "task", undefined, "   ")).rejects.toThrow(
 			"Subagent title is required and must not be empty.",
 		);
+	});
+});
+
+describe("SessionSubagentService 子会话模型继承（2026-08-08）", () => {
+	function makeService(parentModel: unknown, childSession: ReturnType<typeof makeSession>, agentModel?: string) {
+		const parentSession = makeSession("parent");
+		parentSession.model = parentModel;
+		const parentRuntime = makeManagedRuntime(parentSession, "p1");
+		const host = makeHost({
+			getManagedRuntime: vi.fn(() => parentRuntime),
+			createManagedRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(childSession, "p1"))),
+		});
+		const service = new SessionSubagentService({
+			host,
+			modelRegistry: {
+				find: vi.fn(() => ({ provider: "anthropic", id: "claude-opus-4-8" })),
+			} as unknown as ModelRegistry,
+			subAgentRegistry: { getParent: vi.fn(() => null), register: vi.fn() } as unknown as SubAgentRegistry,
+			subAgentRuntimeService: {
+				setupSubSessionTracking: vi.fn(() => Promise.resolve({ ok: true })),
+			} as unknown as SubAgentRuntimeService,
+			permissionService: { getMode: vi.fn(() => "always"), setMode: vi.fn() } as unknown as IPermissionService,
+			planService: {} as unknown as IPlanService,
+			userSettings: { getAll: vi.fn(() => ({ subagentEnabled: true })) } as unknown as UserSettingsStore,
+			agentDefinitionService: {} as unknown as AgentDefinitionService,
+			maxSubagentDepth: 5,
+			maxNameLength: 80,
+		});
+		// 让 runSubSession 走完(需要 setupSubSessionTracking 提供 runtimeInfo 等)
+		const agent: AgentConfig = {
+			name: "test",
+			description: "",
+			systemPrompt: "",
+			...(agentModel ? { model: agentModel } : {}),
+		};
+		return { service, host, childSession, agent };
+	}
+
+	it("agent.model 未配置时继承父会话当前模型", async () => {
+		const childSession = makeSession("child");
+		const {
+			service,
+			childSession: child,
+			agent,
+		} = makeService({ provider: "deepseek", id: "deepseek-v4-flash" }, childSession);
+		await service.runSubSession("parent", agent, "task", undefined, "标题");
+		expect(child.setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-v4-flash" });
+	});
+
+	it("父会话无模型时不 setModel(保持 SDK 解析/bindRuntime 兜底)", async () => {
+		const childSession = makeSession("child");
+		const { service, childSession: child, agent } = makeService(undefined, childSession);
+		await service.runSubSession("parent", agent, "task", undefined, "标题");
+		expect(child.setModel).not.toHaveBeenCalled();
+	});
+
+	it("agent.model 显式配置时优先于父会话模型", async () => {
+		const childSession = makeSession("child");
+		const {
+			service,
+			childSession: child,
+			agent,
+		} = makeService({ provider: "deepseek", id: "deepseek-v4-flash" }, childSession, "anthropic/claude-opus-4-8");
+		await service.runSubSession("parent", agent, "task", undefined, "标题");
+		expect(child.setModel).toHaveBeenCalledWith({ provider: "anthropic", id: "claude-opus-4-8" });
 	});
 });

@@ -75,7 +75,7 @@ import { SessionCatalog } from "../services/session-catalog.js";
 import { SessionControlService } from "../services/session-control-service.js";
 import { SessionHistoryService } from "../services/session-history-service.js";
 import { SessionInfoService } from "../services/session-info-service.js";
-import { SessionLifecycleService } from "../services/session-lifecycle-service.js";
+import { ensureSessionModel, SessionLifecycleService } from "../services/session-lifecycle-service.js";
 import { SessionMessagingService } from "../services/session-messaging-service.js";
 import { SessionPermissionOrchestrator } from "../services/session-permission-orchestrator.js";
 import { SessionSettingsService } from "../services/session-settings-service.js";
@@ -436,6 +436,12 @@ export class CompositionBuilder {
 
 		// runtimeLifecycle — references sessionSubagentService (already assigned)
 		this.runtimeLifecycle = new RuntimeLifecycleCoordinator({
+			ensureSessionModel: (session) =>
+				ensureSessionModel(session, {
+					getAvailableModelsSync: () => getAvailableModels(this.modelRegistry!),
+					modelRegistry: this.modelRegistry!,
+					userSettings: this.userSettings!,
+				}),
 			runtimeFactory: this.runtimeFactory!,
 			runtimeRegistry: this.runtimeRegistry,
 			scopeRegistry: this.scopeRegistry,
