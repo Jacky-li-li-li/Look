@@ -36,6 +36,11 @@ describe("environment-variable credentials are recognized as configured by Look"
 	});
 
 	it("treats ANTHROPIC_API_KEY env var as configured (hasKey, models, source=environment, envVar hint)", async () => {
+		// pi-ai 的 anthropic 解析优先级: AUTH_TOKEN(Bearer) > OAUTH_TOKEN > API_KEY。
+		// 本机 shell 可能已导出 ANTHROPIC_AUTH_TOKEN, 不清空会被它抢跑导致断言失败;
+		// 这里显式清空高优先级变量, 只留 API_KEY 验证 API_KEY 路径。
+		vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "");
+		vi.stubEnv("ANTHROPIC_OAUTH_TOKEN", "");
 		vi.stubEnv("ANTHROPIC_API_KEY", "sk-test-env");
 		vi.stubEnv("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic");
 
