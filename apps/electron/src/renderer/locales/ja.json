@@ -891,7 +891,8 @@
     "undock": "独立ウィンドウで開く",
     "resize": "ドラッグでパネル幅を調整",
     "moreActions": "その他の操作",
-    "readOnly": "プロジェクト外 · 読み取り専用"
+    "readOnly": "プロジェクト外 · 読み取り専用",
+    "fileMissing": "ファイルが存在しないか、移動されました"
   },
   "planDialogs": {
     "toolConfirmTitle": "ツール実行の確認",

@@ -891,7 +891,8 @@
     "undock": "Open in separate window",
     "resize": "Drag to resize panel",
     "moreActions": "More actions",
-    "readOnly": "Outside project · Read-only"
+    "readOnly": "Outside project · Read-only",
+    "fileMissing": "File does not exist or has been moved"
   },
   "planDialogs": {
     "toolConfirmTitle": "Tool approval required",
