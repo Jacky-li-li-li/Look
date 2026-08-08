@@ -1,6 +1,7 @@
 import type { FileTreeNode, GitRepoInfo, ProjectInfo } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
+import { toast } from "sonner";
 import i18n from "../i18n";
 
 export const projectsAtom = atom<ProjectInfo[]>([]);
@@ -72,6 +73,12 @@ export const requestViewFileAtom = atom(null, async (get, set, absolutePath: str
 	// 查看器根据 inProject 标记禁用编辑/保存;目录仍走 Finder 展示。
 	if (stat?.success && stat.kind === "directory") {
 		void window.look.revealInFinder(absolutePath);
+		return;
+	}
+	// 路径不存在(如聊天引用指向已删除/仅存在于其他机器的文件):
+	// 直接 toast 友好提示,不打开一个必然加载失败的查看器。
+	if (stat?.success && stat.kind === "missing") {
+		toast.error(i18n.t("fileViewer.fileMissing"));
 		return;
 	}
 	// Dock 面板已有未保存编辑时先确认，避免静默覆盖（2026-08-07）
