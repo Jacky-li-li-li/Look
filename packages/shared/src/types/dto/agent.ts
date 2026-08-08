@@ -18,6 +18,11 @@ export interface AgentInfo {
 	isCompacting: boolean;
 	messageCount: number;
 	createdAt: number;
+	/**
+	 * 最近内容变更时间（文件落盘 mtime），用于侧栏排序。
+	 * 仅在内容变化时更新——打开/查看/点击会话不刷新，避免列表因选中而跳位。
+	 */
+	lastActivityAt?: number;
 	/** Path to the session JSONL file (~/.look/sessions/...). */
 	sessionFilePath?: string;
 	/** Immutable project binding for this runtime/session row. */

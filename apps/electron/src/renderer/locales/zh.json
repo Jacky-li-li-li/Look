@@ -34,7 +34,11 @@
     "editSessionName": "编辑会话名称",
     "editProjectName": "编辑项目名称",
     "expandSubSessions": "展开子会话",
-    "collapseSubSessions": "折叠子会话"
+    "collapseSubSessions": "折叠子会话",
+    "navigation": "侧边栏导航",
+    "projectsLabel": "项目与会话",
+    "secondaryNavigation": "其他视图",
+    "actions": "侧边栏操作"
   },
   "workspace": {
     "title": "工作区",
@@ -47,7 +51,13 @@
     "noSessionSelected": "尚未选择会话",
     "emptyProjectHint": "在工作区中创建会话后即可开始。",
     "expandMore": "展开更多 ({{count}})",
-    "collapseSessions": "收起"
+    "collapseSessions": "收起",
+    "noProjects": "还没有项目",
+    "noProjectsHint": "添加项目文件夹后即可创建限定在该目录内的会话。",
+    "expandAllProjects": "展开所有项目",
+    "collapseAllProjects": "收起所有项目",
+    "sessionCount": "{{count}} 个会话",
+    "runningCount": "{{count}} 个运行中"
   },
   "rightPanel": {
     "label": "右侧面板",
@@ -223,6 +233,8 @@
       "error": "错误",
       "idle": "空闲"
     },
+    "sidebarLabel": "{{name}}，{{status}}，{{time}}",
+    "subsessionLabel": "子会话 {{name}}",
     "send": "发送",
     "stop": "停止"
   },
@@ -237,7 +249,8 @@
     "deleteConfirmButton": "删除工作区",
     "deleteAgentWarning": "这将永久删除 {{count}} 个会话及全部对话历史，此操作无法撤销。",
     "deleteRunningWarning": "将先停止 {{count}} 个正在运行的会话。",
-    "pathMissing": "项目文件夹不可用"
+    "pathMissing": "项目文件夹不可用",
+    "switchFailed": "无法切换项目：{{message}}"
   },
   "settings": {
     "title": "设置",

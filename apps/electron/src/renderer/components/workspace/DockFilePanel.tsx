@@ -18,7 +18,7 @@ import {
 	dockPanelWidthAtom,
 	rightPanelCollapsedAtom,
 	rightPanelWidthAtom,
-	sidebarCollapsedAtom,
+	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
 import FileViewerDialog from "../dialogs/FileViewerDialog";
 import { PanelResizeHandle } from "./PanelResizeHandle";
@@ -30,7 +30,7 @@ export function DockFilePanel() {
 	const [dockPanelWidth, setDockPanelWidth] = useAtom(dockPanelWidthAtom);
 	const [rightPanelWidth, setRightPanelWidth] = useAtom(rightPanelWidthAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
-	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const viewportWidth = useViewportWidth();
 
 	// 弹出为独立窗口：先打开独立窗口（淡入），再清空面板（滑出），两动画同步。

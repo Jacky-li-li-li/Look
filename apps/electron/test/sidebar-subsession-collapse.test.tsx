@@ -23,8 +23,11 @@ import {
 	openProjectIdsAtom,
 	projectsAtom,
 	recentlyCompletedAtom,
+	sessionErrorsAtom,
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
+	sidebarAutoCollapsedAtom,
+	sidebarCollapsedAtom,
 } from "../src/renderer/store/atoms";
 
 class ResizeObserverMock {
@@ -63,6 +66,7 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof Sidebar>> 
 		onCreateClick: vi.fn(),
 		onSettingsClick: vi.fn(),
 		onCreateProject: vi.fn(),
+		onSelectProject: vi.fn(async () => {}),
 		onDeleteProject: vi.fn(),
 		onOpenProject: vi.fn(),
 		onRenameProject: vi.fn(),
@@ -88,9 +92,12 @@ describe("sidebar sub-session collapse/expand", () => {
 		appStore.set(activeProjectIdAtom, "project-a");
 		appStore.set(activeAgentIdAtom, null);
 		appStore.set(recentlyCompletedAtom, []);
+		appStore.set(sessionErrorsAtom, new Set());
 		appStore.set(openProjectIdsAtom, []);
 		appStore.set(showAgentSquareAtom, false);
 		appStore.set(showScheduledTasksAtom, false);
+		appStore.set(sidebarCollapsedAtom, false);
+		appStore.set(sidebarAutoCollapsedAtom, false);
 	});
 
 	it("shows a newly created sub-session expanded by default (no stored collapse state)", async () => {

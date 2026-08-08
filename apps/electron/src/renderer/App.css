@@ -16,7 +16,6 @@
 	 Look — Neutral light / dark design system
 	 ============================================================ */
 :root {
-	--sidebar-width: 280px;
 	--right-panel-width: 260px;
 
 	/* Ink palette — warm offset at oklch 85° / chroma 0.005 */
@@ -1467,6 +1466,65 @@ body {
 		border-radius: calc(var(--radius) * 1.35);
 	}
 
+	.workspace-project-header {
+		position: relative;
+	}
+
+	.workspace-project-header:hover {
+		background: color-mix(in oklch, var(--foreground), transparent 96%);
+	}
+
+	.workspace-project-header[data-active] {
+		background: var(--sidebar-accent);
+	}
+
+	.workspace-project-header[data-active]::before {
+		content: "";
+		position: absolute;
+		top: 7px;
+		bottom: 7px;
+		left: -1px;
+		width: 2px;
+		border-radius: 999px;
+		background: color-mix(in oklch, var(--primary), transparent 18%);
+		pointer-events: none;
+	}
+
+	.workspace-project-header[data-error] {
+		background: color-mix(in oklch, oklch(0.62 0.2 25), transparent 93%);
+	}
+
+	.workspace-project-header[data-error]::before {
+		content: "";
+		position: absolute;
+		top: 7px;
+		bottom: 7px;
+		left: -1px;
+		width: 2px;
+		border-radius: 999px;
+		background: oklch(0.62 0.2 25);
+		pointer-events: none;
+	}
+	.workspace-tree-toolbar {
+		border-bottom: 1px solid color-mix(in oklch, var(--foreground), transparent 94%);
+	}
+
+	.sidebar-icon-action:focus-visible {
+		outline: 2px solid color-mix(in oklch, var(--ring), transparent 20%);
+		outline-offset: 1px;
+	}
+
+	.sidebar-scroll-area [data-slot="scroll-area-scrollbar"] {
+		opacity: 0;
+		transition: opacity 140ms ease;
+	}
+
+	.sidebar-scroll-area [data-slot="scroll-area-scrollbar"][data-state="visible"],
+	.sidebar-scroll-area:hover [data-slot="scroll-area-scrollbar"],
+	.sidebar-scroll-area:focus-within [data-slot="scroll-area-scrollbar"] {
+		opacity: 1;
+	}
+
 	/* ============================================================
    Registered custom properties for grid track animation.
    CSS transitions on <length> custom properties give smooth
@@ -1500,7 +1558,7 @@ body {
    to fill their cells rather than animating their own width. */
 	.app-shell {
 		display: grid;
-		--sidebar-track: 280px;
+		--sidebar-track: var(--sidebar-width, 280px);
 		--sidebar-sep-track: 1px;
 		--right-panel-track: 260px;
 		--dock-track: 0px;
@@ -1602,7 +1660,7 @@ body {
 		 ============================================================ */
 
 	.sidebar-wrapper {
-		width: 280px;
+		width: var(--sidebar-width, 280px);
 		min-width: 0;
 		transform: translateX(0);
 		opacity: 1;
@@ -1625,6 +1683,16 @@ body {
 		-webkit-backdrop-filter: none;
 	}
 
+	.sidebar-footer-item {
+		min-width: 0;
+	}
+
+	.sidebar-footer-item:focus-visible {
+		position: relative;
+		z-index: 1;
+		outline: 2px solid color-mix(in oklch, var(--ring), transparent 20%);
+		outline-offset: -2px;
+	}
 	/* Header 按钮组：portal 到 body 层 fixed 固定在窗口左上角（红绿灯右侧），
 	   脱离 sidebar-wrapper 的 transform，折叠/展开时完全不跟随面板移动；
 	   折叠时折叠按钮变展开按钮，其余按钮保持显示。 */
@@ -1757,6 +1825,21 @@ body {
 			background-color 140ms ease;
 	}
 
+	.workspace-project-header[data-running] .workspace-folder-mark {
+		color: oklch(0.64 0.17 150);
+	}
+	.workspace-session-count {
+		min-width: 1rem;
+		padding: 1px 3px;
+		border-radius: 999px;
+		color: var(--muted-foreground);
+		background: color-mix(in oklch, var(--foreground), transparent 94%);
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.5rem;
+		line-height: 1.2;
+		text-align: center;
+	}
+
 	.workspace-live-count {
 		min-width: 1.1rem;
 		padding: 1px 4px;
@@ -1802,6 +1885,48 @@ body {
 	.session-ledger-row[data-active] {
 		border-color: color-mix(in oklch, var(--foreground), transparent 76%);
 		background: var(--sidebar-accent);
+	}
+	.session-ledger-row[data-running][data-agent-status]:not([data-agent-status="idle"]):not(.subsession-tree-row) {
+		border-color: color-mix(in oklch, oklch(0.6 0.18 150), transparent 62%);
+		box-shadow: inset 2px 0 0 color-mix(in oklch, oklch(0.6 0.18 150), transparent 20%);
+	}
+
+	/* Parallel work stays legible without turning every row into an animated outline. */
+	.session-ledger-row[data-running][data-agent-status]:not([data-agent-status="idle"]):not(
+			.subsession-tree-row
+		)::before {
+		display: none;
+	}
+
+	.session-ledger-row[data-running][data-agent-status][data-active]:not([data-agent-status="idle"]):not(
+			.subsession-tree-row
+		)::before {
+		display: block;
+		opacity: 0.45;
+		animation-duration: 3.2s;
+	}
+
+	.session-ledger-row[data-completed]:not(.subsession-tree-row) {
+		border-color: color-mix(in oklch, oklch(0.55 0.15 150), transparent 66%);
+		box-shadow: inset 2px 0 0 color-mix(in oklch, oklch(0.55 0.15 150), transparent 25%);
+	}
+
+	.session-ledger-row[data-error]:not(.subsession-tree-row) {
+		border-color: color-mix(in oklch, oklch(0.62 0.2 25), transparent 62%);
+		box-shadow: inset 2px 0 0 color-mix(in oklch, oklch(0.62 0.2 25), transparent 18%);
+	}
+
+	.session-ledger-row[data-error]::before {
+		display: none;
+	}
+
+	.session-ledger-row[data-error] .status-mark[data-status] {
+		border-color: oklch(0.62 0.2 25);
+		background: oklch(0.62 0.2 25);
+	}
+	.session-ledger-row[data-error] .subsession-bot-icon {
+		color: oklch(0.62 0.2 25);
+		animation: none;
 	}
 
 	.session-ledger-row .status-mark[data-status="idle"],

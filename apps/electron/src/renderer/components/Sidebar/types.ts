@@ -10,6 +10,7 @@ export interface SidebarProps {
 	onDestroy: (agentId: string) => void;
 	onCreateClick: (projectId: string) => void;
 	onCreateProject: () => void;
+	onSelectProject: (projectId: string) => Promise<void>;
 	onDeleteProject: (project: ProjectInfo) => void;
 	onOpenProject: (projectId: string) => void;
 	onRenameProject: (projectId: string, name: string) => void;
@@ -18,6 +19,11 @@ export interface SidebarProps {
 export interface ProjectHeaderProps {
 	project: ProjectInfo;
 	isOpen: boolean;
+	isActive: boolean;
+	runningCount: number;
+	hasError: boolean;
+	sessionCount: number;
+	onSelectProject: (id: string) => void;
 	editingProjectId: string | null;
 	editRef: React.RefObject<HTMLInputElement | null>;
 	editValue: string;
@@ -34,6 +40,7 @@ export interface SessionRowProps {
 	agent: AgentInfo;
 	isActive: boolean;
 	isRunning: boolean;
+	isError: boolean;
 	phase: string;
 	isCompleted: boolean;
 	editingSessionId: string | null;
@@ -47,17 +54,18 @@ export interface SessionRowProps {
 	/** 子会话折叠状态：parentId → 是否折叠；未记录（undefined）视为折叠（默认折叠新父会话） */
 	collapsedSubSessions: Record<string, boolean>;
 	toggleSubSessions: (parentId: string, e: React.MouseEvent) => void;
-	/** 子会话列表，已预计算 phase 和 running 状态，避免 SessionRow 订阅全局 atom */
+	/** 子会话列表，已预计算 phase、running、error 状态，避免 SessionRow 订阅全局 atom */
 	childrenList: ChildSessionInfo[];
 	copySessionId: (id: string) => Promise<void>;
 	onDestroy: (id: string) => void;
 }
 
-/** 预计算子会话状态，消除 SessionRow 对 runningAgentsAtom / sessionPhasesAtom 的订阅 */
+/** 预计算子会话状态，消除 SessionRow 对 runningAgentsAtom / sessionPhasesAtom / sessionErrorsAtom 的订阅 */
 export interface ChildSessionInfo {
 	agent: AgentInfo;
 	childPhase: string;
 	childRunning: boolean;
+	childError: boolean;
 	childActive: boolean;
 	childCompleted: boolean;
 }
@@ -66,6 +74,8 @@ export interface ProjectTreeProps {
 	onSelect: (agentId: string) => void;
 	onDestroy: (agentId: string) => void;
 	onCreateClick: (projectId: string) => void;
+	onCreateProject: () => void;
+	onSelectProject: (projectId: string) => Promise<void>;
 	onDeleteProject: (project: ProjectInfo) => void;
 	onOpenProject: (projectId: string) => void;
 	onRenameProject: (projectId: string, name: string) => void;

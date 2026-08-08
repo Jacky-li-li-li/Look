@@ -34,7 +34,11 @@
     "editSessionName": "セッション名を編集",
     "editProjectName": "プロジェクト名を編集",
     "expandSubSessions": "サブセッションを展開",
-    "collapseSubSessions": "サブセッションを折りたたむ"
+    "collapseSubSessions": "サブセッションを折りたたむ",
+    "navigation": "サイドバーのナビゲーション",
+    "projectsLabel": "プロジェクトとセッション",
+    "secondaryNavigation": "その他のビュー",
+    "actions": "サイドバーの操作"
   },
   "workspace": {
     "title": "ワークスペース",
@@ -47,7 +51,13 @@
     "noSessionSelected": "セッションが選択されていません",
     "emptyProjectHint": "ワークスペース内にセッションを作成してください。",
     "expandMore": "さらに表示 ({{count}})",
-    "collapseSessions": "折りたたむ"
+    "collapseSessions": "折りたたむ",
+    "noProjects": "プロジェクトがありません",
+    "noProjectsHint": "プロジェクトフォルダを追加してセッションを開始してください。",
+    "expandAllProjects": "すべてのプロジェクトを展開",
+    "collapseAllProjects": "すべてのプロジェクトを折りたたむ",
+    "sessionCount": "{{count}} 件のセッション",
+    "runningCount": "{{count}} 件実行中"
   },
   "rightPanel": {
     "label": "右パネル",
@@ -223,6 +233,8 @@
       "error": "エラー",
       "idle": "待機中"
     },
+    "sidebarLabel": "{{name}}、{{status}}、{{time}}",
+    "subsessionLabel": "サブセッション {{name}}",
     "send": "送信",
     "stop": "停止"
   },
@@ -237,7 +249,8 @@
     "deleteConfirmButton": "ワークスペースを削除",
     "deleteAgentWarning": "{{count}} 件のセッションとすべての履歴が完全に削除されます。元に戻せません。",
     "deleteRunningWarning": "実行中の {{count}} 件のセッションを先に停止します。",
-    "pathMissing": "プロジェクトフォルダを利用できません"
+    "pathMissing": "プロジェクトフォルダを利用できません",
+    "switchFailed": "プロジェクトを切り替えられませんでした：{{message}}"
   },
   "settings": {
     "title": "設定",

@@ -9,7 +9,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { lazy, memo, type ReactNode, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useViewportWidth } from "../hooks/useViewportWidth";
-import { resolvePanelTracks } from "../lib/panelLayout";
+import { PANEL_LAYOUT, resolvePanelTracks } from "../lib/panelLayout";
 import { syncTrafficLightPosition } from "../lib/trafficLight";
 import {
 	appReadyPhaseAtom,
@@ -20,7 +20,8 @@ import {
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
 	showSettingsAtom,
-	sidebarCollapsedAtom,
+	sidebarAutoCollapsedAtom,
+	sidebarEffectiveCollapsedAtom,
 	windowFullscreenAtom,
 } from "../store/atoms";
 import { dockedFileAtom, dockPanelWidthAtom, rightPanelWidthAtom } from "../store/projectAtoms";
@@ -62,6 +63,7 @@ interface AppLayoutProps {
 	handleModelChanged: (model: string) => void;
 	handleCreateClick: (projectId: string) => void;
 	handleOpenProject: () => void;
+	handleSwitchProject: (projectId: string) => Promise<void>;
 	handleDeleteProject: (project: ProjectInfo) => void;
 	handleProjectCreated: (projectId: string) => void;
 	handleDeleteProjectCancelled: () => void;
@@ -90,6 +92,7 @@ function AppLayout({
 	handleModelChanged,
 	handleCreateClick,
 	handleOpenProject,
+	handleSwitchProject,
 	handleDeleteProject,
 	handleProjectCreated,
 	handleDeleteProjectCancelled,
@@ -101,7 +104,7 @@ function AppLayout({
 	const { t } = useTranslation();
 	const appReadyPhase = useAtomValue(appReadyPhaseAtom);
 	// 布局/视图开关等纯 UI 状态直接从原子读取，App.tsx 无需再逐层传递（Props Drilling 收敛）。
-	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 	const dockedFile = useAtomValue(dockedFileAtom);
 	const rightPanelWidth = useAtomValue(rightPanelWidthAtom);
@@ -122,7 +125,7 @@ function AppLayout({
 	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
 	const showSettings = useAtomValue(showSettingsAtom);
 	const settingsTab = useAtomValue(settingsTabAtom);
-	const setSidebarCollapsed = useSetAtom(sidebarCollapsedAtom);
+	const setSidebarAutoCollapsed = useSetAtom(sidebarAutoCollapsedAtom);
 	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
 	const windowFullscreen = useAtomValue(windowFullscreenAtom);
 
@@ -165,16 +168,16 @@ function AppLayout({
 		function onResize() {
 			const width = window.innerWidth;
 			if (width < 1050) setRightPanelCollapsed(true);
-			if (width < 950) setSidebarCollapsed(true);
+			if (width < 950) setSidebarAutoCollapsed(true);
 			if (width >= 1100) {
 				setRightPanelCollapsed(false);
-				setSidebarCollapsed(false);
+				setSidebarAutoCollapsed(false);
 			}
 		}
 		onResize();
 		window.addEventListener("resize", onResize);
 		return () => window.removeEventListener("resize", onResize);
-	}, [setRightPanelCollapsed, setSidebarCollapsed]);
+	}, [setRightPanelCollapsed, setSidebarAutoCollapsed]);
 
 	// 主内容区视图枚举：新增视图只需加一个 case + 分支条件，避免在 JSX 里
 	// 叠嵌套三元（此前是 4 层三元，任何新增视图都要改整串条件）。
@@ -253,6 +256,7 @@ function AppLayout({
 			style={
 				{
 					// 面板宽度由 resolvePanelTracks 统一解析：拖拽把手改 atom，显示时钳制到可用空间；折叠/收起时归 0
+					"--sidebar-width": `${PANEL_LAYOUT.SIDEBAR_WIDTH}px`,
 					"--right-panel-track": `${layout.rightTrack}px`,
 					"--dock-track": `${layout.dockTrack}px`,
 				} as React.CSSProperties
@@ -264,6 +268,7 @@ function AppLayout({
 					onDestroy={handleDestroyAgent}
 					onCreateClick={handleCreateClick}
 					onCreateProject={handleOpenProject}
+					onSelectProject={handleSwitchProject}
 					onDeleteProject={handleDeleteProject}
 					onOpenProject={handleOpenProjectFolderById}
 					onRenameProject={handleRenameProject}

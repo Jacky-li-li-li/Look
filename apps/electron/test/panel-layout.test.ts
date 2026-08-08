@@ -48,10 +48,11 @@ describe("resolvePanelTracks — 常规大屏", () => {
 		expectNoOverflow(l, 1440);
 	});
 
-	it("Dock 打开时给出各自的拖拽上限（右栏扣除 Dock 下限、Dock 用剩余空间）", () => {
+	it("Dock 打开时给出各自的拖拽上限（右栏扣除 Dock 下限、Dock 扣除右栏下限）", () => {
 		const l = tracks(1440, { dockOpen: true });
 		expect(l.rightMax).toBe(480);
-		expect(l.dockMax).toBe(720);
+		// pool = 1440 - 280(侧栏) - 1(分隔线) - 340(main) = 819；dockMax = 819 - 200(右栏下限) = 619
+		expect(l.dockMax).toBe(619);
 	});
 });
 
@@ -108,7 +109,8 @@ describe("resolvePanelTracks — 窄窗口不裁剪（2026-08-07 修复核心）
 	it("被压缩时 rightMax/dockMax 反映实际可用空间（把手据此隐藏）", () => {
 		const l = tracks(1100, { dockOpen: true });
 		expect(l.rightMax).toBe(159);
-		expect(l.dockMax).toBe(479);
+		// pool = 1100 - 280 - 1 - 340 = 479；dockMax = 479 - 200(右栏下限) = 279
+		expect(l.dockMax).toBe(279);
 	});
 });
 

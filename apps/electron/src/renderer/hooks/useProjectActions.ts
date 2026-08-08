@@ -22,6 +22,26 @@ export function useProjectActions() {
 		setNewProjectCwd(result.path);
 	}, [t]);
 
+	const handleSwitchProject = useCallback(
+		async (projectId: string) => {
+			if (!api || appStore.get(activeProjectIdAtom) === projectId) return;
+			try {
+				const result = await api.switchProject(projectId);
+				if (!result?.success) throw new Error(result?.error ?? "Failed to switch project");
+				appStore.set(activeProjectIdAtom, projectId);
+				appStore.set(activeAgentIdAtom, null);
+			} catch (error) {
+				toast.error(
+					t("project.switchFailed", {
+						defaultValue: "无法切换项目：{{message}}",
+						message: error instanceof Error ? error.message : "Unknown error",
+					}),
+				);
+			}
+		},
+		[t],
+	);
+
 	const handleDeleteProject = useCallback((project: ProjectInfo) => {
 		api.deleteProject(project.id);
 	}, []);
@@ -64,6 +84,7 @@ export function useProjectActions() {
 		newProjectCwd,
 		setNewProjectCwd,
 		handleOpenProject,
+		handleSwitchProject,
 		handleDeleteProject,
 		handleProjectCreated,
 		handleDeleteProjectCancelled,

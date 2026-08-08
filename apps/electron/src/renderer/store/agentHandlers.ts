@@ -10,6 +10,7 @@ import {
 	openedSessionIdsAtom,
 	permissionAskQueueAtom,
 	recentlyCompletedAtom,
+	sessionErrorsAtom,
 } from "./atoms";
 import { clearSessionScheduling } from "./ui-event-processor";
 
@@ -24,6 +25,11 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 			appStore.set(agentsAtom, next);
 			// Prune atom-family entries for sessions no longer in the agent list.
 			pruneAtomFamilies(new Set(next.map((a) => a.id)));
+			const knownIds = new Set(next.map((agent) => agent.id));
+			appStore.set(sessionErrorsAtom, (previous: Set<string>) => {
+				const retained = new Set([...previous].filter((id) => knownIds.has(id)));
+				return retained.size === previous.size ? previous : retained;
+			});
 			const activeId = appStore.get(activeAgentIdAtom);
 			if (activeId && !next.some((agent) => agent.id === activeId)) appStore.set(activeAgentIdAtom, null);
 			return true;
@@ -50,6 +56,10 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 				openedSessionIdsAtom,
 				appStore.get(openedSessionIdsAtom).filter((id) => id !== event.agentId),
 			);
+			appStore.set(
+				sessionErrorsAtom,
+				new Set([...appStore.get(sessionErrorsAtom)].filter((id) => id !== event.agentId)),
+			);
 			removeAgentAtoms(event.agentId);
 			clearSessionScheduling(event.agentId);
 			appStore.set(
@@ -64,6 +74,14 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 				agentsAtom,
 				appStore.get(agentsAtom).map((a) => (a.id === event.agent.id ? event.agent : a)),
 			);
+			if (event.agent.isStreaming || event.agent.isRetrying) {
+				appStore.set(sessionErrorsAtom, (previous: Set<string>) => {
+					if (!previous.has(event.agent.id)) return previous;
+					const next = new Set(previous);
+					next.delete(event.agent.id);
+					return next;
+				});
+			}
 			return true;
 
 		case "agent:context-usage":
@@ -88,12 +106,20 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 				});
 			return true;
 
-		case "error":
+		case "error": {
+			const agentId = event.agentId;
+			if (agentId) {
+				appStore.set(sessionErrorsAtom, (previous: Set<string>) => {
+					if (previous.has(agentId)) return previous;
+					return new Set(previous).add(agentId);
+				});
+			}
 			toast.error(
 				event.agentId ? t("toast.error", { id: event.agentId.slice(0, 6), message: event.message }) : event.message,
 				{ duration: 5000 },
 			);
 			return true;
+		}
 
 		default:
 			return false;

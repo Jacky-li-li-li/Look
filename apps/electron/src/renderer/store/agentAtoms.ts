@@ -17,6 +17,9 @@ export const activeAgentIdAtom = atom<string | null>(null);
 
 export const recentlyCompletedAtom = atom<string[]>([]);
 
+/** Session-level errors remain visible until the user opens the affected session. */
+export const sessionErrorsAtom = atom<Set<string>>(new Set<string>());
+
 export const sessionStateAtomFamily = atomFamily((_agentId: string) =>
 	atom<RendererSessionState>(emptyRendererSessionState()),
 );

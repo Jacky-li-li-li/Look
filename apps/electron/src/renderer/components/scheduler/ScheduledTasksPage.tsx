@@ -6,7 +6,7 @@ import { ArrowLeft, Plus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { activeAgentIdAtom, showScheduledTasksAtom, sidebarCollapsedAtom } from "../../store/atoms";
+import { activeAgentIdAtom, showScheduledTasksAtom, sidebarEffectiveCollapsedAtom } from "../../store/atoms";
 import { ExecutionHistory } from "./ExecutionHistory";
 import {
 	buildScheduledTaskInput,
@@ -31,7 +31,7 @@ export default function ScheduledTasksPage() {
 	const { t } = useTranslation();
 	const setShowScheduledTasks = useSetAtom(showScheduledTasksAtom);
 	const setActiveAgentId = useSetAtom(activeAgentIdAtom);
-	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const [tasks, setTasks] = useState<ScheduledTask[]>([]);
 	const [projects, setProjects] = useState<ProjectInfo[]>([]);
 	const [models, setModels] = useState<ModelChoice[]>([]);

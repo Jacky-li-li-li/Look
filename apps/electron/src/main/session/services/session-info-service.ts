@@ -92,6 +92,7 @@ export class SessionInfoService {
 			isCompacting: false,
 			messageCount: session.messageCount,
 			createdAt: session.created.getTime(),
+			lastActivityAt: session.modified.getTime(),
 			sessionFilePath: session.path,
 			projectId: session.projectId,
 			contextUsage: undefined,
@@ -108,6 +109,11 @@ export class SessionInfoService {
 		const session = managed.runtime.session;
 		const stats = session.getSessionStats();
 		const model = session.model;
+		// 对齐 Proma：lastActivityAt 只反映内容落盘时间（文件 mtime）。
+		// 不用 isStreaming ? Date.now() —— 否则点击/激活会话推送 agent:updated
+		// 时会把选中会话顶到列表顶部。打开查看不写文件 → mtime 不变 → 不跳位。
+		const stored = this.deps.sessionCatalog.get(sessionId);
+		const lastActivityAt = stored?.modified.getTime() ?? managed.createdAt;
 		return {
 			id: sessionId,
 			name: (session.sessionManager.getSessionName() || DEFAULT_SESSION_NAME).slice(0, this.deps.maxNameLength),
@@ -121,6 +127,7 @@ export class SessionInfoService {
 			isCompacting: session.isCompacting,
 			messageCount: stats.totalMessages,
 			createdAt: managed.createdAt,
+			lastActivityAt,
 			sessionFilePath: session.sessionFile && existsSync(session.sessionFile) ? session.sessionFile : undefined,
 			projectId: managed.projectId,
 			contextUsage: session.getContextUsage(),

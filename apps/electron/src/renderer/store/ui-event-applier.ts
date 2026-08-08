@@ -7,7 +7,7 @@ import type { AgentInfo, LookUiEvent, LookUiPhase, LookUiStreamBlock, LookUiTool
 import { toast } from "sonner";
 import { appStore } from "./appStore";
 import { trackAgentFamilyKey } from "./atomFamilyRegistry";
-import { agentsAtom, sessionStateAtomFamily } from "./atoms";
+import { agentsAtom, sessionErrorsAtom, sessionStateAtomFamily } from "./atoms";
 import { subagentCardStatusAtom } from "./subagentAtoms";
 
 let _nextBlockUid = 0;
@@ -27,6 +27,15 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 	if (typeof performance !== "undefined") {
 		performance.mark(`look:ui-events:receive:${sessionId.slice(0, 6)}`);
 	}
+
+	const clearSessionError = (): void => {
+		appStore.set(sessionErrorsAtom, (previous: Set<string>) => {
+			if (!previous.has(sessionId)) return previous;
+			const next = new Set(previous);
+			next.delete(sessionId);
+			return next;
+		});
+	};
 
 	const atom = sessionStateAtomFamily(sessionId);
 	const prev = appStore.get(atom);
@@ -235,6 +244,9 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 			// ── Phase / status ──
 			case "run_status": {
 				phase = ev.status;
+				if (ev.status === "streaming" || ev.status === "working" || ev.status === "retrying") {
+					clearSessionError();
+				}
 				if (ev.status === "streaming") {
 					blocks = [];
 					blocksChanged = true;
@@ -260,6 +272,9 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 			case "retry_status":
 				phase = ev.status === "start" ? "retrying" : "idle";
 				agentFlags = { ...agentFlags, isRetrying: ev.status === "start" };
+				if (ev.status === "start") {
+					clearSessionError();
+				}
 				if (ev.status === "end" && !ev.success && ev.finalError) {
 					toast.error(ev.finalError);
 				}
@@ -312,6 +327,10 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 				break;
 
 			case "error":
+				appStore.set(sessionErrorsAtom, (previous: Set<string>) => {
+					if (previous.has(sessionId)) return previous;
+					return new Set(previous).add(sessionId);
+				});
 				toast.error(ev.message);
 				break;
 

@@ -11,7 +11,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { ArrowLeft, Bot, WandSparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { agentSquareTabAtom } from "../../store/agentDefinitionsAtoms";
-import { showAgentSquareAtom, sidebarCollapsedAtom } from "../../store/atoms";
+import { showAgentSquareAtom, sidebarEffectiveCollapsedAtom } from "../../store/atoms";
 import SkillsPanel from "./SkillsPanel";
 import SubAgentPanel from "./SubAgentPanel";
 
@@ -19,7 +19,7 @@ export default function AgentSquare() {
 	const { t } = useTranslation();
 	const [tab, setTab] = useAtom(agentSquareTabAtom);
 	const [, setShowSquare] = useAtom(showAgentSquareAtom);
-	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 
 	return (
 		<div className="flex h-full flex-col">

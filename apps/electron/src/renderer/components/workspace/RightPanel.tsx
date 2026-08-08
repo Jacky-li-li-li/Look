@@ -22,7 +22,7 @@ import {
 	rightPanelWidthAtom,
 	sharedFilesAtomFamily,
 	sharedFilesLoadingAtomFamily,
-	sidebarCollapsedAtom,
+	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
 import { PanelResizeHandle } from "./PanelResizeHandle";
 import { SharedAreaPanel } from "./SharedAreaPanel";
@@ -40,7 +40,7 @@ export function RightPanel() {
 	const [rightPanelWidth, setRightPanelWidth] = useAtom(rightPanelWidthAtom);
 	const dockedFile = useAtomValue(dockedFileAtom);
 	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
-	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const viewportWidth = useViewportWidth();
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
 

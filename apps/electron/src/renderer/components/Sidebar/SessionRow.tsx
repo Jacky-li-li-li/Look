@@ -15,12 +15,13 @@ import { Bot, ChevronDown, ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } 
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChildSessionInfo, SessionRowProps } from "./types";
-import { fmtRelativeTime } from "./utils";
+import { compactModelName, fmtRelativeTime } from "./utils";
 
 function SessionRowImpl({
 	agent,
 	isActive,
 	isRunning,
+	isError,
 	phase,
 	isCompleted,
 	editingSessionId,
@@ -37,9 +38,28 @@ function SessionRowImpl({
 	copySessionId,
 	onDestroy,
 }: SessionRowProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const hasChildren = childrenList.length > 0;
-	const isCollapsed = collapsedSubSessions[agent.id] ?? false; // 未记录默认展开
+	const userCollapsed = collapsedSubSessions[agent.id] ?? false;
+	const hasAttentionChild = childrenList.some(
+		(child) => child.childRunning || child.childActive || child.childCompleted || child.childError,
+	);
+	const isCollapsed = userCollapsed && !hasAttentionChild;
+	const activityAt = agent.lastActivityAt ?? agent.createdAt;
+	const modelLabel = compactModelName(agent.model);
+	const statusLabel = isError
+		? t("session.status.error", "error")
+		: isRunning
+			? t(`session.status.${phase}`, phase)
+			: phase === "error"
+				? t("session.status.error", "error")
+				: modelLabel ||
+					(agent.sessionFilePath
+						? t("session.messageCount", {
+								count: agent.messageCount,
+								defaultValue: "{{count}} messages",
+							})
+						: t("session.draft", "draft"));
 	const feishuLabel = t("settings.feishu", "Feishu");
 	return (
 		<div
@@ -51,16 +71,23 @@ function SessionRowImpl({
 				data-agent-id={agent.id}
 				data-agent-status={phase}
 				data-running={isRunning || undefined}
+				data-error={isError || undefined}
 				data-completed={isCompleted ? "" : undefined}
 				data-active={isActive || undefined}
 				className="session-ledger-row group/session flex h-[40px] items-center gap-2 rounded-md border border-transparent px-2"
-				aria-current={isActive ? "true" : undefined}
 			>
 				<button
 					type="button"
 					className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
 					onClick={() => selectSession(agent)}
 					onDoubleClick={() => beginEdit("session", agent.id, agent.name)}
+					aria-current={isActive ? "page" : undefined}
+					aria-label={t("session.sidebarLabel", {
+						defaultValue: "{{name}}, {{status}}, {{time}}",
+						name: agent.name,
+						status: statusLabel,
+						time: fmtRelativeTime(activityAt, i18n.language),
+					})}
 				>
 					<span className="status-mark" data-status={phase} />
 					<span className="min-w-0 flex-1">
@@ -78,7 +105,7 @@ function SessionRowImpl({
 						) : (
 							<span className="flex min-w-0 items-center gap-1 text-[12.5px] font-medium">
 								{agent.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}
-								<span className="min-w-0 truncate">
+								<span className="min-w-0 truncate" title={agent.name}>
 									{agent.name}
 									{hasChildren && (
 										<span className="ml-1 text-[10px] text-[oklch(0.65_0.2_150)]">
@@ -88,20 +115,18 @@ function SessionRowImpl({
 								</span>
 							</span>
 						)}
-						<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/50">
-							{isRunning
-								? t(`session.status.${phase}`, phase)
-								: agent.model ||
-									(agent.sessionFilePath
-										? t("session.messageCount", {
-												count: agent.messageCount,
-												defaultValue: "{{count}} messages",
-											})
-										: t("session.draft", "draft"))}
+						<span
+							className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/50"
+							title={agent.model || undefined}
+						>
+							{statusLabel}
 						</span>
 					</span>
-					<span className="shrink-0 font-mono text-[10px] text-muted-foreground/45">
-						{fmtRelativeTime(agent.createdAt)}
+					<span
+						className="shrink-0 font-mono text-[10px] text-muted-foreground/45"
+						title={new Date(activityAt).toLocaleString(i18n.language)}
+					>
+						{fmtRelativeTime(activityAt, i18n.language)}
 					</span>
 				</button>
 				{hasChildren && (
@@ -110,6 +135,11 @@ function SessionRowImpl({
 						className="shrink-0 p-0.5 text-muted-foreground/30 hover:text-muted-foreground"
 						onClick={(e) => toggleSubSessions(agent.id, e)}
 						aria-label={
+							isCollapsed
+								? t("sidebar.expandSubSessions", "展开子会话")
+								: t("sidebar.collapseSubSessions", "折叠子会话")
+						}
+						title={
 							isCollapsed
 								? t("sidebar.expandSubSessions", "展开子会话")
 								: t("sidebar.collapseSubSessions", "折叠子会话")
@@ -125,6 +155,7 @@ function SessionRowImpl({
 							size="icon-xs"
 							className="-mr-1 opacity-0 group-hover/session:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
 							aria-label={t("session.menu", "Session menu")}
+							title={t("session.menu", "Session menu")}
 						>
 							<MoreHorizontal className="size-3" />
 						</Button>
@@ -158,6 +189,7 @@ function SessionRowImpl({
 						data-agent-id={child.agent.id}
 						data-agent-status={child.childPhase}
 						data-running={child.childRunning || undefined}
+						data-error={child.childError || undefined}
 						data-active={child.childActive || undefined}
 						data-completed={child.childCompleted ? "" : undefined}
 						className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[34px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
@@ -166,6 +198,12 @@ function SessionRowImpl({
 							type="button"
 							className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
 							onClick={() => selectSession(child.agent)}
+							aria-current={child.childActive ? "page" : undefined}
+							aria-label={t("session.subsessionLabel", {
+								defaultValue: "Sub-session {{name}}",
+								name: child.agent.name || child.agent.agentConfigName || "agent",
+							})}
+							title={child.agent.name || child.agent.agentConfigName}
 						>
 							<Bot className="subsession-bot-icon size-3 shrink-0 text-sky-500" />
 							{child.agent.imProvider === "feishu" && <FeishuIcon label={feishuLabel} />}

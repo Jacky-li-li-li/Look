@@ -92,6 +92,11 @@ export const settingsTabAtom = atom<SettingsTab>("general");
 
 export const sidebarCollapsedAtom = atom(false);
 
+/** Window-driven collapse is transient and must never overwrite the persisted user preference. */
+export const sidebarAutoCollapsedAtom = atom(false);
+
+export const sidebarEffectiveCollapsedAtom = atom((get) => get(sidebarCollapsedAtom) || get(sidebarAutoCollapsedAtom));
+
 /** 主窗口是否处于 macOS 全屏（全屏时红绿灯隐藏，顶部留白收回）。 */
 export const windowFullscreenAtom = atom(false);
 

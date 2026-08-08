@@ -20,7 +20,9 @@ import {
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
 	showSettingsAtom,
+	sidebarAutoCollapsedAtom,
 	sidebarCollapsedAtom,
+	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
 import { userProfileAtom } from "../../store/authAtoms";
 import ProjectTree from "./ProjectTree";
@@ -31,6 +33,8 @@ const SidebarInner = memo(function SidebarInner({
 	onSelect,
 	onDestroy,
 	onCreateClick,
+	onCreateProject,
+	onSelectProject,
 	onDeleteProject,
 	onOpenProject,
 	onRenameProject,
@@ -44,15 +48,25 @@ const SidebarInner = memo(function SidebarInner({
 
 	return (
 		<>
-			{/* Header 仅保留拖拽区；按钮组已通过 portal 固定到窗口层，不随面板移动 */}
-			<header className="app-drag mac-titlebar-pad h-12 shrink-0 border-b border-hairline" />
+			<header
+				className="sidebar-titlebar app-drag mac-titlebar-pad h-12 shrink-0 border-b border-hairline"
+				aria-label={t("sidebar.navigation", "Sidebar navigation")}
+			>
+				<span className="sr-only">{t("sidebar.navigation", "Sidebar navigation")}</span>
+			</header>
 
-			<ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-scrollbar]]:hidden" type="always">
+			<ScrollArea
+				className="sidebar-scroll-area min-h-0 flex-1"
+				type="always"
+				aria-label={t("sidebar.projectsLabel", "Projects and sessions")}
+			>
 				<div className="space-y-1.5 px-2 py-2">
 					<ProjectTree
 						onSelect={onSelect}
 						onDestroy={onDestroy}
 						onCreateClick={onCreateClick}
+						onCreateProject={onCreateProject}
+						onSelectProject={onSelectProject}
 						onDeleteProject={onDeleteProject}
 						onOpenProject={onOpenProject}
 						onRenameProject={onRenameProject}
@@ -60,67 +74,91 @@ const SidebarInner = memo(function SidebarInner({
 				</div>
 			</ScrollArea>
 
-			<button
-				type="button"
-				onClick={() => {
-					appStore.set(showScheduledTasksAtom, true);
-					appStore.set(showAgentSquareAtom, false);
-					appStore.set(showSettingsAtom, false);
-					appStore.set(rightPanelCollapsedAtom, true);
-				}}
-				className={`group flex h-10 shrink-0 items-center gap-2.5 border-t border-hairline px-3 text-left transition-colors ${showScheduledTasks ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
-				title={t("scheduledTasks.title")}
-				aria-current={showScheduledTasks ? "page" : undefined}
+			<nav
+				className="sidebar-footer shrink-0 border-t border-hairline"
+				aria-label={t("sidebar.secondaryNavigation", "More views")}
 			>
-				<span className="inline-flex size-5 items-center justify-center rounded-[5px] bg-foreground/[0.06] transition-colors group-hover:bg-foreground/[0.12]">
-					<Clock3 className="size-3 text-foreground/40 transition-colors group-hover:text-foreground/60" />
-				</span>
-				<span className="text-[12px] font-medium text-muted-foreground">{t("scheduledTasks.title")}</span>
-			</button>
+				<button
+					type="button"
+					onClick={() => {
+						appStore.set(showScheduledTasksAtom, true);
+						appStore.set(showAgentSquareAtom, false);
+						appStore.set(showSettingsAtom, false);
+						appStore.set(rightPanelCollapsedAtom, true);
+					}}
+					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showScheduledTasks ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
+					title={t("scheduledTasks.title")}
+					aria-current={showScheduledTasks ? "page" : undefined}
+				>
+					<span
+						className={`inline-flex size-5 items-center justify-center rounded-[5px] transition-colors ${showScheduledTasks ? "bg-foreground/[0.12]" : "bg-foreground/[0.06] group-hover:bg-foreground/[0.12]"}`}
+					>
+						<Clock3
+							className={`size-3 transition-colors ${showScheduledTasks ? "text-foreground/80" : "text-foreground/40 group-hover:text-foreground/60"}`}
+						/>
+					</span>
+					<span
+						className={`text-[12px] font-medium ${showScheduledTasks ? "text-foreground" : "text-muted-foreground"}`}
+					>
+						{t("scheduledTasks.title")}
+					</span>
+				</button>
 
-			<button
-				type="button"
-				onClick={() => {
-					appStore.set(showAgentSquareAtom, true);
-					appStore.set(showScheduledTasksAtom, false);
-					appStore.set(showSettingsAtom, false);
-					appStore.set(rightPanelCollapsedAtom, true);
-				}}
-				className={`group flex h-10 shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showAgentSquare ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
-				title={t("marketplace.title")}
-				aria-current={showAgentSquare ? "page" : undefined}
-			>
-				<span className="inline-flex size-5 items-center justify-center rounded-[5px] bg-foreground/[0.06] transition-colors group-hover:bg-foreground/[0.12]">
-					<Bot className="size-3 text-foreground/35 transition-colors group-hover:text-foreground/55" />
-				</span>
-				<span className="text-[12px] font-medium text-muted-foreground">{t("marketplace.title")}</span>
-			</button>
+				<button
+					type="button"
+					onClick={() => {
+						appStore.set(showAgentSquareAtom, true);
+						appStore.set(showScheduledTasksAtom, false);
+						appStore.set(showSettingsAtom, false);
+						appStore.set(rightPanelCollapsedAtom, true);
+					}}
+					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showAgentSquare ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
+					title={t("marketplace.title")}
+					aria-current={showAgentSquare ? "page" : undefined}
+				>
+					<span
+						className={`inline-flex size-5 items-center justify-center rounded-[5px] transition-colors ${showAgentSquare ? "bg-foreground/[0.12]" : "bg-foreground/[0.06] group-hover:bg-foreground/[0.12]"}`}
+					>
+						<Bot
+							className={`size-3 transition-colors ${showAgentSquare ? "text-foreground/80" : "text-foreground/35 group-hover:text-foreground/55"}`}
+						/>
+					</span>
+					<span
+						className={`text-[12px] font-medium ${showAgentSquare ? "text-foreground" : "text-muted-foreground"}`}
+					>
+						{t("marketplace.title")}
+					</span>
+				</button>
 
-			<button
-				type="button"
-				onClick={() => {
-					setSettingsTab("profile");
-					appStore.set(showSettingsAtom, true);
-					appStore.set(showAgentSquareAtom, false);
-					appStore.set(showScheduledTasksAtom, false);
-				}}
-				className={`flex h-11 shrink-0 items-center gap-2 px-3 text-left transition-colors ${showSettings ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.065]"}`}
-				aria-current={showSettings ? "page" : undefined}
-			>
-				<UserAvatar avatar={userProfile.avatar} size="sm" />
-				<span className="min-w-0 flex-1 truncate text-[12px] font-medium text-muted-foreground">
-					{userProfile.userName || t("agent.you", "You")}
-				</span>
-				<span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/45">
-					{t("sidebar.settings", "Settings")}
-				</span>
-			</button>
+				<button
+					type="button"
+					onClick={() => {
+						setSettingsTab("profile");
+						appStore.set(showSettingsAtom, true);
+						appStore.set(showAgentSquareAtom, false);
+						appStore.set(showScheduledTasksAtom, false);
+					}}
+					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2 px-3 text-left transition-colors ${showSettings ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.065]"}`}
+					aria-current={showSettings ? "page" : undefined}
+					title={t("sidebar.settings", "Settings")}
+				>
+					<UserAvatar avatar={userProfile.avatar} size="sm" />
+					<span
+						className={`min-w-0 flex-1 truncate text-[12px] font-medium ${showSettings ? "text-foreground" : "text-muted-foreground"}`}
+					>
+						{userProfile.userName || t("agent.you", "You")}
+					</span>
+					<span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/45">
+						{t("sidebar.settings", "Settings")}
+					</span>
+				</button>
+			</nav>
 		</>
 	);
 });
 
 export default function Sidebar(props: SidebarProps) {
-	const collapsed = useAtomValue(sidebarCollapsedAtom);
+	const collapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const activeProject = useAtomValue(activeProjectAtom);
 	const { t } = useTranslation();
 	const canCreateSession = activeProject?.valid ?? false;
@@ -131,15 +169,36 @@ export default function Sidebar(props: SidebarProps) {
 	// 按钮组通过 portal 渲染到 body 层并 fixed 定位，脱离 sidebar-wrapper 的 transform，
 	// 折叠/展开时完全不跟随面板移动；折叠时折叠按钮变展开按钮，其余按钮保持显示。
 	const headerActions = (
-		<div className="sidebar-header-actions" data-collapsed={collapsed || undefined}>
-			<Button
-				variant="line-ghost"
-				size="icon"
-				onClick={() => appStore.set(sidebarCollapsedAtom, !collapsed)}
-				aria-label={collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
-			>
-				{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-			</Button>
+		<div
+			className="sidebar-header-actions"
+			data-collapsed={collapsed || undefined}
+			role="toolbar"
+			aria-label={t("sidebar.actions", "Sidebar actions")}
+		>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="line-ghost"
+						size="icon"
+						onClick={() => {
+							if (collapsed) {
+								appStore.set(sidebarAutoCollapsedAtom, false);
+								appStore.set(sidebarCollapsedAtom, false);
+							} else {
+								appStore.set(sidebarCollapsedAtom, true);
+							}
+						}}
+						aria-label={
+							collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")
+						}
+					>
+						{collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					{collapsed ? t("sidebar.expand", "Expand sidebar") : t("sidebar.collapse", "Collapse sidebar")}
+				</TooltipContent>
+			</Tooltip>
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<Button

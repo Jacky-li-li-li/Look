@@ -106,6 +106,7 @@ export default function App() {
 			handleModelChanged={agentActions.handleModelChanged}
 			handleCreateClick={agentActions.handleCreateClick}
 			handleOpenProject={projectActions.handleOpenProject}
+			handleSwitchProject={projectActions.handleSwitchProject}
 			handleDeleteProject={projectActions.handleDeleteProject}
 			handleProjectCreated={projectActions.handleProjectCreated}
 			handleDeleteProjectCancelled={projectActions.handleDeleteProjectCancelled}

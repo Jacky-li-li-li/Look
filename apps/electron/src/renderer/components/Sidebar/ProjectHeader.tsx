@@ -21,6 +21,11 @@ import { shortenPath } from "./utils";
 export default function ProjectHeader({
 	project,
 	isOpen,
+	isActive,
+	runningCount,
+	hasError,
+	sessionCount,
+	onSelectProject,
 	editingProjectId,
 	editRef,
 	editValue,
@@ -36,9 +41,19 @@ export default function ProjectHeader({
 	const isDefault = project.id === DEFAULT_PROJECT_ID;
 	const homedir = window.look?.homedir || "";
 	return (
-		<div className="group/project flex h-10 items-center gap-1 rounded-lg px-1 transition-colors hover:bg-foreground/[0.035]">
+		<div
+			className="workspace-project-header group/project flex h-10 items-center gap-1 rounded-lg px-1 transition-colors"
+			data-active={isActive || undefined}
+			data-running={runningCount > 0 || undefined}
+			data-error={hasError || undefined}
+		>
 			<CollapsibleTrigger asChild>
-				<button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left">
+				<button
+					type="button"
+					className="flex min-w-0 flex-1 items-center gap-2 text-left"
+					onClick={() => void onSelectProject(project.id)}
+					title={shortenPath(project.cwd, homedir)}
+				>
 					<ChevronRight
 						className={cn("size-3 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")}
 					/>
@@ -76,7 +91,9 @@ export default function ProjectHeader({
 								maxLength={64}
 							/>
 						) : (
-							<span className="block truncate text-[13px] font-semibold">{project.name}</span>
+							<span className="block truncate text-[13px] font-semibold" title={project.name}>
+								{project.name}
+							</span>
 						)}
 						<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/55">
 							{shortenPath(project.cwd, homedir)}
@@ -84,6 +101,20 @@ export default function ProjectHeader({
 					</span>
 				</button>
 			</CollapsibleTrigger>
+			<span
+				className="workspace-session-count shrink-0"
+				aria-label={t("workspace.sessionCount", { count: sessionCount, defaultValue: "{{count}} sessions" })}
+			>
+				{sessionCount}
+			</span>
+			{runningCount > 0 && (
+				<span
+					className="workspace-live-count shrink-0"
+					aria-label={t("workspace.runningCount", { count: runningCount, defaultValue: "{{count}} running" })}
+				>
+					{runningCount}
+				</span>
+			)}
 			<Button
 				variant="line-ghost"
 				size="icon-xs"
@@ -91,6 +122,7 @@ export default function ProjectHeader({
 				disabled={!project.valid}
 				onClick={() => onCreateClick(project.id)}
 				aria-label={t("sidebar.newSession", "New session")}
+				title={t("sidebar.newSession", "New session")}
 			>
 				<Plus className="size-3" />
 			</Button>
@@ -102,6 +134,7 @@ export default function ProjectHeader({
 							size="icon-xs"
 							className="opacity-0 group-hover/project:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
 							aria-label={t("workspace.projectMenu", "Project menu")}
+							title={t("workspace.projectMenu", "Project menu")}
 						>
 							<MoreHorizontal className="size-3" />
 						</Button>

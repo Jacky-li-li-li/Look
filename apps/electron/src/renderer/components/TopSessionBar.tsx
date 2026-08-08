@@ -19,7 +19,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { PanelLeftOpen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { rightPanelCollapsedAtom, sidebarCollapsedAtom } from "../store/atoms";
+import { rightPanelCollapsedAtom, sidebarEffectiveCollapsedAtom } from "../store/atoms";
 
 interface TopSessionBarProps {
 	activeAgent: AgentInfo | null;
@@ -27,7 +27,7 @@ interface TopSessionBarProps {
 
 export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 	const { t } = useTranslation();
-	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
+	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
 

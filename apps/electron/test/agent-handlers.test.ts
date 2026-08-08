@@ -8,6 +8,7 @@ import {
 	openedSessionIdsAtom,
 	permissionAskQueueAtom,
 	recentlyCompletedAtom,
+	sessionErrorsAtom,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
 } from "../src/renderer/store/atoms";
@@ -41,6 +42,7 @@ describe("handleAgentEvent", () => {
 		appStore.set(activeAgentIdAtom, null);
 		appStore.set(openedSessionIdsAtom, []);
 		appStore.set(recentlyCompletedAtom, []);
+		appStore.set(sessionErrorsAtom, new Set());
 		appStore.set(permissionAskQueueAtom, []);
 		removeAgentAtoms(sessionId);
 		removeAgentAtoms(otherSessionId);
@@ -106,6 +108,7 @@ describe("handleAgentEvent", () => {
 		appStore.set(activeAgentIdAtom, sessionId);
 		appStore.set(openedSessionIdsAtom, [sessionId, otherSessionId]);
 		appStore.set(recentlyCompletedAtom, [sessionId]);
+		appStore.set(sessionErrorsAtom, new Set([sessionId]));
 		appStore.set(sessionLeafIdAtomFamily(sessionId), "leaf-1");
 		appStore.set(permissionAskQueueAtom, [{ requestId: "r1", agentId: sessionId, tool: "write" }]);
 
@@ -168,6 +171,21 @@ describe("handleAgentEvent", () => {
 
 		expect(listAgentDefinitions).toHaveBeenCalled();
 		vi.unstubAllGlobals();
+	});
+
+	it("tracks session-scoped errors for sidebar attention", () => {
+		const handled = handleAgentEvent({
+			type: "error",
+			agentId: sessionId,
+			message: "boom",
+		} as unknown as Parameters<typeof handleAgentEvent>[0]);
+		expect(handled).toBe(true);
+		expect(appStore.get(sessionErrorsAtom)).toEqual(new Set([sessionId]));
+
+		handleAgentEvent({ type: "agent:destroyed", agentId: sessionId } as unknown as Parameters<
+			typeof handleAgentEvent
+		>[0]);
+		expect(appStore.get(sessionErrorsAtom)).toEqual(new Set());
 	});
 
 	it("error shows a toast", () => {

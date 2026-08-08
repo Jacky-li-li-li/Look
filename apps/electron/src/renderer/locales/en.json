@@ -34,7 +34,11 @@
     "editSessionName": "Edit session name",
     "editProjectName": "Edit project name",
     "expandSubSessions": "Expand sub-sessions",
-    "collapseSubSessions": "Collapse sub-sessions"
+    "collapseSubSessions": "Collapse sub-sessions",
+    "navigation": "Sidebar navigation",
+    "projectsLabel": "Projects and sessions",
+    "secondaryNavigation": "More views",
+    "actions": "Sidebar actions"
   },
   "workspace": {
     "title": "Workspaces",
@@ -47,7 +51,13 @@
     "noSessionSelected": "No session selected",
     "emptyProjectHint": "Create a session inside a workspace to begin.",
     "expandMore": "Show more ({{count}})",
-    "collapseSessions": "Show less"
+    "collapseSessions": "Show less",
+    "noProjects": "No projects yet",
+    "noProjectsHint": "Add a project folder to start a scoped session.",
+    "expandAllProjects": "Expand all projects",
+    "collapseAllProjects": "Collapse all projects",
+    "sessionCount": "{{count}} sessions",
+    "runningCount": "{{count}} running"
   },
   "rightPanel": {
     "label": "Right panel",
@@ -223,6 +233,8 @@
       "error": "error",
       "idle": "idle"
     },
+    "sidebarLabel": "{{name}}, {{status}}, {{time}}",
+    "subsessionLabel": "Sub-session {{name}}",
     "send": "Send",
     "stop": "Stop"
   },
@@ -237,7 +249,8 @@
     "deleteConfirmButton": "Delete workspace",
     "deleteAgentWarning": "This permanently deletes {{count}} session(s) and all conversation history. This action cannot be undone.",
     "deleteRunningWarning": "{{count}} running session(s) will be stopped first.",
-    "pathMissing": "Project folder is unavailable"
+    "pathMissing": "Project folder is unavailable",
+    "switchFailed": "Could not switch project: {{message}}"
   },
   "settings": {
     "title": "Settings",

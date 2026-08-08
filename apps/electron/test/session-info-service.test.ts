@@ -66,6 +66,7 @@ describe("SessionInfoService subagent markers", () => {
 		expect(child?.parentSessionId).toBe("parent-1");
 		expect(child?.isSubagentSession).toBe(true);
 		expect(child?.agentConfigName).toBe("Agent：review");
+		expect(child?.lastActivityAt).toBeGreaterThan(0);
 
 		// 二次调用命中 persistedInfoCache，标记不丢。
 		const cached = service.listAgentsInProject(projectId).find((agent) => agent.id === "child-1");
@@ -150,9 +151,10 @@ describe("SessionInfoService subagent markers", () => {
 		expect(child?.isSubagentSession).toBe(true);
 		expect(child?.agentConfigName).toBe("Agent：review");
 
-		// 单个查询路径（getAgentInfo → runtimeInfo）同样必须带标记。
+		// 单个查询路径（getAgentInfo → runtimeInfo）同样校验内容变更时间投影。
 		const direct = service.getAgentInfo(childId);
 		expect(direct?.parentSessionId).toBe("parent-1");
 		expect(direct?.isSubagentSession).toBe(true);
+		expect(direct?.lastActivityAt).toBeGreaterThan(0);
 	});
 });

@@ -5,7 +5,7 @@
 import { Collapsible, CollapsibleContent } from "@look/ui/components/ui/collapsible";
 import { type AgentInfo, DEFAULT_PROJECT_ID, type ProjectInfo } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
-import { ChevronsDownUp, ChevronsUpDown, Plus } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, FolderOpen, Plus } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import {
 	projectsAtom,
 	recentlyCompletedAtom,
 	runningAgentsAtom,
+	sessionErrorsAtom,
 	sessionPhasesAtom,
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
@@ -27,7 +28,7 @@ import {
 import ProjectHeader from "./ProjectHeader";
 import SessionRow from "./SessionRow";
 import type { ChildSessionInfo, ProjectTreeProps } from "./types";
-import { SESSION_COLLAPSE_THRESHOLD } from "./utils";
+import { getSessionActivityAt, SESSION_COLLAPSE_THRESHOLD, sortSessionsByActivity } from "./utils";
 
 /** 稳定空数组引用，避免每次渲染创建新引用导致 memo 失效 */
 const EMPTY_CHILDREN: ChildSessionInfo[] = [];
@@ -38,6 +39,8 @@ export default function ProjectTree({
 	onSelect,
 	onDestroy,
 	onCreateClick,
+	onCreateProject,
+	onSelectProject,
 	onDeleteProject,
 	onOpenProject,
 	onRenameProject,
@@ -48,9 +51,17 @@ export default function ProjectTree({
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
 	const activeProjectId = useAtomValue(activeProjectIdAtom);
 	const recentlyCompleted = useAtomValue(recentlyCompletedAtom);
+	const errorAgentIds = useAtomValue(sessionErrorsAtom);
 	const runningAgents = useAtomValue(runningAgentsAtom);
 	const sessionPhases = useAtomValue(sessionPhasesAtom);
 	const activeChatAtBottom = useAtomValue(activeChatAtBottomAtom);
+
+	// Keep compact relative timestamps fresh without subscribing every row to its own timer.
+	const [, setRelativeTimeTick] = useState(() => Date.now());
+	useEffect(() => {
+		const timer = setInterval(() => setRelativeTimeTick(Date.now()), 60_000);
+		return () => clearInterval(timer);
+	}, []);
 
 	const [openProjectIds, setOpenProjectIds] = useAtom(openProjectIdsAtom);
 	const openProjects = useMemo(() => new Set(openProjectIds), [openProjectIds]);
@@ -121,26 +132,42 @@ export default function ProjectTree({
 		});
 	}, []);
 
-	const sortedProjects = useMemo(() => {
-		return [...projects].sort((a, b) => {
-			if (a.id === DEFAULT_PROJECT_ID) return -1;
-			if (b.id === DEFAULT_PROJECT_ID) return 1;
-			return 0;
-		});
-	}, [projects]);
-
 	const sessionsByProject = useMemo(() => {
 		const grouped = new Map<string, AgentInfo[]>();
-		for (const project of sortedProjects) grouped.set(project.id, []);
+		for (const project of projects) grouped.set(project.id, []);
 		for (const agent of agents) {
 			if (!agent.projectId) continue;
 			const list = grouped.get(agent.projectId) ?? [];
 			list.push(agent);
 			grouped.set(agent.projectId, list);
 		}
-		for (const sessions of grouped.values()) sessions.sort((a, b) => b.createdAt - a.createdAt);
+		for (const [projectId, sessions] of grouped) grouped.set(projectId, sortSessionsByActivity(sessions));
 		return grouped;
-	}, [agents, sortedProjects]);
+	}, [agents, projects]);
+
+	const sortedProjects = useMemo(() => {
+		const projectActivity = (projectId: string): number =>
+			(sessionsByProject.get(projectId) ?? []).reduce(
+				(latest, session) => Math.max(latest, getSessionActivityAt(session)),
+				0,
+			);
+		const projectIsRunning = (projectId: string): boolean =>
+			(sessionsByProject.get(projectId) ?? []).some((session) => runningAgents.has(session.id));
+		const projectHasError = (projectId: string): boolean =>
+			(sessionsByProject.get(projectId) ?? []).some((session) => errorAgentIds.has(session.id));
+
+		return [...projects].sort((a, b) => {
+			if (a.id === DEFAULT_PROJECT_ID) return -1;
+			if (b.id === DEFAULT_PROJECT_ID) return 1;
+			if (a.id === activeProjectId) return -1;
+			if (b.id === activeProjectId) return 1;
+			const runningDelta = Number(projectIsRunning(b.id)) - Number(projectIsRunning(a.id));
+			if (runningDelta) return runningDelta;
+			const errorDelta = Number(projectHasError(b.id)) - Number(projectHasError(a.id));
+			if (errorDelta) return errorDelta;
+			return projectActivity(b.id) - projectActivity(a.id) || b.createdAt - a.createdAt;
+		});
+	}, [activeProjectId, errorAgentIds, projects, runningAgents, sessionsByProject]);
 
 	const childSessionsByParent = useMemo(() => {
 		const map = new Map<string, AgentInfo[]>();
@@ -151,6 +178,7 @@ export default function ProjectTree({
 				map.set(agent.parentSessionId, list);
 			}
 		}
+		for (const children of map.values()) children.sort((a, b) => getSessionActivityAt(b) - getSessionActivityAt(a));
 		return map;
 	}, [agents]);
 
@@ -261,12 +289,19 @@ export default function ProjectTree({
 					recentlyCompleted.filter((id) => id !== agent.id),
 				);
 			}
+			if (errorAgentIds.has(agent.id)) {
+				appStore.set(sessionErrorsAtom, (previous: Set<string>) => {
+					const next = new Set(previous);
+					next.delete(agent.id);
+					return next;
+				});
+			}
 			appStore.set(showAgentSquareAtom, false);
 			appStore.set(showScheduledTasksAtom, false);
 			appStore.set(showSettingsAtom, false);
 			onSelect(agent.id);
 		},
-		[onSelect, recentlyCompleted],
+		[errorAgentIds, onSelect, recentlyCompleted],
 	);
 
 	const copySessionId = useCallback(
@@ -281,44 +316,103 @@ export default function ProjectTree({
 		[t],
 	);
 
-	if (projects.length === 0) return null;
+	const selectProject = useCallback(
+		async (projectId: string) => {
+			appStore.set(showAgentSquareAtom, false);
+			appStore.set(showScheduledTasksAtom, false);
+			appStore.set(showSettingsAtom, false);
+			await onSelectProject(projectId);
+		},
+		[onSelectProject],
+	);
+
+	const allProjectsOpen = sortedProjects.length > 0 && sortedProjects.every((project) => openProjects.has(project.id));
+	const toggleAllProjects = useCallback(() => {
+		setOpenProjectIds(allProjectsOpen ? [] : sortedProjects.map((project) => project.id));
+	}, [allProjectsOpen, setOpenProjectIds, sortedProjects]);
+
+	if (projects.length === 0) {
+		return (
+			<div className="sidebar-empty-state flex flex-col items-center gap-2 px-4 py-10 text-center">
+				<FolderOpen className="size-5 text-muted-foreground/55" />
+				<p className="text-[12px] font-medium text-foreground/80">{t("workspace.noProjects", "No projects yet")}</p>
+				<p className="text-[11px] leading-relaxed text-muted-foreground">
+					{t("workspace.noProjectsHint", "Add a project folder to start a scoped session.")}
+				</p>
+				<button
+					type="button"
+					className="workspace-empty-session mt-1 flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[11.5px] font-medium"
+					onClick={onCreateProject}
+				>
+					<Plus className="size-3" />
+					{t("project.openProject", "Add project folder")}
+				</button>
+			</div>
+		);
+	}
 
 	return (
 		<>
-			{sortedProjects.map((project) => (
-				<ProjectTreeItem
-					key={project.id}
-					project={project}
-					sessions={sessionsByProject.get(project.id) ?? []}
-					isOpen={openProjects.has(project.id)}
-					isActiveProject={project.id === activeProjectId}
-					activeAgentId={activeAgentId}
-					runningAgents={runningAgents}
-					sessionPhases={sessionPhases}
-					recentlyCompleted={recentlyCompleted}
-					activeChatAtBottom={activeChatAtBottom}
-					childSessionsByParent={childSessionsByParent}
-					editingProjectId={editingProjectId}
-					editingSessionId={editingSessionId}
-					editValue={editValue}
-					editRef={editRef}
-					setEditValue={setEditValue}
-					commitEdit={commitEdit}
-					handleEditKeyDown={handleEditKeyDown}
-					beginEdit={beginEdit}
-					selectSession={selectSession}
-					collapsedSubSessions={collapsedSubSessions}
-					toggleSubSessions={toggleSubSessions}
-					copySessionId={copySessionId}
-					onDestroy={onDestroy}
-					onCreateClick={onCreateClick}
-					onOpenProject={onOpenProject}
-					onDeleteProject={onDeleteProject}
-					setOpenProjectIds={setOpenProjectIds}
-					expandedProjectIds={expandedProjectIds}
-					toggleProjectExpansion={toggleProjectExpansion}
-				/>
-			))}
+			<div className="workspace-tree-toolbar flex h-7 items-center justify-between px-1" role="toolbar">
+				<span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
+					{t("workspace.title", "Workspaces")}
+				</span>
+				<button
+					type="button"
+					className="sidebar-icon-action inline-flex size-6 items-center justify-center rounded-md text-muted-foreground/55 transition-colors hover:text-foreground focus-visible:text-foreground"
+					onClick={toggleAllProjects}
+					aria-label={
+						allProjectsOpen
+							? t("workspace.collapseAllProjects", "Collapse all projects")
+							: t("workspace.expandAllProjects", "Expand all projects")
+					}
+					title={
+						allProjectsOpen
+							? t("workspace.collapseAllProjects", "Collapse all projects")
+							: t("workspace.expandAllProjects", "Expand all projects")
+					}
+				>
+					{allProjectsOpen ? <ChevronsDownUp className="size-3.5" /> : <ChevronsUpDown className="size-3.5" />}
+				</button>
+			</div>
+			<div role="tree" aria-label={t("sidebar.projectsLabel", "Projects and sessions")}>
+				{sortedProjects.map((project) => (
+					<ProjectTreeItem
+						key={project.id}
+						project={project}
+						sessions={sessionsByProject.get(project.id) ?? []}
+						isOpen={openProjects.has(project.id)}
+						isActiveProject={project.id === activeProjectId}
+						activeAgentId={activeAgentId}
+						runningAgents={runningAgents}
+						sessionPhases={sessionPhases}
+						recentlyCompleted={recentlyCompleted}
+						errorAgentIds={errorAgentIds}
+						activeChatAtBottom={activeChatAtBottom}
+						childSessionsByParent={childSessionsByParent}
+						editingProjectId={editingProjectId}
+						editingSessionId={editingSessionId}
+						editValue={editValue}
+						editRef={editRef}
+						setEditValue={setEditValue}
+						commitEdit={commitEdit}
+						handleEditKeyDown={handleEditKeyDown}
+						beginEdit={beginEdit}
+						selectSession={selectSession}
+						selectProject={selectProject}
+						collapsedSubSessions={collapsedSubSessions}
+						toggleSubSessions={toggleSubSessions}
+						copySessionId={copySessionId}
+						onDestroy={onDestroy}
+						onCreateClick={onCreateClick}
+						onOpenProject={onOpenProject}
+						onDeleteProject={onDeleteProject}
+						setOpenProjectIds={setOpenProjectIds}
+						expandedProjectIds={expandedProjectIds}
+						toggleProjectExpansion={toggleProjectExpansion}
+					/>
+				))}
+			</div>
 		</>
 	);
 }
@@ -332,6 +426,7 @@ interface ProjectTreeItemProps {
 	runningAgents: Set<string>;
 	sessionPhases: Map<string, string>;
 	recentlyCompleted: string[];
+	errorAgentIds: Set<string>;
 	activeChatAtBottom: boolean;
 	childSessionsByParent: Map<string, AgentInfo[]>;
 	editingProjectId: string | null;
@@ -343,6 +438,7 @@ interface ProjectTreeItemProps {
 	handleEditKeyDown: (event: React.KeyboardEvent) => void;
 	beginEdit: (kind: "project" | "session", id: string, value: string) => void;
 	selectSession: (agent: AgentInfo) => void;
+	selectProject: (projectId: string) => void;
 	collapsedSubSessions: Record<string, boolean>;
 	toggleSubSessions: (parentId: string, event: React.MouseEvent) => void;
 	copySessionId: (sessionId: string) => Promise<void>;
@@ -364,6 +460,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 	runningAgents,
 	sessionPhases,
 	recentlyCompleted,
+	errorAgentIds,
 	activeChatAtBottom,
 	childSessionsByParent,
 	editingProjectId,
@@ -375,6 +472,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 	handleEditKeyDown,
 	beginEdit,
 	selectSession,
+	selectProject,
 	collapsedSubSessions,
 	toggleSubSessions,
 	copySessionId,
@@ -389,10 +487,39 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 	const { t } = useTranslation();
 	const topLevelSessions = sessions.filter((s) => !s.parentSessionId);
 	const isExpanded = expandedProjectIds.has(project.id);
-	const shouldCollapse = topLevelSessions.length > SESSION_COLLAPSE_THRESHOLD && !isExpanded;
-	const visibleSessions = shouldCollapse ? topLevelSessions.slice(0, SESSION_COLLAPSE_THRESHOLD) : topLevelSessions;
-	const hiddenCount = topLevelSessions.length - SESSION_COLLAPSE_THRESHOLD;
+	const recentlyCompletedIds = new Set(recentlyCompleted);
+	const prioritySessionIds = new Set<string>();
+	for (const session of sessions) {
+		const needsAttention =
+			session.id === activeAgentId ||
+			runningAgents.has(session.id) ||
+			recentlyCompletedIds.has(session.id) ||
+			errorAgentIds.has(session.id);
+		if (needsAttention) prioritySessionIds.add(session.parentSessionId ?? session.id);
+	}
+	const sortedTopLevel = [...topLevelSessions].sort((a, b) => b.createdAt - a.createdAt);
+	const prioritySessions = sortedTopLevel.filter((session) => prioritySessionIds.has(session.id));
+	// 折叠时保持 createdAt 顺序：priority 会话（当前/运行中/刚完成/错误）只保证“不被隐藏”，
+	// 不改变相对位置——否则点击会话使其成为 active 后会跳到列表顶部（2026-08-09 修复）。
+	const visibleSessions = isExpanded
+		? sortedTopLevel
+		: (() => {
+				const regularBudget = Math.max(0, SESSION_COLLAPSE_THRESHOLD - prioritySessions.length);
+				let regularShown = 0;
+				return sortedTopLevel.filter((session) => {
+					if (prioritySessionIds.has(session.id)) return true;
+					if (regularShown < regularBudget) {
+						regularShown += 1;
+						return true;
+					}
+					return false;
+				});
+			})();
+	const hiddenCount = Math.max(0, topLevelSessions.length - visibleSessions.length);
+	const hasOverflow = topLevelSessions.length > SESSION_COLLAPSE_THRESHOLD;
+	const shouldCollapse = !isExpanded && hiddenCount > 0;
 	const runningCount = sessions.filter((session) => runningAgents.has(session.id)).length;
+	const hasError = sessions.some((session) => errorAgentIds.has(session.id));
 
 	return (
 		<Collapsible
@@ -407,12 +534,20 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 				});
 			}}
 			className="workspace-group"
+			role="treeitem"
+			aria-expanded={isOpen}
+			aria-selected={isActiveProject || undefined}
 			data-active={isActiveProject || undefined}
 			data-running={runningCount > 0 || undefined}
 		>
 			<ProjectHeader
 				project={project}
 				isOpen={isOpen}
+				isActive={isActiveProject}
+				runningCount={runningCount}
+				hasError={hasError}
+				sessionCount={sessions.length}
+				onSelectProject={selectProject}
 				editingProjectId={editingProjectId}
 				editRef={editRef}
 				editValue={editValue}
@@ -435,6 +570,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 					{visibleSessions.map((agent) => {
 						const isActive = agent.id === activeAgentId;
 						const isRunning = runningAgents.has(agent.id);
+						const isError = errorAgentIds.has(agent.id);
 						const phase = sessionPhases.get(agent.id) ?? "idle";
 						const isCompleted = recentlyCompleted.includes(agent.id) && !(isActive && activeChatAtBottom);
 						// 预计算子会话的 phase/running，消除 SessionRow 对全局 atom 的订阅
@@ -444,6 +580,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 									agent: child,
 									childPhase: sessionPhases.get(child.id) ?? "idle",
 									childRunning: runningAgents.has(child.id),
+									childError: errorAgentIds.has(child.id),
 									childActive: child.id === activeAgentId,
 									childCompleted:
 										recentlyCompleted.includes(child.id) &&
@@ -456,6 +593,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 								agent={agent}
 								isActive={isActive}
 								isRunning={isRunning}
+								isError={isError}
 								phase={phase}
 								isCompleted={isCompleted}
 								editingSessionId={editingSessionId}
@@ -490,7 +628,7 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 						</button>
 					)}
 
-					{!shouldCollapse && hiddenCount > 0 && (
+					{hasOverflow && isExpanded && (
 						<button
 							type="button"
 							onClick={() => toggleProjectExpansion(project.id)}

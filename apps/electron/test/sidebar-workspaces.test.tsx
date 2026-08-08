@@ -17,9 +17,12 @@ import {
 	projectsAtom,
 	recentlyCompletedAtom,
 	rightPanelCollapsedAtom,
+	sessionErrorsAtom,
 	sessionStateAtomFamily,
 	showAgentSquareAtom,
 	showScheduledTasksAtom,
+	sidebarAutoCollapsedAtom,
+	sidebarCollapsedAtom,
 } from "../src/renderer/store/atoms";
 
 class ResizeObserverMock {
@@ -71,6 +74,7 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof Sidebar>> 
 		onCreateClick: vi.fn(),
 		onSettingsClick: vi.fn(),
 		onCreateProject: vi.fn(),
+		onSelectProject: vi.fn(async () => {}),
 		onDeleteProject: vi.fn(),
 		onOpenProject: vi.fn(),
 		onRenameProject: vi.fn(),
@@ -97,10 +101,13 @@ describe("workspace ledger sidebar", () => {
 		appStore.set(activeProjectIdAtom, "project-a");
 		appStore.set(activeAgentIdAtom, "session-a");
 		appStore.set(recentlyCompletedAtom, []);
+		appStore.set(sessionErrorsAtom, new Set());
 		appStore.set(openProjectIdsAtom, []);
 		appStore.set(showAgentSquareAtom, false);
 		appStore.set(showScheduledTasksAtom, false);
 		appStore.set(rightPanelCollapsedAtom, false);
+		appStore.set(sidebarCollapsedAtom, false);
+		appStore.set(sidebarAutoCollapsedAtom, false);
 		appStore.set(sessionStateAtomFamily("session-b"), {
 			...appStore.get(sessionStateAtomFamily("session-b")),
 			uiPhase: "working",
@@ -149,10 +156,73 @@ describe("workspace ledger sidebar", () => {
 	it("creates the first session inside the requested empty project", async () => {
 		appStore.set(agentsAtom, []);
 		const onCreateClick = vi.fn();
-		renderSidebar({ onCreateClick });
+		const onSelectProject = vi.fn(async () => {});
+		renderSidebar({ onCreateClick, onSelectProject });
 		fireEvent.click(screen.getByText("SDK"));
+		await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith("project-b"));
 		await waitFor(() => expect(screen.getAllByText("Create first session")).toHaveLength(2));
 		fireEvent.click(screen.getAllByText("Create first session")[1]);
 		expect(onCreateClick).toHaveBeenCalledWith("project-b");
+	});
+
+	it("keeps active and running sessions visible past the compact list threshold", async () => {
+		const crowdedSessions = Array.from({ length: 7 }, (_, index) => ({
+			...sessions[0],
+			id: `crowded-${index}`,
+			name: `Crowded ${index}`,
+			createdAt: 100 + index,
+			lastActivityAt: 100 + index,
+			projectId: "project-a",
+			isStreaming: index === 6,
+		}));
+		appStore.set(projectsAtom, [projects[0]]);
+		appStore.set(agentsAtom, crowdedSessions);
+		appStore.set(activeAgentIdAtom, "crowded-5");
+		appStore.set(recentlyCompletedAtom, []);
+		appStore.set(sessionErrorsAtom, new Set(["crowded-0"]));
+
+		renderSidebar();
+		await waitFor(() => expect(screen.getByText("Crowded 5")).toBeTruthy());
+		expect(screen.getByText("Crowded 6")).toBeTruthy();
+		expect(screen.getByText("Crowded 0")).toBeTruthy();
+		expect(screen.queryByText("Crowded 1")).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: /Show more/i }));
+		expect(screen.getByText("Crowded 1")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: /Show less/i }));
+		expect(screen.getByText("Crowded 0")).toBeTruthy();
+		expect(screen.queryByText("Crowded 1")).toBeNull();
+	});
+
+	it("selecting a session keeps the list order stable (no jump-to-top)", async () => {
+		const crowdedSessions = Array.from({ length: 6 }, (_, index) => ({
+			...sessions[0],
+			id: `crowded-${index}`,
+			name: `Crowded ${index}`,
+			createdAt: 100 + index,
+			lastActivityAt: 100 + index,
+			projectId: "project-a",
+		}));
+		appStore.set(projectsAtom, [projects[0]]);
+		appStore.set(agentsAtom, crowdedSessions);
+		appStore.set(activeAgentIdAtom, "crowded-5");
+		appStore.set(recentlyCompletedAtom, []);
+		appStore.set(sessionErrorsAtom, new Set());
+
+		// 模拟 App 层行为：点击会话后 activeAgentId 变化（但不改动任何活动时间）。
+		const onSelect = vi.fn((id: string) => appStore.set(activeAgentIdAtom, id));
+		renderSidebar({ onSelect });
+		await waitFor(() => expect(screen.getByText("Crowded 5")).toBeTruthy());
+
+		// 点击列表中间的会话（可见顺序为 [5,4,3,2,1]）
+		fireEvent.click(screen.getByText("Crowded 3"));
+		await waitFor(() => expect(appStore.get(activeAgentIdAtom)).toBe("crowded-3"));
+
+		// 顺序保持内容变更时间降序：Crowded 5 仍在 Crowded 3 之前，3 不会跳到顶部。
+		const ids = Array.from(document.querySelectorAll("[data-agent-id]"))
+			.map((el) => el.getAttribute("data-agent-id"))
+			.filter((id): id is string => Boolean(id) && id.startsWith("crowded-"));
+		expect(ids.indexOf("crowded-5")).toBeLessThan(ids.indexOf("crowded-3"));
+		expect(ids.indexOf("crowded-3")).toBeGreaterThan(0);
 	});
 });
