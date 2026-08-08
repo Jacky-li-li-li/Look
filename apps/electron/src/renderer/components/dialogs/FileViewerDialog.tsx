@@ -718,8 +718,7 @@ export default function FileViewerDialog({
 					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
 						<FileWarning className="size-6 text-destructive" />
 						<p className="text-xs text-destructive">
-							{t("fileViewer.loadFailed")}:{" "}
-							{loadState.error.includes("ENOENT") ? t("fileViewer.fileMissing") : loadState.error}
+							{t("fileViewer.loadFailed")}: {loadState.error}
 						</p>
 					</div>
 				) : loadState.status === "image" ? (

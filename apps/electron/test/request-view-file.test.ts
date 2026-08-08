@@ -61,13 +61,13 @@ describe("requestViewFileAtom", () => {
 		expect(openFileViewer).not.toHaveBeenCalled();
 	});
 
-	it("toasts a friendly hint for missing files instead of opening a failing viewer", async () => {
+	it("still opens missing files in the dock so the viewer shows its own error", async () => {
 		const store = createStore();
 		statFilePath.mockResolvedValue({ success: true, kind: "missing" });
 		await store.set(requestViewFileAtom, "/tmp/none.md");
-		expect(toastError).toHaveBeenCalledTimes(1);
-		expect(store.get(dockedFileAtom)).toBeNull();
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/none.md" });
 		expect(openFileViewer).not.toHaveBeenCalled();
+		expect(toastError).not.toHaveBeenCalled();
 	});
 
 	it("still opens in the dock when stat fails for non-guard reasons", async () => {
