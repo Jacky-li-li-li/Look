@@ -20,6 +20,52 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.0.0",
+		date: "2026-08-09",
+		items: [
+			{
+				zh: "新增文件查看器 Dock 面板：点击文件后直接在主窗口右侧面板中打开，面板宽度可拖拽并自动记忆；可与独立查看器窗口双向切换（合并到主窗口 / 弹出为独立窗口）",
+				en: "New file viewer Dock panel: files open in a docked panel on the right side of the main window with a draggable, remembered width; swap freely between the docked panel and a standalone viewer window",
+				ja: "ファイルビューアの Dock パネルを追加：ファイルがメインウィンドウ右側のパネルで開き、幅はドラッグで調整でき自動で記憶。パネルと独立ビューアウィンドウを相互に切り替え可能",
+			},
+			{
+				zh: "支持只读查看项目目录以外的文件：打开项目外文件时显示「项目外 · 只读」标识，编辑与保存保持禁用，临时文件也能放心查看",
+				en: "You can now open files outside the current project in read-only mode, with an “Outside project · Read-only” badge; editing and saving stay disabled",
+				ja: "プロジェクト外のファイルも読み取り専用で閲覧可能に：「プロジェクト外・読み取り専用」バッジを表示し、編集・保存は無効のまま安全に閲覧できます",
+			},
+			{
+				zh: "左侧面板体验升级：会话按最近内容变化排序，浏览会话不再导致列表跳动；新增项目头部（当前项目、运行/错误状态、会话与运行数量）；错误会话保持可见，直到你打开该会话或恢复对话",
+				en: "Sidebar overhaul: sessions sort by recent activity without the list jumping around as you browse; a new project header shows the current project, running/error state and session counts; error sessions stay visible until you open them or resume chatting",
+				ja: "サイドバーを刷新：セッションは直近の活動順に並び、閲覧してもリストが動きません。プロジェクトヘッダー（現在のプロジェクト、実行中/エラー状態、セッション数）を追加し、エラーセッションは開くか会話を再開するまで表示を維持",
+			},
+			{
+				zh: "修复模型显示异常：会话模型缺失时自动选择可用模型，不再出现「?」图标；子会话默认继承父会话当前使用的模型",
+				en: "Fixed model display issues: sessions with a missing model now automatically fall back to an available one (no more “?” icon); sub-sessions inherit the parent's current model by default",
+				ja: "モデル表示の不具合を修正：モデル未設定のセッションは利用可能なモデルを自動選択し、「?」アイコンを表示しないように。サブセッションは親セッションのモデルをデフォルトで継承",
+			},
+			{
+				zh: "启动与会话历史恢复大幅提速：打开会话时先展示最近内容，更早的历史按需分页加载，长会话首次打开不再卡顿、不再触发整屏滚动动画",
+				en: "Much faster startup and session restore: recent messages appear immediately while older history loads page-by-page on demand — long sessions open without stutter and without full-screen scroll animations",
+				ja: "起動とセッション履歴の復元を大幅高速化：開いた直後に直近の内容を表示し、過去の履歴は必要に応じてページ単位で読み込み。長いセッションもカクつきや全画面スクロールアニメーションなしで開きます",
+			},
+			{
+				zh: "面板拖拽与消息渲染性能优化：拖拽右侧面板更跟手、响应更及时；拖动面板时消息区只重排可见内容，长会话不再整体卡顿",
+				en: "Smoother panel dragging and message rendering: panels follow the pointer more responsively, and dragging no longer reflows the whole message list in long sessions",
+				ja: "パネルのドラッグとメッセージ描画を最適化：パネルがより滑らかに追従し、ドラッグ中もメッセージエリアは表示中の内容だけを再描画するため、長いセッションでもカクつきません",
+			},
+			{
+				zh: "修复多项会话稳定性问题：排队消息在会话重新激活后仍然保留、队列状态显示更准确、会话结束状态同步更可靠、diff 预览兼容更多补丁格式",
+				en: "Session stability fixes: queued messages survive session reactivation, queue state display is more accurate, session completion state sync is more reliable, and the diff preview now handles more patch formats",
+				ja: "セッション安定性を修正：キューされたメッセージが再アクティブ後も保持され、キュー状態の表示が正確に、セッション終了状態の同期が信頼性アップ、diff プレビューはより多くのパッチ形式に対応",
+			},
+			{
+				zh: "其他修复与优化：共享区文件刷新更及时且样式与文件树统一、文件修改后切换查看不再丢失未保存内容、窄窗口下面板不再溢出、界面细节清理（移除冗余提示、消息区滚动条隐藏）",
+				en: "Other fixes and polish: the shared files area refreshes promptly with styling unified to the file tree, unsaved edits are protected when switching files, panels no longer overflow on narrow windows, and UI cleanup (redundant tooltips removed, message-area scrollbar hidden)",
+				ja: "その他の修正と改善：共有エリアのファイル更新が即時に反映されスタイルも統一、ファイル切替時に未保存の編集が失われないよう保護、狭いウィンドウでパネルがはみ出さないよう修正、UI を整理（冗長なツールチップ削除、メッセージエリアのスクロールバー非表示）",
+			},
+		],
+	},
+	{
 		version: "1.8.0",
 		date: "2026-08-05",
 		items: [
