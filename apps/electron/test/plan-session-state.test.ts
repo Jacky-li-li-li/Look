@@ -174,6 +174,109 @@ describe("Plan session state", () => {
 		await expect(pending).resolves.toEqual({ status: "answered", answers: { "Which scope?": "Small" } });
 	});
 
+	it("asks questions outside Plan mode (always/ask sessions)", async () => {
+		const events: unknown[] = [];
+		const eb: IEventBus = {
+			emit(e) {
+				events.push(e);
+			},
+			onEvent() {
+				return () => {};
+			},
+		};
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => mockSession() as unknown as AgentSession,
+			getSessionManager: () => undefined,
+			getCwd: () => "/tmp",
+			getProjectRoot: () => "/tmp",
+		};
+		const ps = new PermissionService(eb, "ask");
+		// 不切换到 plan 模式 —— AskUserQuestion 在 ask/always 模式同样可用
+		const svc = new PlanService(eb, rs, ps, async () => {});
+		const pending = svc.requestQuestions("session-a", questions);
+		const request = (
+			events.find(
+				(e) => (e as Record<string, { request: { requestId: string } }>)?.type === "plan:question-requested",
+			) as Record<string, { request: { requestId: string } }>
+		).request;
+
+		expect(request).toBeDefined();
+		expect(
+			svc.handleQuestionResponse({
+				requestId: request.requestId,
+				sessionId: "session-a",
+				answers: { "Which scope?": "Small" },
+			}),
+		).toBe(true);
+		await expect(pending).resolves.toEqual({ status: "answered", answers: { "Which scope?": "Small" } });
+	});
+
+	it("asks questions in always mode and keeps ExitPlanMode Plan-only", async () => {
+		const events: unknown[] = [];
+		const eb: IEventBus = {
+			emit(e) {
+				events.push(e);
+			},
+			onEvent() {
+				return () => {};
+			},
+		};
+		const rs: IRuntimeStore = {
+			getRuntime: () => undefined as unknown as AgentSessionRuntime,
+			getSession: () => mockSession() as unknown as AgentSession,
+			getSessionManager: () => undefined,
+			getCwd: () => "/tmp",
+			getProjectRoot: () => "/tmp",
+		};
+		const ps = new PermissionService(eb, "always");
+		const svc = new PlanService(eb, rs, ps, async () => {});
+
+		const pending = svc.requestQuestions("session-a", questions);
+		const request = (
+			events.find(
+				(e) => (e as Record<string, { request: { requestId: string } }>)?.type === "plan:question-requested",
+			) as Record<string, { request: { requestId: string } }>
+		).request;
+		expect(request).toBeDefined();
+		expect(
+			svc.handleQuestionResponse({
+				requestId: request.requestId,
+				sessionId: "session-a",
+				answers: { "Which scope?": "Small" },
+			}),
+		).toBe(true);
+		await expect(pending).resolves.toEqual({ status: "answered", answers: { "Which scope?": "Small" } });
+
+		// ExitPlanMode stays Plan-only: non-plan sessions are rejected at the service layer.
+		await expect(svc.requestApproval("session-a", "# Plan")).resolves.toMatchObject({
+			status: "cancelled",
+			reason: "Session is no longer in Plan mode",
+		});
+	});
+
+	it("settles pending questions when the session is disposed", async () => {
+		const { planSvc } = planServiceForTest();
+		const pending = planSvc.requestQuestions("session-a", questions);
+		planSvc.disposeSession("session-a");
+		await expect(pending).resolves.toMatchObject({ status: "cancelled", reason: "Session disposed" });
+	});
+
+	it("times out unanswered questions with the main-process fallback timer", async () => {
+		vi.useFakeTimers();
+		try {
+			const { planSvc } = planServiceForTest();
+			const pending = planSvc.requestQuestions("session-a", questions);
+			vi.advanceTimersByTime(5 * 60 * 1000);
+			await expect(pending).resolves.toMatchObject({
+				status: "cancelled",
+				reason: "Question timed out after 5 minutes",
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("cancels a waiting question before abort can wait on the agent loop", async () => {
 		const { planSvc } = planServiceForTest();
 		const pending = planSvc.requestQuestions("session-a", questions);

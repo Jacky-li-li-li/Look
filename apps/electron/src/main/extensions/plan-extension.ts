@@ -71,8 +71,8 @@ export function createPlanExtensionFactory(sessionId: string, host: PlanExtensio
 			name: "AskUserQuestion",
 			label: "Ask user question",
 			description:
-				"Pause planning and ask the user 1-4 structured questions. Each question supports single-select or multi-select and an automatic Other response.",
-			promptSnippet: "Ask the user structured clarification questions while planning",
+				"Ask the user 1-4 structured questions. Available in any permission mode; each question supports single-select or multi-select and an automatic Other response.",
+			promptSnippet: "Ask the user structured clarification questions (available in any permission mode)",
 			parameters: askUserQuestionSchema,
 			executionMode: "sequential",
 			async execute(_toolCallId, params, signal) {

@@ -30,12 +30,21 @@ import { PLAN_TOOL_NAMES } from "../extensions/plan-extension.js";
 export const PLAN_STATE_ENTRY_TYPE = "look.plan-state.v1";
 export const PLAN_RECORD_ENTRY_TYPE = "look.plan.v1";
 
+/**
+ * Main-process fallback timeout for a pending question dialog.
+ * Matches the renderer's AUTO_TIMEOUT_MS (PlanQuestionDialog) so headless runs
+ * and sessions without a mounted dialog never hang forever.
+ */
+const QUESTION_TIMEOUT_MS = 5 * 60 * 1000;
+
 // ── Internal types ──
 
 interface PendingPlanQuestion {
 	request: PlanQuestionRequest;
 	resolve: (outcome: PlanQuestionOutcome) => void;
 	removeAbortListener: () => void;
+	/** Main-process fallback timer; cleared when the question is settled. */
+	timer?: ReturnType<typeof setTimeout>;
 }
 
 interface PendingPlanApproval {
@@ -103,6 +112,23 @@ export class PlanService implements IPlanService {
 	disposeSession(sessionId: string): void {
 		this.prePlanTools.delete(sessionId);
 		this.dirtyToolSnapshots.delete(sessionId);
+		// Defensive: settle any pending interactions so their promises never hang
+		// and no entries leak when disposal skips cancelInteractions (abnormal paths).
+		for (const [requestId, pending] of [...this.questionsAwaiting]) {
+			if (pending.request.sessionId === sessionId) {
+				this.finishQuestion(requestId, { status: "cancelled", reason: "Session disposed" });
+			}
+		}
+		for (const [requestId, pending] of [...this.approvalsAwaiting]) {
+			if (pending.request.sessionId === sessionId) {
+				this.finishApproval(requestId, {
+					status: "cancelled",
+					planId: pending.request.planId,
+					filePath: pending.request.filePath,
+					reason: "Session disposed",
+				});
+			}
+		}
 	}
 
 	// ── Tool restriction ──
@@ -140,15 +166,17 @@ export class PlanService implements IPlanService {
 	}
 
 	// ── Plan questions ──
+	//
+	// AskUserQuestion is available in any permission mode (always / ask / plan):
+	// the structured question dialog is the UI channel for clarifying questions
+	// both inside and outside planning. ExitPlanMode (requestApproval) below stays
+	// Plan-mode only.
 
 	async requestQuestions(
 		sessionId: string,
 		questions: PlanQuestion[],
 		signal?: AbortSignal,
 	): Promise<PlanQuestionOutcome> {
-		if (this.permissions.getMode(sessionId) !== "plan") {
-			return { status: "cancelled", reason: "Session is no longer in Plan mode" };
-		}
 		if (signal?.aborted) return { status: "cancelled", reason: "Planning turn was aborted" };
 
 		const requestId = uuidv4();
@@ -160,6 +188,9 @@ export class PlanService implements IPlanService {
 			pending.removeAbortListener = this.onAbort(signal, () => {
 				this.finishQuestion(requestId, { status: "cancelled", reason: "Planning turn was aborted" });
 			});
+			pending.timer = setTimeout(() => {
+				this.finishQuestion(requestId, { status: "cancelled", reason: "Question timed out after 5 minutes" });
+			}, QUESTION_TIMEOUT_MS);
 			if (signal?.aborted) {
 				this.finishQuestion(requestId, { status: "cancelled", reason: "Planning turn was aborted" });
 			} else {
@@ -329,6 +360,7 @@ export class PlanService implements IPlanService {
 		if (!pending) return false;
 		this.questionsAwaiting.delete(requestId);
 		pending.removeAbortListener();
+		if (pending.timer) clearTimeout(pending.timer);
 		const active = this.interactionBySession.get(pending.request.sessionId);
 		if (active?.requestId === requestId) this.interactionBySession.delete(pending.request.sessionId);
 		this.eventBus.emit({ type: "plan:question-resolved", agentId: pending.request.sessionId, requestId });
