@@ -31,15 +31,18 @@ describe("requestViewFileAtom", () => {
 		});
 	});
 
-	it("toasts and does not open the viewer when the path guard denies access", async () => {
+	it("opens outside-project files read-only in the dock (no toast, no separate window)", async () => {
+		// 2026-08-08 方案 B:项目外文件允许只读查看,stat 的 Path denied 不再拦截
+		const store = createStore();
 		statFilePath.mockResolvedValue({
 			success: false,
 			error: "Path denied for path: outside allowed project directories",
 		});
-		await createStore().set(requestViewFileAtom, "/Users/x/Desktop/a.png");
-		expect(toastError).toHaveBeenCalledTimes(1);
+		await store.set(requestViewFileAtom, "/Users/x/Desktop/a.png");
+		expect(toastError).not.toHaveBeenCalled();
 		expect(openFileViewer).not.toHaveBeenCalled();
 		expect(revealInFinder).not.toHaveBeenCalled();
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/Users/x/Desktop/a.png" });
 	});
 
 	it("reveals directories in Finder instead of opening the viewer", async () => {
@@ -97,7 +100,7 @@ describe("requestViewFileAtom", () => {
 		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/docked.md" });
 	});
 
-	it("keeps the dock panel unchanged and toasts when the path guard denies access", async () => {
+	it("updates the dock to the outside-project file read-only (no toast)", async () => {
 		const store = createStore();
 		store.set(dockedFileAtom, { absolutePath: "/tmp/docked.md" });
 		statFilePath.mockResolvedValue({
@@ -105,9 +108,9 @@ describe("requestViewFileAtom", () => {
 			error: "Path denied for path: outside allowed project directories",
 		});
 		await store.set(requestViewFileAtom, "/Users/x/Desktop/a.png");
-		expect(toastError).toHaveBeenCalledTimes(1);
+		expect(toastError).not.toHaveBeenCalled();
 		expect(openFileViewer).not.toHaveBeenCalled();
-		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/docked.md" });
+		expect(store.get(dockedFileAtom)).toEqual({ absolutePath: "/Users/x/Desktop/a.png" });
 	});
 
 	// ---- Dock 脏确认：外部跳转不得静默覆盖未保存修改（2026-08-07 修复） ----

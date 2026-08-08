@@ -66,3 +66,115 @@ describe("FileViewerDialog 图片预览", () => {
 		expect(screen.queryByAltText("shot.png")).toBeNull();
 	});
 });
+
+describe("FileViewerDialog 返回按钮", () => {
+	const readFileContent = vi.fn();
+
+	beforeEach(async () => {
+		await i18n.changeLanguage("zh");
+		readFileContent.mockReset().mockResolvedValue({
+			success: true,
+			kind: "text",
+			content: "# 标题\n\n正文",
+			truncated: false,
+			sizeBytes: 10,
+		});
+		Object.defineProperty(window, "look", {
+			configurable: true,
+			value: {
+				readFileContent,
+				homedir: "/Users/test",
+				revealInFinder: vi.fn(),
+				writeFileContent: vi.fn(),
+			},
+		});
+		appStore.set(viewingFileAtom, { absolutePath: "/tmp/proj/readme.md" });
+	});
+
+	afterEach(() => {
+		appStore.set(viewingFileAtom, null);
+		cleanup();
+	});
+
+	it("首次打开（无导航历史）时不渲染返回按钮", async () => {
+		render(
+			<Provider store={appStore}>
+				<TooltipProvider>
+					<FileViewerDialog />
+				</TooltipProvider>
+			</Provider>,
+		);
+		await screen.findByText("readme.md");
+		// 无历史:返回按钮不存在,而非 disabled 灰显
+		expect(screen.queryByLabelText("返回")).toBeNull();
+	});
+});
+
+describe("FileViewerDialog 项目外文件只读", () => {
+	const readFileContent = vi.fn();
+
+	beforeEach(async () => {
+		await i18n.changeLanguage("zh");
+		readFileContent.mockReset().mockResolvedValue({
+			success: true,
+			kind: "text",
+			content: "# 标题\n\n正文",
+			truncated: false,
+			sizeBytes: 10,
+			inProject: false,
+		});
+		Object.defineProperty(window, "look", {
+			configurable: true,
+			value: {
+				readFileContent,
+				homedir: "/Users/test",
+				revealInFinder: vi.fn(),
+				writeFileContent: vi.fn(),
+			},
+		});
+		appStore.set(viewingFileAtom, { absolutePath: "/Users/test/Desktop/outside.md" });
+	});
+
+	afterEach(() => {
+		appStore.set(viewingFileAtom, null);
+		cleanup();
+	});
+
+	it("shows the read-only badge and hides edit/save for outside-project files", async () => {
+		render(
+			<Provider store={appStore}>
+				<TooltipProvider>
+					<FileViewerDialog />
+				</TooltipProvider>
+			</Provider>,
+		);
+		// 徽标出现在标题栏与底部状态条两处
+		const badges = await screen.findAllByText("项目外 · 只读");
+		expect(badges.length).toBeGreaterThanOrEqual(1);
+		// 项目外文件禁止编辑/保存
+		expect(screen.queryByRole("button", { name: "编辑" })).toBeNull();
+		expect(screen.queryByLabelText("保存")).toBeNull();
+	});
+
+	it("hides the read-only badge for in-project files and keeps edit available", async () => {
+		readFileContent.mockResolvedValue({
+			success: true,
+			kind: "text",
+			content: "# 标题\n\n正文",
+			truncated: false,
+			sizeBytes: 10,
+			inProject: true,
+		});
+		appStore.set(viewingFileAtom, { absolutePath: "/tmp/proj/inner.md" });
+		render(
+			<Provider store={appStore}>
+				<TooltipProvider>
+					<FileViewerDialog />
+				</TooltipProvider>
+			</Provider>,
+		);
+		await screen.findByText("inner.md");
+		expect(screen.queryByText("项目外 · 只读")).toBeNull();
+		expect(screen.getByRole("button", { name: "编辑" })).toBeDefined();
+	});
+});

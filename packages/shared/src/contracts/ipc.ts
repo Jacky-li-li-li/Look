@@ -264,13 +264,15 @@ export interface LookAPI {
 		path: string,
 	): Promise<
 		IpcResult<
-			| { kind: "text"; content: string; truncated: boolean; sizeBytes: number }
-			| { kind: "image"; data: string; mimeType: string; sizeBytes: number }
-			| { kind: "binary"; sizeBytes: number }
+			| { kind: "text"; content: string; truncated: boolean; sizeBytes: number; inProject: boolean }
+			| { kind: "image"; data: string; mimeType: string; sizeBytes: number; inProject: boolean }
+			| { kind: "binary"; sizeBytes: number; inProject: boolean }
 		>
 	>;
 	writeFileContent(path: string, content: string): Promise<IpcResult<{ sizeBytes: number }>>;
-	statFilePath(path: string): Promise<IpcResult<{ kind: "file" | "directory" | "other" | "missing" }>>;
+	statFilePath(
+		path: string,
+	): Promise<IpcResult<{ kind: "file" | "directory" | "other" | "missing"; inProject: boolean }>>;
 	// ---- File viewer window ----
 	openFileViewer(path: string, fadeIn?: boolean): Promise<IpcResult>;
 	/** 独立查看器窗口请求合并到主窗口右侧 Dock 面板。 */

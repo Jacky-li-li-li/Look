@@ -533,9 +533,9 @@ const mockApi: LookAPI = {
 	// ---- 补齐的 LookAPI 契约方法（DEV mock 桩，与 preload 保持同构） ----
 	abortCompressSession: () => ok,
 	openOAuthUrl: () => success({ redirectUrl: "" }),
-	readFileContent: () => success({ kind: "binary", sizeBytes: 0 }),
+	readFileContent: () => success({ kind: "binary", sizeBytes: 0, inProject: true }),
 	writeFileContent: () => success({ sizeBytes: 0 }),
-	statFilePath: () => success({ kind: "missing" }),
+	statFilePath: () => success({ kind: "missing", inProject: false }),
 	openFileViewer: (_path, _fadeIn) => Promise.resolve({ success: true }),
 	dockFileViewer: () => Promise.resolve({ success: true }),
 	fileViewerReady: () => Promise.resolve({ success: true, path: null }),

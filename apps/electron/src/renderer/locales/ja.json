@@ -876,7 +876,9 @@
     "close": "閉じる",
     "dockToMain": "メインウィンドウにドッキング",
     "undock": "独立ウィンドウで開く",
-    "resize": "ドラッグでパネル幅を調整"
+    "resize": "ドラッグでパネル幅を調整",
+    "moreActions": "その他の操作",
+    "readOnly": "プロジェクト外 · 読み取り専用"
   },
   "planDialogs": {
     "toolConfirmTitle": "ツール実行の確認",

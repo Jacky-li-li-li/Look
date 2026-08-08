@@ -6,7 +6,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readFileContent, statPathKind, writeFileContent } from "../../src/main/ipc/routers/file-router.js";
+import {
+	isInsideAnyRoot,
+	readFileContent,
+	statPathKind,
+	writeFileContent,
+} from "../../src/main/ipc/routers/file-router.js";
 
 const READ_CAP = 4 * 1024 * 1024;
 const WRITE_CAP = 10 * 1024 * 1024;
@@ -168,5 +173,29 @@ describe("statPathKind", () => {
 			ctx.skip();
 		}
 		await expect(statPathKind(link)).resolves.toEqual({ success: true, kind: "directory" });
+	});
+});
+
+describe("isInsideAnyRoot", () => {
+	it("returns true for paths inside a root", () => {
+		expect(isInsideAnyRoot("/Users/jacky/proj/src/a.ts", ["/Users/jacky/proj"])).toBe(true);
+	});
+
+	it("returns false for paths outside all roots", () => {
+		expect(isInsideAnyRoot("/Users/jacky/Desktop/a.ts", ["/Users/jacky/proj"])).toBe(false);
+	});
+
+	it("returns false for the root itself (not inside, only under it)", () => {
+		expect(isInsideAnyRoot("/Users/jacky/proj", ["/Users/jacky/proj"])).toBe(false);
+	});
+
+	it("ignores empty roots and matches any valid one", () => {
+		expect(isInsideAnyRoot("/Users/jacky/proj/src/a.ts", ["", "/Users/jacky/proj"])).toBe(true);
+		expect(isInsideAnyRoot("/tmp/x.md", ["", "/Users/jacky/proj"])).toBe(false);
+	});
+
+	it("handles sibling prefixes without false positives", () => {
+		// /Users/jacky/proj2 不能命中 root=/Users/jacky/proj
+		expect(isInsideAnyRoot("/Users/jacky/proj2/a.ts", ["/Users/jacky/proj"])).toBe(false);
 	});
 });

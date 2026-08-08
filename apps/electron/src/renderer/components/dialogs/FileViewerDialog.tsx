@@ -9,6 +9,12 @@
 
 import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@look/ui/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom } from "jotai";
@@ -19,6 +25,7 @@ import {
 	Eye,
 	FileWarning,
 	FolderOpen,
+	MoreHorizontal,
 	PanelLeftClose,
 	PanelLeftOpen,
 	PanelRightOpen,
@@ -88,12 +95,26 @@ function truncateMiddle(text: string, max = 72): string {
 	return `${text.slice(0, half)}…${text.slice(text.length - half)}`;
 }
 
+/** 人类可读的文件大小:4 B / 12.4 KB / 1.2 MB / 3.1 GB。 */
+function formatBytes(bytes: number): string {
+	if (!Number.isFinite(bytes) || bytes < 0) return "";
+	if (bytes < 1024) return `${bytes} B`;
+	const units = ["KB", "MB", "GB"];
+	let value = bytes / 1024;
+	let unitIndex = 0;
+	while (value >= 1024 && unitIndex < units.length - 1) {
+		value /= 1024;
+		unitIndex += 1;
+	}
+	return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`;
+}
+
 type LoadState =
 	| { status: "loading" }
 	| { status: "error"; error: string }
-	| { status: "image"; data: string; mimeType: string; sizeBytes: number }
-	| { status: "binary"; sizeBytes: number }
-	| { status: "text"; content: string; truncated: boolean; sizeBytes: number };
+	| { status: "image"; data: string; mimeType: string; sizeBytes: number; inProject: boolean }
+	| { status: "binary"; sizeBytes: number; inProject: boolean }
+	| { status: "text"; content: string; truncated: boolean; sizeBytes: number; inProject: boolean };
 
 interface FileViewerDialogProps {
 	/** 独立原生窗口模式:铺满整个窗口,禁用拖动/缩放,关闭即关窗。 */
@@ -226,8 +247,12 @@ export default function FileViewerDialog({
 	const textData = loadState.status === "text" ? loadState : null;
 	const truncated = textData?.truncated ?? false;
 	const dirty = draft !== savedContent;
-	// 截断文件禁止编辑 / 保存,避免把不完整内容写回磁盘
-	const canEdit = isMarkdown && !truncated;
+	// 项目外文件为只读预览(inProject=false):禁止编辑/保存,避免把改动写回项目外路径
+	const inProject =
+		loadState.status === "text" || loadState.status === "image" || loadState.status === "binary"
+			? loadState.inProject
+			: true;
+	const canEdit = isMarkdown && !truncated && inProject;
 
 	// md 目录导航:从原文提取标题大纲,≥2 个标题时显示左侧导航
 	const tocHeadings = useMemo(
@@ -362,15 +387,17 @@ export default function FileViewerDialog({
 						data: result.data,
 						mimeType: result.mimeType,
 						sizeBytes: result.sizeBytes,
+						inProject: result.inProject,
 					});
 				} else if (result.kind === "binary") {
-					setLoadState({ status: "binary", sizeBytes: result.sizeBytes });
+					setLoadState({ status: "binary", sizeBytes: result.sizeBytes, inProject: result.inProject });
 				} else {
 					setLoadState({
 						status: "text",
 						content: result.content,
 						truncated: result.truncated,
 						sizeBytes: result.sizeBytes,
+						inProject: result.inProject,
 					});
 					setDraft(result.content);
 					setSavedContent(result.content);
@@ -537,33 +564,38 @@ export default function FileViewerDialog({
 			{/* 标题栏:浮窗模式为拖动把手(按钮等交互元素除外);独立窗口模式由原生标题栏负责拖动;Dock 模式固定布局 */}
 			<div
 				className={
-					windowMode || dockMode
-						? "flex shrink-0 select-none flex-col gap-1 border-b px-4 py-3"
-						: "flex shrink-0 cursor-move touch-none select-none flex-col gap-1 border-b px-4 py-3"
+					(windowMode || dockMode
+						? "flex shrink-0 select-none flex-col gap-1 border-b px-4 py-2"
+						: "flex shrink-0 cursor-move touch-none select-none flex-col gap-1 border-b px-4 py-2") +
+					(editMode ? " border-b-2 border-primary/40" : "")
 				}
 				onPointerDown={windowMode || dockMode ? undefined : handleDragStart}
 			>
 				<div className="flex items-center gap-2">
-					{/* disabled 按钮不派发 pointer 事件，span 包裹保证悬停提示仍可触发 */}
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<span className="inline-flex">
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									onClick={handleBack}
-									disabled={backStack.length === 0}
-									aria-label={t("fileViewer.back")}
-								>
+					{/* 返回按钮仅在存在导航历史时渲染:无历史时展示 disabled 按钮会让用户误以为可点 */}
+					{backStack.length > 0 && (
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button variant="ghost" size="icon-xs" onClick={handleBack} aria-label={t("fileViewer.back")}>
 									<ArrowLeft className="size-3.5" />
 								</Button>
-							</span>
-						</TooltipTrigger>
-						<TooltipContent side="bottom">{t("fileViewer.back")}</TooltipContent>
-					</Tooltip>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">{t("fileViewer.back")}</TooltipContent>
+						</Tooltip>
+					)}
 					<FileIcon node={iconNode} className="size-4 shrink-0" />
-					<h2 className="truncate font-heading text-sm leading-none font-medium">{basename}</h2>
-					{dirty && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />}
+					<h2 className="truncate font-heading text-[13px] leading-none font-medium">{basename}</h2>
+					{!inProject && (
+						<span className="shrink-0 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+							{t("fileViewer.readOnly")}
+						</span>
+					)}
+					{dirty && (
+						<span
+							className="size-1.5 shrink-0 rounded-full bg-amber-500 ring-2 ring-amber-500/20"
+							aria-hidden="true"
+						/>
+					)}
 					<div className="ml-auto flex shrink-0 items-center gap-1">
 						{canEdit && (
 							<>
@@ -582,11 +614,14 @@ export default function FileViewerDialog({
 									<TooltipTrigger asChild>
 										<span className="inline-flex">
 											<Button
-												variant="ghost"
+												variant={dirty ? "outline" : "ghost"}
 												size="icon-xs"
 												onClick={() => void handleSave()}
 												disabled={!dirty || saving}
 												aria-label={t("fileViewer.save")}
+												className={cn(
+													dirty && "text-amber-500 hover:text-amber-500/90 hover:bg-amber-500/10",
+												)}
 											>
 												<Save className="size-3.5" />
 											</Button>
@@ -596,45 +631,33 @@ export default function FileViewerDialog({
 								</Tooltip>
 							</>
 						)}
-						<Tooltip>
-							<TooltipTrigger asChild>
+						{/* 次要操作收进溢出菜单:复制路径 / Finder 显示 / 刷新,保证窄面板下文件名不被挤压 */}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
 								<Button
 									variant="ghost"
 									size="icon-xs"
-									onClick={handleCopyPath}
-									aria-label={t("fileViewer.copyPath")}
+									aria-label={t("fileViewer.moreActions")}
+									title={t("fileViewer.moreActions")}
 								>
-									<Copy className="size-3.5" />
+									<MoreHorizontal className="size-3.5" />
 								</Button>
-							</TooltipTrigger>
-							<TooltipContent side="bottom">{t("fileViewer.copyPath")}</TooltipContent>
-						</Tooltip>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									onClick={handleReveal}
-									aria-label={t("fileViewer.revealInFinder")}
-								>
-									<FolderOpen className="size-3.5" />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent side="bottom">{t("fileViewer.revealInFinder")}</TooltipContent>
-						</Tooltip>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									onClick={handleRefresh}
-									aria-label={t("fileViewer.refresh")}
-								>
-									<RefreshCw className="size-3.5" />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent side="bottom">{t("fileViewer.refresh")}</TooltipContent>
-						</Tooltip>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onClick={handleCopyPath}>
+									<Copy className="mr-2 size-3.5" />
+									{t("fileViewer.copyPath")}
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleReveal}>
+									<FolderOpen className="mr-2 size-3.5" />
+									{t("fileViewer.revealInFinder")}
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleRefresh}>
+									<RefreshCw className="mr-2 size-3.5" />
+									{t("fileViewer.refresh")}
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 						{windowMode && (
 							<Tooltip>
 								<TooltipTrigger asChild>
@@ -680,7 +703,7 @@ export default function FileViewerDialog({
 						</Tooltip>
 					</div>
 				</div>
-				<p className="truncate font-mono text-[11px] text-muted-foreground" title={absolutePath ?? undefined}>
+				<p className="truncate font-mono text-[11px] text-muted-foreground/80" title={absolutePath ?? undefined}>
 					{displayPath}
 				</p>
 			</div>
@@ -699,12 +722,27 @@ export default function FileViewerDialog({
 						</p>
 					</div>
 				) : loadState.status === "image" ? (
-					<div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/30 p-4">
-						<img
-							src={`data:${loadState.mimeType};base64,${loadState.data}`}
-							alt={basename}
-							className="max-h-full max-w-full object-contain"
-						/>
+					<div className="flex min-h-0 flex-1 flex-col">
+						<div
+							className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4"
+							style={{
+								backgroundImage:
+									"conic-gradient(color-mix(in oklab, var(--border) 55%, transparent) 25%, transparent 0 50%, color-mix(in oklab, var(--border) 55%, transparent) 0 75%, transparent 0)",
+								backgroundSize: "16px 16px",
+							}}
+						>
+							<img
+								src={`data:${loadState.mimeType};base64,${loadState.data}`}
+								alt={basename}
+								className="max-h-full max-w-full object-contain"
+							/>
+						</div>
+						<div className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-1.5 text-[11px] text-muted-foreground">
+							<span className="rounded-sm bg-foreground/10 px-1.5 py-0.5 font-mono uppercase">
+								{loadState.mimeType.split("/")[1] ?? loadState.mimeType}
+							</span>
+							<span>{formatBytes(loadState.sizeBytes)}</span>
+						</div>
 					</div>
 				) : loadState.status === "binary" ? (
 					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
@@ -751,7 +789,7 @@ export default function FileViewerDialog({
 													className={cn(
 														"block w-full truncate rounded px-2 py-1 text-left text-xs transition-colors",
 														activeSlug === h.slug
-															? "bg-muted font-medium text-foreground"
+															? "bg-muted font-medium text-foreground shadow-[inset_2px_0_0_0_var(--primary)]"
 															: "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
 													)}
 													style={{ paddingLeft: `${(h.level - minTocLevel) * 12 + 8}px` }}
@@ -833,9 +871,18 @@ export default function FileViewerDialog({
 						</pre>
 					</div>
 				) : null}
-				{truncated && (
-					<div className="shrink-0 border-t bg-muted/50 px-4 py-2 text-[11px] text-muted-foreground">
-						{t("fileViewer.truncatedNotice")}
+				{textData && (
+					<div className="flex shrink-0 items-center gap-2 border-t bg-muted/50 px-4 py-1.5 text-[11px] text-muted-foreground">
+						{!textData.inProject && (
+							<span className="rounded-sm bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600 dark:text-amber-400">
+								{t("fileViewer.readOnly")}
+							</span>
+						)}
+						{language && (
+							<span className="rounded-sm bg-foreground/10 px-1.5 py-0.5 font-mono uppercase">{language}</span>
+						)}
+						<span>{formatBytes(textData.sizeBytes)}</span>
+						{textData.truncated && <span className="ml-auto">{t("fileViewer.truncatedNotice")}</span>}
 					</div>
 				)}
 			</div>

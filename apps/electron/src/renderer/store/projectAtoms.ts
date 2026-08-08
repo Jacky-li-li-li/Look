@@ -1,7 +1,6 @@
 import type { FileTreeNode, GitRepoInfo, ProjectInfo } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
-import { toast } from "sonner";
 import i18n from "../i18n";
 
 export const projectsAtom = atom<ProjectInfo[]>([]);
@@ -69,12 +68,8 @@ export function confirmDockFileSwapIfDirty(getDirty: () => boolean): boolean {
  */
 export const requestViewFileAtom = atom(null, async (get, set, absolutePath: string) => {
 	const stat = await window.look.statFilePath(absolutePath).catch(() => null);
-	// 安全 guard 拒绝（路径在项目根之外）时 stat 返回 success:false，
-	// 点击处直接 toast，不再打开一个只会显示 IPC 错误的查看器窗口。
-	if (stat && !stat.success && stat.error.includes("Path denied")) {
-		toast.error(i18n.t("fileViewer.pathDenied"));
-		return;
-	}
+	// 项目外文件允许只读查看（2026-08-08 方案 B）:stat 不再因 "Path denied" 拒绝,
+	// 查看器根据 inProject 标记禁用编辑/保存;目录仍走 Finder 展示。
 	if (stat?.success && stat.kind === "directory") {
 		void window.look.revealInFinder(absolutePath);
 		return;

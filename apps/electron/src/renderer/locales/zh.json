@@ -876,7 +876,9 @@
     "close": "关闭",
     "dockToMain": "合并到主窗口",
     "undock": "弹出为独立窗口",
-    "resize": "拖拽调整面板宽度"
+    "resize": "拖拽调整面板宽度",
+    "moreActions": "更多操作",
+    "readOnly": "项目外 · 只读"
   },
   "planDialogs": {
     "toolConfirmTitle": "工具调用确认",

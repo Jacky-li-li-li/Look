@@ -16,24 +16,32 @@ import type { IpcRouter } from "../invoke-context.js";
  * rejected too (best effort: for not-yet-existing files realpath fails and we
  * fall back to the lexical path check).
  */
-async function guardAllowedProjectPath(rawPath: unknown, label: string, projectRoots: string[]): Promise<string> {
+/**
+ * 只读路径守卫:仅做基本校验(类型/长度/NUL/绝对路径),不限制项目根。
+ * 用于 file:read / file:stat —— 项目外文件允许只读查看(2026-08-08 方案 B),
+ * 渲染端依据返回的 inProject 标记禁用编辑/保存。
+ */
+function guardAnyPath(rawPath: unknown, label: string): string {
+	return guardPath(rawPath, label);
+}
+
+/**
+ * 写入路径守卫:必须在至少一个项目根内(含共享区),symlink 逃逸同样拒绝。
+ * file:write 保持严格限制 —— 项目外文件不可写。
+ */
+async function guardProjectPath(rawPath: unknown, label: string, projectRoots: string[]): Promise<string> {
 	const resolved = guardPath(rawPath, label);
 	const roots = projectRoots.filter((root) => typeof root === "string" && root.length > 0);
 	if (roots.length === 0) {
 		throw new Error(`Path denied for ${label}: no allowed project directories are configured`);
 	}
-	const isInside = (p: string): boolean =>
-		roots.some((root) => {
-			const rel = path.relative(root, p);
-			return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
-		});
-	if (!isInside(resolved)) {
+	if (!isInsideAnyRoot(resolved, roots)) {
 		throw new Error(`Path denied for ${label}: outside allowed project directories`);
 	}
 	// Reject symlinks that escape the allowed roots.
 	try {
 		const real = await fs.promises.realpath(resolved);
-		if (!isInside(real)) {
+		if (!isInsideAnyRoot(real, roots)) {
 			throw new Error(`Path denied for ${label}: symlink escapes allowed project directories`);
 		}
 	} catch (error) {
@@ -41,6 +49,15 @@ async function guardAllowedProjectPath(rawPath: unknown, label: string, projectR
 		// ENOENT etc.: file may not exist yet (write); lexical check already passed.
 	}
 	return resolved;
+}
+
+/** 路径是否位于任一根目录内(词法判断)。 */
+export function isInsideAnyRoot(p: string, roots: string[]): boolean {
+	const effective = roots.filter((root) => typeof root === "string" && root.length > 0);
+	return effective.some((root) => {
+		const rel = path.relative(root, p);
+		return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+	});
 }
 
 /** 读取上限 4MB,超出部分截断返回。 */
@@ -67,10 +84,15 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = {
 	".svg": "image/svg+xml",
 };
 
-export type FileReadResult =
+/** 文件内容读取的底层结果(不含 inProject,由 router 层按路径归属附加)。 */
+export type FileReadContentResult =
 	| { success: true; kind: "text"; content: string; truncated: boolean; sizeBytes: number }
 	| { success: true; kind: "image"; data: string; mimeType: string; sizeBytes: number }
 	| { success: true; kind: "binary"; sizeBytes: number };
+
+export type FileReadResult = FileReadContentResult & { inProject: boolean };
+
+export type PathStatContentResult = Omit<PathStatResult, "inProject">;
 
 export interface FileWriteResult {
 	success: true;
@@ -78,7 +100,7 @@ export interface FileWriteResult {
 }
 
 /** 读取文件内容:>4MB 只读前 4MB 并标记截断;前 8KB 含 NUL 字节视为二进制,不解码。 */
-export async function readFileContent(filePath: string): Promise<FileReadResult> {
+export async function readFileContent(filePath: string): Promise<FileReadContentResult> {
 	const stat = await fs.promises.lstat(filePath);
 	if (!stat.isFile()) {
 		throw new Error(`Not a file: ${filePath}`);
@@ -128,9 +150,11 @@ export type PathKind = "file" | "directory" | "other" | "missing";
 export interface PathStatResult {
 	success: true;
 	kind: PathKind;
+	/** 路径是否位于任一项目根(含共享区)内:渲染端据此禁用项目外文件的编辑/保存。 */
+	inProject: boolean;
 }
 
-export async function statPathKind(filePath: string): Promise<PathStatResult> {
+export async function statPathKind(filePath: string): Promise<PathStatContentResult> {
 	// 使用 stat(而非 lstat)跟随符号链接:指向目录的软链也按目录分类,以便在 Finder 中展示。
 	const stat = await fs.promises.stat(filePath).catch(() => null);
 	if (!stat) return { success: true, kind: "missing" };
@@ -146,12 +170,13 @@ export const fileRouter: IpcRouter = (ctx, register) => {
 	const projectRoots = () => ctx.project.service.listProjects().flatMap((p) => [p.cwd, getProjectSharedDir(p.id)]);
 
 	register("file:read", async (data) => {
-		const filePath = await guardAllowedProjectPath(data.path, "path", projectRoots());
-		return readFileContent(filePath);
+		const filePath = guardAnyPath(data.path, "path");
+		const result = await readFileContent(filePath);
+		return { ...result, inProject: isInsideAnyRoot(filePath, projectRoots()) };
 	});
 
 	register("file:write", async (data) => {
-		const filePath = await guardAllowedProjectPath(data.path, "path", projectRoots());
+		const filePath = await guardProjectPath(data.path, "path", projectRoots());
 		const content: unknown = data.content;
 		if (typeof content !== "string") {
 			throw new Error(`Invalid content: expected string, got ${typeof content}`);
@@ -160,7 +185,8 @@ export const fileRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("file:stat", async (data) => {
-		const filePath = await guardAllowedProjectPath(data.path, "path", projectRoots());
-		return statPathKind(filePath);
+		const filePath = guardAnyPath(data.path, "path");
+		const result = await statPathKind(filePath);
+		return { ...result, inProject: isInsideAnyRoot(filePath, projectRoots()) };
 	});
 };
