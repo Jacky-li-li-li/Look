@@ -28,7 +28,7 @@ export function DockFilePanel() {
 	const dockedFile = useAtomValue(dockedFileAtom);
 	const setDockedFile = useSetAtom(dockedFileAtom);
 	const [dockPanelWidth, setDockPanelWidth] = useAtom(dockPanelWidthAtom);
-	const rightPanelWidth = useAtomValue(rightPanelWidthAtom);
+	const [rightPanelWidth, setRightPanelWidth] = useAtom(rightPanelWidthAtom);
 	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
 	const sidebarCollapsed = useAtomValue(sidebarCollapsedAtom);
 	const viewportWidth = useViewportWidth();
@@ -55,8 +55,36 @@ export function DockFilePanel() {
 		dockOpen: !!dockedFile,
 		dockPanelWidth,
 	});
-	// 显示宽度被空间压缩（显示 != 用户宽度）时隐藏调宽把手，避免“拖了没反应”
-	const dockClamped = layout.dockTrack !== dockPanelWidth;
+
+	// Splitter 语义：拖动 Dock 把手时，右栏与 Dock 互相让位、main 保持不变。
+	// 右栏折叠（track=0）时退化为“Dock 对 main 调宽”。这是用户对“两块面板之间
+	// 的分隔条”的直觉预期：拖左 = Dock 变宽 + 右栏变窄，拖右反之。
+	// 依赖只取 layout 的原始数值（rightTrack/dockTrack），回调身份在数值不变时稳定。
+	const handleDockResize = useCallback(
+		(nextDock: number) => {
+			// 右栏折叠或当前无显示宽度：仅改 Dock，吃/让 main 空间
+			if (rightPanelCollapsed || layout.rightTrack === 0) {
+				setDockPanelWidth(nextDock);
+				return;
+			}
+			const delta = nextDock - layout.dockTrack;
+			let nextRight = layout.rightTrack - delta;
+			let dock = nextDock;
+			// 右栏让到下限仍不够：封顶 dock，不再继续占
+			if (nextRight < PANEL_LAYOUT.RIGHT_MIN) {
+				nextRight = PANEL_LAYOUT.RIGHT_MIN;
+				dock = layout.dockTrack + (layout.rightTrack - PANEL_LAYOUT.RIGHT_MIN);
+			} else if (nextRight > PANEL_LAYOUT.RIGHT_MAX) {
+				nextRight = PANEL_LAYOUT.RIGHT_MAX;
+				dock = layout.dockTrack + (layout.rightTrack - PANEL_LAYOUT.RIGHT_MAX);
+			}
+			// Dock 自身边界
+			dock = Math.min(PANEL_LAYOUT.DOCK_MAX, Math.max(PANEL_LAYOUT.DOCK_MIN, dock));
+			setDockPanelWidth(dock);
+			setRightPanelWidth(nextRight);
+		},
+		[rightPanelCollapsed, layout.rightTrack, layout.dockTrack, setDockPanelWidth, setRightPanelWidth],
+	);
 
 	return (
 		<aside
@@ -65,14 +93,15 @@ export function DockFilePanel() {
 			aria-label={t("fileViewer.windowTitle")}
 			inert={!dockedFile || undefined}
 		>
-			{/* 拖拽调宽把手：面板左侧边缘，收起或显示被压缩时不可用 */}
-			{dockedFile && !dockClamped && layout.dockTrack > 0 && (
+			{/* 拖拽调宽把手：面板左侧边缘（= 右栏与 Dock 之间的分隔条）。
+			    打开即渲染，不再因显示被压缩而隐藏——压缩时仍可拖动重新分配。 */}
+			{dockedFile && layout.dockTrack > 0 && (
 				<PanelResizeHandle
 					cssVar="--dock-track"
 					width={layout.dockTrack}
 					min={PANEL_LAYOUT.DOCK_MIN}
 					max={layout.dockMax}
-					onCommit={setDockPanelWidth}
+					onCommit={handleDockResize}
 					ariaLabel={t("fileViewer.resize")}
 				/>
 			)}

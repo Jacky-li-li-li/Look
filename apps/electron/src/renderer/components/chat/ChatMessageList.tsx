@@ -698,7 +698,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 				);
 				const live = item.isLive;
 				return (
-					<div key={item.id} className="px-msg-item-x py-msg-item-y">
+					<div key={item.id} className="msg-row px-msg-item-x py-msg-item-y">
 						<div
 							data-message-id={item.id}
 							data-entry-ids={anchorEntryIds.join(" ")}

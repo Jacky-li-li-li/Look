@@ -6,10 +6,16 @@
 // 供 atom 持久化。setPointerCapture 保证指针移出窗口也不丢事件；
 // 拖拽期间 .app-shell[data-resizing] 禁用 track 动画。
 //
-// 竞态防护：拖拽值记录在本地 ref（lastWidth），即使拖拽中 React 因
-// 其他 atom 重渲染把 inline CSS 变量重置，endDrag 仍提交真实拖拽值；
-// 组件卸载/失去指针捕获时通过 effect cleanup + lostpointercapture
-// 兜底清理 data-resizing 与 body 光标，避免永久禁用动画。
+// 性能要点（2026-08-09 重写）：
+//  - 原生 window pointer 监听 + getCoalescedEvents()：合并子帧指针
+//    点，120Hz/ProMotion 屏幕上不再每帧只取最后一个点，跟手更顺。
+//  - requestAnimationFrame 合帧：一帧内多个 pointermove 只触发
+//    一次 setProperty → 一次布局/绘制，避免热路径重排风暴。
+//  - pointerdown 时缓存 .app-shell 引用，move 不再 querySelector。
+//  - 解绑在 pointerup/pointercancel 即时移除 window 监听，零常驻
+//    开销；组件卸载兜底清理 data-resizing 与 body 光标。
+//  - 活跃监听的函数引用存入 ref，确保任意路径解绑都能 removeEventListener
+//    到同一引用（避免 render N 添加 / render 0 卸载清理的引用错位）。
 // ============================================================
 
 import { type PointerEvent as ReactPointerEvent, useEffect, useRef } from "react";
@@ -27,30 +33,99 @@ interface PanelResizeHandleProps {
 }
 
 export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel }: PanelResizeHandleProps) {
+	// 拖拽态全部走 ref，避免任何 React 状态参与热路径
 	const draggingRef = useRef(false);
-	const dragStateRef = useRef<{ startX: number; startWidth: number; lastWidth: number } | null>(null);
+	const startRef = useRef<{ startX: number; startWidth: number; lastWidth: number; shell: HTMLElement } | null>(null);
+	const rafIdRef = useRef<number | null>(null);
+	// 最近一次合帧要落地的目标宽度；rAF 回调读它写 CSS 变量
+	const pendingWidthRef = useRef<number | null>(null);
+	// 记录 setProperty 上一次写入的值，相等则跳过，减少无谓样式重算
+	const lastAppliedRef = useRef<number | null>(null);
+	// 活跃 window 监听的函数引用；解绑时按引用移除，避免闭包错位
+	const boundMoveRef = useRef<((e: PointerEvent) => void) | null>(null);
+	const boundUpRef = useRef<((e: PointerEvent) => void) | null>(null);
 
-	// 卸载兜底：拖拽中组件被卸载（窄窗口自动折叠/项目关闭）时清理全局副作用
-	useEffect(() => {
-		return () => {
-			if (!draggingRef.current) return;
-			draggingRef.current = false;
-			dragStateRef.current = null;
-			const shell = document.querySelector<HTMLElement>(".app-shell");
-			if (shell) delete shell.dataset.resizing;
-			document.body.style.userSelect = "";
-			document.body.style.cursor = "";
-		};
-	}, []);
+	const removeWindowListeners = () => {
+		if (boundMoveRef.current) {
+			window.removeEventListener("pointermove", boundMoveRef.current);
+			boundMoveRef.current = null;
+		}
+		if (boundUpRef.current) {
+			window.removeEventListener("pointerup", boundUpRef.current);
+			window.removeEventListener("pointercancel", boundUpRef.current);
+			boundUpRef.current = null;
+		}
+	};
 
-	const cleanupDrag = () => {
+	// 把 pending 宽度写入 CSS 变量（一帧最多一次）。相等跳过避免冗余样式重算
+	const flush = () => {
+		rafIdRef.current = null;
+		const state = startRef.current;
+		const shell = state?.shell;
+		const w = pendingWidthRef.current;
+		if (!shell || w == null) return;
+		if (lastAppliedRef.current === w) return;
+		lastAppliedRef.current = w;
+		shell.style.setProperty(cssVar, `${w}px`);
+	};
+
+	const onPointerMove = (event: PointerEvent) => {
+		if (!draggingRef.current) return;
+		const state = startRef.current;
+		if (!state) return;
+		// getCoalescedEvents 在高刷新率屏幕上给出子帧精度；回退到单事件
+		const events =
+			typeof event.getCoalescedEvents === "function" && event.getCoalescedEvents().length > 0
+				? event.getCoalescedEvents()
+				: [event];
+		// 取最后一个合帧点算目标宽度（与指针最新位置一致）
+		const last = events[events.length - 1];
+		const raw = state.startWidth - (last.clientX - state.startX);
+		const next = Math.min(max, Math.max(min, raw));
+		state.lastWidth = next;
+		pendingWidthRef.current = next;
+		// 合帧：若已有 rAF 排队则不重复调度
+		if (rafIdRef.current == null) rafIdRef.current = requestAnimationFrame(flush);
+	};
+
+	const cleanupDrag = (): number | null => {
 		draggingRef.current = false;
-		dragStateRef.current = null;
-		const shell = document.querySelector<HTMLElement>(".app-shell");
+		const state = startRef.current;
+		startRef.current = null;
+		const shell = state?.shell ?? document.querySelector<HTMLElement>(".app-shell");
 		if (shell) delete shell.dataset.resizing;
 		document.body.style.userSelect = "";
 		document.body.style.cursor = "";
+		if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+		rafIdRef.current = null;
+		pendingWidthRef.current = null;
+		lastAppliedRef.current = null;
+		return state?.lastWidth ?? null;
 	};
+
+	const onPointerUp = (event: PointerEvent) => {
+		if (!draggingRef.current) return;
+		const lastWidth = cleanupDrag();
+		// 立即落地最终值（无 rAF），松手即定格
+		if (lastWidth != null) onCommit(lastWidth);
+		try {
+			(event.target as Element).releasePointerCapture(event.pointerId);
+		} catch {
+			/* pointer capture 可能已自动释放 */
+		}
+		removeWindowListeners();
+	};
+
+	// 卸载兜底：拖拽中组件被卸载（窄窗口自动折叠/项目关闭）时清理全局副作用。
+	// 不依赖任何 render 闭包：cleanupDrag / removeWindowListeners 只读 ref。
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 仅作卸载清理，依赖空数组是有意为之，避免每次渲染重注册 effect
+	useEffect(() => {
+		return () => {
+			if (!draggingRef.current) return;
+			cleanupDrag();
+			removeWindowListeners();
+		};
+	}, []);
 
 	const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
 		if (event.button !== 0) return;
@@ -58,36 +133,34 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 		event.stopPropagation();
 		const shell = document.querySelector<HTMLElement>(".app-shell");
 		if (!shell) return;
-		// 指针捕获：移出窗口后 pointermove/pointerup 仍派发给当前元素
-		event.currentTarget.setPointerCapture(event.pointerId);
+		// 指针捕获：移出窗口后 pointercancel 兜底；window 监听是主路径
+		try {
+			event.currentTarget.setPointerCapture(event.pointerId);
+		} catch {
+			/* 某些环境下 pointerId 已失效，忽略；window 监听兜底 */
+		}
 		draggingRef.current = true;
-		dragStateRef.current = { startX: event.clientX, startWidth: width, lastWidth: width };
+		startRef.current = { startX: event.clientX, startWidth: width, lastWidth: width, shell };
+		pendingWidthRef.current = width;
+		lastAppliedRef.current = null;
 		shell.dataset.resizing = "true";
 		document.body.style.userSelect = "none";
 		document.body.style.cursor = "col-resize";
+		// 热路径用原生 window 监听（passive），避免 React 合成事件代理开销，
+		// 同时可直接访问 getCoalescedEvents()。同一 render 的闭包存入 ref，
+		// 任何路径 removeEventListener 都拿到同一引用。
+		boundMoveRef.current = onPointerMove;
+		boundUpRef.current = onPointerUp;
+		window.addEventListener("pointermove", onPointerMove, { passive: true });
+		window.addEventListener("pointerup", onPointerUp, { passive: true });
+		window.addEventListener("pointercancel", onPointerUp, { passive: true });
 	};
 
-	const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+	// React 事件兜底：lostpointercapture / pointercancel 仍由 React 派发时清理
+	const endDragFromReact = () => {
 		if (!draggingRef.current) return;
-		const state = dragStateRef.current;
-		const shell = document.querySelector<HTMLElement>(".app-shell");
-		if (!state || !shell) return;
-		// 把手在面板左边缘：向左拖（clientX 减小）= 面板变宽，取反
-		const next = Math.min(max, Math.max(min, state.startWidth - (event.clientX - state.startX)));
-		state.lastWidth = next;
-		shell.style.setProperty(cssVar, `${next}px`);
-	};
-
-	const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-		if (!draggingRef.current) return;
-		const state = dragStateRef.current;
 		cleanupDrag();
-		if (state) onCommit(state.lastWidth);
-		try {
-			event.currentTarget.releasePointerCapture(event.pointerId);
-		} catch {
-			/* pointer capture 可能已自动释放 */
-		}
+		removeWindowListeners();
 	};
 
 	return (
@@ -97,10 +170,8 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 			aria-orientation="vertical"
 			aria-label={ariaLabel}
 			onPointerDown={handlePointerDown}
-			onPointerMove={handlePointerMove}
-			onPointerUp={endDrag}
-			onPointerCancel={endDrag}
-			onLostPointerCapture={cleanupDrag}
+			onPointerCancel={endDragFromReact}
+			onLostPointerCapture={endDragFromReact}
 		/>
 	);
 }

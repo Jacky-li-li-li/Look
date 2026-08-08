@@ -1519,9 +1519,29 @@ body {
 		--sidebar-sep-track: 0px;
 	}
 
-	/* 拖拽面板调宽期间禁用 grid track 动画，保证拖动即时跟手（拖完恢复动画） */
-	.app-shell[data-resizing="true"] {
+	/* 拖拽面板调宽期间禁用 grid track 动画，保证拖动即时跟手（拖完恢复动画）。
+	   window resize 期间同样禁用：否则拖窗口边时面板 track 带着 260ms 过渡
+	   “追”着窗口尺寸动画，体感发飘（useViewportWidth 负责打/清该标记）。 */
+	.app-shell[data-resizing="true"],
+	.app-shell[data-window-resizing="true"] {
 		transition: none;
+	}
+
+	/* 主内容区：拖动右栏/Dock 都会改变 1fr 这一列的宽度，进而触发整列
+	   markdown/Shiki 重新换行。给 main 加 layout+paint 隔离，使其内部
+	   reflow 不会把兄弟 grid 格（右栏/Dock）一起标脏重排，并把绘制
+	   限制在 main 自身盒内（main 本就 overflow-hidden，paint 隔离安全）。 */
+	.app-shell > main {
+		contain: layout paint;
+	}
+
+	/* 消息行：离屏行跳过布局与绘制（content-visibility:auto），长会话拖面板时
+	   只重排可见那几条 markdown，不再全量换行。contain-intrinsic-size 的 auto
+	   关键字记住上次渲染高度，滚动到位时高度不跳。仅作用于真实消息行（.msg-row），
+	   不影响历史哨兵/入口气泡等轻量行。 */
+	.msg-row {
+		content-visibility: auto;
+		contain-intrinsic-size: auto 160px;
 	}
 
 	.dock-panel-wrapper {

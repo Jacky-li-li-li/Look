@@ -124,8 +124,9 @@ export function RightPanel() {
 		dockOpen: !!dockedFile,
 		dockPanelWidth,
 	});
-	// 显示宽度被 Dock/空间压缩（显示 != 用户宽度）时隐藏调宽把手，避免“拖了没反应”
-	const rightClamped = layout.rightTrack !== rightPanelWidth;
+	// 显示宽度被空间压缩时不再隐藏把手：把手始终可拖，拖动会更新存储宽度，
+	// resolvePanelTracks 下一帧重新分配空间；min/max 已按对方面板下限收紧，
+	// 拖到上限会自然让位，不会“撞墙回弹”。
 
 	return (
 		<aside
@@ -139,8 +140,8 @@ export function RightPanel() {
 			aria-label={t("rightPanel.label")}
 			inert={collapsed || layout.rightTrack === 0 || undefined}
 		>
-			{/* 拖拽调宽把手：面板左侧边缘，折叠或显示被压缩时不可用 */}
-			{!collapsed && !rightClamped && layout.rightTrack > 0 && (
+			{/* 拖拽调宽把手：面板左侧边缘，折叠时不渲染（折叠时 track=0 也不渲染） */}
+			{!collapsed && layout.rightTrack > 0 && (
 				<PanelResizeHandle
 					cssVar="--right-panel-track"
 					width={layout.rightTrack}

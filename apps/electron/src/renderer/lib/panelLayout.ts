@@ -86,9 +86,12 @@ export function resolvePanelTracks(input: PanelLayoutInput): PanelLayout {
 		? Math.min(clamp(input.dockPanelWidth, PANEL_LAYOUT.DOCK_MIN, PANEL_LAYOUT.DOCK_MAX), dockAvail)
 		: 0;
 
-	// 拖拽上限：右栏最大宽度 = 剩余空间 - Dock 下限；Dock 最大宽度 = 剩余空间
+	// 拖拽上限：右栏最大宽度 = 剩余空间 - Dock 下限；Dock 最大宽度 = 剩余空间 - 右栏下限。
+	// 两者都按“对方让到自身下限后能让出的空间”计算，避免把手上限虚高、
+	// 拖到顶撞墙回弹（此前 dockMax 用了整个 pool，未扣右栏下限）。
 	const rightMax = input.rightPanelCollapsed ? 0 : Math.min(PANEL_LAYOUT.RIGHT_MAX, Math.max(0, pool - dockMin));
-	const dockMax = input.dockOpen ? Math.min(PANEL_LAYOUT.DOCK_MAX, pool) : 0;
+	const rightMinForDock = input.rightPanelCollapsed ? 0 : PANEL_LAYOUT.RIGHT_MIN;
+	const dockMax = input.dockOpen ? Math.min(PANEL_LAYOUT.DOCK_MAX, Math.max(0, pool - rightMinForDock)) : 0;
 
 	return { sidebarWidth, rightTrack: right, dockTrack: dock, rightMax, dockMax };
 }
