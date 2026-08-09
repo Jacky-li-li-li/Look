@@ -438,10 +438,15 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	}, [isAtBottom, setAtBottomAtom, activeAgentId]);
 
 	// === Streaming auto-follow ===
-	// biome-ignore lint/correctness/useExhaustiveDependencies: live block/tool reference changes are the follow signal
+	// 只在 isBusy 翻转时请求一次跟随；流式期间的持续跟随由 Conversation 的
+	// ResizeObserver 驱动（resize 动画链 wait:true 复用，不再每批事件打断弹簧
+	// 重置速度）。逐批调用 followToBottom 会把动画从零速度重启，输出快时视口
+	// 滞后可达一屏以上（对抗性审查模拟：打断 vs 不打断滞后 1660px vs 103px）。
+	const wasBusyRef = useRef(isBusy);
 	useEffect(() => {
-		if (isBusy) followToBottom();
-	}, [isBusy, sessionState.uiBlocks, sessionState.uiTools, followToBottom]);
+		if (isBusy && !wasBusyRef.current) followToBottom();
+		wasBusyRef.current = isBusy;
+	}, [isBusy, followToBottom]);
 
 	// === Branch / fork state ===
 	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));

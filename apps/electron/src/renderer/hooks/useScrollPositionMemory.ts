@@ -35,7 +35,7 @@ export function useScrollPositionManager(
 	ready: boolean,
 	historyStatus: RendererHistoryStatus = "complete",
 ): void {
-	const { scrollRef, stopScroll } = useConversationContext();
+	const { scrollRef, stopScroll, scrollToBottom } = useConversationContext();
 	const restoredRef = useRef(false);
 	const prevIdRef = useRef(id);
 
@@ -155,6 +155,14 @@ export function useScrollPositionManager(
 			);
 
 		if (savedDistance != null && savedDistance > 5) {
+			if (savedDistance <= 70) {
+				// 距底 ≤70px（库的"近底"容差内）→ 直接贴底恢复，不再 stopScroll。
+				// 否则 stopScroll 会强制 isAtBottom=false，而恢复瞬间的 scroll 事件
+				// 在内容重渲染（ResizeObserver 高频触发）时会被 resizeDifference 吞掉，
+				// 导致贴底状态卡死：流式不跟随、输出完不贴底且无回底按钮。
+				void scrollToBottom();
+				return;
+			}
 			// 有保存的滚动位置 → 恢复
 			stopScroll();
 			const targetScrollTop = el.scrollHeight - el.clientHeight - savedDistance;
@@ -166,7 +174,7 @@ export function useScrollPositionManager(
 		}
 		// 无保存位置时（刷新/首次加载）不调用 scrollToBottom：
 		// Conversation 组件在挂载时默认已在底部，额外的滚动调用反而造成可见跳动
-	}, [ready, id, historyStatus, navigatingEntry, scrollRef, stopScroll, scrollToMessage]);
+	}, [ready, id, historyStatus, navigatingEntry, scrollRef, stopScroll, scrollToMessage, scrollToBottom]);
 
 	// historyStatus 从 partial 变 complete 但 ready 早已 true（分页填满后、
 	// 组件重挂载后）时，消费 deferred 比例并近似恢复。

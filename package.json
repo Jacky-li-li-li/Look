@@ -12,7 +12,8 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "postinstall": "npx simple-git-hooks && npm run copy-file-icons --workspace=@look/electron",
+    "postinstall": "npx simple-git-hooks && npm run copy-file-icons --workspace=@look/electron && node scripts/patch-stick-to-bottom.mjs",
+    "patch:vendor": "node scripts/patch-stick-to-bottom.mjs",
     "dev": "npm run dev --workspace=@look/electron",
     "copy-file-icons": "npm run copy-file-icons --workspace=@look/electron",
     "dev:renderer": "npm run dev:renderer --workspace=@look/electron",
