@@ -84,6 +84,10 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 					files.map((file) => {
 						const Icon = STATUS_ICON[file.status];
 						const isOpen = file.path === expandedPath;
+						// 主行展示文件名，副行展示所在目录路径（git 相对路径，/ 分隔）
+						const slash = file.path.lastIndexOf("/");
+						const fileName = slash >= 0 ? file.path.slice(slash + 1) : file.path;
+						const fileDir = slash >= 0 ? file.path.slice(0, slash + 1) : "";
 						return (
 							<div key={file.path} className="flex flex-col">
 								<button
@@ -100,7 +104,17 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 										<ChevronRight className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
 									)}
 									<Icon className={`size-3 shrink-0 ${STATUS_COLOR[file.status]}`} aria-hidden />
-									<span className="min-w-0 flex-1 truncate font-mono text-[11px]">{file.path}</span>
+									<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+										<span className="truncate text-[11px] leading-none font-medium">{fileName}</span>
+										{fileDir && (
+											<span
+												className="truncate font-mono text-[10px] leading-none text-muted-foreground/60"
+												title={file.path}
+											>
+												{fileDir}
+											</span>
+										)}
+									</span>
 									<span className="shrink-0 font-mono text-[10px] text-muted-foreground/60">
 										{file.addedLines > 0 && (
 											<span className="text-emerald-600 dark:text-emerald-400">+{file.addedLines}</span>
