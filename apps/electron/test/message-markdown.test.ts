@@ -58,6 +58,20 @@ describe("remarkLookReferences", () => {
 		]);
 	});
 
+	it("tokenizes file references adjacent to CJK text", () => {
+		const nodes = tokenizeLookReferences("当前@README.md 可以优化下么");
+		expect(nodes).toEqual([
+			{ type: "text", value: "当前" },
+			{ type: "html", value: '<file-tag data-look-path="README.md"></file-tag>' },
+			{ type: "text", value: " 可以优化下么" },
+		]);
+	});
+
+	it("keeps emails with latin prefix intact even after CJK text", () => {
+		const nodes = tokenizeLookReferences("联系 test@example.com 处理");
+		expect(nodes).toEqual([{ type: "text", value: "联系 test@example.com 处理" }]);
+	});
+
 	it("only transforms text nodes and preserves fenced and inline code", () => {
 		const tree = {
 			type: "root",

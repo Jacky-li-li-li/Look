@@ -22,4 +22,21 @@ describe("contentEditableUtils", () => {
 		expect(container.querySelector("[data-file-chip]")).toBeNull();
 		expect(container.textContent).toBe("Email user@example.com and load plain text");
 	});
+
+	it("chips file references adjacent to CJK text", () => {
+		const container = document.createElement("div");
+		renderToDOM(container, "当前@README.md 可以优化下么");
+
+		expect(container.querySelector('[data-file-chip][data-path="README.md"]')).not.toBeNull();
+		expect(container.querySelector("[data-file-chip]")?.textContent).toBe("@README.md");
+		// 前缀文本保留在普通文本节点中
+		expect(container.firstChild?.textContent).toBe("当前");
+	});
+
+	it("still protects emails with CJK-adjacent latin prefix from file chips", () => {
+		const container = document.createElement("div");
+		renderToDOM(container, "联系 test@example.com 处理");
+
+		expect(container.querySelector("[data-file-chip]")).toBeNull();
+	});
 });

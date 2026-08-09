@@ -22,9 +22,11 @@ export function renderToDOM(container: HTMLElement, content: string) {
  * contenteditable="false" 的 chip span + 尾随空格。
  */
 function _renderCombinedSegments(container: HTMLElement, content: string) {
-	// 合并正则：匹配 /agent:name、#server__toolName、/skill:name 或 @path 文件引用（需行首或空白前缀）
+	// 合并正则：匹配 /agent:name、#server__toolName、/skill:name 或 @path 文件引用。
+	// 前缀允许行首、空白或 CJK 字符（中文输入时 @ 常紧贴前文，如「当前@README.md」，
+	// 紧贴拉丁字母的 @ 仍视为 email 不 chip 化）。
 	const COMBINED_RE =
-		/(?:^|\s)((?:\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*)(?=$|\s))|(?:#([^\s#]+))|(?:\/skill:([^\s]+))|(?:@([^\s]*(?:\.[a-zA-Z0-9]+|\/)[^\s]*)))/g;
+		/(?:^|[\s\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af])((?:\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*)(?=$|\s))|(?:#([^\s#]+))|(?:\/skill:([^\s]+))|(?:@([^\s]*(?:\.[a-zA-Z0-9]+|\/)[^\s]*)))/g;
 
 	let cursor = 0;
 	for (const match of content.matchAll(COMBINED_RE)) {

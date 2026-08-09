@@ -225,19 +225,35 @@ export const ContentEditableInput = function ContentEditableInput({
 			setDragActive(false);
 			const relPath = e.dataTransfer.getData(LOOK_FILE_MIME);
 			if (!relPath) return; // 不是工作区拖拽,已经 preventDefault 不会污染,只忽略
-			const text = `@${relPath}`;
 			const el = editorRef.current;
+			const selection = window.getSelection();
+			// 与 insertRequest 行为一致：插入点前文非空白时补一个空格，
+			// 避免「当前@README.md」这类粘连（虽然正则已支持 CJK 紧贴，
+			// 补空格更符合书写习惯且让 chip 边界更清晰）。
+			let insertText = `@${relPath}`;
+			if (selection && selection.rangeCount > 0) {
+				const range = selection.getRangeAt(0);
+				const container = range.startContainer;
+				const offset = range.startOffset;
+				let prevChar = "";
+				if (container.nodeType === Node.TEXT_NODE) {
+					prevChar = offset > 0 ? ((container as Text).data[offset - 1] ?? "") : "";
+				} else if (offset > 0) {
+					const prev = container.childNodes[offset - 1];
+					if (prev?.nodeType === Node.TEXT_NODE) prevChar = (prev as Text).data.at(-1) ?? "";
+				}
+				if (prevChar && !/\s/.test(prevChar)) insertText = ` ${insertText}`;
+			}
 			if (!el) {
-				onChange(text);
+				onChange(insertText);
 				return;
 			}
-			const selection = window.getSelection();
 			if (!selection || selection.rangeCount === 0) {
-				el.appendChild(document.createTextNode(text));
+				el.appendChild(document.createTextNode(insertText));
 			} else {
 				const range = selection.getRangeAt(0);
 				range.deleteContents();
-				range.insertNode(document.createTextNode(text));
+				range.insertNode(document.createTextNode(insertText));
 				range.collapse(false);
 				selection.removeAllRanges();
 				selection.addRange(range);

@@ -19,8 +19,10 @@ interface ReferenceToken {
 	path?: string;
 }
 
+// 前缀允许行首、空白/括号或 CJK 字符（中文输入时 @ 常紧贴前文，如「当前@README.md」；
+// 紧贴拉丁字母的 @（email 等）仍不匹配）。
 const REFERENCE_RE =
-	/(^|[\s([（【])(?:(\/(?:skill):([A-Za-z0-9][A-Za-z0-9._-]*))|(\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*))|(#([a-z][A-Za-z0-9_-]*)__([A-Za-z0-9][A-Za-z0-9._-]*))|(@[^\s`"'<>，。！？、；：）】}]+))/g;
+	/(^|[\s([（【\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af])(?:(\/(?:skill):([A-Za-z0-9][A-Za-z0-9._-]*))|(\/(?:agent|subagent):([A-Za-z0-9][A-Za-z0-9._-]*))|(#([a-z][A-Za-z0-9_-]*)__([A-Za-z0-9][A-Za-z0-9._-]*))|(@[^\s`"'<>，。！？、；：）】}]+))/g;
 
 const ASCII_DIAGRAM_CHARS_RE = /[┌┐└┘├┤┬┴┼─│╭╮╰╯╞╡╤╧╪▶◀▲▼]/g;
 const PLAIN_CODE_LANGUAGES = new Set(["", "text", "txt", "plain", "plaintext"]);
