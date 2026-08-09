@@ -15,7 +15,7 @@ import { dockedFileAtom } from "../../store/atoms";
 import { FileIcon } from "../workspace/FileIcon";
 import { extractEditPatch, isEditTool } from "./message-elements/EditDiffPreview";
 
-const MAX_VISIBLE_FILES = 6;
+const MAX_VISIBLE_FILES = 3;
 
 interface SessionChangesCardProps {
 	entries: LookSessionEntry[];
@@ -251,7 +251,6 @@ const SessionChangesCard = memo(function SessionChangesCard({ entries, projectCw
 						})}
 					</div>
 				</div>
-				<span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/70">{files.length}</span>
 			</div>
 
 			<div className="mt-1.5">
