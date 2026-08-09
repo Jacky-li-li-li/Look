@@ -44,4 +44,48 @@ describe("BrowserWindowEventTransport", () => {
 
 		expect(transport.send({ type: "update:checking" })).toBe(false);
 	});
+
+	describe("buffered startup mode", () => {
+		it("queues events while buffering and replays them in order on flush", () => {
+			const window = makeWindow();
+			const transport = new BrowserWindowEventTransport(() => window);
+			transport.buffer();
+
+			expect(transport.send({ type: "project:list" })).toBe(true);
+			expect(transport.send({ type: "agent:list" })).toBe(true);
+			expect(window.webContents.send).not.toHaveBeenCalled();
+
+			transport.flush();
+			expect(window.webContents.send).toHaveBeenNthCalledWith(1, "look:event", { type: "project:list" });
+			expect(window.webContents.send).toHaveBeenNthCalledWith(2, "look:event", { type: "agent:list" });
+		});
+
+		it("delivers immediately after flush (buffering is left off)", () => {
+			const window = makeWindow();
+			const transport = new BrowserWindowEventTransport(() => window);
+			transport.buffer();
+			transport.flush();
+
+			expect(transport.send({ type: "update:checking" })).toBe(true);
+			expect(window.webContents.send).toHaveBeenCalledWith("look:event", { type: "update:checking" });
+		});
+
+		it("still returns false for a missing window while buffering", () => {
+			const transport = new BrowserWindowEventTransport(() => null);
+			transport.buffer();
+
+			expect(transport.send({ type: "project:list" })).toBe(false);
+		});
+
+		it("clear drops buffered events without delivering them", () => {
+			const window = makeWindow();
+			const transport = new BrowserWindowEventTransport(() => window);
+			transport.buffer();
+			transport.send({ type: "project:list" });
+
+			transport.clear();
+			transport.flush();
+			expect(window.webContents.send).not.toHaveBeenCalled();
+		});
+	});
 });

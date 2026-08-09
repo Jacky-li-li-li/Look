@@ -198,6 +198,12 @@ export function registerIpcHandlers(
 			// 这里运行时校验失败分支必须带 error（违反时抛错走统一 catch）。
 			return ensureIpcEnvelopeShape(await dispatcher.dispatch(data));
 		} catch (err) {
+			console.error(
+				"[IPC] invoke failed:",
+				data?.type,
+				err instanceof Error ? err.message : String(err),
+				err instanceof Error ? err.stack : "",
+			);
 			return {
 				success: false,
 				error: err instanceof Error ? err.message : String(err),

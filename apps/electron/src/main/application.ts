@@ -248,9 +248,14 @@ export class Application {
 		});
 
 		if (!app.isPackaged) {
+			// 窗口加载前开启事件缓冲：启动期快照（project:list 等）在 did-finish-load
+			// 前发出会因 webContents.send 不排队而静默丢失（曾导致 activeProject 为
+			// null、新建会话按钮禁用且无任何报错）。flush 在 did-finish-load 中调用。
+			this.rendererEvents.buffer();
 			this.services.mainWindow.loadURL(`http://localhost:5174?theme=${initialTone}`);
 			this.services.mainWindow.webContents.openDevTools();
 		} else {
+			this.rendererEvents.buffer();
 			this.services.mainWindow.loadFile(getPackagedRendererIndexPath(__dirname), {
 				query: { theme: initialTone },
 			});
@@ -264,6 +269,7 @@ export class Application {
 			// 发 app:ready（webContents.send 不排队，会静默丢失）。
 			this._rendererLoaded = false;
 			this._ipcRegistered = false;
+			this.rendererEvents.clear();
 		});
 
 		this.services.mainWindow.webContents.on("did-finish-load", () => {
@@ -271,6 +277,8 @@ export class Application {
 			void requestFreshCheck();
 			// 渲染进程已完成加载（onEvent 已注册）→ 若 IPC 已注册则补发就绪信号。
 			this._rendererLoaded = true;
+			// 重放窗口加载前缓存的事件（project:list / agent:list 等启动期快照）。
+			this.rendererEvents.flush();
 			this.maybeSendAppReady();
 			// 重放当前全屏状态：渲染进程加载前已进入全屏时 enter-full-screen
 			// 事件已错过，不补发则红绿灯留白一直不收回。
