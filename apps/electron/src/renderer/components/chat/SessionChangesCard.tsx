@@ -1,143 +1,351 @@
 // ============================================================
-// SessionChangesCard — 会话结束「变更文件」卡片
+// SessionChangesCard — 会话轮次「变更文件」收据
 //
-// 从会话消息中收集编辑类工具（edit/write/apply_diff/create）涉及的
-// 文件（含 diff patch，用 extractEditPatch 从工具参数构造，不依赖
-// git）。点击文件 → 就地向下展开该文件的 diff 预览（@pierre/diffs
-// Proma 同款），再次点击收起。
+// 从当前轮次的编辑类工具中收集成功触及的文件。卡片只负责表达
+// Agent 这一轮改了什么；点击文件行后由 Dock 查看器负责深度审阅。
 // ============================================================
 
-// 注册 <diffs-container> custom element（sideEffects 文件，需显式 import）。
-import "@pierre/diffs/dist/components/web-components.js";
-import { PatchDiff } from "@pierre/diffs/react";
 import type { LookSessionEntry } from "@shared/types";
+import { useAtomValue } from "jotai";
 import { ChevronDown, ChevronRight, FileDiff } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLookTheme } from "../../hooks/useLookTheme";
+import { appStore } from "../../store/appStore";
+import { dockedFileAtom } from "../../store/atoms";
+import { FileIcon } from "../workspace/FileIcon";
 import { extractEditPatch, isEditTool } from "./message-elements/EditDiffPreview";
+
+const MAX_VISIBLE_FILES = 6;
 
 interface SessionChangesCardProps {
 	entries: LookSessionEntry[];
+	/** 当前 session 所属项目根目录，用于把工具相对路径解析为绝对路径。 */
+	projectCwd?: string;
 }
 
-/** 会话中一个变更文件（路径 + diff patch + 行统计）。 */
+/** 一个轮次中的变更文件，path 保持为项目相对路径供现有调用方使用。 */
 export interface SessionChangedFile {
 	path: string;
+	relativePath: string;
+	absolutePath: string | null;
 	patch: string;
 	added: number;
 	deleted: number;
+	/** 多次修改同一文件时，行数不是净变化，UI 应隐藏 +/− 统计。 */
+	statsReliable: boolean;
+	operationCount: number;
+	canOpen: boolean;
 }
 
-/** 从 patch 文本统计 +/- 行数（排除头行）。 */
-function countPatchLines(patch: string): { added: number; deleted: number } {
-	let added = 0;
-	let deleted = 0;
-	for (const line of patch.split(/\r?\n/)) {
-		if (line.startsWith("+") && !line.startsWith("+++")) added++;
-		else if (line.startsWith("-") && !line.startsWith("---")) deleted++;
+interface ResolvedChangePath {
+	relativePath: string;
+	absolutePath: string | null;
+}
+
+function normalizePath(value: string): string {
+	const raw = value.trim().replace(/\\/g, "/");
+	if (!raw) return "";
+
+	const drive = raw.match(/^[A-Za-z]:/);
+	const absolute = raw.startsWith("/") || drive !== null;
+	const prefix = drive ? `${drive[0]}/` : raw.startsWith("/") ? "/" : "";
+	const body = drive ? raw.slice(2) : raw;
+	const parts: string[] = [];
+	for (const part of body.split("/")) {
+		if (!part || part === ".") continue;
+		if (part === "..") {
+			if (parts.length > 0 && parts.at(-1) !== "..") parts.pop();
+			else if (!absolute) parts.push(part);
+			continue;
+		}
+		parts.push(part);
 	}
-	return { added, deleted };
+	if (prefix) return parts.length > 0 ? `${prefix}${parts.join("/")}` : prefix;
+	return parts.join("/");
+}
+
+function isAbsolutePath(value: string): boolean {
+	return value.startsWith("/") || /^[A-Za-z]:\//.test(value);
+}
+
+function trimRoot(value: string): string {
+	return value.length > 1 ? value.replace(/\/$/, "") : value;
+}
+
+function comparablePath(value: string): string {
+	return /^[A-Za-z]:\//.test(value) ? value.toLowerCase() : value;
+}
+
+function isInsideRoot(candidate: string, root: string): boolean {
+	const c = comparablePath(trimRoot(candidate));
+	const r = comparablePath(trimRoot(root));
+	return c === r || c.startsWith(`${r}/`);
+}
+
+function resolveChangePath(rawPath: string, projectCwd: string): ResolvedChangePath {
+	const normalized = normalizePath(rawPath);
+	const root = trimRoot(normalizePath(projectCwd));
+	if (!normalized) return { relativePath: rawPath, absolutePath: null };
+
+	if (isAbsolutePath(normalized)) {
+		if (root && isInsideRoot(normalized, root)) {
+			const relativePath = root === "/" ? normalized.slice(1) : normalized.slice(root.length + 1);
+			return { relativePath: relativePath || normalized, absolutePath: normalized };
+		}
+		// 项目外绝对路径仍可只读打开，查看器会走独立的 git/patch fallback。
+		return { relativePath: normalized, absolutePath: normalized };
+	}
+
+	if (!root || normalized === ".." || normalized.startsWith("../")) {
+		return { relativePath: normalized, absolutePath: null };
+	}
+	const absolutePath = normalizePath(`${root}/${normalized}`);
+	if (!isInsideRoot(absolutePath, root)) return { relativePath: normalized, absolutePath: null };
+	return { relativePath: normalized, absolutePath };
+}
+
+function splitDisplayPath(relativePath: string): { fileName: string; directory: string } {
+	const slash = relativePath.lastIndexOf("/");
+	if (slash < 0) return { fileName: relativePath, directory: "" };
+	return { fileName: relativePath.slice(slash + 1), directory: relativePath.slice(0, slash + 1) };
+}
+
+function isFailedToolResult(result: unknown): boolean {
+	return typeof result === "object" && result !== null && "isError" in result && result.isError === true;
+}
+
+function toolResultMap(entries: readonly LookSessionEntry[]): Map<string, unknown> {
+	const results = new Map<string, unknown>();
+	for (const entry of entries) {
+		if (entry.type !== "message" || entry.message.role !== "toolResult") continue;
+		results.set(entry.message.toolCallId, entry.message);
+	}
+	return results;
 }
 
 /**
- * 从会话条目收集编辑类工具涉及的文件及其 diff patch（去重保序）。
- * patch 优先用工具 result（若已在同一条目），否则从 args 构造。
+ * 从当前轮次收集成功编辑的文件（去重保序）。
+ * result patch 优先于 args fallback；同一文件多次修改只保留一行，避免
+ * 把中间步骤的 +/− 行数误加成净变化。
  */
-export function collectChangedFiles(entries: LookSessionEntry[]): SessionChangedFile[] {
+export function collectChangedFiles(entries: LookSessionEntry[], projectCwd = ""): SessionChangedFile[] {
 	const files: SessionChangedFile[] = [];
-	const seen = new Set<string>();
-	for (const entry of entries) {
+	const byPath = new Map<string, SessionChangedFile>();
+	let start = 0;
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const entry = entries[i];
+		if (entry?.type === "message" && entry.message.role === "user") {
+			start = i + 1;
+			break;
+		}
+	}
+	const scopedEntries = entries.slice(start);
+	const results = toolResultMap(scopedEntries);
+
+	for (const entry of scopedEntries) {
 		if (entry.type !== "message" || entry.message.role !== "assistant") continue;
 		const content = entry.message.content;
 		if (!Array.isArray(content)) continue;
+
 		for (const block of content) {
-			if (block?.type !== "toolCall") continue;
-			if (!isEditTool(block.name)) continue;
+			if (block?.type !== "toolCall" || !isEditTool(block.name)) continue;
 			const args = block.arguments ?? {};
-			const p = typeof args.path === "string" ? args.path : "";
-			if (!p || seen.has(p)) continue;
-			const patch = extractEditPatch(block.name, args, undefined, p)?.patch ?? "";
-			const { added, deleted } = countPatchLines(patch);
-			seen.add(p);
-			files.push({ path: p, patch, added, deleted });
+			const rawPath = typeof args.path === "string" ? args.path : "";
+			if (!rawPath) continue;
+
+			const result = typeof block.id === "string" ? results.get(block.id) : undefined;
+			if (isFailedToolResult(result)) continue;
+
+			const resolved = resolveChangePath(rawPath, projectCwd);
+			const key = resolved.absolutePath ?? resolved.relativePath;
+			const extracted = extractEditPatch(block.name, args, result, rawPath);
+			const existing = byPath.get(key);
+			if (existing) {
+				existing.operationCount += 1;
+				existing.statsReliable = false;
+				if (extracted?.patch) existing.patch = extracted.patch;
+				continue;
+			}
+
+			const file: SessionChangedFile = {
+				path: resolved.relativePath,
+				relativePath: resolved.relativePath,
+				absolutePath: resolved.absolutePath,
+				patch: extracted?.patch ?? "",
+				added: extracted?.added ?? 0,
+				deleted: extracted?.deleted ?? 0,
+				statsReliable: extracted !== null,
+				operationCount: 1,
+				canOpen: resolved.absolutePath !== null,
+			};
+			byPath.set(key, file);
+			files.push(file);
 		}
 	}
 	return files;
 }
 
-const SessionChangesCard = memo(function SessionChangesCard({ entries }: SessionChangesCardProps) {
+function formatStats(file: SessionChangedFile) {
+	if (!file.statsReliable) return null;
+	if (file.added === 0 && file.deleted === 0) return null;
+	return (
+		<span className="flex shrink-0 items-center gap-1 font-mono text-[10px] tabular-nums">
+			{file.added > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{file.added}</span>}
+			{file.deleted > 0 && <span className="text-red-600 dark:text-red-400">-{file.deleted}</span>}
+		</span>
+	);
+}
+
+const SessionChangesCard = memo(function SessionChangesCard({ entries, projectCwd = "" }: SessionChangesCardProps) {
 	const { t } = useTranslation();
-	const { tone } = useLookTheme();
-	const isDark = tone === "dark";
-	const files = useMemo(() => collectChangedFiles(entries), [entries]);
-	const [expandedPath, setExpandedPath] = useState<string | null>(null);
+	const dockedFile = useAtomValue(dockedFileAtom);
+	const [expanded, setExpanded] = useState(false);
+	const files = useMemo(() => collectChangedFiles(entries, projectCwd), [entries, projectCwd]);
 
 	if (files.length === 0) return null;
 
-	const expanded = files.find((f) => f.path === expandedPath) ?? null;
+	const visibleFiles = expanded ? files : files.slice(0, MAX_VISIBLE_FILES);
+	const hasMore = files.length > MAX_VISIBLE_FILES;
+	const allStatsReliable = files.every((file) => file.statsReliable);
+	const totalAdded = files.reduce((sum, file) => sum + file.added, 0);
+	const totalDeleted = files.reduce((sum, file) => sum + file.deleted, 0);
+	const totalOperations = files.reduce((sum, file) => sum + file.operationCount, 0);
 
 	return (
-		<div className="flex flex-col gap-1 rounded-lg border border-hairline bg-foreground/[0.02] px-3 py-2">
-			<div className="flex items-center gap-1.5 text-[11px] font-medium text-foreground">
-				<FileDiff className="size-3 text-emerald-500" aria-hidden />
-				{t("changesCard.title", "本次会话变更")}
-				<span className="font-mono text-[10px] text-muted-foreground/70">{files.length}</span>
+		<section
+			data-testid="session-changes-card"
+			aria-label={t("changesCard.title", "本轮变更")}
+			className="relative w-full overflow-hidden rounded-lg border border-hairline bg-foreground/[0.025] px-3 py-2.5"
+		>
+			<div className="flex items-center gap-2">
+				<span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
+					<FileDiff className="size-3.5" aria-hidden />
+				</span>
+				<div className="min-w-0 flex-1">
+					<div className="flex items-center gap-2 text-[12px] font-medium leading-tight text-foreground">
+						{t("changesCard.title", "本轮变更")}
+						<span className="flex items-center gap-1 text-[10px] font-normal leading-none text-muted-foreground/70">
+							{t("changesCard.saved", "已写入工作区")}
+							<span className="h-3 w-px bg-hairline" aria-hidden />
+							{allStatsReliable && (totalAdded > 0 || totalDeleted > 0) ? (
+								<span className="flex items-center gap-1 font-mono tabular-nums">
+									{totalAdded > 0 && (
+										<span className="text-emerald-600 dark:text-emerald-400">+{totalAdded}</span>
+									)}
+									{totalDeleted > 0 && <span className="text-red-600 dark:text-red-400">-{totalDeleted}</span>}
+								</span>
+							) : totalOperations > files.length ? (
+								<span>
+									{t("changesCard.operationCount", {
+										count: totalOperations,
+										defaultValue: "{{count}} 次修改",
+									})}
+								</span>
+							) : null}
+						</span>
+					</div>
+					<div className="mt-0.5 text-[10px] leading-tight text-muted-foreground/70">
+						{t(files.length === 1 ? "changesCard.fileCountOne" : "changesCard.fileCountMany", {
+							count: files.length,
+							defaultValue: "{{count}} 个文件",
+						})}
+					</div>
+				</div>
+				<span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/70">{files.length}</span>
 			</div>
-			<div className="flex flex-wrap gap-1">
-				{files.map((file) => {
-					const isOpen = file.path === expandedPath;
+
+			<div className="mt-1.5">
+				{visibleFiles.map((file) => {
+					const { fileName, directory } = splitDisplayPath(file.relativePath);
+					const active = file.absolutePath !== null && dockedFile?.absolutePath === file.absolutePath;
+					const stats = formatStats(file);
+					const iconNode = {
+						name: fileName,
+						path: file.relativePath,
+						absolutePath: file.absolutePath ?? file.relativePath,
+						type: "file" as const,
+					};
+					const ariaLabel = t("changesCard.fileAria", {
+						path: file.relativePath,
+						defaultValue: "打开 {{path}} 的变更详情",
+					});
+
 					return (
 						<button
-							key={file.path}
+							key={`${file.relativePath}-${file.absolutePath ?? "unresolved"}`}
 							type="button"
-							onClick={() => setExpandedPath(isOpen ? null : file.path)}
-							aria-expanded={isOpen}
-							title={isOpen ? t("changesCard.collapse", "收起") : t("changesCard.expand", "展开变更内容")}
-							className={`flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] transition-colors ${
-								isOpen
-									? "border-foreground/25 bg-foreground/[0.06] text-foreground"
-									: "border-hairline bg-background/60 text-muted-foreground hover:border-foreground/20 hover:text-foreground"
-							}`}
+							disabled={!file.canOpen}
+							onClick={() => {
+								if (!file.absolutePath) return;
+								appStore.set(dockedFileAtom, {
+									absolutePath: file.absolutePath,
+									diffPatch: file.patch,
+								});
+							}}
+							title={file.canOpen ? ariaLabel : t("changesCard.pathUnavailable", "无法定位此文件")}
+							aria-label={ariaLabel}
+							className={`group relative flex min-h-10 w-full items-center gap-2 py-1.5 text-left transition-colors ${
+								active
+									? "bg-foreground/[0.07] text-foreground"
+									: file.canOpen
+										? "text-foreground/90 hover:bg-foreground/[0.04]"
+										: "cursor-default text-muted-foreground/50"
+							} ${active ? "before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-emerald-500" : ""}`}
 						>
-							{isOpen ? (
-								<ChevronDown className="size-2.5 shrink-0 text-emerald-500" aria-hidden />
-							) : (
-								<ChevronRight className="size-2.5 shrink-0 text-emerald-500" aria-hidden />
-							)}
-							<span className="truncate">{file.path}</span>
-							{(file.added > 0 || file.deleted > 0) && (
-								<span className="shrink-0 font-mono text-[9px]">
-									{file.added > 0 && (
-										<span className="text-emerald-600 dark:text-emerald-400">+{file.added}</span>
-									)}
-									{file.deleted > 0 && (
-										<span className="text-red-600 dark:text-red-400"> -{file.deleted}</span>
-									)}
+							<FileIcon node={iconNode} className="size-4" />
+							<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+								<span className="truncate text-[12px] font-medium leading-tight">
+									{fileName || file.relativePath}
 								</span>
+								{directory && (
+									<span className="truncate font-mono text-[10px] leading-tight text-muted-foreground/65">
+										{directory}
+									</span>
+								)}
+							</span>
+							{stats ??
+								(file.operationCount > 1 ? (
+									<span className="shrink-0 font-mono text-[10px] text-muted-foreground/65">
+										{t("changesCard.operationShort", {
+											count: file.operationCount,
+											defaultValue: "{{count}} 次",
+										})}
+									</span>
+								) : null)}
+							{file.canOpen ? (
+								<ChevronRight
+									className="size-3.5 shrink-0 text-muted-foreground/45 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground/70"
+									aria-hidden
+								/>
+							) : (
+								<span className="shrink-0 text-[10px] text-muted-foreground/40">—</span>
 							)}
 						</button>
 					);
 				})}
 			</div>
-			{expanded && (
-				<div className="overflow-hidden rounded-md ring-1 ring-hairline">
-					<PatchDiff
-						patch={expanded.patch}
-						disableWorkerPool
-						renderCustomHeader={() => null}
-						options={{
-							themeType: isDark ? "dark" : "light",
-							diffStyle: "unified",
-							hunkSeparators: "simple",
-							disableBackground: false,
-							// 与文件查看器 FileDiff 一致的变更行标记（bars）
-							diffIndicators: "bars",
-						}}
-					/>
-				</div>
+
+			{hasMore && (
+				<button
+					type="button"
+					onClick={() => setExpanded((value) => !value)}
+					aria-expanded={expanded}
+					className="mt-1.5 flex w-full items-center justify-center gap-1 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+				>
+					{expanded ? (
+						<ChevronDown className="size-3" aria-hidden />
+					) : (
+						<ChevronRight className="size-3" aria-hidden />
+					)}
+					{expanded
+						? t("changesCard.collapse", "收起")
+						: t("changesCard.moreFiles", {
+								count: files.length - MAX_VISIBLE_FILES,
+								defaultValue: "展开其余 {{count}} 个文件",
+							})}
+				</button>
 			)}
-		</div>
+		</section>
 	);
 });
 

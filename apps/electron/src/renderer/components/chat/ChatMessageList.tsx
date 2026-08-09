@@ -1,18 +1,19 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { TextContent } from "@earendil-works/pi-ai";
 import { cn } from "@look/ui";
-import type { LookUiToolExecState } from "@shared/types";
+import type { LookSessionEntry, LookUiToolExecState } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { Check, ChevronDown, ChevronUp, Loader2, MessageSquare } from "lucide-react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useScrollPositionManager } from "../../hooks/useScrollPositionMemory";
-import { applyLiveTimeline, buildPersistedTimeline, type TimelineItem } from "../../lib/timeline";
+import { applyLiveTimeline, buildPersistedTimeline, collectTurnEntries, type TimelineItem } from "../../lib/timeline";
 import { appStore } from "../../store/appStore";
 import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
+	activeProjectAtom,
 	forkingEntryAtomFamily,
 	navigatingEntryAtomFamily,
 	recentlyCompletedAtom,
@@ -34,6 +35,7 @@ import { Conversation, ConversationContent, ConversationScrollButton, useConvers
 import { MessageItem } from "./MessageItem";
 import { MessageTicks, userMessagePreview } from "./MessageTicks";
 import { MessageActions } from "./message-elements/MessageActions";
+import SessionChangesCard from "./SessionChangesCard";
 import { SessionEntryBubble } from "./SessionEntryBubble";
 
 /** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
@@ -660,7 +662,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 	// === Render timeline item ===
 	const renderTimelineItem = useCallback(
-		(item: TimelineItem) => {
+		(item: TimelineItem, turnCard?: { entries: LookSessionEntry[]; projectCwd?: string }) => {
 			if (!item) return null;
 
 			// Compaction status card (live or persisted).
@@ -722,6 +724,14 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								liveBlocks={live ? item.uiBlocks : undefined}
 								liveToolExecutions={live ? (item.uiTools ?? EMPTY_TOOL_EXECUTIONS) : EMPTY_TOOL_EXECUTIONS}
 							/>
+							{turnCard && (
+								<div className="flex w-full max-w-[98%] gap-msg-bubble">
+									<div className="mt-msg-avatar size-7 shrink-0" aria-hidden="true" />
+									<div className="min-w-0 flex-1">
+										<SessionChangesCard entries={turnCard.entries} projectCwd={turnCard.projectCwd} />
+									</div>
+								</div>
+							)}
 							<MessageActions
 								// 旧版仅 assistant/user 显示操作按钮；live 项只保留占位（reserve），
 								// 快照落定前不显示可操作按钮。
@@ -794,6 +804,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	const showEmpty = timeline.length === 0 && !isBusy && canShowEmpty;
 
 	const isAgentRunning = activeAgentId ? activeUiPhase !== "idle" : false;
+	const activeProjectCwd = useAtomValue(activeProjectAtom)?.cwd ?? "";
 
 	return (
 		<>
@@ -822,7 +833,28 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								{historyLoading && <Loader2 className="size-3 animate-spin text-muted-foreground/50" />}
 							</div>
 						)}
-						{visibleTimeline.map((item) => renderTimelineItem(item))}
+						{visibleTimeline.map((item, index) => {
+							const next = visibleTimeline[index + 1];
+							const isLast = index === visibleTimeline.length - 1;
+							// 轮次变更卡片：内嵌在消息流中，紧跟该轮 assistant bubble 之后。
+							// 结束判定：后面紧跟 user 消息（历史轮次已完成），或这是最后一个 item 且会话空闲（本轮已完成）。
+							// live/流式中的 assistant 不显示（该轮尚未结束）。
+							const showTurnCard =
+								item.message?.role === "assistant" &&
+								!item.isLive &&
+								Boolean(item.entryId) &&
+								(next?.message?.role === "user" || (isLast && !isAgentRunning));
+							let turnCard: { entries: LookSessionEntry[]; projectCwd?: string } | undefined;
+							if (showTurnCard) {
+								// 该轮条目从原始 entries 取回，包含被 timeline 附着到 assistant 后面的 toolResult。
+								const globalIndex = timeline.findIndex((it) => it.id === item.id);
+								turnCard = {
+									entries: collectTurnEntries(sessionState.entries, timeline, globalIndex),
+									projectCwd: activeProjectCwd,
+								};
+							}
+							return renderTimelineItem(item, turnCard);
+						})}
 					</>
 				)}
 			</ConversationContent>

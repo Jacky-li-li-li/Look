@@ -895,6 +895,7 @@
     "readOnly": "プロジェクト外 · 読み取り専用",
     "fileMissing": "ファイルが存在しないか、移動されました",
     "headUnavailable": "HEAD 版を取得できません（git リポジトリ外またはファイルが大きすぎる）、現在の内容を表示しています",
+    "patchFallback": "HEAD を取得できないため、ツールの変更を表示しています",
     "deletedDiff": "このファイルは削除されました。HEAD 版との比較を表示しています"
   },
   "planDialogs": {
@@ -940,9 +941,17 @@
     "diff": "Diff"
   },
   "changesCard": {
-    "title": "このセッションで変更",
+    "title": "このターンの変更",
     "open": "変更詳細を開く",
     "expand": "変更内容を展開",
-    "collapse": "折りたたむ"
+    "collapse": "折りたたむ",
+    "fileCountOne": "{{count}} ファイル",
+    "fileCountMany": "{{count}} ファイル",
+    "saved": "ワークスペースに書き込み済み",
+    "operationCount": "{{count}} 回の変更",
+    "operationShort": "{{count}} 回",
+    "moreFiles": "残り {{count}} ファイルを表示",
+    "pathUnavailable": "ファイルパスを解決できません",
+    "fileAria": "{{path}} の変更詳細を開く"
   }
 }

@@ -895,6 +895,7 @@
     "readOnly": "项目外 · 只读",
     "fileMissing": "文件不存在或已被移动",
     "headUnavailable": "无法加载 HEAD 版本（非 git 项目或文件过大），显示当前内容",
+    "patchFallback": "无法取得 HEAD，显示本次工具变更",
     "deletedDiff": "该文件已被删除，以下为 HEAD 版本对比"
   },
   "planDialogs": {
@@ -940,9 +941,17 @@
     "diff": "Diff"
   },
   "changesCard": {
-    "title": "本次会话变更",
+    "title": "本轮变更",
     "open": "打开变更详情",
     "expand": "展开变更内容",
-    "collapse": "收起"
+    "collapse": "收起",
+    "fileCountOne": "{{count}} 个文件",
+    "fileCountMany": "{{count}} 个文件",
+    "saved": "已写入工作区",
+    "operationCount": "{{count}} 次修改",
+    "operationShort": "{{count}} 次",
+    "moreFiles": "展开其余 {{count}} 个文件",
+    "pathUnavailable": "无法定位此文件",
+    "fileAria": "打开 {{path}} 的变更详情"
   }
 }

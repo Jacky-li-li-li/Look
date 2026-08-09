@@ -203,3 +203,45 @@ export function buildTimeline(
 		pendingUserMessage,
 	);
 }
+
+export function collectTurnEntryIds(timeline: readonly TimelineItem[], index: number): string[] {
+	// 按 item 分段收集（每段内部 entryId + secondaryEntryIds 已是正向顺序），
+	// 收集方向从后往前，最后翻转段顺序恢复时间序
+	const segments: string[][] = [];
+	for (let i = index; i >= 0; i--) {
+		const it = timeline[i];
+		if (!it) break;
+		if (it.message?.role === "user") break;
+		if (it.entryId) segments.push([it.entryId, ...(it.secondaryEntryIds ?? [])]);
+	}
+	return segments.reverse().flat();
+}
+
+/**
+ * 按 timeline 的轮次边界取回原始 entries。
+ *
+ * timeline 会把 toolResult 附着到前一个 assistant item，不会把它们作为独立
+ * item 渲染；变更卡片仍需要这些原始结果来读取真实 patch 和 isError 状态。
+ * 因此先用 timeline 定位 assistant 段，再在 entries 中延伸到下一条 user。
+ */
+export function collectTurnEntries(
+	entries: readonly LookSessionEntry[],
+	timeline: readonly TimelineItem[],
+	index: number,
+): LookSessionEntry[] {
+	const turnIds = new Set(collectTurnEntryIds(timeline, index));
+	if (turnIds.size === 0) return [];
+
+	const start = entries.findIndex((entry) => turnIds.has(entry.id));
+	if (start < 0) return [];
+
+	let end = entries.length;
+	for (let i = start + 1; i < entries.length; i++) {
+		const entry = entries[i];
+		if (entry?.type === "message" && entry.message.role === "user") {
+			end = i;
+			break;
+		}
+	}
+	return entries.slice(start, end);
+}

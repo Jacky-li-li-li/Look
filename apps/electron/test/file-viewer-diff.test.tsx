@@ -26,6 +26,7 @@ vi.mock("@pierre/diffs/react", () => ({
 	FileDiff: ({ fileDiff }: { fileDiff: { oldFile: { contents: string }; newFile: { contents: string } } }) => (
 		<div data-testid="file-diff" data-old={fileDiff.oldFile.contents} data-new={fileDiff.newFile.contents} />
 	),
+	PatchDiff: ({ patch }: { patch: string }) => <div data-testid="patch-diff" data-patch={patch} />,
 }));
 vi.mock("@pierre/diffs", () => ({
 	parseDiffFromFile: (oldFile: unknown, newFile: unknown) => ({ oldFile, newFile }),
@@ -90,6 +91,21 @@ describe("FileViewerDialog diff 渲染路径", () => {
 		expect(getGitFileHead).not.toHaveBeenCalled();
 	});
 
+	it("项目外绝对路径带 patch 时走通用 git head，不调用项目 HEAD IPC", async () => {
+		getGitFileHead.mockResolvedValue({ success: true, content: "old external\n" });
+		render(
+			<Provider store={appStore}>
+				<TooltipProvider>
+					<FileViewerDialog dockMode dockPath="/tmp/note.md" dockDiffPatch="diff --git a/note.md b/note.md" />
+				</TooltipProvider>
+			</Provider>,
+		);
+
+		await waitFor(() => expect(getGitFileHead).toHaveBeenCalledWith("/tmp/note.md"));
+		expect(getProjectGitFileHead).not.toHaveBeenCalled();
+		expect(await screen.findByTestId("file-diff")).toBeDefined();
+	});
+
 	it("windowMode 无 diffPatch：走 getGitFileHead 自动检测", async () => {
 		getGitFileHead.mockResolvedValue({ success: true, content: "old window\n" });
 		appStore.set(viewingFileAtom, { absolutePath: "/repo/note.md" });
@@ -144,7 +160,7 @@ describe("FileViewerDialog diff 渲染路径", () => {
 		expect(await screen.findByTestId("file-diff")).toBeDefined();
 	});
 
-	it("期望 diff 但 HEAD 不可得：显示普通视图 + 状态栏降级提示", async () => {
+	it("期望 diff 但 HEAD 不可得：回退显示工具 patch", async () => {
 		getProjectGitFileHead.mockResolvedValue({ success: true, content: null });
 		render(
 			<Provider store={appStore}>
@@ -154,8 +170,10 @@ describe("FileViewerDialog diff 渲染路径", () => {
 			</Provider>,
 		);
 
-		await waitFor(() => expect(screen.queryByTestId("file-diff")).toBeNull());
-		expect(screen.getByText(/无法加载 HEAD 版本/)).toBeDefined();
+		const patch = await screen.findByTestId("patch-diff");
+		expect(patch.getAttribute("data-patch")).toBe("diff --git a/note.md b/note.md");
+		expect(screen.getByText(/无法取得 HEAD/)).toBeDefined();
+		expect(screen.queryByTestId("file-diff")).toBeNull();
 	});
 
 	it("无 diffPatch 且 HEAD 为 null（非 git/无变更）：普通视图且不显示降级提示", async () => {

@@ -895,6 +895,7 @@
     "readOnly": "Outside project · Read-only",
     "fileMissing": "File does not exist or has been moved",
     "headUnavailable": "Cannot load HEAD version (not a git repo or file too large), showing current content",
+    "patchFallback": "HEAD is unavailable; showing the tool change instead",
     "deletedDiff": "This file has been deleted; showing the HEAD version for comparison"
   },
   "planDialogs": {
@@ -940,9 +941,17 @@
     "diff": "Diff"
   },
   "changesCard": {
-    "title": "Changed in this session",
+    "title": "Changes this turn",
     "open": "Open change details",
     "expand": "Expand changes",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "fileCountOne": "{{count}} file",
+    "fileCountMany": "{{count}} files",
+    "saved": "Written to workspace",
+    "operationCount": "{{count}} edits",
+    "operationShort": "{{count}} edits",
+    "moreFiles": "Show {{count}} more files",
+    "pathUnavailable": "File path unavailable",
+    "fileAria": "Open change details for {{path}}"
   }
 }

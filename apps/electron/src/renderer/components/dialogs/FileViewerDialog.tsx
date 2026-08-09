@@ -57,8 +57,9 @@ import { extractHeadings, type TocHeading } from "../../lib/markdownToc";
 import { activeProjectAtom, fileViewerDirtyAtom, viewingFileAtom } from "../../store/atoms";
 // 注册 <diffs-container> custom element（sideEffects 文件，需显式 import）。
 import "@pierre/diffs/dist/components/web-components.js";
+import { ErrorBoundary } from "@look/ui/components/ErrorBoundary";
 import { parseDiffFromFile } from "@pierre/diffs";
-import { FileDiff } from "@pierre/diffs/react";
+import { FileDiff, PatchDiff } from "@pierre/diffs/react";
 import { FileIcon } from "../workspace/FileIcon";
 
 const LookMarkdown = lazy(() => import("../markdown/LookMarkdown"));
@@ -106,6 +107,18 @@ function truncateMiddle(text: string, max = 72): string {
 	if (text.length <= max) return text;
 	const half = Math.floor((max - 1) / 2);
 	return `${text.slice(0, half)}…${text.slice(text.length - half)}`;
+}
+
+function normalizeComparablePath(value: string): string {
+	const normalized = value.replace(/\\/g, "/");
+	const trimmed = normalized === "/" ? normalized : normalized.replace(/\/$/, "");
+	return /^[A-Za-z]:\//.test(trimmed) ? trimmed.toLowerCase() : trimmed;
+}
+
+function isPathInsideProject(filePath: string, projectCwd: string): boolean {
+	const candidate = normalizeComparablePath(filePath);
+	const root = normalizeComparablePath(projectCwd);
+	return Boolean(root) && (candidate === root || candidate.startsWith(`${root}/`));
 }
 
 /** 人类可读的文件大小:4 B / 12.4 KB / 1.2 MB / 3.1 GB。 */
@@ -177,8 +190,11 @@ export default function FileViewerDialog({
 		setOldContent(null);
 		if (!absolutePath) return;
 		let cancelled = false;
+		const canReadProjectHead = Boolean(
+			diffPatch && activeProject && isPathInsideProject(absolutePath, activeProject.cwd),
+		);
 		const load =
-			diffPatch && activeProject
+			canReadProjectHead && activeProject
 				? window.look.getProjectGitFileHead(activeProject.id, absolutePath)
 				: window.look.getGitFileHead(absolutePath);
 		load
@@ -318,8 +334,39 @@ export default function FileViewerDialog({
 
 	const textData = loadState.status === "text" ? loadState : null;
 	// 打开时明确期望 diff（携带 diffPatch）但 HEAD 内容不可得（非 git 项目/HEAD 无此文件/文件过大）
-	// → 已降级为普通文件视图，在状态栏给出提示
+	// → 仍保留本次工具 patch，避免用户点击变更后退化成看不出差异的普通文件预览。
 	const diffExpected = diffPatch !== undefined && oldContent === null && textData !== null;
+	const renderPatchFallback = (patch: string) => (
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+				<FileWarning className="size-3.5 shrink-0" />
+				{t("fileViewer.patchFallback", "无法取得 HEAD，显示本次工具变更")}
+			</div>
+			<div className="min-h-0 flex-1 overflow-auto">
+				<ErrorBoundary
+					fallback={
+						<pre className="m-0 whitespace-pre-wrap break-all p-4 font-mono text-xs text-muted-foreground">
+							{patch}
+						</pre>
+					}
+				>
+					<PatchDiff
+						patch={patch}
+						disableWorkerPool
+						renderCustomHeader={() => null}
+						options={{
+							themeType: viewerTone === "dark" ? "dark" : "light",
+							diffStyle: "unified",
+							hunkSeparators: "simple",
+							disableBackground: false,
+							diffIndicators: "bars",
+							overflow: "wrap",
+						}}
+					/>
+				</ErrorBoundary>
+			</div>
+		</div>
+	);
 	const truncated = textData?.truncated ?? false;
 	const dirty = draft !== savedContent;
 	// 项目外文件为只读预览(inProject=false):禁止编辑/保存,避免把改动写回项目外路径
@@ -790,6 +837,8 @@ export default function FileViewerDialog({
 					// Proma 同款：FileDiff 渲染完整文件（className="h-full" 让虚拟化正确测量高度）。
 					// !editMode：diff 生效时仍允许进入编辑态，避免编辑按钮点了无反应（S1-2）
 					renderDiffView(oldContent, textData.content)
+				) : diffExpected && diffPatch && !editMode ? (
+					renderPatchFallback(diffPatch)
 				) : loadState.status === "loading" ? (
 					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
 						<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
@@ -977,7 +1026,7 @@ export default function FileViewerDialog({
 						)}
 						<span>{formatBytes(textData.sizeBytes)}</span>
 						{textData.truncated && <span className="ml-auto">{t("fileViewer.truncatedNotice")}</span>}
-						{diffExpected && (
+						{diffExpected && !diffPatch && (
 							<span className="ml-auto rounded-sm bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600 dark:text-amber-400">
 								{t("fileViewer.headUnavailable")}
 							</span>
