@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Jacky-li-li-li/Look/releases)
+[![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-lightgrey.svg)](https://github.com/Jacky-li-li-li/Look/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/Jacky-li-li-li/Look)](https://github.com/Jacky-li-li-li/Look/releases)
 
 **Look** 是跑在你电脑上的桌面 AI 工作台——不是又一个网页对话框。
@@ -62,13 +62,13 @@ React 19 + Tailwind 4 + shadcn/ui，明暗主题；思考折叠、工具卡片�
 
 预构建安装包见 [GitHub Releases](https://github.com/Jacky-li-li-li/Look/releases)：
 
-| 平台 | 格式 |
-| --- | --- |
-| macOS (Apple Silicon / Intel) | DMG / ZIP |
-| Windows (x64) | NSIS |
-| Linux (x64) | AppImage / DEB |
+| 平台 | 格式 | 说明 |
+| --- | --- | --- |
+| macOS (Apple Silicon) | DMG / ZIP | CI 当前仅发布 arm64；ZIP 供应用内自动更新 |
 
-> 正式版经 Apple 签名与公证。macOS 若仍被拦截，见 [常见问题](#macos-提示无法验证开发者)。
+Windows / Linux / macOS Intel **尚无预构建包**，可从源码构建（见下方「构建与打包」）。
+
+> GitHub Releases 中的 macOS 正式包经 Developer ID 签名与 Apple 公证；本地或第三方构建除外。若仍被拦截，见 [常见问题](#macos-提示无法验证开发者)。
 
 ---
 
@@ -79,17 +79,16 @@ React 19 + Tailwind 4 + shadcn/ui，明暗主题；思考折叠、工具卡片�
 | 环境 | 最低版本 |
 | --- | --- |
 | [Node.js](https://nodejs.org/) | >= 20.19.0（推荐 v22 LTS，可用 `nvm use` 读 `.nvmrc`） |
-| npm | >= 10.x |
-| macOS | 12 Monterey+（Apple Silicon / Intel） |
-| Windows | 10+ x64 |
-| Linux | 主流发行版 x64 |
+| npm | 建议 >= 10.x |
+| macOS | 较新版本 + Apple Silicon（预构建包）；源码构建可在本机验证的 macOS 上尝试 |
+| Windows / Linux | 源码构建（尚无预构建安装包） |
 
 ### 开发启动
 
 ```bash
 git clone https://github.com/Jacky-li-li-li/Look.git
 cd Look
-npm install          # postinstall 会复制文件图标并应用补丁
+npm install          # postinstall：simple-git-hooks + 复制文件图标
 npm run dev          # Vite :5174 + Electron 主进程
 ```
 
@@ -109,7 +108,7 @@ npx supabase db push
 ```bash
 npm run build        # shared + ui + electron
 npm start            # 启动已构建的应用
-npm run package      # 产出安装包 → release/
+npm run package      # 产出安装包 → apps/electron/release/
 ```
 
 ---
@@ -153,7 +152,7 @@ apps/electron/          # Electron 应用边界
   build/ · scripts/     # 打包资源与辅助脚本
 packages/
   shared/               # 共享类型、IPC 契约、存储路径
-  ui/                   # 跨进程 shadcn/ui 组件
+  ui/                   # 共享 UI 组件库（shadcn/ui）
 supabase/               # 可选：认证/存储迁移
 docs/                   # 架构与功能文档
 ```
@@ -186,12 +185,12 @@ docs/                   # 架构与功能文档
 | `npm run dev:renderer` / `dev:main` | 只起渲染或主进程 |
 | `npm run build` | 构建 shared + ui + electron |
 | `npm start` | 启动已构建应用 |
-| `npm run package` | 打桌面安装包 |
+| `npm run package` | 打桌面安装包（产物在 `apps/electron/release/`） |
 | `npm test` | 测试 |
 | `npm run lint` / `lint:fix` / `format` | 检查 / 修复 / 格式化 |
 | `npm run check` | lint + typecheck + test |
 
-**发版**：`git tag vX.Y.Z && git push origin vX.Y.Z` → GitHub Actions 构建、签名、公证并上传 Releases。请保持 tag 与 `apps/electron/package.json` 版本一致，并在 `apps/electron/src/renderer/data/changelog.ts` 顶部追加中/英/日更新说明（关于页时间线读取此处）。
+**发版**：`git tag vX.Y.Z && git push origin vX.Y.Z` → GitHub Actions 构建 macOS arm64、签名、公证并上传 Releases。版本号以 `apps/electron/package.json` 为准（勿用仓库根 `package.json` 的 version），tag 须与其一致；并在 `apps/electron/src/renderer/data/changelog.ts` 顶部追加中/英/日更新说明（关于页时间线读取此处）。
 
 ---
 
@@ -216,7 +215,7 @@ npm install
 
 ```bash
 lsof -nP -iTCP:5174 -sTCP:LISTEN
-kill -9 <PID>
+kill <PID>           # 仍占用再 kill -9
 ```
 
 ### Electron 白屏
@@ -242,7 +241,7 @@ npm run build && npm start
 | [Scheduled tasks](docs/scheduled-tasks.md) | 定时任务架构、创建与排障 |
 | [Session Runtime Manager](docs/session-runtime-manager-architecture.md) | 多会话运行时 |
 | [Todo 面板设计](docs/todo-panel-design.md) | Todo 面板 |
-| [架构审查报告](docs/architecture-review.md) | 架构审查 |
+| [架构审查报告](docs/architecture-review.md) | 历史架构审查（部分结论可能已过期） |
 | [贡献指南](CONTRIBUTING.md) | 提 issue / PR、提交规范 |
 | [项目记忆 AGENTS.md](AGENTS.md) | 给 Agent 的运行时与扩展约定 |
 
@@ -262,10 +261,9 @@ npm run check        # 提交前建议跑通
 
 ## 联系
 
-使用中有问题或想法，欢迎：
+使用中有问题或想法，优先开 [GitHub Issue](https://github.com/Jacky-li-li-li/Look/issues)。
 
-- 开 [GitHub Issue](https://github.com/Jacky-li-li-li/Look/issues)
-- [添加作者飞书好友](https://www.feishu.cn/invitation/page/add_contact/?token=b42nc543-2547-467b-8a3b-d73db71acce1&unique_id=NfhtWSY6D_FJhaHffrRANQ==)
+也可以 [添加作者飞书好友](https://www.feishu.cn/invitation/page/add_contact/?token=b42nc543-2547-467b-8a3b-d73db71acce1&unique_id=NfhtWSY6D_FJhaHffrRANQ==)（邀请链接若失效，请改走 Issue）。
 
 ---
 
