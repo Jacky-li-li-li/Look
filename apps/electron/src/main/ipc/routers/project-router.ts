@@ -97,4 +97,30 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 
 		return { success: true, info };
 	});
+
+	register("project:git-diff", async (data) => {
+		await ctx.project.service.whenProjectsLoaded();
+		const projectId = guardString(data.projectId, "projectId");
+		const project = ctx.project.service.getProjectInfo(projectId);
+		if (!project?.valid) return { success: true, files: [] };
+		const files = await ctx.git.service.getDiff(project.cwd);
+		return { success: true, files };
+	});
+
+	register("project:git-file-head", async (data) => {
+		await ctx.project.service.whenProjectsLoaded();
+		const projectId = guardString(data.projectId, "projectId");
+		const absolutePath = guardString(data.absolutePath, "absolutePath");
+		const project = ctx.project.service.getProjectInfo(projectId);
+		if (!project?.valid) return { success: true, content: null };
+		// 与 git:file-head 共用 getFileHeadAtRepo 统一语义：无变更 → null，HEAD 无此文件 → ""
+		const content = await ctx.git.service.getFileHeadAtRepo(project.cwd, absolutePath);
+		return { success: true, content };
+	});
+
+	register("git:file-head", async (data) => {
+		const absolutePath = guardString(data.absolutePath, "absolutePath");
+		const result = await ctx.git.service.getFileHeadByAbsolutePath(absolutePath);
+		return { success: true, content: result?.oldContent ?? null };
+	});
 };

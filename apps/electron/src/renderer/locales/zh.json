@@ -68,7 +68,8 @@
     "expand": "展开右侧面板",
     "resize": "拖拽调整面板宽度",
     "loadFailed": "加载共享区失败",
-    "watchFailed": "启动共享区监听失败"
+    "watchFailed": "启动共享区监听失败",
+    "changes": "变更"
   },
   "sharedArea": {
     "listLabel": "共享区文件列表，可拖入文件导入",
@@ -892,7 +893,9 @@
     "resize": "拖拽调整面板宽度",
     "moreActions": "更多操作",
     "readOnly": "项目外 · 只读",
-    "fileMissing": "文件不存在或已被移动"
+    "fileMissing": "文件不存在或已被移动",
+    "headUnavailable": "无法加载 HEAD 版本（非 git 项目或文件过大），显示当前内容",
+    "deletedDiff": "该文件已被删除，以下为 HEAD 版本对比"
   },
   "planDialogs": {
     "toolConfirmTitle": "工具调用确认",
@@ -928,5 +931,18 @@
     "submitFailed": "回答提交失败",
     "remainingMinutes": "{{minutes}} 分 {{seconds}} 秒",
     "remainingSeconds": "{{seconds}} 秒"
+  },
+  "changes": {
+    "loading": "加载中…",
+    "empty": "暂无文件变更",
+    "select": "选择文件查看 diff",
+    "openFile": "打开文件",
+    "diff": "Diff"
+  },
+  "changesCard": {
+    "title": "本次会话变更",
+    "open": "打开变更详情",
+    "expand": "展开变更内容",
+    "collapse": "收起"
   }
 }

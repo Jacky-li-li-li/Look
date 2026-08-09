@@ -38,7 +38,7 @@ describe("resolvePanelTracks — 常规大屏", () => {
 		const l = tracks(1440, { rightPanelWidth: 300 });
 		expect(l.rightTrack).toBe(300);
 		expect(l.dockTrack).toBe(0);
-		expect(l.rightMax).toBe(480);
+		expect(l.rightMax).toBe(640);
 	});
 
 	it("Dock 打开时右栏与 Dock 都按用户宽度显示，main 仍有富余", () => {
@@ -50,7 +50,8 @@ describe("resolvePanelTracks — 常规大屏", () => {
 
 	it("Dock 打开时给出各自的拖拽上限（右栏扣除 Dock 下限、Dock 扣除右栏下限）", () => {
 		const l = tracks(1440, { dockOpen: true });
-		expect(l.rightMax).toBe(480);
+		// rightMax = min(RIGHT_MAX=640, pool - dockMin=819-320=499) = 499
+		expect(l.rightMax).toBe(499);
 		// pool = 1440 - 280(侧栏) - 1(分隔线) - 340(main) = 819；dockMax = 819 - 200(右栏下限) = 619
 		expect(l.dockMax).toBe(619);
 	});
@@ -128,8 +129,8 @@ describe("resolvePanelTracks — 边界与组合", () => {
 		expectNoOverflow(l, 1100);
 	});
 
-	it("用户宽度被钳制到区间内（rightPanelWidth 超 480 / 低于 200）", () => {
-		expect(tracks(1440, { rightPanelWidth: 600 }).rightTrack).toBe(480);
+	it("用户宽度被钳制到区间内（rightPanelWidth 超 640 / 低于 200）", () => {
+		expect(tracks(1440, { rightPanelWidth: 600 }).rightTrack).toBe(600);
 		expect(tracks(1440, { rightPanelWidth: 120 }).rightTrack).toBe(200);
 	});
 });

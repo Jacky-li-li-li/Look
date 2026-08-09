@@ -52,8 +52,12 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 			case "fileViewer:docked":
 				// 独立查看器窗口请求合并：主窗口右侧打开 Dock 面板展示该文件。
 				// Dock 面板内有未保存修改时先确认，避免静默覆盖（2026-08-07）。
+				// diffPatch 随合并事件带回，恢复与「变更面板打开」一致的 diff 语义。
 				if (!confirmDockFileSwapIfDirty(() => appStore.get(fileViewerDirtyAtom))) break;
-				appStore.set(dockedFileAtom, { absolutePath: event.path });
+				appStore.set(dockedFileAtom, {
+					absolutePath: event.path,
+					...(event.diffPatch !== undefined ? { diffPatch: event.diffPatch } : {}),
+				});
 				break;
 
 			case "session:ui-event":

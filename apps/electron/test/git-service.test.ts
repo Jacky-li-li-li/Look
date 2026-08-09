@@ -11,7 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { GitService } from "../src/main/git/git-service.js";
+import { GitService, unquoteGitPath } from "../src/main/git/git-service.js";
 
 function hasGit(): boolean {
 	try {
@@ -275,5 +275,165 @@ describeGit("GitService", () => {
 		git(dir, ["checkout", "-q", "-b", "after-dispose"]);
 		await new Promise((r) => setTimeout(r, 500));
 		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it("getDiff 返回按文件分组的 tracked diff（+/- 行统计）", async () => {
+		const dir = makeRepo("diff-tracked");
+		const service = new GitService();
+
+		// 修改 a.txt：1 行 → 3 行（+2 -0）
+		fs.writeFileSync(path.join(dir, "a.txt"), "hello\nl1\nl2\n");
+
+		const files = await service.getDiff(dir);
+
+		expect(files.length).toBe(1);
+		expect(files[0]?.path).toBe("a.txt");
+		expect(files[0]?.status).toBe("modified");
+		expect(files[0]?.addedLines).toBe(2);
+		expect(files[0]?.deletedLines).toBe(0);
+		expect(files[0]?.patch).toContain("diff --git a/a.txt b/a.txt");
+		expect(files[0]?.patch).toContain("+l1");
+	});
+
+	it("getDiff 包含 untracked 文件（全新增伪 diff）", async () => {
+		const dir = makeRepo("diff-untracked");
+		fs.writeFileSync(path.join(dir, "new.txt"), "n1\nn2\nn3\n");
+
+		const files = await new GitService().getDiff(dir);
+
+		const untracked = files.find((f) => f.path === "new.txt");
+		expect(untracked).toBeDefined();
+		expect(untracked?.status).toBe("untracked");
+		expect(untracked?.addedLines).toBe(3);
+		expect(untracked?.patch).toContain("+n1");
+		expect(untracked?.patch).toContain("@@ -0,0 +1,3 @@");
+	});
+
+	it("getDiff：删除文件 status=deleted 且 patch 含 - 行", async () => {
+		const dir = makeRepo("diff-deleted");
+		fs.writeFileSync(path.join(dir, "del.txt"), "bye\n");
+		git(dir, ["add", "del.txt"]);
+		git(dir, ["commit", "-q", "-m", "add del"]);
+		fs.rmSync(path.join(dir, "del.txt"));
+
+		const files = await new GitService().getDiff(dir);
+
+		const deleted = files.find((f) => f.path === "del.txt");
+		expect(deleted).toBeDefined();
+		expect(deleted?.status).toBe("deleted");
+		expect(deleted?.addedLines).toBe(0);
+		expect(deleted?.deletedLines).toBe(1);
+	});
+
+	it("getDiff：非仓库/不存在的目录返回空数组", async () => {
+		const plain = path.join(tmpRoot, "diff-plain");
+		fs.mkdirSync(plain, { recursive: true });
+		expect(await new GitService().getDiff(plain)).toEqual([]);
+		expect(await new GitService().getDiff(path.join(tmpRoot, "nope"))).toEqual([]);
+	});
+
+	describe("getFileHeadByAbsolutePath / getFileHeadAtRepo", () => {
+		it("有未提交变更的文件 → 返回 HEAD 内容", async () => {
+			const dir = makeRepo("filehead-modified");
+			fs.writeFileSync(path.join(dir, "a.txt"), "hello\nworld\n");
+
+			const result = await new GitService().getFileHeadByAbsolutePath(path.join(dir, "a.txt"));
+
+			expect(result).not.toBeNull();
+			expect(result?.repoRoot).toBe(dir);
+			// git() 返回原始 stdout（不 trim）：文件内容 "hello\n" 原样保留
+			expect(result?.oldContent).toBe("hello\n");
+		});
+
+		it("无变更的文件 → null（普通文件视图）", async () => {
+			const dir = makeRepo("filehead-clean");
+
+			expect(await new GitService().getFileHeadByAbsolutePath(path.join(dir, "a.txt"))).toBeNull();
+		});
+
+		it("untracked（新增）文件 → 空串标记（diff 全新增）", async () => {
+			const dir = makeRepo("filehead-untracked");
+			fs.writeFileSync(path.join(dir, "new-file.ts"), "export const x = 1;\n");
+
+			const result = await new GitService().getFileHeadByAbsolutePath(path.join(dir, "new-file.ts"));
+
+			expect(result).not.toBeNull();
+			expect(result?.oldContent).toBe("");
+		});
+
+		it("非 git 仓库内的文件 → null", async () => {
+			const plain = path.join(tmpRoot, "filehead-plain");
+			fs.mkdirSync(plain, { recursive: true });
+			fs.writeFileSync(path.join(plain, "x.txt"), "x\n");
+
+			expect(await new GitService().getFileHeadByAbsolutePath(path.join(plain, "x.txt"))).toBeNull();
+		});
+
+		it("getFileHeadAtRepo 与自动检测路径语义一致（无变更 null / 新增空串）", async () => {
+			const dir = makeRepo("filehead-repo");
+			const svc = new GitService();
+			fs.writeFileSync(path.join(dir, "a.txt"), "changed\n");
+			fs.writeFileSync(path.join(dir, "brand-new.md"), "# hi\n");
+
+			expect(await svc.getFileHeadAtRepo(dir, path.join(dir, "a.txt"))).toBe("hello\n");
+			expect(await svc.getFileHeadAtRepo(dir, path.join(dir, "brand-new.md"))).toBe("");
+			expect(await svc.getFileHeadAtRepo(dir, path.join(dir, "untouched.txt"))).toBeNull();
+			expect(await svc.getFileHeadAtRepo(dir, "/outside/repo/file.txt")).toBeNull();
+		});
+	});
+
+	describe("getDiff 特殊字符路径（quotePath 转义还原）", () => {
+		it("含空格/中文文件名的 tracked 变更路径正确解码", async () => {
+			const dir = makeRepo("diff-quoted");
+			fs.writeFileSync(path.join(dir, "中文 文件.txt"), "v1\n");
+			fs.writeFileSync(path.join(dir, "a.txt"), "ok\n");
+			git(dir, ["add", "--", "."]);
+			git(dir, ["commit", "-q", "-m", "add quoted"]);
+			fs.writeFileSync(path.join(dir, "中文 文件.txt"), "v2\n");
+
+			const files = await new GitService().getDiff(dir);
+
+			const quoted = files.find((f) => f.path === "中文 文件.txt");
+			expect(quoted).toBeDefined();
+			expect(quoted?.status).toBe("modified");
+			expect(quoted?.patch).toContain("diff --git");
+		});
+
+		it("untracked 中文/空格文件名的伪 diff 路径正确解码", async () => {
+			const dir = makeRepo("diff-untracked-quoted");
+			fs.writeFileSync(path.join(dir, "新文件 笔记.md"), "# hello\n");
+
+			const files = await new GitService().getDiff(dir);
+
+			const untracked = files.find((f) => f.path === "新文件 笔记.md");
+			expect(untracked).toBeDefined();
+			expect(untracked?.status).toBe("untracked");
+			expect(untracked?.patch).toContain("+# hello");
+		});
+	});
+});
+
+describe("unquoteGitPath（纯函数）", () => {
+	it("无引号包裹的路径原样返回", () => {
+		expect(unquoteGitPath("src/app.ts")).toBe("src/app.ts");
+	});
+
+	it("八进制 UTF-8 字节序列解码为中文", () => {
+		expect(unquoteGitPath('"\\344\\270\\255\\346\\226\\207.txt"')).toBe("中文.txt");
+	});
+
+	it("空格引号路径原样保留空格", () => {
+		expect(unquoteGitPath('"foo bar.txt"')).toBe("foo bar.txt");
+	});
+
+	it("转义引号/反斜杠/tab/换行解码", () => {
+		expect(unquoteGitPath('"quo\\"te.txt"')).toBe('quo"te.txt');
+		expect(unquoteGitPath('"a\\\\b.txt"')).toBe("a\\b.txt");
+		expect(unquoteGitPath('"tab\\tfile.txt"')).toBe("tab\tfile.txt");
+		expect(unquoteGitPath('"nl\\nfile.txt"')).toBe("nl\nfile.txt");
+	});
+
+	it("未知转义保留反斜杠", () => {
+		expect(unquoteGitPath('"weird\\q.txt"')).toBe("weird\\q.txt");
 	});
 });

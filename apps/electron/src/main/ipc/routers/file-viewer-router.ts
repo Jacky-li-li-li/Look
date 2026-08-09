@@ -9,15 +9,22 @@ import type { IpcRouter } from "../invoke-context.js";
 export const fileViewerRouter: IpcRouter = (ctx, register) => {
 	register("fileViewer:open", async (data) => {
 		const filePath = guardPath(data.path, "path");
-		openViewerWindow(filePath, { fadeIn: data.fadeIn ?? false });
+		openViewerWindow(filePath, { fadeIn: data.fadeIn ?? false, diffPatch: data.diffPatch });
 		return { success: true };
 	});
 
 	register("fileViewer:ready", async () => {
-		return { success: true, path: consumePendingPath() };
+		const request = consumePendingPath();
+		if (!request) return { success: true, path: null };
+		return {
+			success: true,
+			path: request.path,
+			...(request.diffPatch !== undefined ? { diffPatch: request.diffPatch } : {}),
+		};
 	});
 
 	// 独立查看器窗口请求合并到主窗口：聚焦主窗口 → 通知打开右侧 Dock 面板 → 淡出并关闭独立窗口。
+	// diffPatch 随合并事件带回，主窗口据此恢复与「变更面板打开」一致的 diff 语义。
 	register("fileViewer:dock", async (data) => {
 		const filePath = guardPath(data.path, "path");
 		const mainWindow = ctx.mainWindow;
@@ -27,7 +34,11 @@ export const fileViewerRouter: IpcRouter = (ctx, register) => {
 		}
 		mainWindow.show();
 		mainWindow.focus();
-		mainWindow.webContents.send("look:event", { type: "fileViewer:docked", path: filePath });
+		mainWindow.webContents.send("look:event", {
+			type: "fileViewer:docked",
+			path: filePath,
+			...(data.diffPatch !== undefined ? { diffPatch: data.diffPatch } : {}),
+		});
 		fadeOutAndCloseViewer();
 		return { success: true };
 	});

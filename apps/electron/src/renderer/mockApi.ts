@@ -442,6 +442,31 @@ const mockApi: LookAPI = {
 				dirtyDeletedLines: 1,
 			},
 		}),
+	getProjectGitFileHead: () =>
+		success({
+			content:
+				"// context line 0\n// context line 1\n// context line 2\n// context line 3\n// context line 4\n// context line 5\n// context line 6\n// context line 7\n// context line 8\n// context line 9\n// context line 10\n// context line 11\n// context line 12\n// context line 13\n// context line 14\n// context line 15\n// context line 16\n// context line 17\n// context line 18\n// context line 19\n// context line 20\n// context line 21\n// context line 22\n// context line 23\n// context line 24\n// context line 25\n// context line 26\n// context line 27\n// context line 28\n// context line 29\nconst changed = false;\n// context line 0\n// context line 1\n// context line 2\n// context line 3\n// context line 4\n// context line 5\n// context line 6\n// context line 7\n// context line 8\n// context line 9\n// context line 10\n// context line 11\n// context line 12\n// context line 13\n// context line 14\n// context line 15\n// context line 16\n// context line 17\n// context line 18\n// context line 19\n// context line 20\n// context line 21\n// context line 22\n// context line 23\n// context line 24\n// context line 25\n// context line 26\n// context line 27\n// context line 28\n// context line 29",
+		}),
+	getGitFileHead: () => success({ content: "// context line 0\nconst changed = false;\n// context line 2" }),
+	getProjectGitDiff: () =>
+		success({
+			files: [
+				{
+					path: "apps/electron/src/renderer/components/chat/ChatPanel.tsx",
+					status: "modified",
+					addedLines: 2,
+					deletedLines: 1,
+					patch: "diff --git a/apps/electron/src/renderer/components/chat/ChatPanel.tsx b/apps/electron/src/renderer/components/chat/ChatPanel.tsx\nindex 1234567..89abcde 100644\n--- a/apps/electron/src/renderer/components/chat/ChatPanel.tsx\n+++ b/apps/electron/src/renderer/components/chat/ChatPanel.tsx\n@@ -10,3 +10,4 @@ export function demo() {\n const a = 1;\n-const b = 2;\n+const b = 2;\n+const c = 3;\n+const veryLongLine = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';\n}",
+				},
+				{
+					path: "apps/electron/src/main/git/git-service.ts",
+					status: "untracked",
+					addedLines: 1,
+					deletedLines: 0,
+					patch: "--- /dev/null\n+++ b/src/new-file.ts\n@@ -0,0 +1,1 @@\n+export const fresh = 1;",
+				},
+			],
+		}),
 
 	// ---- Session tree ----
 	navigateTree: () => success({ result: { cancelled: true } }),
@@ -533,11 +558,19 @@ const mockApi: LookAPI = {
 	// ---- 补齐的 LookAPI 契约方法（DEV mock 桩，与 preload 保持同构） ----
 	abortCompressSession: () => ok,
 	openOAuthUrl: () => success({ redirectUrl: "" }),
-	readFileContent: () => success({ kind: "binary", sizeBytes: 0, inProject: true }),
+	readFileContent: () =>
+		success({
+			kind: "text",
+			sizeBytes: 0,
+			inProject: true,
+			content:
+				"// context line 0\n// context line 1\n// context line 2\n// context line 3\n// context line 4\n// context line 5\n// context line 6\n// context line 7\n// context line 8\n// context line 9\n// context line 10\n// context line 11\n// context line 12\n// context line 13\n// context line 14\n// context line 15\n// context line 16\n// context line 17\n// context line 18\n// context line 19\n// context line 20\n// context line 21\n// context line 22\n// context line 23\n// context line 24\n// context line 25\n// context line 26\n// context line 27\n// context line 28\n// context line 29\nconst changed = true;\n// context line 0\n// context line 1\n// context line 2\n// context line 3\n// context line 4\n// context line 5\n// context line 6\n// context line 7\n// context line 8\n// context line 9\n// context line 10\n// context line 11\n// context line 12\n// context line 13\n// context line 14\n// context line 15\n// context line 16\n// context line 17\n// context line 18\n// context line 19\n// context line 20\n// context line 21\n// context line 22\n// context line 23\n// context line 24\n// context line 25\n// context line 26\n// context line 27\n// context line 28\n// context line 29",
+			truncated: false,
+		}),
 	writeFileContent: () => success({ sizeBytes: 0 }),
 	statFilePath: () => success({ kind: "missing", inProject: false }),
-	openFileViewer: (_path, _fadeIn) => Promise.resolve({ success: true }),
-	dockFileViewer: () => Promise.resolve({ success: true }),
+	openFileViewer: (_path, _fadeIn, _diffPatch) => Promise.resolve({ success: true }),
+	dockFileViewer: (_path, _diffPatch) => Promise.resolve({ success: true }),
 	fileViewerReady: () => Promise.resolve({ success: true, path: null }),
 	providerLogin: () => success({ providers: [], customProviders: [], customStats: { configured: 0, totalModels: 0 } }),
 	respondLoginPrompt: () => ok,

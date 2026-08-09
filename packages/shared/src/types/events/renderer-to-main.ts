@@ -84,6 +84,9 @@ export type RendererToMainEvent =
 	| { type: "project:confirm-delete-response"; projectId: string; confirmed: boolean }
 	| { type: "project:get-active" }
 	| { type: "project:git-info"; projectId: string }
+	| { type: "project:git-diff"; projectId: string }
+	| { type: "project:git-file-head"; projectId: string; absolutePath: string }
+	| { type: "git:file-head"; absolutePath: string }
 	| {
 			type: "agent:navigate-tree";
 			agentId: string;
@@ -118,9 +121,9 @@ export type RendererToMainEvent =
 	| { type: "file:read"; path: string }
 	| { type: "file:write"; path: string; content: string }
 	| { type: "file:stat"; path: string }
-	| { type: "fileViewer:open"; path: string; fadeIn?: boolean }
+	| { type: "fileViewer:open"; path: string; fadeIn?: boolean; diffPatch?: string }
 	| { type: "fileViewer:ready" }
-	| { type: "fileViewer:dock"; path: string }
+	| { type: "fileViewer:dock"; path: string; diffPatch?: string }
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode; updateDefault?: boolean }
 	| { type: "permission:get-mode"; agentId: string }
 	| { type: "permission:respond"; payload: PermissionRespondPayload }

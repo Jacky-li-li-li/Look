@@ -18,6 +18,7 @@ import ChatInput, { type ChatInputHandle } from "./ChatInput";
 import ChatMessageList from "./ChatMessageList";
 import ChatQueueDrawer from "./ChatQueueDrawer";
 import GitStatusBar from "./GitStatusBar";
+import SessionChangesCard from "./SessionChangesCard";
 
 interface ChatPanelProps {
 	agentId: string;
@@ -83,6 +84,8 @@ const ChatPanel = memo(function ChatPanel({
 				inputRef={inputRef}
 				onSend={onSend}
 			/>
+			{/* 会话空闲时显示「变更文件」卡片（点击跳右侧「变更」tab） */}
+			{phase === "idle" && <SessionChangesCard entries={sessionState.entries} />}
 			{/* TODO 进度条 — 替代原 SubAgent 进度卡片 */}
 			<TodoPanel />
 			<ChatQueueDrawer agentId={agentId} steerMessages={queue.steering} followUpMessages={queue.followUp} />

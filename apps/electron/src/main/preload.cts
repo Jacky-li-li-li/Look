@@ -184,6 +184,10 @@ const api: LookAPI = {
 		invoke({ type: "project:confirm-delete-response", projectId, confirmed }),
 	getActiveProject: () => invoke({ type: "project:get-active" }),
 	getProjectGitInfo: (projectId) => invoke({ type: "project:git-info", projectId }),
+	getProjectGitDiff: (projectId) => invoke({ type: "project:git-diff", projectId }),
+	getProjectGitFileHead: (projectId, absolutePath) =>
+		invoke({ type: "project:git-file-head", projectId, absolutePath }),
+	getGitFileHead: (absolutePath) => invoke({ type: "git:file-head", absolutePath }),
 
 	// ---- v0.4 Session tree / branching ----
 	// `window.look.*` API surface for the tree-view UI and the
@@ -246,8 +250,15 @@ const api: LookAPI = {
 	statFilePath: (path) => invoke({ type: "file:stat", path }),
 
 	// ---- File viewer window ----
-	openFileViewer: (path, fadeIn) => invoke({ type: "fileViewer:open", path, fadeIn }),
-	dockFileViewer: (path) => invoke({ type: "fileViewer:dock", path }),
+	openFileViewer: (path, fadeIn, diffPatch) =>
+		invoke({
+			type: "fileViewer:open",
+			path,
+			fadeIn,
+			...(diffPatch !== undefined ? { diffPatch } : {}),
+		}),
+	dockFileViewer: (path, diffPatch) =>
+		invoke({ type: "fileViewer:dock", path, ...(diffPatch !== undefined ? { diffPatch } : {}) }),
 	fileViewerReady: () => invoke({ type: "fileViewer:ready" }),
 
 	// ---- Auto Updater ----

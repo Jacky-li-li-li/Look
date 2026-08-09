@@ -37,15 +37,15 @@ export const dockPanelWidthAtom = atom(420);
  *  避免启动首帧把默认宽度写回设置覆盖用户已存值（2026-08-07）。 */
 export const generalSettingsHydratedAtom = atom(false);
 
-export const rightPanelTabAtom = atom<"shared" | "workspace">("workspace");
+export const rightPanelTabAtom = atom<"shared" | "workspace" | "changes">("workspace");
 
 export const showHiddenFilesAtom = atom(true);
 
 /** 文件查看器当前目标；非 null 时 FileViewerDialog 打开。全局同时只查看一个文件。 */
-export const viewingFileAtom = atom<{ absolutePath: string } | null>(null);
+export const viewingFileAtom = atom<{ absolutePath: string; diffPatch?: string } | null>(null);
 
 /** 主窗口右侧 Dock 面板当前展示的文件；非 null 时 DockFilePanel 打开。 */
-export const dockedFileAtom = atom<{ absolutePath: string } | null>(null);
+export const dockedFileAtom = atom<{ absolutePath: string; diffPatch?: string } | null>(null);
 
 /** 聊天图片放大预览当前目标；非 null 时 ImagePreviewDialog 打开。 */
 export const imagePreviewAtom = atom<{ src: string; alt: string } | null>(null);

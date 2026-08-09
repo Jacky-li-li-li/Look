@@ -68,7 +68,8 @@
     "expand": "Expand right panel",
     "resize": "Drag to resize panel",
     "loadFailed": "Failed to load shared files",
-    "watchFailed": "Failed to watch shared files"
+    "watchFailed": "Failed to watch shared files",
+    "changes": "Changes"
   },
   "sharedArea": {
     "listLabel": "Shared files; drop files here to import",
@@ -892,7 +893,9 @@
     "resize": "Drag to resize panel",
     "moreActions": "More actions",
     "readOnly": "Outside project · Read-only",
-    "fileMissing": "File does not exist or has been moved"
+    "fileMissing": "File does not exist or has been moved",
+    "headUnavailable": "Cannot load HEAD version (not a git repo or file too large), showing current content",
+    "deletedDiff": "This file has been deleted; showing the HEAD version for comparison"
   },
   "planDialogs": {
     "toolConfirmTitle": "Tool approval required",
@@ -928,5 +931,18 @@
     "submitFailed": "Failed to submit answers",
     "remainingMinutes": "{{minutes}}m {{seconds}}s",
     "remainingSeconds": "{{seconds}}s"
+  },
+  "changes": {
+    "loading": "Loading…",
+    "empty": "No file changes",
+    "select": "Select a file to view diff",
+    "openFile": "Open file",
+    "diff": "Diff"
+  },
+  "changesCard": {
+    "title": "Changed in this session",
+    "open": "Open change details",
+    "expand": "Expand changes",
+    "collapse": "Collapse"
   }
 }

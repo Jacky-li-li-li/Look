@@ -17,6 +17,7 @@ import {
 	activeProjectAtom,
 	dockedFileAtom,
 	dockPanelWidthAtom,
+	projectGitInfoAtomFamily,
 	rightPanelCollapsedAtom,
 	rightPanelTabAtom,
 	rightPanelWidthAtom,
@@ -24,6 +25,7 @@ import {
 	sharedFilesLoadingAtomFamily,
 	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
+import ChangesPanel from "./ChangesPanel";
 import { PanelResizeHandle } from "./PanelResizeHandle";
 import { SharedAreaPanel } from "./SharedAreaPanel";
 import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
@@ -43,6 +45,8 @@ export function RightPanel() {
 	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const viewportWidth = useViewportWidth();
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
+	const gitInfo = useAtomValue(projectGitInfoAtomFamily(projectId));
+	const dirtyCount = gitInfo?.dirtyCount ?? 0;
 
 	// 始终调用 hooks;在 effect 内判断 projectId 是否有效
 	const filesAtom = sharedFilesAtomFamily(projectId);
@@ -179,6 +183,24 @@ export function RightPanel() {
 					>
 						{t("rightPanel.shared")}
 					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === "changes"}
+						className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+							tab === "changes"
+								? "bg-foreground/10 text-foreground"
+								: "text-muted-foreground hover:bg-foreground/5"
+						}`}
+						onClick={() => setTab("changes")}
+					>
+						{t("rightPanel.changes")}
+						{dirtyCount > 0 && (
+							<span className="ml-1 rounded bg-amber-500/15 px-1 font-mono text-[9px] text-amber-500">
+								{dirtyCount}
+							</span>
+						)}
+					</button>
 				</div>
 				<Tooltip>
 					<TooltipTrigger asChild>
@@ -210,6 +232,7 @@ export function RightPanel() {
 					}}
 				/>
 			)}
+			{tab === "changes" && activeProject && <ChangesPanel projectId={activeProject.id} cwd={activeProject.cwd} />}
 		</aside>
 	);
 }

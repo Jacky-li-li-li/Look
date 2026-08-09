@@ -71,4 +71,25 @@ describe("fileViewer:docked IPC 脏确认", () => {
 		expect(appStore.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/b.md" });
 		expect(confirmSpy).not.toHaveBeenCalled();
 	});
+
+	it("合并事件携带 diffPatch：dockedFileAtom 保留 diffPatch（恢复变更面板语义）", () => {
+		const receive = makeReceiver();
+		appStore.set(fileViewerDirtyAtom, false);
+
+		receive({ type: "fileViewer:docked", path: "/tmp/b.md", diffPatch: "diff --git a/b.md b/b.md" });
+
+		expect(appStore.get(dockedFileAtom)).toEqual({
+			absolutePath: "/tmp/b.md",
+			diffPatch: "diff --git a/b.md b/b.md",
+		});
+	});
+
+	it("合并事件无 diffPatch：dockedFileAtom 不含 diffPatch 字段", () => {
+		const receive = makeReceiver();
+		appStore.set(fileViewerDirtyAtom, false);
+
+		receive({ type: "fileViewer:docked", path: "/tmp/b.md" });
+
+		expect(appStore.get(dockedFileAtom)).toEqual({ absolutePath: "/tmp/b.md" });
+	});
 });

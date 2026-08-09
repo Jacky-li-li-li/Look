@@ -5,6 +5,7 @@ import type {
 	AvailableModel,
 	CustomProviderInput,
 	FileTreeNode,
+	GitDiffFile,
 	GitRepoInfo,
 	ImageContent,
 	MainToRendererEvent,
@@ -152,6 +153,9 @@ export interface LookAPI {
 	switchProject(projectId: string): Promise<IpcResult>;
 	getActiveProject(): Promise<IpcResult<{ project: ProjectInfo | null }>>;
 	getProjectGitInfo(projectId: string): Promise<IpcResult<{ info: GitRepoInfo | null }>>;
+	getProjectGitDiff(projectId: string): Promise<IpcResult<{ files: GitDiffFile[] }>>;
+	getProjectGitFileHead(projectId: string, absolutePath: string): Promise<IpcResult<{ content: string | null }>>;
+	getGitFileHead(absolutePath: string): Promise<IpcResult<{ content: string | null }>>;
 	deleteProject(projectId: string): Promise<IpcResult>;
 	confirmDeleteProject(projectId: string, confirmed: boolean): Promise<IpcResult>;
 	getSettings(): Promise<IpcResult<ProviderSettingsData>>;
@@ -274,10 +278,11 @@ export interface LookAPI {
 		path: string,
 	): Promise<IpcResult<{ kind: "file" | "directory" | "other" | "missing"; inProject: boolean }>>;
 	// ---- File viewer window ----
-	openFileViewer(path: string, fadeIn?: boolean): Promise<IpcResult>;
-	/** 独立查看器窗口请求合并到主窗口右侧 Dock 面板。 */
-	dockFileViewer(path: string): Promise<IpcResult>;
-	fileViewerReady(): Promise<IpcResult<{ path?: string | null }>>;
+	/** 在独立查看器窗口中打开文件；diffPatch 随窗口传递（undock 时保留 diff 语义）。 */
+	openFileViewer(path: string, fadeIn?: boolean, diffPatch?: string): Promise<IpcResult>;
+	/** 独立查看器窗口请求合并到主窗口右侧 Dock 面板；diffPatch 随合并事件带回。 */
+	dockFileViewer(path: string, diffPatch?: string): Promise<IpcResult>;
+	fileViewerReady(): Promise<IpcResult<{ path?: string | null; diffPatch?: string | null }>>;
 	// ---- IM Channels ----
 	getImChannels(): Promise<
 		IpcResult<{

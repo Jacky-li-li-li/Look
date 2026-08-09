@@ -23,3 +23,17 @@ export interface GitRepoInfo {
 	/** 删除行数（tracked numstat del，diff 风格 -N） */
 	dirtyDeletedLines: number;
 }
+
+/** 单个文件的 diff 预览数据（按文件分组的 unified diff） */
+export interface GitDiffFile {
+	/** 相对仓库根的路径 */
+	path: string;
+	/** 变更类型 */
+	status: "added" | "modified" | "deleted" | "untracked";
+	/** 该文件新增行数 */
+	addedLines: number;
+	/** 该文件删除行数 */
+	deletedLines: number;
+	/** unified diff 文本（含 ---/+++ 头；untracked 为全新增伪 diff） */
+	patch: string;
+}

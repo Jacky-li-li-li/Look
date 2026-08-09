@@ -16,7 +16,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { GitRepoInfo } from "@look/shared/types";
+import type { GitDiffFile, GitRepoInfo } from "@look/shared/types";
 import chokidar, { type FSWatcher } from "chokidar";
 
 const execFileAsync = promisify(execFile);
@@ -59,6 +59,70 @@ interface CacheEntry {
 interface WatchEntry {
 	watcher: FSWatcher;
 	onChange: () => void;
+}
+
+/**
+ * git quotePath 转义还原（core.quotePath 默认开启）。
+ * git 对含空格/引号/非 ASCII 等特殊字符的路径输出为双引号包裹的转义串：
+ * `\t` `\n` `\"` `\\` 与 `\ooo`（UTF-8 字节八进制，非 ASCII 字符逐字节转义）。
+ * 无引号包裹时原样返回（如 core.quotePath=false 时的原始 UTF-8 路径）。
+ */
+export function unquoteGitPath(raw: string): string {
+	if (!raw.startsWith('"')) return raw;
+	const s = raw.slice(1, -1);
+	const bytes: number[] = [];
+	let i = 0;
+	while (i < s.length) {
+		const ch = s.charCodeAt(i);
+		if (ch === 92 /* \\ */ && i + 1 < s.length) {
+			const next = s[i + 1];
+			if (next === "t") {
+				bytes.push(9);
+				i += 2;
+				continue;
+			}
+			if (next === "n") {
+				bytes.push(10);
+				i += 2;
+				continue;
+			}
+			if (next === '"') {
+				bytes.push(34);
+				i += 2;
+				continue;
+			}
+			if (next === "\\") {
+				bytes.push(92);
+				i += 2;
+				continue;
+			}
+			if (next >= "0" && next <= "7") {
+				// 八进制字节序列：1-3 位（git 总是补足 3 位，这里兼容 1-2 位）
+				let value = 0;
+				let count = 0;
+				while (count < 3 && i + 1 + count < s.length && s[i + 1 + count] >= "0" && s[i + 1 + count] <= "7") {
+					value = value * 8 + (s.charCodeAt(i + 1 + count) - 48);
+					count++;
+				}
+				bytes.push(value);
+				i += 1 + count;
+				continue;
+			}
+			// 未知转义：原样保留反斜杠字符
+			bytes.push(ch);
+			i += 1;
+			continue;
+		}
+		if (ch < 0x80) {
+			bytes.push(ch);
+		} else if (ch < 0x800) {
+			bytes.push(0xc0 | (ch >> 6), 0x80 | (ch & 0x3f));
+		} else {
+			bytes.push(0xe0 | (ch >> 12), 0x80 | ((ch >> 6) & 0x3f), 0x80 | (ch & 0x3f));
+		}
+		i += 1;
+	}
+	return new TextDecoder().decode(Uint8Array.from(bytes));
 }
 
 export class GitService {
@@ -123,6 +187,104 @@ export class GitService {
 	dispose(): void {
 		for (const cwd of [...this.watchers.keys()]) this.stopWatcher(cwd);
 		this.cache.clear();
+	}
+
+	/**
+	 * 返回项目的 diff 预览（按文件分组）。tracked 变更来自 `git diff HEAD
+	 * --unified=3`；untracked 文件生成全新增伪 diff。上限保护：最多 100 个
+	 * 文件、总 patch 2MB，避免超大 diff 阻塞 IPC。
+	 */
+	async getDiff(projectCwd: string): Promise<GitDiffFile[]> {
+		if (!existsSync(projectCwd)) return [];
+
+		const MAX_FILES = 100;
+		const MAX_TOTAL_BYTES = 2 * 1024 * 1024;
+		const files: GitDiffFile[] = [];
+		let totalBytes = 0;
+
+		// 1. tracked 变更（git diff HEAD）
+		const patch = await this.git(projectCwd, ["diff", "HEAD", "--unified=3"]);
+		if (patch) {
+			for (const file of this.parseUnifiedDiff(patch)) {
+				if (files.length >= MAX_FILES) break;
+				files.push(file);
+				totalBytes += file.patch.length;
+			}
+		}
+
+		// 2. untracked 文件（伪 diff：全新增）
+		// ls-files 输出同样受 core.quotePath 转义（含空格/中文路径带引号 + 八进制），需还原
+		const untracked = (await this.git(projectCwd, ["ls-files", "--others", "--exclude-standard"])) ?? "";
+		for (const raw of untracked.split(/\r?\n/)) {
+			const rel = unquoteGitPath(raw.trim());
+			if (!rel || files.length >= MAX_FILES || totalBytes >= MAX_TOTAL_BYTES) break;
+			try {
+				const full = path.join(projectCwd, rel);
+				const stat = statSync(full);
+				if (!stat.isFile() || stat.size > MAX_TOTAL_BYTES) continue;
+				const content = readFileSync(full, "utf8");
+				const lines = content.split(/\r?\n/);
+				if (lines.at(-1) === "") lines.pop();
+				const linesWithPlus = lines.map((l) => `+${l}`).join("\n");
+				const pseudo = `--- /dev/null\n+++ b/${rel}\n@@ -0,0 +1,${lines.length || 1} @@\n${linesWithPlus}`;
+				files.push({
+					path: rel,
+					status: "untracked",
+					addedLines: lines.length,
+					deletedLines: 0,
+					patch: pseudo,
+				});
+				totalBytes += pseudo.length;
+			} catch {
+				// 文件消失/无权限 → 跳过
+			}
+		}
+
+		return files;
+	}
+
+	/** 解析 unified diff 文本为按文件分组的数据。 */
+	private parseUnifiedDiff(patch: string): GitDiffFile[] {
+		const files: GitDiffFile[] = [];
+		let current: { path: string; added: number; deleted: number; lines: string[] } | null = null;
+
+		const flush = () => {
+			if (!current) return;
+			const status: GitDiffFile["status"] = current.deleted > 0 && current.added === 0 ? "deleted" : "modified";
+			files.push({
+				path: current.path,
+				status,
+				addedLines: current.added,
+				deletedLines: current.deleted,
+				patch: current.lines.join("\n"),
+			});
+			current = null;
+		};
+
+		for (const line of patch.split(/\r?\n/)) {
+			if (line.startsWith("diff --git ")) {
+				flush();
+				// a/path b/path → 取 b/ 后路径；头行也保留在 patch 里。
+				// git 对特殊字符路径输出引号包裹 + 转义（如 "a/中文 文件.txt" "b/quo\"te.txt"），
+				// 此时 b/ 前是闭合引号而非空格；捕获值形如 `path"`（带尾引号）或 `path`，
+				// 统一用 unquoteGitPath 还原为真实相对路径。
+				const m = line.match(/[" ]b\/(.+)$/);
+				const rawPath = m ? m[1] : "";
+				const decoded = rawPath.endsWith('"') ? unquoteGitPath(`"${rawPath}`) : rawPath;
+				current = {
+					path: decoded,
+					added: 0,
+					deleted: 0,
+					lines: [line],
+				};
+			} else if (current) {
+				current.lines.push(line);
+				if (line.startsWith("+") && !line.startsWith("+++")) current.added++;
+				else if (line.startsWith("-") && !line.startsWith("---")) current.deleted++;
+			}
+		}
+		flush();
+		return files;
 	}
 
 	private async probe(projectCwd: string): Promise<GitRepoInfo | null> {
@@ -246,6 +408,47 @@ export class GitService {
 		return total;
 	}
 
+	/**
+	 * 在已知仓库根下按绝对路径取 HEAD 内容（两条 file-head IPC 共用的统一语义）：
+	 * - 文件无未提交变更 → null（普通文件视图）
+	 * - 文件存在变更且 HEAD 有该文件 → HEAD 内容
+	 * - 文件存在变更但 HEAD 无该文件（新增/未跟踪）→ ""（渲染端据此显示「全新增」diff）
+	 * - git 命令失败/路径不在仓库内 → null
+	 */
+	async getFileHeadAtRepo(repoRoot: string, absolutePath: string): Promise<string | null> {
+		const rel = absolutePath.startsWith(`${repoRoot}/`) ? absolutePath.slice(repoRoot.length + 1) : null;
+		if (!rel) return null;
+		// 仅当文件有未提交变更时才返回 HEAD 内容（无变更 = 普通文件视图）；
+		// --literal-pathspecs 避免路径中的 glob 特殊字符被当作模式匹配
+		const status = await this.git(repoRoot, ["--literal-pathspecs", "status", "--porcelain", "--", rel]);
+		if (!status || status.trim().length === 0) return null;
+		// HEAD 无此文件（新增/未跟踪）：返回空串标记，而不是失败
+		const exists = await this.git(repoRoot, ["cat-file", "-e", `HEAD:${rel}`]);
+		if (exists === null) return "";
+		return this.git(repoRoot, ["show", `HEAD:${rel}`]);
+	}
+
+	/**
+	 * 按文件绝对路径向上查找所属 git 仓库，并返回该文件在 HEAD 版本的内容。
+	 * 用于独立窗口/Dock 打开文件时自动展示 git 变更对比（无需 projectId）。
+	 * @returns { repoRoot, oldContent }；文件不在 git 仓库或失败时返回 null
+	 */
+	async getFileHeadByAbsolutePath(absolutePath: string): Promise<{ repoRoot: string; oldContent: string } | null> {
+		let dir = path.dirname(absolutePath);
+		for (let depth = 0; depth < 20; depth++) {
+			const gitDir = path.join(dir, ".git");
+			if (existsSync(gitDir)) {
+				const oldContent = await this.getFileHeadAtRepo(dir, absolutePath);
+				if (oldContent === null) return null;
+				return { repoRoot: dir, oldContent };
+			}
+			const parent = path.dirname(dir);
+			if (parent === dir) break;
+			dir = parent;
+		}
+		return null;
+	}
+
 	/** Run a read-only git command; returns stdout (trimmed of trailing newline) or null on failure. */
 	private async git(projectCwd: string, args: string[]): Promise<string | null> {
 		try {
@@ -255,7 +458,8 @@ export class GitService {
 				cwd: projectCwd,
 				timeout: GIT_TIMEOUT_MS,
 				encoding: "utf8",
-				maxBuffer: 1024 * 1024,
+				// 与 readFileContent 的 4MB 读取阈值对齐:1-4MB 文件的完整 diff 不再因 maxBuffer 静默失败
+				maxBuffer: 4 * 1024 * 1024,
 				windowsHide: true,
 				env,
 			});

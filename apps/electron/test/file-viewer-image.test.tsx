@@ -30,6 +30,9 @@ describe("FileViewerDialog 图片预览", () => {
 				homedir: "/Users/test",
 				revealInFinder: vi.fn(),
 				writeFileContent: vi.fn(),
+				// 文件查看器统一自动检测 git 变更；这些测试场景无需 diff，返回 null
+				getGitFileHead: vi.fn().mockResolvedValue({ success: true, content: null }),
+				getProjectGitFileHead: vi.fn().mockResolvedValue({ success: true, content: null }),
 			},
 		});
 		appStore.set(viewingFileAtom, { absolutePath: "/tmp/proj/shot.png" });
@@ -86,6 +89,9 @@ describe("FileViewerDialog 返回按钮", () => {
 				homedir: "/Users/test",
 				revealInFinder: vi.fn(),
 				writeFileContent: vi.fn(),
+				// 文件查看器统一自动检测 git 变更；这些测试场景无需 diff，返回 null
+				getGitFileHead: vi.fn().mockResolvedValue({ success: true, content: null }),
+				getProjectGitFileHead: vi.fn().mockResolvedValue({ success: true, content: null }),
 			},
 		});
 		appStore.set(viewingFileAtom, { absolutePath: "/tmp/proj/readme.md" });
@@ -130,6 +136,9 @@ describe("FileViewerDialog 项目外文件只读", () => {
 				homedir: "/Users/test",
 				revealInFinder: vi.fn(),
 				writeFileContent: vi.fn(),
+				// 文件查看器统一自动检测 git 变更；这些测试场景无需 diff，返回 null
+				getGitFileHead: vi.fn().mockResolvedValue({ success: true, content: null }),
+				getProjectGitFileHead: vi.fn().mockResolvedValue({ success: true, content: null }),
 			},
 		});
 		appStore.set(viewingFileAtom, { absolutePath: "/Users/test/Desktop/outside.md" });

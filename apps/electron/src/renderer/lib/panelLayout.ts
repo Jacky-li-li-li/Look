@@ -24,7 +24,7 @@ export const PANEL_LAYOUT = {
 	MAIN_MIN_WIDTH: 340,
 	/** 右侧面板可拖拽宽度区间 */
 	RIGHT_MIN: 200,
-	RIGHT_MAX: 480,
+	RIGHT_MAX: 640,
 	/** Dock 面板可拖拽宽度区间 */
 	DOCK_MIN: 320,
 	DOCK_MAX: 720,

@@ -26,10 +26,13 @@ export default function FileViewerApp() {
 			if (language) void i18n.changeLanguage(language);
 		});
 
-		// 就绪握手:取回创建窗口时暂存的待打开路径
+		// 就绪握手:取回创建窗口时暂存的待打开路径（含 undock 时携带的 diffPatch）
 		void api.fileViewerReady().then((result) => {
 			if (result.success && result.path) {
-				appStore.set(viewingFileAtom, { absolutePath: result.path });
+				appStore.set(viewingFileAtom, {
+					absolutePath: result.path,
+					...(result.diffPatch !== undefined && result.diffPatch !== null ? { diffPatch: result.diffPatch } : {}),
+				});
 			}
 		});
 
@@ -39,7 +42,10 @@ export default function FileViewerApp() {
 			if (event.type !== "fileViewer:open-path") return;
 			if (appStore.get(fileViewerDirtyAtom) && !window.confirm(i18n.t("fileViewer.unsavedConfirm"))) return;
 			appStore.set(fileViewerDirtyAtom, false);
-			appStore.set(viewingFileAtom, { absolutePath: event.path });
+			appStore.set(viewingFileAtom, {
+				absolutePath: event.path,
+				...(event.diffPatch !== undefined ? { diffPatch: event.diffPatch } : {}),
+			});
 		});
 		return unsubscribe;
 	}, []);

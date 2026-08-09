@@ -34,11 +34,12 @@ export function DockFilePanel() {
 	const viewportWidth = useViewportWidth();
 
 	// 弹出为独立窗口：先打开独立窗口（淡入），再清空面板（滑出），两动画同步。
+	// diffPatch 随窗口传递：独立窗口据此直接渲染完整文件 diff，不依赖自动检测。
 	// 用 appStore.get 读最新值，避免闭包捕获过期路径。
 	const handleUndock = useCallback(() => {
 		const current = appStore.get(dockedFileAtom);
 		if (!current) return;
-		void window.look.openFileViewer(current.absolutePath, true);
+		void window.look.openFileViewer(current.absolutePath, true, current.diffPatch);
 		setDockedFile(null);
 	}, [setDockedFile]);
 
@@ -109,6 +110,7 @@ export function DockFilePanel() {
 				<FileViewerDialog
 					dockMode
 					dockPath={dockedFile.absolutePath}
+					dockDiffPatch={dockedFile.diffPatch}
 					onDockNavigate={handleDockNavigate}
 					onDockClose={handleDockClose}
 					onDockUndock={handleUndock}

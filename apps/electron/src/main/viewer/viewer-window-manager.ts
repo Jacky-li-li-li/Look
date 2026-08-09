@@ -60,26 +60,33 @@ function animateWindowOpacity(
 
 let viewerWindow: BrowserWindow | null = null;
 const viewerEvents = new BrowserWindowEventTransport(() => viewerWindow);
-/** 窗口已创建但渲染端尚未就绪时暂存的待打开路径,由 fileViewer:ready 一次性消费。 */
-let pendingPath: string | null = null;
+/** 窗口已创建但渲染端尚未就绪时暂存的待打开请求（路径 + 可选 diffPatch），由 fileViewer:ready 一次性消费。 */
+let pendingRequest: { path: string; diffPatch?: string } | null = null;
 
-function sendOpenPath(path: string): void {
-	viewerEvents.send({ type: "fileViewer:open-path", path });
+function sendOpenPath(path: string, diffPatch?: string): void {
+	viewerEvents.send({
+		type: "fileViewer:open-path",
+		path,
+		...(diffPatch !== undefined ? { diffPatch } : {}),
+	});
 }
 
 /** 主窗口入口:在独立查看器窗口中打开指定文件。fadeIn 时窗口淡入展示(用于从主窗口 Dock 面板弹回)。 */
-export function openViewerWindow(absolutePath: string, options?: { fadeIn?: boolean }): void {
+export function openViewerWindow(absolutePath: string, options?: { fadeIn?: boolean; diffPatch?: string }): void {
 	if (viewerWindow && !viewerWindow.isDestroyed()) {
 		// 作废旧淡出/淡入动画,避免淡出中途被重新打开误关窗口
 		animationEpoch += 1;
 		viewerWindow.focus();
-		sendOpenPath(absolutePath);
+		sendOpenPath(absolutePath, options?.diffPatch);
 		// 复用已有窗口时复位透明度(避免残留淡入态),不做重复动画
 		viewerWindow.setOpacity(1);
 		return;
 	}
 
-	pendingPath = absolutePath;
+	pendingRequest = {
+		path: absolutePath,
+		...(options?.diffPatch !== undefined ? { diffPatch: options.diffPatch } : {}),
+	};
 	const tone = readThemeToneSync(getUiSettingsPath());
 	const fadeIn = options?.fadeIn ?? false;
 
@@ -130,11 +137,11 @@ export function openViewerWindow(absolutePath: string, options?: { fadeIn?: bool
 	}
 }
 
-/** 查看器渲染端就绪回调:取回并清除待打开路径(无则 null)。 */
-export function consumePendingPath(): string | null {
-	const path = pendingPath;
-	pendingPath = null;
-	return path;
+/** 查看器渲染端就绪回调:取回并清除待打开请求(无则 null)。 */
+export function consumePendingPath(): { path: string; diffPatch?: string } | null {
+	const request = pendingRequest;
+	pendingRequest = null;
+	return request;
 }
 
 /** 独立窗口淡出后关闭:用于"合并到主窗口"时与主窗口 Dock 面板滑入同步。 */

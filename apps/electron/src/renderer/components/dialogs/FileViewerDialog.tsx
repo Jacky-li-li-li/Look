@@ -16,8 +16,10 @@ import {
 	DropdownMenuTrigger,
 } from "@look/ui/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
+import pierreDark from "@pierre/theme/pierre-dark";
+import pierreLight from "@pierre/theme/pierre-light";
 import type { FileTreeNode } from "@shared/types";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
 	ArrowLeft,
 	Copy,
@@ -46,12 +48,17 @@ import {
 	useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { createHighlighter, type HighlighterGeneric } from "shiki";
+import { createHighlighter, type HighlighterGeneric, type ThemeRegistrationRaw } from "shiki";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { toast } from "sonner";
+import { useLookTheme } from "../../hooks/useLookTheme";
 import { resolveFileLanguage } from "../../lib/fileLanguage";
 import { extractHeadings, type TocHeading } from "../../lib/markdownToc";
-import { fileViewerDirtyAtom, viewingFileAtom } from "../../store/atoms";
+import { activeProjectAtom, fileViewerDirtyAtom, viewingFileAtom } from "../../store/atoms";
+// 注册 <diffs-container> custom element（sideEffects 文件，需显式 import）。
+import "@pierre/diffs/dist/components/web-components.js";
+import { parseDiffFromFile } from "@pierre/diffs";
+import { FileDiff } from "@pierre/diffs/react";
 import { FileIcon } from "../workspace/FileIcon";
 
 const LookMarkdown = lazy(() => import("../markdown/LookMarkdown"));
@@ -63,9 +70,15 @@ type ViewerHighlighter = HighlighterGeneric<string, string>;
 let highlighterPromise: Promise<ViewerHighlighter> | null = null;
 const loadedLanguages = new Set<string>();
 
+// @pierre/theme 的主题是 VS Code/TextMate 格式，shiki 接受该格式；
+// TS 类型差异（readonly 数组）用断言桥接。
+const PIERRE_LIGHT = pierreLight as unknown as ThemeRegistrationRaw;
+const PIERRE_DARK = pierreDark as unknown as ThemeRegistrationRaw;
+
 async function highlightCodeContent(code: string, lang: string): Promise<string> {
 	highlighterPromise ??= createHighlighter({
-		themes: ["github-light", "github-dark"],
+		// 与 @pierre/diffs 的 diff 预览统一用 pierre 主题（Proma 同款）
+		themes: [PIERRE_LIGHT, PIERRE_DARK],
 		langs: [],
 		engine: createJavaScriptRegexEngine({ forgiving: true }),
 	}) as Promise<ViewerHighlighter>;
@@ -74,7 +87,7 @@ async function highlightCodeContent(code: string, lang: string): Promise<string>
 		await highlighter.loadLanguage(lang as never);
 		loadedLanguages.add(lang);
 	}
-	return highlighter.codeToHtml(code, { lang, themes: { light: "github-light", dark: "github-dark" } });
+	return highlighter.codeToHtml(code, { lang, themes: { light: PIERRE_LIGHT, dark: PIERRE_DARK } });
 }
 
 /** Home dir injected by preload — used to shorten absolute paths to ~/…. */
@@ -123,6 +136,8 @@ interface FileViewerDialogProps {
 	dockMode?: boolean;
 	/** Dock 模式当前文件路径(替代 viewingFileAtom 驱动)。 */
 	dockPath?: string | null;
+	/** Dock 模式携带的 diff patch（从「变更」面板打开时显示该文件 diff）。 */
+	dockDiffPatch?: string;
 	/** Dock 模式内返回栈跳转新文件时回调(更新 dockedFileAtom)。 */
 	onDockNavigate?: (path: string) => void;
 	/** Dock 模式关闭回调(清空 dockedFileAtom)。 */
@@ -135,15 +150,48 @@ export default function FileViewerDialog({
 	windowMode = false,
 	dockMode = false,
 	dockPath,
+	dockDiffPatch,
 	onDockNavigate,
 	onDockClose,
 	onDockUndock,
 }: FileViewerDialogProps) {
 	const { t } = useTranslation();
 	const [viewingFile, setViewingFile] = useAtom(viewingFileAtom);
+	const { tone: viewerTone } = useLookTheme();
+	const diffPatch = dockMode ? dockDiffPatch : viewingFile?.diffPatch;
+	const activeProject = useAtomValue(activeProjectAtom);
+	const [oldContent, setOldContent] = useState<string | null>(null);
+	// 手动刷新/保存后的重载信号：同时触发文件重读与 HEAD 重载
+	const [reloadTick, setReloadTick] = useState(0);
 	// 路径来源抽象:Dock 模式由 dockPath 驱动,其余由 viewingFileAtom 驱动
 	const absolutePath = dockMode ? (dockPath ?? null) : (viewingFile?.absolutePath ?? null);
 	const hasFile = dockMode ? !!dockPath : !!viewingFile;
+
+	// 加载该文件 HEAD 版本内容（完整文件 diff 对比，Dock/独立窗口统一）：
+	// ① dockMode 从「变更」面板打开（有 diffPatch）→ 用项目上下文取
+	// ② 其他模式（独立窗口/文件树）→ 按绝对路径自动检测 git 变更
+	// ③ reloadTick（手动刷新/保存后）一并重载，保证 diff 反映最新磁盘内容
+	useEffect(() => {
+		void reloadTick; // 仅作为 effect 触发条件（手动刷新/保存后重载 HEAD）
+		// 路径/依赖变化先清空旧值：避免切换文件时旧 HEAD × 新内容短暂组成错位 diff
+		setOldContent(null);
+		if (!absolutePath) return;
+		let cancelled = false;
+		const load =
+			diffPatch && activeProject
+				? window.look.getProjectGitFileHead(activeProject.id, absolutePath)
+				: window.look.getGitFileHead(absolutePath);
+		load
+			.then((result) => {
+				if (!cancelled) setOldContent(result?.success ? result.content : null);
+			})
+			.catch(() => {
+				if (!cancelled) setOldContent(null);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [diffPatch, activeProject, absolutePath, reloadTick]);
 
 	// 路径写入抽象:返回栈跳转等场景统一入口(Dock 模式回调给父组件更新 dockedFileAtom)
 	const setCurrentFile = useCallback(
@@ -155,7 +203,6 @@ export default function FileViewerDialog({
 	);
 
 	const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
-	const [reloadTick, setReloadTick] = useState(0);
 	const [editMode, setEditMode] = useState(false);
 	const [draft, setDraft] = useState("");
 	const [savedContent, setSavedContent] = useState("");
@@ -235,6 +282,31 @@ export default function FileViewerDialog({
 	);
 
 	const basename = useMemo(() => absolutePath?.split(/[\\/]/).pop() ?? "", [absolutePath]);
+	// FileDiff 完整文件对比视图（正常 diff 与「文件已删除」场景复用）。
+	// 外层 min-h-0 flex-1 overflow-auto + FileDiff className="h-full"（Proma 同款，
+	// 让虚拟化正确测量高度）；name 用 basename 保证 @pierre/diffs 语言推断（兼容 \\ 分隔符）。
+	const renderDiffView = (oldContentText: string, newContentText: string) => (
+		<div className="min-h-0 flex-1 overflow-auto">
+			<FileDiff
+				fileDiff={parseDiffFromFile(
+					{ name: basename || "file", contents: oldContentText },
+					{ name: basename || "file", contents: newContentText },
+				)}
+				disableWorkerPool
+				renderCustomHeader={() => null}
+				className="h-full"
+				options={{
+					themeType: viewerTone === "dark" ? "dark" : "light",
+					diffStyle: "unified",
+					hunkSeparators: "line-info",
+					disableBackground: false,
+					diffIndicators: "bars",
+					lineDiffType: "none",
+					overflow: "scroll",
+				}}
+			/>
+		</div>
+	);
 	const isMarkdown = /\.(md|markdown)$/i.test(basename);
 	const language = useMemo(() => (basename ? resolveFileLanguage(basename) : null), [basename]);
 	const displayPath = useMemo(() => (absolutePath ? truncateMiddle(shortenPath(absolutePath)) : ""), [absolutePath]);
@@ -245,6 +317,9 @@ export default function FileViewerDialog({
 	);
 
 	const textData = loadState.status === "text" ? loadState : null;
+	// 打开时明确期望 diff（携带 diffPatch）但 HEAD 内容不可得（非 git 项目/HEAD 无此文件/文件过大）
+	// → 已降级为普通文件视图，在状态栏给出提示
+	const diffExpected = diffPatch !== undefined && oldContent === null && textData !== null;
 	const truncated = textData?.truncated ?? false;
 	const dirty = draft !== savedContent;
 	// 项目外文件为只读预览(inProject=false):禁止编辑/保存,避免把改动写回项目外路径
@@ -448,11 +523,12 @@ export default function FileViewerDialog({
 	}, [dirty, windowMode, dockMode, onDockClose, setViewingFile, t]);
 
 	// 独立窗口模式:合并到主窗口右侧 Dock 面板(主进程淡出本窗口并通知主窗口滑入面板)
+	// diffPatch 随合并请求带回:主窗口据此恢复与「变更面板打开」一致的 diff 语义
 	const handleDockToMain = useCallback(() => {
 		if (!absolutePath) return;
 		if (dirty && !window.confirm(t("fileViewer.unsavedConfirm"))) return;
-		void window.look.dockFileViewer(absolutePath);
-	}, [absolutePath, dirty, t]);
+		void window.look.dockFileViewer(absolutePath, viewingFile?.diffPatch);
+	}, [absolutePath, dirty, viewingFile, t]);
 
 	// Dock 模式:弹出为独立窗口(父组件打开独立窗口并清空面板,面板滑出与窗口淡入同步)
 	const handleUndock = useCallback(() => {
@@ -517,6 +593,8 @@ export default function FileViewerDialog({
 			const result = await window.look.writeFileContent(absolutePath, draft);
 			if (!result.success) throw new Error(result.error);
 			setSavedContent(draft);
+			// 重读文件与 HEAD 版本:diff 立即反映保存后的磁盘内容(而不停留在打开时的快照)
+			setReloadTick((n) => n + 1);
 			toast.success(t("fileViewer.saved"));
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : t("fileViewer.loadFailed"));
@@ -707,21 +785,36 @@ export default function FileViewerDialog({
 					{displayPath}
 				</p>
 			</div>
-
 			<div className="flex min-h-0 flex-1 flex-col" aria-label={t("fileViewer.viewFile")}>
-				{loadState.status === "loading" ? (
+				{oldContent !== null && textData && !editMode ? (
+					// Proma 同款：FileDiff 渲染完整文件（className="h-full" 让虚拟化正确测量高度）。
+					// !editMode：diff 生效时仍允许进入编辑态，避免编辑按钮点了无反应（S1-2）
+					renderDiffView(oldContent, textData.content)
+				) : loadState.status === "loading" ? (
 					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
 						<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
 						<span className="text-xs text-muted-foreground">{t("fileViewer.loading")}</span>
 					</div>
 				) : loadState.status === "error" ? (
-					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-						<FileWarning className="size-6 text-destructive" />
-						<p className="text-xs text-destructive">
-							{t("fileViewer.loadFailed")}:{" "}
-							{loadState.error.includes("ENOENT") ? t("fileViewer.fileMissing") : loadState.error}
-						</p>
-					</div>
+					// 文件已被删除（如变更面板打开 deleted 文件）：readFileContent 报 ENOENT，
+					// 但 HEAD 内容可取 → 渲染「HEAD 版本对比」（全删除 diff）+ 顶部提示条
+					oldContent !== null && loadState.error.includes("ENOENT") ? (
+						<div className="flex min-h-0 flex-1 flex-col">
+							<div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+								<FileWarning className="size-3.5 shrink-0" />
+								{t("fileViewer.deletedDiff")}
+							</div>
+							{renderDiffView(oldContent, "")}
+						</div>
+					) : (
+						<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+							<FileWarning className="size-6 text-destructive" />
+							<p className="text-xs text-destructive">
+								{t("fileViewer.loadFailed")}:{" "}
+								{loadState.error.includes("ENOENT") ? t("fileViewer.fileMissing") : loadState.error}
+							</p>
+						</div>
+					)
 				) : loadState.status === "image" ? (
 					<div className="flex min-h-0 flex-1 flex-col">
 						<div
@@ -884,10 +977,14 @@ export default function FileViewerDialog({
 						)}
 						<span>{formatBytes(textData.sizeBytes)}</span>
 						{textData.truncated && <span className="ml-auto">{t("fileViewer.truncatedNotice")}</span>}
+						{diffExpected && (
+							<span className="ml-auto rounded-sm bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600 dark:text-amber-400">
+								{t("fileViewer.headUnavailable")}
+							</span>
+						)}
 					</div>
 				)}
 			</div>
-			{/* 右下角缩放把手(仅浮窗模式;独立窗口由原生窗口边框缩放,Dock 模式固定布局) */}
 			{!windowMode && !dockMode && (
 				<div
 					className="absolute right-0 bottom-0 size-4 cursor-nwse-resize touch-none"
