@@ -20,6 +20,42 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.1.0",
+		date: "2026-08-09",
+		items: [
+			{
+				zh: "新增「变更」面板与会话变更卡片：会话结束后卡片列出本轮改动的文件，点开即可查看逐行 diff；右侧面板常驻「变更」tab 展示项目全部未提交改动（新增/修改/删除/未跟踪），并可一键打开文件查看完整对比",
+				en: "New “Changes” panel & session change card: after a turn, a card lists every file the agent touched with inline diff previews; a permanent “Changes” tab in the right panel shows all uncommitted project changes (added/modified/deleted/untracked) and opens any file for a full comparison",
+				ja: "「変更」パネルとセッション変更カードを追加：ターン終了後にエージェントが触ったファイル一覧がカードで表示され、行単位の diff をその場で確認可能。右パネルに常設の「変更」タブで未コミットの変更（追加/変更/削除/未追跡）を一覧し、ファイルをワンクリックで全差分比較で開けます",
+			},
+			{
+				zh: "文件查看器升级为完整文件 diff 视图：打开有变更的文件时展示全部行（带行号），变更行以绿/红底色标注，连续未变更段落自动折叠可展开；编辑保存后 diff 实时刷新",
+				en: "File viewer now shows a full-file diff view: every line with line numbers, changed lines highlighted in green/red, long unchanged runs auto-collapsed with an expand button; the diff refreshes immediately after you save edits",
+				ja: "ファイルビューアを完全なファイル diff ビューに刷新：全行を行番号付きで表示し、変更行を緑/赤でハイライト、長い未変更区間は自動で折りたたみ展開ボタンで表示。保存後は diff が即座に更新されます",
+			},
+			{
+				zh: "变更卡片新增「审核」按钮：一键让 Reviewer 子会话审查本轮代码变更，审查过程与结论在子会话中完整呈现；同一轮次重复点击不会重复创建审核会话",
+				en: "New “Review” button on the change card: start a Reviewer sub-session to audit the current turn's code changes with full visibility in the conversation; clicking again on the same turn reopens the same review instead of duplicating it",
+				ja: "変更カードに「レビュー」ボタンを追加：ワンクリックで Reviewer サブセッションが今回のコード変更をレビューし、過程と結論は会話内に完全表示。同じターンで再クリックしてもレビューセッションは重複作成されません",
+			},
+			{
+				zh: "修复 @文件引用：@文件名 紧贴中文时也正确显示为文件标签（此前会退化为纯文本）；拖入文件到输入框时自动补空格，避免粘连",
+				en: "Fixed @file references: a file tag now renders correctly even when @filename directly follows CJK text (it previously degraded to plain text); dragging a file into the input adds a separating space automatically",
+				ja: "@ファイル参照を修正：@ファイル名 が日本語/中国語テキストに隣接していてもファイルタグとして正しく表示（従来はプレーンテキストに退化）。入力欄へのファイルドラッグ時に自動でスペースを補います",
+			},
+			{
+				zh: "其他稳定性改进：点击不存在的文件路径显示友好提示而非报错页；Plan 模式的 AskUserQuestion 问答现可在任意权限模式使用，并新增 5 分钟超时兜底；重启后子会话层级与文件路径正确恢复",
+				en: "More stability fixes: clicking a missing file path shows a friendly notice instead of an error page; AskUserQuestion now works in any permission mode with a 5-minute fallback timeout; sub-session hierarchy and file paths restore correctly after restart",
+				ja: "その他の安定性改善：存在しないファイルパスをクリックするとエラーページではなく親切な通知を表示。AskUserQuestion が任意の権限モードで利用可能になり 5 分のフォールバックタイムアウトを追加。再起動後もサブセッション階層とファイルパスが正しく復元されます",
+			},
+			{
+				zh: "Reviewer 默认 Agent 更新：审查者现在可以在你明确要求时直接修改代码（此前仅限只读）；版本升级将在下次启动时自动生效",
+				en: "Reviewer default agent updated: the reviewer can now edit code directly when you explicitly ask it to (previously read-only); the upgrade applies automatically on next launch",
+				ja: "Reviewer デフォルトエージェントを更新：レビュー担当者があなたの明示的な指示でコードを直接修正できるようになりました（従来は読み取り専用）。アップグレードは次回起動時に自動適用されます",
+			},
+		],
+	},
+	{
 		version: "2.0.0",
 		date: "2026-08-09",
 		items: [
