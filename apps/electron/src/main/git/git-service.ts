@@ -56,6 +56,12 @@ interface CacheEntry {
 	info: GitRepoInfo | null;
 }
 
+/** getDiff 结果缓存（TTL 与 repo info 一致；切项目/文件变更后 5s 内复用，避免高频切 tab 反复 git diff）。 */
+interface DiffCacheEntry {
+	at: number;
+	files: GitDiffFile[];
+}
+
 interface WatchEntry {
 	watcher: FSWatcher;
 	onChange: () => void;
@@ -127,6 +133,7 @@ export function unquoteGitPath(raw: string): string {
 
 export class GitService {
 	private readonly cache = new Map<string, CacheEntry>();
+	private readonly diffCache = new Map<string, DiffCacheEntry>();
 	private readonly watchers = new Map<string, WatchEntry>();
 
 	/** Resolve git info for a project cwd. Returns null when the directory does not exist. */
@@ -142,10 +149,12 @@ export class GitService {
 	/** Drop the cache entry for a cwd (call after branch/remote changes when a watcher is added). */
 	invalidate(projectCwd: string): void {
 		this.cache.delete(projectCwd);
+		this.diffCache.delete(projectCwd);
 	}
 
 	clear(): void {
 		this.cache.clear();
+		this.diffCache.clear();
 	}
 
 	/**
@@ -187,6 +196,7 @@ export class GitService {
 	dispose(): void {
 		for (const cwd of [...this.watchers.keys()]) this.stopWatcher(cwd);
 		this.cache.clear();
+		this.diffCache.clear();
 	}
 
 	/**
@@ -196,6 +206,9 @@ export class GitService {
 	 */
 	async getDiff(projectCwd: string): Promise<GitDiffFile[]> {
 		if (!existsSync(projectCwd)) return [];
+
+		const cached = this.diffCache.get(projectCwd);
+		if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.files.slice();
 
 		const MAX_FILES = 100;
 		const MAX_TOTAL_BYTES = 2 * 1024 * 1024;
@@ -222,8 +235,10 @@ export class GitService {
 				const full = path.join(projectCwd, rel);
 				const stat = statSync(full);
 				if (!stat.isFile() || stat.size > MAX_TOTAL_BYTES) continue;
-				const content = readFileSync(full, "utf8");
-				const lines = content.split(/\r?\n/);
+				const buf = readFileSync(full);
+				// 二进制（含 NUL 字节）不生成伪 diff：utf8 解码会产生乱码行并渲染进变更列表
+				if (buf.includes(0)) continue;
+				const lines = buf.toString("utf8").split(/\r?\n/);
 				if (lines.at(-1) === "") lines.pop();
 				const linesWithPlus = lines.map((l) => `+${l}`).join("\n");
 				const pseudo = `--- /dev/null\n+++ b/${rel}\n@@ -0,0 +1,${lines.length || 1} @@\n${linesWithPlus}`;
@@ -240,7 +255,8 @@ export class GitService {
 			}
 		}
 
-		return files;
+		this.diffCache.set(projectCwd, { at: Date.now(), files });
+		return files.slice();
 	}
 
 	/** 解析 unified diff 文本为按文件分组的数据。 */
@@ -250,7 +266,14 @@ export class GitService {
 
 		const flush = () => {
 			if (!current) return;
-			const status: GitDiffFile["status"] = current.deleted > 0 && current.added === 0 ? "deleted" : "modified";
+			// git 对「已暂存新增」输出 `new file mode` 头（工作区 diff 的纯新增文件同样如此），
+			// 据此标记 added，而不是统一降级为 modified。
+			const isNewFile = current.lines.some((l) => l.startsWith("new file mode"));
+			const status: GitDiffFile["status"] = isNewFile
+				? "added"
+				: current.deleted > 0 && current.added === 0
+					? "deleted"
+					: "modified";
 			files.push({
 				path: current.path,
 				status,

@@ -332,6 +332,49 @@ describeGit("GitService", () => {
 		expect(await new GitService().getDiff(path.join(tmpRoot, "nope"))).toEqual([]);
 	});
 
+	it("getDiff：untracked 二进制文件（含 NUL）跳过，不生成乱码伪 diff", async () => {
+		const dir = makeRepo("diff-binary");
+		// 模拟二进制内容（PNG 头 + NUL 字节）
+		fs.writeFileSync(path.join(dir, "pic.bin"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02, 0xff]));
+		fs.writeFileSync(path.join(dir, "ok.txt"), "hello\n");
+
+		const files = await new GitService().getDiff(dir);
+
+		expect(files.some((f) => f.path === "pic.bin")).toBe(false);
+		expect(files.find((f) => f.path === "ok.txt")).toBeDefined();
+	});
+
+	it("getDiff：已暂存新增（new file mode）标记为 added 而非 modified", async () => {
+		const dir = makeRepo("diff-added");
+		fs.writeFileSync(path.join(dir, "brand-new.ts"), "export const x = 1;\n");
+		git(dir, ["add", "brand-new.ts"]);
+
+		const files = await new GitService().getDiff(dir);
+
+		const added = files.find((f) => f.path === "brand-new.ts");
+		expect(added).toBeDefined();
+		expect(added?.status).toBe("added");
+	});
+
+	it("getDiff：TTL 内缓存命中，invalidate 后重新探测", async () => {
+		const dir = makeRepo("diff-cache");
+		const service = new GitService();
+
+		fs.writeFileSync(path.join(dir, "a.txt"), "v1\n");
+		const first = await service.getDiff(dir);
+		expect(first.some((f) => f.path === "a.txt")).toBe(true);
+
+		// TTL 内同一目录再次调用：命中缓存（返回同一内容快照，不重新执行 git）
+		fs.writeFileSync(path.join(dir, "b.txt"), "new\n");
+		const second = await service.getDiff(dir);
+		expect(second.some((f) => f.path === "b.txt")).toBe(false);
+
+		// invalidate 后重新探测：b.txt 出现
+		service.invalidate(dir);
+		const third = await service.getDiff(dir);
+		expect(third.some((f) => f.path === "b.txt")).toBe(true);
+	});
+
 	describe("getFileHeadByAbsolutePath / getFileHeadAtRepo", () => {
 		it("有未提交变更的文件 → 返回 HEAD 内容", async () => {
 			const dir = makeRepo("filehead-modified");

@@ -106,12 +106,12 @@ const FileDiffView = memo(function FileDiffView({ oldContent, newContent }: File
 
 	return (
 		<div className="min-w-0">
-			{segments.map((seg) => {
+			{segments.map((seg, segIndex) => {
 				if (seg.kind === "lines") {
 					return (
-						<div key={`l-${segments.indexOf(seg)}`}>
+						<div key={`l-${segIndex}`}>
 							{seg.lines.map((line, i) => (
-								<DiffRow key={`${segments.indexOf(seg)}-${i}`} line={line} />
+								<DiffRow key={`${segIndex}-${i}`} line={line} />
 							))}
 						</div>
 					);

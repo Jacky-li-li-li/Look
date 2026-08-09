@@ -23,6 +23,10 @@ export function lineDiff(oldContent: string, newContent: string): DiffLine[] {
 	const newLines = newContent.split("\n");
 	if (newLines.at(-1) === "") newLines.pop();
 
+	// 配对比较时忽略行尾 CR（CRLF/LF 混用的文件不会被整体误判为全删全增），
+	// 输出仍保留原文（含 \r），避免改变渲染内容。
+	const comparable = (text: string) => (text.endsWith("\r") ? text.slice(0, -1) : text);
+
 	const lines: DiffLine[] = [];
 	let i = 0; // old index
 	let j = 0; // new index
@@ -39,7 +43,7 @@ export function lineDiff(oldContent: string, newContent: string): DiffLine[] {
 			i++;
 			continue;
 		}
-		if (oldLines[i] === newLines[j]) {
+		if (comparable(oldLines[i]) === comparable(newLines[j])) {
 			lines.push({ kind: "context", text: oldLines[i], oldLine: i + 1, newLine: j + 1 });
 			i++;
 			j++;
@@ -49,7 +53,7 @@ export function lineDiff(oldContent: string, newContent: string): DiffLine[] {
 		const lookahead = 50;
 		let match = -1;
 		for (let k = 1; k <= lookahead && j + k < newLines.length; k++) {
-			if (oldLines[i] === newLines[j + k]) {
+			if (comparable(oldLines[i]) === comparable(newLines[j + k])) {
 				match = k;
 				break;
 			}

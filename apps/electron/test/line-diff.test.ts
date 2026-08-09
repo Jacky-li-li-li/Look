@@ -47,3 +47,19 @@ describe("lineDiff", () => {
 		expect(lineDiff("", "x")).toEqual([{ kind: "add", text: "x", newLine: 1 }]);
 	});
 });
+
+describe("CRLF/LF 混用", () => {
+	it("同一行仅换行符差异（CRLF vs LF）时视为 context 而非全红绿", () => {
+		const lines = lineDiff("a\r\nb\r\nc", "a\nb\nc");
+		expect(lines.map((l) => l.kind)).toEqual(["context", "context", "context"]);
+		// 输出保留原文（含 \r），不改变渲染内容
+		expect(lines[0]?.text).toBe("a\r");
+		expect(lines[2]?.text).toBe("c");
+	});
+
+	it("CRLF 文件中插入新行仍正确配对", () => {
+		const lines = lineDiff("x\r\ny\r\n", "x\r\nmid\r\ny\r\n");
+		expect(lines.map((l) => l.kind)).toEqual(["context", "add", "context"]);
+		expect(lines[1]?.text).toBe("mid\r");
+	});
+});

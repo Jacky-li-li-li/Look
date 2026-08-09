@@ -17,7 +17,7 @@ import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../../hooks/useLookTheme";
 import { appStore } from "../../store/appStore";
-import { dockedFileAtom } from "../../store/atoms";
+import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "../../store/atoms";
 
 const STATUS_ICON = {
 	added: FilePlus2,
@@ -136,12 +136,18 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 												className="shrink-0"
 												aria-label={t("changes.openFile", "打开文件")}
 												title={t("changes.openFile", "打开文件")}
-												onClick={() =>
+												onClick={() => {
+													// Dock 面板已有未保存编辑时先确认，避免静默覆盖草稿（与 requestViewFileAtom 一致）。
+													if (
+														appStore.get(dockedFileAtom) &&
+														!confirmDockFileSwapIfDirty(() => appStore.get(fileViewerDirtyAtom))
+													)
+														return;
 													appStore.set(dockedFileAtom, {
 														absolutePath: `${cwd.replace(/\/$/, "")}/${expanded.path}`,
 														diffPatch: expanded.patch,
-													})
-												}
+													});
+												}}
 											>
 												<FolderOpen className="size-3" />
 											</Button>
