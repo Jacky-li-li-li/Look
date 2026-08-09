@@ -26,6 +26,8 @@ export interface CollapsibleExecutionGroupProps {
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 	isStreaming: boolean;
+	/** 组内 ThinkingPanel 的 autoCollapse（流式中调用方传 false；完成后恢复设置值）。 */
+	autoCollapse?: boolean;
 }
 
 type GroupKind = "thinking" | "tools" | "mixed";
@@ -84,6 +86,7 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 	toolExecutions,
 	toolResultMap,
 	isStreaming,
+	autoCollapse = true,
 }: CollapsibleExecutionGroupProps) {
 	const { t } = useTranslation();
 	// 仅在处于 Conversation（StickToBottom）内时可用；独立渲染（测试等）时优雅降级
@@ -195,7 +198,14 @@ const CollapsibleExecutionGroup = React.memo(function CollapsibleExecutionGroup(
 										data-tool-group-item=""
 										style={{ animationDelay: `${revealDelay}ms` }}
 									>
-										{renderBlock(node.block, node.index, toolExecutions, toolResultMap, isStreaming)}
+										{renderBlock(
+											node.block,
+											node.index,
+											toolExecutions,
+											toolResultMap,
+											isStreaming,
+											autoCollapse,
+										)}
 									</div>
 								);
 							})}
@@ -213,6 +223,7 @@ function renderBlock(
 	toolExecutions: Record<string, LookUiToolExecState>,
 	toolResultMap: Record<string, ToolResultMessage> | undefined,
 	isStreaming: boolean,
+	autoCollapse: boolean,
 ): React.ReactNode {
 	if (block.type === "thinking") {
 		const sig = (block as ThinkingContent).thinkingSignature;
@@ -221,7 +232,7 @@ function renderBlock(
 				key={sig != null ? `${sig}-${index}` : `thinking-${index}`}
 				thinking={block.thinking}
 				isStreaming={isStreaming}
-				autoCollapse={true}
+				autoCollapse={autoCollapse}
 			/>
 		);
 	}

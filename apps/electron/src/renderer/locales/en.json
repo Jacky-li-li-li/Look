@@ -311,7 +311,7 @@
     "aiAvatarPreviewText": "Hi! This is how I'll show up next to my replies.",
     "behavior": "Behavior",
     "autoCollapse": "Auto Collapse",
-    "autoCollapseDesc": "Collapse thinking panel when output starts streaming",
+    "autoCollapseDesc": "Collapse thinking panels once streaming finishes",
     "showToolExecution": "Show tool groups",
     "showToolExecutionDesc": "Show tool calls and thinking in messages. Turn off to show only final answers.",
     "messageLayout": "Message layout",

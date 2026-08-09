@@ -315,7 +315,7 @@
     "aiAvatarPreviewText": "こんにちは！返信の横にこの姿で表示されます。",
     "behavior": "動作",
     "autoCollapse": "自動折りたたみ",
-    "autoCollapseDesc": "出力のストリーミング開始時に思考パネルを折りたたむ",
+    "autoCollapseDesc": "出力完了時に思考パネルを折りたたみます",
     "showToolExecution": "ツールグループを表示",
     "showToolExecutionDesc": "メッセージ内でツール呼び出しと思考プロセスを表示します。オフにすると最終回答のみ表示されます。",
     "messageLayout": "メッセージレイアウト",

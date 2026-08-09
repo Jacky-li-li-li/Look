@@ -37,7 +37,9 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 				isStreaming={false}
 				autoCollapse={autoCollapse}
 				toolExecutions={toolExecutions}
-				defaultToolStatus="running"
+				// 完成态（短暂窗口）语义与快照一致：无 execution 的 subagent 显示 pending，
+				// 不再显示 running spinner（与 CEG 的 statusFor 默认 pending 统一）。
+				defaultToolStatus="pending"
 			/>
 		);
 	}

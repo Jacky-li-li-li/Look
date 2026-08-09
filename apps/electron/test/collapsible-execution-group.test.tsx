@@ -60,6 +60,7 @@ function renderGroup(props: Partial<React.ComponentProps<typeof CollapsibleExecu
 				toolExecutions={toolExecutions}
 				toolResultMap={toolResultMap}
 				isStreaming={props.isStreaming ?? false}
+				autoCollapse={props.autoCollapse}
 			/>
 		</I18nextProvider>,
 	);
@@ -319,5 +320,32 @@ describe("CollapsibleExecutionGroup", () => {
 		);
 		expect(container.textContent ?? "").toMatch(/Executed 4 tools/i);
 		expect(rollingSpan(container)?.textContent).toBe("4");
+	});
+
+	describe("autoCollapse passthrough (streaming override)", () => {
+		it("autoCollapse=false: group thinking panels open by default after expanding the group", () => {
+			const blocks = [makeThinking("step 1")];
+			const { container } = renderGroup({ blocks, autoCollapse: false });
+			const badgeBtn = getBadgeBtn(container);
+			// 组默认折叠，点击展开后组内 thinking 面板默认展开（推理内容直接可见）
+			expect(badgeBtn.getAttribute("aria-expanded")).toBe("false");
+			fireEvent.click(badgeBtn);
+			expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
+			const panelBody = container.querySelector("[data-tool-panel-body]")!;
+			expect(panelBody.getAttribute("data-open")).toBe("true");
+			expect(container.textContent).toContain("step 1");
+		});
+
+		it("autoCollapse=true (default): group thinking panels stay collapsed", () => {
+			const blocks = [makeThinking("step 1")];
+			const { container } = renderGroup({ blocks });
+			const badgeBtn = getBadgeBtn(container);
+			fireEvent.click(badgeBtn);
+			expect(badgeBtn.getAttribute("aria-expanded")).toBe("true");
+			// 组展开了，但组内面板仍折叠（标题行可见，内容不可见）
+			const panelBody = container.querySelector("[data-tool-panel-body]")!;
+			expect(panelBody.getAttribute("data-open")).toBe("false");
+			expect(container.textContent).not.toContain("step 1");
+		});
 	});
 });

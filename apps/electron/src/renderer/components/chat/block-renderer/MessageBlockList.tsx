@@ -79,6 +79,8 @@ interface UnifiedBlockViewProps {
 	isStreaming: boolean;
 	autoCollapse: boolean;
 	toolExecution: LookUiToolExecState | undefined;
+	toolResultMap: Record<string, ToolResultMessage> | undefined;
+	defaultToolStatus: "pending" | "running";
 	/** thinking 块是否处于「流式激活」状态（父级已按源类型计算好）。
 	 *  快照源：isStreaming && 是最后一块；流式源：isStreaming && !completed。
 	 *  作为布尔 prop 传入，避免 totalBlocks 变化击穿所有 block 的 memo。 */
@@ -95,6 +97,8 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 	isStreaming,
 	autoCollapse,
 	toolExecution,
+	toolResultMap,
+	defaultToolStatus,
 	thinkingStreaming,
 }: UnifiedBlockViewProps) {
 	switch (block.kind) {
@@ -123,23 +127,31 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 			return <ImageBlock block={block.image} />;
 		}
 		case "toolcall": {
-			// 防御性兜底：normal toolcall 恒被 segmentExecutionBlocks 归入 group，
-			// 此分支理论上不可达；保留以覆盖未知 future 分段变化。
+			// 流式中 normal toolcall 不分组（直接显示工具卡片行），快照路径归入 group；
+			// 此分支主要服务流式路径，状态推导与 group 共用同一规则（execution 优先 →
+			// persisted 兜底 → defaultToolStatus），不新建临时对象以保持 memo 稳定。
+			const callId = block.toolCallId ?? "";
+			const persisted = callId ? toolResultMap?.[callId] : undefined;
+			const status = toolExecution
+				? toolExecution.phase === "running"
+					? "running"
+					: toolExecution.isError
+						? "error"
+						: "success"
+				: persisted
+					? persisted.isError
+						? "error"
+						: "success"
+					: defaultToolStatus;
 			return (
 				<ToolCallCard
 					toolCall={{
-						callId: block.toolCallId ?? "",
+						callId,
 						toolName: block.toolName ?? "unknown",
 						args: block.args ?? {},
-						status: toolExecution
-							? toolExecution.phase === "running"
-								? "running"
-								: toolExecution.isError
-									? "error"
-									: "success"
-							: "running",
-						result: toolExecution?.result ?? toolExecution?.partialResult,
-						isError: toolExecution?.isError,
+						status,
+						result: toolExecution?.result ?? toolExecution?.partialResult ?? persisted?.content,
+						isError: toolExecution?.isError ?? persisted?.isError,
 					}}
 				/>
 			);
@@ -216,11 +228,20 @@ export const MessageBlockList = memo(function MessageBlockList({
 
 	if (visibleBlocks.length === 0) return null;
 
-	// 单次分段：连续 thinking/toolcall 组成折叠组；subagent 类单独成组。
-	// 编辑类工具也归入折叠组（展开后卡内展示 diff 预览）。
+	// 流式中思考面板自动展开（实时可见推理过程）：autoCollapse 强制为 false；
+	// 消息输出完成后恢复设置值（默认 true）→ 所有思考面板统一折叠。
+	// 注意：流式中 CEG 不渲染，effectiveAutoCollapse 实际只影响平铺的 ThinkingPanel
+	// 与完成后 CEG 内的 ThinkingPanel（统一以它为唯一事实源）。
+	const effectiveAutoCollapse = isStreaming ? false : autoCollapse;
+
+	// 分段：
+	// - 流式中不组成执行组：thinking/toolcall 全部 single 平铺（思考面板 + 工具卡片行直接可见），
+	//   完成后恢复分组 → 折叠工具组徽标（展开后才看到执行细节）；
+	// - subagent 类调用任何阶段都独立成组（默认展开的头像卡片区）。
+	// 编辑类工具归入折叠组（展开后卡内展示 diff 预览）。
 	const segments = segmentExecutionBlocks(
 		visibleBlocks,
-		(b) => b.kind === "thinking" || b.kind === "toolcall",
+		isStreaming ? () => false : (b) => b.kind === "thinking" || b.kind === "toolcall",
 		(b) => b.kind === "toolcall" && isSubagentTool(b.toolName ?? ""),
 	);
 
@@ -234,10 +255,12 @@ export const MessageBlockList = memo(function MessageBlockList({
 							key={block.key}
 							block={block}
 							isStreaming={isStreaming}
-							autoCollapse={autoCollapse}
+							autoCollapse={effectiveAutoCollapse}
 							toolExecution={
 								block.kind === "toolcall" && block.toolCallId ? toolExecutions[block.toolCallId] : undefined
 							}
+							toolResultMap={toolResultMap}
+							defaultToolStatus={defaultToolStatus}
 							thinkingStreaming={isThinkingStreaming(block, isStreaming, blocks.length)}
 						/>
 					);
@@ -246,21 +269,24 @@ export const MessageBlockList = memo(function MessageBlockList({
 				if (seg.kind === "subagent") {
 					return (
 						<SubagentToolGroup
-							key={`subagents-${seg.startIndex}-${segIdx}`}
+							// key 只用稳定的源数组下标：流式（平铺）与完成后（分组）的 segIdx 不同，
+							// 含 segIdx 会在切换时重挂丢失 expanded 状态。
+							key={`subagents-${seg.startIndex}`}
 							calls={toToolCallViews(seg.blocks, toolExecutions, toolResultMap, defaultToolStatus)}
 						/>
 					);
 				}
 
-				const groupEndIndex = seg.startIndex + seg.blocks.length;
-				const isActiveGroup = isStreaming && groupEndIndex === blocks.length;
+				// 流式中不产生 group 段（thinking/toolcall 全部平铺），CEG 只在非流式渲染，
+				// isStreaming 恒 false；组内 thinking 骨架（流式空内容）在此不可达。
 				return (
 					<CollapsibleExecutionGroup
 						key={`group-${seg.startIndex}-${segIdx}`}
 						blocks={toContentBlocks(seg.blocks)}
 						toolExecutions={toolExecutions}
 						toolResultMap={toolResultMap}
-						isStreaming={isActiveGroup}
+						isStreaming={false}
+						autoCollapse={effectiveAutoCollapse}
 					/>
 				);
 			})}

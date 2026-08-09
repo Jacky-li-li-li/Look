@@ -478,3 +478,216 @@ describe("StreamingStatusBar — 位置：跟随输出内容之后", () => {
 		expect(container.querySelector(".message-prose")).toBeNull();
 	});
 });
+
+describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped after", () => {
+	// 默认设置 autoCollapse=true：非流式/完成后折叠；流式中强制展开思考面板。
+	const thinkingBlocks = () =>
+		toUnifiedFromPiAi([
+			{ type: "thinking", thinking: "deep thought" },
+			{ type: "text", text: "answer" },
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>);
+
+	const mixedBlocks = () =>
+		toUnifiedFromPiAi([
+			{ type: "text", text: "doing work" },
+			{ type: "thinking", thinking: "step" },
+			{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "/tmp/a" } },
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>);
+
+	it("streaming: thinking panel auto-expands despite autoCollapse=true setting", () => {
+		const { container } = render(
+			<MessageBlockList
+				blocks={thinkingBlocks()}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{}}
+				defaultToolStatus="pending"
+			/>,
+		);
+		const panelBody = container.querySelector("[data-tool-panel-body]")!;
+		expect(panelBody).toBeTruthy();
+		expect(panelBody.getAttribute("data-open")).toBe("true");
+		// 思考内容实时可见
+		expect(container.textContent).toContain("deep thought");
+	});
+
+	it("streaming: tool calls render as standalone card rows, no execution group badge", () => {
+		const { container } = render(
+			<MessageBlockList
+				blocks={mixedBlocks()}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{ tc1: toolExecution }}
+				defaultToolStatus="running"
+			/>,
+		);
+		// 流式中不出现折叠工具组徽标
+		expect(container.querySelector("[data-execution-group]")).toBeNull();
+		// 工具以单卡片行直接显示，状态徽标可用
+		const toolCard = container.querySelector("[data-tool-panel]")!;
+		expect(toolCard).toBeTruthy();
+		expect(container.textContent).toContain("read");
+		expect(container.textContent).toContain("success");
+		// 思考面板同步平铺展开
+		expect(container.querySelector("[data-tool-panel-body]")?.getAttribute("data-open")).toBe("true");
+	});
+
+	it("after streaming finishes: execution group appears collapsed with tools inside", () => {
+		const { container, rerender } = render(
+			<MessageBlockList
+				blocks={mixedBlocks()}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{ tc1: toolExecution }}
+				defaultToolStatus="running"
+			/>,
+		);
+		expect(container.querySelector("[data-execution-group]")).toBeNull();
+
+		rerender(
+			<MessageBlockList
+				blocks={mixedBlocks()}
+				isStreaming={false}
+				autoCollapse={true}
+				toolExecutions={{ tc1: toolExecution }}
+				defaultToolStatus="pending"
+			/>,
+		);
+		// 工具组徽标出现（折叠状态），工具卡片行不再平铺
+		const group = container.querySelector("[data-execution-group]")!;
+		expect(group).toBeTruthy();
+		expect(group.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
+		expect(container.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("false");
+		expect(container.querySelectorAll("[data-tool-panel]").length).toBe(0);
+	});
+
+	it("after streaming finishes: thinking panel collapses inside the group", () => {
+		const { container, rerender } = render(
+			<MessageBlockList
+				blocks={thinkingBlocks()}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{}}
+				defaultToolStatus="pending"
+			/>,
+		);
+		expect(container.querySelector("[data-tool-panel-body]")?.getAttribute("data-open")).toBe("true");
+
+		rerender(
+			<MessageBlockList
+				blocks={thinkingBlocks()}
+				isStreaming={false}
+				autoCollapse={true}
+				toolExecutions={{}}
+				defaultToolStatus="pending"
+			/>,
+		);
+		// 完成后 thinking 归入折叠组：无平铺面板，组徽标折叠
+		expect(container.querySelector("[data-tool-panel-body]")).toBeNull();
+		const group = container.querySelector("[data-execution-group]")!;
+		expect(group).toBeTruthy();
+		expect(group.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
+	});
+
+	it("streaming: subagent calls keep their own (always-visible) group", () => {
+		const subagentBlocks = toUnifiedFromPiAi([
+			{
+				type: "toolCall",
+				id: "sa1",
+				name: "subagent",
+				arguments: { agent: "reviewer", title: "review", task: "x" },
+			},
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>);
+		const { container } = render(
+			<MessageBlockList
+				blocks={subagentBlocks}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{}}
+				defaultToolStatus="running"
+			/>,
+		);
+		expect(container.querySelector("[data-subagent-group]")).toBeTruthy();
+	});
+
+	it("streaming: flat tool card status updates running → success in place", () => {
+		const blocks = toUnifiedFromPiAi([
+			{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "/tmp/a" } },
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>);
+		const { container, rerender } = render(
+			<MessageBlockList
+				blocks={blocks}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{
+					tc1: {
+						toolCallId: "tc1",
+						toolName: "read",
+						args: { path: "/tmp/a" },
+						phase: "running",
+						partialResult: "",
+						isError: false,
+					},
+				}}
+				defaultToolStatus="running"
+			/>,
+		);
+		expect(container.textContent).toContain("running");
+		expect(container.textContent).not.toContain("success");
+
+		rerender(
+			<MessageBlockList
+				blocks={blocks}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{ tc1: toolExecution }}
+				defaultToolStatus="running"
+			/>,
+		);
+		expect(container.textContent).toContain("success");
+		expect(container.textContent).not.toContain("running");
+	});
+
+	it("streaming: empty trailing thinking block shows reasoning skeleton in flat layout", () => {
+		// 快照源：只有最后一块 thinking 流式激活（空内容 + 流式 → 骨架）
+		const blocks = toUnifiedFromPiAi([
+			{ type: "text", text: "answer so far" },
+			{ type: "thinking", thinking: "" },
+		] as unknown as Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ThinkingContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| ToolCall
+		>);
+		const { container } = render(
+			<MessageBlockList
+				blocks={blocks}
+				isStreaming={true}
+				autoCollapse={true}
+				toolExecutions={{}}
+				defaultToolStatus="running"
+			/>,
+		);
+		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
+	});
+});

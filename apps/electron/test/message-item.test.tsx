@@ -5,7 +5,7 @@
 // - 消息容器 div（data-message-id）几何稳定
 // - MessageActions 操作按钮 show/reserve 语义
 
-import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock } from "@shared/types";
 import { cleanup, render } from "@testing-library/react";
 import { Provider } from "jotai";
@@ -91,6 +91,71 @@ describe("MessageItem", () => {
 		const message = { ...baseAssistant([{ type: "text", text: "" }]), errorMessage: "boom" } as AssistantMessage;
 		const { container } = renderItem({ message, autoCollapse: false });
 		expect(container.textContent).toContain("boom");
+	});
+
+	it("streaming → completed: flat live layout switches to collapsed grouped snapshot layout", () => {
+		// 全链路（S2-2 审查补强）：真实切换是 StreamingBlocksBubble（hasLive）→
+		// MessageBlockListForMessage（快照）两个不同组件的整树切换，不是同组件 rerender。
+		const message = baseAssistant([
+			{ type: "text", text: "final answer" },
+			{ type: "thinking", thinking: "deep thought" },
+			{ type: "toolCall", id: "tc1", name: "read", arguments: { path: "/tmp/a" } },
+		]);
+		const liveBlocks: LookUiStreamBlock[] = [
+			{ contentIndex: 0, kind: "text", text: "final answer", thinking: "", completed: true, uid: 1 },
+			{ contentIndex: 1, kind: "thinking", text: "", thinking: "deep thought", completed: true, uid: 2 },
+			{
+				contentIndex: 2,
+				kind: "toolcall",
+				text: "",
+				thinking: "",
+				toolCallId: "tc1",
+				toolName: "read",
+				args: { path: "/tmp/a" },
+				completed: true,
+				uid: 3,
+			},
+		];
+		const toolResultMap: Record<string, ToolResultMessage> = {
+			tc1: {
+				role: "toolResult",
+				toolCallId: "tc1",
+				toolName: "read",
+				content: [{ type: "text", text: "file content" }],
+				isError: false,
+				timestamp: Date.now(),
+			},
+		};
+
+		const { container, rerender } = render(
+			<Provider>
+				<MessageItem
+					message={message}
+					liveBlocks={liveBlocks}
+					isStreaming={true}
+					autoCollapse={true}
+					entryId="e1"
+					toolResultMap={toolResultMap}
+				/>
+			</Provider>,
+		);
+		// 流式中：平铺（无执行组徽标），思考面板展开，工具卡行可见
+		expect(container.querySelector("[data-execution-group]")).toBeNull();
+		expect(container.querySelector("[data-tool-panel]")).toBeTruthy();
+		expect(container.querySelector("[data-tool-panel-body]")?.getAttribute("data-open")).toBe("true");
+		expect(container.textContent).toContain("deep thought");
+
+		// 完成：liveBlocks 移除（hasLive=false）→ 快照路径 → 分组折叠
+		rerender(
+			<Provider>
+				<MessageItem message={message} autoCollapse={true} entryId="e1" toolResultMap={toolResultMap} />
+			</Provider>,
+		);
+		const group = container.querySelector("[data-execution-group]");
+		expect(group).toBeTruthy();
+		expect(group?.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
+		// 平铺工具卡不再存在（折叠进组内）
+		expect(container.querySelector("[data-tool-panel]")).toBeNull();
 	});
 });
 

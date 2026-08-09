@@ -311,7 +311,7 @@
     "aiAvatarPreviewText": "你好！之后我会用这个形象出现在回复旁边。",
     "behavior": "行为",
     "autoCollapse": "自动折叠",
-    "autoCollapseDesc": "当输出开始流式传输时自动折叠思考面板",
+    "autoCollapseDesc": "消息输出完成后自动折叠思考面板",
     "showToolExecution": "显示工具组",
     "showToolExecutionDesc": "在消息中显示工具调用和思考过程。关闭后仅显示最终回答。",
     "messageLayout": "会话显示模式",
