@@ -88,7 +88,7 @@ describe("session index store", () => {
 		}
 		expect(fs.existsSync(indexPath)).toBe(true);
 		const indexFile = JSON.parse(fs.readFileSync(indexPath, "utf8"));
-		expect(indexFile.version).toBe(1);
+		expect(indexFile.version).toBe(2);
 		expect(indexFile.fingerprint).toMatch(/^1:\d+$/);
 		expect(indexFile.sessions[0].id).toBe("sess-1");
 		expect(indexFile.sessions[0].name).toBe("");
@@ -134,6 +134,36 @@ describe("session index store", () => {
 		expect(indexFile.fingerprint).toMatch(/^2:\d+$/);
 	});
 
+	it("old-version index (v1) triggers a full rescan and rebuilds with v2", async () => {
+		const cwd = path.join(tempDir, "cwd");
+		const sessionsDir = path.join(tempDir, "workspaces", "proj-1", "sessions");
+		writeSessionJsonl(sessionsDir, "sess-1", cwd);
+
+		const catalog1 = await loadCatalog();
+		await catalog1.refresh(makeProject(tempDir));
+
+		// 模拟旧版本（v1）索引：持久化了错误的拼接 path，必须被强制重建。
+		const indexPath = path.join(tempDir, "workspaces", "proj-1", "sessions-index.json");
+		const indexFile = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+		indexFile.version = 1;
+		indexFile.sessions[0].path = path.join(tempDir, "workspaces", "proj-1", "sessions", "sess-1.jsonl");
+		fs.writeFileSync(indexPath, JSON.stringify(indexFile));
+
+		const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+		const listSpy = vi.spyOn(SessionManager, "list");
+		const catalog2 = await loadCatalog();
+		const sessions = await catalog2.refresh(makeProject(tempDir));
+		// 版本不符 → 全量重扫（调用 SDK list），而不是直接信任旧索引
+		expect(listSpy).toHaveBeenCalled();
+		listSpy.mockRestore();
+		expect(sessions).toHaveLength(1);
+
+		const rebuilt = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+		expect(rebuilt.version).toBe(2);
+		// 重建后 path 回到真实文件路径（时间戳命名保留）
+		expect(rebuilt.sessions[0].path).toBe(path.join(sessionsDir, "sess-1.jsonl"));
+	});
+
 	it("falls back to a full scan when the index is corrupted", async () => {
 		const cwd = path.join(tempDir, "cwd");
 		writeSessionJsonl(path.join(tempDir, "workspaces", "proj-1", "sessions"), "sess-1", cwd);
@@ -155,7 +185,7 @@ describe("session index store", () => {
 
 		// 索引已重建
 		const repaired = JSON.parse(fs.readFileSync(indexPath, "utf8"));
-		expect(repaired.version).toBe(1);
+		expect(repaired.version).toBe(2);
 	});
 
 	it("computes a stable fingerprint that changes on append", async () => {

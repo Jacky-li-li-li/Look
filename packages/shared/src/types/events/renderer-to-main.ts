@@ -132,6 +132,7 @@ export type RendererToMainEvent =
 	| { type: "agent:list-subagents"; parentSessionId: string }
 	| { type: "agent:get-parent-session"; childSessionId: string }
 	| { type: "agent:set-subagent-enabled"; enabled: boolean }
+	| { type: "agent:review-changes"; parentSessionId: string; title: string; turnKey: string }
 	| { type: "agent-definitions:list" }
 	| { type: "agent-definitions:create"; input: AgentDefinitionInput }
 	| { type: "agent-definitions:update"; name: string; input: AgentDefinitionInput }

@@ -278,6 +278,14 @@ const api: LookAPI = {
 	listSubSessions: (parentSessionId) => invoke({ type: "agent:list-subagents", parentSessionId }),
 	getParentSession: (childSessionId) => invoke({ type: "agent:get-parent-session", childSessionId }),
 
+	reviewChanges: (payload) =>
+		invoke({
+			type: "agent:review-changes",
+			parentSessionId: payload.parentSessionId,
+			title: payload.title,
+			turnKey: payload.turnKey,
+		}),
+
 	// ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
 	listAgentDefinitions: () => invoke({ type: "agent-definitions:list" }),
 	createAgentDefinition: (input) => invoke({ type: "agent-definitions:create", input }),

@@ -952,6 +952,13 @@
     "operationShort": "{{count}} 次",
     "moreFiles": "展开其余 {{count}} 个文件",
     "pathUnavailable": "无法定位此文件",
-    "fileAria": "打开 {{path}} 的变更详情"
+    "fileAria": "打开 {{path}} 的变更详情",
+    "review": "审核",
+    "reviewRunning": "正在创建审核会话…",
+    "reviewDispatched": "已发起审核，主 Agent 将创建审核子会话",
+    "reviewFailed": "创建审核会话失败：{{message}}",
+    "reviewOpen": "查看审核",
+    "reviewOpened": "已打开审核会话",
+    "reviewPending": "审核会话创建中，请稍后再试"
   }
 }

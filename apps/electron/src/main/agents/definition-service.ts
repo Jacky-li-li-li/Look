@@ -40,6 +40,17 @@ export class AgentDefinitionService {
 		return discovery.agents.map(toAgentDefinitionInfo);
 	}
 
+	/**
+	 * Find a full agent definition (systemPrompt + tools) by name across
+	 * user-level and built-in (marketplace) sources. Used by IPC routers
+	 * that need to spawn sub-sessions without loading the discovery module
+	 * themselves.
+	 */
+	async findAgentConfig(name: string): Promise<AgentConfig | null> {
+		const discovery = await discoverAgents("", "both");
+		return discovery.agents.find((agent) => agent.name === name) ?? null;
+	}
+
 	// ── Mutations ──
 
 	/** Create a new agent definition file. Throws if the name already exists. */

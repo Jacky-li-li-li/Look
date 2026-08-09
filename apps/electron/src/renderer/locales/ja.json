@@ -952,6 +952,13 @@
     "operationShort": "{{count}} 回",
     "moreFiles": "残り {{count}} ファイルを表示",
     "pathUnavailable": "ファイルパスを解決できません",
-    "fileAria": "{{path}} の変更詳細を開く"
+    "fileAria": "{{path}} の変更詳細を開く",
+    "review": "レビュー",
+    "reviewRunning": "レビューセッションを作成中…",
+    "reviewDispatched": "レビューを依頼しました。メインエージェントがレビューセッションを作成します",
+    "reviewFailed": "レビューセッションの作成に失敗しました: {{message}}",
+    "reviewOpen": "レビューを開く",
+    "reviewOpened": "レビューセッションを開きました",
+    "reviewPending": "レビューセッションを作成中です。しばらくしてからお試しください"
   }
 }

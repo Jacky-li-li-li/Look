@@ -500,6 +500,7 @@ const mockApi: LookAPI = {
 	// ---- SubAgent ----
 	listSubSessions: () => success({ sessions: [] }),
 	getParentSession: () => Promise.resolve({ success: true, parentSessionId: null }),
+	reviewChanges: () => success({ childSessionId: null, title: "审核本轮变更" }),
 
 	// ---- Agent Definitions ----
 	listAgentDefinitions: () => success({ agents: [] }),

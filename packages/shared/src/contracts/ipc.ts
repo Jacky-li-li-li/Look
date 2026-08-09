@@ -213,6 +213,12 @@ export interface LookAPI {
 	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
 	listSubSessions(parentSessionId: string): Promise<IpcResult<{ childSessionIds?: string[] }>>;
 	getParentSession(childSessionId: string): Promise<IpcResult<{ parentSessionId?: string | null }>>;
+	/** 查找父会话已有的审核子会话（防重复）；未命中由渲染端注入 /subagent:reviewer 委派指令。 */
+	reviewChanges(payload: {
+		parentSessionId: string;
+		title: string;
+		turnKey: string;
+	}): Promise<IpcResult<{ childSessionId: string | null; title: string }>>;
 	// ---- SubAgent：Agent 定义 CRUD（Stage 3 广场） ----
 	listAgentDefinitions(): Promise<IpcResult<{ agents?: AgentDefinitionInfo[] }>>;
 	createAgentDefinition(input: AgentDefinitionInput): Promise<IpcResult<{ agent?: AgentDefinitionInfo }>>;

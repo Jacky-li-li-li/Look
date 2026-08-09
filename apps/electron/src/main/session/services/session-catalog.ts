@@ -26,6 +26,8 @@ export interface StoredSession extends PiSessionInfo {
 
 export interface SubsessionMetadata {
 	sessionId: string;
+	/** 子会话 JSONL 真实文件路径（文件名带时间戳前缀，不能按 sessionId 拼接）。 */
+	filePath: string;
 	displayName?: string;
 	parentSessionId?: string;
 	agentName?: string;
@@ -116,7 +118,17 @@ export async function scanSubsessionMetadata(filePath: string): Promise<Subsessi
 			}
 		}
 		if (!hasSessionEntry || !sessionId) return null;
-		return { sessionId, displayName, parentSessionId, agentName, delegation, firstMessage, messageCount, created };
+		return {
+			sessionId,
+			filePath,
+			displayName,
+			parentSessionId,
+			agentName,
+			delegation,
+			firstMessage,
+			messageCount,
+			created,
+		};
 	} catch {
 		return null;
 	} finally {
@@ -190,6 +202,7 @@ export class SessionCatalog {
 			if (!session.parentSessionId) continue;
 			this.onSubsessionDiscovered({
 				sessionId: session.id,
+				filePath: session.path,
 				displayName: session.name,
 				parentSessionId: session.parentSessionId,
 				agentName: session.subagentAgentName,
@@ -239,7 +252,7 @@ export class SessionCatalog {
 				firstMessage: metadata.firstMessage || "",
 				messageCount: metadata.messageCount,
 				created: new Date(metadata.created),
-				path: path.join(subsessionsDir, `${metadata.sessionId}.jsonl`),
+				path: metadata.filePath,
 				cwd: project.cwd,
 				projectId: project.id,
 				modified: new Date(metadata.created),

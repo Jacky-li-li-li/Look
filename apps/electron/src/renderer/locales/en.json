@@ -952,6 +952,13 @@
     "operationShort": "{{count}} edits",
     "moreFiles": "Show {{count}} more files",
     "pathUnavailable": "File path unavailable",
-    "fileAria": "Open change details for {{path}}"
+    "fileAria": "Open change details for {{path}}",
+    "review": "Review",
+    "reviewRunning": "Creating review session…",
+    "reviewDispatched": "Review dispatched — the main agent will create a review session",
+    "reviewFailed": "Failed to create review session: {{message}}",
+    "reviewOpen": "Open review",
+    "reviewOpened": "Review session opened",
+    "reviewPending": "Review session is being created — try again shortly"
   }
 }

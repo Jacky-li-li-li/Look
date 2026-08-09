@@ -81,8 +81,11 @@ describe("SessionCatalog", () => {
 		ensureWorkspaceDir(projectId);
 		const subsessionsDir = getWorkspaceSubsessionsDir(projectId);
 		fs.mkdirSync(subsessionsDir, { recursive: true });
+		// 真实子会话文件名带时间戳前缀，path 必须指向该真实文件（拼接 <sessionId>.jsonl
+		// 会因文件不存在导致 SessionManager.open 误生成新会话）。
+		const realFileName = "2026-08-09T12-26-12-233Z_child-1.jsonl";
 		fs.writeFileSync(
-			path.join(subsessionsDir, "child.jsonl"),
+			path.join(subsessionsDir, realFileName),
 			[
 				JSON.stringify({ type: "session", id: "child-1", timestamp: "2026-01-02T00:00:00.000Z" }),
 				JSON.stringify({ type: "session_info", name: "Agent：review" }),
@@ -103,5 +106,6 @@ describe("SessionCatalog", () => {
 			parentSessionId: "parent-1",
 			subagentAgentName: "Agent：review",
 		});
+		expect(child?.path).toBe(path.join(subsessionsDir, realFileName));
 	});
 });

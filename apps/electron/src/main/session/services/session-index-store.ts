@@ -20,7 +20,9 @@ import path from "node:path";
 import { getWorkspaceDir } from "@look/shared/look-storage";
 import type { StoredSession } from "./session-catalog.js";
 
-const INDEX_VERSION = 1;
+/** 索引版本：v2 起子会话 path 使用真实文件路径（v1 拼接 <sessionId>.jsonl 无时间戳，
+ *  会导致 SessionManager.open 误生成新会话）。版本不符 → 全量重扫重建。 */
+const INDEX_VERSION = 2;
 const INDEX_FILE_NAME = "sessions-index.json";
 
 /** 索引持久化的会话字段（StoredSession 的瘦身子集）。 */

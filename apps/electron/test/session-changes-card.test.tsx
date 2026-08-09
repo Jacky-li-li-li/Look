@@ -8,9 +8,24 @@
 
 import type { LookSessionEntry } from "@shared/types";
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getDefaultStore } from "jotai";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SessionChangesCard, { collectChangedFiles } from "../src/renderer/components/chat/SessionChangesCard";
+
+// useAgentActions 在模块顶层捕获 window.look（真实运行时 preload 先于模块注入），
+// 测试环境需替换该 hook 才能验证「打开审核子会话」路径。
+vi.mock("../src/renderer/hooks/useAgentActions", () => ({
+	useAgentActions: () => ({
+		handleSelectAgent: vi.fn(async (agentId: string) => {
+			(
+				window as unknown as { look?: { activateSession?: (id: string) => Promise<unknown> } }
+			).look?.activateSession?.(agentId);
+		}),
+	}),
+}));
+
 import i18n from "../src/renderer/i18n";
+import { agentsAtom } from "../src/renderer/store/agentAtoms";
 import { appStore } from "../src/renderer/store/appStore";
 import { dockedFileAtom } from "../src/renderer/store/atoms";
 
@@ -221,7 +236,7 @@ describe("SessionChangesCard 组件", () => {
 	});
 
 	it("无编辑工具时不渲染", () => {
-		const { container } = render(<SessionChangesCard entries={[]} />);
+		const { container } = render(<SessionChangesCard entries={[]} agentId="agent-1" />);
 		expect(container.firstChild).toBeNull();
 	});
 
@@ -239,7 +254,9 @@ describe("SessionChangesCard 组件", () => {
 				},
 			]),
 		];
-		const { getByText, getByRole, getByTestId } = render(<SessionChangesCard entries={entries} projectCwd="/repo" />);
+		const { getByText, getByRole, getByTestId } = render(
+			<SessionChangesCard entries={entries} projectCwd="/repo" agentId="agent-1" />,
+		);
 
 		expect(getByTestId("session-changes-card").className).toContain("w-full");
 		expect(getByText("本轮变更")).toBeTruthy();
@@ -250,5 +267,174 @@ describe("SessionChangesCard 组件", () => {
 		// 直接在 Dock 打开：absolutePath + diffPatch（不再就地展开 diff）
 		expect(appStore.get(dockedFileAtom)).toMatchObject({ absolutePath: "/repo/src/a.ts" });
 		expect(appStore.get(dockedFileAtom)?.diffPatch).toContain("@@");
+	});
+});
+
+describe("审核按钮", () => {
+	const editEntries = [
+		assistantEntry("a1", [
+			{
+				type: "toolCall",
+				id: "t1",
+				name: "edit",
+				arguments: { path: "/repo/src/a.ts", edits: [{ oldText: "a", newText: "b" }] },
+			},
+		]),
+	];
+
+	beforeEach(async () => {
+		await i18n.changeLanguage("zh");
+		appStore.set(dockedFileAtom, null);
+		window.look = {
+			reviewChanges: vi.fn().mockResolvedValue({
+				success: true,
+				childSessionId: null,
+				title: "审核本轮变更",
+			}),
+			sendMessage: vi.fn().mockResolvedValue({ success: true }),
+			activateSession: vi.fn().mockResolvedValue({ success: true }),
+		} as unknown as typeof window.look;
+	});
+
+	afterEach(() => {
+		appStore.set(dockedFileAtom, null);
+		cleanup();
+	});
+
+	it("未命中已有审核会话时注入 /subagent:reviewer 委派指令", async () => {
+		const { getByRole } = render(
+			<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-1" turnKey="entry-a1" />,
+		);
+
+		fireEvent.click(getByRole("button", { name: "审核" }));
+
+		await vi.waitFor(() => {
+			expect(window.look.reviewChanges).toHaveBeenCalledTimes(1);
+		});
+		const payload = (window.look.reviewChanges as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+		expect(payload).toMatchObject({
+			parentSessionId: "agent-1",
+			// turnKey 编入 title → 子会话 agentName 带轮次标识，delegation 匹配不跨轮串用
+			title: "审核本轮变更 (entry-a1)",
+			turnKey: "entry-a1",
+		});
+
+		// 未命中 → 注入委派指令（走主 Agent 的 subagent 工具，消息流可见 subagent 工具卡）
+		await vi.waitFor(() => {
+			expect(window.look.sendMessage).toHaveBeenCalledTimes(1);
+		});
+		const [agentId, instruction] = (window.look.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0] ?? [];
+		expect(agentId).toBe("agent-1");
+		expect(instruction).toContain("/subagent:reviewer");
+		expect(instruction).toContain("审核本轮变更 (entry-a1)");
+		expect(instruction).toContain("src/a.ts");
+	});
+
+	it("不同轮次卡片使用不同 turnKey（互不串用）", async () => {
+		const { getByRole } = render(
+			<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-1" turnKey="entry-turn2" />,
+		);
+
+		fireEvent.click(getByRole("button", { name: "审核" }));
+
+		await vi.waitFor(() => {
+			expect(window.look.reviewChanges).toHaveBeenCalledTimes(1);
+		});
+		const payload = (window.look.reviewChanges as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+		expect(payload.turnKey).toBe("entry-turn2");
+	});
+
+	it("查询进行中按钮禁用，防止重复点击", async () => {
+		let resolveReview: (value: unknown) => void = () => {};
+		window.look.reviewChanges = vi.fn().mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveReview = resolve;
+				}),
+		);
+		const { getByRole } = render(<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-1" />);
+
+		fireEvent.click(getByRole("button", { name: "审核" }));
+		await vi.waitFor(() => {
+			const runningBtn = getByRole("button", { name: /正在创建审核会话/ });
+			expect((runningBtn as HTMLButtonElement).disabled).toBe(true);
+		});
+
+		// 未完成前无法再次触发
+		const runningBtn = getByRole("button", { name: /正在创建审核会话/ });
+		fireEvent.click(runningBtn);
+		expect(window.look.reviewChanges).toHaveBeenCalledTimes(1);
+
+		resolveReview({ success: true, childSessionId: null, title: "审核本轮变更" });
+		await vi.waitFor(() => {
+			expect(window.look.sendMessage).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	it("注入成功后再次点击不重复注入（reviewDispatched 防抖）", async () => {
+		const { getByRole } = render(
+			<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-1" turnKey="entry-a1" />,
+		);
+
+		fireEvent.click(getByRole("button", { name: "审核" }));
+		await vi.waitFor(() => {
+			expect(window.look.sendMessage).toHaveBeenCalledTimes(1);
+		});
+
+		// 再次点击：查询仍未命中（mock 恒返回 null）→ 不重复注入，仅提示等待
+		fireEvent.click(getByRole("button", { name: "审核" }));
+		await vi.waitFor(() => {
+			expect(window.look.reviewChanges).toHaveBeenCalledTimes(2);
+		});
+		expect(window.look.sendMessage).toHaveBeenCalledTimes(1);
+	});
+
+	it("已有审核子会话时直接打开（不注入指令）", async () => {
+		window.look.reviewChanges = vi.fn().mockResolvedValue({
+			success: true,
+			childSessionId: "review-existing",
+			title: "审核本轮变更",
+		});
+		const { getByRole } = render(<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-1" />);
+
+		fireEvent.click(getByRole("button", { name: "审核" }));
+
+		await vi.waitFor(() => {
+			expect(window.look.reviewChanges).toHaveBeenCalledTimes(1);
+		});
+		// 打开路径走 activateSession（handleSelectAgent 内部），且不重复委派
+		await vi.waitFor(() => {
+			expect(window.look.activateSession).toHaveBeenCalledWith("review-existing");
+		});
+		expect(window.look.sendMessage).not.toHaveBeenCalled();
+	});
+
+	it("创建失败 toast 错误且不崩溃", async () => {
+		window.look.reviewChanges = vi.fn().mockRejectedValue(new Error("no key"));
+		const { getByRole } = render(<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-1" />);
+
+		fireEvent.click(getByRole("button", { name: "审核" }));
+
+		await vi.waitFor(() => {
+			expect(getByRole("button", { name: "审核" })).toBeTruthy();
+		});
+	});
+
+	it("子会话内的变更卡片不渲染审核按钮（防无限递归）", () => {
+		// 组件 useAtomValue 在无 Provider 时读 jotai 默认 store，须用 getDefaultStore 设置。
+		getDefaultStore().set(agentsAtom, [
+			{ id: "agent-1", name: "parent", isSubagentSession: false } as never,
+			{ id: "agent-2", name: "Agent：审核本轮变更", isSubagentSession: true } as never,
+		]);
+		const { queryByRole } = render(<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-2" />);
+
+		expect(queryByRole("button", { name: /审核/ })).toBeNull();
+	});
+
+	it("主会话的变更卡片保留审核按钮", () => {
+		getDefaultStore().set(agentsAtom, [{ id: "agent-1", name: "parent", isSubagentSession: false } as never]);
+		const { getByRole } = render(<SessionChangesCard entries={editEntries} projectCwd="/repo" agentId="agent-1" />);
+
+		expect(getByRole("button", { name: "审核" })).toBeTruthy();
 	});
 });

@@ -46,6 +46,11 @@ export class SessionInfoService {
 		return this.deps.runtimeRegistry.get(sessionId);
 	}
 
+	/** 按 sessionId 查持久化会话（含 projectId），供 IPC 路由定位子会话目录。 */
+	getStoredSession(sessionId: string): StoredSession | undefined {
+		return this.deps.sessionCatalog.get(sessionId);
+	}
+
 	listAgents(): AgentInfo[] {
 		return this.deps.listProjects().flatMap((project) => this.listAgentsInProject(project.id));
 	}

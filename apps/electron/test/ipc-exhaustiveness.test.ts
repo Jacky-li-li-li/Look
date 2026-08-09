@@ -169,6 +169,7 @@ const EXHAUSTIVE = {
 	"agent:list-subagents": true,
 	"agent:get-parent-session": true,
 	"agent:set-subagent-enabled": true,
+	"agent:review-changes": true,
 	"agent-definitions:list": true,
 	"agent-definitions:create": true,
 	"agent-definitions:update": true,

@@ -35,7 +35,7 @@ import { Conversation, ConversationContent, ConversationScrollButton, useConvers
 import { MessageItem } from "./MessageItem";
 import { MessageTicks, userMessagePreview } from "./MessageTicks";
 import { MessageActions } from "./message-elements/MessageActions";
-import SessionChangesCard from "./SessionChangesCard";
+import SessionChangesCard, { collectChangedFiles } from "./SessionChangesCard";
 import { SessionEntryBubble } from "./SessionEntryBubble";
 
 /** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
@@ -662,7 +662,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 
 	// === Render timeline item ===
 	const renderTimelineItem = useCallback(
-		(item: TimelineItem, turnCard?: { entries: LookSessionEntry[]; projectCwd?: string }) => {
+		(item: TimelineItem, turnCard?: { entries: LookSessionEntry[]; projectCwd?: string; turnKey?: string }) => {
 			if (!item) return null;
 
 			// Compaction status card (live or persisted).
@@ -728,7 +728,12 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								<div className="flex w-full max-w-[98%] gap-msg-bubble">
 									<div className="mt-msg-avatar size-7 shrink-0" aria-hidden="true" />
 									<div className="min-w-0 flex-1">
-										<SessionChangesCard entries={turnCard.entries} projectCwd={turnCard.projectCwd} />
+										<SessionChangesCard
+											entries={turnCard.entries}
+											projectCwd={turnCard.projectCwd}
+											agentId={agentId}
+											turnKey={turnCard.turnKey}
+										/>
 									</div>
 								</div>
 							)}
@@ -844,14 +849,20 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								!item.isLive &&
 								Boolean(item.entryId) &&
 								(next?.message?.role === "user" || (isLast && !isAgentRunning));
-							let turnCard: { entries: LookSessionEntry[]; projectCwd?: string } | undefined;
+							let turnCard: { entries: LookSessionEntry[]; projectCwd?: string; turnKey?: string } | undefined;
 							if (showTurnCard) {
 								// 该轮条目从原始 entries 取回，包含被 timeline 附着到 assistant 后面的 toolResult。
 								const globalIndex = timeline.findIndex((it) => it.id === item.id);
-								turnCard = {
-									entries: collectTurnEntries(sessionState.entries, timeline, globalIndex),
-									projectCwd: activeProjectCwd,
-								};
+								const turnEntries = collectTurnEntries(sessionState.entries, timeline, globalIndex);
+								// 仅当本轮确有变更文件时才构造卡片（否则占位头像行会在消息与按钮行之间
+								// 撑出 ~30px 空白）。collectChangedFiles 与卡片内部 useMemo 同源，结果一致。
+								if (collectChangedFiles(turnEntries, activeProjectCwd).length > 0) {
+									turnCard = {
+										entries: turnEntries,
+										projectCwd: activeProjectCwd,
+										turnKey: item.entryId ?? item.id,
+									};
+								}
 							}
 							return renderTimelineItem(item, turnCard);
 						})}

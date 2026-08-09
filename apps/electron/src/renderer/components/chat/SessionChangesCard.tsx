@@ -3,24 +3,37 @@
 //
 // 从当前轮次的编辑类工具中收集成功触及的文件。卡片只负责表达
 // Agent 这一轮改了什么；点击文件行后由 Dock 查看器负责深度审阅。
+// 头部右侧「审核」按钮：首次点击创建 Reviewer 子会话审查本轮变更，
+// 之后点击直接打开已绑定的审核会话（绑定信息来自父会话 JSONL 的
+// look.delegation.v1 记录）。
 // ============================================================
 
 import type { LookSessionEntry } from "@shared/types";
 import { useAtomValue } from "jotai";
-import { ChevronDown, ChevronRight, FileDiff } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, FileDiff, Loader2, ShieldCheck } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { useAgentActions } from "../../hooks/useAgentActions";
+import { agentsAtom } from "../../store/agentAtoms";
 import { appStore } from "../../store/appStore";
-import { dockedFileAtom } from "../../store/atoms";
+import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "../../store/atoms";
 import { FileIcon } from "../workspace/FileIcon";
 import { extractEditPatch, isEditTool } from "./message-elements/EditDiffPreview";
 
 const MAX_VISIBLE_FILES = 3;
 
+/** 审核子会话标题（与主进程 subagent-router REVIEW_TITLE 同步，勿单独改动）。 */
+export const REVIEW_SESSION_TITLE = "审核本轮变更";
+
 interface SessionChangesCardProps {
 	entries: LookSessionEntry[];
 	/** 当前 session 所属项目根目录，用于把工具相对路径解析为绝对路径。 */
 	projectCwd?: string;
+	/** 当前会话 ID，审核子会话以其为父会话创建。 */
+	agentId: string;
+	/** 本轮次标识（assistant 消息 entryId），审核子会话按它绑定，每轮互不串用。 */
+	turnKey?: string;
 }
 
 /** 一个轮次中的变更文件，path 保持为项目相对路径供现有调用方使用。 */
@@ -196,11 +209,76 @@ function formatStats(file: SessionChangedFile) {
 	);
 }
 
-const SessionChangesCard = memo(function SessionChangesCard({ entries, projectCwd = "" }: SessionChangesCardProps) {
+const SessionChangesCard = memo(function SessionChangesCard({
+	entries,
+	projectCwd = "",
+	agentId,
+	turnKey,
+}: SessionChangesCardProps) {
 	const { t } = useTranslation();
+	const { handleSelectAgent } = useAgentActions();
 	const dockedFile = useAtomValue(dockedFileAtom);
+	const agents = useAtomValue(agentsAtom);
+	// 子会话（审核子会话等）内的变更卡片不提供审核按钮，避免无限递归创建子子会话。
+	const isSubagentSession = agents.some((agent) => agent.id === agentId && agent.isSubagentSession === true);
 	const [expanded, setExpanded] = useState(false);
+	const [reviewing, setReviewing] = useState(false);
+	// 命中已有审核会话时本地记住；刷新后由主进程按 turnKey 查找兜底，不会重复创建。
+	const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
+	// 已注入委派指令（子会话创建中）：再次点击不再重复注入，提示稍后再试。
+	const [reviewDispatched, setReviewDispatched] = useState(false);
 	const files = useMemo(() => collectChangedFiles(entries, projectCwd), [entries, projectCwd]);
+
+	const handleReview = useCallback(async () => {
+		if (reviewing) return;
+		// 本地已绑定：直接打开审核子会话，不重复创建。
+		if (reviewSessionId) {
+			await handleSelectAgent(reviewSessionId);
+			return;
+		}
+		// 轮次隔离：turnKey 编入审核会话标题（如「审核本轮变更 (entry-a1)」），
+		// 子会话 agentName 随之带轮次标识，delegation 匹配天然不跨轮串用。
+		const effectiveTitle = turnKey ? `${REVIEW_SESSION_TITLE} (${turnKey})` : REVIEW_SESSION_TITLE;
+		setReviewing(true);
+		try {
+			// 1) 查询该轮是否已有审核子会话（主进程按 delegation agentName 匹配）。
+			const result = await window.look.reviewChanges({
+				parentSessionId: agentId,
+				title: effectiveTitle,
+				turnKey: turnKey ?? "",
+			});
+			if (!result?.success) throw new Error(result?.error ?? "Failed to find review session");
+			if (result.childSessionId) {
+				// 已有审核会话：直接打开（不重复委派）。
+				setReviewSessionId(result.childSessionId);
+				await handleSelectAgent(result.childSessionId);
+				toast.success(t("changesCard.reviewOpened", "已打开审核会话"));
+				return;
+			}
+			// 2) 已注入过指令但子会话尚未创建完成：不重复注入，提示等待。
+			if (reviewDispatched) {
+				toast.info(t("changesCard.reviewPending", "审核会话创建中，请稍后再试"));
+				return;
+			}
+			// 3) 未命中且未注入过：注入 /subagent:reviewer 委派指令，主 Agent 调用 subagent 工具
+			//    创建审核子会话（消息流出现 subagent 工具卡，执行可见）。
+			const fileList = files.map((file) => `- ${file.relativePath}（+${file.added} -${file.deleted}）`).join("\n");
+			const instruction = `/subagent:reviewer 请审查本轮代码变更，使用 subagent 工具（title 设为「${effectiveTitle}」）。变更文件清单：\n${fileList}`;
+			const sent = await window.look.sendMessage(agentId, instruction);
+			if (!sent?.success) throw new Error(sent?.error ?? "Failed to dispatch review");
+			setReviewDispatched(true);
+			toast.success(t("changesCard.reviewDispatched", "已发起审核，主 Agent 将创建审核子会话"));
+		} catch (error) {
+			toast.error(
+				t("changesCard.reviewFailed", {
+					message: error instanceof Error ? error.message : String(error),
+					defaultValue: "创建审核会话失败：{{message}}",
+				}),
+			);
+		} finally {
+			setReviewing(false);
+		}
+	}, [reviewing, reviewSessionId, reviewDispatched, handleSelectAgent, agentId, turnKey, files, t]);
 
 	if (files.length === 0) return null;
 
@@ -251,6 +329,33 @@ const SessionChangesCard = memo(function SessionChangesCard({ entries, projectCw
 						})}
 					</div>
 				</div>
+				{!isSubagentSession && (
+					<button
+						type="button"
+						onClick={handleReview}
+						disabled={reviewing}
+						aria-label={
+							reviewing
+								? t("changesCard.reviewRunning", "正在创建审核会话…")
+								: reviewSessionId
+									? t("changesCard.reviewOpen", "查看审核")
+									: t("changesCard.review", "审核")
+						}
+						title={reviewSessionId ? t("changesCard.reviewOpen", "查看审核") : t("changesCard.review", "审核")}
+						className="flex shrink-0 items-center gap-1 rounded-md border border-hairline px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+					>
+						{reviewing ? (
+							<Loader2 className="size-3 animate-spin" aria-hidden />
+						) : (
+							<ShieldCheck className="size-3" aria-hidden />
+						)}
+						{reviewing
+							? t("changesCard.reviewRunning", "正在创建审核会话…")
+							: reviewSessionId
+								? t("changesCard.reviewOpen", "查看审核")
+								: t("changesCard.review", "审核")}
+					</button>
+				)}
 			</div>
 
 			<div className="mt-1.5">
@@ -276,6 +381,12 @@ const SessionChangesCard = memo(function SessionChangesCard({ entries, projectCw
 							disabled={!file.canOpen}
 							onClick={() => {
 								if (!file.absolutePath) return;
+								// Dock 面板已有未保存编辑时先确认，避免静默覆盖草稿（与 requestViewFileAtom 一致）。
+								if (
+									appStore.get(dockedFileAtom) &&
+									!confirmDockFileSwapIfDirty(() => appStore.get(fileViewerDirtyAtom))
+								)
+									return;
 								appStore.set(dockedFileAtom, {
 									absolutePath: file.absolutePath,
 									diffPatch: file.patch,
