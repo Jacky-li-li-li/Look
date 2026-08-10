@@ -8,7 +8,16 @@ import { Button } from "@look/ui/components/ui/button";
 import { ScrollArea } from "@look/ui/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import { useAtomValue, useSetAtom } from "jotai";
-import { Bot, Clock3, FolderOpen, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import {
+	Bot,
+	Clock3,
+	FolderOpen,
+	MessageSquarePlus,
+	PanelLeftClose,
+	PanelLeftOpen,
+	Plus,
+	StickyNote,
+} from "lucide-react";
 import { memo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -18,6 +27,7 @@ import {
 	rightPanelCollapsedAtom,
 	settingsTabAtom,
 	showAgentSquareAtom,
+	showDraftsAtom,
 	showScheduledTasksAtom,
 	showSettingsAtom,
 	sidebarAutoCollapsedAtom,
@@ -43,6 +53,7 @@ const SidebarInner = memo(function SidebarInner({
 	const userProfile = useAtomValue(userProfileAtom);
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
 	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
+	const showDrafts = useAtomValue(showDraftsAtom);
 	const showSettings = useAtomValue(showSettingsAtom);
 	const setSettingsTab = useSetAtom(settingsTabAtom);
 
@@ -81,8 +92,34 @@ const SidebarInner = memo(function SidebarInner({
 				<button
 					type="button"
 					onClick={() => {
+						appStore.set(showDraftsAtom, true);
+						appStore.set(showScheduledTasksAtom, false);
+						appStore.set(showAgentSquareAtom, false);
+						appStore.set(showSettingsAtom, false);
+						appStore.set(rightPanelCollapsedAtom, true);
+					}}
+					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showDrafts ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
+					title={t("drafts.title")}
+					aria-current={showDrafts ? "page" : undefined}
+				>
+					<span
+						className={`inline-flex size-5 items-center justify-center rounded-[5px] transition-colors ${showDrafts ? "bg-foreground/[0.12]" : "bg-foreground/[0.06] group-hover:bg-foreground/[0.12]"}`}
+					>
+						<StickyNote
+							className={`size-3 transition-colors ${showDrafts ? "text-foreground/80" : "text-foreground/40 group-hover:text-foreground/60"}`}
+						/>
+					</span>
+					<span className={`text-[12px] font-medium ${showDrafts ? "text-foreground" : "text-muted-foreground"}`}>
+						{t("drafts.title")}
+					</span>
+				</button>
+
+				<button
+					type="button"
+					onClick={() => {
 						appStore.set(showScheduledTasksAtom, true);
 						appStore.set(showAgentSquareAtom, false);
+						appStore.set(showDraftsAtom, false);
 						appStore.set(showSettingsAtom, false);
 						appStore.set(rightPanelCollapsedAtom, true);
 					}}
@@ -109,6 +146,7 @@ const SidebarInner = memo(function SidebarInner({
 					onClick={() => {
 						appStore.set(showAgentSquareAtom, true);
 						appStore.set(showScheduledTasksAtom, false);
+						appStore.set(showDraftsAtom, false);
 						appStore.set(showSettingsAtom, false);
 						appStore.set(rightPanelCollapsedAtom, true);
 					}}
@@ -137,6 +175,7 @@ const SidebarInner = memo(function SidebarInner({
 						appStore.set(showSettingsAtom, true);
 						appStore.set(showAgentSquareAtom, false);
 						appStore.set(showScheduledTasksAtom, false);
+						appStore.set(showDraftsAtom, false);
 					}}
 					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2 px-3 text-left transition-colors ${showSettings ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.065]"}`}
 					aria-current={showSettings ? "page" : undefined}

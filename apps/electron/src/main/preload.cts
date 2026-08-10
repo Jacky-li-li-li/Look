@@ -88,6 +88,12 @@ const api: LookAPI = {
 	listScheduledTaskLogs: (taskId, limit) => invoke({ type: "scheduled-task:logs", taskId, limit }),
 	validateCron: (cron, timezone) => invoke({ type: "scheduled-task:validate-cron", cron, timezone }),
 
+	// ---- Drafts ----
+	listDrafts: () => invoke({ type: "draft:list" }),
+	createDraft: (text) => invoke({ type: "draft:create", text }),
+	updateDraft: (draftId, patch) => invoke({ type: "draft:update", draftId, patch }),
+	deleteDraft: (draftId) => invoke({ type: "draft:delete", draftId }),
+
 	switchModel: (agentId, model) => invoke({ type: "agent:switch-model", agentId, model }),
 
 	updateThinking: (agentId, level) => invoke({ type: "agent:update-thinking", agentId, level }),

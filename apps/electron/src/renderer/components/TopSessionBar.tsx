@@ -16,10 +16,11 @@ import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { AgentInfo } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
-import { PanelLeftOpen } from "lucide-react";
+import { PanelLeftOpen, StickyNote } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { rightPanelCollapsedAtom, sidebarEffectiveCollapsedAtom } from "../store/atoms";
+import { appStore } from "../store/appStore";
+import { rightPanelCollapsedAtom, sidebarEffectiveCollapsedAtom, stickyNoteExpandRequestAtom } from "../store/atoms";
 
 interface TopSessionBarProps {
 	activeAgent: AgentInfo | null;
@@ -117,6 +118,24 @@ export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 					{t("topBar.emptyHint", "Select a session from the sidebar")}
 				</div>
 			)}
+			{/* 便利贴快速记录按钮：点击展开悬浮便利贴 */}
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						size="icon-sm"
+						variant="ghost"
+						data-sticky-toggle
+						className={`absolute top-1/2 -translate-y-1/2 rounded-md border border-hairline ${
+							rightPanelCollapsed ? "right-10" : "right-2"
+						}`}
+						onClick={() => appStore.set(stickyNoteExpandRequestAtom, (n) => n + 1)}
+						aria-label={t("drafts.stickyHint")}
+					>
+						<StickyNote className="size-3.5" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">{t("drafts.stickyHint")}</TooltipContent>
+			</Tooltip>
 			{rightPanelCollapsed && (
 				<Tooltip>
 					<TooltipTrigger asChild>

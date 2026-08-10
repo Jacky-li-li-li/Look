@@ -35,6 +35,7 @@ export type {
 	UILanguage,
 	UserSettings,
 } from "./contracts/settings.js";
+export type { Draft, DraftPatch } from "./domain/drafts.js";
 export type {
 	ScheduledTask,
 	ScheduledTaskInput,

@@ -7,7 +7,7 @@
 // ============================================================
 
 import type { IpcResult, LookAPI } from "@shared/contracts/ipc";
-import type { MainToRendererEvent, ScheduledTask } from "@shared/types";
+import type { Draft, MainToRendererEvent, ScheduledTask } from "@shared/types";
 
 const noop = () => {};
 
@@ -18,6 +18,21 @@ const mockTone =
 		: "dark";
 const MOCK_SESSION_ID = "dev-chat-session";
 let mockSnapshotSequence = 0;
+
+/** 内存态草稿（mock）：初始两条示例，便于浏览器预览。 */
+let mockDrafts: Draft[] = [
+	{
+		id: "mock-draft-1",
+		text: "检查一下订阅推送在弱网下的重试行为",
+		createdAt: Date.now() - 3 * 60_000,
+	},
+	{
+		id: "mock-draft-2",
+		text: "灵动岛生态调研的竞品清单补一个 Arc",
+		createdAt: Date.now() - 26 * 60 * 60_000,
+	},
+];
+let mockDraftSeq = 3;
 
 /** 泛型成功响应 */
 function success<T extends object>(data: T): Promise<IpcResult<T>> {
@@ -320,6 +335,27 @@ const mockApi: LookAPI = {
 		}),
 	listScheduledTaskLogs: () => success({ logs: [] }),
 	validateCron: () => success({ valid: true }),
+
+	// ---- Drafts (内存态 mock：浏览器预览用，刷新后重置) ----
+	listDrafts: () => success({ drafts: [...mockDrafts] }),
+	createDraft: (text) => {
+		const draft: Draft = { id: `mock-draft-${mockDraftSeq++}`, text: text.trim(), createdAt: Date.now() };
+		mockDrafts.unshift(draft);
+		return success({ draft });
+	},
+	updateDraft: (draftId, patch) => {
+		const draft = mockDrafts.find((item) => item.id === draftId);
+		if (!draft) return Promise.resolve({ success: false, error: `Draft not found: ${draftId}` });
+		if (patch.text !== undefined) draft.text = patch.text.trim();
+		if (patch.convertedSessionId !== undefined) {
+			draft.convertedSessionId = patch.convertedSessionId ?? undefined;
+		}
+		return success({ draft });
+	},
+	deleteDraft: (draftId) => {
+		mockDrafts = mockDrafts.filter((item) => item.id !== draftId);
+		return ok;
+	},
 	getProviders: () => success({ providers: [] }),
 
 	// ---- Agents ----

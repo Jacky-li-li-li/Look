@@ -110,6 +110,11 @@ export function getScheduledTasksPath(): string {
 	return path.join(LOOK_DIR, "scheduled-tasks.json");
 }
 
+/** Persisted quick-capture draft notes (草稿). */
+export function getDraftsPath(): string {
+	return path.join(LOOK_DIR, "drafts.json");
+}
+
 /** Cross-process lock directory used by the scheduled-task coordinator. */
 export function getScheduledTaskLocksDir(): string {
 	return path.join(LOOK_DIR, "scheduled-task-locks");

@@ -105,6 +105,12 @@ export const showAgentSquareAtom = atom(false);
 /** Whether the central content area is showing the scheduled-task workspace. */
 export const showScheduledTasksAtom = atom(false);
 
+/** Whether the central content area is showing the drafts workspace. */
+export const showDraftsAtom = atom(false);
+
+/** 顶部栏便利贴按钮的展开请求信号（递增触发）。 */
+export const stickyNoteExpandRequestAtom = atom(0);
+
 export const activeChatAtBottomAtom = atom(true);
 
 export interface ChatInputInsertRequest {

@@ -11,6 +11,7 @@ import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { AgentDefinitionService } from "../agents/definition-service.js";
 import type { IProjectTrustManager } from "../core/contracts.js";
+import type { DraftStore } from "../drafts/draft-store.js";
 import type { GitService } from "../git/git-service.js";
 import type { MCPManager } from "../mcp/manager.js";
 import type { PlanService } from "../permissions/plan.js";
@@ -115,6 +116,7 @@ export interface InvokeContext {
 	// ── Standalone services (only one per domain) ──
 	mcp: MCPManager;
 	scheduler: SchedulerService;
+	drafts: DraftStore;
 	skill: SkillManagementService;
 	settings: { prompts: PromptStore };
 }

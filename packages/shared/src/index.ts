@@ -9,6 +9,7 @@ export {
 	getAuthPath,
 	getCustomProvidersPath,
 	getDefaultWorkspaceCwd,
+	getDraftsPath,
 	getLookDir,
 	getModelsPath,
 	getProjectDir,

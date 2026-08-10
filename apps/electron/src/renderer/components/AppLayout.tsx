@@ -18,6 +18,7 @@ import {
 	rightPanelCollapsedAtom,
 	settingsTabAtom,
 	showAgentSquareAtom,
+	showDraftsAtom,
 	showScheduledTasksAtom,
 	showSettingsAtom,
 	sidebarAutoCollapsedAtom,
@@ -35,6 +36,8 @@ import NewProjectDialog from "./dialogs/NewProjectDialog";
 import OAuthLoginDialog from "./dialogs/OAuthLoginDialog";
 import PermissionDialog from "./dialogs/PermissionDialog";
 import PlanApprovalDialog from "./dialogs/PlanApprovalDialog";
+import DraftStickyNote from "./drafts/DraftStickyNote";
+import DraftsPage from "./drafts/DraftsPage";
 import Sidebar from "./Sidebar";
 import ScheduledTasksPage from "./scheduler/ScheduledTasksPage";
 import SettingsPage from "./settings/SettingsPage";
@@ -61,7 +64,7 @@ interface AppLayoutProps {
 	handleAbortAgent: () => void;
 	handleThinkingChange: (level: ThinkingLevel) => void;
 	handleModelChanged: (model: string) => void;
-	handleCreateClick: (projectId: string) => void;
+	handleCreateClick: (projectId: string) => Promise<string | null>;
 	handleOpenProject: () => void;
 	handleSwitchProject: (projectId: string) => Promise<void>;
 	handleDeleteProject: (project: ProjectInfo) => void;
@@ -121,6 +124,7 @@ function AppLayout({
 		dockPanelWidth,
 	});
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
+	const showDrafts = useAtomValue(showDraftsAtom);
 	const showScheduledTasks = useAtomValue(showScheduledTasksAtom);
 	const pendingDelete = useAtomValue(pendingDeleteProjectAtom);
 	const showSettings = useAtomValue(showSettingsAtom);
@@ -181,17 +185,19 @@ function AppLayout({
 
 	// 主内容区视图枚举：新增视图只需加一个 case + 分支条件，避免在 JSX 里
 	// 叠嵌套三元（此前是 4 层三元，任何新增视图都要改整串条件）。
-	type MainView = "loading" | "scheduled" | "welcome" | "agent-square" | "chat";
+	type MainView = "loading" | "scheduled" | "drafts" | "welcome" | "agent-square" | "chat";
 	const mainView: MainView =
 		appReadyPhase < 1
 			? "loading"
 			: showScheduledTasks
 				? "scheduled"
-				: projects.length === 0
-					? "welcome"
-					: showAgentSquare
-						? "agent-square"
-						: "chat";
+				: showDrafts
+					? "drafts"
+					: projects.length === 0
+						? "welcome"
+						: showAgentSquare
+							? "agent-square"
+							: "chat";
 
 	const renderMainView = (): ReactNode => {
 		switch (mainView) {
@@ -199,6 +205,14 @@ function AppLayout({
 				return null;
 			case "scheduled":
 				return <ScheduledTasksPage />;
+			case "drafts":
+				return (
+					<DraftsPage
+						projects={projects}
+						handleCreateClick={handleCreateClick}
+						handleSendMessage={handleSendMessage}
+					/>
+				);
 			case "welcome":
 				return <WelcomeScreen onOpenProject={handleOpenProject} />;
 			case "agent-square":
@@ -285,6 +299,9 @@ function AppLayout({
 
 			{/* 文件查看器 Dock 面板：位于右侧面板右侧，grid 第 5 列 --dock-track 控制滑入/出 */}
 			<DockFilePanel />
+
+			{/* 悬浮便利贴：任何视图可见，不替换主内容区 */}
+			<DraftStickyNote />
 
 			{newProjectCwd && (
 				<NewProjectDialog

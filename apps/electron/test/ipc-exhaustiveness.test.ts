@@ -16,6 +16,7 @@ import type { IpcRouter } from "../src/main/ipc/invoke-context.js";
 import { InvokeDispatcher } from "../src/main/ipc/invoke-context.js";
 import {
 	agentRouter,
+	draftRouter,
 	fileRouter,
 	fileViewerRouter,
 	historyRouter,
@@ -39,6 +40,7 @@ import { makeMockContext } from "./helpers/ipc-test-helpers.js";
 /** Same router list as handlers.ts `domainRouters` — keep in sync. */
 const ALL_ROUTERS: IpcRouter[] = [
 	agentRouter,
+	draftRouter,
 	fileRouter,
 	fileViewerRouter,
 	historyRouter,
@@ -91,6 +93,10 @@ const EXHAUSTIVE = {
 	"scheduled-task:test": true,
 	"scheduled-task:logs": true,
 	"scheduled-task:validate-cron": true,
+	"draft:list": true,
+	"draft:create": true,
+	"draft:update": true,
+	"draft:delete": true,
 	"settings:get": true,
 	"settings:get-api-key": true,
 	"settings:set-api-key": true,

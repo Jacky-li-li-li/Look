@@ -4,6 +4,8 @@ import type {
 	AgentInfo,
 	AvailableModel,
 	CustomProviderInput,
+	Draft,
+	DraftPatch,
 	FileTreeNode,
 	GitDiffFile,
 	GitRepoInfo,
@@ -100,6 +102,10 @@ export interface LookAPI {
 	getProviders(): Promise<IpcResult<{ providers: ProviderInfo[] }>>;
 	getAgents(): Promise<IpcResult<{ agents?: AgentInfo[] }>>;
 	listScheduledTasks(): Promise<IpcResult<{ tasks: ScheduledTask[] }>>;
+	listDrafts(): Promise<IpcResult<{ drafts: Draft[] }>>;
+	createDraft(text: string): Promise<IpcResult<{ draft: Draft }>>;
+	updateDraft(draftId: string, patch: DraftPatch): Promise<IpcResult<{ draft: Draft }>>;
+	deleteDraft(draftId: string): Promise<IpcResult>;
 	createScheduledTask(task: ScheduledTaskInput): Promise<IpcResult<{ task: ScheduledTask }>>;
 	updateScheduledTask(taskId: string, patch: Partial<ScheduledTaskInput>): Promise<IpcResult<{ task: ScheduledTask }>>;
 	startScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;

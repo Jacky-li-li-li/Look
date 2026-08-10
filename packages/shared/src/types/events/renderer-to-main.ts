@@ -38,6 +38,10 @@ export type RendererToMainEvent =
 	| { type: "scheduled-task:test"; task: ScheduledTaskInput; taskId?: string }
 	| { type: "scheduled-task:logs"; taskId?: string; limit?: number }
 	| { type: "scheduled-task:validate-cron"; cron: string; timezone?: string }
+	| { type: "draft:list" }
+	| { type: "draft:create"; text: string }
+	| { type: "draft:update"; draftId: string; patch: DraftPatch }
+	| { type: "draft:delete"; draftId: string }
 	| { type: "settings:get" }
 	| { type: "settings:get-api-key"; provider: string; reveal?: boolean }
 	| { type: "settings:set-api-key"; provider: string; key: string }

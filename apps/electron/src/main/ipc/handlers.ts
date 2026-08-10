@@ -9,8 +9,10 @@
 // keeps IPC routing decoupled from the bootstrap facade.
 // ============================================================
 
+import { getDraftsPath } from "@look/shared";
 import type { RendererToMainEvent } from "@look/shared/types";
 import { type BrowserWindow, ipcMain } from "electron";
+import { DraftStore } from "../drafts/draft-store.js";
 import { GitService } from "../git/git-service.js";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
 import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../system/traffic-light.js";
@@ -19,6 +21,7 @@ import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
 import {
 	agentRouter,
+	draftRouter,
 	fileRouter,
 	fileViewerRouter,
 	historyRouter,
@@ -42,6 +45,7 @@ let gitService: GitService | null = null;
 
 const domainRouters = [
 	agentRouter,
+	draftRouter,
 	fileRouter,
 	fileViewerRouter,
 	historyRouter,
@@ -162,6 +166,7 @@ export function registerIpcHandlers(
 
 		mcp: composition.mcpManager,
 		scheduler: schedulerService,
+		drafts: new DraftStore(getDraftsPath()),
 		skill: composition.skillManagementService,
 		settings: { prompts: composition.promptStore },
 	} satisfies InvokeContext;
