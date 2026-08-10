@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 //
 // FileViewerDialog diff 渲染路径测试（S1-2 / S2-1 / S3-5 回归）：
-//  - dockMode（带 diffPatch）→ getProjectGitFileHead + FileDiff 完整文件
-//  - windowMode（仅 absolutePath）→ getGitFileHead 自动检测
-//  - untracked（content=""）→ FileDiff 全新增
-//  - diff 生效时编辑按钮仍可用（不被 FileDiff 分支遮蔽）
-//  - HEAD 不可得时状态栏降级提示
+//  - dockMode（带 diffPatch）→ 按入口语义渲染 patch（工具重放 / git diff），不调 HEAD IPC
+//  - windowMode（仅 absolutePath）→ getGitFileHead 自动检测 + FileDiff 完整文件
+//  - untracked（content=""）→ 带 patch 时仍渲染 patch（不再退化为“空 vs 当前”全新增）
+//  - diff 生效时编辑按钮仍可用
 //
 // @pierre/diffs 的 FileDiff 是复杂虚拟化组件，jsdom 无法真实渲染，
 // 这里替换为可断言的桩组件，验证 props 数据流而非渲染细节。
@@ -74,7 +73,7 @@ afterEach(() => {
 });
 
 describe("FileViewerDialog diff 渲染路径", () => {
-	it("dockMode 带 diffPatch：走 getProjectGitFileHead 并渲染完整文件 FileDiff", async () => {
+	it("dockMode 带 diffPatch：按入口语义渲染 patch，不调 HEAD IPC", async () => {
 		getProjectGitFileHead.mockResolvedValue({ success: true, content: "old line\n# 标题\n" });
 		render(
 			<Provider store={appStore}>
@@ -84,14 +83,14 @@ describe("FileViewerDialog diff 渲染路径", () => {
 			</Provider>,
 		);
 
-		await waitFor(() => expect(getProjectGitFileHead).toHaveBeenCalledWith("proj-1", "/repo/note.md"));
-		const diff = await screen.findByTestId("file-diff");
-		expect(diff.getAttribute("data-old")).toBe("old line\n# 标题\n");
-		expect(diff.getAttribute("data-new")).toBe(mdContent);
+		const patch = await screen.findByTestId("patch-diff");
+		expect(patch.getAttribute("data-patch")).toBe("diff --git a/note.md b/note.md");
+		expect(getProjectGitFileHead).not.toHaveBeenCalled();
 		expect(getGitFileHead).not.toHaveBeenCalled();
+		expect(screen.queryByTestId("file-diff")).toBeNull();
 	});
 
-	it("项目外绝对路径带 patch 时走通用 git head，不调用项目 HEAD IPC", async () => {
+	it("项目外绝对路径带 patch：同样按入口语义渲染 patch，不调 HEAD IPC", async () => {
 		getGitFileHead.mockResolvedValue({ success: true, content: "old external\n" });
 		render(
 			<Provider store={appStore}>
@@ -101,9 +100,9 @@ describe("FileViewerDialog diff 渲染路径", () => {
 			</Provider>,
 		);
 
-		await waitFor(() => expect(getGitFileHead).toHaveBeenCalledWith("/tmp/note.md"));
+		expect(await screen.findByTestId("patch-diff")).toBeDefined();
 		expect(getProjectGitFileHead).not.toHaveBeenCalled();
-		expect(await screen.findByTestId("file-diff")).toBeDefined();
+		expect(getGitFileHead).not.toHaveBeenCalled();
 	});
 
 	it("windowMode 无 diffPatch：走 getGitFileHead 自动检测", async () => {
@@ -123,7 +122,7 @@ describe("FileViewerDialog diff 渲染路径", () => {
 		expect(getProjectGitFileHead).not.toHaveBeenCalled();
 	});
 
-	it('untracked（HEAD 无此文件，content=""）：FileDiff 显示全新增（old 为空）', async () => {
+	it('untracked（HEAD 无此文件，content=""）：带 patch 仍渲染 patch（不再退化为全新增）', async () => {
 		getProjectGitFileHead.mockResolvedValue({ success: true, content: "" });
 		render(
 			<Provider store={appStore}>
@@ -133,12 +132,12 @@ describe("FileViewerDialog diff 渲染路径", () => {
 			</Provider>,
 		);
 
-		const diff = await screen.findByTestId("file-diff");
-		expect(diff.getAttribute("data-old")).toBe("");
-		expect(diff.getAttribute("data-new")).toBe(mdContent);
+		const patch = await screen.findByTestId("patch-diff");
+		expect(patch.getAttribute("data-patch")).toBe("--- /dev/null");
+		expect(screen.queryByTestId("file-diff")).toBeNull();
 	});
 
-	it("diff 生效时点「编辑」进入 textarea（不被 FileDiff 分支遮蔽）", async () => {
+	it("diff 生效时点「编辑」进入 textarea（不被 patch 分支遮蔽）", async () => {
 		getProjectGitFileHead.mockResolvedValue({ success: true, content: "old\n" });
 		render(
 			<Provider store={appStore}>
@@ -148,7 +147,7 @@ describe("FileViewerDialog diff 渲染路径", () => {
 			</Provider>,
 		);
 
-		await screen.findByTestId("file-diff");
+		await screen.findByTestId("patch-diff");
 		const editButton = screen.getByRole("button", { name: "编辑" });
 		fireEvent.click(editButton);
 
@@ -157,10 +156,10 @@ describe("FileViewerDialog diff 渲染路径", () => {
 		expect(textarea?.textContent).toBe(mdContent);
 		// 退出编辑回到 diff
 		fireEvent.click(screen.getByRole("button", { name: "预览" }));
-		expect(await screen.findByTestId("file-diff")).toBeDefined();
+		expect(await screen.findByTestId("patch-diff")).toBeDefined();
 	});
 
-	it("期望 diff 但 HEAD 不可得：回退显示工具 patch", async () => {
+	it("带 diffPatch 且 HEAD 不可得：仍渲染 patch（入口语义不依赖 HEAD）", async () => {
 		getProjectGitFileHead.mockResolvedValue({ success: true, content: null });
 		render(
 			<Provider store={appStore}>
@@ -172,8 +171,29 @@ describe("FileViewerDialog diff 渲染路径", () => {
 
 		const patch = await screen.findByTestId("patch-diff");
 		expect(patch.getAttribute("data-patch")).toBe("diff --git a/note.md b/note.md");
-		expect(screen.getByText(/无法取得 HEAD/)).toBeDefined();
 		expect(screen.queryByTestId("file-diff")).toBeNull();
+	});
+
+	it("删除文件 + diffPatch（右侧 git deleted）：渲染全删除 patch 而非加载失败", async () => {
+		readFileContent.mockResolvedValue({
+			success: false,
+			error: "ENOENT: no such file or directory",
+		});
+		render(
+			<Provider store={appStore}>
+				<TooltipProvider>
+					<FileViewerDialog
+						dockMode
+						dockPath="/repo/deleted.md"
+						dockDiffPatch="diff --git a/deleted.md b/deleted.md"
+					/>
+				</TooltipProvider>
+			</Provider>,
+		);
+
+		const patch = await screen.findByTestId("patch-diff");
+		expect(patch.getAttribute("data-patch")).toBe("diff --git a/deleted.md b/deleted.md");
+		expect(screen.queryByText(/文件不存在/)).toBeNull();
 	});
 
 	it("无 diffPatch 且 HEAD 为 null（非 git/无变更）：普通视图且不显示降级提示", async () => {

@@ -190,7 +190,7 @@ describe("collectChangedFiles", () => {
 		expect(files[0]?.deleted).toBe(1);
 	});
 
-	it("同一文件多次编辑只保留一行并隐藏非净变化统计", () => {
+	it("同一文件多次编辑：重放合并为一行，多次操作隐藏统计（近似）", () => {
 		const entries = [
 			assistantEntry("a1", [
 				{
@@ -211,7 +211,10 @@ describe("collectChangedFiles", () => {
 		const files = collectChangedFiles(entries, "/repo");
 		expect(files).toHaveLength(1);
 		expect(files[0]?.operationCount).toBe(2);
+		// 首操作是 edit（base 未知）且多次操作 → 统计为操作行数（含中间态），隐藏 +/−
 		expect(files[0]?.statsReliable).toBe(false);
+		expect(files[0]?.patch).toContain("-a");
+		expect(files[0]?.patch).toContain("+c");
 	});
 
 	it("无项目 cwd 时相对路径保留为不可打开状态", () => {

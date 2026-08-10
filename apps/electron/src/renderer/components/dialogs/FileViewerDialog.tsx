@@ -180,15 +180,18 @@ export default function FileViewerDialog({
 	const absolutePath = dockMode ? (dockPath ?? null) : (viewingFile?.absolutePath ?? null);
 	const hasFile = dockMode ? !!dockPath : !!viewingFile;
 
-	// 加载该文件 HEAD 版本内容（完整文件 diff 对比，Dock/独立窗口统一）：
-	// ① dockMode 从「变更」面板打开（有 diffPatch）→ 用项目上下文取
+	// 加载该文件 HEAD 版本内容（完整文件 diff 对比，仅无 diffPatch 的文件树/独立窗口路径用）：
+	// ① dockMode 从「变更」面板打开（有 diffPatch）→ 按入口语义直接渲染 patch，无需 HEAD
 	// ② 其他模式（独立窗口/文件树）→ 按绝对路径自动检测 git 变更
 	// ③ reloadTick（手动刷新/保存后）一并重载，保证 diff 反映最新磁盘内容
 	useEffect(() => {
 		void reloadTick; // 仅作为 effect 触发条件（手动刷新/保存后重载 HEAD）
 		// 路径/依赖变化先清空旧值：避免切换文件时旧 HEAD × 新内容短暂组成错位 diff
 		setOldContent(null);
+		// 切换文件/携带的新 patch 到达时，恢复 patch 视图（不再沿用上次保存后的关闭状态）
+		setPatchDismissed(false);
 		if (!absolutePath) return;
+		if (diffPatch !== undefined) return;
 		let cancelled = false;
 		const canReadProjectHead = Boolean(
 			diffPatch && activeProject && isPathInsideProject(absolutePath, activeProject.cwd),
@@ -223,6 +226,8 @@ export default function FileViewerDialog({
 	const [draft, setDraft] = useState("");
 	const [savedContent, setSavedContent] = useState("");
 	const [saving, setSaving] = useState(false);
+	// 保存成功后退出“入口 patch”视图：diffPatch 是打开时的快照，保存后继续显示会陈旧。
+	const [patchDismissed, setPatchDismissed] = useState(false);
 	const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null);
 	const [highlightFailed, setHighlightFailed] = useState(false);
 	const [activeSlug, setActiveSlug] = useState<string | null>(null);
@@ -333,15 +338,11 @@ export default function FileViewerDialog({
 	);
 
 	const textData = loadState.status === "text" ? loadState : null;
-	// 打开时明确期望 diff（携带 diffPatch）但 HEAD 内容不可得（非 git 项目/HEAD 无此文件/文件过大）
-	// → 仍保留本次工具 patch，避免用户点击变更后退化成看不出差异的普通文件预览。
-	const diffExpected = diffPatch !== undefined && oldContent === null && textData !== null;
-	const renderPatchFallback = (patch: string) => (
+	// 携带 diffPatch（变更入口）→ 该入口语义下的完整 diff（工具重放 / git diff），直接渲染 patch。
+	// patchDismissed：保存后 patch 快照陈旧，退出 patch 视图回落到普通文本。
+	const diffExpected = diffPatch !== undefined && textData !== null && !patchDismissed;
+	const renderPatchView = (patch: string) => (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-600 dark:text-amber-400">
-				<FileWarning className="size-3.5 shrink-0" />
-				{t("fileViewer.patchFallback", "无法取得 HEAD，显示本次工具变更")}
-			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
 				<ErrorBoundary
 					fallback={
@@ -642,6 +643,8 @@ export default function FileViewerDialog({
 			setSavedContent(draft);
 			// 重读文件与 HEAD 版本:diff 立即反映保存后的磁盘内容(而不停留在打开时的快照)
 			setReloadTick((n) => n + 1);
+			// 入口 patch 是打开时的快照：保存后退出 patch 视图，避免显示陈旧 diff。
+			setPatchDismissed(true);
 			toast.success(t("fileViewer.saved"));
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : t("fileViewer.loadFailed"));
@@ -833,21 +836,26 @@ export default function FileViewerDialog({
 				</p>
 			</div>
 			<div className="flex min-h-0 flex-1 flex-col" aria-label={t("fileViewer.viewFile")}>
-				{oldContent !== null && textData && !editMode ? (
+				{diffExpected && diffPatch && !editMode ? (
+					// 变更入口（会话“本轮变更”/右侧 git 变更列表）携带 diffPatch → 按入口语义
+					// 渲染完整 diff（工具重放 patch 含删除行；git patch 为 HEAD 对比）。
+					renderPatchView(diffPatch)
+				) : oldContent !== null && textData && !editMode ? (
 					// Proma 同款：FileDiff 渲染完整文件（className="h-full" 让虚拟化正确测量高度）。
 					// !editMode：diff 生效时仍允许进入编辑态，避免编辑按钮点了无反应（S1-2）
 					renderDiffView(oldContent, textData.content)
-				) : diffExpected && diffPatch && !editMode ? (
-					renderPatchFallback(diffPatch)
 				) : loadState.status === "loading" ? (
 					<div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
 						<div className="size-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
 						<span className="text-xs text-muted-foreground">{t("fileViewer.loading")}</span>
 					</div>
 				) : loadState.status === "error" ? (
-					// 文件已被删除（如变更面板打开 deleted 文件）：readFileContent 报 ENOENT，
-					// 但 HEAD 内容可取 → 渲染「HEAD 版本对比」（全删除 diff）+ 顶部提示条
-					oldContent !== null && loadState.error.includes("ENOENT") ? (
+					// 文件已被删除（如变更入口打开 deleted 文件）：readFileContent 报 ENOENT。
+					// 带 diffPatch 时直接渲染入口 patch（git 全删除 / 工具 patch）；
+					// 否则 HEAD 内容可取时渲染「HEAD 版本对比」（全删除 diff）+ 顶部提示条
+					loadState.error.includes("ENOENT") && diffPatch && !editMode ? (
+						renderPatchView(diffPatch)
+					) : oldContent !== null && loadState.error.includes("ENOENT") ? (
 						<div className="flex min-h-0 flex-1 flex-col">
 							<div className="flex shrink-0 items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-600 dark:text-amber-400">
 								<FileWarning className="size-3.5 shrink-0" />
@@ -1026,11 +1034,6 @@ export default function FileViewerDialog({
 						)}
 						<span>{formatBytes(textData.sizeBytes)}</span>
 						{textData.truncated && <span className="ml-auto">{t("fileViewer.truncatedNotice")}</span>}
-						{diffExpected && !diffPatch && (
-							<span className="ml-auto rounded-sm bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600 dark:text-amber-400">
-								{t("fileViewer.headUnavailable")}
-							</span>
-						)}
 					</div>
 				)}
 			</div>

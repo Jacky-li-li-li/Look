@@ -15,6 +15,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useAgentActions } from "../../hooks/useAgentActions";
+import { type FileOperation, replayFileChanges } from "../../lib/changePatch";
 import { agentsAtom } from "../../store/agentAtoms";
 import { appStore } from "../../store/appStore";
 import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "../../store/atoms";
@@ -138,12 +139,10 @@ function toolResultMap(entries: readonly LookSessionEntry[]): Map<string, unknow
 
 /**
  * 从当前轮次收集成功编辑的文件（去重保序）。
- * result patch 优先于 args fallback；同一文件多次修改只保留一行，避免
- * 把中间步骤的 +/− 行数误加成净变化。
+ * 同一文件的所有 write/edit 操作按序重放合并为完整 patch + 精确统计
+ * （replayFileChanges），卡片 +N -M 与查看器渲染共用同一 patch。
  */
 export function collectChangedFiles(entries: LookSessionEntry[], projectCwd = ""): SessionChangedFile[] {
-	const files: SessionChangedFile[] = [];
-	const byPath = new Map<string, SessionChangedFile>();
 	let start = 0;
 	for (let i = entries.length - 1; i >= 0; i--) {
 		const entry = entries[i];
@@ -154,6 +153,9 @@ export function collectChangedFiles(entries: LookSessionEntry[], projectCwd = ""
 	}
 	const scopedEntries = entries.slice(start);
 	const results = toolResultMap(scopedEntries);
+	// 按文件收集本轮所有 write/edit 操作，聚合完成后统一重放成完整 patch（见 buildFiles）。
+	const operationsByPath = new Map<string, FileOperation[]>();
+	const resolvedByPath = new Map<string, ResolvedChangePath>();
 
 	for (const entry of scopedEntries) {
 		if (entry.type !== "message" || entry.message.role !== "assistant") continue;
@@ -171,29 +173,36 @@ export function collectChangedFiles(entries: LookSessionEntry[], projectCwd = ""
 
 			const resolved = resolveChangePath(rawPath, projectCwd);
 			const key = resolved.absolutePath ?? resolved.relativePath;
+			// SDK result patch（args.edits 为空时供 replay 降级使用）
 			const extracted = extractEditPatch(block.name, args, result, rawPath);
-			const existing = byPath.get(key);
-			if (existing) {
-				existing.operationCount += 1;
-				existing.statsReliable = false;
-				if (extracted?.patch) existing.patch = extracted.patch;
+			const ops = operationsByPath.get(key);
+			if (ops) {
+				ops.push({ tool: block.name, args, patchFallback: extracted?.patch });
 				continue;
 			}
-
-			const file: SessionChangedFile = {
-				path: resolved.relativePath,
-				relativePath: resolved.relativePath,
-				absolutePath: resolved.absolutePath,
-				patch: extracted?.patch ?? "",
-				added: extracted?.added ?? 0,
-				deleted: extracted?.deleted ?? 0,
-				statsReliable: extracted !== null,
-				operationCount: 1,
-				canOpen: resolved.absolutePath !== null,
-			};
-			byPath.set(key, file);
-			files.push(file);
+			operationsByPath.set(key, [{ tool: block.name, args, patchFallback: extracted?.patch }]);
+			resolvedByPath.set(key, resolved);
 		}
+	}
+
+	// 聚合完成：按文件重放全部操作 → 完整 patch + 精确统计（卡片与查看器共用同一 patch）。
+	const files: SessionChangedFile[] = [];
+	for (const [key, operations] of operationsByPath) {
+		const resolved = resolvedByPath.get(key);
+		if (!resolved) continue;
+		const replayed = replayFileChanges(resolved.relativePath, operations);
+		files.push({
+			path: resolved.relativePath,
+			relativePath: resolved.relativePath,
+			absolutePath: resolved.absolutePath,
+			patch: replayed?.patch ?? "",
+			added: replayed?.added ?? 0,
+			deleted: replayed?.deleted ?? 0,
+			// 重放完全成功（无 oldText 匹配失败/非近似）→ 统计可靠；否则隐藏 +/−。
+			statsReliable: replayed !== null && !replayed.unmatched && !replayed.approximate,
+			operationCount: operations.length,
+			canOpen: resolved.absolutePath !== null,
+		});
 	}
 	return files;
 }
