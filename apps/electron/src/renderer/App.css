@@ -330,6 +330,54 @@ body {
 	 ============================================================ */
 
 @layer components {
+	/* 工具面板展开 / 流式文本 reveal 动画。必须放在 @layer 顶层（不能嵌在选择器内）：
+	   CSS Nesting 会把选择器内 @keyframes 的名称作用域化，导致 animation 引用失效。 */
+	@keyframes tool-reveal {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+	}
+
+	/* Streamdown wraps only text added by the latest streaming delta. Matching
+		 the tool reveal curve makes each growing line settle into the transcript
+		 without replaying motion on text that is already readable.
+		 用 transform 而非 top：top 是 layout 属性，流式逐批 delta 频繁播放会触发
+		 重新布局拖慢渲染；translateY 走 compositor，不影响 layout。
+		 keyframes 必须放 @layer 顶层（不能嵌进选择器规则），否则 CSS Nesting 会
+		 把名字作用域化导致动画引用失效。 */
+	@keyframes sd-look-text-reveal {
+		from {
+			opacity: 0;
+			transform: translateY(-0.45em);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	/* ThinkingPanel 流式增量 reveal：新追加片段淡入 + 轻微下落，避免整块跳变 */
+	@keyframes look-thinking-reveal {
+		from {
+			opacity: 0;
+			transform: translateY(0.35em);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+	.look-thinking-reveal {
+		animation: look-thinking-reveal 260ms cubic-bezier(0, 0, 0.2, 1);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.look-thinking-reveal {
+			animation: none;
+		}
+	}
+
 	.app-shell {
 		position: relative;
 		isolation: isolate;
@@ -998,32 +1046,6 @@ body {
 		[data-tool-panel-body][data-open="true"] > .overflow-hidden > *,
 		[data-execution-group-body][data-open="true"] > .overflow-hidden > * > [data-tool-group-item] {
 			animation: none;
-		}
-	}
-
-	/* ============================================================
-		 Tool panel content reveal — slides down + fades in as the
-		 grid row expands. Played only when data-open flips to true.
-		 ============================================================ */
-
-	@keyframes tool-reveal {
-		from {
-			opacity: 0;
-			transform: translateY(-8px);
-		}
-	}
-
-	/* Streamdown wraps only text added by the latest streaming delta. Matching
-		 the tool reveal curve makes each growing line settle into the transcript
-		 without replaying motion on text that is already readable. */
-	@keyframes sd-look-text-reveal {
-		from {
-			opacity: 0;
-			top: -0.45em;
-		}
-		to {
-			opacity: 1;
-			top: 0;
 		}
 	}
 

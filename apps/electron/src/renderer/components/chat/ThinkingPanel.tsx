@@ -31,6 +31,21 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 	const [hasRenderedBody, setHasRenderedBody] = React.useState(() => !autoCollapse);
 	const open = manualOpen ?? !autoCollapse;
 
+	// ── 流式增量渲染 ──
+	// thinking 是每批 delta 后的累计全文；把「本批新增片段」单独包一层 reveal span
+	// （淡入 + 轻微下落），避免整块直接替换造成的“一蹦一蹦”跳变感。
+	// prevLenRef 在 effect 中提交（不在 render 内推进，兼容 StrictMode 双调用）。
+	const prevLenRef = React.useRef(0);
+	const thinkingLen = thinking.length;
+	const growing = isStreaming && thinkingLen >= prevLenRef.current;
+	const stableLen = growing ? prevLenRef.current : thinkingLen;
+	const stableText = thinking.slice(0, stableLen);
+	const deltaText = growing ? thinking.slice(stableLen) : "";
+
+	React.useEffect(() => {
+		prevLenRef.current = thinkingLen;
+	});
+
 	const handleToggle = React.useCallback(() => {
 		// 展开时脱离“贴底”锁定：防止 stick-to-bottom 的 resize 跟随把视口拽到
 		// 展开后内容的底部（与 CollapsibleExecutionGroup 同一问题的 thinking 版本）。
@@ -84,7 +99,14 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 				<div className="overflow-hidden">
 					{hasRenderedBody || open ? (
 						<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
-							<div className="whitespace-pre-wrap break-words">{thinking}</div>
+							<div className="whitespace-pre-wrap break-words">
+								{stableText}
+								{deltaText.length > 0 && (
+									<span key={stableLen} className="look-thinking-reveal">
+										{deltaText}
+									</span>
+								)}
+							</div>
 						</div>
 					) : null}
 				</div>

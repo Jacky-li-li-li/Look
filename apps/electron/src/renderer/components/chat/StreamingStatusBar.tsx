@@ -10,8 +10,8 @@
 import type { LookUiStreamBlock } from "@shared/types";
 import { memo, useEffect, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ThinkingOrb } from "thinking-orbs";
 import { useLookTheme } from "../../hooks/useLookTheme";
+import { LookThinkingOrb } from "./LookThinkingOrb";
 
 export type StreamingPhase = "thinking" | "tool" | "text";
 
@@ -57,8 +57,9 @@ export const StreamingStatusBar = memo(function StreamingStatusBar({ phase }: { 
 
 	return (
 		<div className="flex items-center gap-2 py-1 text-sm text-muted-foreground" role="status">
-			{/* thinking-orbs 仅提供 64/20 两个预置：保持 64 预设绘制，CSS 显示为一半（32px） */}
-			<ThinkingOrb state="connecting" size={64} speed={3} theme={tone} style={{ width: 32, height: 32 }} />
+			{/* thinking-orbs 仅提供 64/20 两个预置：保持 64 预设绘制，CSS 显示为一半（32px）。
+			   LookThinkingOrb 为自驱动封装（无 IntersectionObserver 离屏暂停），流式期间始终动画。 */}
+			<LookThinkingOrb state="connecting" size={64} speed={3} dark={tone === "dark"} displaySize={32} />
 			<span className="text-xs font-normal">{t(PHASE_LABEL_KEY[phase])}</span>
 			<span className="font-mono text-[10px] tabular-nums opacity-70">{formatElapsed(elapsed)}</span>
 		</div>
