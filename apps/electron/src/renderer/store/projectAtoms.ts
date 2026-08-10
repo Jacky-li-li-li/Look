@@ -94,12 +94,22 @@ export const loadedWorkspaceChildrenAtomFamily = atomFamily((projectId: string) 
 
 export const selectedSharedPathAtomFamily = atomFamily((projectId: string) => atom<string | null>(null));
 
+/** 共享区展开路径与懒加载缓存；根目录继续由 sharedFilesAtomFamily 提供。 */
+export const expandedSharedPathsAtomFamily = atomFamily((projectId: string) => atom<Set<string>>(new Set<string>()));
+
+export const loadedSharedChildrenAtomFamily = atomFamily((projectId: string) =>
+	atom<Map<string, FileTreeNode[]>>(new Map<string, FileTreeNode[]>()),
+);
+
 /** 每个项目的 git 只读信息（GitStatusBar 订阅；null = 未加载/未知）。 */
 export const projectGitInfoAtomFamily = atomFamily((projectId: string) => atom<GitRepoInfo | null>(null));
 
 export const sharedFilesAtomFamily = atomFamily((projectId: string) => atom<FileTreeNode[]>([]));
 
 export const sharedFilesLoadingAtomFamily = atomFamily((projectId: string) => atom(false));
+
+/** 根列表最近一次加载失败的错误信息；null = 无错误。 */
+export const sharedFilesErrorAtomFamily = atomFamily((projectId: string) => atom<string | null>(null));
 
 export const workspaceTreeLoadingAtomFamily = atomFamily((projectId: string) => atom(false));
 
@@ -109,10 +119,13 @@ export function removeProjectAtoms(projectId: string): void {
 	expandedWorkspacePathsAtomFamily.remove(projectId);
 	loadedWorkspaceChildrenAtomFamily.remove(projectId);
 	selectedSharedPathAtomFamily.remove(projectId);
+	expandedSharedPathsAtomFamily.remove(projectId);
+	loadedSharedChildrenAtomFamily.remove(projectId);
 	projectGitInfoAtomFamily.remove(projectId);
 	projectGitInfoAtomFamily.remove("");
 	sharedFilesAtomFamily.remove(projectId);
 	sharedFilesLoadingAtomFamily.remove(projectId);
+	sharedFilesErrorAtomFamily.remove(projectId);
 	workspaceTreeLoadingAtomFamily.remove(projectId);
 	workspaceTreeErrorAtomFamily.remove(projectId);
 }

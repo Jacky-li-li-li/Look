@@ -8,7 +8,7 @@
 // ============================================================
 
 import fs, { existsSync } from "node:fs";
-import { getProjectSharedDir, getWorkspaceDir } from "@look/shared/look-storage";
+import { assertSafeProjectId, getProjectSharedDir, getWorkspaceDir } from "@look/shared/look-storage";
 import { DEFAULT_PROJECT_ID } from "@look/shared/types";
 import type { RuntimeRegistry } from "../session/runtime/runtime-registry.js";
 import type { SessionCatalog } from "../session/services/session-catalog.js";
@@ -38,14 +38,19 @@ export class ProjectDeletionService {
 	constructor(private readonly deps: ProjectDeletionDependencies) {}
 
 	async executeDelete(projectId: string): Promise<void> {
+		assertSafeProjectId(projectId);
+		if (projectId === DEFAULT_PROJECT_ID) {
+			throw new Error("Cannot delete the default workspace");
+		}
 		const project = this.deps.projectService.getProjectInfo(projectId);
+		if (!project) throw new Error(`Project not found: ${projectId}`);
 		const sessions = this.deps.sessionCatalog.listByProject(projectId);
 		const runtimeIds: string[] = [];
 		for (const [sessionId, managed] of this.deps.runtimeRegistry.entries()) {
 			if (managed.projectId === projectId) runtimeIds.push(sessionId);
 		}
 		const sharedDir = getProjectSharedDir(projectId);
-		const workspaceDir = project ? getWorkspaceDir(project.id) : null;
+		const workspaceDir = getWorkspaceDir(project.id);
 
 		await Promise.all(runtimeIds.map((sessionId) => this.deps.disposeRuntime(sessionId, true)));
 
@@ -93,12 +98,10 @@ export class ProjectDeletionService {
 				}
 			}
 		}
-		if (workspaceDir && existsSync(workspaceDir)) {
+		if (existsSync(workspaceDir)) {
 			try {
 				fs.rmSync(workspaceDir, { recursive: true, force: true });
-				if (project) {
-					console.log(`[Look] Removed workspace for deleted project "${project.name}" (${projectId})`);
-				}
+				console.log(`[Look] Removed workspace for deleted project "${project.name}" (${projectId})`);
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
 					console.error(`Failed to remove workspace for project ${projectId}:`, error);

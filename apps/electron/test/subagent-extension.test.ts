@@ -42,7 +42,9 @@ async function captureRegisteredTools(host: SubagentHost, cwd: string) {
 			registered.set(t.name, t);
 		},
 	};
-	const factory = await createSubagentExtensionFactory("parent-1", host, cwd);
+	// 注意：第三参是 projectId（不是 cwd）。discoverAgents 会用 assertSafeProjectId 校验，
+	// 传绝对路径会在运行时抛 Invalid project ID。
+	const factory = await createSubagentExtensionFactory("parent-1", host, "test-project");
 	factory(api as Parameters<typeof factory>[0]);
 	for (const name of ["subagent", "subagent_parallel", "subagent_chain", "subagent_status", "subagent_cancel"]) {
 		if (!registered.has(name)) throw new Error(`tool ${name} was not registered`);
@@ -77,7 +79,7 @@ describe("SubAgent extension — runtime dispatch", () => {
 	});
 
 	it("discovers the built-in agents from ~/.look/agents", async () => {
-		const { agents } = await discoverAgents(cwd, "both");
+		const { agents } = await discoverAgents("test-project", "both");
 		const names = agents.map((a) => a.name);
 		for (const name of BUILT_IN_AGENTS) {
 			expect(names).toContain(name);

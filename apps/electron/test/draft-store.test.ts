@@ -1,6 +1,6 @@
 // DraftStore — CRUD + 原子持久化
 
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -16,7 +16,7 @@ describe("DraftStore", () => {
 	});
 
 	afterEach(() => {
-		writeFileSync(filePath, "{}"); // 无操作，仅确保测试目录可复用
+		rmSync(dir, { recursive: true, force: true });
 	});
 
 	it("creates drafts and lists them newest first", async () => {
@@ -85,6 +85,53 @@ describe("DraftStore", () => {
 		expect(raw).not.toContain(".tmp");
 	});
 
+	it("serializes concurrent mutations without losing drafts", async () => {
+		const store = new DraftStore(filePath);
+		await Promise.all([store.create("first"), store.create("second"), store.create("third")]);
+
+		expect(new DraftStore(filePath).list()).toHaveLength(3);
+	});
+
+	it("merges mutations from two stores sharing the same file", async () => {
+		const first = new DraftStore(filePath);
+		const second = new DraftStore(filePath);
+		await Promise.all([first.create("from first"), second.create("from second")]);
+
+		expect(
+			new DraftStore(filePath)
+				.list()
+				.map((draft) => draft.text)
+				.sort(),
+		).toEqual(["from first", "from second"]);
+	});
+
+	it("drops malformed database entries while preserving valid drafts", () => {
+		writeFileSync(
+			filePath,
+			JSON.stringify({
+				version: 1,
+				drafts: [
+					null,
+					{ id: "bad", text: "", createdAt: Date.now() },
+					{ id: "valid", text: "  keep me  ", createdAt: Date.now(), convertedSessionId: null },
+				],
+			}),
+		);
+
+		expect(new DraftStore(filePath).list()).toEqual([
+			{ id: "valid", text: "keep me", createdAt: expect.any(Number) },
+		]);
+	});
+
+	it("recovers the mutation queue after a write failure", async () => {
+		mkdirSync(filePath);
+		const store = new DraftStore(filePath);
+		await expect(store.create("first attempt")).rejects.toThrow();
+
+		rmSync(filePath, { recursive: true, force: true });
+		await expect(store.create("recovered")).resolves.toMatchObject({ text: "recovered" });
+		expect(store.list()).toHaveLength(1);
+	});
 	it("falls back to an empty database for corrupt files", async () => {
 		writeFileSync(filePath, "{ not valid json");
 		const store = new DraftStore(filePath);

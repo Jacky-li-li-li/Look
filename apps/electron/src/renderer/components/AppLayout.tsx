@@ -165,7 +165,7 @@ function AppLayout({
 			clearTimeout(settle);
 			window.removeEventListener("resize", syncTrafficLightPosition);
 		};
-	}, [sidebarCollapsed, showAgentSquare, showScheduledTasks, windowFullscreen]);
+	}, [sidebarCollapsed, showAgentSquare, showScheduledTasks, showDrafts, showSettings, windowFullscreen]);
 
 	// 窄窗口自动折叠侧边栏：优先折叠右栏，再折叠左栏
 	useEffect(() => {
@@ -189,10 +189,10 @@ function AppLayout({
 	const mainView: MainView =
 		appReadyPhase < 1
 			? "loading"
-			: showScheduledTasks
-				? "scheduled"
-				: showDrafts
-					? "drafts"
+			: showDrafts
+				? "drafts"
+				: showScheduledTasks
+					? "scheduled"
 					: projects.length === 0
 						? "welcome"
 						: showAgentSquare

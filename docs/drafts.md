@@ -18,7 +18,7 @@ collapsed note expands it.
 
 1. Expand the sticky note (click it or press the hotkey) and type in the input —
    **Enter to save, Shift+Enter for newline**.
-2. The note shows the three most recent drafts as a preview; **View all** opens the
+2. The note shows the two most recent drafts as a preview; **View all** opens the
    management page (list, Run as task, Delete).
 3. **Run as task** on the management page opens a project picker. Confirming creates a
    new agent session in that project and sends the draft text immediately — the app
@@ -28,16 +28,23 @@ collapsed note expands it.
 
 ## Architecture and storage
 
-- Definitions: `~/.look/drafts.json` (or `$LOOK_HOME/drafts.json`). Writes use
-  temp-file plus atomic rename (`writeJsonFile`).
+- Definitions: `~/.look/drafts.json` (or `$LOOK_HOME/drafts.json`). Writes use a
+  unique per-process temp file plus atomic rename, and a cross-process file lock
+  (same `FileTaskLock` primitive as the scheduler) so concurrent mutations from
+  multiple Look instances merge instead of overwriting.
 - `DraftStore` (`src/main/drafts/draft-store.ts`): small atomic JSON store following
   the `ScheduledTaskStore` pattern — mutations are serialized through a queue and
-  awaited before the IPC returns; `list()` reloads from disk each time so external
-  writes are visible.
-- Data shape: `{ id, text, createdAt }`. Text is trimmed; empty text is rejected;
-  length is capped at 4000 chars (`DRAFT_MAX_TEXT_LENGTH`).
+  awaited before the IPC returns; the file is re-read inside the queue so concurrent
+  creates never lose drafts; `list()` reloads from disk each time so external writes
+  are visible. Malformed JSON roots or invalid draft entries are dropped (never
+  crash the list), and a failed write does not poison the queue for later mutations.
+- Data shape: `{ id, text, createdAt, convertedSessionId? }`. Text is trimmed; empty
+  text is rejected; length is capped at 4000 chars (`DRAFT_MAX_TEXT_LENGTH`).
+  `convertedSessionId` is written after a successful conversion and powers the
+  **View task** button.
 - IPC: `draft:list` / `draft:create` / `draft:update` / `draft:delete` via
-  `draftRouter` (`src/main/ipc/routers/draft-router.ts`).
+  `draftRouter` (`src/main/ipc/routers/draft-router.ts`). `draft:update` validates
+  its patch at runtime (text string / nullable convertedSessionId).
 
 ## Renderer
 
@@ -46,20 +53,26 @@ collapsed note expands it.
   three most recent drafts, drag with pointer capture, ⌘⇧N hotkey (window-level keydown
   capture; Mac uses `metaKey`, others `ctrlKey`), position persisted in localStorage.
 - `DraftsPage` (`src/renderer/components/drafts/DraftsPage.tsx`) — full management page.
-- `ConvertDraftDialog` — project picker; conversion uses the existing
-  `handleCreateClick(projectId)` (create + activate session) then
-  `handleSendMessage(text)` (sends to the now-active session). No new main-process
-  capability is required for conversion.
-- Navigation: `showDraftsAtom` in `settingsAtoms.ts`; `AppLayout` renders the drafts
-  view before the chat view in its `MainView` union, and mounts `DraftStickyNote` at
-  the shell root so it stays visible across views.
+- `ConvertDraftDialog` — project picker; conversion runs create → send → mark in
+  that order using the existing `handleCreateClick(projectId)` and
+  `handleSendMessage(text)`. Partial failures are retryable: if sending or marking
+  fails, retrying the **same project** finishes the existing session instead of
+  creating a duplicate; only after a successful send is `convertedSessionId` set.
+- Navigation: `navigateMainView` (`store/viewNavigation.ts`) keeps chat / drafts /
+  scheduled / agent-square / settings mutually exclusive; `AppLayout` derives its
+  `MainView` union from those atoms and mounts `DraftStickyNote` at the shell root
+  so it stays visible across views.
 
 ## Design decisions
 
 - The sticky note is deliberately **non-disruptive**: recording never switches the
   main view, so running sessions stay visible; management (delete/convert) lives on
-  the drafts page opened from "View all".
-- Drafts are deliberately minimal: no categories, tags, search, pinning, or pagination.
-- Conversion keeps the draft (no data loss); marking converted drafts is a future option.
+  the drafts page opened from "View all". Position is clamped back into the viewport
+  on resize / expand so the note can never be lost off-screen.
+- Drafts are deliberately minimal: no categories, tags, search, or pagination. The
+  note can be pinned (kept as a collapsed bar after minimizing) or unpinned (hidden
+  when minimized, reachable from the top bar button).
+- Conversion keeps the draft and records the created session id
+  (`convertedSessionId`); the draft's button becomes **View task** afterwards.
 - A standalone always-on-top sticky window (visible outside Look) is a future option;
   the MVP is an in-window note with an app-level hotkey.

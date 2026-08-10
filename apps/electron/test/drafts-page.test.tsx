@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "jotai";
 import { I18nextProvider } from "react-i18next";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import DraftsPage from "../src/renderer/components/drafts/DraftsPage";
 import i18n from "../src/renderer/i18n";
 import { appStore } from "../src/renderer/store/appStore";
@@ -22,6 +22,11 @@ describe("DraftsPage", () => {
 	const activateSession = vi.fn();
 	const handleCreateClick = vi.fn();
 	const handleSendMessage = vi.fn();
+
+	beforeAll(() => {
+		// Radix Select 在 jsdom 中需要 scrollIntoView
+		Element.prototype.scrollIntoView = vi.fn();
+	});
 
 	beforeEach(async () => {
 		await i18n.changeLanguage("en");
@@ -142,6 +147,78 @@ describe("DraftsPage", () => {
 		fireEvent.click(screen.getByRole("button", { name: /new session & run/i }));
 
 		await waitFor(() => expect(handleCreateClick).toHaveBeenCalled());
+		expect(appStore.get(showDraftsAtom)).toBe(true);
+	});
+
+	it("does not recreate the session or resend when the first send fails", async () => {
+		handleSendMessage.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+		renderPage();
+		await waitFor(() => expect(screen.getByText("Check retry behavior on weak networks")).toBeTruthy());
+
+		fireEvent.click(screen.getAllByRole("button", { name: /run as task/i })[0]);
+		await waitFor(() => expect(screen.getByText("Run as a task")).toBeTruthy());
+		const confirm = screen.getByRole("button", { name: /new session & run/i });
+
+		// 第一次发送失败：不离开草稿页，dialog 保持打开
+		fireEvent.click(confirm);
+		await waitFor(() => expect(handleSendMessage).toHaveBeenCalledTimes(1));
+		expect(appStore.get(showDraftsAtom)).toBe(true);
+		expect(updateDraft).not.toHaveBeenCalled();
+
+		// 重试：不再次创建会话、只重发消息，成功后标记并切回聊天
+		fireEvent.click(confirm);
+		await waitFor(() => expect(handleCreateClick).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(handleSendMessage).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(updateDraft).toHaveBeenCalledWith("draft-1", { convertedSessionId: "agent-1" }));
+		await waitFor(() => expect(appStore.get(showDraftsAtom)).toBe(false));
+	});
+
+	it("only marks the draft on retry when marking failed after a successful send", async () => {
+		updateDraft.mockResolvedValueOnce({ success: false, error: "disk full" }).mockResolvedValueOnce({
+			success: true,
+			draft: {
+				id: "draft-1",
+				text: "Check retry behavior on weak networks",
+				createdAt: 0,
+				convertedSessionId: "agent-1",
+			},
+		});
+		renderPage();
+		await waitFor(() => expect(screen.getByText("Check retry behavior on weak networks")).toBeTruthy());
+
+		fireEvent.click(screen.getAllByRole("button", { name: /run as task/i })[0]);
+		await waitFor(() => expect(screen.getByText("Run as a task")).toBeTruthy());
+		const confirm = screen.getByRole("button", { name: /new session & run/i });
+
+		// 消息已发送，但标记失败：留在草稿页
+		fireEvent.click(confirm);
+		await waitFor(() => expect(handleSendMessage).toHaveBeenCalledTimes(1));
+		expect(appStore.get(showDraftsAtom)).toBe(true);
+
+		// 重试：不再创建会话、不再重发消息，只补标记并成功切换
+		fireEvent.click(confirm);
+		await waitFor(() => expect(handleCreateClick).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(handleSendMessage).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(updateDraft).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(appStore.get(showDraftsAtom)).toBe(false));
+	});
+
+	it("rejects retrying a partial conversion with a different project", async () => {
+		handleSendMessage.mockResolvedValueOnce(false);
+		renderPage();
+		await waitFor(() => expect(screen.getByText("Check retry behavior on weak networks")).toBeTruthy());
+
+		fireEvent.click(screen.getAllByRole("button", { name: /run as task/i })[0]);
+		await waitFor(() => expect(screen.getByText("Run as a task")).toBeTruthy());
+		fireEvent.click(screen.getByRole("button", { name: /new session & run/i }));
+		await waitFor(() => expect(handleSendMessage).toHaveBeenCalledTimes(1));
+
+		// 切换到第二个项目重试：拒绝，避免新建第二个会话
+		fireEvent.click(screen.getByRole("combobox", { name: "Project" }));
+		fireEvent.click(await screen.findByRole("option", { name: /beta/i }));
+		fireEvent.click(screen.getByRole("button", { name: /new session & run/i }));
+
+		await waitFor(() => expect(handleCreateClick).toHaveBeenCalledTimes(1));
 		expect(appStore.get(showDraftsAtom)).toBe(true);
 	});
 

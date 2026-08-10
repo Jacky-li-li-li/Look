@@ -89,6 +89,43 @@ describe("ProjectDeletionService", () => {
 		expect(events).toContainEqual({ type: "project:list" });
 	});
 
+	it("rejects an unknown project before deriving or deleting storage paths", async () => {
+		const removeProject = vi.fn();
+		const removeCatalogProject = vi.fn();
+		const service = new ProjectDeletionService({
+			projectService: {
+				getProjectInfo: vi.fn(() => null),
+				removeProject,
+				activeId: null,
+				setActiveId: vi.fn(),
+				listProjects: vi.fn(() => []),
+				saveProjects: vi.fn(),
+			} as unknown as Pick<
+				ProjectService,
+				"getProjectInfo" | "removeProject" | "activeId" | "setActiveId" | "listProjects" | "saveProjects"
+			>,
+			sessionCatalog: {
+				listByProject: vi.fn(() => []),
+				removeProject: removeCatalogProject,
+			} as unknown as Pick<SessionCatalog, "listByProject" | "removeProject">,
+			runtimeRegistry: { entries: vi.fn(() => new Map<string, unknown>().entries()) } as unknown as Pick<
+				RuntimeRegistry,
+				"entries"
+			>,
+			disposeRuntime: vi.fn(),
+			workspaceFileService: null,
+			workspaceTreeService: null,
+			emitSessionList: vi.fn(),
+			emitProjectList: vi.fn(),
+			getActiveSessionId: () => null,
+			setActiveSessionId: vi.fn(),
+		});
+
+		await expect(service.executeDelete("../escape")).rejects.toThrow("Invalid project ID");
+		expect(removeProject).not.toHaveBeenCalled();
+		expect(removeCatalogProject).not.toHaveBeenCalled();
+	});
+
 	it("clears active session id when it belongs to the deleted project", async () => {
 		const projectId = "proj-2";
 		const sessionId = "s2";

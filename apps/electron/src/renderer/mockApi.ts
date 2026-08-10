@@ -511,6 +511,7 @@ const mockApi: LookAPI = {
 
 	// ---- Shared area ----
 	listSharedFiles: () => success({ nodes: [] }),
+	listSharedChildren: () => success({ nodes: [] }),
 	startSharedWatch: () => ok,
 	stopSharedWatch: () => ok,
 	writeSharedFile: () => ok,

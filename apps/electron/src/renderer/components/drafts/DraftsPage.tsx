@@ -9,13 +9,14 @@ import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Textarea } from "@look/ui/components/ui/textarea";
 import type { Draft, ProjectInfo } from "@shared/types";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue } from "jotai";
 import { ArrowLeft, ArrowUpRight, LoaderCircle, Play, Plus, StickyNote, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { appStore } from "../../store/appStore";
-import { activeAgentIdAtom, showDraftsAtom, sidebarEffectiveCollapsedAtom } from "../../store/atoms";
+import { activeAgentIdAtom, sidebarEffectiveCollapsedAtom } from "../../store/atoms";
+import { navigateMainView } from "../../store/viewNavigation";
 import { fmtRelativeTime } from "../Sidebar/utils";
 import { ConvertDraftDialog } from "./ConvertDraftDialog";
 
@@ -25,9 +26,15 @@ export type DraftsPageProps = {
 	handleSendMessage: (text: string, images?: never[], sendMode?: "steer") => Promise<boolean>;
 };
 
+type ConversionAttempt = {
+	draftId: string;
+	projectId: string;
+	agentId: string;
+	sent: boolean;
+};
+
 export default function DraftsPage({ projects, handleCreateClick, handleSendMessage }: DraftsPageProps) {
 	const { t, i18n } = useTranslation();
-	const setShowDrafts = useSetAtom(showDraftsAtom);
 	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const [drafts, setDrafts] = useState<Draft[]>([]);
 	const [input, setInput] = useState("");
@@ -35,6 +42,7 @@ export default function DraftsPage({ projects, handleCreateClick, handleSendMess
 	const [converting, setConverting] = useState<Draft | null>(null);
 	const [convertBusy, setConvertBusy] = useState(false);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const conversionAttempts = useRef(new Map<string, ConversionAttempt>());
 
 	const refresh = useCallback(async () => {
 		const result = await window.look.listDrafts();
@@ -82,46 +90,62 @@ export default function DraftsPage({ projects, handleCreateClick, handleSendMess
 	const convert = useCallback(
 		async (projectId: string) => {
 			if (!converting) return;
+			const draft = converting;
 			setConvertBusy(true);
 			try {
-				const agentId = await handleCreateClick(projectId);
-				if (!agentId) throw new Error(t("drafts.convertCreateFailed"));
-				// 会话已创建即标记转化状态（即使消息发送失败，任务也已在）
-				const marked = await window.look.updateDraft(converting.id, { convertedSessionId: agentId });
-				if (marked.success) {
-					setDrafts((previous) => previous.map((item) => (item.id === marked.draft.id ? marked.draft : item)));
-				} else {
-					// 标记失败不阻塞转化，但明确提示（避免“还能再转一次”的困惑）
-					toast.warning(t("drafts.markFailed"));
+				let attempt = conversionAttempts.current.get(draft.id);
+				if (attempt && attempt.projectId !== projectId) {
+					throw new Error(t("drafts.convertRetrySameProject"));
 				}
-				const sent = await handleSendMessage(converting.text);
-				if (!sent) throw new Error(t("drafts.convertSendFailed"));
+				if (!attempt) {
+					const agentId = await handleCreateClick(projectId);
+					if (!agentId) throw new Error(t("drafts.convertCreateFailed"));
+					attempt = { draftId: draft.id, projectId, agentId, sent: false };
+					conversionAttempts.current.set(draft.id, attempt);
+				}
+
+				// handleCreateClick activates the new session on the normal path. Re-assert
+				// the target on retries so a changed active session cannot receive the draft.
+				appStore.set(activeAgentIdAtom, attempt.agentId);
+				if (!attempt.sent) {
+					const sent = await handleSendMessage(draft.text);
+					if (!sent) throw new Error(t("drafts.convertSendFailed"));
+					attempt.sent = true;
+				}
+
+				const marked = await window.look.updateDraft(draft.id, { convertedSessionId: attempt.agentId });
+				if (!marked.success) throw new Error(t("drafts.markFailed"));
+				setDrafts((previous) => previous.map((item) => (item.id === marked.draft.id ? marked.draft : item)));
+				conversionAttempts.current.delete(draft.id);
 				const projectName = projects.find((project) => project.id === projectId)?.name ?? projectId;
 				toast.success(t("drafts.convertSuccess", { project: projectName }));
 				setConverting(null);
-				// 切回聊天视图：新会话已在运行（草稿保留，按钮变为「查看任务」）
-				setShowDrafts(false);
+				// 切回聊天视图：新会话已在运行；草稿保留，按钮变为「查看任务」。
+				navigateMainView("chat");
 			} catch (error) {
+				// 保留 conversionAttempts：发送成功但标记失败时，重试只补标记，
+				// 不会再次创建会话或重复发送同一条草稿。
 				toast.error(error instanceof Error ? error.message : String(error));
 			} finally {
 				setConvertBusy(false);
 			}
 		},
-		[converting, handleCreateClick, handleSendMessage, projects, setShowDrafts, t],
+		[converting, handleCreateClick, handleSendMessage, projects, t],
 	);
 
 	// 打开已转化的任务会话（草稿 → 查看任务）
 	const navigateToSession = useCallback(
 		async (sessionId: string) => {
-			appStore.set(activeAgentIdAtom, sessionId);
-			setShowDrafts(false);
 			try {
-				await window.look.activateSession(sessionId);
-			} catch {
-				toast.error(t("drafts.sessionOpenFailed"));
+				const result = await window.look.activateSession(sessionId);
+				if (!result?.success) throw new Error(result?.error ?? t("drafts.sessionOpenFailed"));
+				appStore.set(activeAgentIdAtom, sessionId);
+				navigateMainView("chat");
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : t("drafts.sessionOpenFailed"));
 			}
 		},
-		[setShowDrafts, t],
+		[t],
 	);
 
 	const list = useMemo(() => drafts, [drafts]);
@@ -130,23 +154,23 @@ export default function DraftsPage({ projects, handleCreateClick, handleSendMess
 		<div className="flex h-full min-h-0 flex-col">
 			<header
 				className={cn(
-					"app-drag flex h-12 items-center justify-between gap-4 border-b border-hairline px-5",
+					"app-drag flex min-h-12 shrink-0 items-start justify-between gap-2 border-b border-hairline px-3 py-2 sm:items-center sm:gap-4 sm:px-5",
 					sidebarCollapsed && "mac-titlebar-pad",
 				)}
 			>
-				<div className="flex min-w-0 items-center gap-3">
+				<div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center sm:gap-3">
 					<Button
 						variant="outline"
 						size="sm"
 						className="gap-1 px-2.5 text-[11px]"
-						onClick={() => setShowDrafts(false)}
+						onClick={() => navigateMainView("chat")}
 					>
 						<ArrowLeft className="size-3.5" />
 						{t("marketplace.back")}
 					</Button>
-					<div className="min-w-0">
-						<h1 className="text-sm font-semibold">{t("drafts.title")}</h1>
-						<p className="text-[11px] text-muted-foreground">{t("drafts.description")}</p>
+					<div className="min-w-0 flex-1">
+						<h1 className="truncate text-sm font-semibold">{t("drafts.title")}</h1>
+						<p className="line-clamp-2 text-[11px] leading-4 text-muted-foreground">{t("drafts.description")}</p>
 					</div>
 				</div>
 				<div className="hidden shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground sm:flex">
@@ -208,7 +232,7 @@ export default function DraftsPage({ projects, handleCreateClick, handleSendMess
 										{fmtRelativeTime(draft.createdAt, i18n.resolvedLanguage ?? "en")}
 									</p>
 								</div>
-								<div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+								<div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
 									{draft.convertedSessionId ? (
 										<Button
 											variant="ghost"

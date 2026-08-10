@@ -149,6 +149,7 @@ const EXHAUSTIVE = {
 	"user-profile:logout": true,
 	"usage:get": true,
 	"shared:list": true,
+	"shared:list-children": true,
 	"shared:watch": true,
 	"shared:unwatch": true,
 	"shared:write": true,

@@ -26,6 +26,21 @@ export function guardString(x: unknown, label: string): string {
 	return x;
 }
 
+/**
+ * 内容专用 guard：允许远大于普通字段的文件内容（如 50MB），
+ * 但仍设置字符上限防止一次 IPC 把 V8 堆打爆。真实字节上限由 service 的
+ * Buffer.byteLength 校验（UTF-8 多字节/base64 编码下字符数与字节数不同）。
+ */
+export function guardContentString(x: unknown, label: string, maxChars: number): string {
+	if (typeof x !== "string") {
+		throw new Error(`Invalid ${label}: expected string, got ${typeof x}`);
+	}
+	if (x.length > maxChars) {
+		throw new Error(`Invalid ${label}: string exceeds max length ${maxChars}`);
+	}
+	return x;
+}
+
 export function guardOptionalString(x: unknown, label: string): string | undefined {
 	if (x === undefined) return undefined;
 	return guardString(x, label);

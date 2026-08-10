@@ -251,6 +251,7 @@ export interface LookAPI {
 	logout(): Promise<IpcResult>;
 	// ---- Shared area ----
 	listSharedFiles(projectId: string): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
+	listSharedChildren(projectId: string, relativePath: string): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
 	startSharedWatch(projectId: string): Promise<IpcResult>;
 	stopSharedWatch(projectId: string): Promise<IpcResult>;
 	writeSharedFile(projectId: string, path: string, content: string): Promise<IpcResult>;

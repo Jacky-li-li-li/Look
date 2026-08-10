@@ -92,7 +92,12 @@ export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 			)}
 		>
 			{activeAgent ? (
-				<div className="app-no-drag flex h-full min-w-0 flex-1 items-center px-2">
+				<div
+					className={cn(
+						"app-no-drag flex h-full min-w-0 flex-1 items-center px-2",
+						rightPanelCollapsed ? "pr-20" : "pr-12",
+					)}
+				>
 					{editing ? (
 						<input
 							ref={editRef}

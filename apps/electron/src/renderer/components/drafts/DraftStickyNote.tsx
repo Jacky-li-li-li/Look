@@ -7,13 +7,14 @@
 // ============================================================
 
 import type { Draft } from "@shared/types";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue } from "jotai";
 import { ArrowUpRight, Minimize2, Pin, PinOff, StickyNote } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { showDraftsAtom, stickyNoteExpandRequestAtom } from "../../store/atoms";
+import { navigateMainView } from "../../store/viewNavigation";
 import { fmtRelativeTime } from "../Sidebar/utils";
 
 const STICKY_POS_KEY = "look-draft-sticky-pos";
@@ -22,6 +23,8 @@ const STICKY_PINNED_KEY = "look-draft-sticky-pinned";
 const PREVIEW_COUNT = 2;
 const COLLAPSED_WIDTH = 188;
 const EXPANDED_WIDTH = 268;
+const EXPANDED_HEIGHT = 220;
+const DRAG_GUTTER = 16;
 // 拖动判定阈值（Manhattan 距离）。普通点击的手抖/微动通常 <8px；
 // 阈值过小（曾为 4px）会把正常点击误判为拖动，导致便利贴被微移且不展开。
 const DRAG_THRESHOLD_PX = 8;
@@ -51,11 +54,13 @@ type Pos = { x: number; y: number };
 // 里的旧坐标可能超出视口——不处理会导致便利贴渲染在屏幕外（点击「记一笔」
 // 明明展开了却看不见）。用展开态宽度保守 clamp，保证收起/展开都完全可见。
 function clampPos(p: Pos): Pos {
-	const maxX = Math.max(0, window.innerWidth - EXPANDED_WIDTH);
-	const maxY = Math.max(0, window.innerHeight - 60);
+	const minX = window.innerWidth <= EXPANDED_WIDTH + DRAG_GUTTER ? 0 : DRAG_GUTTER;
+	const minY = window.innerHeight <= EXPANDED_HEIGHT + DRAG_GUTTER ? 0 : DRAG_GUTTER;
+	const maxX = Math.max(minX, window.innerWidth - EXPANDED_WIDTH - DRAG_GUTTER);
+	const maxY = Math.max(minY, window.innerHeight - EXPANDED_HEIGHT - DRAG_GUTTER);
 	return {
-		x: Math.max(0, Math.min(maxX, p.x)),
-		y: Math.max(0, Math.min(maxY, p.y)),
+		x: Math.max(minX, Math.min(maxX, p.x)),
+		y: Math.max(minY, Math.min(maxY, p.y)),
 	};
 }
 
@@ -64,7 +69,7 @@ function loadPos(): Pos | null {
 		const raw = localStorage.getItem(STICKY_POS_KEY);
 		if (!raw) return null;
 		const parsed = JSON.parse(raw) as Pos;
-		if (typeof parsed.x !== "number" || typeof parsed.y !== "number") return null;
+		if (!Number.isFinite(parsed.x) || !Number.isFinite(parsed.y)) return null;
 		return clampPos(parsed);
 	} catch {
 		return null;
@@ -73,7 +78,6 @@ function loadPos(): Pos | null {
 
 export default function DraftStickyNote() {
 	const { t, i18n } = useTranslation();
-	const setShowDrafts = useSetAtom(showDraftsAtom);
 	const showDrafts = useAtomValue(showDraftsAtom);
 	const expandRequest = useAtomValue(stickyNoteExpandRequestAtom);
 	const [expanded, setExpanded] = useState<boolean>(() => loadExpanded());
@@ -140,14 +144,29 @@ export default function DraftStickyNote() {
 		return () => document.removeEventListener("pointerdown", onPointerDown, true);
 	}, [expanded]);
 
-	// 窗口尺寸变化时把便利贴 clamp 回可见区域（显示器切换/缩放后旧坐标可能越界）
+	// 窗口尺寸变化或展开态变化时把便利贴 clamp 回可见区域（显示器切换/缩放后旧坐标可能越界）。
+	// 展开会改变卡片宽度（188→268），因此 expanded 变化时必须重新钳制并持久化。
 	const hasPos = pos !== null;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 展开态变化是重新钳制的触发信号，回调内不直接引用 expanded
 	useEffect(() => {
 		if (!hasPos) return;
-		const onResize = () => setPos((current) => (current ? clampPos(current) : current));
-		window.addEventListener("resize", onResize);
-		return () => window.removeEventListener("resize", onResize);
-	}, [hasPos]);
+		const clampAndPersist = () => {
+			setPos((current) => {
+				if (!current) return current;
+				const next = clampPos(current);
+				if (next.x === current.x && next.y === current.y) return current;
+				try {
+					localStorage.setItem(STICKY_POS_KEY, JSON.stringify(next));
+				} catch {
+					// 忽略存储失败
+				}
+				return next;
+			});
+		};
+		clampAndPersist();
+		window.addEventListener("resize", clampAndPersist);
+		return () => window.removeEventListener("resize", clampAndPersist);
+	}, [expanded, hasPos]);
 
 	// ⌘⇧N / Ctrl+Shift+N 唤起，Esc 收起
 	useEffect(() => {
@@ -200,14 +219,19 @@ export default function DraftStickyNote() {
 			const dy = event.clientY - drag.startY;
 			if (!drag.moved && Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD_PX) drag.moved = true;
 			if (!drag.moved) return;
-			const current = pos ?? {
-				x: window.innerWidth - (expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH) - 16,
-				y: window.innerHeight - 60,
-			};
-			const width = expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
-			const x = Math.max(0, Math.min(window.innerWidth - width, current.x + dx));
-			const y = Math.max(0, Math.min(window.innerHeight - 60, current.y + dy));
-			setPos({ x, y });
+			const current =
+				pos ??
+				clampPos({
+					x: window.innerWidth - (expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH) - DRAG_GUTTER,
+					y: window.innerHeight - EXPANDED_HEIGHT - DRAG_GUTTER,
+				});
+			const next = clampPos({ x: current.x + dx, y: current.y + dy });
+			setPos(next);
+			try {
+				localStorage.setItem(STICKY_POS_KEY, JSON.stringify(next));
+			} catch {
+				// 忽略存储失败
+			}
 			drag.startX = event.clientX;
 			drag.startY = event.clientY;
 		},
@@ -219,20 +243,7 @@ export default function DraftStickyNote() {
 		dragRef.current = null;
 		// 点的是 button/textarea（未进入拖拽跟踪）→ 交给各自 onClick，不处理展开
 		if (!drag) return;
-		if (drag.moved) {
-			// 拖动结束：基于当前 state 的 pos 持久化（state 更新已提交）
-			setPos((current) => {
-				if (current) {
-					try {
-						localStorage.setItem(STICKY_POS_KEY, JSON.stringify(current));
-					} catch {
-						// 忽略存储失败
-					}
-				}
-				return current;
-			});
-			return;
-		}
+		if (drag.moved) return;
 		// 未移动：视为点击 → 展开。必须在 pointerup 判定而非 onClick：
 		// 原生 click 只在按下/释放位移小于浏览器阈值（约 5px）时才派发，
 		// 手抖微动超过阈值后 click 不触发，onClick 里的展开逻辑会静默丢失。
@@ -312,7 +323,7 @@ export default function DraftStickyNote() {
 									<button
 										type="button"
 										className="rounded p-1 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-										onClick={() => setShowDrafts(true)}
+										onClick={() => navigateMainView("drafts")}
 										title={t("drafts.viewAll")}
 										aria-label={t("drafts.viewAll")}
 									>

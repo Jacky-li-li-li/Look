@@ -22,6 +22,7 @@ import {
 	rightPanelTabAtom,
 	rightPanelWidthAtom,
 	sharedFilesAtomFamily,
+	sharedFilesErrorAtomFamily,
 	sharedFilesLoadingAtomFamily,
 	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
@@ -51,8 +52,10 @@ export function RightPanel() {
 	// 始终调用 hooks;在 effect 内判断 projectId 是否有效
 	const filesAtom = sharedFilesAtomFamily(projectId);
 	const loadingAtom = sharedFilesLoadingAtomFamily(projectId);
+	const errorAtom = sharedFilesErrorAtomFamily(projectId);
 	const sharedFiles = useAtomValue(filesAtom);
 	const isLoading = useAtomValue(loadingAtom);
+	const sharedFilesError = useAtomValue(errorAtom);
 	const setIsLoading = useSetAtom(loadingAtom);
 
 	const refreshSharedFiles = useCallback(
@@ -63,12 +66,16 @@ export function RightPanel() {
 				if (cancelled.current) return;
 				if (result?.success) {
 					appStore.set(sharedFilesAtomFamily(pid), result.nodes ?? []);
+					appStore.set(sharedFilesErrorAtomFamily(pid), null);
 				} else {
-					toast.error(result?.error ?? t("rightPanel.loadFailed"));
+					const message = result?.error ?? t("rightPanel.loadFailed");
+					appStore.set(sharedFilesErrorAtomFamily(pid), message);
+					toast.error(message);
 				}
 			} catch (error: unknown) {
 				if (cancelled.current) return;
 				const message = error instanceof Error ? error.message : t("rightPanel.loadFailed");
+				appStore.set(sharedFilesErrorAtomFamily(pid), message);
 				toast.error(message);
 			} finally {
 				if (!cancelled.current) setIsLoading(false);
@@ -225,10 +232,16 @@ export function RightPanel() {
 					projectId={activeProject.id}
 					files={sharedFiles}
 					isLoading={isLoading}
+					error={sharedFilesError}
 					onAfterChange={async () => {
-						const result = await window.look.listSharedFiles(activeProject!.id);
-						if (!result?.success) throw new Error(result?.error ?? t("rightPanel.loadFailed"));
-						appStore.set(sharedFilesAtomFamily(activeProject!.id), result.nodes ?? []);
+						const cancelled = { current: false };
+						await refreshSharedFiles(activeProject!.id, cancelled);
+						// 失败时向上抛出让操作方（创建/删除/导入等）收到错误并 toast。
+						if (appStore.get(sharedFilesErrorAtomFamily(activeProject!.id))) {
+							throw new Error(
+								appStore.get(sharedFilesErrorAtomFamily(activeProject!.id)) ?? t("rightPanel.loadFailed"),
+							);
+						}
 					}}
 				/>
 			)}

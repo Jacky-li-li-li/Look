@@ -231,6 +231,7 @@ const api: LookAPI = {
 
 	// ---- Shared area ----
 	listSharedFiles: (projectId) => invoke({ type: "shared:list", projectId }),
+	listSharedChildren: (projectId, relativePath) => invoke({ type: "shared:list-children", projectId, relativePath }),
 	startSharedWatch: (projectId) => invoke({ type: "shared:watch", projectId }),
 	stopSharedWatch: (projectId) => invoke({ type: "shared:unwatch", projectId }),
 	writeSharedFile: (projectId, path, content) => invoke({ type: "shared:write", projectId, path, content }),

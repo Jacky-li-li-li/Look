@@ -35,6 +35,7 @@ import {
 	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
 import { userProfileAtom } from "../../store/authAtoms";
+import { navigateMainView } from "../../store/viewNavigation";
 import ProjectTree from "./ProjectTree";
 import TopUpdateButton from "./TopUpdateButton";
 import type { SidebarProps } from "./types";
@@ -92,10 +93,7 @@ const SidebarInner = memo(function SidebarInner({
 				<button
 					type="button"
 					onClick={() => {
-						appStore.set(showDraftsAtom, true);
-						appStore.set(showScheduledTasksAtom, false);
-						appStore.set(showAgentSquareAtom, false);
-						appStore.set(showSettingsAtom, false);
+						navigateMainView("drafts");
 						appStore.set(rightPanelCollapsedAtom, true);
 					}}
 					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showDrafts ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
@@ -117,10 +115,7 @@ const SidebarInner = memo(function SidebarInner({
 				<button
 					type="button"
 					onClick={() => {
-						appStore.set(showScheduledTasksAtom, true);
-						appStore.set(showAgentSquareAtom, false);
-						appStore.set(showDraftsAtom, false);
-						appStore.set(showSettingsAtom, false);
+						navigateMainView("scheduled");
 						appStore.set(rightPanelCollapsedAtom, true);
 					}}
 					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showScheduledTasks ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
@@ -144,10 +139,7 @@ const SidebarInner = memo(function SidebarInner({
 				<button
 					type="button"
 					onClick={() => {
-						appStore.set(showAgentSquareAtom, true);
-						appStore.set(showScheduledTasksAtom, false);
-						appStore.set(showDraftsAtom, false);
-						appStore.set(showSettingsAtom, false);
+						navigateMainView("agent-square");
 						appStore.set(rightPanelCollapsedAtom, true);
 					}}
 					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2.5 px-3 text-left transition-colors ${showAgentSquare ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.06]"}`}
@@ -172,10 +164,7 @@ const SidebarInner = memo(function SidebarInner({
 					type="button"
 					onClick={() => {
 						setSettingsTab("profile");
-						appStore.set(showSettingsAtom, true);
-						appStore.set(showAgentSquareAtom, false);
-						appStore.set(showScheduledTasksAtom, false);
-						appStore.set(showDraftsAtom, false);
+						navigateMainView("settings");
 					}}
 					className={`sidebar-footer-item group flex h-10 w-full shrink-0 items-center gap-2 px-3 text-left transition-colors ${showSettings ? "bg-foreground/[0.075] text-foreground" : "hover:bg-foreground/[0.065]"}`}
 					aria-current={showSettings ? "page" : undefined}

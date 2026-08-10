@@ -21,10 +21,8 @@ import {
 	runningAgentsAtom,
 	sessionErrorsAtom,
 	sessionPhasesAtom,
-	showAgentSquareAtom,
-	showScheduledTasksAtom,
-	showSettingsAtom,
 } from "../../store/atoms";
+import { navigateMainView } from "../../store/viewNavigation";
 import ProjectHeader from "./ProjectHeader";
 import SessionRow from "./SessionRow";
 import type { ChildSessionInfo, ProjectTreeProps } from "./types";
@@ -296,9 +294,7 @@ export default function ProjectTree({
 					return next;
 				});
 			}
-			appStore.set(showAgentSquareAtom, false);
-			appStore.set(showScheduledTasksAtom, false);
-			appStore.set(showSettingsAtom, false);
+			navigateMainView("chat");
 			onSelect(agent.id);
 		},
 		[errorAgentIds, onSelect, recentlyCompleted],
@@ -318,9 +314,7 @@ export default function ProjectTree({
 
 	const selectProject = useCallback(
 		async (projectId: string) => {
-			appStore.set(showAgentSquareAtom, false);
-			appStore.set(showScheduledTasksAtom, false);
-			appStore.set(showSettingsAtom, false);
+			navigateMainView("chat");
 			await onSelectProject(projectId);
 		},
 		[onSelectProject],

@@ -39,6 +39,28 @@ import os from "os";
 import path from "path";
 
 const LOOK_DIR = process.env.LOOK_HOME ?? path.join(os.homedir(), ".look");
+const MAX_PROJECT_ID_LENGTH = 128;
+
+/**
+ * Project IDs are used as directory segments in several Look storage roots.
+ * Keep this defense at the storage boundary as a backstop for every caller,
+ * including IPC handlers that should also verify the project record exists.
+ */
+export function assertSafeProjectId(projectId: string): asserts projectId is string {
+	if (
+		typeof projectId !== "string" ||
+		projectId.length === 0 ||
+		projectId.length > MAX_PROJECT_ID_LENGTH ||
+		projectId === "." ||
+		projectId === ".." ||
+		projectId.includes("\0") ||
+		projectId.includes("/") ||
+		projectId.includes("\\") ||
+		path.isAbsolute(projectId)
+	) {
+		throw new Error("Invalid project ID");
+	}
+}
 
 // ── Top-level paths ──
 
@@ -75,6 +97,7 @@ export function getSettingsPath(): string {
 
 /** Project-level user data directory (~/.look/projects/<projectId>). */
 export function getProjectDir(projectId: string): string {
+	assertSafeProjectId(projectId);
 	return path.join(LOOK_DIR, "projects", projectId);
 }
 
@@ -166,6 +189,7 @@ export function sanitiseWorkspaceName(name: string): string {
 /** Workspace directory for a specific project. Bound to the stable project id
  *  so renaming the project display name does not break the path. */
 export function getWorkspaceDir(projectId: string): string {
+	assertSafeProjectId(projectId);
 	return path.join(getWorkspacesDir(), projectId);
 }
 
@@ -211,6 +235,7 @@ export function getSharedAreasDir(): string {
 /** Shared area directory for a specific project. Bound to the stable
  *  project id so renaming the project display name does not break the path. */
 export function getProjectSharedDir(projectId: string): string {
+	assertSafeProjectId(projectId);
 	return path.join(getSharedAreasDir(), projectId);
 }
 

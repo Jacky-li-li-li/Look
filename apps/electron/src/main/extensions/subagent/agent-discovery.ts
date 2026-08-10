@@ -134,12 +134,14 @@ export async function listBuiltinAgents(): Promise<AgentConfig[]> {
  */
 export async function discoverAgents(projectId: string, scope: AgentScope): Promise<AgentDiscoveryResult> {
 	const userDir = getUserAgentsDir();
-	const projectAgentsDir = getProjectAgentsDir(projectId);
+	// 空 projectId 表示“无项目上下文”（用户级查询），不解析项目级目录，
+	// 避免 getProjectAgentsDir 对空 ID 触发 assertSafeProjectId。
+	const projectAgentsDir = projectId.length > 0 ? getProjectAgentsDir(projectId) : null;
 
 	const userAgents = scope === "project" ? [] : await loadAgentsFromDir(userDir, "user");
 	const builtinAgents = scope === "project" ? [] : await listBuiltinAgents();
 	const projectAgents =
-		scope === "user" || !(await isDirectory(projectAgentsDir))
+		scope === "user" || !projectAgentsDir || !(await isDirectory(projectAgentsDir))
 			? []
 			: await loadAgentsFromDir(projectAgentsDir, "project");
 

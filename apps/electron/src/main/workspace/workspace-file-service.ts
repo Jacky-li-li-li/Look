@@ -19,8 +19,6 @@ import { resolveInsideRoot } from "./path-guard.js";
 export type WorkspaceFileServiceEventCallback = (event: MainToRendererEvent) => void;
 
 const WATCHER_DEBOUNCE_MS = 300;
-// 共享区是用户文件空间,只过滤隐藏文件,允许导入 node_modules / .git 等
-const IGNORED_PATTERNS = [/(^|[/\\])\./];
 
 // 共享区单文件最大字节数(防御 OOM:渲染端可通过 shared:write 提交任意大小字符串)。
 // 50 MB 与 drag-drop fallback (writeSharedContent) 对齐,统一上限。
@@ -28,6 +26,8 @@ export const SHARED_MAX_CONTENT_BYTES = 50 * 1024 * 1024;
 
 export class WorkspaceFileService {
 	private readonly watchers = new Map<string, FSWatcher>();
+	/** ready 前的 watcher 登记，供 stopWatching 提前取消，避免句柄泄漏。 */
+	private readonly pendingWatchers = new Map<string, { watcher: FSWatcher; aborted: boolean }>();
 	private readonly pendingUpdates = new Map<string, ReturnType<typeof setTimeout>>();
 	private emitCallback: WorkspaceFileServiceEventCallback | null = null;
 
@@ -54,7 +54,17 @@ export class WorkspaceFileService {
 			throw new Error("Invalid path: empty");
 		}
 		const root = ensureProjectSharedDir(projectId);
+		await this.assertSharedRootNotSymlink(root);
 		return resolveInsideRoot({ root, rootName: "shared area", relativePath });
+	}
+
+	/** 共享区根目录自身不允许是 symlink：resolveInsideRoot 假定 root 可信，
+	 *  若 shared/<projectId> 指向外部，realpath(root) 会把外部目录当作新 root。 */
+	private async assertSharedRootNotSymlink(root: string): Promise<void> {
+		const stat = await this.statSafe(root);
+		if (stat?.isSymbolicLink()) {
+			throw new Error("Shared area root must not be a symbolic link");
+		}
 	}
 
 	private async statSafe(targetPath: string): Promise<fs.Stats | null> {
@@ -67,11 +77,7 @@ export class WorkspaceFileService {
 	}
 
 	private async readDirEntries(dirPath: string): Promise<fs.Dirent[]> {
-		try {
-			return await fs.promises.readdir(dirPath, { withFileTypes: true });
-		} catch {
-			return [];
-		}
+		return fs.promises.readdir(dirPath, { withFileTypes: true });
 	}
 
 	private async buildNode(entry: fs.Dirent, parentPath: string, root: string): Promise<FileTreeNode> {
@@ -103,9 +109,29 @@ export class WorkspaceFileService {
 	// ── Shared area CRUD ──
 
 	async listSharedFiles(projectId: string): Promise<FileTreeNode[]> {
+		return this.listSharedDirectory(projectId, "");
+	}
+
+	/** 列出共享区内已存在目录的一层子项；空路径只由根目录 list API 使用。 */
+	async listSharedChildren(projectId: string, relativePath: string): Promise<FileTreeNode[]> {
+		if (typeof relativePath !== "string" || relativePath.length === 0) {
+			throw new Error("Invalid path: empty");
+		}
+		return this.listSharedDirectory(projectId, relativePath);
+	}
+
+	private async listSharedDirectory(projectId: string, relativePath: string): Promise<FileTreeNode[]> {
 		const root = ensureProjectSharedDir(projectId);
-		const entries = await this.readDirEntries(root);
-		const nodes = await Promise.all(entries.map((entry) => this.buildNode(entry, root, root)));
+		await this.assertSharedRootNotSymlink(root);
+		const target = relativePath === "" ? root : await this.resolveSharedPath(projectId, relativePath);
+		const stat = await this.statSafe(target);
+		if (!stat?.isDirectory()) {
+			const error = new Error("Shared path must be an existing directory") as NodeJS.ErrnoException;
+			error.code = "ENOENT";
+			throw error;
+		}
+		const entries = await this.readDirEntries(target);
+		const nodes = await Promise.all(entries.map((entry) => this.buildNode(entry, target, root)));
 		nodes.sort((a, b) => {
 			if (a.type === b.type) return a.name.localeCompare(b.name);
 			return a.type === "directory" ? -1 : 1;
@@ -179,39 +205,39 @@ export class WorkspaceFileService {
 			throw new Error("Cannot determine user home directory for import");
 		}
 		const imported: string[] = [];
-		try {
-			const outcomes = await Promise.allSettled(
-				sources.map(async (source) => {
-					const resolved = path.isAbsolute(source) ? path.resolve(source) : path.resolve(homeDir, source);
-					const prefix = homeDir.endsWith(path.sep) ? homeDir : `${homeDir}${path.sep}`;
-					if (resolved !== homeDir && !resolved.startsWith(prefix)) {
-						throw new Error(`Import source must be within the user home directory: ${source}`);
-					}
-					const srcStat = await this.statSafe(resolved);
-					if (!srcStat) return null;
-					const dest = path.join(destRoot, path.basename(resolved));
-					const destExists = await this.statSafe(dest);
-					if (destExists) {
-						throw new Error(`Import target already exists: ${path.basename(resolved)}`);
-					}
-					if (srcStat.isDirectory()) {
-						await fs.promises.cp(resolved, dest, { recursive: true, errorOnExist: true });
-					} else {
-						await fs.promises.cp(resolved, dest, { errorOnExist: true });
-					}
-					return dest;
-				}),
-			);
-			const firstRejection = outcomes.find((o): o is PromiseRejectedResult => o.status === "rejected");
-			if (firstRejection) throw firstRejection.reason;
-			for (const outcome of outcomes) {
-				if (outcome.status === "fulfilled" && outcome.value) imported.push(outcome.value);
-			}
-		} catch (error) {
+		const outcomes = await Promise.allSettled(
+			sources.map(async (source) => {
+				const resolved = path.isAbsolute(source) ? path.resolve(source) : path.resolve(homeDir, source);
+				const prefix = homeDir.endsWith(path.sep) ? homeDir : `${homeDir}${path.sep}`;
+				if (resolved !== homeDir && !resolved.startsWith(prefix)) {
+					throw new Error(`Import source must be within the user home directory: ${source}`);
+				}
+				const srcStat = await this.statSafe(resolved);
+				if (!srcStat) return null;
+				const dest = path.join(destRoot, path.basename(resolved));
+				const destExists = await this.statSafe(dest);
+				if (destExists) {
+					throw new Error(`Import target already exists: ${path.basename(resolved)}`);
+				}
+				if (srcStat.isDirectory()) {
+					await fs.promises.cp(resolved, dest, { recursive: true, errorOnExist: true });
+				} else {
+					await fs.promises.cp(resolved, dest, { errorOnExist: true });
+				}
+				return dest;
+			}),
+		);
+		// 先收集所有成功复制项再判断失败，否则部分成功后抛错时 imported 仍为空，
+		// 已复制的半成品不会被回滚清理。
+		for (const outcome of outcomes) {
+			if (outcome.status === "fulfilled" && outcome.value) imported.push(outcome.value);
+		}
+		const firstRejection = outcomes.find((o): o is PromiseRejectedResult => o.status === "rejected");
+		if (firstRejection) {
 			await Promise.all(
 				imported.map((item) => fs.promises.rm(item, { recursive: true, force: true }).catch(() => undefined)),
 			);
-			throw error;
+			throw firstRejection.reason;
 		}
 	}
 
@@ -224,7 +250,15 @@ export class WorkspaceFileService {
 		if (resolvedDest !== homeDir && !resolvedDest.startsWith(homeDir + path.sep)) {
 			throw new Error("Export destination must be within the user home directory");
 		}
+		// 词法校验后仍要防止 home 内的 symlink 指向 home 外：mkdir 后再 realpath
+		// 校验一次，阻止数据写到 home 之外。
+		const resolvedHome = await fs.promises.realpath(homeDir).catch(() => homeDir);
 		await fs.promises.mkdir(resolvedDest, { recursive: true });
+		const realDest = await fs.promises.realpath(resolvedDest);
+		const homePrefix = resolvedHome.endsWith(path.sep) ? resolvedHome : `${resolvedHome}${path.sep}`;
+		if (realDest !== resolvedHome && !realDest.startsWith(homePrefix)) {
+			throw new Error("Export destination resolves outside the user home directory");
+		}
 		await Promise.all(
 			relativePaths.map(async (relativePath) => {
 				const source = await this.resolveSharedPath(projectId, relativePath);
@@ -247,24 +281,41 @@ export class WorkspaceFileService {
 	// ── Watcher lifecycle ──
 
 	async startWatching(projectId: string): Promise<void> {
-		if (this.watchers.has(projectId)) return;
+		if (this.watchers.has(projectId) || this.pendingWatchers.has(projectId)) return;
 		const root = ensureProjectSharedDir(projectId);
+		await this.assertSharedRootNotSymlink(root);
+		// 共享区是用户文件空间：列表不过滤隐藏文件，watcher 也不过滤，语义保持一致。
 		const watcher = chokidar.watch(root, {
-			ignored: IGNORED_PATTERNS,
+			followSymlinks: false,
 			ignoreInitial: true,
 			persistent: true,
 		});
+		const entry = { watcher, aborted: false };
+		this.pendingWatchers.set(projectId, entry);
 
 		// react-doctor-disable-next-line async-defer-await -- 必须等待 watcher ready 后才能判断并发注册
-		await new Promise<void>((resolve, reject) => {
-			watcher.once("ready", resolve);
-			watcher.once("error", (error) => {
-				watcher.close().catch(() => undefined);
-				reject(error);
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const onError = (error: unknown) => {
+					watcher.close().catch(() => undefined);
+					reject(error);
+				};
+				watcher.once("ready", () => {
+					// ready 后移除 ready 阶段 error 监听，避免运行时 error 触发已消费的 Promise。
+					watcher.removeListener("error", onError);
+					resolve();
+				});
+				watcher.once("error", onError);
 			});
-		});
+		} catch (error) {
+			this.pendingWatchers.delete(projectId);
+			await watcher.close().catch(() => undefined);
+			throw error;
+		}
+		this.pendingWatchers.delete(projectId);
 
-		if (this.watchers.has(projectId)) {
+		// ready 前 stopWatching 已标记 aborted，或并发重复注册已就绪：直接关闭本次。
+		if (entry.aborted || this.watchers.has(projectId)) {
 			await watcher.close();
 			return;
 		}
@@ -278,6 +329,10 @@ export class WorkspaceFileService {
 			.on("unlinkDir", notify)
 			.on("error", (error: unknown) => {
 				const message = error instanceof Error ? error.message : String(error);
+				console.error(`[Look] shared area watcher error for ${projectId}:`, message);
+				// 出错后从登记表移除并关闭，下次 startWatching 可重建，避免残留已关闭实例。
+				this.watchers.delete(projectId);
+				void watcher.close();
 				this.emit({ type: "error", message: `Shared area watcher error: ${message}` });
 			});
 
@@ -285,13 +340,19 @@ export class WorkspaceFileService {
 	}
 
 	async stopWatching(projectId: string): Promise<void> {
-		const watcher = this.watchers.get(projectId);
-		if (!watcher) return;
-		this.watchers.delete(projectId);
-		await watcher.close();
-		const pending = this.pendingUpdates.get(projectId);
+		const pending = this.pendingWatchers.get(projectId);
 		if (pending) {
-			clearTimeout(pending);
+			// 标记取消：startWatching 的 ready 回调正常触发后自行 close，避免 await 挂起。
+			pending.aborted = true;
+		}
+		const watcher = this.watchers.get(projectId);
+		if (watcher) {
+			this.watchers.delete(projectId);
+			await watcher.close();
+		}
+		const pendingUpdate = this.pendingUpdates.get(projectId);
+		if (pendingUpdate) {
+			clearTimeout(pendingUpdate);
 			this.pendingUpdates.delete(projectId);
 		}
 	}
@@ -312,5 +373,16 @@ export class WorkspaceFileService {
 	async dispose(): Promise<void> {
 		const keys = Array.from(this.watchers.keys());
 		await Promise.all(keys.map((id) => this.stopWatching(id)));
+		const pendingKeys = Array.from(this.pendingWatchers.keys());
+		await Promise.all(
+			pendingKeys.map(async (id) => {
+				const entry = this.pendingWatchers.get(id);
+				if (entry) {
+					entry.aborted = true;
+					await entry.watcher.close().catch(() => undefined);
+				}
+				this.pendingWatchers.delete(id);
+			}),
+		);
 	}
 }

@@ -42,6 +42,19 @@ describe("project-router", () => {
 			// @ts-expect-error: missing projectId
 			await expectGuardError(dispatch, { type: "project:delete" }, "projectId");
 		});
+
+		it("project:confirm-delete-response rejects an unknown project before deletion", async () => {
+			const ctx = makeProjectCtx();
+			const executeDelete = vi.fn();
+			ctx.project.service.getProjectInfo = vi.fn(() => null) as never;
+			ctx.project.deletion = { executeDelete } as never;
+			const { dispatch } = makeDispatcher(projectRouter, ctx);
+
+			await expect(
+				dispatch({ type: "project:confirm-delete-response", projectId: "../escape", confirmed: true }),
+			).rejects.toThrow("Project not found");
+			expect(executeDelete).not.toHaveBeenCalled();
+		});
 	});
 
 	describe("service delegation", () => {

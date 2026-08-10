@@ -23,12 +23,8 @@ import {
 	subagentSourceTabAtom,
 } from "../../store/agentDefinitionsAtoms";
 import { appStore } from "../../store/appStore";
-import {
-	chatInputInsertRequestAtom,
-	enabledAgentDefinitionsAtom,
-	showAgentSquareAtom,
-	showScheduledTasksAtom,
-} from "../../store/atoms";
+import { chatInputInsertRequestAtom, enabledAgentDefinitionsAtom } from "../../store/atoms";
+import { navigateMainView } from "../../store/viewNavigation";
 import AgentCard from "./AgentCard";
 import AgentEditor from "./AgentEditor";
 import { useToggleEnabled } from "./useToggleEnabled";
@@ -124,8 +120,7 @@ export default function SubAgentPanel() {
 
 	// AI 创建：退出广场 → 切到默认工作区 → 新建会话 → 输入框预填 Agent 创建 Skill
 	const handleAiCreate = useCallback(async () => {
-		appStore.set(showAgentSquareAtom, false);
-		appStore.set(showScheduledTasksAtom, false);
+		navigateMainView("chat");
 		try {
 			await window.look.switchProject(DEFAULT_PROJECT_ID);
 			const agentId = await handleCreateClick(DEFAULT_PROJECT_ID);

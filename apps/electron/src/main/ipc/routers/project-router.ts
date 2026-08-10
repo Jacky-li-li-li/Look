@@ -57,10 +57,16 @@ export const projectRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("project:confirm-delete-response", async (data) => {
-		guardString(data.projectId, "projectId");
+		const projectId = guardString(data.projectId, "projectId");
 		guardBoolean(data.confirmed, "confirmed");
+		if (projectId === DEFAULT_PROJECT_ID) {
+			return { success: false, error: "Cannot delete the default workspace" };
+		}
+		if (!ctx.project.service.getProjectInfo(projectId)) {
+			throw new Error(`Project not found: ${projectId}`);
+		}
 		if (data.confirmed) {
-			await ctx.project.deletion.executeDelete(data.projectId);
+			await ctx.project.deletion.executeDelete(projectId);
 		}
 		return { success: true };
 	});

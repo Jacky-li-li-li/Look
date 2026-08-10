@@ -6,7 +6,8 @@ import { ArrowLeft, Plus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { activeAgentIdAtom, showScheduledTasksAtom, sidebarEffectiveCollapsedAtom } from "../../store/atoms";
+import { activeAgentIdAtom, sidebarEffectiveCollapsedAtom } from "../../store/atoms";
+import { navigateMainView } from "../../store/viewNavigation";
 import { ExecutionHistory } from "./ExecutionHistory";
 import {
 	buildScheduledTaskInput,
@@ -29,7 +30,6 @@ function formatDate(value?: string): string {
 
 export default function ScheduledTasksPage() {
 	const { t } = useTranslation();
-	const setShowScheduledTasks = useSetAtom(showScheduledTasksAtom);
 	const setActiveAgentId = useSetAtom(activeAgentIdAtom);
 	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const [tasks, setTasks] = useState<ScheduledTask[]>([]);
@@ -248,15 +248,16 @@ export default function ScheduledTasksPage() {
 
 	const navigateToSession = useCallback(
 		async (sessionId: string) => {
-			setActiveAgentId(sessionId);
-			setShowScheduledTasks(false);
 			try {
-				await window.look.activateSession(sessionId);
-			} catch {
-				toast.error(t("scheduledTasks.sessionOpenFailed"));
+				const result = await window.look.activateSession(sessionId);
+				if (!result?.success) throw new Error(result?.error ?? t("scheduledTasks.sessionOpenFailed"));
+				setActiveAgentId(sessionId);
+				navigateMainView("chat");
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : t("scheduledTasks.sessionOpenFailed"));
 			}
 		},
-		[setActiveAgentId, setShowScheduledTasks, t],
+		[setActiveAgentId, t],
 	);
 
 	return (
@@ -272,7 +273,7 @@ export default function ScheduledTasksPage() {
 						variant="outline"
 						size="sm"
 						className="gap-1 px-2.5 text-[11px]"
-						onClick={() => setShowScheduledTasks(false)}
+						onClick={() => navigateMainView("chat")}
 					>
 						<ArrowLeft className="size-3.5" />
 						{t("marketplace.back")}
