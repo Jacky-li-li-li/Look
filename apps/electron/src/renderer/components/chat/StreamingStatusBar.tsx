@@ -1,17 +1,17 @@
 // ============================================================
-// StreamingStatusBar — 流式阶段状态行（九宫格顺时针 + 状态文字 + 计时）
+// StreamingStatusBar — 流式阶段状态行（ThinkingOrb 动画 + 状态文字 + 计时）
 //
 // 阶段判定与展示分离：
 //   - streamingPhase() 纯函数按流式块判定当前阶段（thinking / tool / text）
-//   - CubeLoader 渲染 3×3 九宫格，外圈按顺时针顺序点亮（区别于波浪式）
+//   - ThinkingOrb 渲染 connecting 动画（64px，3.00x），颜色跟随 LOOK 主题
 //   - 计时从组件挂载（即 streaming 开始）起，每 100ms 刷新一次
-// 样式在 App.css 的 look-cube-loader* 段。
 // ============================================================
 
-import { cn } from "@look/ui";
 import type { LookUiStreamBlock } from "@shared/types";
 import { memo, useEffect, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ThinkingOrb } from "thinking-orbs";
+import { useLookTheme } from "../../hooks/useLookTheme";
 
 export type StreamingPhase = "thinking" | "tool" | "text";
 
@@ -28,38 +28,6 @@ export function streamingPhase(blocks: LookUiStreamBlock[], isStreaming: boolean
 	return "thinking";
 }
 
-/**
- * 9 格（行优先 0..8）中外圈按顺时针扫描的位置顺序：
- * 0 1 2
- * 7 8 3
- * 6 5 4
- * 中心格（4）不参与扫描，保持常亮作为视觉锚点。
- */
-const CLOCKWISE_POSITIONS = [0, 1, 2, 5, 8, 7, 6, 3];
-
-/** 3×3 九宫格，外圈方块按顺时针顺序依次点亮。 */
-export const CubeLoader = memo(function CubeLoader({ className }: { className?: string }) {
-	return (
-		<span className={cn("look-cube-loader", className)} aria-hidden="true">
-			{Array.from({ length: 9 }, (_, i) => {
-				const order = CLOCKWISE_POSITIONS.indexOf(i);
-				const isActive = order >= 0;
-				return (
-					<span
-						key={i}
-						className={cn(
-							"look-cube-loader__cube",
-							isActive && "look-cube-loader__cube--active",
-							i === 4 && "look-cube-loader__cube--center",
-						)}
-						style={isActive ? { animationDelay: `${order * 0.15}s` } : undefined}
-					/>
-				);
-			})}
-		</span>
-	);
-});
-
 function formatElapsed(seconds: number): string {
 	if (seconds < 60) return `${seconds}s`;
 	const m = Math.floor(seconds / 60);
@@ -73,9 +41,10 @@ const PHASE_LABEL_KEY: Record<StreamingPhase, string> = {
 	text: "chat.streamingText",
 };
 
-/** 流式阶段状态行：九宫格 + 状态文字 + 已等待秒数。 */
+/** 流式阶段状态行：ThinkingOrb + 状态文字 + 已等待秒数。 */
 export const StreamingStatusBar = memo(function StreamingStatusBar({ phase }: { phase: StreamingPhase }) {
 	const { t } = useTranslation();
+	const { tone } = useLookTheme();
 	const [startedAt] = useState(() => Date.now());
 	const [, forceRender] = useReducer((x: number) => x + 1, 0);
 
@@ -88,7 +57,8 @@ export const StreamingStatusBar = memo(function StreamingStatusBar({ phase }: { 
 
 	return (
 		<div className="flex items-center gap-2 py-1 text-sm text-muted-foreground" role="status">
-			<CubeLoader />
+			{/* thinking-orbs 仅提供 64/20 两个预置：保持 64 预设绘制，CSS 显示为一半（32px） */}
+			<ThinkingOrb state="connecting" size={64} speed={3} theme={tone} style={{ width: 32, height: 32 }} />
 			<span className="text-xs font-normal">{t(PHASE_LABEL_KEY[phase])}</span>
 			<span className="font-mono text-[10px] tabular-nums opacity-70">{formatElapsed(elapsed)}</span>
 		</div>

@@ -421,15 +421,15 @@ describe("StreamingStatusBar — streamingPhase 阶段判定", () => {
 	});
 });
 
-describe("StreamingStatusBar — 九宫格状态行渲染", () => {
-	it("renders thinking status bar with cube loader and elapsed", () => {
+describe("StreamingStatusBar — 状态行渲染", () => {
+	it("renders thinking status bar with orb loader and elapsed", () => {
 		const { container } = render(
 			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
 		);
 		// en i18n 默认 → "Thinking…"
 		expect(container.textContent).toContain("Thinking…");
-		// 九宫格 3×3 = 9 个方块
-		expect(container.querySelectorAll(".look-cube-loader__cube")).toHaveLength(9);
+		// ThinkingOrb 渲染 canvas 动画
+		expect(container.querySelector("canvas")).toBeTruthy();
 		// 计时显示（0s 或 1s）
 		expect(container.textContent).toMatch(/\d+s/);
 	});
@@ -463,7 +463,7 @@ describe("StreamingStatusBar — 位置：跟随输出内容之后", () => {
 			<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
 		);
 		const prose = container.querySelector(".message-prose");
-		const loader = container.querySelector(".look-cube-loader");
+		const loader = container.querySelector("canvas");
 		expect(prose).toBeTruthy();
 		expect(loader).toBeTruthy();
 		// 正文在前，状态行在其后（DOCUMENT_POSITION_FOLLOWING = 4）
@@ -474,7 +474,7 @@ describe("StreamingStatusBar — 位置：跟随输出内容之后", () => {
 		const { container } = render(
 			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
 		);
-		expect(container.querySelector(".look-cube-loader")).toBeTruthy();
+		expect(container.querySelector("canvas")).toBeTruthy();
 		expect(container.querySelector(".message-prose")).toBeNull();
 	});
 });
