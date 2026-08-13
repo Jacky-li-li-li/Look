@@ -1896,6 +1896,38 @@ body {
 			box-shadow 180ms ease;
 	}
 
+	/* Session menu trigger — 右端槽位浮层按钮：时间标签始终留在文档流中
+	   占据自己的宽度（悬停零重排、名称区不跳动），按钮绝对定位覆盖其右侧
+	   24px 区域；两者只做 opacity 交叉淡化并切换 pointer-events，任何状态下
+	   都无位移，菜单开/关不会引起跳动。
+	   时间加 min-width 与按钮等宽（size-6 = 1.5rem），保证按钮不会溢出到
+	   子会话箭头区域。依赖 DOM 顺序：trigger 必须在 .session-time 之前。 */
+	.session-menu-trigger {
+		position: absolute;
+		right: 0.5rem;
+		top: 0.5rem;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 150ms ease;
+	}
+	.session-ledger-row:hover .session-menu-trigger,
+	.session-menu-trigger[data-state="open"],
+	.session-menu-trigger:focus-visible {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.session-time {
+		min-width: 1.5rem;
+		text-align: right;
+		transition: opacity 150ms ease;
+	}
+	.session-ledger-row:hover .session-time,
+	.session-menu-trigger[data-state="open"] ~ .session-time,
+	.session-menu-trigger:focus-visible ~ .session-time {
+		opacity: 0;
+		pointer-events: none;
+	}
+
 	.session-ledger-row:hover {
 		background: color-mix(in oklch, var(--foreground), transparent 96%);
 	}
