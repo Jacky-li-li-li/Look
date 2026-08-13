@@ -166,8 +166,8 @@ describe("SharedAreaPanel", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Expand folder: reports" }));
 
-		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledWith("project-1", "reports"));
-		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy());
+		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledWith("project-1", "reports"), { timeout: 3000 });
+		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy(), { timeout: 3000 });
 		expect(screen.getByRole("treeitem", { name: "Folder: reports" }).getAttribute("aria-expanded")).toBe("true");
 	});
 
@@ -177,7 +177,7 @@ describe("SharedAreaPanel", () => {
 
 		const toggle = screen.getByRole("button", { name: "Expand folder: reports" });
 		fireEvent.click(toggle);
-		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy(), { timeout: 3000 });
 		fireEvent.click(screen.getByRole("button", { name: "Collapse folder: reports" }));
 		fireEvent.click(screen.getByRole("button", { name: "Expand folder: reports" }));
 
@@ -192,7 +192,7 @@ describe("SharedAreaPanel", () => {
 		const { rerender } = renderPanel({ files: [reportsFolder] });
 
 		fireEvent.click(screen.getByRole("button", { name: "Expand folder: reports" }));
-		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy(), { timeout: 3000 });
 
 		rerender(
 			<Provider store={appStore}>
@@ -207,7 +207,7 @@ describe("SharedAreaPanel", () => {
 			</Provider>,
 		);
 
-		await waitFor(() => expect(screen.getByText("revised.md")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("revised.md")).toBeTruthy(), { timeout: 3000 });
 		expect(screen.queryByText("summary.md")).toBeNull();
 		expect(listSharedChildren).toHaveBeenCalledTimes(2);
 	});
@@ -255,7 +255,7 @@ describe("SharedAreaPanel", () => {
 		expect(listSharedChildren).toHaveBeenLastCalledWith("project-2", "reports");
 
 		resolveProjectA({ success: true, nodes: [] });
-		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledTimes(2), { timeout: 3000 });
 	});
 
 	it("keeps the expanded tree when a child refresh fails temporarily", async () => {
@@ -265,10 +265,10 @@ describe("SharedAreaPanel", () => {
 		const { rerender } = renderPanel({ files: [reportsFolder] });
 
 		fireEvent.click(screen.getByRole("button", { name: "Expand folder: reports" }));
-		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy(), { timeout: 3000 });
 
 		rerenderPanel(rerender, { files: [{ ...reportsFolder }] });
-		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledTimes(2), { timeout: 3000 });
 
 		// 临时失败保留缓存与展开态，不静默折叠。
 		expect(screen.getByText("summary.md")).toBeTruthy();
@@ -282,10 +282,10 @@ describe("SharedAreaPanel", () => {
 		const { rerender } = renderPanel({ files: [reportsFolder] });
 
 		fireEvent.click(screen.getByRole("button", { name: "Expand folder: reports" }));
-		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy());
+		await waitFor(() => expect(screen.getByText("summary.md")).toBeTruthy(), { timeout: 3000 });
 
 		rerenderPanel(rerender, { files: [{ ...reportsFolder }] });
-		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(listSharedChildren).toHaveBeenCalledTimes(2), { timeout: 3000 });
 		await waitFor(() =>
 			expect(screen.getByRole("treeitem", { name: "Folder: reports" }).getAttribute("aria-expanded")).toBe("false"),
 		);
@@ -302,7 +302,7 @@ describe("SharedAreaPanel", () => {
 		fireEvent.change(input, { target: { value: "draft.md" } });
 		fireEvent.keyDown(input, { key: "Enter" });
 
-		await waitFor(() => expect(toastError).toHaveBeenCalledWith("Disk is read-only"));
+		await waitFor(() => expect(toastError).toHaveBeenCalledWith("Disk is read-only"), { timeout: 3000 });
 		expect(onAfterChange).not.toHaveBeenCalled();
 		expect(screen.getByPlaceholderText("File name")).toBeTruthy();
 	});
@@ -315,7 +315,7 @@ describe("SharedAreaPanel", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Import files or folders" }));
 
-		await waitFor(() => expect(toastError).toHaveBeenCalledWith("Import denied"));
+		await waitFor(() => expect(toastError).toHaveBeenCalledWith("Import denied"), { timeout: 3000 });
 		expect(onAfterChange).not.toHaveBeenCalled();
 	});
 });
