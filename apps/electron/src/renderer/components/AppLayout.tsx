@@ -26,7 +26,6 @@ import {
 	windowFullscreenAtom,
 } from "../store/atoms";
 import { dockedFileAtom, dockPanelWidthAtom, rightPanelWidthAtom } from "../store/projectAtoms";
-import type { RendererSessionPhase, RendererSessionState } from "../store/sessionTypes";
 import ChatPanel from "./chat/ChatPanel";
 import EmptySessionState from "./chat/EmptySessionState";
 import WelcomeScreen from "./chat/WelcomeScreen";
@@ -51,9 +50,6 @@ interface AppLayoutProps {
 	agents: AgentInfo[];
 	activeAgent: AgentInfo | null;
 	activeAgentId: string | null;
-	activeSessionState: RendererSessionState;
-	activeQueue: { steering: string[]; followUp: string[] };
-	activePhase: RendererSessionPhase;
 	projects: ProjectInfo[];
 	newProjectCwd: string | null;
 	setNewProjectCwd: (v: string | null) => void;
@@ -80,9 +76,6 @@ function AppLayout({
 	agents,
 	activeAgent,
 	activeAgentId,
-	activeSessionState,
-	activeQueue,
-	activePhase,
 	projects,
 	newProjectCwd,
 	setNewProjectCwd,
@@ -239,9 +232,6 @@ function AppLayout({
 								key={activeAgent.id}
 								agentId={activeAgent.id}
 								agentName={activeAgent.name}
-								sessionState={activeSessionState}
-								queue={activeQueue}
-								phase={activePhase}
 								currentModel={activeAgent.model}
 								currentThinking={activeAgent.thinkingLevel}
 								onSend={handleSendMessage}

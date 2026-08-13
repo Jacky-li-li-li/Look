@@ -7,9 +7,9 @@
 
 import type { ToolCall } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toUnifiedFromPiAi, toUnifiedFromStream } from "../src/renderer/components/chat/block-renderer/blockTypes";
 import { MessageBlockList } from "../src/renderer/components/chat/block-renderer/MessageBlockList";
 import { StreamingBlocksBubble } from "../src/renderer/components/chat/StreamingBlocksBubble";
@@ -451,6 +451,48 @@ describe("StreamingStatusBar — 状态行渲染", () => {
 			<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
 		);
 		expect(container.textContent).toContain("Calling tool");
+	});
+});
+
+describe("StreamingStatusBar — 阶段文字宽度", () => {
+	// 阶段文字在阶段切换间保持稳定占位宽度（三语最大文案内），计时器不被推挤。
+	it("keeps phase label width stable across phase switches", () => {
+		const { container } = render(
+			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
+		);
+		const label = [...container.querySelectorAll("span")].find((s) => s.textContent === "Thinking…");
+		expect(label).toBeTruthy();
+		expect(label?.className).toContain("min-w-[10em]");
+		expect(label?.className).toContain("whitespace-nowrap");
+	});
+});
+
+describe("StreamingStatusBar — 计时器", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// 计时只在秒数变化时更新：250ms interval 下按秒推进，跨秒进位正确。
+	it("advances elapsed once per second", () => {
+		const { container } = render(
+			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
+		);
+		expect(container.textContent).toMatch(/0s/);
+		act(() => {
+			vi.advanceTimersByTime(1100);
+		});
+		expect(container.textContent).toMatch(/1s/);
+		act(() => {
+			vi.advanceTimersByTime(900);
+		});
+		expect(container.textContent).toMatch(/2s/);
+		act(() => {
+			vi.advanceTimersByTime(10_000);
+		});
+		expect(container.textContent).toMatch(/12s/);
 	});
 });
 

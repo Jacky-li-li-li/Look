@@ -160,7 +160,7 @@ This is **bold**.`;
 		expect(rule).toContain("position: relative");
 		expect(rule).toContain("top: 0");
 		expect(rule).not.toContain("display: inline-block");
-		expect(APP_CSS).toMatch(/@keyframes sd-look-text-reveal[\s\S]*?top: -0\.45em/);
+		expect(APP_CSS).toMatch(/@keyframes sd-look-text-reveal[\s\S]*?transform: translateY\(-0\.45em\)/);
 	});
 
 	it("uses Streamdown incomplete-Markdown handling only while streaming", () => {

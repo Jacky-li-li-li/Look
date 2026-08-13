@@ -12,6 +12,7 @@ class ResizeObserverMock {
 	static instances: ResizeObserverMock[] = [];
 	readonly callback: ResizeObserverCallback;
 	target: Element | null = null;
+	disconnected = false;
 	/** 模拟内容高度；observe 时以当前值触发一次（真实浏览器行为），trigger 时增长。 */
 	height = 0;
 
@@ -26,7 +27,9 @@ class ResizeObserverMock {
 		this.emit();
 	}
 	unobserve(): void {}
-	disconnect(): void {}
+	disconnect(): void {
+		this.disconnected = true;
+	}
 
 	/** 模拟内容高度增长并触发回调。 */
 	trigger(growth = 10): void {
@@ -283,6 +286,190 @@ describe("Conversation streaming follow", () => {
 			await pumpFrames();
 		});
 		expect(metrics.scrollTop).toBeGreaterThanOrEqual(targetTop(metrics) - 2);
+	});
+});
+
+describe("Conversation syncSticky (streaming same-frame stick)", () => {
+	async function renderSyncHarness(): Promise<{
+		scroller: HTMLDivElement;
+		metrics: ScrollMetrics;
+		syncObserver: ResizeObserverMock;
+	}> {
+		const { container } = render(
+			<StrictMode>
+				<Conversation syncSticky>
+					<ScrollHarness />
+				</Conversation>
+			</StrictMode>,
+		);
+		const scroller = container.querySelector('[role="log"] > div');
+		if (!(scroller instanceof HTMLDivElement)) throw new Error("scroll container missing");
+		const metrics = installScrollMetrics(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+		// syncSticky 的 observer 在 effect 中注册，晚于库的 observer，位于 instances 末尾。
+		const syncObserver = ResizeObserverMock.instances.at(-1);
+		if (!syncObserver) throw new Error("syncSticky observer missing");
+		// 防串位：syncSticky observer 观察的必须是内容元素（scroller 的子级）。
+		expect(syncObserver.target).toBe(scroller.firstElementChild);
+		return { scroller, metrics, syncObserver };
+	}
+
+	it("pins to bottom synchronously on content growth (no rAF lag)", async () => {
+		const { metrics, syncObserver } = await renderSyncHarness();
+		expect(metrics.scrollTop).toBeGreaterThanOrEqual(targetTop(metrics) - 1);
+
+		// 内容增长：syncSticky observer 在 ResizeObserver 回调里同帧贴底，
+		// 无需泵任何动画帧（库的 rAF 路径滞后一帧，这里验证的是零滞后）。
+		metrics.scrollHeight = 700;
+		act(() => syncObserver.trigger(100));
+		expect(metrics.scrollTop).toBeGreaterThanOrEqual(700 - 200 - 1);
+	});
+
+	it("does not pull the user back after escaping the bottom", async () => {
+		const { scroller, metrics, syncObserver } = await renderSyncHarness();
+
+		// 建立滚动基线，然后用户向上滚离底部。
+		fireEvent.scroll(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+		metrics.scrollTop = 280;
+		fireEvent.scroll(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+		expect(screen.getByTestId("bottom-state").textContent).toBe("false");
+
+		// 滚离后内容增长：syncSticky 不得把用户拽回底部。
+		metrics.scrollHeight = 700;
+		act(() => syncObserver.trigger(100));
+		expect(metrics.scrollTop).toBeCloseTo(280, 1);
+	});
+
+	it("resumes same-frame sticking after the user returns to the bottom", async () => {
+		const { scroller, metrics, syncObserver } = await renderSyncHarness();
+
+		fireEvent.scroll(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+		metrics.scrollTop = 280;
+		fireEvent.scroll(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+		metrics.scrollHeight = 700;
+		act(() => syncObserver.trigger(100));
+		expect(metrics.scrollTop).toBeCloseTo(280, 1);
+
+		// 用户滚回底部 → 恢复同帧贴底。
+		metrics.scrollTop = targetTop(metrics);
+		fireEvent.scroll(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+		expect(screen.getByTestId("bottom-state").textContent).toBe("true");
+
+		metrics.scrollHeight = 800;
+		act(() => syncObserver.trigger(100));
+		expect(metrics.scrollTop).toBeGreaterThanOrEqual(800 - 200 - 1);
+	});
+
+	it("does not stick while near-bottom but escaped (user scrolled up slightly)", async () => {
+		const { scroller, metrics, syncObserver } = await renderSyncHarness();
+
+		// 建立滚动基线，然后用户小幅上滚 40px：仍在库的 70px 近底窗口内，
+		// 但已 escape —— hook 必须尊重 escapedFromLock 而非只看 isNearBottom。
+		fireEvent.scroll(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+		metrics.scrollTop = 360;
+		fireEvent.scroll(scroller);
+		await act(async () => {
+			await pumpFrames();
+		});
+
+		metrics.scrollHeight = 700;
+		act(() => syncObserver.trigger(100));
+		expect(metrics.scrollTop).toBeCloseTo(360, 1);
+	});
+
+	it("freezes same-frame sticking while the user is selecting text inside the scroller", async () => {
+		const { scroller, metrics, syncObserver } = await renderSyncHarness();
+
+		// mousedown + 选区与滚动容器相交：对齐库 scrollToBottom 的 isSelecting 冻结语义。
+		fireEvent.mouseDown(scroller);
+		const selectionSpy = vi.spyOn(window, "getSelection").mockReturnValue({
+			rangeCount: 1,
+			getRangeAt: () => ({ commonAncestorContainer: scroller }),
+		} as unknown as Selection);
+
+		metrics.scrollHeight = 700;
+		act(() => syncObserver.trigger(100));
+		// 冻结：scrollTop 停在初始贴底位置（≈400），不被拉到新底部。
+		expect(metrics.scrollTop).toBeLessThanOrEqual(401);
+
+		// 松开鼠标 → 恢复同帧贴底。
+		fireEvent.mouseUp(document);
+		act(() => syncObserver.trigger(100));
+		expect(metrics.scrollTop).toBeGreaterThanOrEqual(700 - 200 - 1);
+		selectionSpy.mockRestore();
+	});
+
+	it("cooperates with the library observer in the same growth frame", async () => {
+		const { metrics } = await renderSyncHarness();
+		// 激活的 observer（StrictMode 双挂载后）= [库, syncSticky]。
+		const active = ResizeObserverMock.instances.filter((o) => !o.disconnected);
+		expect(active).toHaveLength(2);
+
+		// 库 observer 先跑（Proma patch restore 写 isAtBottom），syncSticky 后跑读最新值。
+		metrics.scrollHeight = 700;
+		act(() => {
+			active[0]!.trigger(100);
+			active[1]!.trigger(100);
+		});
+		expect(metrics.scrollTop).toBeGreaterThanOrEqual(700 - 200 - 1);
+	});
+
+	it("only creates the sync observer while enabled and rebuilds on flip", async () => {
+		const { rerender } = render(
+			<StrictMode>
+				<Conversation>
+					<ScrollHarness />
+				</Conversation>
+			</StrictMode>,
+		);
+		await act(async () => {
+			await pumpFrames();
+		});
+		expect(ResizeObserverMock.instances.filter((o) => !o.disconnected)).toHaveLength(1);
+
+		rerender(
+			<StrictMode>
+				<Conversation syncSticky>
+					<ScrollHarness />
+				</Conversation>
+			</StrictMode>,
+		);
+		await act(async () => {
+			await pumpFrames();
+		});
+		expect(ResizeObserverMock.instances.filter((o) => !o.disconnected)).toHaveLength(2);
+
+		rerender(
+			<StrictMode>
+				<Conversation>
+					<ScrollHarness />
+				</Conversation>
+			</StrictMode>,
+		);
+		await act(async () => {
+			await pumpFrames();
+		});
+		expect(ResizeObserverMock.instances.filter((o) => !o.disconnected)).toHaveLength(1);
 	});
 });
 

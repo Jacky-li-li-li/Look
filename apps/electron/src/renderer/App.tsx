@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useAtomValue } from "jotai";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import AppLayout from "./components/AppLayout";
 import { BrandMark } from "./components/BrandMark";
 import LoginScreen from "./components/LoginScreen";
@@ -21,11 +21,9 @@ import {
 	projectsAtom,
 	providerSettingsAtom,
 	rightPanelCollapsedAtom,
-	sessionStateAtomFamily,
 	sidebarCollapsedAtom,
 } from "./store/atoms";
 import { dockPanelWidthAtom, generalSettingsHydratedAtom, rightPanelWidthAtom } from "./store/projectAtoms";
-import { deriveActiveQueue, deriveSessionPhase } from "./store/sessionTypes";
 
 const api = window.look;
 
@@ -43,9 +41,6 @@ export default function App() {
 	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
 	const generalSettingsHydrated = useAtomValue(generalSettingsHydratedAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
-	const activeSessionState = useAtomValue(sessionStateAtomFamily(activeAgentId ?? ""));
-	const activeQueue = useMemo(() => deriveActiveQueue(activeSessionState), [activeSessionState]);
-	const activePhase = deriveSessionPhase(activeSessionState);
 	const agents = useAtomValue(agentsAtom);
 	const projects = useAtomValue(projectsAtom);
 
@@ -91,9 +86,6 @@ export default function App() {
 			agents={agents}
 			activeAgent={activeAgent}
 			activeAgentId={activeAgentId}
-			activeSessionState={activeSessionState}
-			activeQueue={activeQueue}
-			activePhase={activePhase}
 			projects={projects}
 			newProjectCwd={projectActions.newProjectCwd}
 			setNewProjectCwd={projectActions.setNewProjectCwd}

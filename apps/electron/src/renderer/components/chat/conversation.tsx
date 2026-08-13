@@ -11,7 +11,7 @@ import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { ArrowDown } from "lucide-react";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
@@ -68,9 +68,21 @@ export function useConversationContextSafe(): ConversationContextValue | null {
 
 // ===== Conversation 根容器 =====
 
-export type ConversationProps = Omit<ComponentProps<typeof StickToBottom>, "children"> & { children?: ReactNode };
+export type ConversationProps = Omit<ComponentProps<typeof StickToBottom>, "children"> & {
+	children?: ReactNode;
+	/**
+	 * 流式同帧贴底（默认 false）。
+	 * use-stick-to-bottom 的 scrollToBottom 会把实际滚动推迟到下一个 rAF
+	 * （ResizeObserver → Promise(rAF) → 设 scrollTop），内容增长与滚动补偿
+	 * 固定相差一帧：token 流不规律或帧率波动时，视口内的旧内容（状态行、
+	 * 最新文本）以「上一帧增长量」的节奏上下蹦跳。
+	 * 开启后由本模块的 ResizeObserver 在布局后、绘制前同步把 scrollTop 对齐
+	 * 到底，内容增长与滚动零相位差：旧内容绝对静止，新内容从底部生长。
+	 */
+	syncSticky?: boolean;
+};
 
-export function Conversation({ className, children, ...props }: ConversationProps): ReactElement {
+export function Conversation({ className, children, syncSticky = false, ...props }: ConversationProps): ReactElement {
 	return (
 		<StickToBottom
 			className={cn("relative flex-1 overflow-hidden", className)}
@@ -83,14 +95,88 @@ export function Conversation({ className, children, ...props }: ConversationProp
 			aria-live="polite"
 			{...props}
 		>
-			<ConversationContextBridge>{children}</ConversationContextBridge>
+			<ConversationContextBridge syncSticky={syncSticky}>{children}</ConversationContextBridge>
 		</StickToBottom>
 	);
 }
 
+/**
+ * 流式同帧贴底。ResizeObserver 回调运行在 layout 之后、paint 之前：
+ * 在回调里同步设置 scrollTop，浏览器会在同一帧重新布局并绘制，滚动与内容
+ * 增长零相位差。库自身的 rAF 贴底循环仍会运行，写的是同一目标值（库 target
+ * 含 -1 偏移，此处与之一致），幂等。
+ * 贴底判定与库的 Proma patch 恢复逻辑一致（严格贴底，或 70px 近底且未主动
+ * 滚离），用户滚离后绝不拽回；用户正在容器内选中文本时同样冻结（对齐库
+ * scrollToBottom 里的 isSelecting 守卫，避免流式期间选区被拉走）。
+ * enabled=false 时不创建 observer（流式开始/结束各重建一次，频率极低）。
+ *
+ * 继承语义（已知局限）：库的 handleScroll 用 setTimeout(1) + resizeDifference
+ * 守卫做 escape 判定，流式期间每帧 resize 会吞掉滚动条拖动/键盘 PageUp 的
+ * escape（库自身缺陷，Proma patch 注释亦承认）；本 hook 把贴底同步化后该
+ * 缺陷表现得更彻底。滚轮上滚不受影响（handleWheel 同步 escape）。彻底修复
+ * 需 patch 库的 escape 判定，超出本模块范围，暂不处理。
+ */
+function useSyncStickyScroll(lib: ReturnType<typeof useStickToBottomContext>, enabled: boolean): void {
+	useEffect(() => {
+		if (!enabled) return;
+		const scroll = lib.scrollRef.current;
+		const content = lib.contentRef.current;
+		if (!scroll || !content) return;
+		const state = lib.state;
+
+		// 与库 scrollToBottom 的 isSelecting 语义对齐：mousedown 期间有选区且
+		// 选区与滚动容器相交 → 冻结贴底，让用户安心选字复制。
+		let selecting = false;
+		const onMouseDown = () => {
+			selecting = true;
+		};
+		const releaseSelecting = () => {
+			selecting = false;
+		};
+		const isSelecting = (): boolean => {
+			if (!selecting) return false;
+			const selection = window.getSelection();
+			if (!selection || !selection.rangeCount) return false;
+			const range = selection.getRangeAt(0);
+			return (
+				range.commonAncestorContainer.contains(scroll) ||
+				(!!scroll && scroll.contains(range.commonAncestorContainer))
+			);
+		};
+		document.addEventListener("mousedown", onMouseDown);
+		document.addEventListener("mouseup", releaseSelecting);
+		document.addEventListener("click", releaseSelecting);
+
+		const observer = new ResizeObserver(() => {
+			if (isSelecting()) return;
+			if (!state.isAtBottom && !(state.isNearBottom && !state.escapedFromLock)) return;
+			// 与库 targetScrollTop（scrollHeight - 1 - clientHeight）一致，避免与库的
+			// overscroll 钳制形成 1px 来回 + 两次 scroll 事件。
+			const target = scroll.scrollHeight - scroll.clientHeight - 1;
+			if (scroll.scrollTop < target) scroll.scrollTop = target;
+		});
+		observer.observe(content);
+		return () => {
+			observer.disconnect();
+			document.removeEventListener("mousedown", onMouseDown);
+			document.removeEventListener("mouseup", releaseSelecting);
+			document.removeEventListener("click", releaseSelecting);
+		};
+		// scrollRef/contentRef 是稳定 ref callback，state 是库内 useMemo 单例；
+		// enabled 翻转（isBusy 开始/结束）时重建 observer。
+	}, [enabled, lib.scrollRef, lib.contentRef, lib.state]);
+}
+
 /** 把 use-stick-to-bottom 的 context 包装成旧接口，保持消费者零改动。 */
-function ConversationContextBridge({ children }: { children: ReactNode }): ReactElement {
+function ConversationContextBridge({
+	children,
+	syncSticky,
+}: {
+	children: ReactNode;
+	syncSticky: boolean;
+}): ReactElement {
 	const lib = useStickToBottomContext();
+	useSyncStickyScroll(lib, syncSticky);
 
 	const value = useMemo<ConversationContextValue>(
 		() => ({

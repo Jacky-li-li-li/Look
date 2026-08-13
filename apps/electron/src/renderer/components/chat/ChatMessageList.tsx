@@ -997,7 +997,9 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 			// agent 运行中（流式输出/思考/工具执行）内容每帧增长：instant 即时同步滚动，
 			// 视口钉在底部让内容平滑流出，避免 smooth 弹簧追赶造成视口跳动；
 			// 静止时保持 smooth 平滑滚动体验。chunking/未 ready 同样 instant（冷渲染分块）。
+			// syncSticky：流式期间同帧同步贴底，消除库 rAF 一帧滞后造成的蹦跳。
 			resize={isBusy || !chunking || !ready ? "instant" : "smooth"}
+			syncSticky={isBusy}
 			className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}
 		>
 			<ChatMessagesInner

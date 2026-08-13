@@ -10,8 +10,14 @@
 import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { memo, useCallback, useMemo, useRef } from "react";
-import { activeAgentAtom, autoCollapseAtom, settingsTabAtom, showSettingsAtom } from "../../store/atoms";
-import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
+import {
+	activeAgentAtom,
+	autoCollapseAtom,
+	sessionStateAtomFamily,
+	settingsTabAtom,
+	showSettingsAtom,
+} from "../../store/atoms";
+import { deriveActiveQueue, deriveSessionPhase } from "../../store/sessionTypes";
 import PlanQuestionDialog from "../dialogs/PlanQuestionDialog";
 import { TodoPanel } from "../workspace/TodoPanel";
 import ChatInput, { type ChatInputHandle } from "./ChatInput";
@@ -22,9 +28,6 @@ import GitStatusBar from "./GitStatusBar";
 interface ChatPanelProps {
 	agentId: string;
 	agentName?: string;
-	sessionState: RendererSessionState;
-	queue: { steering: string[]; followUp: string[] };
-	phase: RendererSessionPhase;
 	currentModel: string;
 	currentThinking: string;
 	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
@@ -36,9 +39,6 @@ interface ChatPanelProps {
 const ChatPanel = memo(function ChatPanel({
 	agentId,
 	agentName,
-	sessionState,
-	queue,
-	phase,
 	currentModel,
 	currentThinking,
 	onSend,
@@ -51,6 +51,13 @@ const ChatPanel = memo(function ChatPanel({
 	const activeAgent = useAtomValue(activeAgentAtom);
 	const setShowSettings = useSetAtom(showSettingsAtom);
 	const setSettingsTab = useSetAtom(settingsTabAtom);
+	// sessionState/phase/queue 在这里订阅：流式每帧只有 ChatPanel 子树重渲染，
+	// App/AppLayout（含侧栏、顶部栏）不再被 uiBlocks 每帧新引用击穿。
+	const sessionState = useAtomValue(sessionStateAtomFamily(agentId));
+	const phase = useMemo(() => deriveSessionPhase(sessionState), [sessionState]);
+	// 只依赖 uiSteering/uiFollowUp：uiBlocks 每帧新引用不应击穿 ChatQueueDrawer 的 memo。
+	// biome-ignore lint/correctness/useExhaustiveDependencies: deriveActiveQueue 只读这两个字段
+	const queue = useMemo(() => deriveActiveQueue(sessionState), [sessionState.uiSteering, sessionState.uiFollowUp]);
 
 	const availableThinkingLevels = useMemo(() => {
 		const levels =

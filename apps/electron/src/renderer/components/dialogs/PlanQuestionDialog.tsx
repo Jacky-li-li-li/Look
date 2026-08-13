@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/
 import type { PlanQuestion } from "@shared/types";
 import { useAtom } from "jotai";
 import { CircleHelp, Send, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../../store/atoms";
@@ -14,7 +14,7 @@ import LookMarkdown from "../markdown/LookMarkdown";
 const AUTO_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const AUTO_ADVANCE_DELAY_MS = 150;
 
-export default function PlanQuestionDialog({ sessionId }: { sessionId: string | null }) {
+export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: string | null }) {
 	const { t } = useTranslation();
 	const [request, setRequest] = useAtom(planQuestionRequestAtomFamily(sessionId ?? ""));
 	const [storedDraft, setDraft] = useAtom(planQuestionDraftAtomFamily(sessionId ?? ""));
@@ -408,7 +408,7 @@ export default function PlanQuestionDialog({ sessionId }: { sessionId: string | 
 			</div>
 		</div>
 	);
-}
+});
 
 interface QuestionState {
 	selected: string[];
