@@ -12,12 +12,14 @@ vi.mock("../src/main/viewer/viewer-window-manager.js", () => ({
 	consumePendingPath: vi.fn(),
 	fadeOutAndCloseViewer: vi.fn(),
 	openViewerWindow: vi.fn(),
+	resolveViewerDock: vi.fn(),
 }));
 
 import {
 	consumePendingPath,
 	fadeOutAndCloseViewer,
 	openViewerWindow,
+	resolveViewerDock,
 } from "../src/main/viewer/viewer-window-manager.js";
 
 function makeCtx(): InvokeContext {
@@ -99,7 +101,12 @@ describe("file-viewer-router diffPatch 链路", () => {
 			path: "/repo/a.ts",
 			diffPatch: "diff --git a/a.ts b/a.ts",
 		});
-		expect(fadeOutAndCloseViewer).toHaveBeenCalled();
+		// 两阶段握手：dock 只发合并事件，独立窗口等回执后才关闭
+		expect(fadeOutAndCloseViewer).not.toHaveBeenCalled();
+		expect(resolveViewerDock).not.toHaveBeenCalled();
+
+		await dispatch({ type: "fileViewer:dock-result", confirmed: true });
+		expect(resolveViewerDock).toHaveBeenCalledWith(true);
 	});
 
 	it("fileViewer:dock 无 diffPatch → 事件不带 diffPatch 字段", async () => {
