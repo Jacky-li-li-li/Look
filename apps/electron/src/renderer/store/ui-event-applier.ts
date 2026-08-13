@@ -7,7 +7,7 @@ import type { AgentInfo, LookUiEvent, LookUiPhase, LookUiStreamBlock, LookUiTool
 import { toast } from "sonner";
 import { appStore } from "./appStore";
 import { trackAgentFamilyKey } from "./atomFamilyRegistry";
-import { agentsAtom, sessionErrorsAtom, sessionStateAtomFamily } from "./atoms";
+import { sessionErrorsAtom, sessionStateAtomFamily, updateAgent } from "./atoms";
 import { subagentCardStatusAtom } from "./subagentAtoms";
 
 let _nextBlockUid = 0;
@@ -306,23 +306,12 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 			// ── Metadata ──
 			case "session_meta":
 				if (ev.field === "name") {
-					appStore.set(
-						agentsAtom,
-						appStore
-							.get(agentsAtom)
-							.map((agent) => (agent.id === sessionId ? { ...agent, name: ev.value as string } : agent)),
-					);
+					updateAgent(sessionId, ["name"], (agent) => ({ ...agent, name: ev.value as string }));
 				} else if (ev.field === "thinkingLevel") {
-					appStore.set(
-						agentsAtom,
-						appStore
-							.get(agentsAtom)
-							.map((agent) =>
-								agent.id === sessionId
-									? { ...agent, thinkingLevel: ev.value as AgentInfo["thinkingLevel"] }
-									: agent,
-							),
-					);
+					updateAgent(sessionId, ["thinkingLevel"], (agent) => ({
+						...agent,
+						thinkingLevel: ev.value as AgentInfo["thinkingLevel"],
+					}));
 				}
 				break;
 
@@ -359,10 +348,12 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 	});
 
 	if (agentFlags) {
-		appStore.set(
-			agentsAtom,
-			appStore.get(agentsAtom).map((agent) => (agent.id === sessionId ? { ...agent, ...agentFlags } : agent)),
-		);
+		// run_status/compacting/retry_status 在流式期间几乎每帧到达；字段值不变时
+		// 跳过写入，避免每帧让 agentsAtom 换新数组、击穿 App/AppLayout 的 memo。
+		updateAgent(sessionId, Object.keys(agentFlags) as (keyof AgentInfo)[], (agent) => ({
+			...agent,
+			...agentFlags,
+		}));
 	}
 
 	if (typeof performance !== "undefined") {

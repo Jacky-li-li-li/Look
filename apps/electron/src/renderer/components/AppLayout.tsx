@@ -47,7 +47,8 @@ import { RightPanel } from "./workspace/RightPanel";
 const AgentSquare = lazy(() => import("./AgentMarketplace/AgentSquare"));
 
 interface AppLayoutProps {
-	agents: AgentInfo[];
+	/** 是否有至少一个会话（只传布尔，避免 agentsAtom 每次写入击穿 memo）。 */
+	hasAgents: boolean;
 	activeAgent: AgentInfo | null;
 	activeAgentId: string | null;
 	projects: ProjectInfo[];
@@ -73,7 +74,7 @@ interface AppLayoutProps {
 }
 
 function AppLayout({
-	agents,
+	hasAgents,
 	activeAgent,
 	activeAgentId,
 	projects,
@@ -239,7 +240,7 @@ function AppLayout({
 								onModelChange={handleModelChanged}
 								onAbort={handleAbortAgent}
 							/>
-						) : agents.length > 0 ? (
+						) : hasAgents ? (
 							<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
 								选择左侧会话查看消息
 							</div>

@@ -17,7 +17,7 @@ import type { ProviderSettingsData } from "./store/atoms";
 import {
 	activeAgentAtom,
 	activeAgentIdAtom,
-	agentsAtom,
+	hasAgentsAtom,
 	projectsAtom,
 	providerSettingsAtom,
 	rightPanelCollapsedAtom,
@@ -41,7 +41,7 @@ export default function App() {
 	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
 	const generalSettingsHydrated = useAtomValue(generalSettingsHydratedAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
-	const agents = useAtomValue(agentsAtom);
+	const hasAgents = useAtomValue(hasAgentsAtom);
 	const projects = useAtomValue(projectsAtom);
 
 	// ── Hooks ──
@@ -54,11 +54,17 @@ export default function App() {
 
 	useEffect(() => {
 		// 设置加载完成前不持久化布局值：避免启动首帧把默认宽度/折叠态写回
-		// 设置覆盖用户已存值（2026-08-07）
+		// 设置覆盖用户已存值（2026-08-07）。
+		// 拖尾防抖：面板拖拽时 rightPanelWidth/dockPanelWidth 以 ~60Hz 变化，
+		// 直接发 IPC 会产生数百次 invoke；与 useAppEffects 的持久化防抖同模式，
+		// 每次拖拽手势收敛为一次写入。
 		if (!api || !generalSettingsHydrated) return;
-		api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth }).catch((err) =>
-			console.warn("[App] setGeneralSettings failed:", err),
-		);
+		const timer = setTimeout(() => {
+			api.setGeneralSettings({ sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth }).catch(
+				(err) => console.warn("[App] setGeneralSettings failed:", err),
+			);
+		}, 200);
+		return () => clearTimeout(timer);
 	}, [sidebarCollapsed, rightPanelCollapsed, rightPanelWidth, dockPanelWidth, generalSettingsHydrated]);
 
 	// ── Early return guards ──
@@ -83,7 +89,7 @@ export default function App() {
 	// ── Main layout ──
 	return (
 		<AppLayout
-			agents={agents}
+			hasAgents={hasAgents}
 			activeAgent={activeAgent}
 			activeAgentId={activeAgentId}
 			projects={projects}

@@ -816,6 +816,36 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	const isAgentRunning = activeAgentId ? activeUiPhase !== "idle" : false;
 	const activeProjectCwd = useAtomValue(activeProjectAtom)?.cwd ?? "";
 
+	// === Turn-card cache（流式性能） ===
+	// collectTurnEntries + collectChangedFiles 在流式期间每帧对每个可见 assistant 行
+	// 重新执行（O(可见行数 × 条目数)）。已完成轮次的窗口是 (entries, messageDurations,
+	// timeline 前缀, cwd) 的纯函数；applyLiveTimeline 只在尾部追加 live 项（唯一例外是
+	// 最后一条 assistant 被 attach 为 live —— isLive 置 true 后本就不参与 turn-card），
+	// 因此 entries/messageDurations/cwd 引用不变时结果稳定，即使 timeline 每帧换新引用。
+	// 按 turnKey 缓存，快照/分页/分支导航/压缩（entries 或 messageDurations 换引用）时
+	// 整体失效；map 值 null 表示"已计算但本轮无变更文件"。
+	const turnCardCacheRef = useRef<{
+		entries: readonly LookSessionEntry[];
+		messageDurations: Record<string, number>;
+		cwd: string;
+		map: Map<string, { entries: LookSessionEntry[]; projectCwd?: string; turnKey?: string } | null>;
+	} | null>(null);
+	let turnCardCache = turnCardCacheRef.current;
+	if (
+		!turnCardCache ||
+		turnCardCache.entries !== sessionState.entries ||
+		turnCardCache.messageDurations !== sessionState.messageDurations ||
+		turnCardCache.cwd !== activeProjectCwd
+	) {
+		turnCardCache = {
+			entries: sessionState.entries,
+			messageDurations: sessionState.messageDurations,
+			cwd: activeProjectCwd,
+			map: new Map(),
+		};
+		turnCardCacheRef.current = turnCardCache;
+	}
+
 	return (
 		<>
 			<ConversationContent>
@@ -856,17 +886,22 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								(next?.message?.role === "user" || (isLast && !isAgentRunning));
 							let turnCard: { entries: LookSessionEntry[]; projectCwd?: string; turnKey?: string } | undefined;
 							if (showTurnCard) {
-								// 该轮条目从原始 entries 取回，包含被 timeline 附着到 assistant 后面的 toolResult。
-								const globalIndex = timeline.findIndex((it) => it.id === item.id);
-								const turnEntries = collectTurnEntries(sessionState.entries, timeline, globalIndex);
-								// 仅当本轮确有变更文件时才构造卡片（否则占位头像行会在消息与按钮行之间
-								// 撑出 ~30px 空白）。collectChangedFiles 与卡片内部 useMemo 同源，结果一致。
-								if (collectChangedFiles(turnEntries, activeProjectCwd).length > 0) {
-									turnCard = {
-										entries: turnEntries,
-										projectCwd: activeProjectCwd,
-										turnKey: item.entryId ?? item.id,
-									};
+								const turnKey = item.entryId ?? item.id;
+								const cached = turnCardCache.map.get(turnKey);
+								if (cached !== undefined) {
+									// null = 已计算但本轮无变更文件（不渲染卡片）
+									turnCard = cached ?? undefined;
+								} else {
+									// 该轮条目从原始 entries 取回，包含被 timeline 附着到 assistant 后面的 toolResult。
+									const globalIndex = timeline.findIndex((it) => it.id === item.id);
+									const turnEntries = collectTurnEntries(sessionState.entries, timeline, globalIndex);
+									// 仅当本轮确有变更文件时才构造卡片（否则占位头像行会在消息与按钮行之间
+									// 撑出 ~30px 空白）。collectChangedFiles 与卡片内部 useMemo 同源，结果一致。
+									const hasChanges = collectChangedFiles(turnEntries, activeProjectCwd).length > 0;
+									turnCard = hasChanges
+										? { entries: turnEntries, projectCwd: activeProjectCwd, turnKey }
+										: undefined;
+									turnCardCache.map.set(turnKey, turnCard ?? null);
 								}
 							}
 							return renderTimelineItem(item, turnCard);

@@ -12,9 +12,9 @@ import {
 	type SessionHistoryWindow,
 	type SessionSnapshotEnvelope,
 } from "@shared/types";
+import { updateAgent } from "./agentAtoms";
 import { appStore } from "./appStore";
 import {
-	agentsAtom,
 	forkingEntryAtomFamily,
 	navigatingEntryAtomFamily,
 	sessionLeafIdAtomFamily,
@@ -118,23 +118,23 @@ function fallbackHistory(entries: readonly LookSessionEntry[], leafId: string | 
 }
 
 function applyAgentRuntimeProjection(snapshot: SessionSnapshotEnvelope): void {
-	appStore.set(
-		agentsAtom,
-		appStore.get(agentsAtom).map((agent) =>
-			agent.id === snapshot.sessionId
-				? {
-						...agent,
-						model: snapshot.runtime.model
-							? `${snapshot.runtime.model.provider}/${snapshot.runtime.model.id}`
-							: agent.model,
-						thinkingLevel: snapshot.runtime.thinkingLevel,
-						isStreaming: snapshot.runtime.isStreaming,
-						isRetrying: snapshot.runtime.isRetrying,
-						isCompacting: snapshot.runtime.isCompacting,
-						messageCount: snapshot.runtime.stats.totalMessages,
-					}
-				: agent,
-		),
+	// Snapshot 在每轮激活/结束/流式边界都会到达；当投影字段与当前值一致时
+	// 跳过写入（updateAgent 守卫），避免每次快照都让 agentsAtom 换新数组、
+	// 触发 App/AppLayout/Sidebar 等订阅者全量重渲染。
+	updateAgent(
+		snapshot.sessionId,
+		["model", "thinkingLevel", "isStreaming", "isRetrying", "isCompacting", "messageCount"],
+		(agent) => ({
+			...agent,
+			model: snapshot.runtime.model
+				? `${snapshot.runtime.model.provider}/${snapshot.runtime.model.id}`
+				: agent.model,
+			thinkingLevel: snapshot.runtime.thinkingLevel,
+			isStreaming: snapshot.runtime.isStreaming,
+			isRetrying: snapshot.runtime.isRetrying,
+			isCompacting: snapshot.runtime.isCompacting,
+			messageCount: snapshot.runtime.stats.totalMessages,
+		}),
 	);
 }
 
