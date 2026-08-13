@@ -266,6 +266,7 @@ const api: LookAPI = {
 		}),
 	dockFileViewer: (path, diffPatch) =>
 		invoke({ type: "fileViewer:dock", path, ...(diffPatch !== undefined ? { diffPatch } : {}) }),
+	resolveFileViewerDock: (confirmed) => invoke({ type: "fileViewer:dock-result", confirmed }),
 	fileViewerReady: () => invoke({ type: "fileViewer:ready" }),
 
 	// ---- Auto Updater ----

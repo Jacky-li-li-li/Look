@@ -49,16 +49,26 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 				});
 				break;
 
-			case "fileViewer:docked":
+			case "fileViewer:docked": {
 				// 独立查看器窗口请求合并：主窗口右侧打开 Dock 面板展示该文件。
 				// Dock 面板内有未保存修改时先确认，避免静默覆盖（2026-08-07）。
 				// diffPatch 随合并事件带回，恢复与「变更面板打开」一致的 diff 语义。
-				if (!confirmDockFileSwapIfDirty(() => appStore.get(fileViewerDirtyAtom))) break;
+				// 结果经 resolveFileViewerDock 回执主进程：确认后主进程才淡出关闭独立窗口；
+				// 取消时独立窗口保持打开，文件不丢（2026-08-10 修复，此前事件发出即关窗）。
+				// 仅当 Dock 面板非空时才弹确认：空面板直接合并，避免脏状态残留（关闭
+				// Dock 后 fileViewerDirtyAtom 可能仍为 true）导致的误弹确认。
+				const hasDockContent = appStore.get(dockedFileAtom) !== null;
+				if (hasDockContent && !confirmDockFileSwapIfDirty(() => appStore.get(fileViewerDirtyAtom))) {
+					void window.look.resolveFileViewerDock(false).catch(() => {});
+					break;
+				}
 				appStore.set(dockedFileAtom, {
 					absolutePath: event.path,
 					...(event.diffPatch !== undefined ? { diffPatch: event.diffPatch } : {}),
 				});
+				void window.look.resolveFileViewerDock(true).catch(() => {});
 				break;
+			}
 
 			case "session:ui-event":
 				enqueueUiEvent(event.sessionId, event.events);

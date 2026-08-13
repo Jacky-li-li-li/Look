@@ -157,6 +157,28 @@ export function fadeOutAndCloseViewer(): void {
 	});
 }
 
+/**
+ * 主窗口对 fileViewer:docked 合并请求的回执：
+ * confirmed=true → 淡出关闭独立窗口（与 Dock 面板滑入同步）；
+ * confirmed=false（主窗口脏确认被用户取消）→ 保持窗口打开、复位透明度并
+ * 重新聚焦，文件仍留在独立窗口，不会两端皆失（2026-08-10 修复）。
+ */
+export function resolveViewerDock(confirmed: boolean): void {
+	if (confirmed) {
+		fadeOutAndCloseViewer();
+		return;
+	}
+	const win = viewerWindow;
+	if (!win || win.isDestroyed()) {
+		if (viewerWindow === win) viewerWindow = null;
+		return;
+	}
+	// 作废在途动画，复位为完全不透明并夺回焦点
+	animationEpoch += 1;
+	win.setOpacity(1);
+	win.focus();
+}
+
 /** 主窗口关闭时一并关闭查看器窗口。 */
 export function closeViewerWindow(): void {
 	// 作废在途动画,防止旧回调引用已销毁窗口

@@ -168,6 +168,7 @@ const EXHAUSTIVE = {
 	"fileViewer:open": true,
 	"fileViewer:ready": true,
 	"fileViewer:dock": true,
+	"fileViewer:dock-result": true,
 	"permission:set-mode": true,
 	"permission:get-mode": true,
 	"permission:respond": true,

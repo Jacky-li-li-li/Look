@@ -130,6 +130,7 @@ export type RendererToMainEvent =
 	| { type: "fileViewer:open"; path: string; fadeIn?: boolean; diffPatch?: string }
 	| { type: "fileViewer:ready" }
 	| { type: "fileViewer:dock"; path: string; diffPatch?: string }
+	| { type: "fileViewer:dock-result"; confirmed: boolean }
 	| { type: "permission:set-mode"; agentId: string; mode: PermissionMode; updateDefault?: boolean }
 	| { type: "permission:get-mode"; agentId: string }
 	| { type: "permission:respond"; payload: PermissionRespondPayload }

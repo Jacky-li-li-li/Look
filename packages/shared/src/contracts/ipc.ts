@@ -299,6 +299,8 @@ export interface LookAPI {
 	openFileViewer(path: string, fadeIn?: boolean, diffPatch?: string): Promise<IpcResult>;
 	/** 独立查看器窗口请求合并到主窗口右侧 Dock 面板；diffPatch 随合并事件带回。 */
 	dockFileViewer(path: string, diffPatch?: string): Promise<IpcResult>;
+	/** 主窗口对 fileViewer:docked 合并请求的回执：confirmed=true 才关闭独立窗口，取消时保持窗口打开。 */
+	resolveFileViewerDock(confirmed: boolean): Promise<IpcResult>;
 	fileViewerReady(): Promise<IpcResult<{ path?: string | null; diffPatch?: string | null }>>;
 	// ---- IM Channels ----
 	getImChannels(): Promise<

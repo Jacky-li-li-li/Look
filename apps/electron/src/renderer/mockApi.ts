@@ -609,6 +609,7 @@ const mockApi: LookAPI = {
 	statFilePath: () => success({ kind: "missing", inProject: false }),
 	openFileViewer: (_path, _fadeIn, _diffPatch) => Promise.resolve({ success: true }),
 	dockFileViewer: (_path, _diffPatch) => Promise.resolve({ success: true }),
+	resolveFileViewerDock: (_confirmed) => Promise.resolve({ success: true }),
 	fileViewerReady: () => Promise.resolve({ success: true, path: null }),
 	providerLogin: () => success({ providers: [], customProviders: [], customStats: { configured: 0, totalModels: 0 } }),
 	respondLoginPrompt: () => ok,
