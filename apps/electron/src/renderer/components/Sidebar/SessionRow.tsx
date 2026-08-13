@@ -74,7 +74,7 @@ function SessionRowImpl({
 				data-error={isError || undefined}
 				data-completed={isCompleted ? "" : undefined}
 				data-active={isActive || undefined}
-				className="session-ledger-row group/session flex h-[40px] items-center gap-2 rounded-md border border-transparent px-2"
+				className="session-ledger-row flex h-[40px] items-center gap-2 rounded-md border border-transparent px-2"
 			>
 				<button
 					type="button"
@@ -122,12 +122,6 @@ function SessionRowImpl({
 							{statusLabel}
 						</span>
 					</span>
-					<span
-						className="shrink-0 font-mono text-[10px] text-muted-foreground/45"
-						title={new Date(activityAt).toLocaleString(i18n.language)}
-					>
-						{fmtRelativeTime(activityAt, i18n.language)}
-					</span>
 				</button>
 				{hasChildren && (
 					<button
@@ -151,9 +145,9 @@ function SessionRowImpl({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<Button
-							variant="line-ghost"
+							variant="line"
 							size="icon-xs"
-							className="-mr-1 opacity-0 group-hover/session:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100"
+							className="session-menu-trigger"
 							aria-label={t("session.menu", "Session menu")}
 							title={t("session.menu", "Session menu")}
 						>
@@ -180,6 +174,14 @@ function SessionRowImpl({
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
+				<span
+					className="session-time shrink-0 font-mono text-[10px] text-muted-foreground/45"
+					title={new Date(activityAt).toLocaleString(i18n.language)}
+					onClick={() => selectSession(agent)}
+					onDoubleClick={() => beginEdit("session", agent.id, agent.name)}
+				>
+					{fmtRelativeTime(activityAt, i18n.language)}
+				</span>
 			</div>
 			{/* Sub-sessions — 使用预计算的 phase/running，无需订阅全局 atom */}
 			{!isCollapsed &&
@@ -192,7 +194,7 @@ function SessionRowImpl({
 						data-error={child.childError || undefined}
 						data-active={child.childActive || undefined}
 						data-completed={child.childCompleted ? "" : undefined}
-						className="session-ledger-row subsession-tree-row group/session ml-[18px] flex h-[34px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
+						className="session-ledger-row subsession-tree-row ml-[18px] flex h-[34px] items-center gap-1.5 rounded-md border border-transparent pl-2 pr-1"
 					>
 						<button
 							type="button"
