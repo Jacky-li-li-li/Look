@@ -180,9 +180,9 @@ export default function DraftsPage({ projects, handleCreateClick, handleSendMess
 			</header>
 
 			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-				{/* 快速输入区 */}
+				{/* 快速输入区：与聊天输入框一致的「容器 + 底部工具条」结构，保存按钮不再悬空 */}
 				<div className="shrink-0 border-b border-hairline px-5 py-4">
-					<div className="flex items-start gap-2">
+					<div className="rounded-lg border border-hairline bg-background/30 transition-colors focus-within:border-foreground/20">
 						<Textarea
 							ref={inputRef}
 							value={input}
@@ -194,19 +194,17 @@ export default function DraftsPage({ projects, handleCreateClick, handleSendMess
 								}
 							}}
 							placeholder={t("drafts.inputPlaceholder")}
-							className="min-h-[64px] resize-none text-[13px]"
+							className="min-h-[64px] resize-none rounded-b-none border-0 bg-transparent text-[13px] dark:bg-transparent"
 							rows={3}
 							aria-label={t("drafts.inputPlaceholder")}
 						/>
-						<Button
-							size="sm"
-							className="mt-1 shrink-0"
-							onClick={() => void addDraft()}
-							disabled={busy || !input.trim()}
-						>
-							{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-							{t("drafts.save")}
-						</Button>
+						<div className="flex items-center justify-between gap-2 border-t border-hairline px-2 py-1.5">
+							<span className="text-[10px] text-muted-foreground/70">{t("drafts.inputHint")}</span>
+							<Button size="sm" onClick={() => void addDraft()} disabled={busy || !input.trim()}>
+								{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+								{t("drafts.save")}
+							</Button>
+						</div>
 					</div>
 				</div>
 

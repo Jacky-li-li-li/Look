@@ -968,7 +968,8 @@
   "drafts": {
     "title": "Drafts",
     "description": "Capture problems, ideas and low-urgency todos, then run them as tasks in one click.",
-    "inputPlaceholder": "Jot down an idea, problem or todo… (Enter to save, Shift+Enter for newline)",
+    "inputPlaceholder": "Jot down an idea, problem or todo…",
+    "inputHint": "Enter to save · Shift+Enter for newline",
     "save": "Save",
     "count": "notes",
     "empty": "No drafts yet",

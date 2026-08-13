@@ -968,7 +968,8 @@
   "drafts": {
     "title": "草稿",
     "description": "随手记录问题、想法与待办事项，随时一键转为任务运行。",
-    "inputPlaceholder": "记录一个想法、问题或待办…（Enter 保存，Shift+Enter 换行）",
+    "inputPlaceholder": "记录一个想法、问题或待办…",
+    "inputHint": "Enter 保存 · Shift+Enter 换行",
     "save": "保存",
     "count": "条",
     "empty": "还没有草稿",

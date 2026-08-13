@@ -968,7 +968,8 @@
   "drafts": {
     "title": "下書き",
     "description": "問題・アイデア・後でやることのメモを残し、いつでもタスクとして実行できます。",
-    "inputPlaceholder": "アイデアやTODOをメモ…（Enterで保存、Shift+Enterで改行）",
+    "inputPlaceholder": "アイデアやTODOをメモ…",
+    "inputHint": "Enterで保存 · Shift+Enterで改行",
     "save": "保存",
     "count": "件",
     "empty": "下書きはまだありません",
