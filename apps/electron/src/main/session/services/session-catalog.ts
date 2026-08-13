@@ -287,6 +287,27 @@ export class SessionCatalog {
 		this.rebuildIndex();
 	}
 
+	/**
+	 * Remove a single session from the index (e.g. when its JSONL is being
+	 * deleted). Used by destroyAgent *before* disposeRuntime so concurrent
+	 * ensureRuntime callers (queued applyMode etc.) fail fast instead of
+	 * resurrecting a ghost runtime for a session that is being deleted.
+	 */
+	remove(sessionId: string): boolean {
+		let removed = false;
+		for (const [projectId, sessions] of this.sessionsByProject) {
+			const index = sessions.findIndex((s) => s.id === sessionId);
+			if (index >= 0) {
+				const next = [...sessions];
+				next.splice(index, 1);
+				this.sessionsByProject.set(projectId, next);
+				removed = true;
+			}
+		}
+		if (removed) this.rebuildIndex();
+		return removed;
+	}
+
 	get(sessionId: string): StoredSession | undefined {
 		return this.sessionsById.get(sessionId);
 	}

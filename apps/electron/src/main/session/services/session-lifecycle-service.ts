@@ -43,6 +43,8 @@ export interface SessionLifecycleHost {
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
 	refreshProjectSessions(projectId: string): Promise<StoredSession[]>;
 	getStoredSession(sessionId: string): StoredSession | undefined;
+	/** Remove a session from the catalog index (before disposing its runtime). */
+	removeStoredSession(sessionId: string): void;
 	emit(event: MainToRendererEvent): void;
 	emitSessionState(sessionId: string, reason?: SessionSnapshotEnvelope["reason"]): void;
 	emitSessionList(projectId: string): void;
@@ -152,6 +154,11 @@ export class SessionLifecycleService {
 		const managed = this.deps.runtimeRegistry.get(sessionId);
 		const projectId = stored?.projectId ?? managed?.projectId;
 		if (!projectId) return;
+		// 先从目录索引移除 stored：disposeRuntime 进行中/完成后，任何并发
+		// ensureRuntime（如排队中的 applyMode 权限切换）都会因 getStoredSession
+		// 为空而失败，不会为"正在删除"的会话重建幽灵 runtime。随后的
+		// refreshProjectSessions 基于磁盘（文件已删）重建索引，结果一致。
+		if (stored) this.deps.host.removeStoredSession(sessionId);
 		await this.deps.host.disposeRuntime(sessionId, true);
 		if (stored) {
 			try {

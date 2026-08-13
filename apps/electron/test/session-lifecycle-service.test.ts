@@ -50,6 +50,7 @@ describe("SessionLifecycleService", () => {
 			disposeRuntime: vi.fn().mockResolvedValue(undefined),
 			refreshProjectSessions: vi.fn().mockResolvedValue([]),
 			getStoredSession: vi.fn().mockReturnValue(overrides?.stored ?? null),
+			removeStoredSession: vi.fn(),
 			emit: vi.fn(),
 			emitSessionState: vi.fn(),
 			emitSessionList: vi.fn(),

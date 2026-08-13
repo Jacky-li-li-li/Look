@@ -25,6 +25,8 @@ export interface SessionPermissionOrchestratorHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
 	/** Push a fresh agent snapshot so the renderer reflects the model switch immediately. */
 	emitSessionUpdated(sessionId: string): void;
+	/** Whether the session still exists in the catalog (false while being deleted). */
+	sessionExists(sessionId: string): boolean;
 }
 
 export interface SessionPermissionOrchestratorDependencies {
@@ -60,6 +62,10 @@ export class SessionPermissionOrchestrator {
 		mode: PermissionMode,
 		options: { internal: boolean; updateDefault: boolean },
 	): Promise<void> {
+		// 会话已从目录移除（destroyAgent 删除中/已删除）：模式切换对已删除会话
+		// 无意义，直接跳过 —— 否则队列链里的 applyModeInner 会 ensureRuntime
+		// 重建一个无渲染端引用的幽灵 runtime（W6 竞态）。
+		if (!this.deps.host.sessionExists(sessionId)) return;
 		const previous = this.applyQueues.get(sessionId) ?? Promise.resolve();
 		const next = previous.then(
 			() => this.applyModeInner(sessionId, mode, options),
@@ -83,6 +89,9 @@ export class SessionPermissionOrchestrator {
 		mode: PermissionMode,
 		options: { internal: boolean; updateDefault: boolean },
 	): Promise<void> {
+		// 排队期间会话可能已被销毁（destroyAgent 先清 catalog 再 dispose）——
+		// 短路，不执行 ensureRuntime，避免为已删除会话重建幽灵 runtime。
+		if (!this.deps.host.sessionExists(sessionId)) return;
 		const managed = await this.deps.host.ensureRuntime(sessionId);
 		const previousMode = this.deps.permissionService.getMode(sessionId);
 		if (previousMode === mode) return;

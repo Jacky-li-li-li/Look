@@ -539,6 +539,9 @@ export class CompositionBuilder {
 				disposeRuntime: (sessionId, abort) => this.runtimeLifecycle!.disposeRuntime(sessionId, abort),
 				refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
 				getStoredSession: (sessionId) => this.sessionCatalog!.get(sessionId),
+				removeStoredSession: (sessionId) => {
+					this.sessionCatalog!.remove(sessionId);
+				},
 				emit: (event) => host.emit(event),
 				emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason ?? "activate"),
 				emitSessionList: (projectId) => this.sessionNotifier!.emitSessionList(projectId),
@@ -581,6 +584,7 @@ export class CompositionBuilder {
 			host: {
 				ensureRuntime: (sessionId) => this.runtimeLifecycle!.ensureRuntime(sessionId),
 				emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
+				sessionExists: (sessionId) => this.sessionCatalog!.get(sessionId) !== undefined,
 			},
 			eventBus: this.eventBus!,
 			permissionService: this.permissionService!,

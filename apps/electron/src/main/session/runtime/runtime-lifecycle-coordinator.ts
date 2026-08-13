@@ -115,7 +115,7 @@ export class RuntimeLifecycleCoordinator {
 		const ownsTarget = !pendingTarget;
 		if (ownsTarget) this.creationTargets.set(sessionId, target);
 		try {
-			return await this.options.runtimeRegistry.getOrCreate(sessionId, async () => {
+			const managed = await this.options.runtimeRegistry.getOrCreate(sessionId, async () => {
 				const runtime = await this.options.runtimeFactory.create(
 					cwd,
 					sessionManager,
@@ -129,6 +129,17 @@ export class RuntimeLifecycleCoordinator {
 					throw error;
 				}
 			});
+			// 并发 dispose 竞态：disposeRuntime 可能在初始化期间到达——它会等待初始化
+			// 完成后清理 registry 条目并 dispose runtime。若返回的 runtime 已被并发
+			// dispose 清掉（registry 里不再是它），或 dispose 正在/即将进行，抛错
+			// 而不是把已销毁的 runtime 交给调用方继续使用（调用方触碰
+			// managed.runtime.session 会崩溃，且会留下幽灵引用）。
+			if (this.disposals.has(sessionId) || this.options.runtimeRegistry.get(sessionId) !== managed) {
+				const disposing = this.disposals.get(sessionId);
+				if (disposing) await disposing;
+				throw new Error(`Session ${sessionId} was disposed while its runtime was initializing`);
+			}
+			return managed;
 		} finally {
 			if (ownsTarget && this.creationTargets.get(sessionId) === target) {
 				this.creationTargets.delete(sessionId);

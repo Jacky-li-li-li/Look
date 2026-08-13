@@ -115,6 +115,7 @@ function makeOrchestrator(opts: {
 		host: {
 			ensureRuntime: vi.fn(() => Promise.resolve(runtime)),
 			emitSessionUpdated,
+			sessionExists: vi.fn(() => true),
 		},
 		eventBus,
 		permissionService,
@@ -138,6 +139,7 @@ describe("SessionPermissionOrchestrator", () => {
 			host: {
 				ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime())),
 				emitSessionUpdated: vi.fn(),
+				sessionExists: vi.fn(() => true),
 			},
 			eventBus: makeEventBus(),
 			permissionService,
@@ -158,6 +160,7 @@ describe("SessionPermissionOrchestrator", () => {
 			host: {
 				ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime())),
 				emitSessionUpdated: vi.fn(),
+				sessionExists: vi.fn(() => true),
 			},
 			eventBus: makeEventBus(),
 			permissionService,

@@ -239,6 +239,9 @@ export class SessionSubagentService {
 					createdAt: string;
 			  }
 			| undefined;
+		/** 运行中失败（resultPromise 错误分支）已写入 failed delegation 条目。
+		 *  外层 catch 只负责初始化段失败——若已写入则不再补写，避免双条 failed。 */
+		let delegationFailureWritten = false;
 
 		try {
 			const displayName = `Agent：${trimmedTitle}`.slice(0, this.deps.maxNameLength);
@@ -372,6 +375,8 @@ export class SessionSubagentService {
 						finishedAt: new Date().toISOString(),
 						error: error instanceof Error ? error.message : String(error),
 					});
+					// 标记已写：rethrow 后外层 catch 不得再补写第二条 failed 条目
+					delegationFailureWritten = true;
 					throw error;
 				},
 			);
@@ -382,9 +387,10 @@ export class SessionSubagentService {
 			// （allowlist 无有效工具、runtimeInfo missing、appendCustomEntry 失败、
 			//   无 API key 等预检失败）
 			console.error(`[Look][subagent] Failed to initialize subagent ${childSessionId}:`, error);
-			if (delegation) {
-				// 若 delegation entry 已写入（runtimeInfo missing 等场景），补写 failed 状态，
-				// 避免侧栏子代理条目永久停留在 running。
+			if (delegation && !delegationFailureWritten) {
+				// 仅初始化段失败（delegation entry 尚未由 resultPromise 错误分支写入）时
+				// 补写 failed 状态，避免侧栏子代理条目永久停留在 running；运行中失败
+				// 已由错误分支写过，此处跳过防止双条 failed 条目。
 				try {
 					session.sessionManager.appendCustomEntry(DELEGATION_ENTRY_TYPE, {
 						...delegation,
