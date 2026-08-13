@@ -4,9 +4,10 @@
 // - 短内容不出现「展开全部」按钮
 // - 长内容自动折叠到固定高度（max-h-24），底部渐隐 + 虚化遮罩，出现
 //   「展开全部」；点击展开全部内容（去掉高度钳制），再点收起
+// - 流式与完成后都按高度截断
 // - 展开时调用 conversation 上下文的 stopScroll（防止贴底视口被拽到
 //   展开后内容底部）
-// - 流式期间自动展开跟随输出，流式结束自动恢复折叠
+// - 手动展开状态跨流式结束保持（不强制折叠）
 
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
@@ -129,28 +130,36 @@ describe("ThinkingPanel 超高折叠", () => {
 		expect(container.querySelector("[data-thinking-fade]")).toBeTruthy();
 	});
 
-	it("流式期间自动展开跟随输出，长内容也不钳制", () => {
+	it("流式期间同样按高度截断：长内容被钳制并出现「展开全部」", () => {
 		const { container } = renderPanel("long thought".repeat(100), true);
 		measureWithHeight(container, 500);
 
 		const body = container.querySelector("[data-thinking-panel-body]") as HTMLElement;
-		expect(body.getAttribute("data-expanded")).toBe("true");
-		expect(body.className).not.toContain("max-h-24");
+		expect(body.getAttribute("data-expanded")).toBe("false");
+		expect(body.className).toContain("max-h-24");
+		expect(container.querySelector("[data-thinking-fade]")).toBeTruthy();
+		const toggle = container.querySelector("[data-thinking-expand-toggle]") as HTMLButtonElement;
+		expect(toggle).toBeTruthy();
+		expect(toggle.textContent).toContain("Expand all");
 	});
 
-	it("流式结束自动恢复折叠", () => {
+	it("手动展开状态跨流式结束保持（不强制折叠）", () => {
 		const { container, rerender } = renderPanel("long thought".repeat(100), true);
 		measureWithHeight(container, 500);
+
+		// 流式中手动展开全部
+		const toggle = container.querySelector("[data-thinking-expand-toggle]") as HTMLButtonElement;
+		fireEvent.click(toggle);
 		expect(container.querySelector("[data-thinking-panel-body]")?.getAttribute("data-expanded")).toBe("true");
 
+		// 流式结束：展开状态保持，不被强制折叠
 		rerender(
 			<I18nextProvider i18n={i18n}>
 				<ThinkingPanel thinking={"long thought".repeat(100)} isStreaming={false} />
 			</I18nextProvider>,
 		);
 		const body = container.querySelector("[data-thinking-panel-body]") as HTMLElement;
-		expect(body.getAttribute("data-expanded")).toBe("false");
-		expect(body.className).toContain("max-h-24");
-		expect(container.querySelector("[data-thinking-fade]")).toBeTruthy();
+		expect(body.getAttribute("data-expanded")).toBe("true");
+		expect(body.className).not.toContain("max-h-24");
 	});
 });

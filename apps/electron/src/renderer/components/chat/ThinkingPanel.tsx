@@ -2,9 +2,9 @@
 // ThinkingPanel — 思考过程内容块（Ink Wash, shadcn/ui）
 //
 // 始终展示、带外虚线边框的内容块（标题行 + 字符数 + 正文）。
-// 内容超过折叠高度（96px）时自动截断，底部以渐隐 + 虚化（渐变
-// 遮罩 + backdrop blur）过渡，并提供「展开全部 / 收起」交互；
-// 流式期间自动展开实时跟随输出，输出结束后恢复超高折叠。
+// 内容超过折叠高度（96px）时自动截断——流式与完成后都按高度
+// 钳制，底部以渐隐 + 虚化（渐变遮罩 + backdrop blur）过渡，
+// 并提供「展开全部 / 收起」交互（展开状态由用户手动控制）。
 // 流式增量片段以 reveal 动画淡入，避免整块跳变。
 // ============================================================
 
@@ -27,7 +27,7 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming 
 	// 展开时脱离“贴底”锁定：防止 stick-to-bottom 的 resize 跟随把视口拽到
 	// 展开后内容的底部（与 CollapsibleExecutionGroup 同一问题的 thinking 版本）。
 	const ctx = useConversationContextSafe();
-	const [expanded, setExpanded] = React.useState(() => isStreaming);
+	const [expanded, setExpanded] = React.useState(false);
 	const [overflows, setOverflows] = React.useState(false);
 	const bodyRef = React.useRef<HTMLDivElement>(null);
 
@@ -46,14 +46,10 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming 
 		prevLenRef.current = thinkingLen;
 	});
 
-	// 流式期间自动展开（实时跟随输出）；输出结束后自动折叠（超高时截断）。
-	React.useEffect(() => {
-		setExpanded(isStreaming);
-	}, [isStreaming]);
-
 	// 测量内容是否超出折叠高度：展开态比对内容总高度与折叠阈值；折叠态直接
 	// 比对 scrollHeight / clientHeight（max-h 截断后两者的差值即溢出量）。
-	// 内容增长由 ResizeObserver 触发重测（无 RO 环境挂载时测一次，足够静态内容使用）。
+	// 内容增长（含流式增量）由 ResizeObserver 触发重测（无 RO 环境挂载时测
+	// 一次，足够静态内容使用）。
 	React.useEffect(() => {
 		const el = bodyRef.current;
 		if (!el) return;
