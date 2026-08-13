@@ -33,10 +33,14 @@ import type {
  * 成功分支的 `error?: never` 是兼容位：让渲染端 `result?.error ?? fallback`
  * 的无收窄读法继续成立（成功时类型为 undefined），同时保证失败分支必须
  * 携带 error。
+ *
+ * 注意：失败分支**不携带错误栈**。完整栈（含绝对路径、SDK 内部帧）只写入
+ * 主进程日志；渲染端 UI 从不消费栈信息，随 IPC 回传只会放大 XSS 下的信息
+ * 泄露面。
  */
 export type IpcResult<T extends object = object> =
 	| ({ success: true } & T & { error?: never })
-	| { success: false; error: string; errorCode?: string | null; errorStack?: string | null };
+	| { success: false; error: string; errorCode?: string | null };
 
 /**
  * Redirect target for Supabase account OAuth (GitHub/Google). Uses the app's

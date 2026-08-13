@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getProjectSharedDir } from "@look/shared/look-storage";
+import { isSensitivePath } from "../../security/sensitive-paths.js";
 import { guardPath } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
@@ -17,12 +18,27 @@ import type { IpcRouter } from "../invoke-context.js";
  * fall back to the lexical path check).
  */
 /**
- * 只读路径守卫:仅做基本校验(类型/长度/NUL/绝对路径),不限制项目根。
- * 用于 file:read / file:stat —— 项目外文件允许只读查看(2026-08-08 方案 B),
- * 渲染端依据返回的 inProject 标记禁用编辑/保存。
+ * 只读路径守卫:基本校验 + 敏感路径拦截(2026-08-08 方案 B 保留项目外只读,
+ * 但 ~/.ssh、dotfile、LOOK_HOME 凭据区、macOS ~/Library 关键目录一律拒绝)。
+ * 已存在的路径再对 realpath 复核一次(防 symlink 指向敏感区后经 open() 跟随读取)。
  */
-function guardAnyPath(rawPath: unknown, label: string): string {
-	return guardPath(rawPath, label);
+async function guardAnyPath(rawPath: unknown, label: string): Promise<string> {
+	const resolved = guardPath(rawPath, label);
+	// 词法检查:路径本身落在敏感区(含尚未创建的探测目标)
+	if (isSensitivePath(resolved)) {
+		throw new Error(`Path denied for ${label}: sensitive location`);
+	}
+	// realpath 复核:已存在路径经 symlink 解析后落入敏感区同样拒绝
+	try {
+		const real = await fs.promises.realpath(resolved);
+		if (real !== resolved && isSensitivePath(real)) {
+			throw new Error(`Path denied for ${label}: symlink resolves to a sensitive location`);
+		}
+	} catch (error) {
+		if (error instanceof Error && error.message.startsWith("Path denied")) throw error;
+		// ENOENT 等:目标不存在,词法检查已通过
+	}
+	return resolved;
 }
 
 /**
@@ -170,7 +186,7 @@ export const fileRouter: IpcRouter = (ctx, register) => {
 	const projectRoots = () => ctx.project.service.listProjects().flatMap((p) => [p.cwd, getProjectSharedDir(p.id)]);
 
 	register("file:read", async (data) => {
-		const filePath = guardAnyPath(data.path, "path");
+		const filePath = await guardAnyPath(data.path, "path");
 		const result = await readFileContent(filePath);
 		return { ...result, inProject: isInsideAnyRoot(filePath, projectRoots()) };
 	});
@@ -185,7 +201,7 @@ export const fileRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("file:stat", async (data) => {
-		const filePath = guardAnyPath(data.path, "path");
+		const filePath = await guardAnyPath(data.path, "path");
 		const result = await statPathKind(filePath);
 		return { ...result, inProject: isInsideAnyRoot(filePath, projectRoots()) };
 	});

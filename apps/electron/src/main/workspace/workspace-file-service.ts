@@ -14,6 +14,7 @@ import { ensureProjectSharedDir, getProjectSharedDir } from "@look/shared/look-s
 import type { FileTreeNode, MainToRendererEvent } from "@look/shared/types";
 import type { FSWatcher } from "chokidar";
 import chokidar from "chokidar";
+import { isSensitivePath } from "../security/sensitive-paths.js";
 import { resolveInsideRoot } from "./path-guard.js";
 
 export type WorkspaceFileServiceEventCallback = (event: MainToRendererEvent) => void;
@@ -250,14 +251,23 @@ export class WorkspaceFileService {
 		if (resolvedDest !== homeDir && !resolvedDest.startsWith(homeDir + path.sep)) {
 			throw new Error("Export destination must be within the user home directory");
 		}
+		// 敏感区拦截：dotfile/LOOK_HOME/~/Library 关键目录一律不可作为导出目标
+		// （内容由渲染端经 shared:write 控制，写入 ~/.zshrc、LaunchAgents 等
+		// 等于把渲染端可控内容落盘到持久化/提权位置）。
+		if (isSensitivePath(resolvedDest)) {
+			throw new Error("Export destination is a sensitive location");
+		}
 		// 词法校验后仍要防止 home 内的 symlink 指向 home 外：mkdir 后再 realpath
-		// 校验一次，阻止数据写到 home 之外。
+		// 校验一次，阻止数据写到 home 之外或落入敏感区。
 		const resolvedHome = await fs.promises.realpath(homeDir).catch(() => homeDir);
 		await fs.promises.mkdir(resolvedDest, { recursive: true });
 		const realDest = await fs.promises.realpath(resolvedDest);
 		const homePrefix = resolvedHome.endsWith(path.sep) ? resolvedHome : `${resolvedHome}${path.sep}`;
 		if (realDest !== resolvedHome && !realDest.startsWith(homePrefix)) {
 			throw new Error("Export destination resolves outside the user home directory");
+		}
+		if (isSensitivePath(realDest)) {
+			throw new Error("Export destination resolves to a sensitive location");
 		}
 		await Promise.all(
 			relativePaths.map(async (relativePath) => {

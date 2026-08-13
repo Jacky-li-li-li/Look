@@ -178,21 +178,38 @@ export function registerIpcHandlers(
 	}
 
 	// Handle renderer → main events (fire-and-forget)
-	ipcMain.on("look:event", (_event, data: RendererToMainEvent) => {
-		switch (data.type) {
-			case "app:ready":
-				break;
-			// 渲染端实测顶部栏可视中心(CSS px) → 校正 macOS 红绿灯垂直位置。
-			// CSS px 乘 zoomFactor 换算为 pt;仅 macOS 有 hiddenInset 红绿灯。
-			case "window:traffic-light-center": {
-				if (process.platform !== "darwin" || mainWindow.isDestroyed()) break;
-				const zoom = mainWindow.webContents.zoomFactor || 1;
-				mainWindow.setWindowButtonPosition({
-					x: TRAFFIC_LIGHT_X,
-					y: trafficLightYForCenter(data.centerCssPx * zoom),
-				});
-				break;
+	ipcMain.on("look:event", (_event, data: unknown) => {
+		try {
+			// 通道级硬化：payload 未经类型校验直接进 switch，非对象载荷会在这里
+			// 抛未捕获异常（ipcMain 监听器内 throw 无法被上方 handle() 的 catch
+			// 兜住）。先做形状校验，再按 type 分发。
+			const event = data as Partial<RendererToMainEvent> | null | undefined;
+			if (!event || typeof event !== "object" || typeof event.type !== "string") {
+				console.warn("[IPC] Ignoring malformed look:event payload:", typeof data);
+				return;
 			}
+			switch (event.type) {
+				case "app:ready":
+					break;
+				// 渲染端实测顶部栏可视中心(CSS px) → 校正 macOS 红绿灯垂直位置。
+				// CSS px 乘 zoomFactor 换算为 pt;仅 macOS 有 hiddenInset 红绿灯。
+				case "window:traffic-light-center": {
+					if (process.platform !== "darwin" || mainWindow.isDestroyed()) break;
+					const centerCssPx = (event as { centerCssPx?: unknown }).centerCssPx;
+					if (typeof centerCssPx !== "number" || !Number.isFinite(centerCssPx)) {
+						console.warn("[IPC] Ignoring malformed window:traffic-light-center payload");
+						break;
+					}
+					const zoom = mainWindow.webContents.zoomFactor || 1;
+					mainWindow.setWindowButtonPosition({
+						x: TRAFFIC_LIGHT_X,
+						y: trafficLightYForCenter(centerCssPx * zoom),
+					});
+					break;
+				}
+			}
+		} catch (error) {
+			console.error("[IPC] look:event handler failed:", error);
 		}
 	});
 
@@ -209,11 +226,12 @@ export function registerIpcHandlers(
 				err instanceof Error ? err.message : String(err),
 				err instanceof Error ? err.stack : "",
 			);
+			// 只回传 error/errorCode：完整栈（绝对路径、SDK 内部帧）留在主进程日志，
+			// 不随 IPC 泄漏到渲染端（渲染端 UI 从不消费 errorStack）。
 			return {
 				success: false,
 				error: err instanceof Error ? err.message : String(err),
 				errorCode: (err as NodeJS.ErrnoException)?.code ?? null,
-				errorStack: err instanceof Error ? (err.stack ?? null) : null,
 			};
 		}
 	});
