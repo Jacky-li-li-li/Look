@@ -34,7 +34,6 @@ const USE_SESSION_MODEL = "__session__";
 
 function persistSettings(partial: {
 	language?: "en" | "zh" | "ja";
-	autoCollapse?: boolean;
 	compactionEnabled?: boolean;
 	autoTitleModel?: string | null;
 	planModel?: string | null;
@@ -188,7 +187,6 @@ function MessageLayoutTile({
 
 interface GeneralSettingsState {
 	language: string;
-	autoCollapse: boolean;
 	compactionEnabled: boolean;
 	/** 只读展示：读自 SDK SettingsManager（settings.json: compaction.reserveTokens）。 */
 	compactionReserveTokens: number;
@@ -212,7 +210,6 @@ export default function GeneralTab() {
 	// the async getGeneralSettings() round-trip is in flight.
 	const [state, setState] = useState<GeneralSettingsState>({
 		language: (SUPPORTED_LOCALES as string[]).includes(i18n.language) ? i18n.language : "en",
-		autoCollapse: true,
 		compactionEnabled: true,
 		compactionReserveTokens: 16384,
 		compactionKeepRecentTokens: 20000,
@@ -232,7 +229,6 @@ export default function GeneralTab() {
 	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
 	const {
 		language,
-		autoCollapse,
 		compactionEnabled,
 		compactionReserveTokens,
 		compactionKeepRecentTokens,
@@ -271,7 +267,6 @@ export default function GeneralTab() {
 					setState((prev) => ({
 						...prev,
 						...(settings.language ? { language: settings.language } : {}),
-						...(settings.autoCollapse !== undefined ? { autoCollapse: settings.autoCollapse } : {}),
 						...(settings.compactionEnabled !== undefined
 							? { compactionEnabled: settings.compactionEnabled }
 							: {}),
@@ -523,17 +518,6 @@ export default function GeneralTab() {
 					</CardTitle>
 				</CardHeader>
 				<CardContent className="flex flex-col divide-y divide-hairline px-4 py-0">
-					<SettingRow id="autoclp" label={t("settings.autoCollapse")} desc={t("settings.autoCollapseDesc")}>
-						<Switch
-							id="autoclp"
-							size="sm"
-							checked={autoCollapse}
-							onCheckedChange={(v) => {
-								setState((prev) => ({ ...prev, autoCollapse: v }));
-								persistSettings({ autoCollapse: v });
-							}}
-						/>
-					</SettingRow>
 					<SettingRow
 						id="tool-exec"
 						label={t("settings.showToolExecution")}

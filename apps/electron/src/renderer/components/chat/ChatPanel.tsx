@@ -10,13 +10,7 @@
 import type { ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { memo, useCallback, useMemo, useRef } from "react";
-import {
-	activeAgentAtom,
-	autoCollapseAtom,
-	sessionStateAtomFamily,
-	settingsTabAtom,
-	showSettingsAtom,
-} from "../../store/atoms";
+import { activeAgentAtom, sessionStateAtomFamily, settingsTabAtom, showSettingsAtom } from "../../store/atoms";
 import { deriveActiveQueue, deriveSessionPhase } from "../../store/sessionTypes";
 import PlanQuestionDialog from "../dialogs/PlanQuestionDialog";
 import { TodoPanel } from "../workspace/TodoPanel";
@@ -47,7 +41,6 @@ const ChatPanel = memo(function ChatPanel({
 	onAbort,
 }: ChatPanelProps) {
 	const inputRef = useRef<ChatInputHandle>(null);
-	const autoCollapse = useAtomValue(autoCollapseAtom);
 	const activeAgent = useAtomValue(activeAgentAtom);
 	const setShowSettings = useSetAtom(showSettingsAtom);
 	const setSettingsTab = useSetAtom(settingsTabAtom);
@@ -84,7 +77,6 @@ const ChatPanel = memo(function ChatPanel({
 				agentId={agentId}
 				agentName={agentName}
 				sessionState={sessionState}
-				autoCollapse={autoCollapse}
 				phase={phase}
 				isBusy={isBusy}
 				inputRef={inputRef}

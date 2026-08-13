@@ -7,6 +7,10 @@
 // UnifiedBlock（见 blockTypes.ts）归一双源后，这里只保留一份分段
 // 与渲染逻辑。
 //
+// 流式中 thinking/toolcall 全部平铺直出（思考内容实时可见）；
+// 输出结束后连续 thinking + toolcall 归入 CollapsibleExecutionGroup，
+// 自动折叠为徽标（展开后才看到执行细节）。
+//
 // 性能约束：流式路径依赖 per-block React.memo + 稳定引用。
 // - 转换器（toUnifiedFromStream）用 WeakMap 缓存，源 block 引用不变时
 //   返回同一 UnifiedBlock 对象 → UnifiedBlockView memo 生效；
@@ -77,7 +81,6 @@ function isThinkingStreaming(block: UnifiedBlock, isStreaming: boolean, totalBlo
 interface UnifiedBlockViewProps {
 	block: UnifiedBlock;
 	isStreaming: boolean;
-	autoCollapse: boolean;
 	toolExecution: LookUiToolExecState | undefined;
 	toolResultMap: Record<string, ToolResultMessage> | undefined;
 	defaultToolStatus: "pending" | "running";
@@ -95,7 +98,6 @@ interface UnifiedBlockViewProps {
 const UnifiedBlockView = memo(function UnifiedBlockView({
 	block,
 	isStreaming,
-	autoCollapse,
 	toolExecution,
 	toolResultMap,
 	defaultToolStatus,
@@ -114,13 +116,7 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 		case "thinking": {
 			// ThinkingPanel 自身处理空 thinking（空+非流式 → null，空+流式 → 骨架），
 			// 这里不再重复拦截，保持单一职责。
-			return (
-				<ThinkingPanel
-					thinking={block.thinking ?? ""}
-					isStreaming={thinkingStreaming}
-					autoCollapse={autoCollapse}
-				/>
-			);
+			return <ThinkingPanel thinking={block.thinking ?? ""} isStreaming={thinkingStreaming} />;
 		}
 		case "image": {
 			if (!block.image) return null;
@@ -165,7 +161,8 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 
 /**
  * 把 group 段内的 UnifiedBlock 转回 pi-ai content block 形状，
- * 供 CollapsibleExecutionGroup 消费（与旧流式路径的转换一致）。
+ * 供 CollapsibleExecutionGroup 消费（thinking + toolCall 混合组，
+ * 输出结束后一起自动折叠为徽标）。
  */
 function toContentBlocks(blocks: UnifiedBlock[]): Array<ThinkingContent | ToolCall> {
 	return blocks.map((b) =>
@@ -206,7 +203,6 @@ export interface MessageBlockListProps {
 	/** 归一后的消息块（快照源或流式源）。 */
 	blocks: UnifiedBlock[];
 	isStreaming: boolean;
-	autoCollapse: boolean;
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 	/** 无 execution 也无 persisted result 时工具的默认状态：快照 pending / 流式 running。 */
@@ -216,7 +212,6 @@ export interface MessageBlockListProps {
 export const MessageBlockList = memo(function MessageBlockList({
 	blocks,
 	isStreaming,
-	autoCollapse,
 	toolExecutions,
 	toolResultMap,
 	defaultToolStatus,
@@ -228,15 +223,11 @@ export const MessageBlockList = memo(function MessageBlockList({
 
 	if (visibleBlocks.length === 0) return null;
 
-	// 流式中思考面板自动展开（实时可见推理过程）：autoCollapse 强制为 false；
-	// 消息输出完成后恢复设置值（默认 true）→ 所有思考面板统一折叠。
-	// 注意：流式中 CEG 不渲染，effectiveAutoCollapse 实际只影响平铺的 ThinkingPanel
-	// 与完成后 CEG 内的 ThinkingPanel（统一以它为唯一事实源）。
-	const effectiveAutoCollapse = isStreaming ? false : autoCollapse;
-
 	// 分段：
-	// - 流式中不组成执行组：thinking/toolcall 全部 single 平铺（思考面板 + 工具卡片行直接可见），
-	//   完成后恢复分组 → 折叠工具组徽标（展开后才看到执行细节）；
+	// - 流式中不组成执行组：thinking/toolcall 全部 single 平铺（思考面板 + 工具卡片行
+	//   直接可见，ThinkingPanel 无自身折叠交互）；
+	// - 完成后恢复分组：连续 thinking + toolcall 归入折叠工具组徽标（展开后才看到
+	//   执行细节），思考过程随工具组一起自动折叠；
 	// - subagent 类调用任何阶段都独立成组（默认展开的头像卡片区）。
 	// 编辑类工具归入折叠组（展开后卡内展示 diff 预览）。
 	const segments = segmentExecutionBlocks(
@@ -255,7 +246,6 @@ export const MessageBlockList = memo(function MessageBlockList({
 							key={block.key}
 							block={block}
 							isStreaming={isStreaming}
-							autoCollapse={effectiveAutoCollapse}
 							toolExecution={
 								block.kind === "toolcall" && block.toolCallId ? toolExecutions[block.toolCallId] : undefined
 							}
@@ -286,7 +276,6 @@ export const MessageBlockList = memo(function MessageBlockList({
 						toolExecutions={toolExecutions}
 						toolResultMap={toolResultMap}
 						isStreaming={false}
-						autoCollapse={effectiveAutoCollapse}
 					/>
 				);
 			})}

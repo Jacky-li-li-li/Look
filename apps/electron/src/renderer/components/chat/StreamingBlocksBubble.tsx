@@ -19,12 +19,10 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 	blocks,
 	toolExecutions,
 	isStreaming,
-	autoCollapse,
 }: {
 	blocks: LookUiStreamBlock[];
 	toolExecutions: Record<string, LookUiToolExecState>;
 	isStreaming: boolean;
-	autoCollapse: boolean;
 }) {
 	const unified = useMemo(() => toUnifiedFromStream(blocks), [blocks]);
 	// toolExecutions 感知：工具执行中（toolcall 块已 completed）阶段判定为 tool
@@ -36,7 +34,6 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 			<MessageBlockList
 				blocks={unified}
 				isStreaming={false}
-				autoCollapse={autoCollapse}
 				toolExecutions={toolExecutions}
 				// 完成态（短暂窗口）语义与快照一致：无 execution 的 subagent 显示 pending，
 				// 不再显示 running spinner（与 CEG 的 statusFor 默认 pending 统一）。
@@ -51,7 +48,6 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 				<MessageBlockList
 					blocks={unified}
 					isStreaming={true}
-					autoCollapse={autoCollapse}
 					toolExecutions={toolExecutions}
 					defaultToolStatus="running"
 				/>

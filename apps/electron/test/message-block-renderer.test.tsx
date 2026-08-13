@@ -4,6 +4,9 @@
 // - 快照路径（pi-ai blocks）与流式路径（LookUiStreamBlock）经 UnifiedBlock
 //   归一后，渲染出相同的 ToolCallCard / 文本 / 思考块结构
 // - 流式转换缓存：相同源 block 引用 → 相同 UnifiedBlock 对象（memo 前提）
+//
+// 思考块（ThinkingPanel）无折叠交互：流式与完成后都平铺直出，
+// 带外虚线边框；只有 toolcall 完成后归入折叠执行组。
 
 import type { ToolCall } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
@@ -57,11 +60,6 @@ function expandExecutionGroups(container: HTMLElement): void {
 		fireEvent.click(button);
 	}
 	for (const button of container.querySelectorAll<HTMLButtonElement>(
-		'[data-thinking-panel] button[aria-expanded="false"]',
-	)) {
-		fireEvent.click(button);
-	}
-	for (const button of container.querySelectorAll<HTMLButtonElement>(
 		'[data-tool-panel-trigger][aria-expanded="false"]',
 	)) {
 		if (!button.disabled) fireEvent.click(button);
@@ -91,7 +89,6 @@ describe("MessageBlockList dual-source equivalence", () => {
 			<MessageBlockList
 				blocks={unified}
 				isStreaming={false}
-				autoCollapse={false}
 				toolExecutions={{ tc1: toolExecution }}
 				defaultToolStatus="pending"
 			/>,
@@ -108,7 +105,6 @@ describe("MessageBlockList dual-source equivalence", () => {
 			<MessageBlockList
 				blocks={unified}
 				isStreaming={false}
-				autoCollapse={false}
 				toolExecutions={{ tc1: toolExecution }}
 				defaultToolStatus="running"
 			/>,
@@ -135,22 +131,29 @@ describe("MessageBlockList dual-source equivalence", () => {
 			<MessageBlockList
 				blocks={unified}
 				isStreaming={false}
-				autoCollapse={false}
 				toolExecutions={{ tc1: toolExecution }}
 				defaultToolStatus="pending"
 			/>,
 		);
-		expandExecutionGroups(container);
+		// thinking + toolCall 组成折叠组：组头显示计数徽标，折叠时不渲染组内内容
+		const group = container.querySelector("[data-execution-group]");
+		expect(group).toBeTruthy();
+		expect(group?.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
 		expect(container.textContent).toContain("first");
+		expect(container.textContent).not.toContain("step");
+
+		expandExecutionGroups(container);
 		expect(container.textContent).toContain("read");
-		// thinking + toolCall 组成折叠组：组头会显示工具计数徽标
-		expect(container.querySelector("[data-execution-group]")).toBeTruthy();
+		// 组内思考面板：始终展开（无自身折叠按钮），带外虚线边框
+		const thinkingPanel = container.querySelector("[data-thinking-panel]");
+		expect(thinkingPanel).toBeTruthy();
+		expect(thinkingPanel?.querySelector("button")).toBeNull();
+		expect(thinkingPanel?.className).toContain("border-dashed");
+		expect(container.textContent).toContain("step");
 	});
 
 	it("shows streaming loading indicator only while streaming with no blocks (StreamingBlocksBubble layer)", () => {
-		const { container } = render(
-			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
-		);
+		const { container } = render(<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} />);
 		expect(container.textContent).toContain("Thinking");
 	});
 
@@ -162,23 +165,16 @@ describe("MessageBlockList dual-source equivalence", () => {
 		];
 		const unified = toUnifiedFromStream(blocks);
 		const { container } = render(
-			<MessageBlockList
-				blocks={unified}
-				isStreaming={true}
-				autoCollapse={false}
-				toolExecutions={{}}
-				defaultToolStatus="running"
-			/>,
+			<MessageBlockList blocks={unified} isStreaming={true} toolExecutions={{}} defaultToolStatus="running" />,
 		);
-		expandExecutionGroups(container);
-		// thinking 未完成 → ThinkingPanel 显示 reasoning 骨架/内容
+		// thinking 未完成 → ThinkingPanel 直接显示 reasoning 内容（无折叠）
 		expect(container.textContent).toContain("step 1");
 		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
 	});
 
 	it("thinking: snapshot source activates only the last block while streaming", () => {
 		// 快照源：isStreaming 时只有最后一块 thinking active；
-		// 前面已完成 thinking 不应显示 skeleton（ThinkingPanel 空内容时不渲染）。
+		// 前面已完成 thinking 直接展示内容（ThinkingPanel 无折叠、无骨架）。
 		const blocks = [
 			{ type: "thinking", thinking: "step 1" },
 			{ type: "text", text: "answer" },
@@ -190,15 +186,10 @@ describe("MessageBlockList dual-source equivalence", () => {
 		>;
 		const unified = toUnifiedFromPiAi(blocks);
 		const { container } = render(
-			<MessageBlockList
-				blocks={unified}
-				isStreaming={true}
-				autoCollapse={false}
-				toolExecutions={{}}
-				defaultToolStatus="pending"
-			/>,
+			<MessageBlockList blocks={unified} isStreaming={true} toolExecutions={{}} defaultToolStatus="pending" />,
 		);
 		expect(container.textContent).toContain("answer");
+		expect(container.textContent).toContain("step 1");
 	});
 
 	it("subagent tool calls are carved out into their own group", () => {
@@ -218,7 +209,6 @@ describe("MessageBlockList dual-source equivalence", () => {
 			<MessageBlockList
 				blocks={unified}
 				isStreaming={false}
-				autoCollapse={false}
 				toolExecutions={{
 					sa1: { toolCallId: "sa1", toolName: "delegate_agent", args: {}, phase: "completed" },
 				}}
@@ -248,13 +238,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 		];
 		const unified = toUnifiedFromStream(subagentBlocks);
 		const { container } = render(
-			<MessageBlockList
-				blocks={unified}
-				isStreaming={false}
-				autoCollapse={false}
-				toolExecutions={{}}
-				defaultToolStatus="running"
-			/>,
+			<MessageBlockList blocks={unified} isStreaming={false} toolExecutions={{}} defaultToolStatus="running" />,
 		);
 		expandExecutionGroups(container);
 		expect(container.textContent).toContain("delegate_agent");
@@ -266,13 +250,7 @@ describe("MessageBlockList dual-source equivalence", () => {
 		];
 		const unified = toUnifiedFromStream(blocks);
 		const { container } = render(
-			<MessageBlockList
-				blocks={unified}
-				isStreaming={false}
-				autoCollapse={false}
-				toolExecutions={{}}
-				defaultToolStatus="running"
-			/>,
+			<MessageBlockList blocks={unified} isStreaming={false} toolExecutions={{}} defaultToolStatus="running" />,
 		);
 		// 不再渲染 data:image/png;base64, 坏图
 		expect(container.querySelector("img")).toBeNull();
@@ -298,7 +276,6 @@ describe("MessageBlockList showToolExecution toggle", () => {
 			<MessageBlockList
 				blocks={mixedBlocks()}
 				isStreaming={false}
-				autoCollapse={false}
 				toolExecutions={{
 					tc1: { toolCallId: "tc1", toolName: "read", args: {}, phase: "completed", result: "file content" },
 					sa1: { toolCallId: "sa1", toolName: "delegate_agent", args: {}, phase: "completed" },
@@ -310,6 +287,7 @@ describe("MessageBlockList showToolExecution toggle", () => {
 		expect(container.textContent).toContain("hello");
 		expect(container.textContent).toContain("read");
 		expect(container.textContent).toContain("delegate_agent");
+		expect(container.textContent).toContain("step");
 	});
 
 	it("off hides thinking and tool calls, keeps text", () => {
@@ -320,7 +298,6 @@ describe("MessageBlockList showToolExecution toggle", () => {
 				<MessageBlockList
 					blocks={mixedBlocks()}
 					isStreaming={false}
-					autoCollapse={false}
 					toolExecutions={{
 						tc1: { toolCallId: "tc1", toolName: "read", args: {}, phase: "completed", result: "file content" },
 						sa1: { toolCallId: "sa1", toolName: "delegate_agent", args: {}, phase: "completed" },
@@ -354,7 +331,6 @@ describe("MessageBlockList showToolExecution toggle", () => {
 						| ToolCall
 					>)}
 					isStreaming={false}
-					autoCollapse={false}
 					toolExecutions={{}}
 					defaultToolStatus="pending"
 				/>
@@ -461,9 +437,7 @@ describe("StreamingStatusBar — streamingPhase 阶段判定", () => {
 
 describe("StreamingStatusBar — 状态行渲染", () => {
 	it("renders thinking status bar with orb loader and elapsed", () => {
-		const { container } = render(
-			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
-		);
+		const { container } = render(<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} />);
 		// en i18n 默认 → "Thinking…"
 		expect(container.textContent).toContain("Thinking…");
 		// ThinkingOrb 渲染 canvas 动画
@@ -485,9 +459,7 @@ describe("StreamingStatusBar — 状态行渲染", () => {
 				uid: 1,
 			},
 		];
-		const { container } = render(
-			<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
-		);
+		const { container } = render(<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} />);
 		expect(container.textContent).toContain("Calling tool");
 	});
 });
@@ -496,9 +468,7 @@ describe("StreamingStatusBar — 阶段文字宽度", () => {
 	// 阶段文字按自然宽度布局（不再用 min-w 占位）：短文案（en/zh）时计时器
 	// 紧跟文本（flex gap-2），避免文本与计时器之间出现大段空隙。
 	it("uses natural label width so the timer sits close to the text", () => {
-		const { container } = render(
-			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
-		);
+		const { container } = render(<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} />);
 		const label = [...container.querySelectorAll("span")].find((s) => s.textContent === "Thinking…");
 		expect(label).toBeTruthy();
 		expect(label?.className).toContain("whitespace-nowrap");
@@ -516,9 +486,7 @@ describe("StreamingStatusBar — 计时器", () => {
 
 	// 计时只在秒数变化时更新：250ms interval 下按秒推进，跨秒进位正确。
 	it("advances elapsed once per second", () => {
-		const { container } = render(
-			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
-		);
+		const { container } = render(<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} />);
 		expect(container.textContent).toMatch(/0s/);
 		act(() => {
 			vi.advanceTimersByTime(1100);
@@ -540,9 +508,7 @@ describe("StreamingStatusBar — 位置：跟随输出内容之后", () => {
 		const blocks: LookUiStreamBlock[] = [
 			{ contentIndex: 0, kind: "text", text: "hello", thinking: "", completed: false, uid: 1 },
 		];
-		const { container } = render(
-			<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
-		);
+		const { container } = render(<StreamingBlocksBubble blocks={blocks} toolExecutions={{}} isStreaming={true} />);
 		const prose = container.querySelector(".message-prose");
 		const loader = container.querySelector("canvas");
 		expect(prose).toBeTruthy();
@@ -552,16 +518,16 @@ describe("StreamingStatusBar — 位置：跟随输出内容之后", () => {
 	});
 
 	it("renders only the status bar when there are no blocks yet", () => {
-		const { container } = render(
-			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
-		);
+		const { container } = render(<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} />);
 		expect(container.querySelector("canvas")).toBeTruthy();
 		expect(container.querySelector(".message-prose")).toBeNull();
 	});
 });
 
-describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped after", () => {
-	// 默认设置 autoCollapse=true：非流式/完成后折叠；流式中强制展开思考面板。
+describe("MessageBlockList streaming layout: flat while streaming, grouped + collapsed after", () => {
+	// 思考块本身无折叠交互（ThinkingPanel 始终展开、带外虚线边框）；
+	// 流式中 thinking/toolcall 全部平铺直出，完成后连续 thinking + toolcall
+	// 归入折叠执行组，输出结束后随工具组一起自动折叠为徽标。
 	const thinkingBlocks = () =>
 		toUnifiedFromPiAi([
 			{ type: "thinking", thinking: "deep thought" },
@@ -585,19 +551,19 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 			| ToolCall
 		>);
 
-	it("streaming: thinking panel auto-expands despite autoCollapse=true setting", () => {
+	it("streaming: thinking panel renders flat and visible without any toggle", () => {
 		const { container } = render(
 			<MessageBlockList
 				blocks={thinkingBlocks()}
 				isStreaming={true}
-				autoCollapse={true}
 				toolExecutions={{}}
 				defaultToolStatus="pending"
 			/>,
 		);
-		const panelBody = container.querySelector("[data-tool-panel-body]")!;
-		expect(panelBody).toBeTruthy();
-		expect(panelBody.getAttribute("data-open")).toBe("true");
+		const panel = container.querySelector("[data-thinking-panel]")!;
+		expect(panel).toBeTruthy();
+		// 无折叠按钮（去除折叠展开交互）
+		expect(panel.querySelector("button")).toBeNull();
 		// 思考内容实时可见
 		expect(container.textContent).toContain("deep thought");
 	});
@@ -607,7 +573,6 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 			<MessageBlockList
 				blocks={mixedBlocks()}
 				isStreaming={true}
-				autoCollapse={true}
 				toolExecutions={{ tc1: toolExecution }}
 				defaultToolStatus="running"
 			/>,
@@ -619,16 +584,16 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 		expect(toolCard).toBeTruthy();
 		expect(container.textContent).toContain("read");
 		expect(container.textContent).toContain("success");
-		// 思考面板同步平铺展开
-		expect(container.querySelector("[data-tool-panel-body]")?.getAttribute("data-open")).toBe("true");
+		// 思考面板同步平铺直出
+		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
+		expect(container.textContent).toContain("step");
 	});
 
-	it("after streaming finishes: execution group appears collapsed with tools inside", () => {
+	it("after streaming finishes: execution group appears collapsed with thinking + tools inside", () => {
 		const { container, rerender } = render(
 			<MessageBlockList
 				blocks={mixedBlocks()}
 				isStreaming={true}
-				autoCollapse={true}
 				toolExecutions={{ tc1: toolExecution }}
 				defaultToolStatus="running"
 			/>,
@@ -639,45 +604,58 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 			<MessageBlockList
 				blocks={mixedBlocks()}
 				isStreaming={false}
-				autoCollapse={true}
 				toolExecutions={{ tc1: toolExecution }}
 				defaultToolStatus="pending"
 			/>,
 		);
-		// 工具组徽标出现（折叠状态），工具卡片行不再平铺
+		// 工具组徽标出现（折叠状态），thinking + 工具卡片行都不再平铺
 		const group = container.querySelector("[data-execution-group]")!;
 		expect(group).toBeTruthy();
 		expect(group.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
 		expect(container.querySelector("[data-execution-group-body]")?.getAttribute("data-open")).toBe("false");
 		expect(container.querySelectorAll("[data-tool-panel]").length).toBe(0);
+		expect(container.querySelector("[data-thinking-panel]")).toBeNull();
+		expect(container.textContent).not.toContain("step");
+
+		// 展开组：思考面板 + 工具卡片一起出现
+		expandExecutionGroups(container);
+		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
+		expect(container.textContent).toContain("step");
+		expect(container.querySelector("[data-tool-panel]")).toBeTruthy();
 	});
 
-	it("after streaming finishes: thinking panel collapses inside the group", () => {
+	it("after streaming finishes: thinking-only content collapses into the group badge", () => {
 		const { container, rerender } = render(
 			<MessageBlockList
 				blocks={thinkingBlocks()}
 				isStreaming={true}
-				autoCollapse={true}
 				toolExecutions={{}}
 				defaultToolStatus="pending"
 			/>,
 		);
-		expect(container.querySelector("[data-tool-panel-body]")?.getAttribute("data-open")).toBe("true");
+		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
 
 		rerender(
 			<MessageBlockList
 				blocks={thinkingBlocks()}
 				isStreaming={false}
-				autoCollapse={true}
 				toolExecutions={{}}
 				defaultToolStatus="pending"
 			/>,
 		);
 		// 完成后 thinking 归入折叠组：无平铺面板，组徽标折叠
-		expect(container.querySelector("[data-tool-panel-body]")).toBeNull();
+		expect(container.querySelector("[data-thinking-panel]")).toBeNull();
 		const group = container.querySelector("[data-execution-group]")!;
 		expect(group).toBeTruthy();
 		expect(group.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
+
+		// 展开组：思考面板出现（无自身折叠按钮、带虚线边框），内容可见
+		expandExecutionGroups(container);
+		const panel = container.querySelector("[data-thinking-panel]")!;
+		expect(panel).toBeTruthy();
+		expect(panel.querySelector("button")).toBeNull();
+		expect(panel.className).toContain("border-dashed");
+		expect(container.textContent).toContain("deep thought");
 	});
 
 	it("streaming: subagent calls keep their own (always-visible) group", () => {
@@ -698,7 +676,6 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 			<MessageBlockList
 				blocks={subagentBlocks}
 				isStreaming={true}
-				autoCollapse={true}
 				toolExecutions={{}}
 				defaultToolStatus="running"
 			/>,
@@ -719,7 +696,6 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 			<MessageBlockList
 				blocks={blocks}
 				isStreaming={true}
-				autoCollapse={true}
 				toolExecutions={{
 					tc1: {
 						toolCallId: "tc1",
@@ -740,7 +716,6 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 			<MessageBlockList
 				blocks={blocks}
 				isStreaming={true}
-				autoCollapse={true}
 				toolExecutions={{ tc1: toolExecution }}
 				defaultToolStatus="running"
 			/>,
@@ -761,13 +736,7 @@ describe("MessageBlockList streaming layout: flat thinking + tool rows, grouped 
 			| ToolCall
 		>);
 		const { container } = render(
-			<MessageBlockList
-				blocks={blocks}
-				isStreaming={true}
-				autoCollapse={true}
-				toolExecutions={{}}
-				defaultToolStatus="running"
-			/>,
+			<MessageBlockList blocks={blocks} isStreaming={true} toolExecutions={{}} defaultToolStatus="running" />,
 		);
 		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
 	});

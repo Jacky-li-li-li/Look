@@ -31,7 +31,6 @@ export interface MessageItemProps {
 	blockCacheKey?: string;
 	agentName?: string;
 	isStreaming?: boolean;
-	autoCollapse: boolean;
 	toolExecutions?: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 	isActiveLeaf?: boolean;
@@ -60,7 +59,6 @@ export const MessageItem = memo(function MessageItem({
 	blockCacheKey,
 	agentName,
 	isStreaming = false,
-	autoCollapse,
 	toolExecutions = {},
 	toolResultMap,
 	isActiveLeaf = false,
@@ -97,14 +95,12 @@ export const MessageItem = memo(function MessageItem({
 							blocks={liveBlocks ?? []}
 							toolExecutions={liveToolExecutions}
 							isStreaming={isStreaming}
-							autoCollapse={autoCollapse}
 						/>
 					) : message ? (
 						<MessageBlockListForMessage
 							message={message}
 							cacheKey={blockCacheKey ?? entryId}
 							isStreaming={isStreaming}
-							autoCollapse={autoCollapse}
 							toolExecutions={toolExecutions}
 							toolResultMap={toolResultMap}
 						/>
@@ -173,7 +169,6 @@ function areMessageItemPropsEqual(previous: MessageItemProps, next: MessageItemP
 		previous.blockCacheKey !== next.blockCacheKey ||
 		previous.agentName !== next.agentName ||
 		previous.isStreaming !== next.isStreaming ||
-		previous.autoCollapse !== next.autoCollapse ||
 		previous.isActiveLeaf !== next.isActiveLeaf ||
 		previous.flash !== next.flash ||
 		previous.liveBlocks !== next.liveBlocks ||
@@ -232,14 +227,12 @@ const MessageBlockListForMessage = memo(function MessageBlockListForMessage({
 	message,
 	cacheKey,
 	isStreaming,
-	autoCollapse,
 	toolExecutions,
 	toolResultMap,
 }: {
 	message: AgentMessage;
 	cacheKey?: string;
 	isStreaming: boolean;
-	autoCollapse: boolean;
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
 }) {
@@ -249,7 +242,6 @@ const MessageBlockListForMessage = memo(function MessageBlockListForMessage({
 		<MessageBlockList
 			blocks={unified}
 			isStreaming={isStreaming}
-			autoCollapse={autoCollapse}
 			toolExecutions={toolExecutions}
 			toolResultMap={toolResultMap}
 			defaultToolStatus="pending"

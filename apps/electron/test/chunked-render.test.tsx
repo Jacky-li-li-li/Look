@@ -95,7 +95,6 @@ function listUi(state: RendererSessionState) {
 					agentId="session-a"
 					agentName="Session A"
 					sessionState={state}
-					autoCollapse
 					phase="idle"
 					isBusy={false}
 					inputRef={createRef()}

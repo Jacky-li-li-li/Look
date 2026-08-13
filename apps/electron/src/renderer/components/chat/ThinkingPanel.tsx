@@ -1,35 +1,35 @@
 // ============================================================
-// ThinkingPanel — Inset Drawer (Ink Wash, shadcn/ui)
-// Collapsed by default (same as single tool-call cards), unless
-// the autoCollapse setting is off. User manual toggle overrides
-// the default for the lifetime of this panel.
+// ThinkingPanel — 思考过程内容块（Ink Wash, shadcn/ui）
 //
-// NOTE: Uses pure CSS collapse instead of Radix Collapsible to
-// avoid expensive hook overhead (Presence/useLayoutEffect) during
-// agent switches where many panels mount simultaneously.
+// 始终展示、带外虚线边框的内容块（标题行 + 字符数 + 正文）。
+// 内容超过折叠高度（96px）时自动截断，底部以渐隐 + 虚化（渐变
+// 遮罩 + backdrop blur）过渡，并提供「展开全部 / 收起」交互；
+// 流式期间自动展开实时跟随输出，输出结束后恢复超高折叠。
+// 流式增量片段以 reveal 动画淡入，避免整块跳变。
 // ============================================================
 
 import { cn } from "@look/ui";
-import { Brain, ChevronRight } from "lucide-react";
+import { Brain, ChevronDown } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useConversationContextSafe } from "./conversation";
 
+/** 折叠态正文最大高度（px）；对应样式类 max-h-24。 */
+const COLLAPSED_BODY_HEIGHT = 96;
+
 interface ThinkingPanelProps {
 	thinking: string;
 	isStreaming: boolean;
-	autoCollapse: boolean;
 }
 
-const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming, autoCollapse }: ThinkingPanelProps) {
+const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming }: ThinkingPanelProps) {
 	const { t } = useTranslation();
-	// 仅在处于 Conversation（StickToBottom）内时可用；独立渲染（测试等）时优雅降级
+	// 展开时脱离“贴底”锁定：防止 stick-to-bottom 的 resize 跟随把视口拽到
+	// 展开后内容的底部（与 CollapsibleExecutionGroup 同一问题的 thinking 版本）。
 	const ctx = useConversationContextSafe();
-	// Collapsed by default (like tool-call cards); a boolean manualOpen
-	// means the user has taken control, null means "follow autoCollapse".
-	const [manualOpen, setManualOpen] = React.useState<boolean | null>(null);
-	const [hasRenderedBody, setHasRenderedBody] = React.useState(() => !autoCollapse);
-	const open = manualOpen ?? !autoCollapse;
+	const [expanded, setExpanded] = React.useState(() => isStreaming);
+	const [overflows, setOverflows] = React.useState(false);
+	const bodyRef = React.useRef<HTMLDivElement>(null);
 
 	// ── 流式增量渲染 ──
 	// thinking 是每批 delta 后的累计全文；把「本批新增片段」单独包一层 reveal span
@@ -46,26 +46,43 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 		prevLenRef.current = thinkingLen;
 	});
 
-	const handleToggle = React.useCallback(() => {
-		// 展开时脱离“贴底”锁定：防止 stick-to-bottom 的 resize 跟随把视口拽到
-		// 展开后内容的底部（与 CollapsibleExecutionGroup 同一问题的 thinking 版本）。
-		if (!open) {
-			ctx?.stopScroll();
-			setHasRenderedBody(true);
-		}
-		setManualOpen((prev) => !(prev ?? !autoCollapse));
-	}, [autoCollapse, open, ctx]);
+	// 流式期间自动展开（实时跟随输出）；输出结束后自动折叠（超高时截断）。
+	React.useEffect(() => {
+		setExpanded(isStreaming);
+	}, [isStreaming]);
 
-	// When streaming but no thinking content has arrived yet, show a loading
-	// skeleton with a pulse indicator so the user knows reasoning is in progress.
+	// 测量内容是否超出折叠高度：展开态比对内容总高度与折叠阈值；折叠态直接
+	// 比对 scrollHeight / clientHeight（max-h 截断后两者的差值即溢出量）。
+	// 内容增长由 ResizeObserver 触发重测（无 RO 环境挂载时测一次，足够静态内容使用）。
+	React.useEffect(() => {
+		const el = bodyRef.current;
+		if (!el) return;
+		const update = () => {
+			setOverflows(expanded ? el.scrollHeight > COLLAPSED_BODY_HEIGHT : el.scrollHeight > el.clientHeight);
+		};
+		update();
+		if (typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(update);
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, [expanded]);
+
+	const handleToggle = React.useCallback(() => {
+		if (!expanded) {
+			ctx?.stopScroll();
+		}
+		setExpanded((prev) => !prev);
+	}, [expanded, ctx]);
+
+	// 流式但思考内容尚未到达：显示带脉冲指示的占位行（同样的虚线边框，
+	// 保持“思考内容块”的视觉一致性）。
 	if (!thinking) {
 		if (!isStreaming) return null;
 		return (
 			<div
 				data-thinking-panel=""
-				className="flex cursor-default items-center gap-1.5 px-2 py-1 text-[11px] text-muted-foreground"
+				className="flex items-center gap-1.5 rounded-md border border-dashed border-hairline px-2.5 py-1 text-[11px] text-muted-foreground"
 			>
-				<ChevronRight className="size-3 shrink-0" />
 				<Brain className="size-3.5 shrink-0 text-blue-400 dark:text-blue-300" />
 				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">{t("chat.reasoning")}</span>
 				<span className="inline-block w-2 h-4 bg-blue-400 animate-pulse rounded-xs" />
@@ -74,43 +91,55 @@ const ThinkingPanel = React.memo(function ThinkingPanel({ thinking, isStreaming,
 	}
 
 	return (
-		<div data-thinking-panel="">
-			<button
-				type="button"
-				className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] text-muted-foreground outline-none transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted/50 focus-visible:text-foreground"
-				aria-expanded={open}
-				onClick={handleToggle}
-			>
-				<ChevronRight className={cn("size-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
+		<div data-thinking-panel="" className="overflow-hidden rounded-md border border-dashed border-hairline">
+			<div className="flex items-center gap-1.5 border-b border-hairline px-2.5 py-1 text-[11px] text-muted-foreground">
 				<Brain className="size-3.5 shrink-0 text-blue-400 dark:text-blue-300" />
 				<span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">{t("chat.reasoning")}</span>
 				<span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
 					{t("chat.characters", { count: thinking.length.toLocaleString() })}
 				</span>
-			</button>
-			<div
-				data-tool-panel-body=""
-				data-open={open}
-				className={cn("grid", open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}
-				style={{
-					transition: "grid-template-rows 380ms cubic-bezier(0.0, 0.0, 0.2, 1), opacity 320ms ease",
-				}}
-			>
-				<div className="overflow-hidden">
-					{hasRenderedBody || open ? (
-						<div className="max-h-72 overflow-auto px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground">
-							<div className="whitespace-pre-wrap break-words">
-								{stableText}
-								{deltaText.length > 0 && (
-									<span key={stableLen} className="look-thinking-reveal">
-										{deltaText}
-									</span>
-								)}
-							</div>
-						</div>
-					) : null}
-				</div>
 			</div>
+			<div
+				ref={bodyRef}
+				data-thinking-panel-body=""
+				data-expanded={expanded}
+				className={cn(
+					"relative overflow-hidden px-2.5 py-1.5 text-[11px] leading-[1.4] text-muted-foreground",
+					!expanded && "max-h-24",
+				)}
+			>
+				<div className="whitespace-pre-wrap break-words">
+					{stableText}
+					{deltaText.length > 0 && (
+						<span key={stableLen} className="look-thinking-reveal">
+							{deltaText}
+						</span>
+					)}
+				</div>
+				{!expanded && overflows && (
+					<div
+						aria-hidden="true"
+						data-thinking-fade=""
+						className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background to-transparent backdrop-blur-[2px]"
+						style={{
+							WebkitMaskImage: "linear-gradient(to bottom, transparent, black 75%)",
+							maskImage: "linear-gradient(to bottom, transparent, black 75%)",
+						}}
+					/>
+				)}
+			</div>
+			{overflows && (
+				<button
+					type="button"
+					data-thinking-expand-toggle=""
+					aria-expanded={expanded}
+					onClick={handleToggle}
+					className="flex w-full items-center justify-center gap-1 px-2 pb-1.5 pt-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+				>
+					<ChevronDown className={cn("size-3 transition-transform duration-150", expanded && "rotate-180")} />
+					{expanded ? t("chat.reasoningCollapse") : t("chat.reasoningExpand")}
+				</button>
+			)}
 		</div>
 	);
 });

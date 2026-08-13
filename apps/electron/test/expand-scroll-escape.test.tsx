@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
 //
 // 展开型组件与 scroll-escape 守卫测试：
-// CollapsibleExecutionGroup / SubagentToolGroup / ThinkingPanel 在展开时应
+// CollapsibleExecutionGroup / SubagentToolGroup 在展开时应
 // 调用 useConversationContextSafe()?.stopScroll()（鼠标 + 键盘两条路径），
 // 防止 stick-to-bottom 的 resize 跟随把视口拽到展开后内容底部；
 // 在 Conversation 之外（safe hook 返回 null）应优雅降级不崩溃。
+// （ThinkingPanel 已无折叠交互，不再参与本守卫。）
 
 import type { ToolCall } from "@earendil-works/pi-ai";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CollapsibleExecutionGroup from "../src/renderer/components/chat/CollapsibleExecutionGroup";
 import SubagentToolGroup from "../src/renderer/components/chat/SubagentToolGroup";
-import ThinkingPanel from "../src/renderer/components/chat/ThinkingPanel";
 import type { ToolCallViewModel } from "../src/renderer/components/chat/ToolCallCard";
 
 const { mockCtx } = vi.hoisted(() => ({
@@ -124,31 +124,6 @@ describe("SubagentToolGroup scroll-escape guard", () => {
 		mockCtx.current = null;
 		render(<SubagentToolGroup calls={toolCalls} />);
 		const header = headerButton()!;
-		expect(() => fireEvent.click(header)).not.toThrow();
-	});
-});
-
-describe("ThinkingPanel scroll-escape guard", () => {
-	it("calls stopScroll when expanding a collapsed panel", () => {
-		render(<ThinkingPanel thinking="long thinking content" isStreaming={false} autoCollapse={true} />);
-		const stop = mockCtx.current!.stopScroll;
-		const header = screen.getByRole("button");
-		fireEvent.click(header); // expand (autoCollapse=true → initially collapsed)
-		expect(stop).toHaveBeenCalledTimes(1);
-	});
-
-	it("does not call stopScroll when collapsing", () => {
-		render(<ThinkingPanel thinking="content" isStreaming={false} autoCollapse={false} />);
-		const stop = mockCtx.current!.stopScroll;
-		const header = screen.getByRole("button");
-		fireEvent.click(header); // collapse (autoCollapse=false → initially expanded)
-		expect(stop).not.toHaveBeenCalled();
-	});
-
-	it("degrades gracefully without a Conversation provider", () => {
-		mockCtx.current = null;
-		render(<ThinkingPanel thinking="content" isStreaming={false} autoCollapse={true} />);
-		const header = screen.getByRole("button");
 		expect(() => fireEvent.click(header)).not.toThrow();
 	});
 });

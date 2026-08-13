@@ -29,7 +29,6 @@ function listUi(state = emptyRendererSessionState(), phase: RendererSessionPhase
 					agentId="session-a"
 					agentName="Session A"
 					sessionState={state}
-					autoCollapse
 					phase={phase}
 					isBusy={isBusy}
 					inputRef={createRef()}

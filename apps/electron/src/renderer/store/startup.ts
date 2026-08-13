@@ -17,7 +17,6 @@ import {
 	agentsAtom,
 	aiAvatarAtom,
 	appReadyPhaseAtom,
-	autoCollapseAtom,
 	messageAlignmentAtom,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
@@ -120,7 +119,6 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 
 			const settings = result.settings;
 			writeLookThemeToDom(themeFromSettings(settings));
-			if (settings.autoCollapse !== undefined) appStore.set(autoCollapseAtom, settings.autoCollapse);
 			if (settings.aiAvatar !== undefined) appStore.set(aiAvatarAtom, settings.aiAvatar);
 			if (settings.messageAlignment !== undefined) appStore.set(messageAlignmentAtom, settings.messageAlignment);
 			if (settings.showToolExecution !== undefined) appStore.set(showToolExecutionAtom, settings.showToolExecution);

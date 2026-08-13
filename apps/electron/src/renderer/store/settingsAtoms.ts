@@ -20,8 +20,6 @@ export interface ProviderSettingsData {
 	customStats: CustomProviderStats;
 }
 
-export const autoCollapseAtom = atom(true);
-
 export const userPreferredModelAtom = atom<string | null>(null);
 
 export const subagentEnabledAtom = atom(true);

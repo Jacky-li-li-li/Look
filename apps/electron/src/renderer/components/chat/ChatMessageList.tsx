@@ -48,7 +48,6 @@ interface ChatMessageListProps {
 	agentId: string;
 	agentName?: string;
 	sessionState: RendererSessionState;
-	autoCollapse: boolean;
 	phase: RendererSessionPhase;
 	isBusy: boolean;
 	inputRef: React.RefObject<ChatInputHandle | null>;
@@ -203,7 +202,6 @@ interface ChatMessagesInnerProps {
 	timeline: TimelineItem[];
 	persistedTimeline: TimelineItem[];
 	leafId: string | null;
-	autoCollapse: boolean;
 	phase: RendererSessionPhase;
 	isBusy: boolean;
 	ready: boolean;
@@ -222,7 +220,6 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	timeline,
 	persistedTimeline,
 	leafId,
-	autoCollapse,
 	phase,
 	isBusy,
 	ready,
@@ -721,7 +718,6 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 								}
 								agentName={agentName}
 								isStreaming={live ? isBusy : false}
-								autoCollapse={autoCollapse}
 								toolExecutions={EMPTY_TOOL_EXECUTIONS}
 								toolResultMap={item.toolResultMap}
 								isActiveLeaf={Boolean(actionEntryId && actionEntryId === leafId)}
@@ -789,7 +785,6 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 		},
 		[
 			agentName,
-			autoCollapse,
 			flashEntryId,
 			isBusy,
 			leafId,
@@ -1061,7 +1056,6 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 				timeline={timeline}
 				persistedTimeline={persistedTimeline}
 				leafId={leafId}
-				autoCollapse={props.autoCollapse}
 				phase={props.phase}
 				isBusy={isBusy}
 				ready={ready}

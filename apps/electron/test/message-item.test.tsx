@@ -7,7 +7,7 @@
 
 import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock } from "@shared/types";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { Provider } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MessageItem } from "../src/renderer/components/chat/MessageItem";
@@ -51,7 +51,6 @@ describe("MessageItem", () => {
 	it("renders an assistant message with text content", () => {
 		const { container } = renderItem({
 			message: baseAssistant([{ type: "text", text: "hi, how can I help?" }]),
-			autoCollapse: false,
 		});
 		expect(container.textContent).toContain("hi, how can I help?");
 		expect(container.querySelector(".whisper-bubble--assistant")).toBeTruthy();
@@ -60,7 +59,6 @@ describe("MessageItem", () => {
 	it("renders a user message right-aligned with user bubble", () => {
 		const { container } = renderItem({
 			message: baseUser("hello agent"),
-			autoCollapse: false,
 		});
 		expect(container.textContent).toContain("hello agent");
 		expect(container.querySelector(".whisper-bubble--user")).toBeTruthy();
@@ -73,7 +71,6 @@ describe("MessageItem", () => {
 		const { container } = renderItem({
 			liveBlocks: blocks,
 			isStreaming: true,
-			autoCollapse: false,
 		});
 		expect(container.textContent).toContain("streaming text");
 	});
@@ -82,18 +79,17 @@ describe("MessageItem", () => {
 		const { container } = renderItem({
 			liveBlocks: [],
 			isStreaming: true,
-			autoCollapse: false,
 		});
 		expect(container.textContent).toContain("Thinking");
 	});
 
 	it("renders assistant errorMessage", () => {
 		const message = { ...baseAssistant([{ type: "text", text: "" }]), errorMessage: "boom" } as AssistantMessage;
-		const { container } = renderItem({ message, autoCollapse: false });
+		const { container } = renderItem({ message });
 		expect(container.textContent).toContain("boom");
 	});
 
-	it("streaming → completed: flat live layout switches to collapsed grouped snapshot layout", () => {
+	it("streaming → completed: flat live layout switches to grouped snapshot layout", () => {
 		// 全链路（S2-2 审查补强）：真实切换是 StreamingBlocksBubble（hasLive）→
 		// MessageBlockListForMessage（快照）两个不同组件的整树切换，不是同组件 rerender。
 		const message = baseAssistant([
@@ -133,29 +129,35 @@ describe("MessageItem", () => {
 					message={message}
 					liveBlocks={liveBlocks}
 					isStreaming={true}
-					autoCollapse={true}
 					entryId="e1"
 					toolResultMap={toolResultMap}
 				/>
 			</Provider>,
 		);
-		// 流式中：平铺（无执行组徽标），思考面板展开，工具卡行可见
+		// 流式中：平铺（无执行组徽标），思考面板直出，工具卡行可见
 		expect(container.querySelector("[data-execution-group]")).toBeNull();
 		expect(container.querySelector("[data-tool-panel]")).toBeTruthy();
-		expect(container.querySelector("[data-tool-panel-body]")?.getAttribute("data-open")).toBe("true");
+		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
 		expect(container.textContent).toContain("deep thought");
 
-		// 完成：liveBlocks 移除（hasLive=false）→ 快照路径 → 分组折叠
+		// 完成：liveBlocks 移除（hasLive=false）→ 快照路径 → thinking + 工具分组折叠
 		rerender(
 			<Provider>
-				<MessageItem message={message} autoCollapse={true} entryId="e1" toolResultMap={toolResultMap} />
+				<MessageItem message={message} entryId="e1" toolResultMap={toolResultMap} />
 			</Provider>,
 		);
 		const group = container.querySelector("[data-execution-group]");
 		expect(group).toBeTruthy();
 		expect(group?.querySelector("button")?.getAttribute("aria-expanded")).toBe("false");
-		// 平铺工具卡不再存在（折叠进组内）
+		// 平铺工具卡与思考面板不再存在（都折叠进组内）
 		expect(container.querySelector("[data-tool-panel]")).toBeNull();
+		expect(container.querySelector("[data-thinking-panel]")).toBeNull();
+
+		// 展开组：思考面板（无自身折叠按钮）+ 工具卡片一起出现
+		fireEvent.click(group?.querySelector("button") as HTMLButtonElement);
+		expect(container.querySelector("[data-thinking-panel]")).toBeTruthy();
+		expect(container.textContent).toContain("deep thought");
+		expect(container.querySelector("[data-tool-panel]")).toBeTruthy();
 	});
 });
 
