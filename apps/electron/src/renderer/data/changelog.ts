@@ -20,6 +20,37 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.2.0",
+		date: "2026-08-14",
+		items: [
+			{
+				zh: "流式输出体验全面改版：状态行改用全新的思考动画（ThinkingOrb），思考过程实时增量展示、超高时自动折叠（可手动展开全部）；输出结束后思考与工具卡片自动归组折叠，滚动贴底跟随更跟手、结束不再回弹抖动",
+				en: "Streaming output overhaul: a new animated status line (ThinkingOrb); thinking renders incrementally in real time and auto-collapses when tall (expand manually); thinking & tool cards auto-group into collapsible sections when a turn finishes; stick-to-bottom scrolling is smoother with no bounce at the end",
+				ja: "ストリーミング出力を全面刷新：ステータス行に新しい思考アニメーション（ThinkingOrb）を採用。思考プロセスはリアルタイムに増分表示され、高さ超過時は自動で折りたたみ（手動で全展開可能）。ターン終了後は思考・ツールカードを自動グループ化して折りたたみ、貼り付きスクロールの追従性を高め終了時の跳ね返りを解消",
+			},
+			{
+				zh: "新增草稿便利贴：随手写下的草稿以悬浮便利贴形式管理，不再丢失；输入区改为一整块容器，保存按钮移入底部工具条，界面更清爽",
+				en: "New draft sticky notes: quick drafts are kept as floating sticky notes instead of getting lost; the composer is now one unified container with the save action in the bottom toolbar for a cleaner look",
+				ja: "ドラフト付箋を追加：書きかけの下書きを浮かぶ付箋として管理し、内容を失いません。入力エリアは一体型コンテナになり、保存ボタンは下部ツールバーへ移動して見た目もすっきり",
+			},
+			{
+				zh: "共享区支持树形浏览：项目共享文件按目录树展开查看，多会话并发读写草稿更安全",
+				en: "Shared-area tree browsing: shared project files open as a browsable directory tree, and concurrent draft access across sessions is now safer",
+				ja: "共有エリアをツリー表示に対応：共有ファイルをディレクトリツリーで展開・閲覧でき、複数セッションによるドラフトの同時読み書きがより安全に",
+			},
+			{
+				zh: "变更 diff 展示升级：同一文件的多次修改正确合并为一份完整 diff，并按改动类型分开展示，审查代码更直观",
+				en: "Change diff rendering upgraded: multiple edits to the same file now merge into one complete diff, and entries render by change type for clearer code review",
+				ja: "変更 diff の表示を強化：同じファイルへの複数の編集を1つの完全な diff に正しく統合し、変更種別ごとに表示してコードレビューをより直感的に",
+			},
+			{
+				zh: "多项稳定性修复：新建会话偶发无响应、会话生命周期竞态、IPC 路径安全加固，以及右侧 Dock 面板与侧边栏会话行的交互细节打磨",
+				en: "Stability fixes: rare unresponsive new sessions, session lifecycle races, IPC path hardening, plus interaction polish for the right dock panel and sidebar session rows",
+				ja: "安定性の修正：新規セッションがまれに応答しなくなる問題、セッションライフサイクルの競合を解消し、IPC パスをセキュリティ強化。右側 Dock パネルとサイドバーのセッション行の操作感も改善",
+			},
+		],
+	},
+	{
 		version: "2.1.0",
 		date: "2026-08-09",
 		items: [
