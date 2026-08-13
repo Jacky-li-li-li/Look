@@ -11,12 +11,12 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
-import { PANEL_LAYOUT, resolvePanelTracks } from "../../lib/panelLayout";
+import { linkedRightTrack, PANEL_LAYOUT, resolvePanelTracks } from "../../lib/panelLayout";
 import { appStore } from "../../store/appStore";
 import {
 	dockedFileAtom,
 	dockPanelWidthAtom,
-	rightPanelCollapsedAtom,
+	rightPanelEffectiveCollapsedAtom,
 	rightPanelWidthAtom,
 	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
@@ -29,7 +29,11 @@ export function DockFilePanel() {
 	const setDockedFile = useSetAtom(dockedFileAtom);
 	const [dockPanelWidth, setDockPanelWidth] = useAtom(dockPanelWidthAtom);
 	const [rightPanelWidth, setRightPanelWidth] = useAtom(rightPanelWidthAtom);
-	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
+	// 必须读 effective（手动 OR 窄窗口自动折叠）：AppLayout/RightPanel 均按 effective
+	// 折叠渲染（右栏 track=0），此前这里读手动态 rightPanelCollapsedAtom，自动折叠带
+	// 下把手边界与重分配按“右栏仍可见”计算，拖动会把 Dock 拽出闪变并误改隐藏右栏
+	// 的存储宽度（2026-08 修复）。
+	const rightPanelCollapsed = useAtomValue(rightPanelEffectiveCollapsedAtom);
 	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const viewportWidth = useViewportWidth();
 
@@ -58,6 +62,8 @@ export function DockFilePanel() {
 	});
 
 	// Splitter 语义：拖动 Dock 把手时，右栏与 Dock 互相让位、main 保持不变。
+	// 拖拽期间由 PanelResizeHandle 的 linked（linkedRightTrack）实时改写右栏 track，
+	// 松手时此处把两块面板的最终宽度一起落盘 —— 两个口径一致，无跳变。
 	// 右栏折叠（track=0）时退化为“Dock 对 main 调宽”。这是用户对“两块面板之间
 	// 的分隔条”的直觉预期：拖左 = Dock 变宽 + 右栏变窄，拖右反之。
 	// 依赖只取 layout 的原始数值（rightTrack/dockTrack），回调身份在数值不变时稳定。
@@ -95,13 +101,24 @@ export function DockFilePanel() {
 			inert={!dockedFile || undefined}
 		>
 			{/* 拖拽调宽把手：面板左侧边缘（= 右栏与 Dock 之间的分隔条）。
-			    打开即渲染，不再因显示被压缩而隐藏——压缩时仍可拖动重新分配。 */}
+			    打开即渲染，不再因显示被压缩而隐藏——压缩时仍可拖动重新分配。
+			    min/max 用 live 口径（dockMin/dockMax）：拖拽中右栏与 Dock 互相让位、
+			    main 不变，松手落盘与拖拽完全一致；右栏被压缩时 max < min，
+			    PanelResizeHandle 自判冻结，不再闪变。 */}
 			{dockedFile && layout.dockTrack > 0 && (
 				<PanelResizeHandle
 					cssVar="--dock-track"
 					width={layout.dockTrack}
-					min={PANEL_LAYOUT.DOCK_MIN}
+					min={layout.dockMin}
 					max={layout.dockMax}
+					linked={
+						!rightPanelCollapsed && layout.rightTrack > 0
+							? {
+									cssVar: "--right-panel-track",
+									map: (dock) => linkedRightTrack(layout, dock),
+								}
+							: undefined
+					}
 					onCommit={handleDockResize}
 					ariaLabel={t("fileViewer.resize")}
 				/>

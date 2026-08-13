@@ -6,6 +6,14 @@
 // 供 atom 持久化。setPointerCapture 保证指针移出窗口也不丢事件；
 // 拖拽期间 .app-shell[data-resizing] 禁用 track 动画。
 //
+// 联动面板（linked）：拖拽中每帧同步写入联动面板的 CSS 变量，
+// 实现“两面板互相让位、main 保持不变”的分隔条语义。map 必须镜像
+// 松手后 resolve/commit 的口径（见 panelLayout.linkedDockTrack /
+// linkedRightTrack），否则拖拽与最终布局不一致会出现跳变。
+//
+// 冻结（frozen）：当前宽度无法向任一方向移动时（压缩态下 min/max
+// 倒挂或退化）把手自判禁用，避免拖动瞬间把 track 写成钳制值闪变。
+//
 // 性能要点（2026-08-09 重写）：
 //  - 原生 window pointer 监听 + getCoalescedEvents()：合并子帧指针
 //    点，120Hz/ProMotion 屏幕上不再每帧只取最后一个点，跟手更顺。
@@ -20,6 +28,14 @@
 
 import { type PointerEvent as ReactPointerEvent, useEffect, useRef } from "react";
 
+/** 联动面板：拖拽期间与主面板一起让位的另一块面板。 */
+export interface PanelResizeLinked {
+	/** 联动面板的 .app-shell CSS 变量。 */
+	cssVar: "--right-panel-track" | "--dock-track";
+	/** 由主面板目标宽度推演联动面板显示宽度（必须已钳制到合法区间）。 */
+	map: (primaryWidth: number) => number;
+}
+
 interface PanelResizeHandleProps {
 	/** 要修改的 .app-shell CSS 变量。 */
 	cssVar: "--right-panel-track" | "--dock-track";
@@ -27,12 +43,14 @@ interface PanelResizeHandleProps {
 	width: number;
 	min: number;
 	max: number;
+	/** 联动面板；主面板拖动时同步改写其 track（无联动需求时省略）。 */
+	linked?: PanelResizeLinked;
 	/** 拖拽结束提交最终宽度（持久化）。 */
 	onCommit: (width: number) => void;
 	ariaLabel: string;
 }
 
-export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel }: PanelResizeHandleProps) {
+export function PanelResizeHandle({ cssVar, width, min, max, linked, onCommit, ariaLabel }: PanelResizeHandleProps) {
 	// 拖拽态全部走 ref，避免任何 React 状态参与热路径
 	const draggingRef = useRef(false);
 	const startRef = useRef<{ startX: number; startWidth: number; lastWidth: number; shell: HTMLElement } | null>(null);
@@ -40,10 +58,17 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 	// 最近一次合帧要落地的目标宽度；rAF 回调读它写 CSS 变量
 	const pendingWidthRef = useRef<number | null>(null);
 	// 记录 setProperty 上一次写入的值，相等则跳过，减少无谓样式重算
-	const lastAppliedRef = useRef<number | null>(null);
+	const lastPrimaryRef = useRef<number | null>(null);
+	const lastLinkedRef = useRef<number | null>(null);
 	// 活跃 window 监听的函数引用；解绑时按引用移除，避免闭包错位
 	const boundMoveRef = useRef<((e: PointerEvent) => void) | null>(null);
 	const boundUpRef = useRef<((e: PointerEvent) => void) | null>(null);
+	// pointerdown 时快照联动面板（map 闭包随 render 更新，拖拽期间必须保持起点口径）
+	const linkedRef = useRef<PanelResizeLinked | null>(null);
+
+	// 当前宽度是否无可移动区间（min/max 倒挂或退化为单点）：禁用把手，
+	// 防止拖动瞬间把 track 写成钳制值造成闪变（2026-08 修复压缩态把手假死闪跳）。
+	const frozen = max <= width && min >= width;
 
 	const removeWindowListeners = () => {
 		if (boundMoveRef.current) {
@@ -64,9 +89,19 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 		const shell = state?.shell;
 		const w = pendingWidthRef.current;
 		if (!shell || w == null) return;
-		if (lastAppliedRef.current === w) return;
-		lastAppliedRef.current = w;
-		shell.style.setProperty(cssVar, `${w}px`);
+		if (lastPrimaryRef.current !== w) {
+			lastPrimaryRef.current = w;
+			shell.style.setProperty(cssVar, `${w}px`);
+		}
+		// 联动面板：同一帧内同步改写其 track，分隔条语义下 main 全程不变
+		const linkedPanel = linkedRef.current;
+		if (linkedPanel) {
+			const linkedWidth = linkedPanel.map(w);
+			if (lastLinkedRef.current !== linkedWidth) {
+				lastLinkedRef.current = linkedWidth;
+				shell.style.setProperty(linkedPanel.cssVar, `${linkedWidth}px`);
+			}
+		}
 	};
 
 	const onPointerMove = (event: PointerEvent) => {
@@ -99,7 +134,9 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 		if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
 		rafIdRef.current = null;
 		pendingWidthRef.current = null;
-		lastAppliedRef.current = null;
+		lastPrimaryRef.current = null;
+		lastLinkedRef.current = null;
+		linkedRef.current = null;
 		return state?.lastWidth ?? null;
 	};
 
@@ -129,6 +166,7 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 
 	const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
 		if (event.button !== 0) return;
+		if (frozen) return;
 		event.preventDefault();
 		event.stopPropagation();
 		const shell = document.querySelector<HTMLElement>(".app-shell");
@@ -142,7 +180,10 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 		draggingRef.current = true;
 		startRef.current = { startX: event.clientX, startWidth: width, lastWidth: width, shell };
 		pendingWidthRef.current = width;
-		lastAppliedRef.current = null;
+		lastPrimaryRef.current = null;
+		lastLinkedRef.current = null;
+		// 快照联动面板：拖拽全程使用起点口径的 map，避免 render 更新切换闭包
+		linkedRef.current = linked ?? null;
 		shell.dataset.resizing = "true";
 		document.body.style.userSelect = "none";
 		document.body.style.cursor = "col-resize";
@@ -169,6 +210,7 @@ export function PanelResizeHandle({ cssVar, width, min, max, onCommit, ariaLabel
 			role="separator"
 			aria-orientation="vertical"
 			aria-label={ariaLabel}
+			data-disabled={frozen || undefined}
 			onPointerDown={handlePointerDown}
 			onPointerCancel={endDragFromReact}
 			onLostPointerCapture={endDragFromReact}

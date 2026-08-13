@@ -45,14 +45,27 @@ export interface PanelLayoutInput {
 
 export interface PanelLayout {
 	sidebarWidth: number;
+	/** 供右侧面板 / Dock 分配的空间（viewport - sidebar - separator - main 下限） */
+	pool: number;
 	/** 右侧面板实际显示宽度（0 = 折叠，或空间不足被虚拟折叠） */
 	rightTrack: number;
 	/** Dock 面板实际显示宽度（0 = 未打开） */
 	dockTrack: number;
 	/** 右栏可拖到的最大显示宽度（已扣除 Dock 下限所需空间） */
 	rightMax: number;
-	/** Dock 可拖到的最大显示宽度（受剩余空间限制） */
+	/**
+	 * Dock 把手可拖到的最大显示宽度（live 口径）：
+	 * 按“右栏让到自身下限（RIGHT_MIN）后 Dock 能到达的宽度”计算，
+	 * 拖拽中即与松手后的 resolve 结果一致，不再撞墙回弹
+	 * （此前用 pool - RIGHT_MIN 高估了 dock 未占满可用空间时的可让度）。
+	 */
 	dockMax: number;
+	/**
+	 * Dock 把手可拖到的最小显示宽度（live 口径）：
+	 * 按“右栏让到自身上限（RIGHT_MAX）后 Dock 停住的宽度”计算。
+	 * 与 dockMax 一样，保证拖拽中与松手后的布局完全一致。
+	 */
+	dockMin: number;
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -65,7 +78,7 @@ export function resolvePanelTracks(input: PanelLayoutInput): PanelLayout {
 	const separator = sidebarWidth > 0 ? PANEL_LAYOUT.SEPARATOR_WIDTH : 0;
 	const pool = Math.max(0, input.viewportWidth - sidebarWidth - separator - PANEL_LAYOUT.MAIN_MIN_WIDTH);
 	if (pool === 0) {
-		return { sidebarWidth, rightTrack: 0, dockTrack: 0, rightMax: 0, dockMax: 0 };
+		return { sidebarWidth, pool, rightTrack: 0, dockTrack: 0, rightMax: 0, dockMax: 0, dockMin: 0 };
 	}
 
 	const rightRequested = input.rightPanelCollapsed
@@ -86,12 +99,47 @@ export function resolvePanelTracks(input: PanelLayoutInput): PanelLayout {
 		? Math.min(clamp(input.dockPanelWidth, PANEL_LAYOUT.DOCK_MIN, PANEL_LAYOUT.DOCK_MAX), dockAvail)
 		: 0;
 
-	// 拖拽上限：右栏最大宽度 = 剩余空间 - Dock 下限；Dock 最大宽度 = 剩余空间 - 右栏下限。
-	// 两者都按“对方让到自身下限后能让出的空间”计算，避免把手上限虚高、
-	// 拖到顶撞墙回弹（此前 dockMax 用了整个 pool，未扣右栏下限）。
+	// 右栏把手上限：右栏最大宽度 = 剩余空间 - Dock 下限。右栏把手拖拽只与 Dock/main 让位，
+	// live 上限即为此值（拖拽中 main 先吸收、main 触底 340 后 Dock 联动让位，见 linkedDockTrack）。
 	const rightMax = input.rightPanelCollapsed ? 0 : Math.min(PANEL_LAYOUT.RIGHT_MAX, Math.max(0, pool - dockMin));
-	const rightMinForDock = input.rightPanelCollapsed ? 0 : PANEL_LAYOUT.RIGHT_MIN;
-	const dockMax = input.dockOpen ? Math.min(PANEL_LAYOUT.DOCK_MAX, Math.max(0, pool - rightMinForDock)) : 0;
 
-	return { sidebarWidth, rightTrack: right, dockTrack: dock, rightMax, dockMax };
+	// Dock 把手 live 上下限（分隔条语义：右栏与 Dock 互相让位、main 保持不变）。
+	// 右栏折叠/无显示宽度时退化为“Dock 对 main 调宽”，上限为全部剩余空间。
+	// 右栏被压缩（rightTrack < RIGHT_MIN）时 Dock 无法再挤占右栏，dockMax 会小于
+	// dockMin —— 调用方据此把把手视为“冻结”（PanelResizeHandle 内部自判禁用）。
+	let dockMax: number;
+	let dockMinBound: number;
+	if (!input.dockOpen) {
+		dockMax = 0;
+		dockMinBound = 0;
+	} else if (input.rightPanelCollapsed || right <= 0) {
+		dockMinBound = PANEL_LAYOUT.DOCK_MIN;
+		dockMax = Math.min(PANEL_LAYOUT.DOCK_MAX, pool);
+	} else {
+		dockMinBound = Math.max(PANEL_LAYOUT.DOCK_MIN, dock + right - PANEL_LAYOUT.RIGHT_MAX);
+		dockMax = Math.min(PANEL_LAYOUT.DOCK_MAX, dock + right - PANEL_LAYOUT.RIGHT_MIN);
+	}
+
+	return { sidebarWidth, pool, rightTrack: right, dockTrack: dock, rightMax, dockMax, dockMin: dockMinBound };
+}
+
+/**
+ * 右栏把手拖动到 right 宽度时，Dock 面板的联动显示宽度。
+ * 镜像 resolvePanelTracks 的 dock 口径（dock = min(钳制后的存储宽度, pool - right)）：
+ * main 未触底（340）时 dock 保持存储宽度不变，main 触底后 dock 才让位 ——
+ * 拖拽中与松手后的最终布局完全一致，无跳变。
+ */
+export function linkedDockTrack(layout: PanelLayout, right: number, dockPanelWidth: number, dockOpen: boolean): number {
+	if (!dockOpen) return 0;
+	const clamped = clamp(dockPanelWidth, PANEL_LAYOUT.DOCK_MIN, PANEL_LAYOUT.DOCK_MAX);
+	return Math.min(clamped, Math.max(0, layout.pool - right));
+}
+
+/**
+ * Dock 把手拖动到 dock 宽度时，右栏的联动显示宽度。
+ * 镜像 DockFilePanel.handleDockResize 的分隔条语义：右栏与 Dock 互相让位、
+ * main 保持不变（right + dock 之和恒定），右栏被钳制在 [RIGHT_MIN, RIGHT_MAX]。
+ */
+export function linkedRightTrack(layout: PanelLayout, dock: number): number {
+	return clamp(layout.rightTrack - (dock - layout.dockTrack), PANEL_LAYOUT.RIGHT_MIN, PANEL_LAYOUT.RIGHT_MAX);
 }

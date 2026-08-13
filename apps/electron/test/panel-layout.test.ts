@@ -6,7 +6,13 @@
 // ============================================================
 
 import { describe, expect, it } from "vitest";
-import { PANEL_LAYOUT, type PanelLayoutInput, resolvePanelTracks } from "../src/renderer/lib/panelLayout";
+import {
+	linkedDockTrack,
+	linkedRightTrack,
+	PANEL_LAYOUT,
+	type PanelLayoutInput,
+	resolvePanelTracks,
+} from "../src/renderer/lib/panelLayout";
 
 const BASE: PanelLayoutInput = {
 	viewportWidth: 1440,
@@ -48,12 +54,27 @@ describe("resolvePanelTracks — 常规大屏", () => {
 		expectNoOverflow(l, 1440);
 	});
 
-	it("Dock 打开时给出各自的拖拽上限（右栏扣除 Dock 下限、Dock 扣除右栏下限）", () => {
+	it("Dock 打开时给出各自的拖拽上限（右栏扣除 Dock 下限、Dock 按右栏让到下限的口径）", () => {
 		const l = tracks(1440, { dockOpen: true });
 		// rightMax = min(RIGHT_MAX=640, pool - dockMin=819-320=499) = 499
 		expect(l.rightMax).toBe(499);
-		// pool = 1440 - 280(侧栏) - 1(分隔线) - 340(main) = 819；dockMax = 819 - 200(右栏下限) = 619
-		expect(l.dockMax).toBe(619);
+		// pool = 1440 - 280(侧栏) - 1(分隔线) - 340(main) = 819
+		expect(l.pool).toBe(819);
+		// live 口径（2026-08 修复撞墙回弹）：dock 拖到右栏让到下限为止，
+		// dockMax = dock(420) + right(260) - RIGHT_MIN(200) = 480 ——
+		// 拖拽中与松手后一致，不再出现“拖到 619、松手回弹 480”的跳变
+		expect(l.dockMax).toBe(480);
+		// dockMin = max(DOCK_MIN=320, dock + right - RIGHT_MAX=40) = 320
+		expect(l.dockMin).toBe(320);
+	});
+
+	it("右栏已到下限时 Dock 把手冻结（dockMax === dockMin === dockTrack）", () => {
+		const l = tracks(1440, { dockOpen: true, rightPanelWidth: 200, dockPanelWidth: 320 });
+		expect(l.rightTrack).toBe(200);
+		expect(l.dockTrack).toBe(320);
+		// 右栏无法再让，Dock 也无法再缩 → 无可移动区间，把手应禁用
+		expect(l.dockMax).toBe(320);
+		expect(l.dockMin).toBe(320);
 	});
 });
 
@@ -107,11 +128,14 @@ describe("resolvePanelTracks — 窄窗口不裁剪（2026-08-07 修复核心）
 		expectNoOverflow(l, 300);
 	});
 
-	it("被压缩时 rightMax/dockMax 反映实际可用空间（把手据此隐藏）", () => {
+	it("被压缩时 rightMax/dockMax 反映实际可用空间（dockMax < dockMin，把手冻结禁用）", () => {
 		const l = tracks(1100, { dockOpen: true });
 		expect(l.rightMax).toBe(159);
-		// pool = 1100 - 280 - 1 - 340 = 479；dockMax = 479 - 200(右栏下限) = 279
+		// pool = 1100 - 280 - 1 - 340 = 479；dockMax = 320 + 159 - 200(右栏下限) = 279
 		expect(l.dockMax).toBe(279);
+		// dockMin = max(320, 320 + 159 - 640) = 320 > dockMax → 倒挂，PanelResizeHandle 据此冻结
+		expect(l.dockMin).toBe(320);
+		expect(l.dockMax).toBeLessThan(l.dockMin);
 	});
 });
 
@@ -132,5 +156,28 @@ describe("resolvePanelTracks — 边界与组合", () => {
 	it("用户宽度被钳制到区间内（rightPanelWidth 超 640 / 低于 200）", () => {
 		expect(tracks(1440, { rightPanelWidth: 600 }).rightTrack).toBe(600);
 		expect(tracks(1440, { rightPanelWidth: 120 }).rightTrack).toBe(200);
+	});
+});
+
+describe("联动宽度（拖拽中实时改写另一块面板的 track，与松手后 resolve 口径一致）", () => {
+	it("linkedDockTrack：main 未触底时 Dock 保持存储宽度，触底后才让位", () => {
+		// 1440px：right=260、dock=420，main 有 139px 富余
+		const l = tracks(1440, { dockOpen: true });
+		expect(linkedDockTrack(l, 360, 420, true)).toBe(420); // main 仍 ≥ 340，Dock 不动
+		expect(linkedDockTrack(l, 399, 420, true)).toBe(420); // main 恰好 340
+		expect(linkedDockTrack(l, 499, 420, true)).toBe(320); // main 触底，Dock 让到下限
+		// 反方向收缩：Dock 恢复其存储宽度（镜像 resolve 的 dock=min(atom, pool-right)）
+		expect(linkedDockTrack(l, 250, 420, true)).toBe(420);
+		// Dock 关闭时不联动
+		expect(linkedDockTrack(l, 360, 420, false)).toBe(0);
+	});
+
+	it("linkedRightTrack：Dock 拖动时右栏与 Dock 互相让位、main 不变，且被钳制在上下限内", () => {
+		const l = tracks(1440, { dockOpen: true }); // right=260 dock=420
+		expect(linkedRightTrack(l, 460)).toBe(220); // 拖左 40px：Dock +40、右栏 -40，和恒定
+		expect(linkedRightTrack(l, 480)).toBe(200); // Dock 到 live 上限时右栏恰好到下限
+		expect(linkedRightTrack(l, 380)).toBe(300); // 拖右：右栏回补
+		expect(linkedRightTrack(l, 40)).toBe(640); // 右栏到上限（RIGHT_MAX）后 Dock 停止收缩
+		expect(linkedRightTrack(l, 20)).toBe(640); // 钳制在 RIGHT_MAX，不再越界
 	});
 });

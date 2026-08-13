@@ -11,7 +11,7 @@ import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
-import { PANEL_LAYOUT, resolvePanelTracks } from "../../lib/panelLayout";
+import { linkedDockTrack, PANEL_LAYOUT, resolvePanelTracks } from "../../lib/panelLayout";
 import { appStore } from "../../store/appStore";
 import {
 	activeProjectAtom,
@@ -159,6 +159,8 @@ export function RightPanel() {
 	// 显示宽度被空间压缩时不再隐藏把手：把手始终可拖，拖动会更新存储宽度，
 	// resolvePanelTracks 下一帧重新分配空间；min/max 已按对方面板下限收紧，
 	// 拖到上限会自然让位，不会“撞墙回弹”。
+	// 拖拽期间通过 linked 同步改写 Dock track：main 触底（340）后 Dock 才让位，
+	// 与松手后 resolve 的 dock 口径完全一致（linkedDockTrack 镜像同一公式）。
 
 	return (
 		<aside
@@ -179,6 +181,14 @@ export function RightPanel() {
 					width={layout.rightTrack}
 					min={PANEL_LAYOUT.RIGHT_MIN}
 					max={layout.rightMax}
+					linked={
+						dockedFile
+							? {
+									cssVar: "--dock-track",
+									map: (right) => linkedDockTrack(layout, right, dockPanelWidth, true),
+								}
+							: undefined
+					}
 					onCommit={setRightPanelWidth}
 					ariaLabel={t("rightPanel.resize")}
 				/>

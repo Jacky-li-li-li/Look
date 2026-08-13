@@ -1655,9 +1655,15 @@ body {
 		transition: background-color 150ms ease;
 	}
 
-	.panel-resize-handle:hover::before,
-	.panel-resize-handle:active::before {
+	/* 冻结（无可移动区间）的把手不再显示拖拽提示线，光标还原为默认 */
+	.panel-resize-handle:not([data-disabled="true"]):hover::before,
+	.panel-resize-handle:not([data-disabled="true"]):active::before {
 		background: color-mix(in oklab, var(--primary) 30%, transparent);
+	}
+
+	.panel-resize-handle[data-disabled="true"] {
+		cursor: default;
+		touch-action: auto;
 	}
 
 	/* Dock 面板内容入场：track 展开动画进行到一半左右再淡入内容，避免内容抢先闪现 */
