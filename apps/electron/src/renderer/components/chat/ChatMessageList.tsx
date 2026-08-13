@@ -970,6 +970,21 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 		}
 	}, [agentId]);
 
+	// 流式结束过渡：isBusy 刚翻转 false 时保持 instant 滚动一小段。agent_end
+	// 快照在同一渲染周期内清空 uiBlocks、折叠 thinking/toolcall 分组、移除状态行
+	// —— 内容高度骤变。若此刻 resize 已切回 smooth，库的弹簧会用动画追赶高度突变，
+	// 造成视口回弹抖动。保持 instant 让高度变化即时同步，稳定后再切回 smooth。
+	const [endTransition, setEndTransition] = useState(false);
+	const prevBusyRef = useRef(isBusy);
+	useEffect(() => {
+		if (prevBusyRef.current && !isBusy) {
+			setEndTransition(true);
+			const timer = setTimeout(() => setEndTransition(false), 450);
+			return () => clearTimeout(timer);
+		}
+		prevBusyRef.current = isBusy;
+	}, [isBusy]);
+
 	// === Anti-flash ready state ===
 	const [ready, setReady] = useState(false);
 	const prevAgentIdRef = useRef(agentId);
@@ -1033,7 +1048,9 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 			// 视口钉在底部让内容平滑流出，避免 smooth 弹簧追赶造成视口跳动；
 			// 静止时保持 smooth 平滑滚动体验。chunking/未 ready 同样 instant（冷渲染分块）。
 			// syncSticky：流式期间同帧同步贴底，消除库 rAF 一帧滞后造成的蹦跳。
-			resize={isBusy || !chunking || !ready ? "instant" : "smooth"}
+			// endTransition：流式结束后 450ms 保持 instant，吸收状态行消失/分组
+			// 折叠造成的高度突变，避免 smooth 弹簧回弹抖动（见上方 endTransition 注释）。
+			resize={isBusy || endTransition || !chunking || !ready ? "instant" : "smooth"}
 			syncSticky={isBusy}
 			className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}
 		>
