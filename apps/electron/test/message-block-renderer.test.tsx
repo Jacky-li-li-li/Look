@@ -366,11 +366,11 @@ describe("MessageBlockList showToolExecution toggle", () => {
 
 describe("StreamingStatusBar — streamingPhase 阶段判定", () => {
 	it("no blocks while streaming → thinking", () => {
-		expect(streamingPhase([], true)).toBe("thinking");
+		expect(streamingPhase([], {}, true)).toBe("thinking");
 	});
 
 	it("not streaming → null", () => {
-		expect(streamingPhase([], false)).toBeNull();
+		expect(streamingPhase([], {}, false)).toBeNull();
 	});
 
 	it("incomplete toolcall → tool", () => {
@@ -386,7 +386,45 @@ describe("StreamingStatusBar — streamingPhase 阶段判定", () => {
 				uid: 1,
 			},
 		];
-		expect(streamingPhase(blocks, true)).toBe("tool");
+		expect(streamingPhase(blocks, {}, true)).toBe("tool");
+	});
+
+	it("completed toolcall + running tool execution → tool", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{
+				contentIndex: 0,
+				kind: "toolcall",
+				text: "",
+				thinking: "",
+				toolCallId: "t1",
+				toolName: "read",
+				completed: true,
+				uid: 1,
+			},
+		];
+		// 工具执行阶段（toolcall 块已完成、toolExecutions 有 running 项）——
+		// 此前误判为 thinking 的回归用例
+		expect(
+			streamingPhase(blocks, { t1: { toolCallId: "t1", toolName: "read", args: {}, phase: "running" } }, true),
+		).toBe("tool");
+	});
+
+	it("completed toolcall without running execution → thinking fallback", () => {
+		const blocks: LookUiStreamBlock[] = [
+			{
+				contentIndex: 0,
+				kind: "toolcall",
+				text: "",
+				thinking: "",
+				toolCallId: "t1",
+				toolName: "read",
+				completed: true,
+				uid: 1,
+			},
+		];
+		expect(
+			streamingPhase(blocks, { t1: { toolCallId: "t1", toolName: "read", args: {}, phase: "completed" } }, true),
+		).toBe("thinking");
 	});
 
 	it("incomplete thinking wins over completed text → thinking", () => {
@@ -394,14 +432,14 @@ describe("StreamingStatusBar — streamingPhase 阶段判定", () => {
 			{ contentIndex: 0, kind: "thinking", text: "", thinking: "step", completed: false, uid: 1 },
 			{ contentIndex: 1, kind: "text", text: "done", thinking: "", completed: true, uid: 2 },
 		];
-		expect(streamingPhase(blocks, true)).toBe("thinking");
+		expect(streamingPhase(blocks, {}, true)).toBe("thinking");
 	});
 
 	it("streaming text with content → text", () => {
 		const blocks: LookUiStreamBlock[] = [
 			{ contentIndex: 0, kind: "text", text: "hello", thinking: "", completed: false, uid: 1 },
 		];
-		expect(streamingPhase(blocks, true)).toBe("text");
+		expect(streamingPhase(blocks, {}, true)).toBe("text");
 	});
 
 	it("all completed and no text → thinking fallback", () => {
@@ -417,7 +455,7 @@ describe("StreamingStatusBar — streamingPhase 阶段判定", () => {
 				uid: 1,
 			},
 		];
-		expect(streamingPhase(blocks, true)).toBe("thinking");
+		expect(streamingPhase(blocks, {}, true)).toBe("thinking");
 	});
 });
 
@@ -455,15 +493,16 @@ describe("StreamingStatusBar — 状态行渲染", () => {
 });
 
 describe("StreamingStatusBar — 阶段文字宽度", () => {
-	// 阶段文字在阶段切换间保持稳定占位宽度（三语最大文案内），计时器不被推挤。
-	it("keeps phase label width stable across phase switches", () => {
+	// 阶段文字按自然宽度布局（不再用 min-w 占位）：短文案（en/zh）时计时器
+	// 紧跟文本（flex gap-2），避免文本与计时器之间出现大段空隙。
+	it("uses natural label width so the timer sits close to the text", () => {
 		const { container } = render(
 			<StreamingBlocksBubble blocks={[]} toolExecutions={{}} isStreaming={true} autoCollapse={false} />,
 		);
 		const label = [...container.querySelectorAll("span")].find((s) => s.textContent === "Thinking…");
 		expect(label).toBeTruthy();
-		expect(label?.className).toContain("min-w-[10em]");
 		expect(label?.className).toContain("whitespace-nowrap");
+		expect(label?.className).not.toContain("min-w-[10em]");
 	});
 });
 

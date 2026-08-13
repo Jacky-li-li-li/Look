@@ -27,7 +27,8 @@ export const StreamingBlocksBubble = memo(function StreamingBlocksBubble({
 	autoCollapse: boolean;
 }) {
 	const unified = useMemo(() => toUnifiedFromStream(blocks), [blocks]);
-	const phase = streamingPhase(blocks, isStreaming);
+	// toolExecutions 感知：工具执行中（toolcall 块已 completed）阶段判定为 tool
+	const phase = streamingPhase(blocks, toolExecutions, isStreaming);
 
 	if (!isStreaming) {
 		if (blocks.length === 0) return null;
