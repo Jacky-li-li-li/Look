@@ -20,7 +20,13 @@ import { PanelLeftOpen, StickyNote } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { appStore } from "../store/appStore";
-import { rightPanelCollapsedAtom, sidebarEffectiveCollapsedAtom, stickyNoteExpandRequestAtom } from "../store/atoms";
+import {
+	rightPanelAutoCollapsedAtom,
+	rightPanelCollapsedAtom,
+	rightPanelEffectiveCollapsedAtom,
+	sidebarEffectiveCollapsedAtom,
+	stickyNoteExpandRequestAtom,
+} from "../store/atoms";
 
 interface TopSessionBarProps {
 	activeAgent: AgentInfo | null;
@@ -29,8 +35,10 @@ interface TopSessionBarProps {
 export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 	const { t } = useTranslation();
 	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
-	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
+	// 读 effective：窄窗口自动折叠时同样显示展开按钮（与面板实际可见性一致）。
+	const rightPanelCollapsed = useAtomValue(rightPanelEffectiveCollapsedAtom);
 	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
+	const setRightPanelAutoCollapsed = useSetAtom(rightPanelAutoCollapsedAtom);
 
 	// 双击重命名编辑态（与 Sidebar 的编辑互不影响，独立管理）
 	const [editing, setEditing] = useState(false);
@@ -148,7 +156,11 @@ export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 							size="icon-sm"
 							variant="ghost"
 							className="expand-right-panel-btn rounded-md border border-hairline"
-							onClick={() => setRightPanelCollapsed(false)}
+							onClick={() => {
+								// 同时清除手动与自动折叠：窄窗口下用户点击展开即覆盖自动态。
+								setRightPanelCollapsed(false);
+								setRightPanelAutoCollapsed(false);
+							}}
 							aria-label={t("rightPanel.expand", "展开右侧面板")}
 						>
 							<PanelLeftOpen className="size-3.5" />

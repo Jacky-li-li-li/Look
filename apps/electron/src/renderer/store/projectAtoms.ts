@@ -27,6 +27,19 @@ export const activeProjectAtom = atom((get) => {
 
 export const rightPanelCollapsedAtom = atom(false);
 
+/**
+ * 右栏「自动折叠」态（窄窗口 resize 触发）。与手动偏好分离（对齐侧栏的
+ * sidebarAutoCollapsedAtom/sidebarEffectiveCollapsedAtom 模式）：
+ * resize 只操作 auto 态，不再覆盖用户在宽窗口手动折叠/持久化的偏好
+ * （2026-08 修复：此前宽窗口任意一次 resize 都会把手动折叠强制展开）。
+ */
+export const rightPanelAutoCollapsedAtom = atom(false);
+
+/** 右栏实际折叠态 = 手动折叠 OR 自动折叠（布局、可见性统一读此值）。 */
+export const rightPanelEffectiveCollapsedAtom = atom(
+	(get) => get(rightPanelCollapsedAtom) || get(rightPanelAutoCollapsedAtom),
+);
+
 /** 右侧面板宽度（px），可拖拽把手调整，持久化到 ui-settings.json。默认 260。 */
 export const rightPanelWidthAtom = atom(260);
 

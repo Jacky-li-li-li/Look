@@ -3,19 +3,25 @@
 // ============================================================
 
 import { ErrorBoundarySection } from "@look/ui/components/ErrorBoundary";
+import { Button } from "@look/ui/components/ui/button";
 import { Separator } from "@look/ui/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
+import { PanelRightOpen } from "lucide-react";
 import { lazy, memo, type ReactNode, Suspense, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useViewportWidth } from "../hooks/useViewportWidth";
 import { PANEL_LAYOUT, resolvePanelTracks } from "../lib/panelLayout";
 import { syncTrafficLightPosition } from "../lib/trafficLight";
 import {
+	activeProjectAtom,
 	appReadyPhaseAtom,
 	type ProviderSettingsData,
 	pendingDeleteProjectAtom,
+	rightPanelAutoCollapsedAtom,
 	rightPanelCollapsedAtom,
+	rightPanelEffectiveCollapsedAtom,
 	settingsTabAtom,
 	showAgentSquareAtom,
 	showDraftsAtom,
@@ -102,7 +108,9 @@ function AppLayout({
 	const appReadyPhase = useAtomValue(appReadyPhaseAtom);
 	// 布局/视图开关等纯 UI 状态直接从原子读取，App.tsx 无需再逐层传递（Props Drilling 收敛）。
 	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
-	const rightPanelCollapsed = useAtomValue(rightPanelCollapsedAtom);
+	// 布局与可见性统一读 effective：手动折叠或窄窗口自动折叠都会隐藏右栏。
+	const rightPanelCollapsed = useAtomValue(rightPanelEffectiveCollapsedAtom);
+	const activeProject = useAtomValue(activeProjectAtom);
 	const dockedFile = useAtomValue(dockedFileAtom);
 	const rightPanelWidth = useAtomValue(rightPanelWidthAtom);
 	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
@@ -125,6 +133,7 @@ function AppLayout({
 	const settingsTab = useAtomValue(settingsTabAtom);
 	const setSidebarAutoCollapsed = useSetAtom(sidebarAutoCollapsedAtom);
 	const setRightPanelCollapsed = useSetAtom(rightPanelCollapsedAtom);
+	const setRightPanelAutoCollapsed = useSetAtom(rightPanelAutoCollapsedAtom);
 	const windowFullscreen = useAtomValue(windowFullscreenAtom);
 
 	// 首帧渲染后标记 data-app-ready，CSS 可据此禁用初始加载过渡
@@ -161,21 +170,24 @@ function AppLayout({
 		};
 	}, [sidebarCollapsed, showAgentSquare, showScheduledTasks, showDrafts, showSettings, windowFullscreen]);
 
-	// 窄窗口自动折叠侧边栏：优先折叠右栏，再折叠左栏
+	// 窄窗口自动折叠侧边栏：优先折叠右栏，再折叠左栏。
+	// 只操作 auto 态（rightPanelAutoCollapsedAtom / sidebarAutoCollapsedAtom）：
+	// 手动折叠与持久化偏好（rightPanelCollapsedAtom）不被 resize 覆盖
+	// （2026-08 修复：此前 >=1100px 的任意 resize/启动帧都会把手动折叠强制展开）。
 	useEffect(() => {
 		function onResize() {
 			const width = window.innerWidth;
-			if (width < 1050) setRightPanelCollapsed(true);
+			if (width < 1050) setRightPanelAutoCollapsed(true);
 			if (width < 950) setSidebarAutoCollapsed(true);
 			if (width >= 1100) {
-				setRightPanelCollapsed(false);
+				setRightPanelAutoCollapsed(false);
 				setSidebarAutoCollapsed(false);
 			}
 		}
 		onResize();
 		window.addEventListener("resize", onResize);
 		return () => window.removeEventListener("resize", onResize);
-	}, [setRightPanelCollapsed, setSidebarAutoCollapsed]);
+	}, [setRightPanelAutoCollapsed, setSidebarAutoCollapsed]);
 
 	// 主内容区视图枚举：新增视图只需加一个 case + 分支条件，避免在 JSX 里
 	// 叠嵌套三元（此前是 4 层三元，任何新增视图都要改整串条件）。
@@ -290,6 +302,31 @@ function AppLayout({
 
 			{/* 文件查看器 Dock 面板：位于右侧面板右侧，grid 第 5 列 --dock-track 控制滑入/出 */}
 			<DockFilePanel />
+
+			{/* 非聊天视图（草稿/定时任务/广场）的右栏展开入口：这些视图进入时会把右栏
+			    折叠且不渲染 TopSessionBar（其展开按钮只在 chat 视图可见），折叠态下右栏
+			    自身按钮随面板整体隐藏，这里提供贴右缘的悬浮展开按钮兜底（2026-08 修复）。 */}
+			{mainView !== "chat" && rightPanelCollapsed && activeProject && !dockedFile && (
+				<div className="fixed right-0 top-1/2 z-30 -translate-y-1/2">
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								size="icon-sm"
+								variant="ghost"
+								className="app-no-drag h-16 w-5 rounded-l-md border border-r-0 border-hairline"
+								onClick={() => {
+									setRightPanelCollapsed(false);
+									setRightPanelAutoCollapsed(false);
+								}}
+								aria-label={t("rightPanel.expand")}
+							>
+								<PanelRightOpen className="size-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent side="left">{t("rightPanel.expand")}</TooltipContent>
+					</Tooltip>
+				</div>
+			)}
 
 			{/* 悬浮便利贴：任何视图可见，不替换主内容区 */}
 			<DraftStickyNote />

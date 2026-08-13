@@ -939,6 +939,8 @@
   },
   "changes": {
     "loading": "加载中…",
+    "loadFailed": "加载变更列表失败",
+    "retry": "重试",
     "empty": "暂无文件变更",
     "select": "选择文件查看 diff",
     "openFile": "打开文件",

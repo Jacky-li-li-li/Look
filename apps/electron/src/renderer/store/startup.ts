@@ -8,6 +8,7 @@
 
 import i18n from "../i18n";
 import { themeFromSettings, writeLookThemeToDom } from "../lib/look-theme";
+import { PANEL_LAYOUT } from "../lib/panelLayout";
 import { agentDefinitionsAtom } from "./agentDefinitionsAtoms";
 import { appStore } from "./appStore";
 import {
@@ -126,10 +127,18 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 			if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
 			if (settings.rightPanelCollapsed !== undefined)
 				appStore.set(rightPanelCollapsedAtom, settings.rightPanelCollapsed);
+			// 恢复上限与拖拽上限对齐(PANEL_LAYOUT.RIGHT_MAX/DOCK_MAX):此前硬编码 480,
+			// 用户拖到 480~640 之间后重启会被意外压回(2026-08 修复)。
 			if (typeof settings.rightPanelWidth === "number")
-				appStore.set(rightPanelWidthAtom, Math.min(480, Math.max(200, settings.rightPanelWidth)));
+				appStore.set(
+					rightPanelWidthAtom,
+					Math.min(PANEL_LAYOUT.RIGHT_MAX, Math.max(PANEL_LAYOUT.RIGHT_MIN, settings.rightPanelWidth)),
+				);
 			if (typeof settings.dockPanelWidth === "number")
-				appStore.set(dockPanelWidthAtom, Math.min(720, Math.max(320, settings.dockPanelWidth)));
+				appStore.set(
+					dockPanelWidthAtom,
+					Math.min(PANEL_LAYOUT.DOCK_MAX, Math.max(PANEL_LAYOUT.DOCK_MIN, settings.dockPanelWidth)),
+				);
 			if (settings.preferredModel) appStore.set(userPreferredModelAtom, settings.preferredModel);
 			if (settings.lastActiveSessionId) _lastActiveSessionId = settings.lastActiveSessionId;
 			if (Array.isArray(settings.openProjectIds)) appStore.set(openProjectIdsAtom, settings.openProjectIds);

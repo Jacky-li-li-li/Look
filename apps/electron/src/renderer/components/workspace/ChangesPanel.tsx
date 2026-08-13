@@ -45,28 +45,42 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 	const isDark = tone === "dark";
 	const [files, setFiles] = useState<GitDiffFile[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const [expandedPath, setExpandedPath] = useState<string | null>(null);
+	const [retryTick, setRetryTick] = useState(0);
 
-	// 加载 diff 列表（切换项目/tab 时）
+	// 加载 diff 列表（切换项目/tab 时）。失败时清空 files/expandedPath：
+	// 组件实例在 tab 切换时复用缓存外的 state，若不清空会把上一个项目的
+	// 变更列表错误地显示在当前项目名下（2026-08 修复）。
 	useEffect(() => {
 		if (!projectId) return;
+		// retryTick 仅作为重试触发信号使用（点击重试 +1 重新拉取）
+		void retryTick;
 		let cancelled = false;
 		setLoading(true);
+		setError(null);
 		window.look
 			.getProjectGitDiff(projectId)
 			.then((result) => {
 				if (cancelled) return;
 				setFiles(result?.success ? result.files : []);
 				setExpandedPath(null);
+				if (!result?.success) setError(result?.error ?? t("changes.loadFailed"));
 			})
-			.catch((err) => console.warn("[ChangesPanel] getProjectGitDiff failed:", err))
+			.catch((err) => {
+				if (cancelled) return;
+				console.warn("[ChangesPanel] getProjectGitDiff failed:", err);
+				setFiles([]);
+				setExpandedPath(null);
+				setError(t("changes.loadFailed"));
+			})
 			.finally(() => {
 				if (!cancelled) setLoading(false);
 			});
 		return () => {
 			cancelled = true;
 		};
-	}, [projectId]);
+	}, [projectId, retryTick, t]);
 
 	const expanded = files.find((f) => f.path === expandedPath) ?? null;
 
@@ -77,6 +91,13 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 					<div className="flex items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground">
 						<LoaderCircle className="size-3 animate-spin" />
 						{t("changes.loading", "加载中…")}
+					</div>
+				) : error ? (
+					<div className="flex flex-col items-center gap-2 px-3 py-3 text-center">
+						<p className="text-[11px] text-destructive">{error}</p>
+						<Button variant="outline" size="sm" onClick={() => setRetryTick((n) => n + 1)}>
+							{t("changes.retry", "重试")}
+						</Button>
 					</div>
 				) : files.length === 0 ? (
 					<div className="px-3 py-2 text-[11px] text-muted-foreground">{t("changes.empty", "暂无文件变更")}</div>

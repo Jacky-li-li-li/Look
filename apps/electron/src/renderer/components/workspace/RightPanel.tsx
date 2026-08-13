@@ -19,6 +19,7 @@ import {
 	dockPanelWidthAtom,
 	projectGitInfoAtomFamily,
 	rightPanelCollapsedAtom,
+	rightPanelEffectiveCollapsedAtom,
 	rightPanelTabAtom,
 	rightPanelWidthAtom,
 	sharedFilesAtomFamily,
@@ -37,7 +38,8 @@ const PLACEHOLDER_PROJECT_ID = "__right_panel_placeholder__";
 export function RightPanel() {
 	const { t } = useTranslation();
 	const activeProject = useAtomValue(activeProjectAtom);
-	const collapsed = useAtomValue(rightPanelCollapsedAtom);
+	// 读 effective：手动折叠或窄窗口自动折叠都按折叠处理（与 AppLayout 布局口径一致）。
+	const collapsed = useAtomValue(rightPanelEffectiveCollapsedAtom);
 	const [tab, setTab] = useAtom(rightPanelTabAtom);
 	const setCollapsed = useSetAtom(rightPanelCollapsedAtom);
 	const [rightPanelWidth, setRightPanelWidth] = useAtom(rightPanelWidthAtom);
@@ -59,7 +61,7 @@ export function RightPanel() {
 	const setIsLoading = useSetAtom(loadingAtom);
 
 	const refreshSharedFiles = useCallback(
-		async (pid: string, cancelled: { current: boolean }) => {
+		async (pid: string, cancelled: { current: boolean }, opts?: { silent?: boolean }) => {
 			setIsLoading(true);
 			try {
 				const result = await window.look.listSharedFiles(pid);
@@ -70,13 +72,14 @@ export function RightPanel() {
 				} else {
 					const message = result?.error ?? t("rightPanel.loadFailed");
 					appStore.set(sharedFilesErrorAtomFamily(pid), message);
-					toast.error(message);
+					// silent:调用方(如 onAfterChange 的 throw→操作 handler)自己负责 toast,避免同一条错误弹两遍。
+					if (!opts?.silent) toast.error(message);
 				}
 			} catch (error: unknown) {
 				if (cancelled.current) return;
 				const message = error instanceof Error ? error.message : t("rightPanel.loadFailed");
 				appStore.set(sharedFilesErrorAtomFamily(pid), message);
-				toast.error(message);
+				if (!opts?.silent) toast.error(message);
 			} finally {
 				if (!cancelled.current) setIsLoading(false);
 			}
@@ -123,6 +126,24 @@ export function RightPanel() {
 			window.look.stopSharedWatch(pid).catch(() => {});
 		};
 	}, [projectId, t]);
+
+	// 「变更」tab 徽标的脏文件计数数据：不依赖 GitStatusBar 是否挂载（无会话、
+	// 草稿/广场等非聊天视图下 GitStatusBar 不存在，徽标会缺失），右栏自行拉取一次；
+	// 之后由主进程 HEAD watcher 推送（project:git-info）保持新鲜。
+	useEffect(() => {
+		if (projectId === PLACEHOLDER_PROJECT_ID) return;
+		let cancelled = false;
+		window.look
+			.getProjectGitInfo(projectId)
+			.then((result) => {
+				if (cancelled || !result?.success) return;
+				appStore.set(projectGitInfoAtomFamily(projectId), result.info);
+			})
+			.catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, [projectId]);
 
 	if (!activeProject) return null;
 
@@ -235,8 +256,8 @@ export function RightPanel() {
 					error={sharedFilesError}
 					onAfterChange={async () => {
 						const cancelled = { current: false };
-						await refreshSharedFiles(activeProject!.id, cancelled);
-						// 失败时向上抛出让操作方（创建/删除/导入等）收到错误并 toast。
+						await refreshSharedFiles(activeProject!.id, cancelled, { silent: true });
+						// 失败时向上抛出让操作方（创建/删除/导入等）收到错误并 toast（silent 已抑制本函数自身的 toast）。
 						if (appStore.get(sharedFilesErrorAtomFamily(activeProject!.id))) {
 							throw new Error(
 								appStore.get(sharedFilesErrorAtomFamily(activeProject!.id)) ?? t("rightPanel.loadFailed"),

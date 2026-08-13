@@ -9,7 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RightPanel } from "../src/renderer/components/workspace/RightPanel";
 import i18n from "../src/renderer/i18n";
 import { appStore } from "../src/renderer/store/appStore";
-import { activeProjectIdAtom, projectsAtom } from "../src/renderer/store/projectAtoms";
+import {
+	activeProjectIdAtom,
+	projectGitInfoAtomFamily,
+	projectsAtom,
+	rightPanelAutoCollapsedAtom,
+	rightPanelCollapsedAtom,
+	rightPanelEffectiveCollapsedAtom,
+} from "../src/renderer/store/projectAtoms";
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 
@@ -50,6 +57,7 @@ describe("RightPanel 共享区 watcher", () => {
 	const listSharedFiles = vi.fn();
 	const startSharedWatch = vi.fn();
 	const stopSharedWatch = vi.fn();
+	const getProjectGitInfo = vi.fn();
 
 	beforeEach(async () => {
 		await i18n.changeLanguage("en");
@@ -57,9 +65,10 @@ describe("RightPanel 共享区 watcher", () => {
 		listSharedFiles.mockReset().mockResolvedValue({ success: true, nodes: [] });
 		startSharedWatch.mockReset().mockResolvedValue({ success: true });
 		stopSharedWatch.mockReset().mockResolvedValue({ success: true });
+		getProjectGitInfo.mockReset().mockResolvedValue({ success: true, info: null });
 		Object.defineProperty(window, "look", {
 			configurable: true,
-			value: { listSharedFiles, startSharedWatch, stopSharedWatch },
+			value: { listSharedFiles, startSharedWatch, stopSharedWatch, getProjectGitInfo },
 		});
 		appStore.set(projectsAtom, projects);
 		appStore.set(activeProjectIdAtom, "project-1");
@@ -73,6 +82,8 @@ describe("RightPanel 共享区 watcher", () => {
 		// unhandled error（CI 上偶发退出码 1）。
 		appStore.set(projectsAtom, []);
 		appStore.set(activeProjectIdAtom, null);
+		appStore.set(rightPanelCollapsedAtom, false);
+		appStore.set(rightPanelAutoCollapsedAtom, false);
 		await act(async () => {});
 		document.body.replaceChildren();
 	});
@@ -94,5 +105,37 @@ describe("RightPanel 共享区 watcher", () => {
 		unmount();
 
 		expect(stopSharedWatch).toHaveBeenCalledWith("project-1");
+	});
+
+	it("切换项目时拉取 git info 填充「变更」tab 徽标数据（不依赖 GitStatusBar 挂载）", async () => {
+		renderPanel();
+
+		await waitFor(() => expect(getProjectGitInfo).toHaveBeenCalledWith("project-1"));
+		expect(appStore.get(projectGitInfoAtomFamily("project-1"))).toBeNull();
+	});
+
+	it("git info 拉取失败不写入 atom（保持 null 徽标）", async () => {
+		getProjectGitInfo.mockRejectedValue(new Error("boom"));
+		renderPanel();
+
+		await waitFor(() => expect(getProjectGitInfo).toHaveBeenCalledWith("project-1"));
+		expect(appStore.get(projectGitInfoAtomFamily("project-1"))).toBeNull();
+	});
+
+	it("rightPanelEffectiveCollapsedAtom = 手动折叠 OR 自动折叠（2026-08 回归:resize 只操作 auto 态）", () => {
+		expect(appStore.get(rightPanelEffectiveCollapsedAtom)).toBe(false);
+
+		// 窄窗口自动折叠:effective 折叠,但手动偏好保持不变
+		appStore.set(rightPanelAutoCollapsedAtom, true);
+		expect(appStore.get(rightPanelEffectiveCollapsedAtom)).toBe(true);
+		expect(appStore.get(rightPanelCollapsedAtom)).toBe(false);
+
+		// 清除自动态:effective 跟随手动偏好恢复
+		appStore.set(rightPanelAutoCollapsedAtom, false);
+		expect(appStore.get(rightPanelEffectiveCollapsedAtom)).toBe(false);
+
+		// 手动折叠同样生效
+		appStore.set(rightPanelCollapsedAtom, true);
+		expect(appStore.get(rightPanelEffectiveCollapsedAtom)).toBe(true);
 	});
 });

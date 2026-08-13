@@ -29,6 +29,7 @@ import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import { toast } from "sonner";
+import { appStore } from "../../store/appStore";
 import {
 	activeAgentIdAtom,
 	chatInputInsertRequestAtom,
@@ -83,6 +84,44 @@ function useLazyRef<T>(factory: () => T): React.MutableRefObject<T> {
 	return ref as React.MutableRefObject<T>;
 }
 
+/** pending watcher 登记的条目:key 为 `${projectId}::${relativePath}`。 */
+interface PendingWatch {
+	projectId: string;
+	relativePath: string;
+}
+
+/**
+ * 统一「启动 watcher + 登记」路径（2026-08 修复在途 watcher 泄漏）：
+ *  - invoke 在途时先把路径登记进 pendingWatchRef,卸载/切项目时清理逻辑能停掉它;
+ *  - 成功后仅在 shouldRegister() 仍成立时记入 watchedPathsRef,否则立即 stop 撤销
+ *    （目录在请求在途时被折叠 / 项目已切换 / 组件已卸载）;
+ *  - 撤销前若同路径已有新一轮启动在途（pending 仍含同 key）,跳过 stop,
+ *    把是否关闭的决定留给最新一轮,避免“老撤销关闭新 watcher”的竞态。
+ */
+function startWatchGuarded(
+	watchedPathsRef: React.MutableRefObject<Set<string>>,
+	pendingWatchRef: React.MutableRefObject<Map<string, PendingWatch>>,
+	projectId: string,
+	relativePath: string,
+	shouldRegister: () => boolean,
+): void {
+	const key = `${projectId}::${relativePath}`;
+	pendingWatchRef.current.set(key, { projectId, relativePath });
+	window.look
+		.startWorkspaceWatch(projectId, relativePath)
+		.then(() => {
+			pendingWatchRef.current.delete(key);
+			if (shouldRegister()) {
+				watchedPathsRef.current.add(relativePath);
+			} else if (!pendingWatchRef.current.has(key)) {
+				window.look.stopWorkspaceWatch(projectId, relativePath).catch(() => undefined);
+			}
+		})
+		.catch(() => {
+			pendingWatchRef.current.delete(key);
+		});
+}
+
 export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelProps) {
 	const { t } = useTranslation();
 	const [expanded, setExpanded] = useAtom(expandedWorkspacePathsAtomFamily(projectId));
@@ -97,6 +136,9 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 	// 跟踪已启动的 watcher path 集合,卸载 / 切换项目时统一停止(VSCode 模式防句柄累积)。
 	// 用 ref 而非 state 避免触发额外 re-render。必须在 useBootstrapRoot 之前声明。
 	const watchedPathsRef = useLazyRef(() => new Set<string>());
+	// startWorkspaceWatch 在途登记:invoke 未返回时卸载/切项目也要能 stop 掉主进程
+	// 已注册的 watcher(2026-08 修复泄漏;与共享区 pendingWatchers 机制同构)。
+	const pendingWatchRef = useLazyRef(() => new Map<string, PendingWatch>());
 
 	// 异步操作世代号:projectId 变化或卸载时递增,丢弃旧 project 的异步回调。
 	const operationGenRef = useRef(0);
@@ -109,7 +151,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 	}, [projectId]);
 
 	// 首次挂载时如未加载根,自动加载
-	useBootstrapRoot(projectId, setLoaded, watchedPathsRef, setIsLoading, setError, showHiddenFiles);
+	useBootstrapRoot(projectId, setLoaded, watchedPathsRef, pendingWatchRef, setIsLoading, setError, showHiddenFiles);
 
 	// showHiddenFiles 切换时：清空缓存、停止 watcher、重新加载根目录
 	useEffect(() => {
@@ -125,6 +167,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 
 	useEffect(() => {
 		const paths = watchedPathsRef.current;
+		const pending = pendingWatchRef.current;
 		const currentProjectId = projectId;
 		return () => {
 			// 组件卸载 / projectId 变化时清理所有已启动的 watcher
@@ -132,8 +175,14 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 				window.look.stopWorkspaceWatch(currentProjectId, relPath).catch(() => undefined);
 			}
 			paths.clear();
+			// 在途 startWorkspaceWatch:invoke 返回后其 .then 会自行撤销,此处再兜底 stop 一次
+			// (主进程 stopWatchDir 幂等;若新项目同 key 已重新注册,其 .then 的 pending 检查会跳过撤销)。
+			for (const entry of pending.values()) {
+				window.look.stopWorkspaceWatch(entry.projectId, entry.relativePath).catch(() => undefined);
+			}
+			pending.clear();
 		};
-	}, [projectId, watchedPathsRef]);
+	}, [projectId, watchedPathsRef, pendingWatchRef]);
 
 	const flatRows = useMemo(() => flattenTree(rootChildren, expanded, loaded), [rootChildren, expanded, loaded]);
 
@@ -151,6 +200,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 		async (row: FlatRow) => {
 			const { node, parentPath } = row;
 			if (node.type !== "directory") return;
+			const watchKey = `${projectId}::${node.path}`;
 
 			if (expanded.has(node.path)) {
 				// 折叠:同时停 watcher,避免无 UI 显示时仍触发 workspace:updated
@@ -162,17 +212,30 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 				if (watchedPathsRef.current.delete(node.path)) {
 					window.look.stopWorkspaceWatch(projectId, node.path).catch(() => undefined);
 				}
+				// 在途启动也要撤销:startWatchGuarded 的 .then 会因 pending 已删而再次 stop(幂等)。
+				if (pendingWatchRef.current.delete(watchKey)) {
+					window.look.stopWorkspaceWatch(projectId, node.path).catch(() => undefined);
+				}
 				return;
 			}
+
+			const gen = operationGenRef.current;
+			const expandedAtom = expandedWorkspacePathsAtomFamily(projectId);
+			// 启动 watcher 的统一守卫:世代未变(未切项目)且目录仍处于展开态。
+			const watchGuard = () => operationGenRef.current === gen && appStore.get(expandedAtom).has(node.path);
 
 			// 展开:children 已加载直接展开;否则先 load 成功后再 add expanded,
 			// 避免 "展开但无子项" 的中间态(load 失败时回滚更稳)。
 			if (loaded.has(node.path)) {
 				setExpanded((prev) => new Set(prev).add(node.path));
+				// 折叠时 watcher 已停:缓存命中再展开必须重启,否则该目录变更不再实时刷新
+				// (2026-08 修复:此前仅首次加载路径启动 watcher,折叠→再展开后树会 stale)。
+				if (!watchedPathsRef.current.has(node.path) && !pendingWatchRef.current.has(watchKey)) {
+					startWatchGuarded(watchedPathsRef, pendingWatchRef, projectId, node.path, watchGuard);
+				}
 				return;
 			}
 
-			const gen = operationGenRef.current;
 			try {
 				// react-doctor-disable-next-line async-defer-await -- 加载后需用 generation 检查请求是否已过期
 				const result = await window.look.listWorkspaceChildren(projectId, node.path, showHiddenFiles);
@@ -185,13 +248,8 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 						return next;
 					});
 					setExpanded((prev) => new Set(prev).add(node.path));
-					// 启动该目录的 watcher(只监听直接子项)
-					window.look
-						.startWorkspaceWatch(projectId, node.path)
-						.then(() => {
-							if (operationGenRef.current === gen) watchedPathsRef.current.add(node.path);
-						})
-						.catch(() => undefined);
+					// 启动该目录的 watcher(只监听直接子项;统一助手处理在途撤销与泄漏防护)
+					startWatchGuarded(watchedPathsRef, pendingWatchRef, projectId, node.path, watchGuard);
 				} else if (result && !result.success) {
 					toast.error(result.error ?? t("workspaceTree.loadChildFailed"));
 				}
@@ -212,6 +270,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 			setLoaded,
 			showHiddenFiles,
 			watchedPathsRef,
+			pendingWatchRef,
 			operationGenRef,
 			t,
 		],
@@ -236,14 +295,8 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 					return next;
 				});
 				setError(null);
-				window.look
-					.startWorkspaceWatch(projectId, "")
-					.then(() => {
-						if (operationGenRef.current === gen) watchedPathsRef.current.add("");
-					})
-					.catch((err: unknown) => {
-						console.error("[WorkspaceTree] Failed to start root watcher on refresh:", err);
-					});
+				// 根 watcher 统一走 startWatchGuarded:在途撤销/泄漏防护与展开路径一致。
+				startWatchGuarded(watchedPathsRef, pendingWatchRef, projectId, "", () => operationGenRef.current === gen);
 			} else {
 				const errMsg = result?.error ?? t("workspaceTree.refreshFailed");
 				console.error(`[WorkspaceTree] Refresh failed: ${errMsg}`);
@@ -259,7 +312,17 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 		} finally {
 			if (operationGenRef.current === gen) setIsLoading(false);
 		}
-	}, [projectId, setLoaded, setIsLoading, setError, showHiddenFiles, watchedPathsRef, operationGenRef, t]);
+	}, [
+		projectId,
+		setLoaded,
+		setIsLoading,
+		setError,
+		showHiddenFiles,
+		watchedPathsRef,
+		pendingWatchRef,
+		operationGenRef,
+		t,
+	]);
 
 	const handleCollapseAll = useCallback(() => {
 		setExpanded(new Set());
@@ -337,6 +400,7 @@ function useBootstrapRoot(
 	projectId: string,
 	setLoaded: (updater: (prev: Map<string, FileTreeNode[]>) => Map<string, FileTreeNode[]>) => void,
 	watchedPathsRef: React.MutableRefObject<Set<string>>,
+	pendingWatchRef: React.MutableRefObject<Map<string, PendingWatch>>,
 	setIsLoading: (loading: boolean) => void,
 	setError: (error: string | null) => void,
 	showHiddenFiles: boolean,
@@ -370,15 +434,9 @@ function useBootstrapRoot(
 						return next;
 					});
 					setError(null);
-					// 启动根目录 watcher（best-effort，失败不影响树展示）
-					window.look
-						.startWorkspaceWatch(projectId, "")
-						.then(() => {
-							if (!cancelled) watchedPathsRef.current.add("");
-						})
-						.catch((err: unknown) => {
-							console.error("[WorkspaceTree] Failed to start root watcher:", err);
-						});
+					// 启动根目录 watcher（best-effort，失败不影响树展示）;
+					// 统一走 startWatchGuarded 处理在途撤销/泄漏防护。
+					startWatchGuarded(watchedPathsRef, pendingWatchRef, projectId, "", () => !cancelled);
 				} else {
 					const errMsg = result?.error ?? "未知错误";
 					console.error(`[WorkspaceTree] Failed to load root children: ${errMsg}`);
@@ -401,7 +459,7 @@ function useBootstrapRoot(
 			cancelled = true;
 			clearTimeout(timeoutId);
 		};
-	}, [projectId, setLoaded, watchedPathsRef, setIsLoading, setError, showHiddenFiles]);
+	}, [projectId, setLoaded, watchedPathsRef, pendingWatchRef, setIsLoading, setError, showHiddenFiles]);
 }
 
 interface WorkspaceTreeNodeRowProps {

@@ -939,6 +939,8 @@
   },
   "changes": {
     "loading": "Loading…",
+    "loadFailed": "Failed to load changes",
+    "retry": "Retry",
     "empty": "No file changes",
     "select": "Select a file to view diff",
     "openFile": "Open file",
