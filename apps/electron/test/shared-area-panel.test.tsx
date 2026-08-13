@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { FileTreeNode } from "@shared/types";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "jotai";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -149,6 +149,9 @@ describe("SharedAreaPanel", () => {
 	});
 
 	afterEach(() => {
+		// 必须真实卸载组件：面板的防抖重校验定时器/在途请求若泄漏到下个用例，
+		// 会污染共享 atom 缓存导致全量跑时随机失败。
+		cleanup();
 		document.body.replaceChildren();
 	});
 
