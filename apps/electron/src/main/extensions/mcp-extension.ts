@@ -125,23 +125,27 @@ export function createMcpExtensionFactory(
 			// project's .look/mcp.json would still be loaded and spawned.
 			const loadProjectConfig = resolveProjectTrust?.(cwd) ?? true;
 			await mcpManager.loadConfig(projectId, cwd, { loadProjectConfig });
-			const { started, failed } = await mcpManager.startEnabled(projectId);
+			// 后台启动，不阻塞会话创建完成：MCP 连接（stdio spawn + 握手，最长
+			// 30s/服务器超时）一旦变慢，此前会让「新建会话」卡住无响应。
+			// 工具在连接完成后动态注册（与 mcp_connect 同机制），失败仅
+			// 注入一条启动告警，不拖慢会话就绪。
+			void mcpManager.startEnabled(projectId).then(({ failed }) => {
+				// 注册所有 MCP 工具到 pi SDK
+				registerConnectedMcpTools();
 
-			// 注册所有 MCP 工具到 pi SDK
-			registerConnectedMcpTools();
-
-			// 注入启动失败警告
-			if (failed.length > 0) {
-				const failedNames = failed.map((f) => `${f.name} (${f.error})`).join(", ");
-				api.sendMessage(
-					{
-						customType: "look.mcp-warning.v1",
-						content: `MCP servers failed to start: ${failedNames}. ` + `Started: ${started.length} server(s).`,
-						display: false,
-					},
-					{ deliverAs: "followUp" },
-				);
-			}
+				// 注入启动失败警告
+				if (failed.length > 0) {
+					const failedNames = failed.map((f) => `${f.name} (${f.error})`).join(", ");
+					api.sendMessage(
+						{
+							customType: "look.mcp-warning.v1",
+							content: `MCP servers failed to start: ${failedNames}. `,
+							display: false,
+						},
+						{ deliverAs: "followUp" },
+					);
+				}
+			});
 		});
 
 		// MCPManager is shared across live sessions. Do not stop all clients when

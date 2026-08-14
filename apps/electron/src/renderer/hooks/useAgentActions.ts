@@ -5,7 +5,7 @@
 // ============================================================
 
 import type { ImageContent, ThinkingLevel } from "@shared/types";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { appStore } from "../store/appStore";
 import {
@@ -19,6 +19,9 @@ import { markSessionSnapshotLoading } from "../store/snapshot";
 const api = window.look;
 
 export function useAgentActions() {
+	// 新建会话在途标志：防止创建慢时连点产生多个重复会话（失败/完成后释放）。
+	const creatingRef = useRef(false);
+
 	const handleSendMessage = useCallback(
 		async (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<boolean> => {
 			const id = appStore.get(activeAgentIdAtom);
@@ -116,17 +119,27 @@ export function useAgentActions() {
 	}, []);
 
 	const handleCreateClick = useCallback(async (projectId: string): Promise<string | null> => {
-		if (!api) return null;
-		const result = await api.createAgent({ projectId });
-		if (result?.success && result.agentId) {
-			appStore.set(activeAgentIdAtom, result.agentId);
-			appStore.set(openedSessionIdsAtom, (previous) => {
-				if (previous.includes(result.agentId)) return previous;
-				return [...previous, result.agentId];
-			});
-			return result.agentId;
+		if (!api || creatingRef.current) return null;
+		creatingRef.current = true;
+		try {
+			const result = await api.createAgent({ projectId });
+			if (result?.success && result.agentId) {
+				appStore.set(activeAgentIdAtom, result.agentId);
+				appStore.set(openedSessionIdsAtom, (previous) => {
+					if (previous.includes(result.agentId)) return previous;
+					return [...previous, result.agentId];
+				});
+				return result.agentId;
+			}
+			// 创建失败不能静默吞掉（此前无任何提示，用户只看到“没反应”）
+			toast.error(result?.error ?? "Failed to create session");
+			return null;
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "Failed to create session");
+			return null;
+		} finally {
+			creatingRef.current = false;
 		}
-		return null;
 	}, []);
 
 	return {

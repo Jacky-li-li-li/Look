@@ -98,6 +98,9 @@ async function triggerSessionStart(api: MockAPI): Promise<void> {
 	const handler = api.eventHandlers.session_start?.[0];
 	expect(handler).toBeDefined();
 	await handler!();
+	// MCP 启动已改为后台进行：startEnabled 的 then 链在 handler resolve 之后
+	// 才完成工具注册/告警注入。flush 一轮宏任务，让后台链落定后再断言。
+	await new Promise((resolve) => setImmediate(resolve));
 }
 
 describe("createMcpExtensionFactory", () => {
@@ -113,6 +116,36 @@ describe("createMcpExtensionFactory", () => {
 		expect(mcpManager.startEnabled).toHaveBeenCalledWith(TEST_PROJECT_ID);
 		expect(api.registerTool).toHaveBeenCalled();
 		expect(api.tools.length).toBe(2);
+		expect(api.tools[1].name).toBe("mcp__test-server__hello");
+	});
+
+	it("session_start resolves without waiting for slow MCP connects (non-blocking)", async () => {
+		let resolveStart!: (value: { started: string[]; failed: Array<{ name: string; error: string }> }) => void;
+		const mcpManager = createMockMCPManager({
+			startEnabled: vi.fn().mockReturnValue(
+				new Promise<{ started: string[]; failed: Array<{ name: string; error: string }> }>((resolve) => {
+					resolveStart = resolve;
+				}),
+			),
+		});
+		const factory = createMcpExtensionFactory("test-session", mcpManager, "/test/cwd", TEST_PROJECT_ID);
+		const api = createMockAPI();
+		factory(api as unknown as ExtensionAPI);
+
+		const handler = api.eventHandlers.session_start?.[0];
+		expect(handler).toBeDefined();
+		// MCP 连接挂起（如网络超时）时 handler 也必须立即 resolve，不阻塞会话创建
+		const outcome = await Promise.race([
+			handler!().then(() => "resolved"),
+			new Promise((resolve) => setTimeout(() => resolve("blocked"), 100)),
+		]);
+		expect(outcome).toBe("resolved");
+		// 连接未完成前只有工厂期注册的 mcp_connect
+		expect(api.registerTool).toHaveBeenCalledTimes(1);
+
+		// 连接完成后动态注册工具
+		resolveStart({ started: ["test-server"], failed: [] });
+		await vi.waitFor(() => expect(api.registerTool).toHaveBeenCalledTimes(2));
 		expect(api.tools[1].name).toBe("mcp__test-server__hello");
 	});
 
