@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.2.1",
+		date: "2026-08-14",
+		items: [
+			{
+				zh: "修复新建会话卡顿无响应：MCP 服务器连接改为后台进行，新建会话不再等待 MCP 就绪（工具连接完成后自动注册）；创建失败时现在会明确提示，连点也不会再产生重复会话",
+				en: "Fixed slow, unresponsive new-session creation: MCP server connections now start in the background, so creating a session no longer waits for MCP servers to be ready (their tools register as they connect); failures now show a clear message and rapid clicks no longer create duplicate sessions",
+				ja: "新規セッション作成の遅延・無反応を修正：MCP サーバーへの接続をバックグラウンド化し、セッション作成が MCP の準備を待たなくなりました（ツールは接続完了後に自動登録）。作成失敗時は明確なメッセージを表示し、連打による重複作成も防止します",
+			},
+		],
+	},
+	{
 		version: "2.2.0",
 		date: "2026-08-14",
 		items: [
