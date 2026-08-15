@@ -169,7 +169,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 				<Button
 					variant="line-ghost"
 					size="sm"
-					className="group/selector h-7 min-w-[5.5rem] max-w-[9rem] flex-[0_1_8rem] justify-start overflow-hidden font-mono text-[11px]"
+					className="group/selector h-7 min-w-[4rem] max-w-[24rem] flex-none justify-start overflow-hidden font-mono text-[11px]"
 					aria-label={label}
 					title={label}
 					disabled={switching}
@@ -183,7 +183,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 							data-icon="inline-start"
 						/>
 					)}
-					<span className="min-w-0 flex-1 truncate whitespace-nowrap text-left">{label}</span>
+					<span className="min-w-0 truncate whitespace-nowrap text-left">{label}</span>
 				</Button>
 			</DialogTrigger>
 			<DialogContent className="max-w-xl p-0 max-h-[85vh] overflow-hidden grid-rows-[auto_auto_1fr]" showCloseButton>

@@ -47,24 +47,24 @@ describe("TopUpdateButton", () => {
 		expect(container.firstChild).toBeNull();
 	});
 
-	it("available 时显示「更新中」胶囊且不可点击（自动下载已开始）", () => {
+	it("available 时显示下载进度图标且不可点击（自动下载已开始）", () => {
 		act(() => appStore.set(appUpdateAtom, { phase: "available", version: "9.9.9" }));
 
-		// aria-label 用带版本号的 autoDownloading 文案，语义更准确
+		// aria-label 用带版本号的 autoDownloading 文案，语义更准确；纯图标无文字
 		const { getByRole } = renderButton();
 		const button = getByRole("button", { name: "发现新版本 v9.9.9，正在自动下载…" }) as HTMLButtonElement;
 		expect(button.disabled).toBe(true);
-		expect(button.textContent).toContain("更新中");
+		expect(button.textContent?.trim()).toBe("");
 	});
 
-	it("downloading 时仅显示「更新中」（百分比由边框光效展示）且不可点击", () => {
+	it("downloading 时仅显示下载图标 + 环形进度（百分比在环上，不进入文本/aria）且不可点击", () => {
 		act(() => appStore.set(appUpdateAtom, { phase: "downloading", percent: 42 }));
 
 		const { getByRole } = renderButton();
 		const button = getByRole("button", { name: "正在下载更新" }) as HTMLButtonElement;
 		expect(button.disabled).toBe(true);
-		expect(button.textContent).toContain("更新中");
-		expect(button.textContent).not.toContain("%");
+		expect(button.textContent?.trim()).toBe("");
+		expect(button.getAttribute("aria-label")).not.toContain("%");
 	});
 
 	it("downloaded 时变为重启按钮，点击后进入安装中 loading 态（防重复点击）", () => {

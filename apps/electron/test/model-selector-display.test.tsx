@@ -75,7 +75,7 @@ describe("ModelSelector first-frame model display", () => {
 		renderSelector("deepseek/deepseek-v4-pro");
 		const button = await screen.findByRole("button");
 		expect(button.textContent).toContain("deepseek-v4-pro");
-		expect(button.className).toContain("min-w-[5.5rem]");
+		expect(button.className).toContain("max-w-[24rem]");
 
 		resolveModels?.({ success: true, models: [model({})] });
 		await waitFor(() => expect(button.textContent).toContain("DeepSeek V4 Pro"));

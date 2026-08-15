@@ -1734,10 +1734,26 @@ body {
 		display: flex;
 		align-items: center;
 		gap: 2px;
+		/* 更新胶囊（下载中/重启更新）出现时不超出左侧边栏：fixed 层不继承
+		   .app-shell 的 --sidebar-width，这里用与 PANEL_LAYOUT.SIDEBAR_WIDTH 一致的
+		   常量限宽；超宽时更新胶囊收缩、文字省略（配合 TopUpdateButton 的 truncate）。 */
+		max-width: calc(280px - 12px);
+		overflow: hidden;
+		min-width: 0;
+	}
+
+	/* 折叠时侧栏 0 宽，按钮组保持自由显示（折叠按钮变展开按钮） */
+	.sidebar-header-actions[data-collapsed] {
+		max-width: none;
 	}
 
 	html[data-platform="darwin"]:not([data-fullscreen="true"]) .sidebar-header-actions {
 		left: 78px;
+		max-width: calc(280px - 78px);
+	}
+
+	html[data-platform="darwin"]:not([data-fullscreen="true"]) .sidebar-header-actions[data-collapsed] {
+		max-width: none;
 	}
 
 	/* 顶部更新胶囊：下载中/待重启的呼吸光效（自动下载模式）
@@ -1762,9 +1778,23 @@ body {
 		animation: top-update-glow 1.6s ease-in-out infinite;
 	}
 
-	/* 下载完成等待手动重启：更明显的提示光 */
+	/* 下载完成等待手动重启：绿色图标 + 绿色呼吸光 */
+	@keyframes top-update-glow-ready {
+		0%,
+		100% {
+			box-shadow:
+				0 0 3px color-mix(in oklab, #22c55e 30%, transparent),
+				0 0 8px color-mix(in oklab, #22c55e 18%, transparent);
+		}
+		50% {
+			box-shadow:
+				0 0 5px color-mix(in oklab, #22c55e 65%, transparent),
+				0 0 14px color-mix(in oklab, #22c55e 40%, transparent);
+		}
+	}
+
 	.top-update-restart {
-		animation: top-update-glow 2s ease-in-out infinite;
+		animation: top-update-glow-ready 2s ease-in-out infinite;
 	}
 
 	.sidebar-separator {
