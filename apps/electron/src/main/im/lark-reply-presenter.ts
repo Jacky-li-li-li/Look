@@ -272,6 +272,9 @@ export class LarkReplyPresenter {
 				elements.push(this.markdown(`**回复**\n\n${this.truncateMarkdown(block.text, BLOCK_TEXT_LIMIT)}`));
 		}
 		if (!acc.text && acc.done && !acc.error) elements.push(this.markdown("（Agent 未返回文本回复）"));
+		// 进行中（思考/输出/执行/重试）时提供「停止」按钮；点击经
+		// card.action.trigger → cardAction 事件由桥接层中止 Agent。
+		if (!acc.done) elements.push(this.stopButton());
 
 		const footerLines: string[] = [];
 		if (acc.model) footerLines.push(`模型：${this.escapeMarkdown(acc.model)}`);
@@ -395,6 +398,16 @@ export class LarkReplyPresenter {
 
 	private markdown(content: string): object {
 		return { tag: "markdown", content: this.truncateMarkdown(content, BLOCK_TEXT_LIMIT) };
+	}
+
+	/** 流式卡片「停止」按钮。value 与 LarkBridgeService.handleCardAction 的判定一致。 */
+	private stopButton(): object {
+		return {
+			tag: "button",
+			text: { tag: "plain_text", content: "⏹ 停止" },
+			type: "danger",
+			value: { action: "stop" },
+		};
 	}
 
 	private collapsiblePanel(title: string, expanded: boolean, elements: object[]): object {

@@ -161,7 +161,7 @@ export type RendererToMainEvent =
 	| { type: "im:disconnect-channel"; provider: string; appId?: string }
 	| { type: "im:remove-channel"; provider: string; appId: string }
 	| { type: "im:reconnect-channel"; provider: string; appId: string }
-	| { type: "im:send-test-message"; receiveIdType: string; receiveId: string; text: string }
+	| { type: "im:send-test-message"; appId: string; receiveIdType: string; receiveId: string; text: string }
 	| { type: "im:test-connection"; appId: string }
 	| { type: "im:test-connection-direct"; appId: string; appSecret: string; name?: string }
 	| { type: "im:update-channel"; appId: string; name?: string }

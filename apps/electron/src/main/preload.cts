@@ -366,6 +366,7 @@ const api: LookAPI = {
 	sendImTestMessage: (input) =>
 		invoke({
 			type: "im:send-test-message",
+			appId: input.appId,
 			receiveIdType: input.receiveIdType,
 			receiveId: input.receiveId,
 			text: input.text,

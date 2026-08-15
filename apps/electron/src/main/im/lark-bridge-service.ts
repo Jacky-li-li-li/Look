@@ -27,8 +27,17 @@ function trace(...args: unknown[]): void {
 	if (DEBUG_TRACE) console.log("[LarkBridgeService]", ...args);
 }
 
+/** 单个 Agent 回复的最长等待时间（ms），超时自动中止该会话。 */
+const AGENT_REPLY_TIMEOUT_MS = 300_000;
+
+export interface LarkBridgeServiceOptions {
+	/** 覆盖默认回复超时（ms）。默认 5 分钟。 */
+	replyTimeoutMs?: number;
+}
+
 export class LarkBridgeService {
 	private readonly replyPresenter = new LarkReplyPresenter();
+	private readonly replyTimeoutMs: number;
 	/**
 	 * Agent host for session lifecycle. Depends on the narrow IImAgentHost
 	 * interface rather than the concrete SessionRuntimeManager class, so the
@@ -47,9 +56,20 @@ export class LarkBridgeService {
 	private replyAccumulators = new Map<string, ReplyAccumulator>();
 	/** sessionId → 该回复所属的 bot appId（用于按 bot 释放在途回复） */
 	private accumulatorAppIds = new Map<string, string>();
+	/**
+	 * (appId, chatId) → 串行化链。同一 chat 的用户消息严格按到达顺序处理：
+	 * 前一条消息的 Agent 轮次结束后才处理下一条，保证每条消息拥有独立的
+	 * 回复累积器与流式卡片。SDK 侧 chatQueue 已关闭（避免消息合并与
+	 * cardAction 被排到轮次之后），这里是唯一的 per-chat 串行点。
+	 */
+	private chatQueues = new Map<string, Promise<void>>();
 	/** 运行时事件取消订阅 */
 	private unsubscribeEvents?: () => void;
 	private initialized = false;
+
+	constructor(options: LarkBridgeServiceOptions = {}) {
+		this.replyTimeoutMs = options.replyTimeoutMs ?? AGENT_REPLY_TIMEOUT_MS;
+	}
 
 	// ============================================================
 	// 初始化：绑定消息回调 + 监听 Agent 事件（幂等，可在无连接时调用）
@@ -66,6 +86,8 @@ export class LarkBridgeService {
 
 		// 注册飞书归一化消息 → 桥接（appId 标识接收消息的 bot）
 		channelManager.onMessage((appId, msg) => this.handleMessage(appId, msg));
+		// 注册流式卡片按钮动作（card.action.trigger → cardAction 事件）
+		channelManager.onCardAction((appId, evt) => this.handleCardAction(appId, evt));
 
 		// Agent 事件 → 累积回复文本
 		this.unsubscribeEvents?.();
@@ -91,10 +113,12 @@ export class LarkBridgeService {
 		this.unsubscribeEvents?.();
 		this.unsubscribeEvents = undefined;
 		this.channelManager?.onMessage(undefined);
+		this.channelManager?.onCardAction(undefined);
 		this.initialized = false;
 		this.bindings.clear();
 		this.pendingBindings.clear();
 		this.pendingDurableBindingSessionIds.clear();
+		this.chatQueues.clear();
 		this.accumulatorAppIds.clear();
 		this.releaseAllAccumulators("飞书连接已关闭");
 	}
@@ -106,12 +130,38 @@ export class LarkBridgeService {
 	detachChannel(appId?: string): void {
 		if (!appId) {
 			this.pendingBindings.clear();
+			this.chatQueues.clear();
 			this.releaseAllAccumulators("飞书连接已断开");
 			return;
+		}
+		for (const key of Array.from(this.chatQueues.keys())) {
+			if (key.startsWith(`${appId}::`)) this.chatQueues.delete(key);
 		}
 		for (const [sessionId, owner] of Array.from(this.accumulatorAppIds.entries())) {
 			if (owner === appId) this.releaseAccumulator(sessionId, "飞书连接已断开");
 		}
+	}
+
+	/**
+	 * 同一 (appId, chatId) 的入站用户消息串行化执行：前序任务完成后才执行
+	 * 下一个（前序失败不阻塞）。返回的 promise 随任务结束而 resolve。
+	 */
+	private enqueueChatTask(appId: string, chatId: string, task: () => Promise<void>): Promise<void> {
+		const key = this.keyFor(appId, chatId);
+		const prev = this.chatQueues.get(key) ?? Promise.resolve();
+		const run = async (): Promise<void> => {
+			try {
+				await task();
+			} catch (err) {
+				console.warn("[LarkBridgeService] Chat task failed:", key, err);
+			}
+		};
+		const next = prev.then(run, run);
+		this.chatQueues.set(key, next);
+		void next.finally(() => {
+			if (this.chatQueues.get(key) === next) this.chatQueues.delete(key);
+		});
+		return next;
 	}
 
 	// ============================================================
@@ -383,8 +433,11 @@ export class LarkBridgeService {
 			trace("Dispatching command:", text.split(/\s+/)[0]);
 			await this.handleCommand(appId, channel, msg, text);
 		} else {
-			trace("Dispatching user message to agent");
-			await this.handleUserMessage(appId, channel, msg, text);
+			// 同一 chat 的用户消息按到达顺序串行化：上一条消息的 Agent 轮次
+			// 结束后才处理下一条，避免并发 stream 覆盖 controller（孤儿卡片）
+			// 与累积器提前释放（后续回复丢失）。
+			trace("Queueing user message for chat", msg.chatId, "appId:", appId);
+			await this.enqueueChatTask(appId, msg.chatId, () => this.handleUserMessage(appId, msg, text));
 		}
 	}
 
@@ -428,7 +481,7 @@ export class LarkBridgeService {
 					break;
 				default:
 					// 未知命令当普通消息处理
-					await this.handleUserMessage(appId, channel, msg, rawText);
+					await this.handleUserMessage(appId, msg, rawText);
 			}
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
@@ -701,13 +754,17 @@ export class LarkBridgeService {
 	// ============================================================
 	// 普通用户消息 → Agent 桥接
 	// ============================================================
-	private async handleUserMessage(
-		appId: string,
-		channel: lark.LarkChannel,
-		msg: NormalizedMessage,
-		text: string,
-	): Promise<void> {
+	private async handleUserMessage(appId: string, msg: NormalizedMessage, text: string): Promise<void> {
 		const chatId = msg.chatId;
+		// 队列内执行时连接可能已断开/重连，重新解析当前连接，避免使用陈旧 channel。
+		const channel = this.channelManager?.getLarkChannel(appId);
+		if (!channel) {
+			console.warn(
+				"[LarkBridgeService] Dropping queued message because Lark channel is not connected:",
+				msg.messageId,
+			);
+			return;
+		}
 		const key = this.keyFor(appId, chatId);
 		let binding = this.findBinding(appId, chatId);
 		if (!binding) {
@@ -785,10 +842,13 @@ export class LarkBridgeService {
 							return;
 						}
 
-						// 等待 Agent 完成（最长时间 5 分钟）
+						// 等待 Agent 完成（默认最长 5 分钟，可构造时配置）
 						let timeoutId: ReturnType<typeof setTimeout> | undefined;
 						const timeout = new Promise<void>((_, reject) => {
-							timeoutId = setTimeout(() => reject(new Error("Agent 回复超时（5 分钟）")), 300_000);
+							timeoutId = setTimeout(
+								() => reject(new Error(`Agent 回复超时（${Math.round(this.replyTimeoutMs / 1000)} 秒）`)),
+								this.replyTimeoutMs,
+							);
 						});
 
 						try {
@@ -827,6 +887,40 @@ export class LarkBridgeService {
 		} finally {
 			// 清理累积器
 			this.releaseAccumulator(sessionId, "飞书回复流已结束");
+		}
+	}
+
+	// ============================================================
+	// 卡片按钮动作（card.action.trigger → cardAction 事件）
+	// ============================================================
+
+	/**
+	 * 处理流式卡片上的按钮点击。当前唯一动作是「停止」：中止对应 Agent
+	 * 会话并终结其回复卡片（移除按钮、红色头部、标记已停止）。SDK 侧
+	 * chatQueue 已关闭，因此该动作不会被排在运行中的消息轮次之后。
+	 */
+	private async handleCardAction(appId: string, evt: lark.CardActionEvent): Promise<void> {
+		const value = evt.action?.value;
+		if (!value || typeof value !== "object" || (value as { action?: unknown }).action !== "stop") return;
+		const binding = this.findBinding(appId, evt.chatId);
+		if (!binding) return;
+		const sessionId = binding.sessionId;
+
+		const acc = this.replyAccumulators.get(sessionId);
+		if (acc && !acc.done) {
+			acc.status = "error";
+			acc.error = "已停止";
+			acc.logs.push("用户点击了停止按钮。");
+			acc.done = true;
+			acc.resolveDone();
+			// 先刷新最终卡片（按钮消失、红色头部），再释放累积器。
+			await this.replyPresenter.flushUpdate(acc, true);
+			this.releaseAccumulator(sessionId, "用户已停止");
+		}
+		try {
+			await this.runtimeManager.abortAgent(sessionId);
+		} catch (err) {
+			console.warn("[LarkBridgeService] abortAgent on stop click failed:", err);
 		}
 	}
 

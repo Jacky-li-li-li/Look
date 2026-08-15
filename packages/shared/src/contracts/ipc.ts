@@ -365,7 +365,12 @@ export interface LookAPI {
 	disconnectImChannel(provider: string, appId?: string): Promise<IpcResult>;
 	removeImChannel(provider: string, appId: string): Promise<IpcResult>;
 	reconnectImChannel(provider: string, appId: string): Promise<IpcResult>;
-	sendImTestMessage(input: { receiveIdType: string; receiveId: string; text: string }): Promise<IpcResult>;
+	sendImTestMessage(input: {
+		appId: string;
+		receiveIdType: string;
+		receiveId: string;
+		text: string;
+	}): Promise<IpcResult>;
 	testImConnection(appId: string): Promise<IpcResult<{ message?: string }>>;
 	testImConnectionDirect(appId: string, appSecret: string): Promise<IpcResult<{ message?: string }>>;
 	updateImChannel(appId: string, updates: { name?: string }): Promise<IpcResult>;

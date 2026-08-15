@@ -78,13 +78,14 @@ export const imRouter: IpcRouter = (ctx, register) => {
 	});
 
 	register("im:send-test-message", async (data) => {
+		const appId = guardString(data.appId, "appId");
 		const receiveIdType = guardString(data.receiveIdType, "receiveIdType");
 		const receiveId = guardString(data.receiveId, "receiveId");
 		const text = guardString(data.text, "text");
 		if (!ctx.im.channelManager) {
 			return { success: false, error: "Feishu channel manager is not available" };
 		}
-		return await ctx.im.channelManager.sendTestMessage({ receiveIdType, receiveId, text });
+		return await ctx.im.channelManager.sendTestMessage({ appId, receiveIdType, receiveId, text });
 	});
 
 	register("im:test-connection", async (data) => {

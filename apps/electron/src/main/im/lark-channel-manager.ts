@@ -54,43 +54,25 @@ type ImMessageReceivedEvent = {
 
 type ImRendererEvent = ImRegistrationUpdateEvent | ImChannelStatusEvent | ImMessageReceivedEvent;
 
-// Feishu tenant scopes from the official one-click app-creation guide.
+// 飞书应用权限（tenant scope）：仅保留 Look IM 桥接实际用到的项，每个都对应
+// 明确调用点。注意：未知/未使用的 scope 名会被「创建应用」确认页静默丢弃
+// （SDK AppAddons 注释），多余的项只会无谓扩大授权面，因此保持最小集。
 const FEISHU_TENANT_SCOPES = [
-	"contact:contact.base:readonly",
-	"im:chat:create",
-	"im:chat:read",
-	"im:chat:update",
-	"im:message.group_at_msg:readonly",
+	// 接收消息事件：单聊 + 群聊@机器人（include_bot 覆盖 @all 时机器人被@；
+	// 该名称需在开发者后台确认当前租户可用，若不存在会被确认页静默丢弃）
 	"im:message.p2p_msg:readonly",
-	"im:message.pins:read",
-	"im:message.pins:write_only",
-	"im:message.reactions:read",
-	"im:message.reactions:write_only",
-	"im:message:readonly",
-	"im:message:send_as_bot",
-	"im:message:send_multi_users",
-	"im:message:send_sys_msg",
-	"im:message:update",
-	"im:resource",
+	"im:message.group_at_msg:readonly",
 	"im:message.group_at_msg.include_bot:readonly",
-	"application:bot.basic_info:read",
-	"application:application:self_manage",
+	// SDK 对 interactive / 合并转发消息内部调用 im.v1.message.get 拉取子消息
+	"im:message:readonly",
+	// 以机器人身份发送文本 / 卡片消息
+	"im:message:send_as_bot",
+	// 流式卡片：SDK 走 cardkit.v1.card.create / cardElement.content 更新
 	"cardkit:card:write",
-	"cardkit:card:read",
-	"application:bot.menu:write",
-	"im:chat.members:bot_access",
-	"drive:drive.metadata:readonly",
-	"docs:document.comment:create",
-	"docs:document.comment:delete",
-	"docs:document.comment:read",
-	"docs:document.comment:update",
-	"docs:document.comment:write_only",
-	"docx:document:readonly",
-	"docx:document:write_only",
-	"wiki:node:read",
-	"docx:document.block:convert",
-	"application:app_slash_command:read",
-	"application:app_slash_command:write",
+	// 群信息读取（chat.get 解析 chatType / 群名）
+	"im:chat:read",
+	// 机器人身份（SDK connect() 内部调 /open-apis/bot/v3/info）
+	"application:bot.basic_info:read",
 ];
 
 interface FeishuCredentials {
@@ -111,6 +93,8 @@ export interface LarkChannelListItem {
 }
 
 export interface SendTestMessageInput {
+	/** 目标 bot 的 appId；多 bot 时必须显式指定，避免随机路由。 */
+	appId: string;
 	receiveIdType: string;
 	receiveId: string;
 	text: string;
@@ -149,6 +133,8 @@ export class LarkChannelManager {
 	private registrations = new Map<string, AbortController>();
 	/** v2: 外部消息处理器（LarkBridgeService 注册） */
 	private externalMessageHandler?: NormalizedMessageHandler;
+	/** 外部卡片动作处理器（LarkBridgeService 注册，如流式卡片的「停止」按钮） */
+	private externalCardActionHandler?: (appId: string, evt: lark.CardActionEvent) => void | Promise<void>;
 	onConnectionReady?: ChannelLifecycleHandler;
 	onConnectionClosed?: ChannelLifecycleHandler;
 
@@ -165,6 +151,25 @@ export class LarkChannelManager {
 	// ============================================================
 	onMessage(handler?: NormalizedMessageHandler): void {
 		this.externalMessageHandler = handler;
+	}
+
+	/** 注册外部卡片动作处理器（如流式卡片「停止」按钮 → card.action.trigger）。 */
+	onCardAction(handler?: (appId: string, evt: lark.CardActionEvent) => void | Promise<void>): void {
+		this.externalCardActionHandler = handler;
+	}
+
+	private notifyCardAction(appId: string, evt: lark.CardActionEvent): void {
+		if (!this.externalCardActionHandler) return;
+		try {
+			const result = this.externalCardActionHandler(appId, evt);
+			if (result && typeof result.catch === "function") {
+				result.catch((err) => {
+					console.warn("[LarkChannelManager] Card action handler failed:", err);
+				});
+			}
+		} catch (err) {
+			console.warn("[LarkChannelManager] Card action handler failed:", err);
+		}
 	}
 
 	private notifyLifecycle(handler: ChannelLifecycleHandler | undefined, label: string, appId: string): void {
@@ -393,7 +398,11 @@ export class LarkChannelManager {
 				requireMention: false, // 不强制 @ 触发
 			},
 			safety: {
-				chatQueue: { enabled: true }, // 内置 per-chat 串行
+				// 关闭 SDK 内置 per-chat 批处理队列：入站消息的 per-chat 串行由
+				// LarkBridgeService.chatQueues 承担（每条消息独立成轮，不合并）。
+				// 否则 cardAction（如「停止」按钮）会被排在运行中的消息轮次之后，
+				// 无法立即中断 Agent。
+				chatQueue: { enabled: false },
 			},
 			loggerLevel: lark.LoggerLevel.info,
 			source: "look",
@@ -417,6 +426,10 @@ export class LarkChannelManager {
 					msg.content?.slice(0, 80),
 				);
 				await this.handleMessage(appId, msg);
+			},
+			// 流式卡片按钮点击（如「停止」）→ 转发给桥接层。
+			cardAction: (evt) => {
+				this.notifyCardAction(appId, evt);
 			},
 			error: (err) => {
 				console.warn("[LarkChannelManager] Channel error:", appId, err.message);
@@ -684,9 +697,9 @@ export class LarkChannelManager {
 	}
 
 	async sendTestMessage(input: SendTestMessageInput): Promise<{ success: boolean; error?: string }> {
-		const client = this.getClient();
+		const client = this.getClient(input.appId);
 		if (!client) {
-			return { success: false, error: "Feishu client is not connected" };
+			return { success: false, error: "Feishu client is not available for the selected bot channel" };
 		}
 		return this.deliverMessage(client, input.receiveIdType, input.receiveId, {
 			text: input.text,
