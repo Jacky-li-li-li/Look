@@ -66,6 +66,7 @@ export class RuntimeManagerComposition {
 	readonly sessionEventEffects;
 	readonly sessionSettingsService;
 	readonly skillManagementService;
+	readonly attachmentService;
 
 	readonly workspaceFileService;
 	readonly workspaceTreeService;
@@ -126,6 +127,7 @@ export class RuntimeManagerComposition {
 		this.sessionEventEffects = builder.sessionEventEffects!;
 		this.sessionSettingsService = builder.sessionSettingsService!;
 		this.skillManagementService = builder.skillManagementService!;
+		this.attachmentService = builder.attachmentService!;
 	}
 
 	// ── Static async factory ──

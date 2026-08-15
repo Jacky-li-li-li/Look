@@ -21,6 +21,8 @@
 //   ├── agents/             → 用户级 Agent 定义
 //   │   └── marketplace/  → 内置 Agent
 //   ├── builtin-skills/     → 内置 Skills
+//   ├── attachments/
+//   │   └── <project-id>/<session-id>/ → 粘贴转附件文件（paste-to-attachment）
 //   ├── projects/
 //   │   └── <project-id>/   → 按项目隔离的用户级数据
 //   │       ├── SYSTEM.md   → 项目级 system prompt
@@ -257,6 +259,39 @@ export function ensureProjectSharedDir(projectId: string): string {
 	return dir;
 }
 
+// ── Attachments (paste-to-attachment session files) ──
+//
+// 附件是 Look 管理的会话级数据，位于 $LOOK_HOME/attachments/ 下（与 JSONL
+// 会话数据同区）。注意该目录落在 LOOK_HOME 敏感树内：file:read/file:write
+// 的守卫会拒绝它，因此附件读写必须走 attachment:* IPC（attachment-service），
+// 绝不经过文件守卫通道。目录按 <projectId>/<sessionId> 两级隔离。
+
+/** Root directory for all per-session paste attachments. */
+export function getAttachmentsRootDir(): string {
+	return path.join(LOOK_DIR, "attachments");
+}
+
+/** Attachment directory for a specific project + session. */
+export function getAttachmentsDir(projectId: string, sessionId: string): string {
+	assertSafeProjectId(projectId);
+	if (
+		typeof sessionId !== "string" ||
+		sessionId.length === 0 ||
+		sessionId.length > 64 ||
+		!/^[A-Za-z0-9_-]+$/.test(sessionId)
+	) {
+		throw new Error("Invalid session ID");
+	}
+	return path.join(getAttachmentsRootDir(), projectId, sessionId);
+}
+
+/** Ensure the attachment directory for a project + session exists. */
+export function ensureAttachmentsDir(projectId: string, sessionId: string): string {
+	const dir = getAttachmentsDir(projectId, sessionId);
+	fs.mkdirSync(dir, { recursive: true });
+	return dir;
+}
+
 // ── Initialization ──
 
 export function ensureLookDir(): void {
@@ -264,6 +299,7 @@ export function ensureLookDir(): void {
 	fs.mkdirSync(projectsDir, { recursive: true });
 	fs.mkdirSync(getWorkspacesDir(), { recursive: true });
 	fs.mkdirSync(getSharedAreasDir(), { recursive: true });
+	fs.mkdirSync(getAttachmentsRootDir(), { recursive: true });
 }
 
 /**

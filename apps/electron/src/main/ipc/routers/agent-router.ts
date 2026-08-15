@@ -3,8 +3,9 @@
 // ============================================================
 
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { ThinkingLevel } from "@look/shared/types";
-import { guardAgentId, guardEnum, guardOptionalString, guardString } from "../guards.js";
+import type { AttachmentRef, ThinkingLevel } from "@look/shared/types";
+import { assertAttachmentName } from "../../session/services/attachment-service.js";
+import { guardAgentId, guardEnum, guardObject, guardOptionalString, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 import { promptForProjectTrust } from "../project-trust.js";
 import { withTimeout } from "../with-timeout.js";
@@ -41,13 +42,38 @@ async function replayQueue(session: AgentSession, excludeText?: string): Promise
 	}
 }
 
+/**
+ * 校验渲染端传来的附件引用数组（agent:send-message 使用）。
+ * 每个字段在 AttachmentService 读取时还会再次校验，这里是 IPC 边界的形状守卫。
+ */
+function guardAttachmentRefs(x: unknown): AttachmentRef[] {
+	if (x === undefined) return [];
+	if (!Array.isArray(x)) throw new Error("Invalid attachments: expected array");
+	return x.map((item, index) => {
+		const obj = guardObject(item, `attachments[${index}]`);
+		return {
+			projectId: guardString(obj.projectId, `attachments[${index}].projectId`),
+			sessionId: guardAgentId(obj.sessionId, `attachments[${index}].sessionId`),
+			name: assertAttachmentName(obj.name),
+		};
+	});
+}
+
 export const agentRouter: IpcRouter = (ctx, register) => {
 	register("agent:send-message", async (data) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		guardString(data.message, "message");
 		const sendMode = data.sendMode === "steer" || data.sendMode === "followUp" ? data.sendMode : undefined;
-		await ctx.session.messaging.sendMessage(_agentId, data.message, data.images, sendMode);
-		return { success: true };
+		// runtime 未就绪时消息挂起（queued=true）立即返回——首条消息不被
+		// 会话初始化阻塞，绑定后由 onSessionBound flush 自动发出。
+		const result = await ctx.session.messaging.sendMessage(
+			_agentId,
+			data.message,
+			data.images,
+			guardAttachmentRefs(data.attachments),
+			sendMode,
+		);
+		return { success: true, queued: result.queued };
 	});
 
 	register("agent:remove-queued-message", async (data) => {

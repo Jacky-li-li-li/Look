@@ -28,7 +28,7 @@
 //     in the candidate.
 // ============================================================
 
-import type { ImageContent } from "@shared/types";
+import type { ImageContent, PendingAttachment } from "@shared/types";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useContentEditablePaste } from "../../hooks/useContentEditablePaste";
 import { placeCaretAtEnd, renderToDOM } from "./contentEditableUtils";
@@ -48,6 +48,14 @@ interface ContentEditableInputProps {
 	/** Called when one or more images are pasted from the clipboard.
 	 *  The consumer (ChatInput) manages the image list and preview UI. */
 	onImagesPasted?: (images: ImageContent[]) => void;
+	/** 大段文本粘贴自动转附件：当前会话所属项目 id（为空时禁用自动转换）。 */
+	projectId?: string | null;
+	/** 大段文本粘贴自动转附件：当前会话 id。 */
+	sessionId?: string | null;
+	/** 大段文本粘贴转附件成功后的回调。 */
+	onAttachmentCreated?: (attachment: PendingAttachment) => void;
+	/** 当前待发送附件数量（附件文件名序号用）。 */
+	attachmentCount?: number;
 	/** Tab pressed while the editor is focused. */
 	onTab?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 	/** All other keydowns (including Enter, ArrowUp/Down, Escape).
@@ -69,6 +77,10 @@ export const ContentEditableInput = function ContentEditableInput({
 	placeholder,
 	onChange,
 	onImagesPasted,
+	projectId,
+	sessionId,
+	onAttachmentCreated,
+	attachmentCount,
 	onTab,
 	onKeyDown,
 	className,
@@ -205,6 +217,10 @@ export const ContentEditableInput = function ContentEditableInput({
 		lastRenderedRef,
 		onChange,
 		onImagesPasted,
+		projectId,
+		sessionId,
+		onAttachmentCreated,
+		attachmentCount,
 	});
 
 	/**

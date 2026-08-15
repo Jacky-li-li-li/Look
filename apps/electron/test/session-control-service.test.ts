@@ -15,6 +15,9 @@ function createHost(overrides: Partial<SessionControlHost> = {}): SessionControl
 		},
 		getManagedRuntime: () => undefined,
 		getSessionManager: () => undefined,
+		sessionExists: () => false,
+		setPendingModel: () => {},
+		setPendingThinkingLevel: () => {},
 		updateStoredName: () => undefined,
 		closeDefaultNameGate: () => {},
 		emitSessionUpdated: () => {},
@@ -42,7 +45,7 @@ describe("SessionControlService", () => {
 		const runtime = { runtime: { session: { setModel } } } as unknown as ManagedRuntime;
 		const model = { provider: "openai", id: "gpt-test" };
 		const service = new SessionControlService(
-			createHost({ ensureRuntime: async () => runtime, emitSessionUpdated }),
+			createHost({ getManagedRuntime: () => runtime, emitSessionUpdated }),
 			{ find: () => model } as never,
 			scopeRegistry,
 		);
@@ -51,6 +54,50 @@ describe("SessionControlService", () => {
 
 		expect(setModel).toHaveBeenCalledWith(model);
 		expect(emitSessionUpdated).toHaveBeenCalledWith("session-a");
+	});
+
+	it("records a pending model instead of waiting for the runtime when the session is not live", async () => {
+		const setPendingModel = vi.fn();
+		const emitSessionUpdated = vi.fn();
+		const ensureRuntime = vi.fn();
+		const model = { provider: "openai", id: "gpt-test" };
+		const service = new SessionControlService(
+			createHost({ sessionExists: () => true, setPendingModel, emitSessionUpdated, ensureRuntime }),
+			{ find: () => model } as never,
+			scopeRegistry,
+		);
+
+		await service.setModel("session-a", "openai/gpt-test");
+
+		// 意图先行：不拉起/等待 runtime，挂起意图物化时应用。
+		expect(setPendingModel).toHaveBeenCalledWith("session-a", "openai/gpt-test");
+		expect(ensureRuntime).not.toHaveBeenCalled();
+		expect(emitSessionUpdated).toHaveBeenCalledWith("session-a");
+	});
+
+	it("rejects a model switch for a session that does not exist", async () => {
+		const setPendingModel = vi.fn();
+		const service = new SessionControlService(
+			createHost({ sessionExists: () => false, setPendingModel }),
+			{ find: () => ({ provider: "openai", id: "gpt-test" }) } as never,
+			scopeRegistry,
+		);
+
+		await expect(service.setModel("session-a", "openai/gpt-test")).rejects.toThrow("not found");
+		expect(setPendingModel).not.toHaveBeenCalled();
+	});
+
+	it("records a pending thinking level when the session is not live", async () => {
+		const setPendingThinkingLevel = vi.fn();
+		const service = new SessionControlService(
+			createHost({ sessionExists: () => true, setPendingThinkingLevel }),
+			{ find: () => undefined },
+			scopeRegistry,
+		);
+
+		await service.setThinkingLevel("session-a", "high");
+
+		expect(setPendingThinkingLevel).toHaveBeenCalledWith("session-a", "high");
 	});
 
 	it("renames a live session, closes the auto-title gate and refreshes its project list", () => {

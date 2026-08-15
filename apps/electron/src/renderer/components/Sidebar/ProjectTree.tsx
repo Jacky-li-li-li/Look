@@ -212,18 +212,19 @@ export default function ProjectTree({
 		const projectHasError = (projectId: string): boolean =>
 			(sessionsByProject.get(projectId) ?? []).some((session) => errorAgentIds.has(session.id));
 
+		// 注意：不把 activeProjectId 提前 —— 否则点击项目使其成为 active 后会跳到
+		// 列表顶部（对齐会话排序：点击/查看不刷新活动时间，列表不因选中而跳位）。
+		// 活动项目仍由下方 auto-expand effect 保持展开可见。
 		return [...projects].sort((a, b) => {
 			if (a.id === DEFAULT_PROJECT_ID) return -1;
 			if (b.id === DEFAULT_PROJECT_ID) return 1;
-			if (a.id === activeProjectId) return -1;
-			if (b.id === activeProjectId) return 1;
 			const runningDelta = Number(projectIsRunning(b.id)) - Number(projectIsRunning(a.id));
 			if (runningDelta) return runningDelta;
 			const errorDelta = Number(projectHasError(b.id)) - Number(projectHasError(a.id));
 			if (errorDelta) return errorDelta;
 			return projectActivity(b.id) - projectActivity(a.id) || b.createdAt - a.createdAt;
 		});
-	}, [activeProjectId, errorAgentIds, projects, runningAgents, sessionsByProject]);
+	}, [errorAgentIds, projects, runningAgents, sessionsByProject]);
 
 	const childSessionsByParent = useMemo(() => {
 		const map = new Map<string, AgentInfo[]>();
@@ -380,11 +381,6 @@ export default function ProjectTree({
 		[onSelectProject],
 	);
 
-	const allProjectsOpen = sortedProjects.length > 0 && sortedProjects.every((project) => openProjects.has(project.id));
-	const toggleAllProjects = useCallback(() => {
-		setOpenProjectIds(allProjectsOpen ? [] : sortedProjects.map((project) => project.id));
-	}, [allProjectsOpen, setOpenProjectIds, sortedProjects]);
-
 	// ── FLIP 列表动画 ──
 	// 只在可见行的结构/顺序真正变化时读布局并播放一次动画。状态流、时间
 	// 刷新和初始化后的同形 agent:list 只会命中 structureKey 守卫，不会重启动画。
@@ -510,68 +506,44 @@ export default function ProjectTree({
 	}
 
 	return (
-		<>
-			<div className="workspace-tree-toolbar flex h-7 items-center justify-between px-1" role="toolbar">
-				<span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
-					{t("workspace.title", "Workspaces")}
-				</span>
-				<button
-					type="button"
-					className="sidebar-icon-action inline-flex size-6 items-center justify-center rounded-md text-muted-foreground/55 transition-colors hover:text-foreground focus-visible:text-foreground"
-					onClick={toggleAllProjects}
-					aria-label={
-						allProjectsOpen
-							? t("workspace.collapseAllProjects", "Collapse all projects")
-							: t("workspace.expandAllProjects", "Expand all projects")
-					}
-					title={
-						allProjectsOpen
-							? t("workspace.collapseAllProjects", "Collapse all projects")
-							: t("workspace.expandAllProjects", "Expand all projects")
-					}
-				>
-					{allProjectsOpen ? <ChevronsDownUp className="size-3.5" /> : <ChevronsUpDown className="size-3.5" />}
-				</button>
-			</div>
-			<div ref={treeRef} role="tree" aria-label={t("sidebar.projectsLabel", "Projects and sessions")}>
-				{sortedProjects.map((project) => (
-					<ProjectTreeItem
-						key={project.id}
-						project={project}
-						sessions={sessionsByProject.get(project.id) ?? []}
-						isOpen={openProjects.has(project.id)}
-						isActiveProject={project.id === activeProjectId}
-						activeAgentId={activeAgentId}
-						runningAgents={runningAgents}
-						sessionPhases={sessionPhases}
-						recentlyCompleted={recentlyCompleted}
-						errorAgentIds={errorAgentIds}
-						activeChatAtBottom={activeChatAtBottom}
-						childSessionsByParent={childSessionsByParent}
-						editingProjectId={editingProjectId}
-						editingSessionId={editingSessionId}
-						editValue={editValue}
-						editRef={editRef}
-						setEditValue={setEditValue}
-						commitEdit={commitEdit}
-						handleEditKeyDown={handleEditKeyDown}
-						beginEdit={beginEdit}
-						selectSession={selectSession}
-						selectProject={selectProject}
-						collapsedSubSessions={collapsedSubSessions}
-						toggleSubSessions={toggleSubSessions}
-						copySessionId={copySessionId}
-						onDestroy={onDestroy}
-						onCreateClick={onCreateClick}
-						onOpenProject={onOpenProject}
-						onDeleteProject={onDeleteProject}
-						setOpenProjectIds={setOpenProjectIds}
-						expandedProjectIds={expandedProjectIds}
-						toggleProjectExpansion={toggleProjectExpansion}
-					/>
-				))}
-			</div>
-		</>
+		<div ref={treeRef} role="tree" aria-label={t("sidebar.projectsLabel", "Projects and sessions")}>
+			{sortedProjects.map((project) => (
+				<ProjectTreeItem
+					key={project.id}
+					project={project}
+					sessions={sessionsByProject.get(project.id) ?? []}
+					isOpen={openProjects.has(project.id)}
+					isActiveProject={project.id === activeProjectId}
+					activeAgentId={activeAgentId}
+					runningAgents={runningAgents}
+					sessionPhases={sessionPhases}
+					recentlyCompleted={recentlyCompleted}
+					errorAgentIds={errorAgentIds}
+					activeChatAtBottom={activeChatAtBottom}
+					childSessionsByParent={childSessionsByParent}
+					editingProjectId={editingProjectId}
+					editingSessionId={editingSessionId}
+					editValue={editValue}
+					editRef={editRef}
+					setEditValue={setEditValue}
+					commitEdit={commitEdit}
+					handleEditKeyDown={handleEditKeyDown}
+					beginEdit={beginEdit}
+					selectSession={selectSession}
+					selectProject={selectProject}
+					collapsedSubSessions={collapsedSubSessions}
+					toggleSubSessions={toggleSubSessions}
+					copySessionId={copySessionId}
+					onDestroy={onDestroy}
+					onCreateClick={onCreateClick}
+					onOpenProject={onOpenProject}
+					onDeleteProject={onDeleteProject}
+					setOpenProjectIds={setOpenProjectIds}
+					expandedProjectIds={expandedProjectIds}
+					toggleProjectExpansion={toggleProjectExpansion}
+				/>
+			))}
+		</div>
 	);
 }
 

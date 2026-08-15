@@ -41,7 +41,6 @@
     "actions": "Sidebar actions"
   },
   "workspace": {
-    "title": "Workspaces",
     "projects": "projects",
     "projectMenu": "Project menu",
     "openFolder": "Open folder",
@@ -54,8 +53,6 @@
     "collapseSessions": "Show less",
     "noProjects": "No projects yet",
     "noProjectsHint": "Add a project folder to start a scoped session.",
-    "expandAllProjects": "Expand all projects",
-    "collapseAllProjects": "Collapse all projects",
     "expandProject": "Expand project",
     "collapseProject": "Collapse project",
     "sessionCount": "{{count}} sessions",
@@ -233,7 +230,8 @@
     "emptyHint": "Select a session from the sidebar"
   },
   "session": {
-    "draft": "draft",    "messageCount": "{{count}} messages",
+    "draft": "draft",
+    "messageCount": "{{count}} messages",
     "menu": "Session menu",
     "status": {
       "thinking": "thinking",
@@ -634,7 +632,19 @@
     "gitRemote": "Remote",
     "gitRepoRoot": "Repository root",
     "gitDetachedHead": "Detached HEAD",
-    "gitDirtyCount": "Uncommitted changes"
+    "gitDirtyCount": "Uncommitted changes",
+    "attachmentPlaceholder": "Converted to attachment — add a note and send",
+    "attachmentConvertedToast": "Converted to attachment {{name}}",
+    "attachmentView": "View",
+    "attachmentEdit": "Edit",
+    "attachmentRestore": "Restore as text",
+    "attachmentRemove": "Remove",
+    "attachmentRestoreFailed": "Restore failed: {{message}}",
+    "attachmentOpenHint": "Open in file viewer",
+    "attachmentExpand": "Show content",
+    "attachmentCollapse": "Collapse",
+    "attachmentMissing": "Attachment file not found (may have been cleaned up)",
+    "attachmentNoContent": "Content not inlined — open the viewer for the full file"
   },
   "context": {
     "compressing": "Compressing…",

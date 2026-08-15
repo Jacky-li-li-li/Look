@@ -15,6 +15,7 @@ import { SESSION_INIT_TIMEOUT_MS } from "../constants.js";
 import type { SessionEventProcessor } from "../events/session-event-processor.js";
 import type { SessionNotifier } from "../events/session-notifier.js";
 import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
+import type { SessionPendingIntents } from "../scope/session-pending-intents.js";
 import type { StoredSession } from "../services/session-catalog.js";
 import type { SessionPermissionOrchestrator } from "../services/session-permission-orchestrator.js";
 import type { SessionSubagentService } from "../services/session-subagent-service.js";
@@ -57,6 +58,14 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	getDraft(sessionId: string): { cwd: string; projectId: string; name: string } | undefined;
 	/** 会话模型兜底(新建/历史恢复/子会话统一入口,见 ensureSessionModel)。 */
 	ensureSessionModel(session: AgentSession): Promise<void>;
+	/** 挂起意图（模型/思考）：runtime 未就绪时用户的切换在此暂存，物化时消费。 */
+	pendingIntents: Pick<SessionPendingIntents, "takeModel" | "takeThinkingLevel" | "clear">;
+	/** modelKey（provider/model）→ SDK Model 解析（bind 时补应用挂起模型用）。 */
+	resolveModel(modelKey: string): Parameters<AgentSession["setModel"]>[0] | undefined;
+	/** runtime 绑定完成（含注册表登记）后回调：用于 flush 挂起消息等就绪后动作。 */
+	onSessionBound?(managed: ManagedRuntime): void;
+	/** 会话销毁/初始化失败后回调：用于丢弃挂起消息等随会话生灭的状态。 */
+	onSessionDisposed?(sessionId: string): void;
 	/** Optional cold-start fast path; runtime activation remains authoritative. */
 	emitSessionPreview?(sessionId: string, stored: StoredSession): Promise<void>;
 	openSessionManager(stored: StoredSession): SessionManager;
@@ -125,7 +134,7 @@ export class RuntimeLifecycleCoordinator {
 					cwd,
 					sessionManager,
 					sessionStartEvent,
-					factoryOptions,
+					this.applyPendingIntents(sessionId, factoryOptions),
 				);
 				try {
 					return await this.bindRuntime(runtime, projectId, createdAt);
@@ -152,6 +161,26 @@ export class RuntimeLifecycleCoordinator {
 		}
 	}
 
+	/** 物化时消费挂起意图：并入 factoryOptions，由 SDK 的 model/thinkingLevel 选项应用。 */
+	private applyPendingIntents(
+		sessionId: string,
+		factoryOptions?: RuntimeFactoryOptions,
+	): RuntimeFactoryOptions | undefined {
+		const modelKey = this.options.pendingIntents.takeModel(sessionId);
+		const thinkingLevel = this.options.pendingIntents.takeThinkingLevel(sessionId);
+		if (modelKey === undefined && thinkingLevel === undefined) return factoryOptions;
+		return {
+			...factoryOptions,
+			modelKey: modelKey ?? factoryOptions?.modelKey,
+			thinkingLevel: (thinkingLevel ?? factoryOptions?.thinkingLevel) as RuntimeFactoryOptions["thinkingLevel"],
+		};
+	}
+
+	/** 是否有该会话的后台初始化在途（乐观草稿期判定用）。 */
+	hasPendingCreation(sessionId: string): boolean {
+		return this.creationTargets.has(sessionId);
+	}
+
 	async ensureRuntime(sessionId: string): Promise<ManagedRuntime> {
 		const disposing = this.disposals.get(sessionId);
 		if (disposing) await disposing;
@@ -161,10 +190,26 @@ export class RuntimeLifecycleCoordinator {
 		// catalog 查不到。此时发送消息/激活/切模式都必须等待 in-flight
 		// 创建 settle（getOrCreate 去重），而不是误判为 "Session not found"。
 		if (this.creationTargets.has(sessionId)) {
-			await this.options.runtimeRegistry.awaitInitialization(sessionId);
+			let timedOut = false;
+			try {
+				await withDeadline(
+					this.options.runtimeRegistry.awaitInitialization(sessionId),
+					SESSION_INIT_TIMEOUT_MS,
+					`Session ${sessionId} initialization timed out after ${SESSION_INIT_TIMEOUT_MS / 1000}s`,
+				);
+			} catch {
+				// 初始化卡死：withDeadline 不取消底层 promise，必须主动解挂——
+				// 忘掉 in-flight 条目并落到 stored/draft 路径重建，而不是永久等待
+				// （此前此处无超时，挂死的初始化会让切模型/发消息永远转圈）。
+				timedOut = true;
+				this.creationTargets.delete(sessionId);
+				this.options.runtimeRegistry.forgetInitialization(sessionId);
+			}
 			const created = this.options.runtimeRegistry.get(sessionId);
 			if (created) return created;
-			throw new Error(`Session ${sessionId} failed to initialize`);
+			// 非超时的创建失败保持原语义（明确报错，不隐式重建）；超时解挂后落到
+			// stored/draft 路径尝试重建。
+			if (!timedOut) throw new Error(`Session ${sessionId} failed to initialize`);
 		}
 		const stored = this.options.getStoredSession(sessionId);
 		if (!stored) {
@@ -194,11 +239,17 @@ export class RuntimeLifecycleCoordinator {
 			if (lateBound) return lateBound;
 			throw new Error(`Session ${sessionId} not found`);
 		}
-		return this.createManagedRuntime(
-			stored.cwd,
-			this.options.openSessionManager(stored),
-			stored.projectId,
-			stored.created.getTime(),
+		// 历史会话恢复同样要有 deadline：启动自动激活/点击历史会话都走这里，
+		// 无超时的挂死会把激活和所有 ensureRuntime 等待方永久吊住。
+		return withDeadline(
+			this.createManagedRuntime(
+				stored.cwd,
+				this.options.openSessionManager(stored),
+				stored.projectId,
+				stored.created.getTime(),
+			),
+			SESSION_INIT_TIMEOUT_MS,
+			`Session ${sessionId} initialization timed out after ${SESSION_INIT_TIMEOUT_MS / 1000}s`,
 		);
 	}
 
@@ -318,6 +369,18 @@ export class RuntimeLifecycleCoordinator {
 		this.options.runtimeRegistry.set(session.sessionId, managed);
 		this.options.planService.syncToolState(session.sessionId);
 		this.options.sessionSubagentService.applyDefaultOnBind(session.sessionId, session);
+		// 初始化窗口内到达的挂起意图：创建时已消费的不会重复（take 语义），
+		// 这里补应用创建之后才到达的模型/思考切换。先于 ensureSessionModel——
+		// 应用成功则模型已就位，兜底自然跳过。
+		try {
+			const pendingModelKey = this.options.pendingIntents.takeModel(session.sessionId);
+			const pendingModel = pendingModelKey ? this.options.resolveModel(pendingModelKey) : undefined;
+			if (pendingModel) await session.setModel(pendingModel);
+			const pendingThinking = this.options.pendingIntents.takeThinkingLevel(session.sessionId);
+			if (pendingThinking !== undefined) session.setThinkingLevel(pendingThinking);
+		} catch {
+			// 挂起意图应用失败（如凭据刚好失效）：交给 ensureSessionModel 兜底。
+		}
 		// 模型兜底:SDK 解析失败(快照失真等)时填充首个可用模型,统一覆盖
 		// 新建/历史恢复/子会话三条路径。await 保证后续 agent:created/snapshot
 		// 推送时模型已就位(内部已 catch,失败不阻塞绑定;不额外推送,
@@ -327,6 +390,8 @@ export class RuntimeLifecycleCoordinator {
 		} catch {
 			// 兜底失败不阻塞运行时绑定(发送时会报明确错误)
 		}
+		// runtime 已注册、模型已就位：flush 挂起消息等待就动作（回调内部自管异常）。
+		this.options.onSessionBound?.(managed);
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 		return managed;
 	}
@@ -463,6 +528,8 @@ export class RuntimeLifecycleCoordinator {
 		attempt(() => this.options.permissionService.disposeSession(sessionId));
 		attempt(() => this.options.planService.disposeSession(sessionId));
 		attempt(() => this.options.sessionPermissionOrchestrator.disposeSession(sessionId));
+		attempt(() => this.options.pendingIntents.clear(sessionId));
+		attempt(() => this.options.onSessionDisposed?.(sessionId));
 		if (scope) attempt(() => this.options.eventProcessor.dispose(sessionId));
 		attempt(() => this.options.scopeRegistry.release(sessionId));
 		attempt(() => this.options.sessionSubagentService.clearSession(sessionId));
@@ -521,6 +588,8 @@ export class RuntimeLifecycleCoordinator {
 		attempt(() => this.options.permissionService.disposeSession(sessionId));
 		attempt(() => this.options.planService.disposeSession(sessionId));
 		attempt(() => this.options.sessionPermissionOrchestrator.disposeSession(sessionId));
+		attempt(() => this.options.pendingIntents.clear(sessionId));
+		attempt(() => this.options.onSessionDisposed?.(sessionId));
 		if (scope) attempt(() => this.options.eventProcessor.dispose(sessionId));
 		attempt(() => this.options.scopeRegistry.release(sessionId));
 		attempt(() => this.options.sessionSubagentService.clearSession(sessionId));

@@ -7,7 +7,7 @@
 // in ChatInput.
 // ============================================================
 
-import type { ImageContent, ThinkingLevel } from "@shared/types";
+import type { AttachmentRef, ImageContent, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { memo, useCallback, useMemo, useRef } from "react";
 import { activeAgentAtom, sessionStateAtomFamily, settingsTabAtom, showSettingsAtom } from "../../store/atoms";
@@ -24,7 +24,12 @@ interface ChatPanelProps {
 	agentName?: string;
 	currentModel: string;
 	currentThinking: string;
-	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
+	onSend: (
+		text: string,
+		images?: ImageContent[],
+		attachments?: AttachmentRef[],
+		sendMode?: "steer" | "followUp",
+	) => Promise<boolean>;
 	onThinkingChange: (level: ThinkingLevel) => void;
 	onModelChange: (model: string) => void;
 	onAbort?: () => void;

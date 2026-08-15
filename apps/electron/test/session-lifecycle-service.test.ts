@@ -113,6 +113,10 @@ describe("SessionLifecycleService", () => {
 					find: vi.fn().mockReturnValue(overrides?.findResult ?? null),
 					hasConfiguredAuth: vi.fn().mockReturnValue(overrides?.hasAuth ?? true),
 				} as unknown as import("@earendil-works/pi-coding-agent").ModelRegistry,
+				attachments: {
+					deleteSessionAttachments: vi.fn(),
+					deleteProjectAttachments: vi.fn(),
+				} as unknown as import("../src/main/session/services/attachment-service.js").AttachmentService,
 				getAvailableModelsSync: vi.fn().mockReturnValue(overrides?.availableModels ?? []),
 			}),
 			host,

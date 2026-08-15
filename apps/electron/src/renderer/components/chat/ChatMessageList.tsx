@@ -11,6 +11,7 @@ import { useScrollPositionManager } from "../../hooks/useScrollPositionMemory";
 import { applyLiveTimeline, buildPersistedTimeline, collectTurnEntries, type TimelineItem } from "../../lib/timeline";
 import { appStore } from "../../store/appStore";
 import {
+	activeAgentAtom,
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
 	activeProjectAtom,
@@ -405,6 +406,8 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 	// === Sync isAtBottom to global atom (debounced to avoid state churn while scrolling) ===
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
 	const activeAgentId = useAtomValue(activeAgentIdAtom);
+	// 历史附件卡片打开查看器需要会话所属项目（ChatPanel 以 activeAgent.id 渲染本列表）。
+	const activeAgent = useAtomValue(activeAgentAtom);
 	const messageAlignment = useAtomValue(messageAlignmentAtom);
 	// 只订阅 uiPhase，避免 streaming 期间全量 sessionState 变化触发 re-render
 	const activeUiPhaseAtom = useMemo(
@@ -717,6 +720,8 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 										: undefined
 								}
 								agentName={agentName}
+								sessionId={agentId}
+								projectId={activeAgent?.projectId}
 								isStreaming={live ? isBusy : false}
 								toolExecutions={EMPTY_TOOL_EXECUTIONS}
 								toolResultMap={item.toolResultMap}
@@ -797,6 +802,7 @@ const ChatMessagesInner = memo(function ChatMessagesInner({
 			t,
 			agentId,
 			messageAlignment,
+			activeAgent?.projectId,
 		],
 	);
 

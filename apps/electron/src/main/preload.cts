@@ -40,8 +40,8 @@ const api: LookAPI = {
 		};
 	},
 
-	sendMessage: (agentId, message, images, sendMode) =>
-		invoke({ type: "agent:send-message", agentId, message, images, sendMode }),
+	sendMessage: (agentId, message, images, attachments, sendMode) =>
+		invoke({ type: "agent:send-message", agentId, message, images, attachments, sendMode }),
 
 	removeQueuedMessage: (agentId, text) => invoke({ type: "agent:remove-queued-message", agentId, text }),
 
@@ -255,6 +255,16 @@ const api: LookAPI = {
 	readFileContent: (path) => invoke({ type: "file:read", path }),
 	writeFileContent: (path, content) => invoke({ type: "file:write", path, content }),
 	statFilePath: (path) => invoke({ type: "file:stat", path }),
+
+	// ---- Paste attachments (LOOK_HOME/attachments/<projectId>/<sessionId>/<name>) ----
+	createAttachment: (projectId, sessionId, name, content) =>
+		invoke({ type: "attachment:create", projectId, sessionId, name, content }),
+	readAttachment: (projectId, sessionId, name) => invoke({ type: "attachment:read", projectId, sessionId, name }),
+	updateAttachment: (projectId, sessionId, name, content) =>
+		invoke({ type: "attachment:update", projectId, sessionId, name, content }),
+	deleteAttachment: (projectId, sessionId, name) => invoke({ type: "attachment:delete", projectId, sessionId, name }),
+	resolveAttachmentPath: (projectId, sessionId, name) =>
+		invoke({ type: "attachment:resolve", projectId, sessionId, name }),
 
 	// ---- File viewer window ----
 	openFileViewer: (path, fadeIn, diffPatch) =>

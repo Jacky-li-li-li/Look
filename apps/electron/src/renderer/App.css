@@ -1527,14 +1527,6 @@ body {
 		background: oklch(0.62 0.2 25);
 		pointer-events: none;
 	}
-	.workspace-tree-toolbar {
-		border-bottom: 1px solid color-mix(in oklch, var(--foreground), transparent 94%);
-	}
-
-	.sidebar-icon-action:focus-visible {
-		outline: 2px solid color-mix(in oklch, var(--ring), transparent 20%);
-		outline-offset: 1px;
-	}
 
 	.sidebar-scroll-area [data-slot="scroll-area-scrollbar"] {
 		opacity: 0;

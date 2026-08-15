@@ -13,6 +13,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	ModelRegistry,
 	ModelRuntime,
@@ -30,6 +31,7 @@ import {
 	getUiSettingsPath,
 	resetLegacySessionsOnce,
 } from "@look/shared/look-storage";
+import type { ThinkingLevel } from "@look/shared/types";
 import { AgentDefinitionService } from "../../agents/definition-service.js";
 import { BrowserService } from "../../browser/browser-service.js";
 import { ComputerUseService } from "../../computer-use/computer-use-service.js";
@@ -69,6 +71,8 @@ import { RuntimeLifecycleCoordinator } from "../runtime/runtime-lifecycle-coordi
 import { RuntimeRegistry } from "../runtime/runtime-registry.js";
 import { ActiveSessionSelection } from "../scope/active-session-selection.js";
 import { SessionScopeRegistry } from "../scope/scope-registry.js";
+import { SessionPendingIntents } from "../scope/session-pending-intents.js";
+import { AttachmentService } from "../services/attachment-service.js";
 import { type ExpectedSessionDefaults, resolveExpectedSessionDefaults } from "../services/expected-session-defaults.js";
 import { ProjectApplicationService } from "../services/project-application-service.js";
 import { ProjectRuntimeService } from "../services/project-runtime-service.js";
@@ -100,6 +104,8 @@ export class CompositionBuilder {
 	readonly scopeRegistry = new SessionScopeRegistry();
 	readonly subAgentRegistry = new SubAgentRegistry();
 	readonly activeSessionSelection = new ActiveSessionSelection();
+	/** 会话级挂起意图（模型/思考）：runtime 未就绪时的切换暂存，物化时消费。 */
+	readonly sessionPendingIntents = new SessionPendingIntents();
 
 	// ── Infra (sync) ──
 	trustStore: ProjectTrustStore | null = null;
@@ -146,6 +152,7 @@ export class CompositionBuilder {
 	sessionEventEffects: SessionEventEffects | null = null;
 	sessionSettingsService: SessionSettingsService | null = null;
 	skillManagementService: SkillManagementService | null = null;
+	attachmentService: AttachmentService | null = null;
 
 	// ── Mutable cross-cutting reference (shared with composition after build) ──
 	readonly schedulerRef: { current: SchedulerService | null } = { current: null };
@@ -249,6 +256,8 @@ export class CompositionBuilder {
 			listProjects: () => host.listProjects(),
 			// 草稿行预期默认值（延迟执行，modelRegistry 在 Phase 2 就位）。
 			getExpectedSessionDefaults: (projectId) => this.resolveExpectedSessionDefaults(projectId),
+			// 挂起意图覆盖：runtime 未就绪时用户已切换的模型/思考立即上屏。
+			getPendingIntentOverrides: (sessionId) => this.resolvePendingIntentOverrides(sessionId),
 		});
 		this.sessionNotifier = new SessionNotifier(this.eventBus, {
 			sessionInfoService: this.sessionInfoService,
@@ -508,6 +517,18 @@ export class CompositionBuilder {
 			},
 			emitSessionPreview: (sessionId, stored) => this.sessionNotifier!.emitSessionPreview(sessionId, stored),
 			openSessionManager: (stored) => SessionManager.open(stored.path),
+			pendingIntents: this.sessionPendingIntents,
+			resolveModel: (modelKey) => {
+				const slash = modelKey.indexOf("/");
+				if (slash <= 0) return undefined;
+				return this.modelRegistry!.find(modelKey.slice(0, slash), modelKey.slice(slash + 1));
+			},
+			// runtime 绑定完成 → flush 挂起消息（messaging service 在 Phase 5 就位，
+			// 闭包延迟解析；flush 内部自管异常，不影响绑定路径）。
+			onSessionBound: (managed) => {
+				void this.sessionMessagingService?.flushPending(managed);
+			},
+			onSessionDisposed: (sessionId) => this.sessionMessagingService?.disposeSession(sessionId),
 			handleSessionEvent: (sessionId, event) => this.eventProcessor!.handle(sessionId, event),
 			setActiveProjectId: (projectId) => this.projectService!.setActiveId(projectId),
 			getActiveProjectId: () => this.projectService!.activeId,
@@ -562,6 +583,10 @@ export class CompositionBuilder {
 				ensureRuntime: (sessionId) => this.runtimeLifecycle!.ensureRuntime(sessionId),
 				getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
 				getSessionManager: (sessionId) => this.sessionManagerFor(sessionId),
+				sessionExists: (sessionId) => this.sessionExists(sessionId),
+				setPendingModel: (sessionId, modelKey) => this.sessionPendingIntents.setModel(sessionId, modelKey),
+				setPendingThinkingLevel: (sessionId, level) =>
+					this.sessionPendingIntents.setThinkingLevel(sessionId, level),
 				updateStoredName: (sessionId, name) => {
 					const stored = this.sessionCatalog!.get(sessionId);
 					if (stored) stored.name = name;
@@ -607,6 +632,7 @@ export class CompositionBuilder {
 			planService: this.planService!,
 			userSettings: this.userSettings!,
 			modelRegistry,
+			attachments: this.attachmentService!,
 			getAvailableModelsSync: () => getAvailableModels(modelRegistry),
 		});
 
@@ -622,15 +648,21 @@ export class CompositionBuilder {
 			emitProjectList: () => this.sessionNotifier!.emitProjectList(),
 			getActiveSessionId: () => this.activeSessionSelection.currentId,
 			setActiveSessionId: (sessionId) => this.activeSessionSelection.setCurrent(sessionId),
+			attachments: this.attachmentService!,
 			deleteScheduledTasksByProject: async (projectId) => this.schedulerRef.current?.deleteTasksByProject(projectId),
 		});
 
+		this.attachmentService = new AttachmentService();
+
 		this.sessionMessagingService = new SessionMessagingService({
+			getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
 			ensureRuntime: (sessionId) => this.runtimeLifecycle!.ensureRuntime(sessionId),
+			sessionExists: (sessionId) => this.sessionExists(sessionId),
 			ensureMcpReady: async (projectId) => {
 				await this.mcpManager!.ensureRequiredReady(projectId);
 			},
 			emitError: (error, sessionId) => this.sessionNotifier!.emitError(error, sessionId),
+			attachments: this.attachmentService!,
 		});
 
 		this.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({
@@ -736,6 +768,7 @@ export class CompositionBuilder {
 			sessionEventEffects: this.sessionEventEffects,
 			sessionSettingsService: this.sessionSettingsService,
 			skillManagementService: this.skillManagementService,
+			attachmentService: this.attachmentService,
 		};
 
 		const missing = Object.entries(required)
@@ -786,6 +819,47 @@ export class CompositionBuilder {
 		const settings = SettingsManager.create(project.cwd, getLookDir());
 		settings.setProjectTrusted(this.projectService!.resolveProjectTrust(project.cwd));
 		return settings;
+	}
+
+	/**
+	 * 挂起意图 → 草稿/持久化行投影覆盖。模型切换覆盖模型字段并按新模型
+	 * 重算思考档位表（默认档与 SDK 显式 model 路径一致：medium 就近收敛）；
+	 * 思考切换覆盖档位（有挂起模型时按其档位表钳制，否则物化时由 SDK 钳制）。
+	 */
+	private resolvePendingIntentOverrides(sessionId: string): Partial<ExpectedSessionDefaults> | undefined {
+		const modelKey = this.sessionPendingIntents.peekModel(sessionId);
+		const pendingThinking = this.sessionPendingIntents.peekThinkingLevel(sessionId);
+		if (modelKey === undefined && pendingThinking === undefined) return undefined;
+		const overrides: Partial<ExpectedSessionDefaults> = {};
+		let levels: ThinkingLevel[] | undefined;
+		if (modelKey !== undefined) {
+			const slash = modelKey.indexOf("/");
+			const model =
+				slash > 0 ? this.modelRegistry?.find(modelKey.slice(0, slash), modelKey.slice(slash + 1)) : undefined;
+			if (model) {
+				overrides.model = modelKey;
+				overrides.modelSupportsThinking = !!model.reasoning;
+				levels = getSupportedThinkingLevels(model) as ThinkingLevel[];
+				overrides.availableThinkingLevels = levels;
+				overrides.thinkingLevel = clampThinkingLevel(model, "medium") as ThinkingLevel;
+			}
+		}
+		if (pendingThinking !== undefined) {
+			overrides.thinkingLevel =
+				levels && !levels.includes(pendingThinking)
+					? (overrides.thinkingLevel ?? pendingThinking)
+					: pendingThinking;
+		}
+		return overrides;
+	}
+
+	/** 会话存在性（live runtime 之外）：catalog stored / 草稿索引 / 在途初始化。 */
+	private sessionExists(sessionId: string): boolean {
+		return (
+			this.sessionCatalog!.get(sessionId) !== undefined ||
+			this.draftIndex.get(sessionId) !== undefined ||
+			this.runtimeLifecycle?.hasPendingCreation(sessionId) === true
+		);
 	}
 
 	private findProjectIdByCwd(cwd: string): string | undefined {

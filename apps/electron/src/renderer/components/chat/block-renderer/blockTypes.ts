@@ -20,7 +20,7 @@ import { safelyParsePartialJson } from "./parsePartialJson";
 export interface UnifiedBlock {
 	/** 稳定 key（流式用 uid / 快照用内容 hash），用于 React key 与 memo。 */
 	key: string;
-	kind: "text" | "thinking" | "toolcall" | "image";
+	kind: "text" | "thinking" | "toolcall" | "image" | "attachment";
 	/** 文本内容（kind === "text"）。 */
 	text?: string;
 	/** 思考内容（kind === "thinking"）。 */
@@ -29,6 +29,10 @@ export interface UnifiedBlock {
 	thinkingSignature?: string;
 	/** 图片块（kind === "image"）。 */
 	image?: ImageContent;
+	/** 附件块（kind === "attachment"，仅快照源用户消息）。 */
+	attachmentName?: string;
+	attachmentNote?: string;
+	attachmentContent?: string;
 	/** 工具调用 ID（kind === "toolcall"）。 */
 	toolCallId?: string;
 	toolName?: string;
@@ -49,17 +53,37 @@ export interface UnifiedBlock {
 // ── 快照源转换：pi-ai blocks ────────────────────────────────
 
 /**
+ * 快照源附件块（仅 MessageItem.messageBlocks 对用户消息解析产生，
+ * 不属于 pi-ai 原生类型）。
+ */
+export interface AttachmentContentBlock {
+	type: "attachment";
+	name: string;
+	note?: string;
+	content: string;
+}
+
+/**
  * 把 pi-ai 消息内容块转成统一块。
  * completed 不设置（undefined）：渲染时视为已完成前奏，isStreaming 效果
  * 与旧 ContentBlocks 一致（全局 isStreaming 传给 text，最后一块传给 thinking）。
  */
 export function toUnifiedFromPiAi(
-	blocks: Array<TextContent | ThinkingContent | ImageContent | ToolCall>,
+	blocks: Array<TextContent | ThinkingContent | ImageContent | ToolCall | AttachmentContentBlock>,
 ): UnifiedBlock[] {
 	return blocks.map((block, index) => {
 		switch (block.type) {
 			case "text":
 				return { key: `text-${index}-${hashKey(block.text)}`, kind: "text", text: block.text, sourceIndex: index };
+			case "attachment":
+				return {
+					key: `attachment-${index}-${hashKey(block.name)}`,
+					kind: "attachment",
+					attachmentName: block.name,
+					attachmentNote: block.note,
+					attachmentContent: block.content,
+					sourceIndex: index,
+				};
 			case "thinking":
 				return {
 					key: `thinking-${index}-${hashKey(block.thinking)}`,

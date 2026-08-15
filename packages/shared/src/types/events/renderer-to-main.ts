@@ -5,6 +5,7 @@ import type { DraftPatch } from "../../domain/drafts.js";
 import type { ScheduledTaskInput } from "../../domain/scheduler.js";
 import type { ThinkingLevel } from "../../types.js";
 import type { AgentDefinitionInput } from "../dto/agent.js";
+import type { AttachmentRef } from "../dto/attachment.js";
 import type { ImSessionProvider } from "../dto/misc.js";
 import type { PermissionRespondPayload, PlanApprovalResponse, PlanQuestionResponse } from "../dto/permission.js";
 import type { CustomProviderInput } from "../dto/provider.js";
@@ -16,6 +17,7 @@ export type RendererToMainEvent =
 			agentId: string;
 			message: string;
 			images?: ImageContent[];
+			attachments?: AttachmentRef[];
 			sendMode?: "steer" | "followUp";
 	  }
 	| { type: "agent:remove-queued-message"; agentId: string; text: string }
@@ -127,6 +129,11 @@ export type RendererToMainEvent =
 	| { type: "file:read"; path: string }
 	| { type: "file:write"; path: string; content: string }
 	| { type: "file:stat"; path: string }
+	| { type: "attachment:create"; projectId: string; sessionId: string; name: string; content: string }
+	| { type: "attachment:read"; projectId: string; sessionId: string; name: string }
+	| { type: "attachment:update"; projectId: string; sessionId: string; name: string; content: string }
+	| { type: "attachment:delete"; projectId: string; sessionId: string; name: string }
+	| { type: "attachment:resolve"; projectId: string; sessionId: string; name: string }
 	| { type: "fileViewer:open"; path: string; fadeIn?: boolean; diffPatch?: string }
 	| { type: "fileViewer:ready" }
 	| { type: "fileViewer:dock"; path: string; diffPatch?: string }

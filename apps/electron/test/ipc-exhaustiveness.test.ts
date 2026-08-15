@@ -16,6 +16,7 @@ import type { IpcRouter } from "../src/main/ipc/invoke-context.js";
 import { InvokeDispatcher } from "../src/main/ipc/invoke-context.js";
 import {
 	agentRouter,
+	attachmentRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -40,6 +41,7 @@ import { makeMockContext } from "./helpers/ipc-test-helpers.js";
 /** Same router list as handlers.ts `domainRouters` — keep in sync. */
 const ALL_ROUTERS: IpcRouter[] = [
 	agentRouter,
+	attachmentRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -165,6 +167,11 @@ const EXHAUSTIVE = {
 	"file:read": true,
 	"file:write": true,
 	"file:stat": true,
+	"attachment:create": true,
+	"attachment:read": true,
+	"attachment:update": true,
+	"attachment:delete": true,
+	"attachment:resolve": true,
 	"fileViewer:open": true,
 	"fileViewer:ready": true,
 	"fileViewer:dock": true,

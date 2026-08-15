@@ -34,6 +34,11 @@ export interface SessionInfoServiceDependencies {
 	 * 空串，初始化完成前选择器来回跳变；projectId 用于读取项目级设置。
 	 */
 	getExpectedSessionDefaults(projectId: string): ExpectedSessionDefaults;
+	/**
+	 * 挂起意图投影覆盖：runtime 未就绪时用户已切换的模型/思考档位，
+	 * 让草稿行/持久化行立即反映切换结果（物化后由 runtimeInfo 真值接管）。
+	 */
+	getPendingIntentOverrides?(sessionId: string): Partial<ExpectedSessionDefaults> | undefined;
 }
 
 export class SessionInfoService {
@@ -107,7 +112,11 @@ export class SessionInfoService {
 	 * 选择器整行跳变；解析失败退回空占位。
 	 */
 	draftInfo(sessionId: string, projectId: string, name: string, imProvider?: ImSessionProvider): AgentInfo {
-		const resolved = this.deps.getExpectedSessionDefaults(projectId);
+		// 挂起意图优先于预期默认值：初始化窗口内用户切换的模型/思考立即上屏。
+		const resolved = {
+			...this.deps.getExpectedSessionDefaults(projectId),
+			...this.deps.getPendingIntentOverrides?.(sessionId),
+		};
 		const now = Date.now();
 		return {
 			id: sessionId,
@@ -136,8 +145,13 @@ export class SessionInfoService {
 
 		const cacheKey = `${session.path}:${session.modified.getTime()}:${session.messageCount}:${session.name}:${session.firstMessage}:${session.parentSessionId ?? ""}`;
 		const cached = this.persistedInfoCache.get(session.id);
-		if (cached && cached.key === cacheKey) return cached.info;
+		const base = cached && cached.key === cacheKey ? cached.info : this.buildPersistedInfo(session, cacheKey);
+		// 挂起意图覆盖在缓存读取之后应用（不进缓存：意图随物化消失）。
+		const overrides = this.deps.getPendingIntentOverrides?.(session.id);
+		return overrides ? { ...base, ...overrides } : base;
+	}
 
+	private buildPersistedInfo(session: StoredSession, cacheKey: string): AgentInfo {
 		const info: AgentInfo = {
 			id: session.id,
 			name: (session.name || session.firstMessage || DEFAULT_SESSION_NAME).slice(0, this.deps.maxNameLength),

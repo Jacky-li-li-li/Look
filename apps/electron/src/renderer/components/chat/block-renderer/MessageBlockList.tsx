@@ -30,6 +30,7 @@ import { isSubagentTool } from "../SubagentArgsCards";
 import SubagentToolGroup from "../SubagentToolGroup";
 import ThinkingPanel from "../ThinkingPanel";
 import ToolCallCard from "../ToolCallCard";
+import { AttachmentBlock } from "./AttachmentBlock";
 import type { UnifiedBlock } from "./blockTypes";
 import { ImageBlock } from "./ImageBlock";
 
@@ -88,6 +89,9 @@ interface UnifiedBlockViewProps {
 	 *  快照源：isStreaming && 是最后一块；流式源：isStreaming && !completed。
 	 *  作为布尔 prop 传入，避免 totalBlocks 变化击穿所有 block 的 memo。 */
 	thinkingStreaming: boolean;
+	/** 附件块所属会话（历史附件卡片打开查看器用）。 */
+	attachmentSessionId?: string;
+	attachmentProjectId?: string;
 }
 
 /**
@@ -102,6 +106,8 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 	toolResultMap,
 	defaultToolStatus,
 	thinkingStreaming,
+	attachmentSessionId,
+	attachmentProjectId,
 }: UnifiedBlockViewProps) {
 	switch (block.kind) {
 		case "text": {
@@ -111,6 +117,18 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 				<div className="message-prose">
 					<SkillAwareContent content={block.text} isStreaming={streaming} />
 				</div>
+			);
+		}
+		case "attachment": {
+			if (!block.attachmentName) return null;
+			return (
+				<AttachmentBlock
+					name={block.attachmentName}
+					note={block.attachmentNote}
+					content={block.attachmentContent ?? ""}
+					projectId={attachmentProjectId}
+					sessionId={attachmentSessionId}
+				/>
 			);
 		}
 		case "thinking": {
@@ -207,6 +225,9 @@ export interface MessageBlockListProps {
 	toolResultMap?: Record<string, ToolResultMessage>;
 	/** 无 execution 也无 persisted result 时工具的默认状态：快照 pending / 流式 running。 */
 	defaultToolStatus: "pending" | "running";
+	/** 附件块所属会话（历史附件卡片打开查看器用）。 */
+	attachmentSessionId?: string;
+	attachmentProjectId?: string;
 }
 
 export const MessageBlockList = memo(function MessageBlockList({
@@ -215,11 +236,15 @@ export const MessageBlockList = memo(function MessageBlockList({
 	toolExecutions,
 	toolResultMap,
 	defaultToolStatus,
+	attachmentSessionId,
+	attachmentProjectId,
 }: MessageBlockListProps) {
-	// 设置「显示工具组」关闭时：完全隐藏工具调用与思考块，只保留文本/图片。
+	// 设置「显示工具组」关闭时：完全隐藏工具调用与思考块，只保留文本/图片/附件。
 	// 用户选择关闭后消息流只显示最终回答，不展示任何执行细节。
 	const showToolExecution = useAtomValue(showToolExecutionAtom);
-	const visibleBlocks = showToolExecution ? blocks : blocks.filter((b) => b.kind === "text" || b.kind === "image");
+	const visibleBlocks = showToolExecution
+		? blocks
+		: blocks.filter((b) => b.kind === "text" || b.kind === "image" || b.kind === "attachment");
 
 	if (visibleBlocks.length === 0) return null;
 
@@ -252,6 +277,8 @@ export const MessageBlockList = memo(function MessageBlockList({
 							toolResultMap={toolResultMap}
 							defaultToolStatus={defaultToolStatus}
 							thinkingStreaming={isThinkingStreaming(block, isStreaming, blocks.length)}
+							attachmentSessionId={attachmentSessionId}
+							attachmentProjectId={attachmentProjectId}
 						/>
 					);
 				}

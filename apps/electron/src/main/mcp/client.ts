@@ -117,9 +117,12 @@ export class McpClient {
 
 		if (this.client) {
 			try {
-				await this.client.close();
+				// close 必须带超时：卡死的 stdio 服务器若让 close 永不返回，
+				// 会毒化 MCPManager 的 configLock（loadConfig 在锁内 await
+				// disconnect），进而挂住所有后续会话的 bindExtensions。
+				await this.withTimeout(this.client.close(), 10_000, "MCP client close timed out");
 			} catch {
-				// 忽略关闭错误
+				// 忽略关闭错误（含超时——进程可能已僵死，由 idle reaper/退出清理）
 			}
 			this.client = null;
 		}

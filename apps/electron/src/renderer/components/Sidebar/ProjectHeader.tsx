@@ -47,60 +47,73 @@ export default function ProjectHeader({
 			data-running={runningCount > 0 || undefined}
 			data-error={hasError || undefined}
 		>
+			{/* 折叠/展开只由箭头触发；点击项目主体仅切换项目，不再折叠——否则
+			    点击已展开项目会先收起（下方行上移）再被 auto-expand 重新展开（下移），
+			    产生两段式跳动（2026-08 修复）。 */}
 			<CollapsibleTrigger asChild>
 				<button
 					type="button"
-					className="flex min-w-0 flex-1 items-center gap-2 text-left"
-					onClick={() => void onSelectProject(project.id)}
-					title={shortenPath(project.cwd, homedir)}
+					className="flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+					aria-label={
+						isOpen
+							? t("workspace.collapseProject", "Collapse project")
+							: t("workspace.expandProject", "Expand project")
+					}
 				>
 					<ChevronRight
 						className={cn("size-3 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")}
 					/>
-					<span className="workspace-folder-mark relative">
-						{project.valid ? (
-							<>
-								<Folder
-									className={cn(
-										"size-3.5 absolute inset-0 m-auto transition-all duration-300",
-										isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100",
-									)}
-								/>
-								<FolderOpen
-									className={cn(
-										"size-3.5 absolute inset-0 m-auto transition-all duration-300",
-										isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0",
-									)}
-								/>
-							</>
-						) : (
-							<AlertTriangle className="size-3.5" />
-						)}
-					</span>
-					<span className="min-w-0 flex-1">
-						{editingProjectId === project.id ? (
-							<input
-								ref={editRef}
-								aria-label={t("sidebar.editProjectName", "编辑项目名称")}
-								value={editValue}
-								onChange={(event) => setEditValue(event.target.value)}
-								onBlur={commitEdit}
-								onKeyDown={handleEditKeyDown}
-								onClick={(event) => event.stopPropagation()}
-								className="w-full border-b border-foreground/40 bg-transparent text-[13px] font-semibold outline-none"
-								maxLength={64}
-							/>
-						) : (
-							<span className="block truncate text-[13px] font-semibold" title={project.name}>
-								{project.name}
-							</span>
-						)}
-						<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/55">
-							{shortenPath(project.cwd, homedir)}
-						</span>
-					</span>
 				</button>
 			</CollapsibleTrigger>
+			<button
+				type="button"
+				className="flex min-w-0 flex-1 items-center gap-2 text-left"
+				onClick={() => void onSelectProject(project.id)}
+				title={shortenPath(project.cwd, homedir)}
+			>
+				<span className="workspace-folder-mark relative">
+					{project.valid ? (
+						<>
+							<Folder
+								className={cn(
+									"size-3.5 absolute inset-0 m-auto transition-all duration-300",
+									isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100",
+								)}
+							/>
+							<FolderOpen
+								className={cn(
+									"size-3.5 absolute inset-0 m-auto transition-all duration-300",
+									isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0",
+								)}
+							/>
+						</>
+					) : (
+						<AlertTriangle className="size-3.5" />
+					)}
+				</span>
+				<span className="min-w-0 flex-1">
+					{editingProjectId === project.id ? (
+						<input
+							ref={editRef}
+							aria-label={t("sidebar.editProjectName", "编辑项目名称")}
+							value={editValue}
+							onChange={(event) => setEditValue(event.target.value)}
+							onBlur={commitEdit}
+							onKeyDown={handleEditKeyDown}
+							onClick={(event) => event.stopPropagation()}
+							className="w-full border-b border-foreground/40 bg-transparent text-[13px] font-semibold outline-none"
+							maxLength={64}
+						/>
+					) : (
+						<span className="block truncate text-[13px] font-semibold" title={project.name}>
+							{project.name}
+						</span>
+					)}
+					<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/55">
+						{shortenPath(project.cwd, homedir)}
+					</span>
+				</span>
+			</button>
 			<span
 				className="workspace-session-count shrink-0"
 				aria-label={t("workspace.sessionCount", { count: sessionCount, defaultValue: "{{count}} sessions" })}

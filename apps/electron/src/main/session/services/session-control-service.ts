@@ -15,6 +15,11 @@ export interface SessionControlHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
 	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
 	getSessionManager(sessionId: string): SessionManager | undefined;
+	/** 会话存在性（live runtime 之外）：catalog stored / 草稿索引 / 在途初始化。 */
+	sessionExists(sessionId: string): boolean;
+	/** 挂起意图：runtime 未就绪时的模型/思考切换暂存，物化时应用。 */
+	setPendingModel(sessionId: string, modelKey: string): void;
+	setPendingThinkingLevel(sessionId: string, level: ThinkingLevel): void;
 	updateStoredName(sessionId: string, name: string): { projectId: string } | undefined;
 	closeDefaultNameGate(sessionId: string): void;
 	emitSessionUpdated(sessionId: string): void;
@@ -35,14 +40,31 @@ export class SessionControlService {
 		if (slash <= 0) throw new Error(`Model key must be in provider/model form: ${modelKey}`);
 		const model = this.modelRegistry.find(modelKey.slice(0, slash), modelKey.slice(slash + 1));
 		if (!model) throw new Error(`Model not found: ${modelKey}`);
-		const session = (await this.host.ensureRuntime(sessionId)).runtime.session;
-		await session.setModel(model);
+		const managed = this.host.getManagedRuntime(sessionId);
+		if (managed) {
+			// runtime 就绪：直接切换（checkAuth 无网络、JSONL/设置写入均同步）。
+			await managed.runtime.session.setModel(model);
+			this.host.emitSessionUpdated(sessionId);
+			return;
+		}
+		// runtime 未就绪（后台初始化中/尚未激活）：记录挂起意图立即返回，
+		// 物化时经 createAgentSessionFromServices 的 model 选项应用——
+		// 不等 ensureRuntime，切换模型不再被会话初始化阻塞。
+		if (!this.host.sessionExists(sessionId)) throw new Error(`Session ${sessionId} not found`);
+		this.host.setPendingModel(sessionId, modelKey);
 		this.host.emitSessionUpdated(sessionId);
 	}
 
 	async setThinkingLevel(sessionId: string, level: ThinkingLevel): Promise<void> {
-		const managed = await this.host.ensureRuntime(sessionId);
-		managed.runtime.session.setThinkingLevel(level);
+		const managed = this.host.getManagedRuntime(sessionId);
+		if (managed) {
+			managed.runtime.session.setThinkingLevel(level);
+			return;
+		}
+		// 与 setModel 同理：挂起意图，物化时应用，不为切思考档位拉起 runtime。
+		if (!this.host.sessionExists(sessionId)) throw new Error(`Session ${sessionId} not found`);
+		this.host.setPendingThinkingLevel(sessionId, level);
+		this.host.emitSessionUpdated(sessionId);
 	}
 
 	async compress(sessionId: string, customInstructions?: string): Promise<void> {

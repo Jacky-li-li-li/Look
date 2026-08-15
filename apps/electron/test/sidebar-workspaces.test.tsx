@@ -156,12 +156,16 @@ describe("workspace ledger sidebar", () => {
 	it("creates the first session inside the requested empty project", async () => {
 		appStore.set(agentsAtom, []);
 		const onCreateClick = vi.fn();
-		const onSelectProject = vi.fn(async () => {});
+		// 模拟 App 层行为：点击项目后 activeProjectId 变化（auto-expand 展开该项目）。
+		const onSelectProject = vi.fn(async (id: string) => appStore.set(activeProjectIdAtom, id));
 		renderSidebar({ onCreateClick, onSelectProject });
 		fireEvent.click(screen.getByText("SDK"));
 		await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith("project-b"));
 		await waitFor(() => expect(screen.getAllByText("Create first session")).toHaveLength(2));
-		fireEvent.click(screen.getAllByText("Create first session")[1]);
+		// 定位 SDK（project-b）项目组内的按钮，不依赖项目排序位置。
+		const sdkTreeItem = screen.getByText("SDK").closest('[role="treeitem"]') as HTMLElement;
+		const createButton = sdkTreeItem.querySelector<HTMLButtonElement>(".workspace-empty-session");
+		fireEvent.click(createButton!);
 		expect(onCreateClick).toHaveBeenCalledWith("project-b");
 	});
 
@@ -224,5 +228,65 @@ describe("workspace ledger sidebar", () => {
 			.filter((id): id is string => Boolean(id) && id.startsWith("crowded-"));
 		expect(ids.indexOf("crowded-5")).toBeLessThan(ids.indexOf("crowded-3"));
 		expect(ids.indexOf("crowded-3")).toBeGreaterThan(0);
+	});
+
+	it("selecting a project keeps the project list order stable (no jump-to-top)", async () => {
+		const threeProjects: ProjectInfo[] = [
+			{ id: "project-a", name: "Look", cwd: "/work/look", createdAt: 1, valid: true },
+			{ id: "project-b", name: "SDK", cwd: "/work/sdk", createdAt: 2, valid: true },
+			{ id: "project-c", name: "Docs", cwd: "/work/docs", createdAt: 3, valid: true },
+		];
+		appStore.set(projectsAtom, threeProjects);
+		appStore.set(agentsAtom, []);
+		appStore.set(activeProjectIdAtom, "project-c");
+		appStore.set(activeAgentIdAtom, null);
+		appStore.set(recentlyCompletedAtom, []);
+		appStore.set(sessionErrorsAtom, new Set());
+
+		// 模拟 App 层行为：点击项目后 activeProjectId 变化（不刷新任何活动时间）。
+		const onSelectProject = vi.fn(async (id: string) => appStore.set(activeProjectIdAtom, id));
+		renderSidebar({ onSelectProject });
+		await waitFor(() => expect(screen.getByText("Docs")).toBeTruthy());
+
+		const projectOrder = () =>
+			Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]'))
+				.map((el) => el.querySelector(".workspace-project-header span.font-semibold")?.textContent ?? "")
+				.filter(Boolean);
+
+		// 稳定顺序为 createdAt 降序：[Docs, SDK, Look]
+		expect(projectOrder()).toEqual(["Docs", "SDK", "Look"]);
+
+		// 点击中间的 SDK：位置不应跳到顶部（旧行为会把 active 项目提到 DEFAULT 之后）。
+		fireEvent.click(screen.getByText("SDK"));
+		await waitFor(() => expect(appStore.get(activeProjectIdAtom)).toBe("project-b"));
+		expect(projectOrder()).toEqual(["Docs", "SDK", "Look"]);
+	});
+
+	it("clicking a project header selects without toggling collapse (chevron toggles)", async () => {
+		appStore.set(projectsAtom, [projects[0]]);
+		appStore.set(agentsAtom, [sessions[0]]);
+		appStore.set(activeProjectIdAtom, "project-a");
+		appStore.set(activeAgentIdAtom, "session-a");
+		appStore.set(openProjectIdsAtom, ["project-a"]);
+		appStore.set(recentlyCompletedAtom, []);
+		appStore.set(sessionErrorsAtom, new Set());
+
+		const onSelectProject = vi.fn(async (id: string) => appStore.set(activeProjectIdAtom, id));
+		renderSidebar({ onSelectProject });
+		await waitFor(() => expect(screen.getByText("Refine sidebar")).toBeTruthy());
+
+		const treeItem = screen.getByText("Look").closest('[role="treeitem"]') as HTMLElement;
+		expect(treeItem.getAttribute("aria-expanded")).toBe("true");
+
+		// 点击项目主体（名称）：只切换项目，不再折叠/收起（避免两段式跳动）。
+		fireEvent.click(screen.getByText("Look"));
+		await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith("project-a"));
+		expect(treeItem.getAttribute("aria-expanded")).toBe("true");
+
+		// 折叠/展开只由箭头按钮触发。
+		fireEvent.click(screen.getByRole("button", { name: /Collapse project/i }));
+		expect(treeItem.getAttribute("aria-expanded")).toBe("false");
+		fireEvent.click(screen.getByRole("button", { name: /Expand project/i }));
+		expect(treeItem.getAttribute("aria-expanded")).toBe("true");
 	});
 });

@@ -11,7 +11,7 @@ import { expectGuardError, makeDispatcher, makeMockContext } from "./helpers/ipc
 
 function makeAgentCtx(overrides?: Partial<InvokeContext["session"]>): InvokeContext {
 	const ctx = makeMockContext();
-	ctx.session.messaging = { sendMessage: vi.fn().mockResolvedValue(undefined) } as never;
+	ctx.session.messaging = { sendMessage: vi.fn().mockResolvedValue({ queued: false }) } as never;
 	ctx.session.lifecycle = {
 		createAgent: vi.fn(),
 		destroyAgent: vi.fn(),
@@ -66,11 +66,12 @@ describe("agent-router", () => {
 				agentId: "test-agent",
 				message: "hello world",
 			});
-			expect(result).toEqual({ success: true });
+			expect(result).toEqual({ success: true, queued: false });
 			expect(ctx.session.messaging.sendMessage).toHaveBeenCalledWith(
 				"test-agent",
 				"hello world",
 				undefined,
+				[],
 				undefined,
 			);
 		});
@@ -83,7 +84,13 @@ describe("agent-router", () => {
 				message: "steer me",
 				sendMode: "steer",
 			});
-			expect(ctx.session.messaging.sendMessage).toHaveBeenCalledWith("test-agent", "steer me", undefined, "steer");
+			expect(ctx.session.messaging.sendMessage).toHaveBeenCalledWith(
+				"test-agent",
+				"steer me",
+				undefined,
+				[],
+				"steer",
+			);
 		});
 
 		it("agent:send-message with followUp sendMode", async () => {
@@ -98,6 +105,7 @@ describe("agent-router", () => {
 				"test-agent",
 				"follow up",
 				undefined,
+				[],
 				"followUp",
 			);
 		});

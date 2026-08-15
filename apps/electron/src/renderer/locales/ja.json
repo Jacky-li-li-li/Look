@@ -41,7 +41,6 @@
     "actions": "サイドバーの操作"
   },
   "workspace": {
-    "title": "ワークスペース",
     "projects": "プロジェクト",
     "projectMenu": "プロジェクトメニュー",
     "openFolder": "フォルダを開く",
@@ -54,8 +53,6 @@
     "collapseSessions": "折りたたむ",
     "noProjects": "プロジェクトがありません",
     "noProjectsHint": "プロジェクトフォルダを追加してセッションを開始してください。",
-    "expandAllProjects": "すべてのプロジェクトを展開",
-    "collapseAllProjects": "すべてのプロジェクトを折りたたむ",
     "expandProject": "プロジェクトを展開",
     "collapseProject": "プロジェクトを折りたたむ",
     "sessionCount": "{{count}} 件のセッション",
@@ -233,7 +230,8 @@
     "emptyHint": "サイドバーからセッションを選択"
   },
   "session": {
-    "draft": "下書き",    "messageCount": "{{count}} 件のメッセージ",
+    "draft": "下書き",
+    "messageCount": "{{count}} 件のメッセージ",
     "menu": "セッションメニュー",
     "status": {
       "thinking": "思考中",
@@ -634,7 +632,19 @@
     "gitRemote": "リモート",
     "gitRepoRoot": "リポジトリルート",
     "gitDetachedHead": "デタッチド HEAD",
-    "gitDirtyCount": "未コミット変更"
+    "gitDirtyCount": "未コミット変更",
+    "attachmentPlaceholder": "添付ファイルに変換しました — 補足して送信",
+    "attachmentConvertedToast": "添付ファイル {{name}} に変換しました",
+    "attachmentView": "表示",
+    "attachmentEdit": "編集",
+    "attachmentRestore": "テキストに戻す",
+    "attachmentRemove": "削除",
+    "attachmentRestoreFailed": "復元に失敗しました：{{message}}",
+    "attachmentOpenHint": "ファイルビューアで開く",
+    "attachmentExpand": "内容を表示",
+    "attachmentCollapse": "折りたたむ",
+    "attachmentMissing": "添付ファイルが見つかりません（削除された可能性があります）",
+    "attachmentNoContent": "内容はインライン化されていません — ビューアで全文を表示"
   },
   "context": {
     "compressing": "圧縮中…",

@@ -41,7 +41,6 @@
     "actions": "侧边栏操作"
   },
   "workspace": {
-    "title": "工作区",
     "projects": "个项目",
     "projectMenu": "项目菜单",
     "openFolder": "打开文件夹",
@@ -54,8 +53,6 @@
     "collapseSessions": "收起",
     "noProjects": "还没有项目",
     "noProjectsHint": "添加项目文件夹后即可创建限定在该目录内的会话。",
-    "expandAllProjects": "展开所有项目",
-    "collapseAllProjects": "收起所有项目",
     "expandProject": "展开项目",
     "collapseProject": "收起项目",
     "sessionCount": "{{count}} 个会话",
@@ -635,7 +632,19 @@
     "gitRemote": "远程仓库",
     "gitRepoRoot": "仓库根目录",
     "gitDetachedHead": "游离 HEAD",
-    "gitDirtyCount": "未提交改动"
+    "gitDirtyCount": "未提交改动",
+    "attachmentPlaceholder": "已转为附件，可补充说明后发送",
+    "attachmentConvertedToast": "已转为附件 {{name}}",
+    "attachmentView": "查看",
+    "attachmentEdit": "编辑",
+    "attachmentRestore": "还原为文本",
+    "attachmentRemove": "移除",
+    "attachmentRestoreFailed": "还原失败：{{message}}",
+    "attachmentOpenHint": "在查看器中打开",
+    "attachmentExpand": "展开内容",
+    "attachmentCollapse": "收起",
+    "attachmentMissing": "附件文件不存在（可能已被清理）",
+    "attachmentNoContent": "内容未内联，可在查看器中查看完整文件"
   },
   "context": {
     "compressing": "压缩中…",

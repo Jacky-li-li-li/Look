@@ -353,7 +353,9 @@ export class SessionRuntimeManager
 	}
 
 	async sendMessage(sessionId: string, text: string, images?: ImageContent[]): Promise<void> {
-		return this.composition.sessionMessagingService.sendMessage(sessionId, text, images);
+		// IM/headless 调用方不关心 queued 语义（消息挂起后由 onSessionBound flush），
+		// 外观保持 Promise<void>（IImAgentHost/IHeadlessExecutionHost 契约不变）。
+		await this.composition.sessionMessagingService.sendMessage(sessionId, text, images);
 	}
 
 	// ============================================================

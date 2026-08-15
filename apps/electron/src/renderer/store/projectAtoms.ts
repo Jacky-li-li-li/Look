@@ -1,4 +1,4 @@
-import type { FileTreeNode, GitRepoInfo, ProjectInfo } from "@shared/types";
+import type { AttachmentRef, FileTreeNode, GitRepoInfo, ProjectInfo } from "@shared/types";
 import { atom } from "jotai";
 import { atomFamily } from "jotai-family";
 import { toast } from "sonner";
@@ -54,11 +54,19 @@ export const rightPanelTabAtom = atom<"shared" | "workspace" | "changes">("works
 
 export const showHiddenFilesAtom = atom(true);
 
+/** 文件查看器目标：普通文件路径，或携带 attachment 元数据的粘贴附件
+ *  （附件走 attachment:* IPC 读写，不经过 file:read/write 守卫）。 */
+export interface ViewFileTarget {
+	absolutePath: string;
+	diffPatch?: string;
+	attachment?: AttachmentRef;
+}
+
 /** 文件查看器当前目标；非 null 时 FileViewerDialog 打开。全局同时只查看一个文件。 */
-export const viewingFileAtom = atom<{ absolutePath: string; diffPatch?: string } | null>(null);
+export const viewingFileAtom = atom<ViewFileTarget | null>(null);
 
 /** 主窗口右侧 Dock 面板当前展示的文件；非 null 时 DockFilePanel 打开。 */
-export const dockedFileAtom = atom<{ absolutePath: string; diffPatch?: string } | null>(null);
+export const dockedFileAtom = atom<ViewFileTarget | null>(null);
 
 /** 聊天图片放大预览当前目标；非 null 时 ImagePreviewDialog 打开。 */
 export const imagePreviewAtom = atom<{ src: string; alt: string } | null>(null);

@@ -4,7 +4,7 @@
 // 所有回调使用 appStore.get() 读最新 atom 值，避免闭包过期。
 // ============================================================
 
-import type { ImageContent, ThinkingLevel } from "@shared/types";
+import type { AttachmentRef, ImageContent, ThinkingLevel } from "@shared/types";
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { appStore } from "../store/appStore";
@@ -15,7 +15,7 @@ import {
 	sessionStateAtomFamily,
 	userPreferredModelAtom,
 } from "../store/atoms";
-import { markSessionSnapshotLoading } from "../store/snapshot";
+import { markPendingUserMessage, markSessionEmpty, markSessionSnapshotLoading } from "../store/snapshot";
 
 const api = window.look;
 
@@ -24,14 +24,24 @@ export function useAgentActions() {
 	const creatingRef = useRef(false);
 
 	const handleSendMessage = useCallback(
-		async (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp"): Promise<boolean> => {
+		async (
+			text: string,
+			images?: ImageContent[],
+			attachments?: AttachmentRef[],
+			sendMode?: "steer" | "followUp",
+		): Promise<boolean> => {
 			const id = appStore.get(activeAgentIdAtom);
 			if (!id || !api) return false;
 			try {
-				const result = await api.sendMessage(id, text, images, sendMode);
+				const result = await api.sendMessage(id, text, images, attachments, sendMode);
 				if (!result?.success) {
 					toast.error(result?.error ?? "Message was not accepted");
 					return false;
+				}
+				// runtime 未就绪时主进程挂起消息并立即返回：乐观回显用户气泡，
+				// flush 后真实 user_message 事件以同内容覆盖（去重见 markPendingUserMessage）。
+				if (result.queued) {
+					markPendingUserMessage(id, text, images);
 				}
 				return true;
 			} catch (error) {
@@ -135,6 +145,9 @@ export function useAgentActions() {
 						createdAgent,
 					]);
 				}
+				// 新建即空态：新会话没有历史，消息区直接可用（agent:created
+				// 事件路径同样置空，此处兜底 IPC 先连后建的场景）。
+				markSessionEmpty(result.agentId);
 				appStore.set(activeAgentIdAtom, result.agentId);
 				appStore.set(openedSessionIdsAtom, (previous) => {
 					if (previous.includes(result.agentId)) return previous;

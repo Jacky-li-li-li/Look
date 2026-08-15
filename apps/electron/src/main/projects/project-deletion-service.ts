@@ -11,6 +11,7 @@ import fs, { existsSync } from "node:fs";
 import { assertSafeProjectId, getProjectSharedDir, getWorkspaceDir } from "@look/shared/look-storage";
 import { DEFAULT_PROJECT_ID } from "@look/shared/types";
 import type { RuntimeRegistry } from "../session/runtime/runtime-registry.js";
+import type { AttachmentService } from "../session/services/attachment-service.js";
 import type { SessionCatalog } from "../session/services/session-catalog.js";
 import type { SessionDraftIndex } from "../session/services/session-draft-index.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
@@ -35,6 +36,8 @@ export interface ProjectDeletionDependencies {
 	setActiveSessionId(id: string | null): void;
 	/** Optional hook to remove scheduled tasks bound to the deleted project. */
 	deleteScheduledTasksByProject?(projectId: string): Promise<void>;
+	/** 粘贴附件服务：项目删除时级联清理该项目下所有会话的附件。 */
+	attachments: AttachmentService;
 }
 
 export class ProjectDeletionService {
@@ -110,6 +113,12 @@ export class ProjectDeletionService {
 					console.error(`Failed to remove workspace for project ${projectId}:`, error);
 				}
 			}
+		}
+		// 级联清理该项目下所有会话的粘贴附件目录。
+		try {
+			this.deps.attachments.deleteProjectAttachments(projectId);
+		} catch (error) {
+			console.error(`Failed to remove attachments for deleted project ${projectId}:`, error);
 		}
 
 		// 清理该项目下未落盘的草稿索引条目（项目已删，条目不可能再被落盘修剪）。

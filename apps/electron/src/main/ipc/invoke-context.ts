@@ -22,6 +22,7 @@ import type { SchedulerService } from "../scheduler/scheduler-service.js";
 import type { SessionNotifier } from "../session/events/session-notifier.js";
 import type { RuntimeLifecycleCoordinator } from "../session/runtime/runtime-lifecycle-coordinator.js";
 import type { RuntimeRegistry } from "../session/runtime/runtime-registry.js";
+import type { AttachmentService } from "../session/services/attachment-service.js";
 import type { ProjectApplicationService } from "../session/services/project-application-service.js";
 import type { ProjectRuntimeService } from "../session/services/project-runtime-service.js";
 import type { SessionControlService } from "../session/services/session-control-service.js";
@@ -66,6 +67,9 @@ export interface InvokeContext {
 		permission: SessionPermissionOrchestrator;
 		notifier: SessionNotifier;
 	};
+
+	// ── Paste attachments ──
+	attachments: AttachmentService;
 
 	// ── Runtime lifecycle ──
 	runtime: {

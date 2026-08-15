@@ -6,7 +6,7 @@ import { ErrorBoundarySection } from "@look/ui/components/ErrorBoundary";
 import { Button } from "@look/ui/components/ui/button";
 import { Separator } from "@look/ui/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
-import type { AgentInfo, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
+import type { AgentInfo, AttachmentRef, ImageContent, ProjectInfo, ThinkingLevel } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
 import { PanelRightOpen } from "lucide-react";
 import { lazy, memo, type ReactNode, Suspense, useEffect } from "react";
@@ -61,7 +61,12 @@ interface AppLayoutProps {
 	newProjectCwd: string | null;
 	setNewProjectCwd: (v: string | null) => void;
 	providerSettings: ProviderSettingsData;
-	handleSendMessage: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
+	handleSendMessage: (
+		text: string,
+		images?: ImageContent[],
+		attachments?: AttachmentRef[],
+		sendMode?: "steer" | "followUp",
+	) => Promise<boolean>;
 	handleSelectAgent: (agentId: string) => void;
 	handleDestroyAgent: (agentId: string) => void;
 	handleAbortAgent: () => void;

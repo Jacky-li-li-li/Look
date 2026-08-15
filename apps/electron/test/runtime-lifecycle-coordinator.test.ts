@@ -12,6 +12,7 @@ import {
 import { RuntimeRegistry } from "../src/main/session/runtime/runtime-registry.js";
 import { ActiveSessionSelection } from "../src/main/session/scope/active-session-selection.js";
 import { SessionScopeRegistry } from "../src/main/session/scope/scope-registry.js";
+import { SessionPendingIntents } from "../src/main/session/scope/session-pending-intents.js";
 import type { StoredSession } from "../src/main/session/services/session-catalog.js";
 
 interface SessionFixture {
@@ -148,6 +149,8 @@ function makeCoordinator(
 		sessionNotifier: { disposeSession: vi.fn() },
 		selection,
 		ensureSessionModel: vi.fn().mockResolvedValue(undefined),
+		pendingIntents: new SessionPendingIntents(),
+		resolveModel: vi.fn(() => undefined),
 		getStoredSession: vi.fn((sessionId: string) => (sessionId === stored.id ? stored : undefined)),
 		getDraft: vi.fn(() => undefined),
 		emitSessionPreview: vi.fn().mockResolvedValue(undefined),
@@ -293,6 +296,51 @@ describe("RuntimeLifecycleCoordinator", () => {
 		expect(managed.runtime.session.sessionId).toBe("draft-1");
 		expect(session.setSessionName).toHaveBeenCalledWith("重启草稿");
 		expect(fixture.dependencies.runtimeFactory.create).toHaveBeenCalled();
+	});
+
+	it("bind 时补应用初始化窗口内到达的挂起模型/思考意图", async () => {
+		const session = makeSession("session-1");
+		const setModel = vi.fn().mockResolvedValue(undefined);
+		const setThinkingLevel = vi.fn();
+		(session.session as unknown as Record<string, unknown>).setModel = setModel;
+		(session.session as unknown as Record<string, unknown>).setThinkingLevel = setThinkingLevel;
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime);
+		const pendingModel = { provider: "openai", id: "gpt-test" };
+		vi.mocked(fixture.dependencies.resolveModel).mockReturnValue(pendingModel as never);
+
+		// 创建已开始后（意图未能在创建时消费）才记录挂起意图。
+		const creation = fixture.coordinator.createManagedRuntime(
+			"/project",
+			session.session.sessionManager,
+			"project-1",
+		);
+		fixture.dependencies.pendingIntents.setModel("session-1", "openai/gpt-test");
+		fixture.dependencies.pendingIntents.setThinkingLevel("session-1", "high");
+		await creation;
+
+		expect(setModel).toHaveBeenCalledWith(pendingModel);
+		expect(setThinkingLevel).toHaveBeenCalledWith("high");
+	});
+
+	it("创建时已存在的挂起意图经 factoryOptions 透传且 bind 时不重复应用", async () => {
+		const session = makeSession("session-1");
+		const setModel = vi.fn().mockResolvedValue(undefined);
+		(session.session as unknown as Record<string, unknown>).setModel = setModel;
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime);
+		fixture.dependencies.pendingIntents.setModel("session-1", "openai/gpt-test");
+
+		await fixture.coordinator.createManagedRuntime("/project", session.session.sessionManager, "project-1");
+
+		// 创建时经 applyPendingIntents 消费（take 语义）→ bind 时不再重复 setModel。
+		expect(fixture.dependencies.runtimeFactory.create).toHaveBeenCalledWith(
+			"/project",
+			session.session.sessionManager,
+			undefined,
+			expect.objectContaining({ modelKey: "openai/gpt-test" }),
+		);
+		expect(setModel).not.toHaveBeenCalled();
 	});
 
 	it("ensureRuntime 在草稿期创建失败时抛出初始化失败错误", async () => {

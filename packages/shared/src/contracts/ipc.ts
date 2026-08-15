@@ -2,6 +2,7 @@ import type {
 	AgentDefinitionInfo,
 	AgentDefinitionInput,
 	AgentInfo,
+	AttachmentRef,
 	AvailableModel,
 	CustomProviderInput,
 	Draft,
@@ -11,6 +12,7 @@ import type {
 	GitRepoInfo,
 	ImageContent,
 	MainToRendererEvent,
+	PendingAttachment,
 	ProjectInfo,
 	ProviderInfo,
 	RendererToMainEvent,
@@ -89,12 +91,14 @@ export interface LookAPI {
 	invoke(event: RendererToMainEvent): Promise<unknown>;
 	onEvent(callback: (event: MainToRendererEvent) => void): () => void;
 
+	/** 返回 queued=true 表示 runtime 未就绪、消息已挂起，绑定后自动发出（意图先行）。 */
 	sendMessage(
 		agentId: string,
 		message: string,
 		images?: ImageContent[],
+		attachments?: AttachmentRef[],
 		sendMode?: "steer" | "followUp",
-	): Promise<IpcResult>;
+	): Promise<IpcResult<{ queued: boolean }>>;
 	removeQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
 	insertQueuedMessage(agentId: string, text: string): Promise<IpcResult>;
 	activateSession(sessionId: string, opts?: { skipSnapshot?: boolean }): Promise<IpcResult>;
@@ -294,6 +298,28 @@ export interface LookAPI {
 	statFilePath(
 		path: string,
 	): Promise<IpcResult<{ kind: "file" | "directory" | "other" | "missing"; inProject: boolean }>>;
+	// ---- Paste attachments (LOOK_HOME/attachments/<projectId>/<sessionId>/<name>) ----
+	/** 创建（或覆盖同名）粘贴附件，返回完整元数据。 */
+	createAttachment(
+		projectId: string,
+		sessionId: string,
+		name: string,
+		content: string,
+	): Promise<IpcResult<{ attachment: PendingAttachment }>>;
+	readAttachment(
+		projectId: string,
+		sessionId: string,
+		name: string,
+	): Promise<IpcResult<{ content: string; sizeBytes: number }>>;
+	updateAttachment(
+		projectId: string,
+		sessionId: string,
+		name: string,
+		content: string,
+	): Promise<IpcResult<{ sizeBytes: number }>>;
+	deleteAttachment(projectId: string, sessionId: string, name: string): Promise<IpcResult>;
+	/** 解析附件绝对路径（历史消息附件卡片打开查看器用）；文件不存在时返回 error。 */
+	resolveAttachmentPath(projectId: string, sessionId: string, name: string): Promise<IpcResult<{ path: string }>>;
 	// ---- File viewer window ----
 	/** 在独立查看器窗口中打开文件；diffPatch 随窗口传递（undock 时保留 diff 语义）。 */
 	openFileViewer(path: string, fadeIn?: boolean, diffPatch?: string): Promise<IpcResult>;

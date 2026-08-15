@@ -62,9 +62,22 @@ export class RuntimeRegistry {
 		if (existing) return existing;
 		const initializing = this.initializations.get(sessionId);
 		if (initializing) return initializing;
-		const initialization = create().finally(() => this.initializations.delete(sessionId));
+		const initialization = create().finally(() => {
+			// 仅删除自己：forgetInitialization 解挂后同一会话可能已注册新的
+			// 初始化 promise，无 Guard 的删除会把新条目误清掉。
+			if (this.initializations.get(sessionId) === initialization) this.initializations.delete(sessionId);
+		});
 		this.initializations.set(sessionId, initialization);
 		return initialization;
+	}
+
+	/**
+	 * 超时解挂：忘掉 in-flight 初始化条目。底层 promise 仍在跑（无法取消），
+	 * 但其结果不再被等待；若它最终 settle 并注册 runtime，会与重建路径经
+	 * bindRuntime 的冲突检测去重（后到者被 dispose）。
+	 */
+	forgetInitialization(sessionId: string): void {
+		this.initializations.delete(sessionId);
 	}
 
 	// 初始化失败已由 createManagedRuntime 上报给创建方，这里仅等待 settle，避免重复告警。

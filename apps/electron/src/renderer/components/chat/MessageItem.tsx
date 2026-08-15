@@ -15,6 +15,7 @@ import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { parseAttachmentMessage } from "../../lib/pasteAttachment";
 import { userProfileAtom } from "../../store/authAtoms";
 import { messageAlignmentAtom } from "../../store/settingsAtoms";
 import { toUnifiedFromPiAi } from "./block-renderer/blockTypes";
@@ -30,6 +31,9 @@ export interface MessageItemProps {
 	/** Scope-aware aggregate key for the persisted block cache. */
 	blockCacheKey?: string;
 	agentName?: string;
+	/** 消息所属会话（历史附件卡片打开查看器用）。 */
+	sessionId?: string;
+	projectId?: string;
 	isStreaming?: boolean;
 	toolExecutions?: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
@@ -58,6 +62,8 @@ export const MessageItem = memo(function MessageItem({
 	entryId,
 	blockCacheKey,
 	agentName,
+	sessionId,
+	projectId,
 	isStreaming = false,
 	toolExecutions = {},
 	toolResultMap,
@@ -103,6 +109,8 @@ export const MessageItem = memo(function MessageItem({
 							isStreaming={isStreaming}
 							toolExecutions={toolExecutions}
 							toolResultMap={toolResultMap}
+							attachmentSessionId={sessionId}
+							attachmentProjectId={projectId}
 						/>
 					) : null}
 					{assistant?.errorMessage && <div className="text-destructive">{assistant.errorMessage}</div>}
@@ -168,6 +176,8 @@ function areMessageItemPropsEqual(previous: MessageItemProps, next: MessageItemP
 		previous.entryId !== next.entryId ||
 		previous.blockCacheKey !== next.blockCacheKey ||
 		previous.agentName !== next.agentName ||
+		previous.sessionId !== next.sessionId ||
+		previous.projectId !== next.projectId ||
 		previous.isStreaming !== next.isStreaming ||
 		previous.isActiveLeaf !== next.isActiveLeaf ||
 		previous.flash !== next.flash ||
@@ -229,12 +239,16 @@ const MessageBlockListForMessage = memo(function MessageBlockListForMessage({
 	isStreaming,
 	toolExecutions,
 	toolResultMap,
+	attachmentSessionId,
+	attachmentProjectId,
 }: {
 	message: AgentMessage;
 	cacheKey?: string;
 	isStreaming: boolean;
 	toolExecutions: Record<string, LookUiToolExecState>;
 	toolResultMap?: Record<string, ToolResultMessage>;
+	attachmentSessionId?: string;
+	attachmentProjectId?: string;
 }) {
 	const blocks = useMemo(() => messageBlocks(message), [message]);
 	const unified = useMemo(() => cachedUnifiedBlocks(cacheKey, blocks), [blocks, cacheKey]);
@@ -245,6 +259,8 @@ const MessageBlockListForMessage = memo(function MessageBlockListForMessage({
 			toolExecutions={toolExecutions}
 			toolResultMap={toolResultMap}
 			defaultToolStatus="pending"
+			attachmentSessionId={attachmentSessionId}
+			attachmentProjectId={attachmentProjectId}
 		/>
 	);
 });
@@ -256,10 +272,34 @@ function messageBlocks(
 	| import("@earendil-works/pi-ai").ThinkingContent
 	| import("@earendil-works/pi-ai").ImageContent
 	| import("@earendil-works/pi-ai").ToolCall
+	| import("./block-renderer/blockTypes.js").AttachmentContentBlock
 > {
 	if (message.role === "assistant") return [...message.content];
 	if (message.role === "user") {
-		return typeof message.content === "string" ? [{ type: "text", text: message.content }] : [...message.content];
+		// pi 把 user 消息内容序列化为数组（通常单个 text block + 图片）。
+		// 附件标记（[Attachment: …] / [/Attachment]）可能落在任一 text block 里，
+		// 逐块解析为 text + attachment 段落，历史中渲染为附件卡片 + 折叠内容。
+		const blocks: Array<import("@earendil-works/pi-ai").TextContent | import("@earendil-works/pi-ai").ImageContent> =
+			typeof message.content === "string" ? [{ type: "text", text: message.content }] : message.content;
+		const segments: Array<
+			| import("@earendil-works/pi-ai").TextContent
+			| import("@earendil-works/pi-ai").ImageContent
+			| import("./block-renderer/blockTypes.js").AttachmentContentBlock
+		> = [];
+		for (const block of blocks) {
+			if (block.type === "text") {
+				for (const segment of parseAttachmentMessage(block.text)) {
+					segments.push(
+						segment.type === "attachment"
+							? { type: "attachment", name: segment.name, note: segment.note, content: segment.content }
+							: { type: "text", text: segment.text },
+					);
+				}
+			} else {
+				segments.push(block);
+			}
+		}
+		return segments;
 	}
 	if (message.role === "custom") {
 		return typeof message.content === "string" ? [{ type: "text", text: message.content }] : [...message.content];

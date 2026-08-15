@@ -8,7 +8,7 @@
 import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Textarea } from "@look/ui/components/ui/textarea";
-import type { Draft, ProjectInfo } from "@shared/types";
+import type { AttachmentRef, Draft, ProjectInfo } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { ArrowLeft, ArrowUpRight, LoaderCircle, Play, Plus, StickyNote, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,7 +23,12 @@ import { ConvertDraftDialog } from "./ConvertDraftDialog";
 export type DraftsPageProps = {
 	projects: ProjectInfo[];
 	handleCreateClick: (projectId: string) => Promise<string | null>;
-	handleSendMessage: (text: string, images?: never[], sendMode?: "steer") => Promise<boolean>;
+	handleSendMessage: (
+		text: string,
+		images?: never[],
+		attachments?: AttachmentRef[],
+		sendMode?: "steer",
+	) => Promise<boolean>;
 };
 
 type ConversionAttempt = {

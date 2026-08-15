@@ -18,7 +18,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import pierreDark from "@pierre/theme/pierre-dark";
 import pierreLight from "@pierre/theme/pierre-light";
-import type { FileTreeNode } from "@shared/types";
+import type { AttachmentRef, FileTreeNode } from "@shared/types";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
 	ArrowLeft,
@@ -151,6 +151,8 @@ interface FileViewerDialogProps {
 	dockPath?: string | null;
 	/** Dock 模式携带的 diff patch（从「变更」面板打开时显示该文件 diff）。 */
 	dockDiffPatch?: string;
+	/** Dock 模式携带的粘贴附件元数据（附件模式：读写走 attachment:* IPC）。 */
+	dockAttachment?: AttachmentRef | null;
 	/** Dock 模式内返回栈跳转新文件时回调(更新 dockedFileAtom)。 */
 	onDockNavigate?: (path: string) => void;
 	/** Dock 模式关闭回调(清空 dockedFileAtom)。 */
@@ -164,6 +166,7 @@ export default function FileViewerDialog({
 	dockMode = false,
 	dockPath,
 	dockDiffPatch,
+	dockAttachment,
 	onDockNavigate,
 	onDockClose,
 	onDockUndock,
@@ -179,6 +182,10 @@ export default function FileViewerDialog({
 	// 路径来源抽象:Dock 模式由 dockPath 驱动,其余由 viewingFileAtom 驱动
 	const absolutePath = dockMode ? (dockPath ?? null) : (viewingFile?.absolutePath ?? null);
 	const hasFile = dockMode ? !!dockPath : !!viewingFile;
+	// 粘贴附件模式：Dock 模式由 dockAttachment 携带，其余由 viewingFile.attachment 携带。
+	// 附件读写走 attachment:* IPC（附件区位于 LOOK_HOME 敏感树内，file:read/write 拒绝）。
+	const attachment: AttachmentRef | null = dockMode ? (dockAttachment ?? null) : (viewingFile?.attachment ?? null);
+	const isAttachment = attachment !== null;
 
 	// 加载该文件 HEAD 版本内容（完整文件 diff 对比，仅无 diffPatch 的文件树/独立窗口路径用）：
 	// ① dockMode 从「变更」面板打开（有 diffPatch）→ 按入口语义直接渲染 patch，无需 HEAD
@@ -192,6 +199,8 @@ export default function FileViewerDialog({
 		setPatchDismissed(false);
 		if (!absolutePath) return;
 		if (diffPatch !== undefined) return;
+		// 附件无 git 语义，跳过 HEAD 加载
+		if (isAttachment) return;
 		let cancelled = false;
 		const canReadProjectHead = Boolean(
 			diffPatch && activeProject && isPathInsideProject(absolutePath, activeProject.cwd),
@@ -210,7 +219,7 @@ export default function FileViewerDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [diffPatch, activeProject, absolutePath, reloadTick]);
+	}, [diffPatch, activeProject, absolutePath, reloadTick, isAttachment]);
 
 	// 路径写入抽象:返回栈跳转等场景统一入口(Dock 模式回调给父组件更新 dockedFileAtom)
 	const setCurrentFile = useCallback(
@@ -375,7 +384,8 @@ export default function FileViewerDialog({
 		loadState.status === "text" || loadState.status === "image" || loadState.status === "binary"
 			? loadState.inProject
 			: true;
-	const canEdit = isMarkdown && !truncated && inProject;
+	// 附件（粘贴转成）允许编辑任意类型，不限于 Markdown
+	const canEdit = (isMarkdown || isAttachment) && !truncated && inProject;
 
 	// md 目录导航:从原文提取标题大纲,≥2 个标题时显示左侧导航
 	const tocHeadings = useMemo(
@@ -500,6 +510,30 @@ export default function FileViewerDialog({
 		setLoadState({ status: "loading" });
 		void (async () => {
 			try {
+				// 附件模式：读写走 attachment:* IPC（附件区在 LOOK_HOME 敏感树内，
+				// file:read/file:write 守卫拒绝，且附件语义上不是项目文件）。
+				if (isAttachment) {
+					const result = await window.look.readAttachment(
+						attachment.projectId,
+						attachment.sessionId,
+						attachment.name,
+					);
+					if (cancelled) return;
+					if (!result.success) {
+						setLoadState({ status: "error", error: result.error });
+						return;
+					}
+					setLoadState({
+						status: "text",
+						content: result.content,
+						truncated: false,
+						sizeBytes: result.sizeBytes,
+						inProject: true,
+					});
+					setDraft(result.content);
+					setSavedContent(result.content);
+					return;
+				}
 				const result = await window.look.readFileContent(absolutePath);
 				if (cancelled) return;
 				if (!result.success) {
@@ -536,7 +570,7 @@ export default function FileViewerDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [absolutePath, reloadTick, t]);
+	}, [absolutePath, reloadTick, t, isAttachment, attachment]);
 
 	// shiki 高亮:仅非 Markdown 且语言已知时执行,异步生成双主题 HTML
 	useEffect(() => {
@@ -638,7 +672,9 @@ export default function FileViewerDialog({
 		if (!absolutePath || saving || !dirty || truncated) return;
 		setSaving(true);
 		try {
-			const result = await window.look.writeFileContent(absolutePath, draft);
+			const result = isAttachment
+				? await window.look.updateAttachment(attachment.projectId, attachment.sessionId, attachment.name, draft)
+				: await window.look.writeFileContent(absolutePath, draft);
 			if (!result.success) throw new Error(result.error);
 			setSavedContent(draft);
 			// 重读文件与 HEAD 版本:diff 立即反映保存后的磁盘内容(而不停留在打开时的快照)
@@ -651,7 +687,7 @@ export default function FileViewerDialog({
 		} finally {
 			setSaving(false);
 		}
-	}, [absolutePath, saving, dirty, truncated, draft, t]);
+	}, [absolutePath, saving, dirty, truncated, draft, t, isAttachment, attachment]);
 
 	// Cmd/Ctrl+S 保存(仅编辑态 textarea 内监听)
 	const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -801,7 +837,8 @@ export default function FileViewerDialog({
 								<TooltipContent side="bottom">{t("fileViewer.dockToMain")}</TooltipContent>
 							</Tooltip>
 						)}
-						{dockMode && (
+						{/* 附件模式禁用弹出独立窗口：独立窗口走 file:read，会命中 LOOK_HOME 敏感守卫 */}
+						{dockMode && !isAttachment && (
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<Button
@@ -996,7 +1033,7 @@ export default function FileViewerDialog({
 							</div>
 						</div>
 					</div>
-				) : textData && isMarkdown && editMode ? (
+				) : textData && editMode && (isMarkdown || isAttachment) ? (
 					<textarea
 						className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 font-mono text-xs leading-relaxed outline-none"
 						value={draft}

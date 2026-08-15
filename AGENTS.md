@@ -40,7 +40,8 @@ Type: rule
 - History, names, parent links, model/thinking changes, compaction, and branches are owned by **pi JSONL**; pi JSONL is the source of truth for transcript content. The **only** Look-owned side index is the draft index (`SessionDraftIndex`), which carries existence/name/time for sessions that have not yet persisted a pi session file (pi buffers all entries until the first assistant message). Do not extend it into a general session wrapper.
 - Runtime status, transport stream IDs, subscriptions, and queues are **session-scoped**. Never one global active-stream state.
 - `AuthStorage`, `ModelRegistry`, and `ProjectTrustStore` are **process-global**. Cwd-bound services and extension bindings stay **runtime-local**.
-- Resource initialization is **serialized** (package install races). Initialized sessions may run concurrently with no app-level hard cap.
+- Resource initialization is serialized **only when `packages` are configured** (npm install races); otherwise session inits run concurrently with no app-level hard cap.
+- **Intent first, materialize later**: model/thinking switches and message sends must not wait on `ensureRuntime`. When no live runtime exists, record the intent — `SessionPendingIntents` (model/thinking, applied via the factory's `modelKey`/`thinkingLevel` options at creation, or by `bindRuntime` for intents arriving mid-init) and `SessionMessagingService`'s pending queue (flushed on `onSessionBound`). Never extend the draft index for this; intents are in-memory only.
 
 ---
 
@@ -48,9 +49,9 @@ Type: rule
 
 Type: rule
 
-- Build cwd-bound services with `createAgentSessionServices` + `createAgentSessionFromServices` (`apps/electron/src/main/session/runtime/runtime-factory.ts`).
+- Build cwd-bound services by assembling them directly: `DefaultResourceLoader` + provider-registration flush + `createAgentSessionFromServices` (`apps/electron/src/main/session/runtime/runtime-factory.ts`). Do **not** use `createAgentSessionServices` — its per-call `modelRuntime.refresh()` joins any in-flight network catalog refresh (pi provider-level in-flight dedup) and stalls session init behind the network.
 - Call `AgentSession.bindExtensions` after **every** runtime creation or replacement (`apps/electron/src/main/session/runtime/runtime-lifecycle-coordinator.ts`).
-- **Do not** pass a `tools` allowlist into `createAgentSessionServices` when extension tools must stay available. (Agent definition **frontmatter** may still list `tools:` for SubAgent docs — that is serialization only, not the services call. See `apps/electron/src/main/extensions/subagent/agent-definition-serializer.ts` and the pi-runtime-alignment tests.)
+- **Do not** pass a `tools` allowlist into the ResourceLoader/services assembly when extension tools must stay available. (Agent definition **frontmatter** may still list `tools:` for SubAgent docs — that is serialization only, not the services call. See `apps/electron/src/main/extensions/subagent/agent-definition-serializer.ts` and the pi-runtime-alignment tests.)
 - Gate project resources with pi `ProjectTrustStore`, `SettingsManager.getDefaultProjectTrust`, and ResourceLoader’s `resolveProjectTrust` callback.
 - When the global policy is `ask`, the Electron host must **ask once** and persist in `ProjectTrustStore` — never silently trust project resources.
 - Skills load via pi `ResourceLoader` and run only as `/skill:name`. Do not invent a second invocation format.

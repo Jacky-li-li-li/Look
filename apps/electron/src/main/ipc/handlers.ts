@@ -21,6 +21,7 @@ import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
 import {
 	agentRouter,
+	attachmentRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -45,6 +46,7 @@ let gitService: GitService | null = null;
 
 const domainRouters = [
 	agentRouter,
+	attachmentRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -169,6 +171,7 @@ export function registerIpcHandlers(
 		drafts: new DraftStore(getDraftsPath()),
 		skill: composition.skillManagementService,
 		settings: { prompts: composition.promptStore },
+		attachments: composition.attachmentService,
 	} satisfies InvokeContext;
 
 	// Build the dispatcher from all domain routers

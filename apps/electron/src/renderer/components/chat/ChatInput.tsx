@@ -3,16 +3,26 @@
 //            (Ink Wash)
 // ============================================================
 
-import type { ImageContent, ThinkingLevel } from "@shared/types";
-import { useAtom } from "jotai";
+import type { ImageContent, PendingAttachment, ThinkingLevel } from "@shared/types";
+import { useAtom, useAtomValue } from "jotai";
 import type React from "react";
 import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { useChatInputMenus } from "../../hooks/useChatInputMenus";
-import { chatInputInsertRequestAtom, permissionModeAtomFamily } from "../../store/atoms";
+import { appStore } from "../../store/appStore";
+import {
+	activeAgentAtom,
+	chatInputInsertRequestAtom,
+	confirmDockFileSwapIfDirty,
+	dockedFileAtom,
+	fileViewerDirtyAtom,
+	permissionModeAtomFamily,
+} from "../../store/atoms";
 import ChatInputToolbar from "./ChatInputToolbar";
 import ContentEditableInput, { type ContentEditableInputHandle } from "./ContentEditableInput";
 import ImagePreviewBar from "./ImagePreviewBar";
+import PendingAttachmentBar from "./PendingAttachmentBar";
 import { SkillSlashMenu } from "./SkillSlashMenu";
 
 export interface ChatInputHandle {
@@ -28,7 +38,12 @@ interface ChatInputProps {
 	availableThinkingLevels?: ThinkingLevel[];
 	isBusy: boolean;
 	isCompacting?: boolean;
-	onSend: (text: string, images?: ImageContent[], sendMode?: "steer" | "followUp") => Promise<boolean>;
+	onSend: (
+		text: string,
+		images?: ImageContent[],
+		attachments?: PendingAttachment[],
+		sendMode?: "steer" | "followUp",
+	) => Promise<boolean>;
 	onThinkingChange: (level: ThinkingLevel) => void;
 	onModelChange: (model: string) => void;
 	onRequestApiKeys?: () => void;
@@ -64,8 +79,13 @@ const ChatInput = function ChatInput({
 	inputSnapshotRef.current = input;
 	// Pending images pasted from clipboard, shown as thumbnails above the input.
 	const [pendingImages, setPendingImages] = useState<ImageContent[]>([]);
+	// Pending attachments — 大段粘贴自动转成的附件文件，随消息发送。
+	const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
 	// Whether a workspace file is currently being dragged over the input box.
 	const [dragActive, setDragActive] = useState(false);
+	// 当前会话所属项目（粘贴转附件需要 projectId + sessionId 定位附件目录）。
+	const activeAgent = useAtomValue(activeAgentAtom);
+	const projectId = activeAgent?.projectId ?? null;
 
 	// setInput is the single mutation entry-point: every
 	// programmatic change (slash menu pick, tools picker, send
@@ -128,6 +148,59 @@ const ChatInput = function ChatInput({
 		setPendingImages((prev) => prev.filter((_, i) => i !== index));
 	}, []);
 
+	// ── paste attachments ──
+	const handleAttachmentCreated = useCallback(
+		(attachment: PendingAttachment) => {
+			setPendingAttachments((prev) => [...prev, attachment]);
+			toast.success(t("chat.attachmentConvertedToast", { name: attachment.name }));
+		},
+		[t],
+	);
+
+	/** 点击附件卡片/编辑 → Dock 面板打开查看器（附件模式，预览/编辑共用入口）。 */
+	const handleViewAttachment = useCallback((attachment: PendingAttachment) => {
+		if (appStore.get(dockedFileAtom) && !confirmDockFileSwapIfDirty(() => appStore.get(fileViewerDirtyAtom))) {
+			return;
+		}
+		appStore.set(dockedFileAtom, {
+			absolutePath: attachment.path,
+			attachment: {
+				projectId: attachment.projectId,
+				sessionId: attachment.sessionId,
+				name: attachment.name,
+			},
+		});
+	}, []);
+
+	/** 还原为文本：读回磁盘内容填回输入框，并删除附件文件。 */
+	const handleRestoreAttachment = useCallback(
+		async (attachment: PendingAttachment) => {
+			try {
+				const result = await window.look.readAttachment(
+					attachment.projectId,
+					attachment.sessionId,
+					attachment.name,
+				);
+				if (!result?.success) throw new Error(result?.error ?? "Failed to read attachment");
+				const current = inputRef.current?.getText() ?? inputSnapshotRef.current;
+				const separator = current.length > 0 && !/\s$/.test(current) ? "\n\n" : "";
+				setInput(`${current}${separator}${result.content}`);
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : t("chat.attachmentRestoreFailed", { message: "" }));
+				return;
+			}
+			await window.look.deleteAttachment(attachment.projectId, attachment.sessionId, attachment.name);
+			setPendingAttachments((prev) => prev.filter((item) => item !== attachment));
+		},
+		[setInput, t],
+	);
+
+	/** 移除：仅删除附件文件与卡片（内容不保留）。 */
+	const handleRemoveAttachment = useCallback(async (attachment: PendingAttachment) => {
+		await window.look.deleteAttachment(attachment.projectId, attachment.sessionId, attachment.name);
+		setPendingAttachments((prev) => prev.filter((item) => item !== attachment));
+	}, []);
+
 	// Tool 面板选中工具 → 追加引用 token 到输入框末尾（复用 insertRequest 机制）
 	const handleInsertToken = useCallback(
 		(token: string) => {
@@ -136,19 +209,21 @@ const ChatInput = function ChatInput({
 		[agentId, setInsertRequest],
 	);
 
-	const hasContent = input.trim().length > 0 || pendingImages.length > 0;
+	const hasContent = input.trim().length > 0 || pendingImages.length > 0 || pendingAttachments.length > 0;
 
 	const handleSend = useCallback(
 		async (sendMode?: "steer" | "followUp") => {
 			const text = (inputRef.current?.getText() ?? "").trim();
-			if (!text && pendingImages.length === 0) return;
+			if (!text && pendingImages.length === 0 && pendingAttachments.length === 0) return;
 			const images = pendingImages.length > 0 ? pendingImages : undefined;
-			if (await onSend(text || "", images, sendMode)) {
+			const attachments = pendingAttachments.length > 0 ? pendingAttachments : undefined;
+			if (await onSend(text || "", images, attachments, sendMode)) {
 				setInput("");
 				setPendingImages([]);
+				setPendingAttachments([]);
 			}
 		},
-		[onSend, pendingImages, setInput],
+		[onSend, pendingImages, pendingAttachments, setInput],
 	);
 
 	const handleAbort = useCallback(() => {
@@ -196,6 +271,8 @@ const ChatInput = function ChatInput({
 		}
 	};
 
+	const placeholder = pendingAttachments.length > 0 ? t("chat.attachmentPlaceholder") : undefined;
+
 	return (
 		<div
 			className={[
@@ -226,17 +303,28 @@ const ChatInput = function ChatInput({
 				/>
 			) : null}
 
+			<PendingAttachmentBar
+				attachments={pendingAttachments}
+				onView={handleViewAttachment}
+				onRestore={handleRestoreAttachment}
+				onRemove={handleRemoveAttachment}
+			/>
 			<ImagePreviewBar pendingImages={pendingImages} onRemove={handleRemoveImage} />
 
 			<ContentEditableInput
 				ref={inputRef}
 				placeholder={
-					isBusy
+					placeholder ??
+					(isBusy
 						? `${t("chat.send")}… Enter ${t("chat.toSteer")} · Ctrl+Enter ${t("chat.toQueue")}`
-						: `${t("chat.placeholder")}`
+						: `${t("chat.placeholder")}`)
 				}
 				onChange={handleEditorChange}
 				onImagesPasted={handleImagesPasted}
+				projectId={projectId}
+				sessionId={agentId}
+				onAttachmentCreated={handleAttachmentCreated}
+				attachmentCount={pendingAttachments.length + 1}
 				onKeyDown={handleEditorKeyDown}
 				onDragActiveChange={setDragActive}
 			/>

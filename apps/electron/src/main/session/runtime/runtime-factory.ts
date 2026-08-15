@@ -2,17 +2,29 @@
 // SessionRuntimeFactory — pi SDK resource and runtime construction
 //
 // Owns the cwd-bound SettingsManager/ResourceLoader composition and serializes
-// that resource initialization. Lifecycle binding, registry updates and UI
-// notifications deliberately remain outside this module.
+// package-install-sensitive resource initialization. Lifecycle binding,
+// registry updates and UI notifications deliberately remain outside this module.
+//
+// 与 createAgentSessionServices 的差异（自建 services 的原因）：
+// SDK 的 createAgentSessionServices 每次都会执行 modelRuntime.refresh()
+// （agent-session-services.js:97），而 pi provider 级的 in-flight 去重会让这个
+// 本地 refresh 并入任何在途的网络目录刷新——冷启动时一次慢网络请求会把所有
+// 会话初始化拖住。这里用 SDK 导出的 DefaultResourceLoader +
+// createAgentSessionFromServices 自组 services：refresh 只在进程级
+// ModelRuntime 启动/凭据变更时做，会话初始化不再触碰它。
+// provider 注册的 flush（pendingProviderRegistrations）与 SDK 同序保留。
 // ============================================================
 
 import { existsSync } from "node:fs";
 import {
 	type AgentSessionRuntime,
+	type AgentSessionRuntimeDiagnostic,
+	type AgentSessionServices,
+	type CreateAgentSessionFromServicesOptions,
 	type CreateAgentSessionRuntimeFactory,
 	createAgentSessionFromServices,
 	createAgentSessionRuntime,
-	createAgentSessionServices,
+	DefaultResourceLoader,
 	type ExtensionFactory,
 	type ModelRuntime,
 	type SessionManager,
@@ -24,6 +36,14 @@ import { SerialTail } from "../../utils/serial-tail.js";
 
 export interface RuntimeFactoryOptions {
 	appendSystemPrompt?: string[];
+	/**
+	 * 挂起意图透传（provider/model 形式）：用户在 runtime 未就绪时切换的模型。
+	 * 经 createAgentSessionFromServices 的 model 选项应用，SDK 自行落 model_change。
+	 * 解析失败（模型不存在/凭据缺失）时忽略，由 ensureSessionModel 兜底。
+	 */
+	modelKey?: string;
+	/** 挂起的思考档位，同上。 */
+	thinkingLevel?: CreateAgentSessionFromServicesOptions["thinkingLevel"];
 }
 
 export interface SessionRuntimeFactoryDependencies {
@@ -35,7 +55,7 @@ export interface SessionRuntimeFactoryDependencies {
 }
 
 export class SessionRuntimeFactory {
-	/** 资源初始化串行化：同一时刻只有一个 cwd 的 SettingsManager/ResourceLoader 构建在跑。 */
+	/** 包安装串行化：仅在配置了 packages 时启用（npm install 共享目录防竞争）。 */
 	private readonly serial = new SerialTail<"resource">();
 
 	constructor(private readonly dependencies: SessionRuntimeFactoryDependencies) {}
@@ -56,22 +76,18 @@ export class SessionRuntimeFactory {
 
 	private createFactory(options?: RuntimeFactoryOptions): CreateAgentSessionRuntimeFactory {
 		return async ({ cwd, sessionManager, sessionStartEvent }) => {
-			return this.withResourceInitialization(async () => {
-				const startedAt = Date.now();
-				try {
-					return await this.buildServices(cwd, sessionManager, sessionStartEvent, options);
-				} finally {
-					// 初始化耗时观测：这段在全局串行锁内执行，排队 + 扫描 +
-					// 潜在的缺包 npm install 都算在内。慢于 1s 即告警，现场
-					// 可直接定位是排队还是扫描/install 变慢。
-					const elapsed = Date.now() - startedAt;
-					if (elapsed > 1_000) {
-						console.warn(`[Look][RuntimeFactory] slow resource init (${elapsed}ms) for ${cwd}`);
-					} else {
-						console.log(`[Look][RuntimeFactory] resource init ${elapsed}ms for ${cwd}`);
-					}
+			const startedAt = Date.now();
+			try {
+				return await this.buildServices(cwd, sessionManager, sessionStartEvent, options);
+			} finally {
+				// 初始化耗时观测：慢于 1s 即告警，现场可直接定位是扫描还是排队。
+				const elapsed = Date.now() - startedAt;
+				if (elapsed > 1_000) {
+					console.warn(`[Look][RuntimeFactory] slow resource init (${elapsed}ms) for ${cwd}`);
+				} else {
+					console.log(`[Look][RuntimeFactory] resource init ${elapsed}ms for ${cwd}`);
 				}
-			});
+			}
 		};
 	}
 
@@ -79,7 +95,7 @@ export class SessionRuntimeFactory {
 		cwd: string,
 		sessionManager: SessionManager,
 		sessionStartEvent: SessionStartEvent | undefined,
-		options?: RuntimeFactoryOptions,
+		options: RuntimeFactoryOptions | undefined,
 	) {
 		const settingsManager = SettingsManager.create(cwd, this.dependencies.agentDir);
 		const resolveLatestProjectTrust = () => {
@@ -88,6 +104,30 @@ export class SessionRuntimeFactory {
 			return trusted;
 		};
 		resolveLatestProjectTrust();
+
+		// 串行锁只为 npm/git 包安装防竞争而存在；未配置 packages 时
+		// resourceLoader.reload 是纯本地扫描，各会话并发初始化即可——
+		// 否则冷启动时一个会话的慢初始化会经全局锁车队拖住所有会话。
+		if (this.hasConfiguredPackages(settingsManager)) {
+			return this.serial.run("resource", () =>
+				this.buildServicesInner(cwd, settingsManager, sessionManager, sessionStartEvent, options),
+			);
+		}
+		return this.buildServicesInner(cwd, settingsManager, sessionManager, sessionStartEvent, options);
+	}
+
+	private async buildServicesInner(
+		cwd: string,
+		settingsManager: SettingsManager,
+		sessionManager: SessionManager,
+		sessionStartEvent: SessionStartEvent | undefined,
+		options: RuntimeFactoryOptions | undefined,
+	) {
+		const resolveLatestProjectTrust = () => {
+			const trusted = this.dependencies.resolveProjectTrust(cwd);
+			settingsManager.setProjectTrusted(trusted);
+			return trusted;
+		};
 
 		const projectId = this.dependencies.findProjectIdByCwd(cwd);
 		const sharedPath = projectId ? getProjectSharedDir(projectId) : undefined;
@@ -100,29 +140,103 @@ export class SessionRuntimeFactory {
 
 		const projectPromptPath = projectId ? getProjectSystemPromptPath(projectId) : undefined;
 		const systemPrompt = projectPromptPath && existsSync(projectPromptPath) ? projectPromptPath : undefined;
-		const services = await createAgentSessionServices({
+
+		const resourceLoader = new DefaultResourceLoader({
+			cwd,
+			agentDir: this.dependencies.agentDir,
+			settingsManager,
+			extensionFactories: await this.dependencies.buildExtensionFactories(
+				cwd,
+				sessionManager.getSessionId(),
+				projectId,
+			),
+			appendSystemPrompt: appendSystemPrompt.length > 0 ? appendSystemPrompt : undefined,
+			systemPrompt,
+		});
+		await resourceLoader.reload({
+			resolveProjectTrust: async () => resolveLatestProjectTrust(),
+		});
+
+		const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
+		this.flushPendingProviderRegistrations(resourceLoader, diagnostics);
+		const model = this.resolvePendingModel(options?.modelKey, diagnostics);
+
+		const services: AgentSessionServices = {
 			cwd,
 			agentDir: this.dependencies.agentDir,
 			modelRuntime: this.dependencies.modelRuntime,
 			settingsManager,
-			resourceLoaderOptions: {
-				extensionFactories: await this.dependencies.buildExtensionFactories(
-					cwd,
-					sessionManager.getSessionId(),
-					projectId,
-				),
-				appendSystemPrompt: appendSystemPrompt.length > 0 ? appendSystemPrompt : undefined,
-				systemPrompt,
-			},
-			resourceLoaderReloadOptions: {
-				resolveProjectTrust: async () => resolveLatestProjectTrust(),
-			},
+			resourceLoader,
+			diagnostics,
+		};
+		const result = await createAgentSessionFromServices({
+			services,
+			sessionManager,
+			sessionStartEvent,
+			model,
+			thinkingLevel: options?.thinkingLevel,
 		});
-		const result = await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent });
 		return { ...result, services, diagnostics: services.diagnostics };
 	}
 
-	private withResourceInitialization<T>(task: () => Promise<T>): Promise<T> {
-		return this.serial.run("resource", task);
+	/**
+	 * 与 createAgentSessionServices 同序的 provider 注册 flush：扩展加载期
+	 * 排队的 provider 注册必须落到共享 modelRuntime 上（注册本身是幂等的，
+	 * 且 registerProvider 内部会自触发后台 refresh，无需显式重复刷新）。
+	 */
+	private flushPendingProviderRegistrations(
+		resourceLoader: DefaultResourceLoader,
+		diagnostics: AgentSessionRuntimeDiagnostic[],
+	): void {
+		const runtime = resourceLoader.getExtensions().runtime;
+		for (const { name, config, extensionPath } of runtime.pendingProviderRegistrations) {
+			try {
+				this.dependencies.modelRuntime.registerProvider(name, config);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				diagnostics.push({ type: "error", message: `Extension "${extensionPath}" error: ${message}` });
+			}
+		}
+		runtime.pendingProviderRegistrations = [];
+		for (const { provider, extensionPath } of runtime.pendingNativeProviderRegistrations) {
+			try {
+				this.dependencies.modelRuntime.registerNativeProvider(provider);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				diagnostics.push({ type: "error", message: `Extension "${extensionPath}" error: ${message}` });
+			}
+		}
+		runtime.pendingNativeProviderRegistrations = [];
+	}
+
+	/** 解析挂起模型意图；模型缺失或 provider 无凭据时降级为 undefined（走默认解析）。 */
+	private resolvePendingModel(
+		modelKey: string | undefined,
+		diagnostics: AgentSessionRuntimeDiagnostic[],
+	): CreateAgentSessionFromServicesOptions["model"] {
+		if (!modelKey) return undefined;
+		const slash = modelKey.indexOf("/");
+		if (slash <= 0) return undefined;
+		const provider = modelKey.slice(0, slash);
+		const model = this.dependencies.modelRuntime.getModel(provider, modelKey.slice(slash + 1));
+		if (!model) {
+			diagnostics.push({ type: "warning", message: `Pending model not found, using default: ${modelKey}` });
+			return undefined;
+		}
+		if (!this.dependencies.modelRuntime.hasConfiguredAuth(provider)) {
+			diagnostics.push({
+				type: "warning",
+				message: `Pending model provider has no auth, using default: ${modelKey}`,
+			});
+			return undefined;
+		}
+		return model;
+	}
+
+	/** 全局或项目 settings 配置了 packages 时才需要包安装串行锁。 */
+	private hasConfiguredPackages(settingsManager: SettingsManager): boolean {
+		const globalCount = settingsManager.getGlobalSettings().packages?.length ?? 0;
+		const projectCount = settingsManager.getProjectSettings().packages?.length ?? 0;
+		return globalCount + projectCount > 0;
 	}
 }

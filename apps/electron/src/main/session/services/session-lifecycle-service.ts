@@ -20,6 +20,7 @@ import { withDeadline } from "../../utils/with-deadline.js";
 import { MAX_NAME_LENGTH, SESSION_INIT_TIMEOUT_MS } from "../constants.js";
 import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
+import type { AttachmentService } from "./attachment-service.js";
 import { selectSdkFallbackModel } from "./expected-session-defaults.js";
 import type { StoredSession } from "./session-catalog.js";
 import type { SessionDraftIndex } from "./session-draft-index.js";
@@ -70,6 +71,8 @@ export interface SessionLifecycleServiceDependencies {
 	planService: IPlanService;
 	userSettings: UserSettingsStore;
 	modelRegistry: Pick<ModelRegistry, "find">;
+	/** 粘贴附件服务：会话销毁时级联清理附件目录。 */
+	attachments: AttachmentService;
 	getAvailableModelsSync(): AvailableModel[];
 }
 
@@ -289,6 +292,8 @@ export class SessionLifecycleService {
 		this.deps.draftIndex.remove(sessionId);
 		const projectId = stored?.projectId ?? managed?.projectId ?? draftEntry?.projectId;
 		if (!projectId) return;
+		// 级联清理该会话的粘贴附件目录（附件是会话级数据，随会话销毁）。
+		this.deps.attachments.deleteSessionAttachments(projectId, sessionId);
 		// 先从目录索引移除 stored：disposeRuntime 进行中/完成后，任何并发
 		// ensureRuntime（如排队中的 applyMode 权限切换）都会因 getStoredSession
 		// 为空而失败，不会为"正在删除"的会话重建幽灵 runtime。随后的

@@ -77,6 +77,9 @@ describe("ProjectDeletionService", () => {
 			emitProjectList: () => events.push({ type: "project:list" }),
 			getActiveSessionId: () => null,
 			setActiveSessionId: () => {},
+			attachments: {
+				deleteProjectAttachments: vi.fn(),
+			} as unknown as import("../src/main/session/services/attachment-service.js").AttachmentService,
 		});
 
 		await service.executeDelete(projectId);
@@ -121,6 +124,9 @@ describe("ProjectDeletionService", () => {
 			emitProjectList: vi.fn(),
 			getActiveSessionId: () => null,
 			setActiveSessionId: vi.fn(),
+			attachments: {
+				deleteProjectAttachments: vi.fn(),
+			} as unknown as import("../src/main/session/services/attachment-service.js").AttachmentService,
 		});
 
 		await expect(service.executeDelete("../escape")).rejects.toThrow("Invalid project ID");
@@ -168,6 +174,9 @@ describe("ProjectDeletionService", () => {
 			setActiveSessionId: (id: string | null) => {
 				activeSessionId = id;
 			},
+			attachments: {
+				deleteProjectAttachments: vi.fn(),
+			} as unknown as import("../src/main/session/services/attachment-service.js").AttachmentService,
 		});
 
 		await service.executeDelete(projectId);

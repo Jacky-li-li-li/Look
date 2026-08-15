@@ -52,6 +52,7 @@ export function makeMockContext(overrides?: Partial<InvokeContext>): InvokeConte
 		drafts: {} as never,
 		skill: {} as never,
 		settings: { prompts: {} as never },
+		attachments: {} as never,
 		...overrides,
 	} as InvokeContext;
 }

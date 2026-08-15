@@ -128,6 +128,7 @@ export function DockFilePanel() {
 					dockMode
 					dockPath={dockedFile.absolutePath}
 					dockDiffPatch={dockedFile.diffPatch}
+					dockAttachment={dockedFile.attachment}
 					onDockNavigate={handleDockNavigate}
 					onDockClose={handleDockClose}
 					onDockUndock={handleUndock}

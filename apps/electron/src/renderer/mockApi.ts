@@ -284,10 +284,11 @@ const mockApi: LookAPI = {
 		_agentId: string,
 		message: string,
 		_images?: import("@shared/types").ImageContent[],
+		_attachments?: import("@shared/types").AttachmentRef[],
 		_sendMode?: "steer" | "followUp",
 	) => {
 		if (mockScenario === "chat") runMockStream(message);
-		return ok;
+		return Promise.resolve({ success: true, queued: false }) as Promise<IpcResult<{ queued: boolean }>>;
 	},
 	removeQueuedMessage: () => ok,
 	insertQueuedMessage: () => ok,
@@ -607,6 +608,23 @@ const mockApi: LookAPI = {
 		}),
 	writeFileContent: () => success({ sizeBytes: 0 }),
 	statFilePath: () => success({ kind: "missing", inProject: false }),
+	createAttachment: (_projectId, _sessionId, name) =>
+		Promise.resolve({
+			success: true,
+			attachment: {
+				projectId: "mock-project",
+				sessionId: "mock-session",
+				name,
+				path: `/mock/attachments/${name}`,
+				sizeBytes: 0,
+				mimeType: "text/plain",
+				createdAt: Date.now(),
+			},
+		}),
+	readAttachment: () => Promise.resolve({ success: true, content: "mock attachment content", sizeBytes: 0 }),
+	updateAttachment: () => Promise.resolve({ success: true, sizeBytes: 0 }),
+	deleteAttachment: () => Promise.resolve({ success: true }),
+	resolveAttachmentPath: () => Promise.resolve({ success: true, path: "/mock/attachments/paste-1.md" }),
 	openFileViewer: (_path, _fadeIn, _diffPatch) => Promise.resolve({ success: true }),
 	dockFileViewer: (_path, _diffPatch) => Promise.resolve({ success: true }),
 	resolveFileViewerDock: (_confirmed) => Promise.resolve({ success: true }),

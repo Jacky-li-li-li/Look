@@ -12,6 +12,7 @@ import {
 	recentlyCompletedAtom,
 	sessionErrorsAtom,
 } from "./atoms";
+import { markSessionEmpty } from "./snapshot";
 import { clearSessionScheduling } from "./ui-event-processor";
 
 const t = i18n.t.bind(i18n);
@@ -42,6 +43,9 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 				...appStore.get(agentsAtom).filter((agent) => agent.id !== event.agent.id),
 				event.agent,
 			]);
+			// 新建即空态：新会话没有历史可读，直接放空消息区，
+			// 不等后台 runtime 初始化完成后的 initial 快照。
+			markSessionEmpty(event.agent.id);
 			return true;
 
 		case "agent:destroyed": {

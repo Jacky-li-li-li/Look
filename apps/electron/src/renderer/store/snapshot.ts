@@ -4,6 +4,7 @@
 // ============================================================
 
 import {
+	type ImageContent,
 	LOOK_MESSAGE_DURATION_ENTRY_TYPE,
 	type LookMessageDurationEntryData,
 	type LookSessionEntry,
@@ -151,6 +152,29 @@ export function markSessionSnapshotLoading(sessionId: string, loading: boolean):
 		...previous,
 		loadingSnapshot: loading && !previous.snapshotLoaded,
 	});
+}
+
+/**
+ * 新建会话即刻空态：刚创建的会话没有历史可读，不必等后台 runtime 初始化
+ * 完成后的 initial 快照才把消息区从 loading 放出来。后续快照到达走正常
+ * 幂等合并。已有内容/已加载的会话不受影响。
+ */
+export function markSessionEmpty(sessionId: string): void {
+	const atom = sessionStateAtomFamily(sessionId);
+	const previous = appStore.get(atom);
+	if (previous.snapshotLoaded || previous.historyStatus !== "unloaded" || previous.entries.length > 0) return;
+	appStore.set(atom, { ...previous, historyStatus: "complete" });
+}
+
+/**
+ * 挂起消息的乐观回显：runtime 未就绪时 sendMessage 立即返回 queued，
+ * 用户气泡借 pendingUserMessage 通道即刻上屏；flush 后真实 user_message
+ * UI 事件以同内容覆盖（天然去重），快照到达后由持久化条目接管。
+ */
+export function markPendingUserMessage(sessionId: string, text: string, images?: ImageContent[]): void {
+	const atom = sessionStateAtomFamily(sessionId);
+	const previous = appStore.get(atom);
+	appStore.set(atom, { ...previous, pendingUserMessage: { text, images } });
 }
 
 export function applyHistoryPreview(preview: SessionHistoryPreviewEnvelope): void {
