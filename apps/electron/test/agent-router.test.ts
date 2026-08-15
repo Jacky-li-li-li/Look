@@ -107,7 +107,6 @@ describe("agent-router", () => {
 			(ctx.session.lifecycle.createAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
 				id: "new-agent",
 				projectId: "proj-1",
-				initializing: true,
 			});
 			const result = (await dispatch({
 				type: "agent:create",
@@ -116,7 +115,7 @@ describe("agent-router", () => {
 			})) as Record<string, unknown>;
 			expect(result.success).toBe(true);
 			expect(result.agentId).toBe("new-agent");
-			expect(result.agent).toEqual(expect.objectContaining({ id: "new-agent", initializing: true }));
+			expect(result.agent).toEqual(expect.objectContaining({ id: "new-agent" }));
 			expect(ctx.session.lifecycle.createAgent).toHaveBeenCalledWith(
 				expect.objectContaining({ name: "my-agent", projectId: "proj-1" }),
 			);

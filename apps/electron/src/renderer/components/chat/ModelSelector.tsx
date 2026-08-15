@@ -15,6 +15,20 @@ import { ProviderIcon } from "../ProviderIcon";
 
 const api = window.look;
 
+/**
+ * 模型目录缓存提升到模块级：ChatPanel 以 agentId 为 key 重挂载（新建会话、
+ * 切换会话都会），组件级 ref 会在重挂载时清空并重新异步拉取目录，导致模型行
+ * 首帧只显示 model key、目录到达后才换成完整名称——输入框看起来在跳动。
+ * 模块级缓存让每次挂载首帧就能命中完整名称；主进程刷新模型时
+ * modelUpdatedVersionAtom 递增，所有挂载实例都会失效一次。
+ */
+const MODELS_CACHE_TTL_MS = 60_000;
+const modelsCache: { models: AvailableModel[]; ts: number; version: number } = {
+	models: [],
+	ts: 0,
+	version: 0,
+};
+
 interface ModelSelectorProps {
 	agentId: string;
 	currentModel: string;
@@ -25,7 +39,9 @@ interface ModelSelectorProps {
 
 export default function ModelSelector({ agentId, currentModel, onModelChanged, onRequestApiKeys }: ModelSelectorProps) {
 	const { t } = useTranslation();
-	const [models, setModels] = useState<AvailableModel[]>([]);
+	// 用模块级缓存初始化：新建/切换会话重挂载时首帧就有完整目录，模型行立即显示
+	// 完整名称；effect 里的 fetchModels 只是再确认新鲜度（命中缓存时 setModels 同值）。
+	const [models, setModels] = useState<AvailableModel[]>(() => modelsCache.models);
 	const [switching, setSwitching] = useState(false);
 	const [open, setOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -33,29 +49,28 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	const latestPropsRef = useRef({ currentModel, onModelChanged });
 	latestPropsRef.current = { currentModel, onModelChanged };
 
-	// Cache: avoid re-fetching on every dialog open (ref persists across renders)
-	const modelsCacheRef = useRef<{ models: AvailableModel[]; ts: number }>({ models: [], ts: 0 });
-
-	// Invalidate the 60s cache when main process signals models have been refreshed
-	// (API key set, OAuth login, etc.) so the next dialog open always sees fresh data.
+	// 主进程刷新模型（API key 设置、OAuth 登录等）→ version 递增 → 全局失效缓存，
+	// 下一次打开对话框强制拉取。用模块级 version 而不是组件 ref：跨挂载（新建会话 /
+	// 切换会话时 ChatPanel 以 agentId 为 key 重挂载）仍能感知，不会把过期目录当新的。
 	const modelVersion = useAtomValue(modelUpdatedVersionAtom);
-	const prevModelVersionRef = useRef(modelVersion);
-	if (prevModelVersionRef.current !== modelVersion) {
-		prevModelVersionRef.current = modelVersion;
-		modelsCacheRef.current.ts = 0;
+	if (modelVersion !== modelsCache.version) {
+		modelsCache.models = [];
+		modelsCache.ts = 0;
+		modelsCache.version = modelVersion;
 	}
 
 	const fetchModels = useCallback(async (force = false) => {
 		if (!api) return;
 		const now = Date.now();
 		// Return cached if fresh (< 60s) and not forced
-		if (!force && modelsCacheRef.current.ts > 0 && now - modelsCacheRef.current.ts < 60_000) {
-			setModels(modelsCacheRef.current.models);
+		if (!force && modelsCache.ts > 0 && now - modelsCache.ts < MODELS_CACHE_TTL_MS) {
+			setModels(modelsCache.models);
 			return;
 		}
 		const m = await api.getModels();
 		if (m?.success) {
-			modelsCacheRef.current = { models: m.models, ts: now };
+			modelsCache.models = m.models;
+			modelsCache.ts = now;
 			setModels(m.models);
 		}
 	}, []);
@@ -115,9 +130,21 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 	);
 
 	const currentModelObj = models.find((m) => `${m.provider}/${m.id}` === currentModel);
-	// 切换中不换文案（避免按钮宽度一缩一放的抖动），只把图标换成 spinner
-	// 注意:"".split("/").pop() 返回空串而非 undefined,?? 不会兜底 → 必须用 || 兜底到翻译文案
-	const label = currentModelObj?.name ?? (currentModel?.split("/").pop() || t("agent.model"));
+	// Keep the last valid catalog entry while the model list is refreshing. The
+	// fallback key is still rendered when the selected model changes, so a stale
+	// model name can never be shown for a different session/model.
+	const stableModelRef = useRef<{ key: string; model: AvailableModel } | null>(null);
+	if (currentModelObj) {
+		stableModelRef.current = { key: currentModel, model: currentModelObj };
+	} else if (stableModelRef.current?.key !== currentModel) {
+		stableModelRef.current = null;
+	}
+	const displayModelObj = currentModelObj ?? stableModelRef.current?.model;
+	const fallbackModelLabel = currentModel?.split("/").pop() || t("agent.model");
+	// 切换中不换文案（避免按钮宽度一缩一放的抖动），只把图标换成 spinner。
+	// 模型目录异步到达前也用 currentModel 的稳定 key 占位；工具栏槽位固定且
+	// 可收缩，首帧不会出现空白/整行横向重排。
+	const label = displayModelObj?.name ?? fallbackModelLabel;
 
 	// Default the active tab to whichever side has content. If the
 	// user only configured env-var credentials, the "API Keys" tab
@@ -142,20 +169,21 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 				<Button
 					variant="line-ghost"
 					size="sm"
-					className="group/selector h-7 font-mono text-[11px]"
+					className="group/selector h-7 min-w-[5.5rem] max-w-[9rem] flex-[0_1_8rem] justify-start overflow-hidden font-mono text-[11px]"
+					aria-label={label}
 					title={label}
 					disabled={switching}
 				>
 					{switching ? (
-						<Loader2 className="size-3 animate-spin" data-icon="inline-start" />
+						<Loader2 className="size-3 shrink-0 animate-spin" data-icon="inline-start" />
 					) : (
 						<ProviderIcon
-							id={currentModelObj?.provider ?? currentModel?.split("/")[0] ?? ""}
-							className="size-3"
+							id={displayModelObj?.provider ?? currentModel?.split("/")[0] ?? ""}
+							className="size-3 shrink-0"
 							data-icon="inline-start"
 						/>
 					)}
-					<span className="whitespace-nowrap">{label}</span>
+					<span className="min-w-0 flex-1 truncate whitespace-nowrap text-left">{label}</span>
 				</Button>
 			</DialogTrigger>
 			<DialogContent className="max-w-xl p-0 max-h-[85vh] overflow-hidden grid-rows-[auto_auto_1fr]" showCloseButton>
@@ -171,6 +199,7 @@ export default function ModelSelector({ agentId, currentModel, onModelChanged, o
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
 							placeholder={t("agent.searchModels", "Search models…")}
+							aria-label={t("agent.searchModels", "Search models")}
 							className="flex-1 bg-transparent text-[12px] outline-hidden placeholder:text-muted-foreground"
 						/>
 					</div>

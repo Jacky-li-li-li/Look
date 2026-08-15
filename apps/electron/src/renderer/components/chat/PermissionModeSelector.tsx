@@ -80,7 +80,7 @@ export default function PermissionModeSelector({ agentId, currentMode }: Permiss
 				<Button
 					variant="line-ghost"
 					size="sm"
-					className="group/perm h-7 font-mono text-[11px]"
+					className="group/perm h-7 shrink-0 font-mono text-[11px]"
 					title={t(current.descriptionKey)}
 					aria-label={t(current.descriptionKey)}
 				>

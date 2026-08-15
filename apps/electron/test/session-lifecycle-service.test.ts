@@ -88,13 +88,16 @@ describe("SessionLifecycleService", () => {
 				} as unknown as import("../src/main/services/subagent-runtime.js").SubAgentRuntimeService,
 				sessionInfoService: {
 					getAgentInfo: vi.fn().mockReturnValue({ id: "session-1", projectId }),
-					// 与真实 draftInfo 同构：id 由调用方传入（SessionManager 分配）。
+					// 与真实 draftInfo 同构：预期默认值在投影内部解析（模型/思考先行）。
 					draftInfo: vi.fn((id: string, pid: string, name: string, imProvider?: "feishu") => ({
 						id,
 						name,
 						projectId: pid,
 						imProvider,
-						initializing: true,
+						model: "deepseek/deepseek-v4-pro",
+						thinkingLevel: "high",
+						modelSupportsThinking: true,
+						availableThinkingLevels: ["off", "low", "high"],
 					})),
 				} as unknown as import("../src/main/session/services/session-info-service.js").SessionInfoService,
 				permissionService: {
@@ -118,14 +121,16 @@ describe("SessionLifecycleService", () => {
 		};
 	}
 
-	it("createAgent 先返回 initializing 草稿，后台初始化完成后再补发事件", async () => {
+	it("createAgent 先返回最终形态草稿行，初始化完成后只补快照（单事件收敛）", async () => {
 		const { service, host, runtime, draftIndex } = makeService();
 
 		const draft = await service.createAgent("My Agent");
 
-		// 草稿立即返回：真实 SessionManager 分配的 ID，带 initializing 标记
-		expect(draft.initializing).toBe(true);
+		// 草稿立即返回：真实 SessionManager 分配的 ID，即为最终形态
 		expect(draft.name).toBe("My Agent");
+		// 预期默认值先行：草稿第一帧即带正式行一致的模型/思考信息（避免跳变）
+		expect(draft.model).toBe("deepseek/deepseek-v4-pro");
+		expect(draft.thinkingLevel).toBe("high");
 		const sessionId = draft.id;
 		// 创建即落草稿索引（崩溃/重启可恢复；落盘后由 refresh 修剪）
 		expect(draftIndex.get(sessionId)).toMatchObject({ id: sessionId, projectId: "project-1", name: "My Agent" });
@@ -133,22 +138,23 @@ describe("SessionLifecycleService", () => {
 		expect(host.emit).toHaveBeenCalledWith({
 			type: "agent:created",
 			agentId: sessionId,
-			agent: expect.objectContaining({ id: sessionId, initializing: true }),
+			agent: expect.objectContaining({ id: sessionId, model: "deepseek/deepseek-v4-pro" }),
 		});
 		expect(host.setActiveProjectId).toHaveBeenCalledWith("project-1");
 		expect(host.setActiveSessionId).toHaveBeenCalledWith(sessionId);
 
 		await service.awaitPendingCreations();
 
-		// 后台完成：命名、默认名标记、目录刷新、真实 created + 初始快照
+		// 后台完成：命名、默认名标记、目录刷新、仅补初始快照——
+		// 不再补发第二次 agent:created（Proma 式单事件收敛）。
 		expect(host.createManagedRuntime).toHaveBeenCalled();
 		expect(runtime.runtime.session.setSessionName).toHaveBeenCalledWith("My Agent");
 		expect(host.refreshProjectSessions).toHaveBeenCalledWith("project-1");
-		expect(host.emit).toHaveBeenCalledWith({
-			type: "agent:created",
-			agentId: sessionId,
-			agent: { id: "session-1", projectId: "project-1" },
-		});
+		const createdEvents = vi
+			.mocked(host.emit)
+			.mock.calls.map((call) => call[0])
+			.filter((event) => event.type === "agent:created" && event.agentId === sessionId);
+		expect(createdEvents).toHaveLength(1);
 		expect(host.emitSessionState).toHaveBeenCalledWith(sessionId, "initial");
 	});
 
@@ -395,13 +401,25 @@ describe("SessionLifecycleService", () => {
 			return { session, setModel, update, deps };
 		};
 
-		it("SDK 未解析出模型时用首个可用模型兜底 setModel", async () => {
+		it("SDK 未解析出模型时用可用模型兜底 setModel", async () => {
 			const { session, setModel, deps } = makeDeps({
 				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
 				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
 			});
 			await ensureSessionModel(session, deps);
 			expect(setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-v4-flash" });
+		});
+
+		it("同一 provider 有多个模型时按 pi 默认模型表兜底", async () => {
+			const { session, setModel, deps } = makeDeps({
+				available: [
+					{ provider: "deepseek", id: "deepseek-v4-flash" },
+					{ provider: "deepseek", id: "deepseek-v4-pro" },
+				],
+				findResult: { provider: "deepseek", id: "deepseek-v4-pro" },
+			});
+			await ensureSessionModel(session, deps);
+			expect(setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-v4-pro" });
 		});
 
 		it("已解析出模型时跳过(即使有可用模型)", async () => {

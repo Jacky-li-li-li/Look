@@ -101,7 +101,9 @@ const ChatPanel = memo(function ChatPanel({
 				onRequestApiKeys={handleRequestApiKeys}
 				onAbort={handleAbort}
 			/>
-			{/* Git 状态栏在输入框下方，内容紧凑上移，不改变输入框位置 */}
+			{/* Git 状态栏作为底部常驻 20px 槽位（内容按需淡入）：
+			    高度恒定 → 输入框在其上方始终纹丝不动，git 信息出现/消失只影响
+			    状态栏自身内容，不参与推动输入框的布局。 */}
 			<GitStatusBar projectId={activeAgent?.projectId ?? ""} />
 		</div>
 	);

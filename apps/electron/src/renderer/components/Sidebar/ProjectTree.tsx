@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent } from "@look/ui/components/ui/collapsi
 import { type AgentInfo, DEFAULT_PROJECT_ID, type ProjectInfo } from "@shared/types";
 import { useAtom, useAtomValue } from "jotai";
 import { ChevronsDownUp, ChevronsUpDown, FolderOpen, Plus } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { appStore } from "../../store/appStore";
@@ -30,6 +30,64 @@ import { getSessionActivityAt, SESSION_COLLAPSE_THRESHOLD, sortSessionsByActivit
 
 /** 稳定空数组引用，避免每次渲染创建新引用导致 memo 失效 */
 const EMPTY_CHILDREN: ChildSessionInfo[] = [];
+
+const SESSION_FLIP_DURATION_MS = 240;
+const SESSION_FLIP_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+type SessionRowPositions = Map<string, number>;
+type SessionRowAnimations = Map<string, Animation>;
+
+function getSessionRows(tree: HTMLElement): HTMLElement[] {
+	return Array.from(tree.querySelectorAll<HTMLElement>("[data-agent-id]"));
+}
+
+function getSessionTreeStructureKey(
+	tree: HTMLElement,
+	projects: readonly ProjectInfo[],
+	openProjectIds: readonly string[],
+): string {
+	const openIds = new Set(openProjectIds);
+	const projectKey = projects
+		.map((project) => `${project.id}:${openIds.has(project.id) ? "open" : "closed"}`)
+		.join(",");
+	const rowKey = getSessionRows(tree)
+		.map((row) => row.dataset.agentId ?? "")
+		.join(",");
+	return `${projectKey}::${rowKey}`;
+}
+
+/**
+ * Read all rows in one coordinate system. getBoundingClientRect is intentional:
+ * offsetTop is relative to the nearest positioned ancestor, and each session
+ * group is positioned so top-level rows would otherwise all report zero.
+ */
+function measureSessionRows(tree: HTMLElement, rows: readonly HTMLElement[]): SessionRowPositions {
+	const treeTop = tree.getBoundingClientRect().top;
+	const positions: SessionRowPositions = new Map();
+	for (const row of rows) {
+		const id = row.dataset.agentId;
+		if (id) positions.set(id, row.getBoundingClientRect().top - treeTop);
+	}
+	return positions;
+}
+
+function cancelSessionRowAnimations(animations: SessionRowAnimations): void {
+	for (const animation of animations.values()) {
+		try {
+			animation.cancel();
+		} catch {
+			// A detached row may already have had its animation released by Chromium.
+		}
+	}
+	animations.clear();
+}
+
+function prefersReducedMotion(): boolean {
+	return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
+function hasMeaningfulOffset(value: number): boolean {
+	return Math.abs(value) > 0.5;
+}
 
 const api = window.look;
 
@@ -228,7 +286,9 @@ export default function ProjectTree({
 		});
 	}, [activeAgentId, activeProjectId, agents, projects, runningAgents, setOpenProjectIds]);
 
-	// Scroll to active session
+	// Keep scrolling synchronous: the row FLIP below is the single animated timeline.
+	// A second browser smooth-scroll animation would make a newly inserted row
+	// move on a different clock and can look like a two-stage transition.
 	useEffect(() => {
 		if (!activeAgentId) return;
 		const frame = requestAnimationFrame(() => {
@@ -325,6 +385,110 @@ export default function ProjectTree({
 		setOpenProjectIds(allProjectsOpen ? [] : sortedProjects.map((project) => project.id));
 	}, [allProjectsOpen, setOpenProjectIds, sortedProjects]);
 
+	// ── FLIP 列表动画 ──
+	// 只在可见行的结构/顺序真正变化时读布局并播放一次动画。状态流、时间
+	// 刷新和初始化后的同形 agent:list 只会命中 structureKey 守卫，不会重启动画。
+	const treeRef = useRef<HTMLDivElement>(null);
+	const sessionPositionsRef = useRef<SessionRowPositions>(new Map());
+	const structureKeyRef = useRef<string | null>(null);
+	const sessionAnimationsRef = useRef<SessionRowAnimations>(new Map());
+
+	// 这些依赖是 DOM 结构变化的触发信号；具体值通过 tree/querySelector 读取，
+	// 因而不一定直接出现在 effect 闭包中。
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 依赖集合用于捕获折叠、优先级和子会话可见性变化。
+	useLayoutEffect(() => {
+		const tree = treeRef.current;
+		if (!tree) {
+			structureKeyRef.current = null;
+			sessionPositionsRef.current.clear();
+			cancelSessionRowAnimations(sessionAnimationsRef.current);
+			return;
+		}
+
+		const rows = getSessionRows(tree);
+		const structureKey = getSessionTreeStructureKey(tree, sortedProjects, openProjectIds);
+		if (structureKeyRef.current === structureKey) return;
+
+		const hadPreviousLayout = structureKeyRef.current !== null;
+		const previous = sessionPositionsRef.current;
+		const activeAnimationIds = new Set(sessionAnimationsRef.current.keys());
+		const visualPositions = hadPreviousLayout ? measureSessionRows(tree, rows) : new Map<string, number>();
+		cancelSessionRowAnimations(sessionAnimationsRef.current);
+		const current = measureSessionRows(tree, rows);
+
+		structureKeyRef.current = structureKey;
+		sessionPositionsRef.current = current;
+
+		const canAnimate = typeof Element !== "undefined" && typeof Element.prototype.animate === "function";
+		if (!hadPreviousLayout || prefersReducedMotion() || !canAnimate) return;
+
+		// The largest positive displacement is the inserted row's slot. Existing
+		// rows use their own exact displacement, so variable-height child groups
+		// remain correct while a normal new session still moves one row height.
+		let insertedSlot = 0;
+		for (const row of rows) {
+			const id = row.dataset.agentId;
+			if (!id) continue;
+			const before = previous.get(id);
+			const after = current.get(id);
+			if (before !== undefined && after !== undefined) insertedSlot = Math.max(insertedSlot, after - before);
+		}
+
+		const animateRow = (id: string, row: HTMLElement, keyframes: Keyframe[]): void => {
+			const animation = row.animate(keyframes, {
+				duration: SESSION_FLIP_DURATION_MS,
+				easing: SESSION_FLIP_EASING,
+				fill: "both",
+			});
+			sessionAnimationsRef.current.set(id, animation);
+			const clear = (): void => {
+				if (sessionAnimationsRef.current.get(id) === animation) sessionAnimationsRef.current.delete(id);
+			};
+			animation.onfinish = clear;
+			animation.oncancel = clear;
+		};
+
+		for (const row of rows) {
+			const id = row.dataset.agentId;
+			if (!id) continue;
+			const after = current.get(id);
+			if (after === undefined) continue;
+			const before = previous.get(id);
+
+			if (before === undefined) {
+				// New rows enter from one slot above while the existing rows move in
+				// the same 240ms interval. This is one composed motion, not fade-then-slide.
+				const entryOffset = insertedSlot > 0 ? -insertedSlot : 0;
+				animateRow(id, row, [
+					{ opacity: 0, transform: `translateY(${entryOffset}px)` },
+					{ opacity: 1, transform: "translateY(0)" },
+				]);
+				continue;
+			}
+
+			// If another structural change arrives while a row is moving, continue
+			// from its current visual position. Otherwise use the previous committed
+			// layout, which is the standard FLIP first/last pair.
+			const start = activeAnimationIds.has(id) ? (visualPositions.get(id) ?? after) - after : before - after;
+			if (hasMeaningfulOffset(start)) {
+				animateRow(id, row, [{ transform: `translateY(${start}px)` }, { transform: "translateY(0)" }]);
+			}
+		}
+	}, [
+		activeAgentId,
+		collapsedSubSessions,
+		errorAgentIds,
+		expandedProjectIds,
+		openProjectIds,
+		recentlyCompleted,
+		runningAgents,
+		sessionsByProject,
+		sortedProjects,
+	]);
+
+	// Do not leave compositor animations attached to detached sidebar rows.
+	useEffect(() => () => cancelSessionRowAnimations(sessionAnimationsRef.current), []);
+
 	if (projects.length === 0) {
 		return (
 			<div className="sidebar-empty-state flex flex-col items-center gap-2 px-4 py-10 text-center">
@@ -369,7 +533,7 @@ export default function ProjectTree({
 					{allProjectsOpen ? <ChevronsDownUp className="size-3.5" /> : <ChevronsUpDown className="size-3.5" />}
 				</button>
 			</div>
-			<div role="tree" aria-label={t("sidebar.projectsLabel", "Projects and sessions")}>
+			<div ref={treeRef} role="tree" aria-label={t("sidebar.projectsLabel", "Projects and sessions")}>
 				{sortedProjects.map((project) => (
 					<ProjectTreeItem
 						key={project.id}

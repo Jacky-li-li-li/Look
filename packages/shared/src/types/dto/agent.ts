@@ -36,14 +36,6 @@ export interface AgentInfo {
 	agentConfigName?: string;
 	/** Current context usage (live-updating, used by ContextRing). */
 	contextUsage?: ContextUsage;
-
-	/**
-	 * 新建会话乐观草稿标记：session ID 已分配、runtime 仍在后台初始化。
-	 * 主进程的 agent:list 不含这种行（runtime 未注册、JSONL 未落盘），
-	 * 渲染端替换列表时必须保留带此标记的行；runtime 就绪后主进程会重发
-	 * 不带此标记的 agent:created / agent:list。
-	 */
-	initializing?: boolean;
 }
 
 /** Agent definition source. */

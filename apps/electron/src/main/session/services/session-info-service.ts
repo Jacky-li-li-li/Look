@@ -14,6 +14,7 @@ import { loadBindings } from "../../im/im-storage.js";
 import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
+import type { ExpectedSessionDefaults } from "./expected-session-defaults.js";
 import type { SessionCatalog, StoredSession } from "./session-catalog.js";
 import type { SessionDraftIndex } from "./session-draft-index.js";
 
@@ -26,6 +27,13 @@ export interface SessionInfoServiceDependencies {
 	scopeRegistry: Pick<SessionScopeRegistry, "get">;
 	maxNameLength: number;
 	listProjects(): ProjectInfo[];
+	/**
+	 * 同步解析「预期会话默认值」（模型/思考级别，与 pi findInitialModel
+	 * 同序）。草稿行的所有投影（创建、agent:list 合并、getAgentInfo 兜底）
+	 * 都从这里取值——若只在创建时传一次，下一次 agent:list 会把模型冲回
+	 * 空串，初始化完成前选择器来回跳变；projectId 用于读取项目级设置。
+	 */
+	getExpectedSessionDefaults(projectId: string): ExpectedSessionDefaults;
 }
 
 export class SessionInfoService {
@@ -92,19 +100,23 @@ export class SessionInfoService {
 
 	/**
 	 * 新建会话的乐观草稿投影：runtime 仍在后台初始化，主进程尚无
-	 * runtime/stored 可查，但渲染端需要立即展示侧边栏行。字段默认值
-	 * 与 sessionInfo() 的持久化占位一致，另带 initializing 标记。
+	 * runtime/stored 可查，但渲染端需要立即展示侧边栏行。
+	 *
+	 * 模型/思考字段来自 getExpectedSessionDefaults（与 pi findInitialModel
+	 * 同序解析），草稿从第一帧就与正式行一致，避免初始化完成时模型/思考
+	 * 选择器整行跳变；解析失败退回空占位。
 	 */
 	draftInfo(sessionId: string, projectId: string, name: string, imProvider?: ImSessionProvider): AgentInfo {
+		const resolved = this.deps.getExpectedSessionDefaults(projectId);
 		const now = Date.now();
 		return {
 			id: sessionId,
 			name: name.slice(0, this.deps.maxNameLength),
 			imProvider,
-			model: "",
-			thinkingLevel: "off",
-			modelSupportsThinking: false,
-			availableThinkingLevels: ["off"],
+			model: resolved?.model ?? "",
+			thinkingLevel: resolved?.thinkingLevel ?? "off",
+			modelSupportsThinking: resolved?.modelSupportsThinking ?? false,
+			availableThinkingLevels: resolved?.availableThinkingLevels ?? ["off"],
 			isStreaming: false,
 			isRetrying: false,
 			isCompacting: false,
@@ -114,7 +126,6 @@ export class SessionInfoService {
 			sessionFilePath: undefined,
 			projectId,
 			contextUsage: undefined,
-			initializing: true,
 		};
 	}
 

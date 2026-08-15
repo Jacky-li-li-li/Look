@@ -20,6 +20,7 @@ import { withDeadline } from "../../utils/with-deadline.js";
 import { MAX_NAME_LENGTH, SESSION_INIT_TIMEOUT_MS } from "../constants.js";
 import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
+import { selectSdkFallbackModel } from "./expected-session-defaults.js";
 import type { StoredSession } from "./session-catalog.js";
 import type { SessionDraftIndex } from "./session-draft-index.js";
 import type { SessionInfoService } from "./session-info-service.js";
@@ -84,7 +85,8 @@ export interface EnsureSessionModelDeps {
  *
  * - 已解析出模型 → 跳过
  * - 未解析(SDK findInitialModel 在快照失真/无可用时静默返回 undefined) →
- *   取首个可用模型 setModel;setModel 内部用实时 checkAuth 校验凭据
+ *   按 pi 的 provider 默认模型表选择第一个命中的可用模型；无命中时取首个
+ *   可用模型。setModel 内部用实时 checkAuth 校验凭据
  *   (agent-session.js),失败 throw → 忽略,保持现状(发送时会报明确错误)
  * - setModel 副作用:持久化 defaultProvider/defaultModel 到 settings.json
  *   (agent-session.js setDefaultModelAndProvider)。若用户已设置全局默认模型
@@ -99,7 +101,8 @@ export async function ensureSessionModel(
 	try {
 		const available = deps.getAvailableModelsSync();
 		if (available.length === 0) return;
-		const first = available[0];
+		const first = selectSdkFallbackModel(available);
+		if (!first) return;
 		const model = deps.modelRegistry.find(first.provider, first.id);
 		if (!model) return;
 		await session.setModel(model);
@@ -133,13 +136,15 @@ export class SessionLifecycleService {
 	}
 
 	/**
-	 * 新建会话：立即分配 session ID 并返回乐观草稿，runtime 初始化转后台。
+	 * 新建会话：立即分配 session ID 并返回最终形态的草稿行，runtime 初始化
+	 * 转后台（Proma 式「创建即终态」）。
 	 *
 	 * 此前整条链路（串行资源锁 + 扩展/包/agent 目录扫描 + bind）都在 IPC
 	 * 返回前 await，慢速 MCP / 缺包 npm install / 排队中的其他初始化会让
 	 * 「新建会话」点击后长时间无响应。现在 SessionManager.create（同步、
-	 * 不落盘）后马上发 initializing 草稿行并返回；runtime 就绪后补发真实
-	 * agent:created + session:snapshot。初始化期间渲染端的发送/激活经
+	 * 不落盘）+ 草稿索引落盘后马上发出与正式行一致的草稿行（模型/思考
+	 * 同步解析）并返回；runtime 就绪后只补发 session:snapshot，不再补发
+	 * agent:created——渲染端零跳变。初始化期间渲染端的发送/激活经
 	 * ensureRuntime 等待 in-flight 创建（见 runtime-lifecycle-coordinator）。
 	 */
 	async createAgent(
@@ -154,6 +159,8 @@ export class SessionLifecycleService {
 		const sessionManager = SessionManager.create(project.cwd, ensureWorkspaceDir(projectId));
 		const sessionId = sessionManager.getSessionId();
 		const name = (input.name?.trim() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH);
+		// 草稿投影内部解析预期默认值（模型/思考与 pi findInitialModel 同序），
+		// 第一帧即与正式行一致。
 		const draft = this.deps.sessionInfoService.draftInfo(sessionId, projectId, name, input.imProvider);
 
 		// 创建即落草稿索引（Proma 式最小双事实源）：pi JSONL 仍是内容真源，
@@ -226,11 +233,10 @@ export class SessionLifecycleService {
 				return;
 			}
 
+			// Proma 式单事件收敛：会话行在创建时已以最终形态发出（模型/思考
+			// 同步解析），初始化完成不再补发 agent:created——渲染端的行、快照
+			// 投影与后续 agent:list 全部命中幂等守卫，视觉上零变化。
 			await this.deps.host.refreshProjectSessions(projectId);
-			const agent = this.deps.sessionInfoService.getAgentInfo(sessionId);
-			if (agent) {
-				this.deps.host.emit({ type: "agent:created", agentId: sessionId, agent });
-			}
 			this.deps.host.emitSessionState(sessionId, "initial");
 		} catch (error) {
 			// 用户在草稿期主动删除：删除路径已移除草稿索引条目，这里只做清理，

@@ -69,6 +69,7 @@ import { RuntimeLifecycleCoordinator } from "../runtime/runtime-lifecycle-coordi
 import { RuntimeRegistry } from "../runtime/runtime-registry.js";
 import { ActiveSessionSelection } from "../scope/active-session-selection.js";
 import { SessionScopeRegistry } from "../scope/scope-registry.js";
+import { type ExpectedSessionDefaults, resolveExpectedSessionDefaults } from "../services/expected-session-defaults.js";
 import { ProjectApplicationService } from "../services/project-application-service.js";
 import { ProjectRuntimeService } from "../services/project-runtime-service.js";
 import { SessionCatalog } from "../services/session-catalog.js";
@@ -242,6 +243,8 @@ export class CompositionBuilder {
 			scopeRegistry: this.scopeRegistry,
 			maxNameLength: MAX_NAME_LENGTH,
 			listProjects: () => host.listProjects(),
+			// 草稿行预期默认值（延迟执行，modelRegistry 在 Phase 2 就位）。
+			getExpectedSessionDefaults: (projectId) => this.resolveExpectedSessionDefaults(projectId),
 		});
 		this.sessionNotifier = new SessionNotifier(this.eventBus, {
 			sessionInfoService: this.sessionInfoService,
@@ -745,6 +748,35 @@ export class CompositionBuilder {
 	}
 
 	// ── Helpers (shared across phases) ──
+
+	/**
+	 * 草稿行预期默认值（延迟执行，modelRegistry 在 Phase 2 就位）。
+	 * 解析序与 pi findInitialModel 对齐，见 expected-session-defaults.ts。
+	 */
+	private resolveExpectedSessionDefaults(projectId?: string): ExpectedSessionDefaults {
+		const projectSettings = projectId ? this.createProjectSettingsManager(projectId) : undefined;
+		return resolveExpectedSessionDefaults({
+			globalSettingsManager: this.globalSettingsManager!,
+			modelRegistry: this.modelRegistry!,
+			getDefaultSettings: projectSettings
+				? () => ({
+						defaultProvider: projectSettings.getDefaultProvider(),
+						defaultModel: projectSettings.getDefaultModel(),
+						defaultThinkingLevel: projectSettings.getDefaultThinkingLevel(),
+					})
+				: undefined,
+			getAvailableModels: () => getAvailableModels(this.modelRegistry!),
+		});
+	}
+
+	/** Read the same trusted project settings that SessionRuntimeFactory uses. */
+	private createProjectSettingsManager(projectId: string): SettingsManager | undefined {
+		const project = this.projectService?.getProjectInfo(projectId);
+		if (!project) return undefined;
+		const settings = SettingsManager.create(project.cwd, getLookDir());
+		settings.setProjectTrusted(this.projectService!.resolveProjectTrust(project.cwd));
+		return settings;
+	}
 
 	private findProjectIdByCwd(cwd: string): string | undefined {
 		return this.projectService!.listProjects().find((project) => project.cwd === cwd)?.id;

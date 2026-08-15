@@ -82,7 +82,7 @@ export default function ThinkingSelector({ currentLevel, availableThinkingLevels
 			size="sm"
 			title={triggerTitle}
 			aria-label={triggerTitle}
-			className="group/selector h-7 font-mono text-[11px]"
+			className="group/selector h-7 shrink-0 font-mono text-[11px]"
 		>
 			<Brain data-icon="inline-start" className={`size-3 ${LEVEL_COLORS[current.value]}`} />
 		</Button>

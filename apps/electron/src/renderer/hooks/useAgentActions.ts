@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { appStore } from "../store/appStore";
 import {
 	activeAgentIdAtom,
+	agentsAtom,
 	openedSessionIdsAtom,
 	sessionStateAtomFamily,
 	userPreferredModelAtom,
@@ -124,6 +125,16 @@ export function useAgentActions() {
 		try {
 			const result = await api.createAgent({ projectId });
 			if (result?.success && result.agentId) {
+				// The main process emits agent:created before resolving the invoke, but
+				// keep the reply as a same-shaped fallback for a renderer that connected
+				// after the event. The ID upsert prevents duplicate React rows.
+				const createdAgent = result.agent;
+				if (createdAgent) {
+					appStore.set(agentsAtom, (previous) => [
+						...previous.filter((agent) => agent.id !== createdAgent.id),
+						createdAgent,
+					]);
+				}
 				appStore.set(activeAgentIdAtom, result.agentId);
 				appStore.set(openedSessionIdsAtom, (previous) => {
 					if (previous.includes(result.agentId)) return previous;

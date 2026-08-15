@@ -5,7 +5,8 @@
 // 传入的 projectId 变化 → effect 重新 invoke 主进程 git 探测。
 // 为避免外部 checkout/改 remote 后状态栏长期 stale，挂载后每 30s
 // （窗口可见时）重新拉取；主进程侧有 5s TTL 缓存兜底，IPC 开销极小。
-// 非 git 仓库（info.isRepo=false）时整条不渲染，保持极简。
+// 非 git 仓库（info.isRepo=false）时渲染透明内容但保留 20px 槽位：
+// 高度恒定保证输入框位置不被顶动，git 信息异步到达后内容淡入。
 // ============================================================
 
 import { useAtomValue, useSetAtom } from "jotai";
@@ -76,34 +77,38 @@ const GitStatusBar = memo(function GitStatusBar({ projectId }: GitStatusBarProps
 		};
 	}, [projectId, setInfo]);
 
-	if (!info?.isRepo) return null;
+	// 非 git 仓库 / 探测未完成时也渲染完整的 20px 槽位，只是内容透明（opacity 0）。
+	// 高度恒定是“输入框纹丝不动”的关键：ChatInput 在状态栏上方，若状态栏高度
+	// 从 0→20px 变化，输入框会被顶动；常驻槽位让输入框位置永远不变，
+	// git 信息到达后内容淡入。
+	const isRepo = info?.isRepo === true;
+	const head = isRepo ? (info.branch ?? info.headShort ?? "") : "";
+	const show = isRepo && head.length > 0;
 
-	const head = info.branch ?? info.headShort ?? "";
-	// 极端探测失败（symbolic-ref 与 rev-parse 同时失败）时不渲染空图标条。
-	if (!head) return null;
-
-	const remote = info.remoteUrl ? shortenRemoteUrl(info.remoteUrl) : null;
-	const dirty = info.dirtyCount > 0;
+	const remote = show && info.remoteUrl ? shortenRemoteUrl(info.remoteUrl) : null;
+	const dirty = show && info.dirtyCount > 0;
 	// diff 风格：+新增/修改行（绿），-删除行（红）；只显示非零侧
-	const dirtyAddedLabel = info.dirtyAddedLines > 0 ? `+${info.dirtyAddedLines}` : null;
-	const dirtyDeletedLabel = info.dirtyDeletedLines > 0 ? `-${info.dirtyDeletedLines}` : null;
+	const dirtyAddedLabel = show && info.dirtyAddedLines > 0 ? `+${info.dirtyAddedLines}` : null;
+	const dirtyDeletedLabel = show && info.dirtyDeletedLines > 0 ? `-${info.dirtyDeletedLines}` : null;
 	const dirtyLabel = [dirtyAddedLabel, dirtyDeletedLabel].filter(Boolean).join(" ");
-	const headLabel = info.branch
+	const headLabel = info?.branch
 		? `${t("chat.gitBranch")}: ${info.branch}`
-		: `${t("chat.gitDetachedHead")}: ${info.headShort ?? ""}`;
+		: `${t("chat.gitDetachedHead")}: ${info?.headShort ?? ""}`;
 	const titleParts: string[] = [headLabel];
-	if (info.repoRoot) titleParts.push(`${t("chat.gitRepoRoot")}: ${info.repoRoot}`);
-	if (info.remoteUrl) titleParts.push(`${t("chat.gitRemote")}: ${info.remoteUrl}`);
+	if (show && info.repoRoot) titleParts.push(`${t("chat.gitRepoRoot")}: ${info.repoRoot}`);
+	if (show && info.remoteUrl) titleParts.push(`${t("chat.gitRemote")}: ${info.remoteUrl}`);
 	if (dirty) titleParts.push(`${t("chat.gitDirtyCount")}: ${info.dirtyCount} (${dirtyLabel})`);
 
 	const visible = [head, remote, dirtyLabel].filter(Boolean);
 
 	return (
 		<div
-			role="status"
-			aria-label={visible.join(" · ")}
-			className="flex h-5 shrink-0 items-start gap-1.5 overflow-hidden px-3 pt-[3px] text-muted-foreground/70"
-			title={titleParts.join("\n")}
+			role={show ? "status" : undefined}
+			aria-hidden={show ? undefined : true}
+			aria-label={show ? visible.join(" · ") : undefined}
+			className="flex h-5 shrink-0 items-start gap-1.5 overflow-hidden px-3 pt-[3px] text-muted-foreground/70 transition-opacity duration-150"
+			title={show ? titleParts.join("\n") : undefined}
+			style={{ opacity: show ? 1 : 0 }}
 		>
 			<svg viewBox="0 0 16 16" className="size-3 shrink-0" fill="currentColor" aria-hidden="true">
 				<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />

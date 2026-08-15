@@ -29,6 +29,12 @@ function createQueries(runtime: ManagedRuntime | undefined): SessionNotifierQuer
 		sessionInfoService,
 		scopeRegistry: { get: () => undefined },
 		listProjects: () => [],
+		getExpectedSessionDefaults: () => ({
+			model: "",
+			thinkingLevel: "off",
+			modelSupportsThinking: false,
+			availableThinkingLevels: ["off"],
+		}),
 		getActiveProjectId: () => "project-a",
 	};
 }

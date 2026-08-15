@@ -59,6 +59,12 @@ describe("SessionInfoService subagent markers", () => {
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
 			listProjects: () => [project],
+			getExpectedSessionDefaults: () => ({
+				model: "",
+				thinkingLevel: "off",
+				modelSupportsThinking: false,
+				availableThinkingLevels: ["off"],
+			}),
 		});
 
 		const agents = service.listAgentsInProject(projectId);
@@ -92,6 +98,12 @@ describe("SessionInfoService subagent markers", () => {
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
 			listProjects: () => [project],
+			getExpectedSessionDefaults: () => ({
+				model: "",
+				thinkingLevel: "off",
+				modelSupportsThinking: false,
+				availableThinkingLevels: ["off"],
+			}),
 		});
 
 		const child = service.getAgentInfo("child-1");
@@ -145,6 +157,12 @@ describe("SessionInfoService subagent markers", () => {
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
 			listProjects: () => [project],
+			getExpectedSessionDefaults: () => ({
+				model: "",
+				thinkingLevel: "off",
+				modelSupportsThinking: false,
+				availableThinkingLevels: ["off"],
+			}),
 		});
 
 		const agents = service.listAgentsInProject(projectId);
@@ -204,11 +222,17 @@ describe("SessionInfoService subagent markers", () => {
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
 			listProjects: () => [project],
+			getExpectedSessionDefaults: () => ({
+				model: "",
+				thinkingLevel: "off",
+				modelSupportsThinking: false,
+				availableThinkingLevels: ["off"],
+			}),
 		});
 
 		const rows = service.listAgentsInProject(projectId).filter((agent) => agent.id === draftId);
 		expect(rows).toHaveLength(1);
-		// live 行优先（不带 initializing 标记，带 runtime 投影）
-		expect(rows[0]?.initializing).toBeUndefined();
+		// live 行优先（带 runtime 投影）
+		expect(rows[0]?.name).toBe("新会话");
 	});
 });

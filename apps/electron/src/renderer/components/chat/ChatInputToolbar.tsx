@@ -63,89 +63,95 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 	const { t } = useTranslation();
 
 	return (
-		<div className="flex items-center gap-1.5 px-2 py-2">
-			<ModelSelector
-				agentId={agentId}
-				currentModel={currentModel}
-				onModelChanged={onModelChange}
-				onRequestApiKeys={onRequestApiKeys}
-			/>
-			<ThinkingSelector
-				currentLevel={currentThinking}
-				availableThinkingLevels={availableThinkingLevels}
-				onChanged={onThinkingChange}
-			/>
-			<PermissionModeSelector agentId={agentId} currentMode={permissionMode} />
-			<SimplePopover
-				className="w-auto"
-				preferredHeight={360}
-				trigger={
-					<Button
-						variant="line-ghost"
-						size="icon-sm"
-						aria-label={t("chat.tools", "Tools")}
-						title={t("chat.tools", "Tools")}
-					>
-						<Wrench data-icon="inline-start" className="size-3.5" />
-					</Button>
-				}
-			>
-				{({ close }) => (
-					<ToolPickerPanel
-						skills={toolData.skills}
-						agents={toolData.agents}
-						mcpTools={toolData.mcpTools}
-						onInsert={(token) => {
-							onInsertToken(token);
-							close();
-						}}
-					/>
-				)}
-			</SimplePopover>
-			<SubagentToggle />
-			<div className="flex-1" />
-			<ContextRing />
-			{isBusy ? (
-				<>
-					{/* During compaction the CompactionStatusCard cancel button handles abortCompaction,
-					    so the Square stop button (abortAgent) is hidden to avoid confusion. */}
-					{!isCompacting && (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button
-									variant="line-ghost"
-									size="icon-sm"
-									onClick={onAbort}
-									aria-label={t("chat.stop")}
-									className="text-muted-foreground hover:text-destructive"
-								>
-									<Square data-icon="inline-start" className="size-3 fill-current" />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent side="bottom">{t("chat.stop")}</TooltipContent>
-						</Tooltip>
+		<div className="flex min-w-0 items-center gap-1.5 px-2 py-2">
+			<div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+				<ModelSelector
+					agentId={agentId}
+					currentModel={currentModel}
+					onModelChanged={onModelChange}
+					onRequestApiKeys={onRequestApiKeys}
+				/>
+				<ThinkingSelector
+					currentLevel={currentThinking}
+					availableThinkingLevels={availableThinkingLevels}
+					onChanged={onThinkingChange}
+				/>
+				<PermissionModeSelector agentId={agentId} currentMode={permissionMode} />
+				<SimplePopover
+					className="w-auto"
+					preferredHeight={360}
+					trigger={
+						<Button
+							variant="line-ghost"
+							size="icon-sm"
+							className="shrink-0"
+							aria-label={t("chat.tools", "Tools")}
+							title={t("chat.tools", "Tools")}
+						>
+							<Wrench data-icon="inline-start" className="size-3.5" />
+						</Button>
+					}
+				>
+					{({ close }) => (
+						<ToolPickerPanel
+							skills={toolData.skills}
+							agents={toolData.agents}
+							mcpTools={toolData.mcpTools}
+							onInsert={(token) => {
+								onInsertToken(token);
+								close();
+							}}
+						/>
 					)}
+				</SimplePopover>
+				<SubagentToggle />
+			</div>
+			<div className="flex shrink-0 items-center gap-1.5">
+				<ContextRing />
+				{isBusy ? (
+					<>
+						{/* During compaction the CompactionStatusCard cancel button handles abortCompaction,
+						    so the Square stop button (abortAgent) is hidden to avoid confusion. */}
+						{!isCompacting && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button
+										variant="line-ghost"
+										size="icon-sm"
+										onClick={onAbort}
+										aria-label={t("chat.stop")}
+										className="shrink-0 text-muted-foreground hover:text-destructive"
+									>
+										<Square data-icon="inline-start" className="size-3 fill-current" />
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent side="bottom">{t("chat.stop")}</TooltipContent>
+							</Tooltip>
+						)}
+						<Button
+							variant={hasContent ? "line-filled" : "line-ghost"}
+							size="icon-sm"
+							onClick={() => void onSend()}
+							disabled={!hasContent}
+							aria-label={t("chat.send")}
+							className="shrink-0"
+						>
+							<Send data-icon="inline-start" className="size-3.5" />
+						</Button>
+					</>
+				) : (
 					<Button
 						variant={hasContent ? "line-filled" : "line-ghost"}
 						size="icon-sm"
 						onClick={() => void onSend()}
 						disabled={!hasContent}
 						aria-label={t("chat.send")}
+						className="shrink-0"
 					>
 						<Send data-icon="inline-start" className="size-3.5" />
 					</Button>
-				</>
-			) : (
-				<Button
-					variant={hasContent ? "line-filled" : "line-ghost"}
-					size="icon-sm"
-					onClick={() => void onSend()}
-					disabled={!hasContent}
-					aria-label={t("chat.send")}
-				>
-					<Send data-icon="inline-start" className="size-3.5" />
-				</Button>
-			)}
+				)}
+			</div>
 		</div>
 	);
 });

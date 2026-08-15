@@ -68,6 +68,12 @@ describe("subagent hierarchy: runSubSession → agent:created payload", () => {
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
 			listProjects: () => [project],
+			getExpectedSessionDefaults: () => ({
+				model: "",
+				thinkingLevel: "off",
+				modelSupportsThinking: false,
+				availableThinkingLevels: ["off"],
+			}),
 		});
 		const hostRuntimeInfo = (sessionId: string) => sessionInfoService.getAgentInfo(sessionId);
 
@@ -114,6 +120,12 @@ describe("subagent hierarchy: runSubSession → agent:created payload", () => {
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
 			listProjects: () => [project],
+			getExpectedSessionDefaults: () => ({
+				model: "",
+				thinkingLevel: "off",
+				modelSupportsThinking: false,
+				availableThinkingLevels: ["off"],
+			}),
 		});
 
 		const child = sessionInfoService.getAgentInfo(childId);

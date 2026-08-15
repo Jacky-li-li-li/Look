@@ -1,6 +1,8 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 
+const sharedSrc = path.resolve(__dirname, "../../packages/shared/src");
+
 export default defineConfig({
 	test: {
 		include: ["test/**/*.test.{ts,tsx}"],
@@ -15,15 +17,19 @@ export default defineConfig({
 		},
 	},
 	resolve: {
-		alias: {
-			"@shared": path.resolve(__dirname, "../../packages/shared/src"),
-			"@look/shared": path.resolve(__dirname, "../../packages/shared/src"),
-			"@look/ui": path.resolve(__dirname, "../../packages/ui/src"),
-			"@look/ui/components": path.resolve(__dirname, "../../packages/ui/src/components"),
-			"@pierre/diffs/dist/components/web-components.js": path.resolve(
-				__dirname,
-				"../../node_modules/@pierre/diffs/dist/components/web-components.js",
-			),
-		},
+		alias: [
+			{ find: "@shared/types.js", replacement: path.join(sharedSrc, "types.ts") },
+			{ find: "@shared/types", replacement: path.join(sharedSrc, "types.ts") },
+			{ find: "@shared/contracts/ipc", replacement: path.join(sharedSrc, "contracts/ipc.ts") },
+			{ find: "@shared/look-storage", replacement: path.join(sharedSrc, "look-storage.ts") },
+			{ find: "@shared", replacement: sharedSrc },
+			{ find: "@look/shared", replacement: sharedSrc },
+			{ find: "@look/ui/components", replacement: path.resolve(__dirname, "../../packages/ui/src/components") },
+			{ find: "@look/ui", replacement: path.resolve(__dirname, "../../packages/ui/src") },
+			{
+				find: "@pierre/diffs/dist/components/web-components.js",
+				replacement: path.resolve(__dirname, "../../node_modules/@pierre/diffs/dist/components/web-components.js"),
+			},
+		],
 	},
 });

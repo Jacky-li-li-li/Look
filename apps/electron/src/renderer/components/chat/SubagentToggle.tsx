@@ -40,7 +40,7 @@ export default function SubagentToggle() {
 		<Button
 			variant="line-ghost"
 			size="icon-sm"
-			className="h-7 w-7"
+			className="h-7 w-7 shrink-0"
 			onClick={handleToggle}
 			disabled={switching}
 			title={enabled ? t("marketplace.subagentEnabledDesc") : t("marketplace.subagentDisabledDesc")}
