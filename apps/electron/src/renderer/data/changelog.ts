@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.3.0",
+		date: "2026-08-15",
+		items: [
+			{
+				zh: "新建会话体验全面升级：点击新建后会话立即以最终形态出现，侧栏新会话从顶部丝滑淡入、其余行同步平滑下移，全程一次连贯动画；输入区模型行从第一帧稳定显示、不再闪跳，git 状态栏常驻底部也不会顶动输入框；模型名称完整展示、窄屏工具栏自动自适应。应用更新按钮改为纯图标：下载中显示环形进度，下载完成后变绿，点击即可重启",
+				en: "New-session experience overhaul: sessions appear in their final form instantly; the sidebar row fades in from the top while existing rows glide down in one continuous animation. The composer model row stays stable from the first frame with no flicker, and the persistent git status bar no longer nudges the input. Model names display fully and the toolbar adapts on narrow windows. The update button is now icon-only: a circular progress ring while downloading, turning green when ready to restart",
+				ja: "新規セッションの体験を刷新：作成と同時に最終形で表示され、サイドバーの新行は上部から滑らかにフェードイン、既存行は同期して下がる一体アニメーションに。入力エリアのモデル行は最初のフレームから安定表示でちらつきません。git ステータスバーを常設しても入力欄は動かず、モデル名は完全表示、狭いウィンドウではツールバーが自動調整。更新ボタンはアイコンのみになり、ダウンロード中は円形プログレス、完了すると緑色になりクリックで再起動します",
+			},
+		],
+	},
+	{
 		version: "2.2.1",
 		date: "2026-08-14",
 		items: [
