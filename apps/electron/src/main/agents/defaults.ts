@@ -25,7 +25,11 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { getLookDir } from "@look/shared/look-storage";
-import { getBuiltinAgentsDir, getUserAgentsDir } from "../extensions/subagent/agent-discovery.js";
+import {
+	getBuiltinAgentsDir,
+	getUserAgentsDir,
+	invalidateAgentDiscoveryCache,
+} from "../extensions/subagent/agent-discovery.js";
 
 // ---- 版本管理 ----
 
@@ -151,6 +155,8 @@ export function syncLookDefaultAgents(projectDir: string): string | null {
 
 	if (synced > 0 || upgraded > 0) {
 		console.log(`[Look][内置Agent] 同步完成: ${synced} 新增, ${upgraded} 升级, ${skipped} 跳过`);
+		// 内置 Agent 目录有变更，失效发现缓存（启动早期可能已被预热）。
+		invalidateAgentDiscoveryCache();
 	}
 
 	// ---- 迁移清理：移除 ~/.look/agents/ 下与内置 Agent 同名的旧格式文件 ----

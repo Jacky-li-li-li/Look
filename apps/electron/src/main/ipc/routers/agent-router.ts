@@ -92,12 +92,14 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		}
 		const projectId = data.projectId ?? ctx.project.service.getActiveProject()?.id;
 		if (projectId) await promptForProjectTrust(ctx.project.trust, projectId, ctx.mainWindow);
-		const id = await ctx.session.lifecycle.createAgent({
+		// 返回乐观草稿（runtime 后台初始化）：agentId 立即可用，agent 行
+		// 与主进程先行发出的 agent:created 事件同形，渲染端互为兜底。
+		const draft = await ctx.session.lifecycle.createAgent({
 			name: data.name,
 			projectId,
 			imProvider: data.imProvider,
 		});
-		return { success: true, agentId: id };
+		return { success: true, agentId: draft.id, agent: draft };
 	});
 
 	register("agent:destroy", async (data) => {

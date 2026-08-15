@@ -32,12 +32,12 @@ Type: rule
 - Look hosts a registry of live `AgentSessionRuntime` instances keyed by **pi session ID**. Each runtime owns exactly one active `AgentSession`.
 - A session ID has at most one live runtime. **Deduplicate** creation while initialization is in flight.
 - A runtime’s **project ID and cwd are immutable** for its lifetime. Model and thinking changes are **session-scoped** and must route by session ID — never a global active-model store.
-- Persisted sidebar rows are pi session files from `SessionManager.list`. A newly created, **unsent** session may exist only as a runtime-backed draft and is **not** recoverable until pi writes JSONL.
+- Persisted sidebar rows are pi session files from `SessionManager.list`. A newly created, **unsent** session is recorded in the Look-owned draft index (`session-drafts.json`, `SessionDraftIndex`) at creation — the row survives crash/restart and is recoverable even though pi has not written JSONL yet. The draft entry is pruned once the pi session file appears.
 - Independent create/resume → new `AgentSessionRuntime` via `SessionManager.create` / `SessionManager.open`. Fork → `SessionManager.open(sourceFile, sessionDir)` for a separate manager, then `createBranchedSession(entryId)`, then load that manager into a **new** runtime (never branch on the source `session.sessionManager`).
 - **Selecting** a session changes the renderer view only. It must not replace, abort, or dispose a different running session.
 - Tree navigation → `AgentSession.navigateTree` only.
 - Session names → `AgentSession.setSessionName`, or pi `SessionManager.appendSessionInfo` for an inactive file.
-- History, names, parent links, model/thinking changes, compaction, and branches are owned by **pi JSONL**. Do not recreate a parallel session index/wrapper; pi JSONL is the source of truth.
+- History, names, parent links, model/thinking changes, compaction, and branches are owned by **pi JSONL**; pi JSONL is the source of truth for transcript content. The **only** Look-owned side index is the draft index (`SessionDraftIndex`), which carries existence/name/time for sessions that have not yet persisted a pi session file (pi buffers all entries until the first assistant message). Do not extend it into a general session wrapper.
 - Runtime status, transport stream IDs, subscriptions, and queues are **session-scoped**. Never one global active-stream state.
 - `AuthStorage`, `ModelRegistry`, and `ProjectTrustStore` are **process-global**. Cwd-bound services and extension bindings stay **runtime-local**.
 - Resource initialization is **serialized** (package install races). Initialized sessions may run concurrently with no app-level hard cap.

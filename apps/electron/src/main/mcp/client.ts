@@ -15,6 +15,16 @@ import type { McpCallResult, McpServerConfig, McpTool } from "./types.js";
 /** 客户端状态 */
 type ClientState = "disconnected" | "connecting" | "connected";
 
+/**
+ * 连接预算（Proma 式）：默认 30s 建连，覆盖 stdio 冷启动（npx 大包 /
+ * docker 类进程）与真实网络；连接已在后台进行（session_start 即启动、
+ * 项目激活预热），预算宽裕不会拖慢任何用户路径，误判为病态的概率更低。
+ * 用户显式配置的 timeout 永远优先（同时作用于连接与工具调用）。
+ */
+export function defaultConnectTimeoutMs(_type: McpServerConfig["type"] | undefined): number {
+	return 30_000;
+}
+
 export class McpClient {
 	readonly name: string;
 	private config: McpServerConfig;
@@ -22,10 +32,22 @@ export class McpClient {
 	private transport: Transport | null = null;
 	private tools: McpTool[] = [];
 	private state: ClientState = "disconnected";
+	/** 最近一次工具调用时间（空闲回收判定）。 */
+	private lastUsedAt: number = Date.now();
 
 	constructor(name: string, config: McpServerConfig) {
 		this.name = name;
 		this.config = config;
+	}
+
+	/** 工具调用时刷新活跃时间。 */
+	touch(): void {
+		this.lastUsedAt = Date.now();
+	}
+
+	/** 距最近一次工具调用的空闲毫秒数。 */
+	idleMs(now = Date.now()): number {
+		return now - this.lastUsedAt;
 	}
 
 	// ── 连接 ──
@@ -40,7 +62,7 @@ export class McpClient {
 
 			this.client = new Client({ name: "look", version: "1.0.0" }, { capabilities: {} });
 
-			const connectTimeout = this.config.timeout ?? 30_000;
+			const connectTimeout = this.config.timeout ?? defaultConnectTimeoutMs(this.config.type);
 			await this.withTimeout(
 				this.client.connect(this.transport),
 				connectTimeout,
@@ -75,6 +97,7 @@ export class McpClient {
 			throw new Error(`MCP server "${this.name}" is not connected`);
 		}
 
+		this.touch();
 		const timeout = this.config.timeout ?? 120_000;
 		const result = await this.withTimeout(
 			this.client.callTool({ name, arguments: args }),

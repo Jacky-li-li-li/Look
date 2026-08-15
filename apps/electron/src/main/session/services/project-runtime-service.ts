@@ -19,7 +19,14 @@ export interface ProjectRuntimeServiceDependencies {
 }
 
 export class ProjectRuntimeService {
+	/** 信任授予回调（MCP 预热重踢挂点，composition 装配时注入）。 */
+	private onProjectTrusted: ((projectId: string, cwd: string) => void) | null = null;
+
 	constructor(private readonly deps: ProjectRuntimeServiceDependencies) {}
+
+	setOnProjectTrusted(cb: ((projectId: string, cwd: string) => void) | null): void {
+		this.onProjectTrusted = cb;
+	}
 
 	async createProject(cwd: string, name?: string): Promise<{ project: ProjectInfo; isDuplicate: boolean }> {
 		if (!existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
@@ -41,6 +48,8 @@ export class ProjectRuntimeService {
 		const project = this.deps.projectService.getProjectInfo(projectId);
 		if (!project?.valid) throw new Error(`Project ${projectId} not found`);
 		this.deps.projectService.setTrust(projectId, trusted);
+		// 信任授予前 MCP 预热跳过了项目级 .look/mcp.json；现在重踢加载。
+		if (trusted) this.onProjectTrusted?.(projectId, project.cwd);
 		const reloadPromises: Promise<void>[] = [];
 		for (const managed of this.deps.runtimeRegistry.values()) {
 			if (managed.cwd !== project.cwd) continue;

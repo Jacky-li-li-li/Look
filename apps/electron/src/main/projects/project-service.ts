@@ -278,8 +278,20 @@ export class ProjectService {
 		return this.activeProjectId;
 	}
 
+	/** 项目激活变化回调（预热等后台任务挂点）。 */
+	private onActiveProjectChanged: ((projectId: string | null) => void) | null = null;
+
 	setActiveId(id: string | null): void {
+		const changed = this.activeProjectId !== id;
 		this.activeProjectId = id;
+		// 项目激活总闸：所有切换路径（启动恢复/点选/跨项目切会话/新建会话/
+		// 删除回退）都经过这里。激活变化时通知订阅方做后台预热（MCP 连接），
+		// 让首个会话创建不付冷启动成本。
+		if (changed) this.onActiveProjectChanged?.(id);
+	}
+
+	setOnActiveProjectChanged(cb: ((projectId: string | null) => void) | null): void {
+		this.onActiveProjectChanged = cb;
 	}
 
 	// ── CRUD ──

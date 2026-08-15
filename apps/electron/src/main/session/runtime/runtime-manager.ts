@@ -297,7 +297,10 @@ export class SessionRuntimeManager
 	private async refreshProjectSessions(projectId: string): Promise<StoredSession[]> {
 		const project = this.composition.projectService.getProjectInfo(projectId);
 		if (!project?.valid) return [];
-		return this.composition.sessionCatalog.refresh(project);
+		const sessions = await this.composition.sessionCatalog.refresh(project);
+		// 修剪草稿索引：会话文件已落盘的条目退出草稿态（Proma 式索引的生命周期收口）。
+		this.composition.draftIndex.prunePersisted(projectId, new Set(sessions.map((session) => session.id)));
+		return sessions;
 	}
 
 	private findStoredSession(sessionId: string): StoredSession | undefined {
@@ -328,10 +331,17 @@ export class SessionRuntimeManager
 		return this.composition.runtimeLifecycle.activateSession(sessionId, opts);
 	}
 
+	/**
+	 * 阻塞到 runtime 就绪的创建入口（headless/IM 等拿到 ID 后立即操作
+	 * runtime 的调用方）。交互式新建会话走 IPC agent:create，直接调用
+	 * sessionLifecycleService.createAgent 拿乐观草稿提前返回。
+	 */
 	async createAgent(
 		opts?: { name?: string; projectId?: string; imProvider?: ImSessionProvider; background?: boolean } | string,
 	): Promise<string> {
-		return this.composition.sessionLifecycleService.createAgent(opts);
+		const draft = await this.composition.sessionLifecycleService.createAgent(opts);
+		await this.composition.sessionLifecycleService.awaitCreation(draft.id);
+		return draft.id;
 	}
 
 	async destroyAgent(sessionId: string): Promise<void> {

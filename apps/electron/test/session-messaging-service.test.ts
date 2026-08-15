@@ -33,6 +33,7 @@ describe("SessionMessagingService", () => {
 
 		const service = new SessionMessagingService({
 			ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(session))),
+			ensureMcpReady: vi.fn(() => Promise.resolve()),
 			emitError: vi.fn(),
 		});
 
@@ -52,6 +53,7 @@ describe("SessionMessagingService", () => {
 
 		const service = new SessionMessagingService({
 			ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(session))),
+			ensureMcpReady: vi.fn(() => Promise.resolve()),
 			emitError: vi.fn(),
 		});
 
@@ -65,6 +67,7 @@ describe("SessionMessagingService", () => {
 
 		const service = new SessionMessagingService({
 			ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(session))),
+			ensureMcpReady: vi.fn(() => Promise.resolve()),
 			emitError: vi.fn(),
 		});
 
@@ -78,6 +81,7 @@ describe("SessionMessagingService", () => {
 
 		const service = new SessionMessagingService({
 			ensureRuntime: vi.fn(() => Promise.resolve(makeManagedRuntime(session))),
+			ensureMcpReady: vi.fn(() => Promise.resolve()),
 			emitError: vi.fn(),
 		});
 

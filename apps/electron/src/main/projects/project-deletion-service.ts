@@ -12,6 +12,7 @@ import { assertSafeProjectId, getProjectSharedDir, getWorkspaceDir } from "@look
 import { DEFAULT_PROJECT_ID } from "@look/shared/types";
 import type { RuntimeRegistry } from "../session/runtime/runtime-registry.js";
 import type { SessionCatalog } from "../session/services/session-catalog.js";
+import type { SessionDraftIndex } from "../session/services/session-draft-index.js";
 import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 import type { ProjectService } from "./project-service.js";
@@ -22,6 +23,8 @@ export interface ProjectDeletionDependencies {
 		"getProjectInfo" | "removeProject" | "activeId" | "setActiveId" | "listProjects" | "saveProjects"
 	>;
 	sessionCatalog: Pick<SessionCatalog, "listByProject" | "removeProject">;
+	/** 草稿索引：项目删除时清理该项目下未落盘的草稿条目。 */
+	draftIndex: Pick<SessionDraftIndex, "prunePersisted">;
 	runtimeRegistry: Pick<RuntimeRegistry, "entries">;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
 	workspaceFileService: WorkspaceFileService | null;
@@ -108,6 +111,9 @@ export class ProjectDeletionService {
 				}
 			}
 		}
+
+		// 清理该项目下未落盘的草稿索引条目（项目已删，条目不可能再被落盘修剪）。
+		this.deps.draftIndex.prunePersisted(projectId, new Set());
 
 		const activeSessionId = this.deps.getActiveSessionId();
 		if (activeSessionId && runtimeIds.includes(activeSessionId)) {

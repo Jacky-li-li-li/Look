@@ -154,6 +154,7 @@ export function guardMcpServerConfig(x: unknown, label: string): McpServerConfig
 	guardString(obj.name, `${label}.name`);
 	guardEnum(obj.type, `${label}.type`, ["stdio", "http", "sse"] as const);
 	if (obj.enabled !== undefined) guardBoolean(obj.enabled, `${label}.enabled`);
+	if (obj.required !== undefined) guardBoolean(obj.required, `${label}.required`);
 	// Detailed validation deferred to MCPManager.
 	return obj as unknown as McpServerConfig;
 }

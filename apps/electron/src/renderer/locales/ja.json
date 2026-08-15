@@ -129,6 +129,8 @@
     "commandRequired": "コマンドを入力してください",
     "urlRequired": "URL を入力してください",
     "addServer": "サーバーを追加",
+    "requiredLabel": "必須サーバー",
+    "requiredHint": "セッションの最初のメッセージは接続を待ちます（最大30秒）。オフにするとバックグラウンド接続になり、メッセージをブロックしません",
     "saveChanges": "変更を保存",
     "adding": "追加中…",
     "updating": "更新中…",
@@ -229,8 +231,7 @@
     "emptyHint": "サイドバーからセッションを選択"
   },
   "session": {
-    "draft": "下書き",
-    "messageCount": "{{count}} 件のメッセージ",
+    "draft": "下書き",    "messageCount": "{{count}} 件のメッセージ",
     "menu": "セッションメニュー",
     "status": {
       "thinking": "思考中",

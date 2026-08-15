@@ -129,6 +129,8 @@ export function useAgentActions() {
 					if (previous.includes(result.agentId)) return previous;
 					return [...previous, result.agentId];
 				});
+				// 草稿行由主进程经 agent:created 草稿事件 / 含草稿的 agent:list 推送，
+				// 渲染端无需用 invoke 回执兜底插入（草稿索引保证主进程列表必含该行）。
 				return result.agentId;
 			}
 			// 创建失败不能静默吞掉（此前无任何提示，用户只看到“没反应”）

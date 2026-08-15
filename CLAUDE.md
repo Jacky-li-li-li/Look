@@ -143,7 +143,7 @@ Highest-frequency traps (full invariants: `AGENTS.md` → Runtime and sessions):
 - **project ID and cwd are immutable** for a runtime’s lifetime; model / thinking changes are session-scoped only.
 - **Selecting a session changes the renderer view only** — never abort or dispose a different running session.
 
-New/resume → `SessionManager.create` / `open` into a new runtime. Fork → `SessionManager.createBranchedSession` + new runtime. Persisted sidebar rows = pi session files via `SessionManager.list`; unsent drafts are process-local until pi writes JSONL.
+New/resume → `SessionManager.create` / `open` into a new runtime. Fork → `SessionManager.createBranchedSession` + new runtime. Persisted sidebar rows = pi session files via `SessionManager.list` + the draft index (`SessionDraftIndex`, `session-drafts.json`) for unsent sessions — drafts persist at creation and are pruned once pi writes JSONL (pi buffers until the first assistant message).
 
 ### IPC
 
@@ -187,6 +187,7 @@ No Look-managed user data is written into `<cwd>/.pi/`. Dev unpacked → `~/.loo
 | `SYSTEM.md` | Global system prompt |
 | `auth.json` / `models.json` / `settings.json` | pi AuthStorage, ModelRegistry, SettingsManager |
 | `ui-settings.json` / `user-profile.json` / `prompts.json` | Look UI, profile, prompt variants |
+| `session-drafts.json` | Draft index for unsent sessions (pruned once pi JSONL lands) |
 | `custom-providers.json` | Custom model providers |
 | `projects.json` | Project index |
 | `scheduled-tasks.json` / `scheduled-task-locks/` | Scheduler definitions + locks |

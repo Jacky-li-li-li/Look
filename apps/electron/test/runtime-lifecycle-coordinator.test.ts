@@ -18,6 +18,7 @@ interface SessionFixture {
 	session: AgentSession;
 	bindExtensions: ReturnType<typeof vi.fn>;
 	abort: ReturnType<typeof vi.fn>;
+	setSessionName: ReturnType<typeof vi.fn>;
 	unsubscribe: ReturnType<typeof vi.fn>;
 	emit(event: AgentSessionEvent): void;
 }
@@ -33,12 +34,14 @@ function makeSession(sessionId: string, isStreaming = false): SessionFixture {
 	const unsubscribe = vi.fn();
 	const bindExtensions = vi.fn().mockResolvedValue(undefined);
 	const abort = vi.fn().mockResolvedValue(undefined);
+	const setSessionName = vi.fn();
 	const session = {
 		sessionId,
 		sessionManager: { getSessionId: () => sessionId } as SessionManager,
 		isStreaming,
 		bindExtensions,
 		abort,
+		setSessionName,
 		subscribe: vi.fn((callback: (event: AgentSessionEvent) => void) => {
 			subscriber = callback;
 			return unsubscribe;
@@ -48,6 +51,7 @@ function makeSession(sessionId: string, isStreaming = false): SessionFixture {
 		session,
 		bindExtensions,
 		abort,
+		setSessionName,
 		unsubscribe,
 		emit: (event) => subscriber?.(event),
 	};
@@ -145,6 +149,7 @@ function makeCoordinator(
 		selection,
 		ensureSessionModel: vi.fn().mockResolvedValue(undefined),
 		getStoredSession: vi.fn((sessionId: string) => (sessionId === stored.id ? stored : undefined)),
+		getDraft: vi.fn(() => undefined),
 		emitSessionPreview: vi.fn().mockResolvedValue(undefined),
 		openSessionManager: vi.fn(() => ({ getSessionId: () => stored.id }) as SessionManager),
 		handleSessionEvent: vi.fn(),
@@ -243,6 +248,78 @@ describe("RuntimeLifecycleCoordinator", () => {
 		expect(await first).toBe(await second);
 		expect(fixture.dependencies.runtimeFactory.create).toHaveBeenCalledTimes(1);
 		expect(session.bindExtensions).toHaveBeenCalledTimes(1);
+	});
+
+	it("ensureRuntime 等待乐观草稿期的 in-flight 创建，而不是报 Session not found", async () => {
+		const session = makeSession("session-1");
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime);
+		// 草稿期：catalog 无 stored（JSONL 未落盘）
+		vi.mocked(fixture.dependencies.getStoredSession).mockReturnValue(undefined);
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		vi.mocked(fixture.dependencies.runtimeFactory.create).mockImplementation(async () => {
+			await gate;
+			return runtime.runtime;
+		});
+
+		const creation = fixture.coordinator.createManagedRuntime(
+			"/project",
+			session.session.sessionManager,
+			"project-1",
+		);
+		const ensured = fixture.coordinator.ensureRuntime("session-1");
+		release();
+
+		expect(await ensured).toBe(await creation);
+	});
+
+	it("ensureRuntime 恢复草稿索引中的未落盘会话（重启恢复路径）", async () => {
+		const session = makeSession("draft-1");
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime, storedSession("session-1"));
+		vi.mocked(fixture.dependencies.getStoredSession).mockReturnValue(undefined);
+		vi.mocked(fixture.dependencies.getDraft).mockReturnValue({
+			cwd: "/project",
+			projectId: "project-1",
+			name: "重启草稿",
+		});
+
+		const managed = await fixture.coordinator.ensureRuntime("draft-1");
+
+		// 用草稿 ID 重建 SessionManager（文件未落盘），并沿用索引中的名称。
+		expect(managed.runtime.session.sessionId).toBe("draft-1");
+		expect(session.setSessionName).toHaveBeenCalledWith("重启草稿");
+		expect(fixture.dependencies.runtimeFactory.create).toHaveBeenCalled();
+	});
+
+	it("ensureRuntime 在草稿期创建失败时抛出初始化失败错误", async () => {
+		const session = makeSession("session-1");
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime);
+		vi.mocked(fixture.dependencies.getStoredSession).mockReturnValue(undefined);
+		let rejectCreation!: (error: Error) => void;
+		const gate = new Promise<never>((_resolve, reject) => {
+			rejectCreation = reject;
+		});
+		vi.mocked(fixture.dependencies.runtimeFactory.create).mockImplementation(async () => {
+			await gate;
+			return runtime.runtime;
+		});
+
+		const creation = fixture.coordinator.createManagedRuntime(
+			"/project",
+			session.session.sessionManager,
+			"project-1",
+		);
+		const ensured = fixture.coordinator.ensureRuntime("session-1");
+		rejectCreation(new Error("bind boom"));
+
+		await expect(creation).rejects.toThrow("bind boom");
+		// 创建在途失败：ensureRuntime 等到 settle 后给出明确的初始化失败错误
+		await expect(ensured).rejects.toThrow("Session session-1 failed to initialize");
 	});
 
 	it("disposes a runtime when extension binding fails", async () => {

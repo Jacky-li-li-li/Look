@@ -100,7 +100,7 @@ export interface LookAPI {
 	activateSession(sessionId: string, opts?: { skipSnapshot?: boolean }): Promise<IpcResult>;
 	createAgent(
 		name?: string | { name?: string; projectId?: string; imProvider?: "feishu" },
-	): Promise<IpcResult<{ agentId: string }>>;
+	): Promise<IpcResult<{ agentId: string; agent?: AgentInfo }>>;
 	destroyAgent(agentId: string): Promise<IpcResult>;
 	getModels(): Promise<IpcResult<{ models: AvailableModel[] }>>;
 	getProviders(): Promise<IpcResult<{ providers: ProviderInfo[] }>>;

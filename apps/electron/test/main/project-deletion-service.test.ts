@@ -22,6 +22,7 @@ describe("ProjectDeletionService", () => {
 				saveProjects: vi.fn(),
 			},
 			sessionCatalog: { listByProject: () => [], removeProject: vi.fn() },
+			draftIndex: { prunePersisted: vi.fn() },
 			runtimeRegistry: { *entries() {} },
 			disposeRuntime: vi.fn(),
 			workspaceFileService: null,

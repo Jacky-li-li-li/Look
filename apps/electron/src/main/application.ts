@@ -410,9 +410,18 @@ export class Application {
 
 		// 后台补齐模型目录网络刷新（启动时 allowModelNetwork=false 只做本地
 		// 加载），完成后广播 model:updated 让渲染端刷新模型可用性。
+		// 必须带超时 signal：该 refresh 的 in-flight promise 会被会话初始化的
+		// refresh({allowNetwork:false}) 共享（pi provider 级 inflight 去重）——
+		// 若此网络调用挂死（代理/断网），新建会话的初始化会跟着永久卡住
+		// （表现为「准备中」一直转圈）。超时后 in-flight settle，会话初始化
+		// 走本地 store 数据继续。
+		const backgroundRefreshStartedAt = Date.now();
 		void this.services
-			.runtimeManager!.composition.modelRuntime.refresh({ allowNetwork: true })
-			.then(() => this.services.runtimeManager?.composition.sessionNotifier.emit({ type: "model:updated" }))
+			.runtimeManager!.composition.modelRuntime.refresh({ allowNetwork: true, signal: AbortSignal.timeout(30_000) })
+			.then(() => {
+				console.log(`[Look] Background model refresh done in ${Date.now() - backgroundRefreshStartedAt}ms`);
+				this.services.runtimeManager?.composition.sessionNotifier.emit({ type: "model:updated" });
+			})
 			.catch((err) => console.warn("[Look] Background model refresh failed:", err));
 	}
 

@@ -19,6 +19,7 @@ import {
 	discoverAgents,
 	getBuiltinAgentsDir,
 	getUserAgentsDir,
+	invalidateAgentDiscoveryCache,
 	parseAgentFile,
 } from "../extensions/subagent/agent-discovery.js";
 import type { AgentConfig } from "../extensions/subagent/types.js";
@@ -30,7 +31,16 @@ import type { AgentConfig } from "../extensions/subagent/types.js";
 export type AgentDefinitionsChangedCallback = () => Promise<void>;
 
 export class AgentDefinitionService {
-	constructor(private readonly onChanged: AgentDefinitionsChangedCallback) {}
+	private readonly notifyChanged: AgentDefinitionsChangedCallback;
+
+	constructor(onChanged: AgentDefinitionsChangedCallback) {
+		// 变更回调前先失效 Agent 发现缓存：reload 会重新 discoverAgents
+		// 构建工具描述，必须读盘而不是命中 TTL 缓存。
+		this.notifyChanged = async () => {
+			invalidateAgentDiscoveryCache();
+			await onChanged();
+		};
+	}
 
 	// ── Query ──
 
@@ -68,7 +78,7 @@ export class AgentDefinitionService {
 		fs.writeFileSync(filePath, serializeAgentDefinition(enriched), { encoding: "utf-8", mode: 0o644 });
 		const parsed = await parseAgentFile(filePath, "user");
 		if (!parsed) throw new Error(`Failed to parse created agent "${name}"`);
-		this.onChanged();
+		this.notifyChanged();
 		return toAgentDefinitionInfo(parsed);
 	}
 
@@ -87,7 +97,7 @@ export class AgentDefinitionService {
 			if (fs.existsSync(newPath)) throw new Error(`Agent "${newName}" already exists`);
 			fs.renameSync(oldPath, newPath);
 		}
-		this.onChanged();
+		this.notifyChanged();
 		const parsed = await parseAgentFile(path.join(getUserAgentsDir(), `${newName}.md`), "user");
 		if (!parsed) throw new Error(`Failed to parse updated agent "${newName}"`);
 		return toAgentDefinitionInfo(parsed);
@@ -99,7 +109,7 @@ export class AgentDefinitionService {
 		const filePath = path.join(getUserAgentsDir(), `${safeName}.md`);
 		if (!fs.existsSync(filePath)) throw new Error(`Agent "${safeName}" not found`);
 		fs.unlinkSync(filePath);
-		this.onChanged();
+		this.notifyChanged();
 	}
 
 	/**
@@ -136,7 +146,7 @@ export class AgentDefinitionService {
 			encoding: "utf-8",
 			mode: 0o644,
 		});
-		this.onChanged();
+		this.notifyChanged();
 		const installedParsed = await parseAgentFile(destPath, "user");
 		if (!installedParsed) throw new Error(`Failed to parse installed agent "${safeName}"`);
 		return toAgentDefinitionInfo(installedParsed);

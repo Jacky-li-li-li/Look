@@ -15,10 +15,13 @@ import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registr
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
 import type { SessionCatalog, StoredSession } from "./session-catalog.js";
+import type { SessionDraftIndex } from "./session-draft-index.js";
 
 export interface SessionInfoServiceDependencies {
 	runtimeRegistry: Pick<RuntimeRegistry, "get" | "entries">;
 	sessionCatalog: Pick<SessionCatalog, "listByProject" | "get">;
+	/** 未落盘草稿会话索引（列表合并与 getAgentInfo 兜底）。 */
+	draftIndex: SessionDraftIndex;
 	subAgentRegistry: Pick<SubAgentRegistry, "getMeta">;
 	scopeRegistry: Pick<SessionScopeRegistry, "get">;
 	maxNameLength: number;
@@ -62,17 +65,57 @@ export class SessionInfoService {
 			return managed ? this.runtimeInfo(session.id, managed) : this.sessionInfo(session);
 		});
 		const persistedIds = new Set(persistedEntries.map((session) => session.id));
-		const drafts = Array.from(this.deps.runtimeRegistry.entries()).flatMap(([sessionId, managed]) =>
+		const runtimeBacked = Array.from(this.deps.runtimeRegistry.entries()).flatMap(([sessionId, managed]) =>
 			managed.projectId === projectId && !persistedIds.has(sessionId) ? [this.runtimeInfo(sessionId, managed)] : [],
 		);
-		return [...drafts, ...persisted];
+		// 草稿索引行（未落盘会话）：创建即持久，重启后仍在；落盘后被 prune。
+		// 初始化窗口期内同一会话会同时出现在 registry（runtime 已绑定）与索引
+		// （pi 文件未落盘）——live 行优先，索引行必须对两者去重，否则渲染端
+		// 收到同 id 两行 → React duplicate key。
+		const knownIds = new Set([...persistedIds, ...runtimeBacked.map((agent) => agent.id)]);
+		const indexDrafts = this.deps.draftIndex
+			.list(projectId)
+			.filter((entry) => !knownIds.has(entry.id))
+			.map((entry) => this.draftInfo(entry.id, entry.projectId, entry.name, entry.imProvider));
+		return [...indexDrafts, ...runtimeBacked, ...persisted];
 	}
 
 	getAgentInfo(sessionId: string): AgentInfo | undefined {
 		const managed = this.deps.runtimeRegistry.get(sessionId);
 		if (managed) return this.runtimeInfo(sessionId, managed);
 		const session = this.deps.sessionCatalog.get(sessionId);
-		return session ? this.sessionInfo(session) : undefined;
+		if (session) return this.sessionInfo(session);
+		// 草稿兜底：未落盘会话也能定位 projectId（trust 弹窗/激活路径）。
+		const draft = this.deps.draftIndex.get(sessionId);
+		return draft ? this.draftInfo(draft.id, draft.projectId, draft.name, draft.imProvider) : undefined;
+	}
+
+	/**
+	 * 新建会话的乐观草稿投影：runtime 仍在后台初始化，主进程尚无
+	 * runtime/stored 可查，但渲染端需要立即展示侧边栏行。字段默认值
+	 * 与 sessionInfo() 的持久化占位一致，另带 initializing 标记。
+	 */
+	draftInfo(sessionId: string, projectId: string, name: string, imProvider?: ImSessionProvider): AgentInfo {
+		const now = Date.now();
+		return {
+			id: sessionId,
+			name: name.slice(0, this.deps.maxNameLength),
+			imProvider,
+			model: "",
+			thinkingLevel: "off",
+			modelSupportsThinking: false,
+			availableThinkingLevels: ["off"],
+			isStreaming: false,
+			isRetrying: false,
+			isCompacting: false,
+			messageCount: 0,
+			createdAt: now,
+			lastActivityAt: now,
+			sessionFilePath: undefined,
+			projectId,
+			contextUsage: undefined,
+			initializing: true,
+		};
 	}
 
 	private sessionInfo(session: StoredSession): AgentInfo {

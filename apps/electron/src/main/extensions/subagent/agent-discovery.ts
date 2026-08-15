@@ -131,8 +131,24 @@ export async function listBuiltinAgents(): Promise<AgentConfig[]> {
  *   - "both"     → user + project（项目级覆盖同名用户级）
  *
  * builtin Agent 始终并入用户级结果（作为最底层的 fallback）。
+ *
+ * 短 TTL 缓存：该函数在每次 runtime 创建的串行资源锁内执行（工具描述
+ * 需要急切的 agent 列表），连续新建会话/subagent 派生时不必重复扫盘。
+ * Agent 定义的写入路径（definition-service / 内置同步）会显式失效。
  */
+const DISCOVERY_CACHE_TTL_MS = 5_000;
+const discoveryCache = new Map<string, { expires: number; result: AgentDiscoveryResult }>();
+
+/** 使 Agent 发现缓存失效（定义文件写入/删除/安装/内置同步后调用）。 */
+export function invalidateAgentDiscoveryCache(): void {
+	discoveryCache.clear();
+}
+
 export async function discoverAgents(projectId: string, scope: AgentScope): Promise<AgentDiscoveryResult> {
+	const cacheKey = `${projectId}\u0000${scope}`;
+	const cached = discoveryCache.get(cacheKey);
+	if (cached && cached.expires > Date.now()) return cached.result;
+
 	const userDir = getUserAgentsDir();
 	// 空 projectId 表示“无项目上下文”（用户级查询），不解析项目级目录，
 	// 避免 getProjectAgentsDir 对空 ID 触发 assertSafeProjectId。
@@ -151,7 +167,9 @@ export async function discoverAgents(projectId: string, scope: AgentScope): Prom
 	for (const agent of userAgents) agentMap.set(agent.name, agent);
 	for (const agent of projectAgents) agentMap.set(agent.name, agent);
 
-	return { agents: Array.from(agentMap.values()), projectAgentsDir };
+	const result: AgentDiscoveryResult = { agents: Array.from(agentMap.values()), projectAgentsDir };
+	discoveryCache.set(cacheKey, { expires: Date.now() + DISCOVERY_CACHE_TTL_MS, result });
+	return result;
 }
 
 /** 格式化 Agent 列表为紧凑字符串（供工具描述 / 错误提示） */

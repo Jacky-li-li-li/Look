@@ -36,6 +36,7 @@ export class RuntimeManagerComposition {
 	readonly promptStore;
 	readonly mcpManager;
 	readonly sessionCatalog;
+	readonly draftIndex;
 	readonly projectRuntimeService;
 	readonly sessionInfoService;
 	readonly sessionNotifier;
@@ -95,6 +96,7 @@ export class RuntimeManagerComposition {
 		this.promptStore = builder.promptStore!;
 		this.mcpManager = builder.mcpManager!;
 		this.sessionCatalog = builder.sessionCatalog!;
+		this.draftIndex = builder.draftIndex;
 		this.projectRuntimeService = builder.projectRuntimeService!;
 		this.sessionInfoService = builder.sessionInfoService!;
 		this.sessionNotifier = builder.sessionNotifier!;

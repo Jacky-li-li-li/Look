@@ -138,6 +138,17 @@ export function getDraftsPath(): string {
 	return path.join(LOOK_DIR, "drafts.json");
 }
 
+/**
+ * 会话草稿索引（未落盘会话的存在性/名称/时间）。
+ *
+ * pi JSONL 仍是对话内容与历史的唯一真源；该索引只负责「尚未写出
+ * 会话文件的新建会话」的最小元数据，让草稿行在崩溃/重启后可恢复。
+ * 会话文件一旦落盘（首个 assistant 消息），对应条目即被修剪移除。
+ */
+export function getSessionDraftsIndexPath(): string {
+	return path.join(LOOK_DIR, "session-drafts.json");
+}
+
 /** Cross-process lock directory used by the scheduled-task coordinator. */
 export function getScheduledTaskLocksDir(): string {
 	return path.join(LOOK_DIR, "scheduled-task-locks");

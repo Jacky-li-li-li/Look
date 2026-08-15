@@ -1,14 +1,17 @@
-import type {
-	AgentSession,
-	AgentSessionEvent,
-	AgentSessionRuntime,
+import {
+	type AgentSession,
+	type AgentSessionEvent,
+	type AgentSessionRuntime,
 	SessionManager,
-	SessionStartEvent,
+	type SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
+import { ensureWorkspaceDir } from "@look/shared/look-storage";
 import type { MainToRendererEvent, SessionSnapshotEnvelope } from "@look/shared/types";
 import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "../../core/contracts.js";
 import type { AutoTitleService } from "../../services/auto-title.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
+import { withDeadline } from "../../utils/with-deadline.js";
+import { SESSION_INIT_TIMEOUT_MS } from "../constants.js";
 import type { SessionEventProcessor } from "../events/session-event-processor.js";
 import type { SessionNotifier } from "../events/session-notifier.js";
 import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
@@ -50,6 +53,8 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	sessionNotifier: Pick<SessionNotifier, "disposeSession">;
 	selection: ActiveSessionSelection;
 	getStoredSession(sessionId: string): StoredSession | undefined;
+	/** 未落盘草稿会话（草稿索引），用于重启后恢复/激活。 */
+	getDraft(sessionId: string): { cwd: string; projectId: string; name: string } | undefined;
 	/** 会话模型兜底(新建/历史恢复/子会话统一入口,见 ensureSessionModel)。 */
 	ensureSessionModel(session: AgentSession): Promise<void>;
 	/** Optional cold-start fast path; runtime activation remains authoritative. */
@@ -152,8 +157,43 @@ export class RuntimeLifecycleCoordinator {
 		if (disposing) await disposing;
 		const existing = this.options.runtimeRegistry.get(sessionId);
 		if (existing) return existing;
+		// 新建会话的乐观草稿期：runtime 初始化在后台进行、JSONL 未落盘，
+		// catalog 查不到。此时发送消息/激活/切模式都必须等待 in-flight
+		// 创建 settle（getOrCreate 去重），而不是误判为 "Session not found"。
+		if (this.creationTargets.has(sessionId)) {
+			await this.options.runtimeRegistry.awaitInitialization(sessionId);
+			const created = this.options.runtimeRegistry.get(sessionId);
+			if (created) return created;
+			throw new Error(`Session ${sessionId} failed to initialize`);
+		}
 		const stored = this.options.getStoredSession(sessionId);
-		if (!stored) throw new Error(`Session ${sessionId} not found`);
+		if (!stored) {
+			// 草稿恢复：草稿索引中的未落盘会话（新建后重启/崩溃恢复）。
+			// pi 的 SessionManager 允许用既存 ID 重建 manager（文件尚未写出，
+			// 首个 assistant 消息落盘后与新建路径完全同构）。
+			const draft = this.options.getDraft(sessionId);
+			if (draft) {
+				const sessionManager = SessionManager.create(draft.cwd, ensureWorkspaceDir(draft.projectId), {
+					id: sessionId,
+				});
+				const managed = await withDeadline(
+					this.createManagedRuntime(draft.cwd, sessionManager, draft.projectId),
+					SESSION_INIT_TIMEOUT_MS,
+					`Session ${sessionId} initialization timed out after ${SESSION_INIT_TIMEOUT_MS / 1000}s`,
+				);
+				// 草稿恢复路径没有 initializeCreatedSession 兜底命名：
+				// 沿用索引中的名称，与新建路径行为一致。
+				managed.runtime.session.setSessionName(draft.name);
+				const scope = this.options.scopeRegistry.get(sessionId);
+				if (scope) scope.isDefaultName = true;
+				return managed;
+			}
+			// 关闭上面 has() 检查与本次读取之间的完成竞口：创建恰在此间隙
+			// settle（registry 已注册但 catalog 尚未刷新）时直接复用。
+			const lateBound = this.options.runtimeRegistry.get(sessionId);
+			if (lateBound) return lateBound;
+			throw new Error(`Session ${sessionId} not found`);
+		}
 		return this.createManagedRuntime(
 			stored.cwd,
 			this.options.openSessionManager(stored),

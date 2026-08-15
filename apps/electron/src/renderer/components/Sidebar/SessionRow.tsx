@@ -15,7 +15,7 @@ import { Bot, ChevronDown, ChevronRight, Copy, MoreHorizontal, Pencil, Trash2 } 
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ChildSessionInfo, SessionRowProps } from "./types";
-import { compactModelName, fmtRelativeTime } from "./utils";
+import { fmtRelativeTime } from "./utils";
 
 function SessionRowImpl({
 	agent,
@@ -46,20 +46,14 @@ function SessionRowImpl({
 	);
 	const isCollapsed = userCollapsed && !hasAttentionChild;
 	const activityAt = agent.lastActivityAt ?? agent.createdAt;
-	const modelLabel = compactModelName(agent.model);
+	// 副标题只承载运行/错误状态；不显示模型名、消息数，也不显示草稿标记。
 	const statusLabel = isError
 		? t("session.status.error", "error")
 		: isRunning
 			? t(`session.status.${phase}`, phase)
 			: phase === "error"
 				? t("session.status.error", "error")
-				: modelLabel ||
-					(agent.sessionFilePath
-						? t("session.messageCount", {
-								count: agent.messageCount,
-								defaultValue: "{{count}} messages",
-							})
-						: t("session.draft", "draft"));
+				: "";
 	const feishuLabel = t("settings.feishu", "Feishu");
 	return (
 		<div
@@ -85,7 +79,7 @@ function SessionRowImpl({
 					aria-label={t("session.sidebarLabel", {
 						defaultValue: "{{name}}, {{status}}, {{time}}",
 						name: agent.name,
-						status: statusLabel,
+						status: statusLabel || t("session.status.idle", "idle"),
 						time: fmtRelativeTime(activityAt, i18n.language),
 					})}
 				>
@@ -115,12 +109,11 @@ function SessionRowImpl({
 								</span>
 							</span>
 						)}
-						<span
-							className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/50"
-							title={agent.model || undefined}
-						>
-							{statusLabel}
-						</span>
+						{statusLabel && (
+							<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/50">
+								{statusLabel}
+							</span>
+						)}
 					</span>
 				</button>
 				{hasChildren && (

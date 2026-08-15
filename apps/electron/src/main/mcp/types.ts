@@ -12,7 +12,13 @@ export interface McpServerConfig {
 	url?: string;
 	headers?: Record<string, string>;
 	enabled: boolean;
-	/** 工具调用超时 (ms)，默认 120_000 */
+	/**
+	 * 必需服务器（默认 true）：会话首条消息在预算内等待其连接完成，
+	 * 保证 MCP 工具在模型首轮可用；required:false 的服务器后台连接，
+	 * 不阻塞任何消息（Proma 式 required/optional 分层）。
+	 */
+	required?: boolean;
+	/** 显式超时 (ms)：优先于分层默认（连接 30s；调用 120s） */
 	timeout?: number;
 	_source?: "user" | "project" | "discovered";
 	_discoveredFrom?: string;
@@ -57,6 +63,8 @@ export interface McpServerStatus {
 	name: string;
 	type: string;
 	enabled: boolean;
+	/** 必需服务器：首条消息在预算内等待其连接（required !== false）。 */
+	required?: boolean;
 	connected: boolean;
 	connecting?: boolean;
 	toolCount: number;

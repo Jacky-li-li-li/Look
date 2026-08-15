@@ -73,6 +73,7 @@ import { ProjectApplicationService } from "../services/project-application-servi
 import { ProjectRuntimeService } from "../services/project-runtime-service.js";
 import { SessionCatalog } from "../services/session-catalog.js";
 import { SessionControlService } from "../services/session-control-service.js";
+import { SessionDraftIndex } from "../services/session-draft-index.js";
 import { SessionHistoryService } from "../services/session-history-service.js";
 import { SessionInfoService } from "../services/session-info-service.js";
 import { ensureSessionModel, SessionLifecycleService } from "../services/session-lifecycle-service.js";
@@ -110,6 +111,7 @@ export class CompositionBuilder {
 	computerUseService: ComputerUseService | null = null;
 	browserService: BrowserService | null = null;
 	sessionCatalog: SessionCatalog | null = null;
+	draftIndex: SessionDraftIndex = new SessionDraftIndex();
 	projectRuntimeService: ProjectRuntimeService | null = null;
 	sessionInfoService: SessionInfoService | null = null;
 	sessionNotifier: SessionNotifier | null = null;
@@ -184,6 +186,9 @@ export class CompositionBuilder {
 		this.promptStore = new PromptStore();
 
 		this.mcpManager = new MCPManager();
+		// 空闲连接回收（Proma 式连接池）：5 分钟未调用的 MCP 连接断开并释放
+		// stdio 子进程；定时器 unref，不阻止应用退出。
+		this.mcpManager.startIdleReaper();
 
 		// Computer Use 是进程级 OS 服务（截图/输入与具体会话无关），
 		// 与 MCPManager 同为全局共享服务；构造不触碰 Electron API，
@@ -207,14 +212,32 @@ export class CompositionBuilder {
 		);
 		const host = this.host;
 		this.mcpManager.setOnChange(() => host.emit({ type: "mcp:status-changed" }));
+		// 项目激活即后台预热 MCP（应用启动/切项目/跨项目切会话都会经过
+		// setActiveId）：把冷启动挪到用户还在浏览界面的空闲窗口，首个
+		// 新建会话直接命中已连接客户端。信任门与 mcp-extension 的
+		// session_start 一致——项目级 .look/mcp.json 仅受信任时加载。
+		this.projectService.setOnActiveProjectChanged((projectId) => {
+			if (!projectId) return;
+			const project = this.projectService!.getProjectInfo(projectId);
+			if (!project?.valid) return;
+			const loadProjectConfig = this.projectService!.resolveProjectTrust(project.cwd);
+			void this.mcpManager!.prewarmProject(projectId, project.cwd, { loadProjectConfig });
+		});
+		// 信任授予 → 强制重踢预热，补载项目级 .look/mcp.json（信任前的预热
+		// 出于安全门跳过了它）。挂在 projectRuntimeService 总闸，覆盖启动
+		// 弹窗与 IPC 两条信任落地路径。
 		this.projectRuntimeService = new ProjectRuntimeService({
 			projectService: this.projectService,
 			sessionCatalog: this.sessionCatalog,
 			runtimeRegistry: this.runtimeRegistry,
 		});
+		this.projectRuntimeService.setOnProjectTrusted((projectId, cwd) => {
+			void this.mcpManager!.prewarmProject(projectId, cwd, { loadProjectConfig: true, force: true });
+		});
 		this.sessionInfoService = new SessionInfoService({
 			runtimeRegistry: this.runtimeRegistry,
 			sessionCatalog: this.sessionCatalog,
+			draftIndex: this.draftIndex,
 			subAgentRegistry: this.subAgentRegistry,
 			scopeRegistry: this.scopeRegistry,
 			maxNameLength: MAX_NAME_LENGTH,
@@ -319,9 +342,14 @@ export class CompositionBuilder {
 							discoverAgents: async (_projectId, scope) => {
 								const result = await discoverAgents(resolvedProjectId, scope);
 								const enabled = this.userSettings!.getAll().enabledAgentDefinitions;
-								if (enabled !== null)
-									result.agents = result.agents.filter((agent) => enabled.includes(agent.name));
-								return result;
+								if (enabled === null) return result;
+								// discoverAgents 有短 TTL 缓存且按引用返回：不能原地改写
+								// result.agents（会毒化缓存，其他调用方 5s 内看到过滤后的
+								// 列表），必须克隆一份再过滤。
+								return {
+									...result,
+									agents: result.agents.filter((agent) => enabled.includes(agent.name)),
+								};
 							},
 							runSubSession: (
 								parentId: string,
@@ -458,6 +486,13 @@ export class CompositionBuilder {
 			sessionNotifier: this.sessionNotifier!,
 			selection: this.activeSessionSelection,
 			getStoredSession: (sessionId) => this.sessionCatalog!.get(sessionId),
+			getDraft: (sessionId) => {
+				const entry = this.draftIndex.get(sessionId);
+				if (!entry) return undefined;
+				const project = this.projectService!.getProjectInfo(entry.projectId);
+				if (!project?.valid) return undefined;
+				return { cwd: project.cwd, projectId: entry.projectId, name: entry.name };
+			},
 			emitSessionPreview: (sessionId, stored) => this.sessionNotifier!.emitSessionPreview(sessionId, stored),
 			openSessionManager: (stored) => SessionManager.open(stored.path),
 			handleSessionEvent: (sessionId, event) => this.eventProcessor!.handle(sessionId, event),
@@ -550,6 +585,7 @@ export class CompositionBuilder {
 				getActiveSessionId: () => this.activeSessionSelection.currentId,
 			},
 			projectService: this.projectService!,
+			draftIndex: this.draftIndex,
 			runtimeRegistry: this.runtimeRegistry,
 			scopeRegistry: this.scopeRegistry,
 			subAgentRuntimeService: this.subAgentRuntimeService!,
@@ -564,6 +600,7 @@ export class CompositionBuilder {
 		this.projectDeletionService = new ProjectDeletionService({
 			projectService: this.projectService!,
 			sessionCatalog: this.sessionCatalog!,
+			draftIndex: this.draftIndex,
 			runtimeRegistry: this.runtimeRegistry,
 			disposeRuntime: (sessionId, abort) => this.runtimeLifecycle!.disposeRuntime(sessionId, abort),
 			workspaceFileService: this.workspaceFileServiceRef,
@@ -577,6 +614,9 @@ export class CompositionBuilder {
 
 		this.sessionMessagingService = new SessionMessagingService({
 			ensureRuntime: (sessionId) => this.runtimeLifecycle!.ensureRuntime(sessionId),
+			ensureMcpReady: async (projectId) => {
+				await this.mcpManager!.ensureRequiredReady(projectId);
+			},
 			emitError: (error, sessionId) => this.sessionNotifier!.emitError(error, sessionId),
 		});
 

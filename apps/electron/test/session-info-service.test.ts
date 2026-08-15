@@ -54,6 +54,7 @@ describe("SessionInfoService subagent markers", () => {
 		const service = new SessionInfoService({
 			runtimeRegistry: { get: () => undefined, entries: () => new Map().entries() },
 			sessionCatalog: catalog,
+			draftIndex: { list: () => [], get: () => undefined },
 			subAgentRegistry: registry,
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
@@ -86,6 +87,7 @@ describe("SessionInfoService subagent markers", () => {
 		const service = new SessionInfoService({
 			runtimeRegistry: { get: () => undefined, entries: () => new Map().entries() },
 			sessionCatalog: catalog,
+			draftIndex: { list: () => [], get: () => undefined },
 			subAgentRegistry: new SubAgentRegistry(), // 从未注册过
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
@@ -138,6 +140,7 @@ describe("SessionInfoService subagent markers", () => {
 				entries: () => runtimeMap.entries(),
 			},
 			sessionCatalog: catalog,
+			draftIndex: { list: () => [], get: () => undefined },
 			subAgentRegistry: registry,
 			scopeRegistry: { get: () => undefined },
 			maxNameLength: 120,
@@ -156,5 +159,56 @@ describe("SessionInfoService subagent markers", () => {
 		expect(direct?.parentSessionId).toBe("parent-1");
 		expect(direct?.isSubagentSession).toBe(true);
 		expect(direct?.lastActivityAt).toBeGreaterThan(0);
+	});
+
+	it("初始化窗口期去重：索引草稿行与 live runtime 同 id 时只返回一行", async () => {
+		// 回归：新建会话的初始化窗口内，runtime 已绑定（registry 有条目）但
+		// pi 文件未落盘（catalog 无条目、草稿索引仍有条目）。列表合并必须
+		// 只保留 live 行——否则渲染端收到同 id 两行触发 React duplicate key。
+		const projectId = "proj-info-draft-1";
+		const cwd = await mkdtemp(path.join(tmpdir(), "look-info-cwd-"));
+		const project: ProjectInfo = { id: projectId, name: "proj", cwd, createdAt: 1, valid: true };
+
+		const catalog = new SessionCatalog(); // 空：pi 文件未落盘
+		const registry = new SubAgentRegistry();
+		const draftId = "draft-live-1";
+
+		const session = {
+			sessionManager: { getSessionName: () => "新会话" },
+			getSessionStats: () => ({ totalMessages: 0 }),
+			model: null,
+			thinkingLevel: "off",
+			supportsThinking: () => false,
+			getAvailableThinkingLevels: () => ["off"],
+			isStreaming: false,
+			isRetrying: false,
+			isCompacting: false,
+			getContextUsage: () => undefined,
+			sessionFile: undefined,
+		};
+		const managed = { runtime: { session }, projectId, createdAt: 456 };
+		const runtimeMap = new Map<string, typeof managed>([[draftId, managed]]);
+
+		const draftEntries = [{ id: draftId, projectId, name: "新会话", createdAt: 1, updatedAt: 1 }];
+		const service = new SessionInfoService({
+			runtimeRegistry: {
+				get: (id: string) => (id === draftId ? managed : undefined),
+				entries: () => runtimeMap.entries(),
+			},
+			sessionCatalog: catalog,
+			draftIndex: {
+				list: () => draftEntries,
+				get: (id: string) => draftEntries.find((entry) => entry.id === id),
+			},
+			subAgentRegistry: registry,
+			scopeRegistry: { get: () => undefined },
+			maxNameLength: 120,
+			listProjects: () => [project],
+		});
+
+		const rows = service.listAgentsInProject(projectId).filter((agent) => agent.id === draftId);
+		expect(rows).toHaveLength(1);
+		// live 行优先（不带 initializing 标记，带 runtime 投影）
+		expect(rows[0]?.initializing).toBeUndefined();
 	});
 });

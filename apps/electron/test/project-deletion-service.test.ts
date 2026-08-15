@@ -68,6 +68,7 @@ describe("ProjectDeletionService", () => {
 		const service = new ProjectDeletionService({
 			projectService,
 			sessionCatalog,
+			draftIndex: { prunePersisted: vi.fn() },
 			runtimeRegistry,
 			disposeRuntime: async (sessionId: string) => disposed.push(sessionId),
 			workspaceFileService,
@@ -105,6 +106,7 @@ describe("ProjectDeletionService", () => {
 				"getProjectInfo" | "removeProject" | "activeId" | "setActiveId" | "listProjects" | "saveProjects"
 			>,
 			sessionCatalog: {
+				draftIndex: { prunePersisted: vi.fn() },
 				listByProject: vi.fn(() => []),
 				removeProject: removeCatalogProject,
 			} as unknown as Pick<SessionCatalog, "listByProject" | "removeProject">,
@@ -155,6 +157,7 @@ describe("ProjectDeletionService", () => {
 				SessionCatalog,
 				"listByProject" | "removeProject"
 			>,
+			draftIndex: { prunePersisted: vi.fn() },
 			runtimeRegistry,
 			disposeRuntime: vi.fn(),
 			workspaceFileService: null,

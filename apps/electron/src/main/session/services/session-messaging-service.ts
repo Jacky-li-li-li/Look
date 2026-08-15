@@ -13,6 +13,8 @@ import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionMessagingHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
+	/** 首条消息前等待「必需」MCP 服务器连接（Proma 式 required 预检，预算内不阻塞）。 */
+	ensureMcpReady(projectId: string): Promise<void>;
 	emitError(error: unknown, sessionId?: string): void;
 }
 
@@ -27,6 +29,10 @@ export class SessionMessagingService {
 	): Promise<void> {
 		const managed = await this.host.ensureRuntime(sessionId);
 		const session = managed.runtime.session;
+
+		// 必需 MCP 服务器预检：session_start 已后台启动连接，这里在预算内
+		// 等待其工具注册，保证模型首轮能看到必需工具；可选服务器不阻塞。
+		await this.host.ensureMcpReady(managed.projectId);
 
 		// Parse /agent:name chips: /skill remains a pi skill command, lone @ is kept for pi file refs.
 		const agentTokens = Array.from(

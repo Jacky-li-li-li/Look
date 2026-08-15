@@ -129,6 +129,8 @@
     "commandRequired": "请输入命令",
     "urlRequired": "请输入 URL",
     "addServer": "添加服务器",
+    "requiredLabel": "必需服务器",
+    "requiredHint": "会话首条消息会等待其连接（最长 30s）；关闭后改为后台连接，不阻塞消息",
     "saveChanges": "保存更改",
     "adding": "添加中…",
     "updating": "更新中…",

@@ -20,6 +20,8 @@ export function handleAgentEvent(event: MainToRendererEvent): boolean {
 	switch (event.type) {
 		case "agent:list": {
 			const previous = appStore.get(agentsAtom);
+			// 草稿会话已由主进程草稿索引并入 agent:list（创建即持久），无需渲染端
+			// 保留逻辑：列表替换就是权威结果。
 			const otherProjects = previous.filter((agent) => agent.projectId !== event.projectId);
 			const next = [...otherProjects, ...event.agents];
 			appStore.set(agentsAtom, next);

@@ -23,6 +23,13 @@ import {
 } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
+/**
+ * 网络模型刷新的硬性超时。刷新内部每个 provider 的 fetchModels 可能
+ * 无自身超时（代理/断网时挂死），这里统一用 AbortSignal 兜底，保证
+ * 设置页操作与后台启动刷新都能 settle。
+ */
+const MODEL_NETWORK_REFRESH_TIMEOUT_MS = 30_000;
+
 export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:get", async () => {
 		const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
@@ -50,7 +57,11 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		await setApiKey(ctx.model.credentials, _provider, data.key);
 		// Trigger SDK model refresh so the provider's latest model list
 		// (including newly released models) becomes available immediately.
-		const refreshResult = await ctx.model.runtime.refresh({ allowNetwork: true });
+		// 显式超时：网络刷新挂死（代理/断网）不能把 IPC 永久吊住。
+		const refreshResult = await ctx.model.runtime.refresh({
+			allowNetwork: true,
+			signal: AbortSignal.timeout(MODEL_NETWORK_REFRESH_TIMEOUT_MS),
+		});
 		if (refreshResult.errors.size > 0) {
 			console.warn("[Look] Model refresh after set-api-key had errors:", refreshResult.errors);
 		}
@@ -190,7 +201,10 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 				providerId: _provider,
 				success: true,
 			});
-			await ctx.model.runtime.refresh({ allowNetwork: true });
+			await ctx.model.runtime.refresh({
+				allowNetwork: true,
+				signal: AbortSignal.timeout(MODEL_NETWORK_REFRESH_TIMEOUT_MS),
+			});
 			ctx.session.notifier.emit({ type: "model:updated" });
 			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 			return { success: true, ...result };
@@ -214,7 +228,10 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const _provider = guardProvider(data.provider);
 		try {
 			await ctx.model.runtime.logout(_provider);
-			await ctx.model.runtime.refresh({ allowNetwork: true });
+			await ctx.model.runtime.refresh({
+				allowNetwork: true,
+				signal: AbortSignal.timeout(MODEL_NETWORK_REFRESH_TIMEOUT_MS),
+			});
 			ctx.session.notifier.emit({ type: "model:updated" });
 			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 			return { success: true, ...result };

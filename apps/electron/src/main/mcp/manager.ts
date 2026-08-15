@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { getLookDir } from "@look/shared/look-storage";
+import { SerialTail } from "../utils/serial-tail.js";
 import { McpClient } from "./client.js";
 import type { McpCallResult, McpServerConfig, McpServerStatus, McpTestResult, McpTool } from "./types.js";
 
@@ -27,6 +28,13 @@ export class MCPManager {
 	private circuitStates = new Map<string, CircuitState>();
 	private readonly failureThreshold = 5;
 	private readonly circuitOpenMs = 30_000;
+	/** 已预热的项目（应用运行期一次；配置变更由 session_start 的 loadConfig 兜底） */
+	private readonly prewarmedProjects = new Set<string>();
+	/**
+	 * 配置重载串行化：预热（项目激活）与 session_start 可能并发触发
+	 * loadConfig，交叉的 map 变更会留下已删配置的僵尸连接。
+	 */
+	private readonly configLock = new SerialTail<"mcp-config">();
 	private onChange: (() => void) | null = null;
 
 	private projectKey(projectId: string, name: string): string {
@@ -57,44 +65,46 @@ export class MCPManager {
 	}
 
 	async loadConfig(projectId: string, cwd?: string, options: { loadProjectConfig?: boolean } = {}): Promise<void> {
-		const merged = new Map<string, McpServerConfig>();
-		for (const config of await discoverCompatibleConfigs(cwd)) {
-			merged.set(config.name, { ...config, _source: "discovered" });
-		}
-		// Project-level .look/mcp.json can spawn arbitrary stdio commands, so it
-		// must be gated by project trust. The caller (MCP extension) decides
-		// whether the project is trusted and passes loadProjectConfig=false
-		// otherwise — the same gate that blocks .pi/* resources.
-		if (cwd && options.loadProjectConfig !== false) {
-			const projectConfigPath = path.join(cwd, ".look", "mcp.json");
-			for (const config of await loadConfigFile(projectConfigPath)) {
-				merged.set(config.name, { ...config, _source: "project" });
+		return this.configLock.run("mcp-config", async () => {
+			const merged = new Map<string, McpServerConfig>();
+			for (const config of await discoverCompatibleConfigs(cwd)) {
+				merged.set(config.name, { ...config, _source: "discovered" });
 			}
-		}
-		const userConfigPath = path.join(getLookDir(), "mcp.json");
-		for (const config of await loadConfigFile(userConfigPath)) {
-			merged.set(config.name, { ...config, _source: "user" });
-		}
+			// Project-level .look/mcp.json can spawn arbitrary stdio commands, so it
+			// must be gated by project trust. The caller (MCP extension) decides
+			// whether the project is trusted and passes loadProjectConfig=false
+			// otherwise — the same gate that blocks .pi/* resources.
+			if (cwd && options.loadProjectConfig !== false) {
+				const projectConfigPath = path.join(cwd, ".look", "mcp.json");
+				for (const config of await loadConfigFile(projectConfigPath)) {
+					merged.set(config.name, { ...config, _source: "project" });
+				}
+			}
+			const userConfigPath = path.join(getLookDir(), "mcp.json");
+			for (const config of await loadConfigFile(userConfigPath)) {
+				merged.set(config.name, { ...config, _source: "user" });
+			}
 
-		const previous = this.getProjectConfigMap(projectId);
-		const changed = !configMapsEqual(previous, merged);
-		const prefix = this.projectPrefix(projectId);
-		for (const key of this.configs.keys()) {
-			if (key.startsWith(prefix)) this.configs.delete(key);
-		}
-		for (const [name, config] of merged) {
-			this.configs.set(this.projectKey(projectId, name), config);
-		}
-		for (const [key, client] of this.clients) {
-			if (!key.startsWith(prefix)) continue;
-			const name = key.slice(prefix.length);
-			const nextConfig = merged.get(name);
-			if (!nextConfig?.enabled || !mcpConfigEqual(previous.get(name), nextConfig)) {
-				await client.disconnect();
-				this.clients.delete(key);
+			const previous = this.getProjectConfigMap(projectId);
+			const changed = !configMapsEqual(previous, merged);
+			const prefix = this.projectPrefix(projectId);
+			for (const key of this.configs.keys()) {
+				if (key.startsWith(prefix)) this.configs.delete(key);
 			}
-		}
-		if (changed) this.notifyChange();
+			for (const [name, config] of merged) {
+				this.configs.set(this.projectKey(projectId, name), config);
+			}
+			for (const [key, client] of this.clients) {
+				if (!key.startsWith(prefix)) continue;
+				const name = key.slice(prefix.length);
+				const nextConfig = merged.get(name);
+				if (!nextConfig?.enabled || !mcpConfigEqual(previous.get(name), nextConfig)) {
+					await client.disconnect();
+					this.clients.delete(key);
+				}
+			}
+			if (changed) this.notifyChange();
+		});
 	}
 
 	async persistConfig(projectId = "global"): Promise<void> {
@@ -125,6 +135,109 @@ export class MCPManager {
 			servers[config.name] = rest;
 		}
 		await writeFile(configPath, JSON.stringify({ mcpServers: servers }, null, 2), "utf-8");
+	}
+
+	/**
+	 * 项目激活时后台预热：加载配置并启动已启用服务器。
+	 *
+	 * 把 MCP 冷启动（进程 spawn + 握手）从「首个会话创建」挪到「应用启动 /
+	 * 项目切换」的空闲窗口，会话创建时命中已连接客户端（startServer 的
+	 * isConnected 短路）。失败静默（状态面板可见 lastError），不阻塞任何
+	 * 调用方。每个项目应用运行期只预热一次；信任授予后可用 force 重踢以
+	 * 加载项目级 .look/mcp.json。
+	 */
+	async prewarmProject(
+		projectId: string,
+		cwd?: string,
+		options: { loadProjectConfig?: boolean; force?: boolean } = {},
+	): Promise<void> {
+		if (!options.force && this.prewarmedProjects.has(projectId)) return;
+		this.prewarmedProjects.add(projectId);
+		try {
+			await this.loadConfig(projectId, cwd, { loadProjectConfig: options.loadProjectConfig });
+			const { started, failed } = await this.startEnabled(projectId);
+			if (failed.length > 0) {
+				const detail = failed.map((f) => `${f.name} (${f.error})`).join(", ");
+				console.warn(`[Look][MCP] 预热完成，部分服务器失败: ${detail}`);
+			}
+			if (started.length > 0) {
+				console.log(`[Look][MCP] 项目 ${projectId} 预热完成: ${started.join(", ")}`);
+			}
+		} catch (error) {
+			console.warn(
+				`[Look][MCP] 项目 ${projectId} 预热失败:`,
+				error instanceof Error ? error.message : String(error),
+			);
+		}
+	}
+
+	/**
+	 * Proma 式 required 预检：会话首条消息前等待「必需」服务器连接完成。
+	 *
+	 * 必需服务器保证其工具在模型首轮可用（session_start 已后台启动连接，
+	 * 这里复用同一 in-flight promise，已连接的立即返回）；可选服务器
+	 * （required:false）不参与等待。预算内未连上不抛错——工具会在连接
+	 * 完成后动态注册，只是首轮不可见。
+	 */
+	async ensureRequiredReady(projectId: string, timeoutMs = 30_000): Promise<{ ready: string[]; pending: string[] }> {
+		const prefix = this.projectPrefix(projectId);
+		const required = Array.from(this.configs.entries()).filter(
+			([key, config]) => key.startsWith(prefix) && config.enabled && config.required !== false,
+		);
+		if (required.length === 0) return { ready: [], pending: [] };
+
+		const starts = required.map(async ([_key, config]) => {
+			try {
+				await this.startServer(projectId, config.name);
+				return { name: config.name, ok: true };
+			} catch {
+				return { name: config.name, ok: false };
+			}
+		});
+		// 预算超时后不再继续等待：连接仍在后台进行，工具就绪后动态注册。
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			const results = await Promise.race([
+				Promise.all(starts),
+				new Promise<Array<{ name: string; ok: boolean }>>((resolve) => {
+					timer = setTimeout(() => resolve([]), timeoutMs);
+				}),
+			]);
+			const ready = results.filter((result) => result.ok).map((result) => result.name);
+			const pending = required.map(([_key, config]) => config.name).filter((name) => !ready.includes(name));
+			if (pending.length > 0) {
+				console.log(
+					`[Look][MCP] 必需服务器预算内未就绪（${pending.join(", ")}），本轮继续发送，工具就绪后动态注册`,
+				);
+			}
+			return { ready, pending };
+		} finally {
+			if (timer) clearTimeout(timer);
+		}
+	}
+
+	/**
+	 * 空闲连接回收（Proma 式连接池）：超过 idleTtlMs 未调用工具的客户端
+	 * 断开并释放 stdio 子进程。周期清扫，定时器 unref 不阻止应用退出。
+	 */
+	startIdleReaper(intervalMs = 60_000, idleTtlMs = 5 * 60_000): void {
+		const timer = setInterval(() => this.reapIdleClients(idleTtlMs), intervalMs);
+		timer.unref();
+	}
+
+	/** 执行一次空闲清扫（周期回收的测试可观测入口）。 */
+	reapIdleClients(idleTtlMs = 5 * 60_000, now = Date.now()): void {
+		for (const [key, client] of this.clients) {
+			if (client.idleMs(now) <= idleTtlMs) continue;
+			void client
+				.disconnect()
+				.catch(() => undefined)
+				.finally(() => {
+					if (this.clients.get(key) === client) this.clients.delete(key);
+				});
+			this.lastErrors.delete(key);
+			this.notifyChange();
+		}
 	}
 
 	async startEnabled(projectId: string): Promise<{
@@ -167,6 +280,7 @@ export class MCPManager {
 			this.clients.set(key, client);
 			this.lastErrors.delete(key);
 			this.notifyChange();
+			const startedAt = Date.now();
 			try {
 				await client.connect();
 				if (this.clients.get(key) !== client || !this.configs.get(key)?.enabled) {
@@ -174,6 +288,14 @@ export class MCPManager {
 					throw new Error(`MCP server "${name}" start was cancelled`);
 				}
 				this.lastErrors.delete(key);
+				// 连接耗时观测：本地 stdio 超过 3s 即视为病态（冷启动通常
+				// <1.5s），现场可直接从日志定位慢服务器并调整其预算/配置。
+				const elapsed = Date.now() - startedAt;
+				if (elapsed > 3_000) {
+					console.warn(`[Look][MCP] slow server "${name}": connected in ${elapsed}ms (${config.type})`);
+				} else {
+					console.log(`[Look][MCP] "${name}" connected in ${elapsed}ms (${config.type})`);
+				}
 				return client;
 			} catch (error) {
 				if (this.clients.get(key) === client) this.clients.delete(key);
@@ -262,6 +384,7 @@ export class MCPManager {
 					name: config.name,
 					type: config.type,
 					enabled: config.enabled,
+					required: config.required !== false,
 					connected: active,
 					connecting: config.enabled && this.clientStarts.has(clientKey),
 					toolCount: active ? (client?.getTools().length ?? 0) : 0,
@@ -407,6 +530,7 @@ async function loadConfigFile(filePath: string): Promise<McpServerConfig[]> {
 					url: c.url as string | undefined,
 					headers: c.headers as Record<string, string> | undefined,
 					enabled: (c.enabled as boolean) ?? true,
+					required: typeof c.required === "boolean" ? c.required : undefined,
 				}),
 			);
 		}

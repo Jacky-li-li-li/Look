@@ -129,6 +129,8 @@
     "commandRequired": "Enter a command",
     "urlRequired": "Enter a URL",
     "addServer": "Add server",
+    "requiredLabel": "Required server",
+    "requiredHint": "The first message of a session waits for its connection (up to 30s); turn off to connect in background without blocking messages",
     "saveChanges": "Save changes",
     "adding": "Adding…",
     "updating": "Updating…",
@@ -229,8 +231,7 @@
     "emptyHint": "Select a session from the sidebar"
   },
   "session": {
-    "draft": "draft",
-    "messageCount": "{{count}} messages",
+    "draft": "draft",    "messageCount": "{{count}} messages",
     "menu": "Session menu",
     "status": {
       "thinking": "thinking",

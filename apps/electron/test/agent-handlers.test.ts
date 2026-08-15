@@ -81,6 +81,33 @@ describe("handleAgentEvent", () => {
 		expect(appStore.get(activeAgentIdAtom)).toBeNull();
 	});
 
+	it("agent:list 草稿行随主进程列表到达（草稿索引已并入，无需渲染端保留逻辑）", () => {
+		const draft = { ...makeAgent("agent-draft"), initializing: true };
+		appStore.set(activeAgentIdAtom, "agent-draft");
+
+		handleAgentEvent({
+			type: "agent:list",
+			projectId: "project-1",
+			// 主进程列表含草稿（创建即落索引）；替换列表时草稿行直接进入。
+			agents: [draft, makeAgent(sessionId), makeAgent(otherSessionId)],
+		} as unknown as Parameters<typeof handleAgentEvent>[0]);
+
+		const agents = appStore.get(agentsAtom);
+		expect(agents.some((a) => a.id === "agent-draft" && a.initializing === true)).toBe(true);
+		expect(appStore.get(activeAgentIdAtom)).toBe("agent-draft");
+
+		// runtime 就绪后主进程重发的同 id 列表（不再 initializing）替换草稿行
+		const ready = makeAgent("agent-draft");
+		handleAgentEvent({
+			type: "agent:list",
+			projectId: "project-1",
+			agents: [ready, makeAgent(sessionId)],
+		} as unknown as Parameters<typeof handleAgentEvent>[0]);
+		const merged = appStore.get(agentsAtom);
+		expect(merged.filter((a) => a.id === "agent-draft")).toHaveLength(1);
+		expect(merged.find((a) => a.id === "agent-draft")?.initializing).toBeUndefined();
+	});
+
 	it("agent:list replaces metadata when the project has the same session IDs", () => {
 		const updated = {
 			...makeAgent(sessionId),

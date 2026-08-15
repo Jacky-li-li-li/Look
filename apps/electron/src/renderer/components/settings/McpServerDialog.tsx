@@ -22,6 +22,7 @@ interface McpServerDialogProps {
 	initialConfig?: {
 		type: string;
 		enabled?: boolean;
+		required?: boolean;
 		command?: string;
 		args?: string[];
 		url?: string;
@@ -35,6 +36,8 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 	const [command, setCommand] = useState("");
 	const [args, setArgs] = useState("");
 	const [url, setUrl] = useState("");
+	// Proma 式 required/optional：必需服务器首条消息在预算内等待其连接。
+	const [required, setRequired] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const returnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -44,6 +47,7 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 		setCommand("");
 		setArgs("");
 		setUrl("");
+		setRequired(true);
 	}, []);
 
 	// Pre-fill form when editing an existing server
@@ -55,6 +59,7 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 			setCommand(initialConfig.command ?? "");
 			setArgs((initialConfig.args ?? []).join(" "));
 			setUrl(initialConfig.url ?? "");
+			setRequired(initialConfig.required !== false);
 		} else {
 			resetForm();
 		}
@@ -78,6 +83,7 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 			const config: Record<string, unknown> = {
 				type,
 				enabled: editingName ? (initialConfig?.enabled ?? true) : true,
+				required,
 			};
 			if (type === "stdio") {
 				config.command = command.trim();
@@ -210,6 +216,26 @@ export function McpServerDialog({ open, onClose, onSave, editingName, initialCon
 							/>
 						</div>
 					)}
+
+					{/* 必需服务器（Proma 式 required/optional 分层） */}
+					<label className="flex items-start gap-2 rounded-md border border-hairline px-3 py-2">
+						<input
+							type="checkbox"
+							checked={required}
+							onChange={(e) => setRequired(e.target.checked)}
+							className="mt-0.5 size-3.5 accent-foreground"
+						/>
+						<span className="text-xs leading-relaxed">
+							<span className="font-medium">{t("mcpDialog.requiredLabel", "必需服务器")}</span>
+							<span className="text-muted-foreground">
+								{" · "}
+								{t(
+									"mcpDialog.requiredHint",
+									"会话首条消息会等待其连接（最长 30s）；关闭后改为后台连接，不阻塞消息",
+								)}
+							</span>
+						</span>
+					</label>
 				</div>
 
 				<DialogFooter className="m-0 shrink-0 rounded-none px-5 py-3">
