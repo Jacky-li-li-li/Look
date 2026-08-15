@@ -29,8 +29,18 @@ import { isApprovalRequiredTool } from "./tool-permission-registry.js";
  */
 const INTERCEPT_TOOLS = new Set(["write", "edit", "notebook_edit", "bash", "task_create", "task_update"]);
 
+/**
+ * 需要权限拦截的工具判定：
+ * - SDK 内置变更工具（INTERCEPT_TOOLS）；
+ * - Look 自注册的危险工具（tool-permission-registry，如 mcp_connect）；
+ * - 外部 MCP server 暴露的 mcp__* 工具——capability-registry 已把它们
+ *   声明为 requiresExplicitApproval（external-mcp），但拦截必须在这里
+ *   到达 handler 才能生效；否则 mcp__* 在 ask 模式不弹确认、在 plan 模式
+ *   不阻断，等于绕过了整个权限模型（例如接入 computer-use MCP server
+ *   后其控制工具可直接执行）。
+ */
 export function shouldInterceptPermissionTool(toolName: string): boolean {
-	return INTERCEPT_TOOLS.has(toolName) || isApprovalRequiredTool(toolName);
+	return INTERCEPT_TOOLS.has(toolName) || isApprovalRequiredTool(toolName) || toolName.startsWith("mcp__");
 }
 
 const PLAN_BLOCKED_TOOLS = new Set(["write", "edit", "notebook_edit", "task_create", "task_update"]);

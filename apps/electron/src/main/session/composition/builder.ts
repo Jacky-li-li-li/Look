@@ -194,7 +194,11 @@ export class CompositionBuilder {
 		// Computer Use 是进程级 OS 服务（截图/输入与具体会话无关），
 		// 与 MCPManager 同为全局共享服务；构造不触碰 Electron API，
 		// 真正的 desktopCapturer/nut-js 调用发生在工具执行时（app ready 后）。
-		this.computerUseService = new ComputerUseService();
+		// v1 仅支持 macOS：服务依赖 macOS 专属 TCC API
+		// （getMediaAccessStatus("screen") / isTrustedAccessibilityClient），
+		// 且输入坐标按主屏全局原点设计；非 macOS 不构造服务、不注册
+		// computer_* 工具，避免暴露必然失败的入口。
+		this.computerUseService = process.platform === "darwin" ? new ComputerUseService() : null;
 		this.browserService = new BrowserService();
 
 		this.sessionCatalog = new SessionCatalog((metadata) => {
@@ -384,10 +388,16 @@ export class CompositionBuilder {
 					createSkillInjectExtensionFactory(),
 					// 截图落盘到项目共享区（守卫白名单内，共享面板可见，
 					// 路径芯片点击可预览）；无项目时不落盘，仅内联返回。
-					createComputerUseExtensionFactory(
-						this.computerUseService!,
-						resolvedProjectId ? path.join(getProjectSharedDir(resolvedProjectId), "screenshots") : null,
-					),
+					// 非 macOS 不注册：computer-use 服务依赖 macOS 专属 TCC API，
+					// 见构造处注释（computerUseService 为 null 时跳过）。
+					...(this.computerUseService
+						? [
+								createComputerUseExtensionFactory(
+									this.computerUseService,
+									resolvedProjectId ? path.join(getProjectSharedDir(resolvedProjectId), "screenshots") : null,
+								),
+							]
+						: []),
 					createBrowserExtensionFactory(
 						this.browserService!,
 						(cwd) => this.projectService!.resolveProjectTrust(cwd),

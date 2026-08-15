@@ -14,6 +14,13 @@ describe("permission extension", () => {
 		expect(shouldInterceptPermissionTool("grep")).toBe(false);
 	});
 
+	it("intercepts external MCP tools so they cannot bypass the permission model", () => {
+		// mcp__* 工具（含接入的 computer-use MCP server 暴露的控制工具）
+		// 必须经过 ask 确认 / plan 阻断，不能绕过拦截直接执行。
+		expect(shouldInterceptPermissionTool("mcp__computer-use__click")).toBe(true);
+		expect(shouldInterceptPermissionTool("mcp__github__create_issue")).toBe(true);
+	});
+
 	it("delegates intercepted calls to the runtime permission handler", async () => {
 		let listener:
 			| ((event: Record<string, unknown>, context: Record<string, unknown>) => Record<string, unknown>)

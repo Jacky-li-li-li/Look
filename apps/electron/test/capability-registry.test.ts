@@ -15,4 +15,24 @@ describe("CapabilityRegistry", () => {
 		});
 		expect(registry.resolve("unregistered-tool")).toMatchObject({ kind: "unknown", requiresExplicitApproval: true });
 	});
+
+	it("classifies built-in computer_* tools with human-readable descriptions", () => {
+		expect(registry.resolve("computer_click")).toMatchObject({
+			kind: "computer-use",
+			description: "Computer use: click a mouse button",
+			requiresExplicitApproval: true,
+		});
+		expect(registry.resolve("computer_type")).toMatchObject({
+			kind: "computer-use",
+			requiresExplicitApproval: true,
+		});
+		expect(registry.resolve("computer_screenshot")).toMatchObject({
+			kind: "computer-use",
+			requiresExplicitApproval: false,
+		});
+		expect(registry.resolve("computer_mouse_move")).toMatchObject({
+			kind: "computer-use",
+			requiresExplicitApproval: false,
+		});
+	});
 });
