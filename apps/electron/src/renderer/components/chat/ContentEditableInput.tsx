@@ -56,6 +56,8 @@ interface ContentEditableInputProps {
 	onAttachmentCreated?: (attachment: PendingAttachment) => void;
 	/** 当前待发送附件数量（附件文件名序号用）。 */
 	attachmentCount?: number;
+	/** 外部文件（Finder/VSCode 等）拖入输入框时的回调；不传则忽略外部拖拽。 */
+	onFilesDropped?: (files: File[]) => void;
 	/** Tab pressed while the editor is focused. */
 	onTab?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 	/** All other keydowns (including Enter, ArrowUp/Down, Escape).
@@ -66,11 +68,16 @@ interface ContentEditableInputProps {
 	className?: string;
 	/** Minimum number of visible text rows. Default 2. */
 	minRows?: number;
-	/** Notified when a workspace file is dragged over the editor
-	 *  (true) or the drag leaves / drops (false). Lets the consumer
-	 *  highlight the input box as a drop target. */
-	onDragActiveChange?: (active: boolean) => void;
+	/** Notified when a file drag hovers the editor: active + kind
+	 *  (workspace = 工作区 @path 引用；external = 外部文件转附件）。
+	 *  Lets the consumer highlight the input box and choose the drop hint. */
+	onDragActiveChange?: (active: boolean, kind?: "workspace" | "external") => void;
 	ref?: React.Ref<ContentEditableInputHandle>;
+}
+
+/** 外部文件拖拽（Finder/VSCode 等）是否命中。 */
+function hasExternalFiles(types: readonly string[]): boolean {
+	return types.includes("Files");
 }
 
 export const ContentEditableInput = function ContentEditableInput({
@@ -81,6 +88,7 @@ export const ContentEditableInput = function ContentEditableInput({
 	sessionId,
 	onAttachmentCreated,
 	attachmentCount,
+	onFilesDropped,
 	onTab,
 	onKeyDown,
 	className,
@@ -92,6 +100,8 @@ export const ContentEditableInput = function ContentEditableInput({
 	const [editorContent, setEditorContent] = useState("");
 	// Whether a workspace file drag is currently hovering the editor.
 	const [dragActive, setDragActive] = useState(false);
+	// 当前悬停拖拽类型：workspace（@path 引用）| external（外部文件转附件）。
+	const [dragKind, setDragKind] = useState<"workspace" | "external" | null>(null);
 	const onDragActiveChangeRef = useRef(onDragActiveChange);
 	onDragActiveChangeRef.current = onDragActiveChange;
 	const isComposingRef = useRef(false);
@@ -234,18 +244,14 @@ export const ContentEditableInput = function ContentEditableInput({
 	 */
 	const LOOK_FILE_MIME = "application/x-look-filerelpath";
 
-	const handleDrop = useCallback(
-		(e: React.DragEvent<HTMLDivElement>) => {
-			// 始终阻止默认行为,防止外部文件污染编辑器
-			e.preventDefault();
-			setDragActive(false);
-			const relPath = e.dataTransfer.getData(LOOK_FILE_MIME);
-			if (!relPath) return; // 不是工作区拖拽,已经 preventDefault 不会污染,只忽略
+	/**
+	 * 工作区 @path 引用插入：与 insertRequest 行为一致，插入点前文非空白时补空格。
+	 * 抽成独立函数以支持 handleDrop 内复用（工作区拖拽分支）。
+	 */
+	const insertWorkspaceRef = useCallback(
+		(relPath: string) => {
 			const el = editorRef.current;
 			const selection = window.getSelection();
-			// 与 insertRequest 行为一致：插入点前文非空白时补一个空格，
-			// 避免「当前@README.md」这类粘连（虽然正则已支持 CJK 紧贴，
-			// 补空格更符合书写习惯且让 chip 边界更清晰）。
 			let insertText = `@${relPath}`;
 			if (selection && selection.rangeCount > 0) {
 				const range = selection.getRangeAt(0);
@@ -285,18 +291,56 @@ export const ContentEditableInput = function ContentEditableInput({
 		[onChange],
 	);
 
+	const handleDrop = useCallback(
+		(e: React.DragEvent<HTMLDivElement>) => {
+			// 始终阻止默认行为,防止外部文件污染编辑器
+			e.preventDefault();
+			setDragActive(false);
+			setDragKind(null);
+			const relPath = e.dataTransfer.getData(LOOK_FILE_MIME);
+			if (relPath) {
+				// 工作区拖拽：插入 @path 引用（行为不变）
+				insertWorkspaceRef(relPath);
+				return;
+			}
+			// 外部文件拖拽：交给消费者转附件/图片（原行为是静默忽略）。
+			const files = Array.from(e.dataTransfer.files ?? []);
+			if (files.length > 0 && onFilesDropped) {
+				onFilesDropped(files);
+			}
+		},
+		[insertWorkspaceRef, onFilesDropped],
+	);
+
 	const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-		if (!e.dataTransfer.types.includes(LOOK_FILE_MIME)) return;
-		e.preventDefault();
-		setDragActive(true);
+		if (e.dataTransfer.types.includes(LOOK_FILE_MIME)) {
+			e.preventDefault();
+			setDragKind("workspace");
+			setDragActive(true);
+			return;
+		}
+		if (hasExternalFiles(e.dataTransfer.types)) {
+			e.preventDefault();
+			setDragKind("external");
+			setDragActive(true);
+		}
 	}, []);
 
 	const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-		// 仅当携带工作区 MIME 时显示 drop effect
-		if (!e.dataTransfer.types.includes(LOOK_FILE_MIME)) return;
-		e.preventDefault();
-		e.dataTransfer.dropEffect = "copy";
-		setDragActive(true);
+		// 仅当携带工作区 MIME 或外部文件时显示 drop effect
+		if (e.dataTransfer.types.includes(LOOK_FILE_MIME)) {
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "copy";
+			setDragKind("workspace");
+			setDragActive(true);
+			return;
+		}
+		if (hasExternalFiles(e.dataTransfer.types)) {
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "copy";
+			setDragKind("external");
+			setDragActive(true);
+		}
 	}, []);
 
 	const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -304,12 +348,13 @@ export const ContentEditableInput = function ContentEditableInput({
 		const next = e.relatedTarget;
 		if (next instanceof Node && e.currentTarget.contains(next)) return;
 		setDragActive(false);
+		setDragKind(null);
 	}, []);
 
-	// 同步拖拽悬停状态给父级(用于输入框整体高亮)
+	// 同步拖拽悬停状态给父级(用于输入框整体高亮 + 提示文案)
 	useEffect(() => {
-		onDragActiveChangeRef.current?.(dragActive);
-	}, [dragActive]);
+		onDragActiveChangeRef.current?.(dragActive, dragKind ?? undefined);
+	}, [dragActive, dragKind]);
 
 	const handleFocus = useCallback(() => {
 		// Some Chromium versions inject a stray `<br>` into

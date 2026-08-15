@@ -28,14 +28,24 @@ export const ATTACHMENT_INLINE_MAX_BYTES = 32 * 1024;
 /** 降级模式下附带进 prompt 的摘要字节数。 */
 export const ATTACHMENT_PREVIEW_MAX_BYTES = 8 * 1024;
 /**
- * 附件文件名安全格式：无路径分隔符、无控制字符，最长 120 字符。
- * 渲染端只传名字，路径由本服务拼接，杜绝路径穿越。
+ * 附件文件名安全校验：拒绝路径分隔符/控制字符/隐藏文件，以及会破坏
+ * 消息标记格式的字符（`]`、` — ` 说明分隔符）。允许 CJK、空格等合法
+ * 文件名字符（macOS 文件系统语义）——拖拽转附件的原始文件名常用中文。
  */
-const ATTACHMENT_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
+const ATTACHMENT_NAME_RE = /[/\\\0\n\r\]]/;
 
 /** 校验附件文件名（非法时抛错，作为所有 attachment:* IPC 的统一入口）。 */
 export function assertAttachmentName(name: unknown): string {
-	if (typeof name !== "string" || !ATTACHMENT_NAME_RE.test(name)) {
+	if (
+		typeof name !== "string" ||
+		name.length === 0 ||
+		name.length > 120 ||
+		name === "." ||
+		name === ".." ||
+		name.startsWith(".") ||
+		ATTACHMENT_NAME_RE.test(name) ||
+		name.includes(" — ")
+	) {
 		throw new Error(`Invalid attachment name: ${JSON.stringify(name)}`);
 	}
 	return name;

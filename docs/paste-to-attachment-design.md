@@ -6,7 +6,7 @@
 
 > **实现记录（Phase 1）**：look-storage 附件目录 + `AttachmentService`（落盘/读取/内联注入）+ `attachment:*` IPC（create/read/update/delete）+ preload/LookAPI 契约 + 渲染端阈值判定（`lib/pasteAttachment.ts`，2000 字符/60 行/代码特征）+ `PendingAttachmentBar` 附件栏（点击卡片 → Dock 查看器、还原为文本、移除）+ `sendMessage` 透传与主进程 `buildPrompt` 内联注入（>32KB 降级引用+摘要）+ `FileViewerDialog` 附件模式（read/update、任意类型可编辑、Cmd+S）+ zh/en/ja 文案 + 单测（`test/main/attachment-service.test.ts`）。
 
-> **实现记录（Phase 2 第一梯队）**：① 历史消息附件块渲染 — `buildPrompt` 标记统一为可解析格式（`[Attachment: name]\n内容\n[/Attachment]` / `[Attachment: name — note]\n预览\n[/Attachment]`），渲染端 `parseAttachmentMessage` 切成 text/attachment 段落，新增 `AttachmentBlock`（卡片 + 折叠内容 + 点击经 `attachment:resolve` 打开 Dock 查看器），`MessageItem`/`MessageBlockList`/`blockTypes` 打通 unified block 新 kind；② 级联清理 — `destroyAgent` 挂钩 `deleteSessionAttachments`、`ProjectDeletionService` 挂钩 `deleteProjectAttachments`（附件不再只增不减）；③ 新增 `attachment:resolve` IPC（历史卡片解析真实路径，缺失时返回明确错误）。未实现（Phase 2 其余）：Cmd+Z 撤销转换；Phase 3：设置项（阈值/开关）、`FileContentSource` 抽象、拖拽转附件。
+> **实现记录（Phase 2 其余）**：外部文件拖拽转附件 — `ContentEditableInput` 接收 Finder/VSCode 拖入的文件（此前被静默忽略）：图片文件进现有图片栏（与剪贴板一致），文本文件读内容转附件（`createAttachment` + 附件栏）；工作区 `@path` 拖拽行为不变；拖拽悬停提示按类型区分（引用/附件）；附件名守卫放宽支持 CJK/空格（仍拒绝路径分隔符/控制符/隐藏文件/标记冲突字符），新增 `sanitizeAttachmentName` 清洗原始文件名；`npm run check` 全量回归通过（166 文件 1356 例 + shared 22 例）。未实现（Phase 3）：设置项（阈值/自动转换开关）、`FileContentSource` 抽象。
 
 ---
 

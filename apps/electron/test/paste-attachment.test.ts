@@ -7,6 +7,7 @@ import {
 	buildAttachmentName,
 	guessAttachmentExtension,
 	parseAttachmentMessage,
+	sanitizeAttachmentName,
 	shouldConvertPasteToAttachment,
 } from "../src/renderer/lib/pasteAttachment";
 
@@ -55,6 +56,30 @@ describe("buildAttachmentName", () => {
 	it("produces paste-<stamp>-<seq>.<ext>", () => {
 		const name = buildAttachmentName("# heading", 1);
 		expect(name).toMatch(/^paste-\d{8}-\d{4}-1\.md$/);
+	});
+});
+
+describe("sanitizeAttachmentName", () => {
+	it("keeps valid names (CJK / spaces / dots in extension)", () => {
+		expect(sanitizeAttachmentName("需求文档.md")).toBe("需求文档.md");
+		expect(sanitizeAttachmentName("error log 2026.txt")).toBe("error log 2026.txt");
+	});
+
+	it("strips path separators and marker-conflicting chars", () => {
+		expect(sanitizeAttachmentName("a/b\\c.txt")).toBe("a-b-c.txt");
+		// `]` 与全角破折号被替换为 `-`（保留空格，仍是合法文件名）
+		expect(sanitizeAttachmentName("x]y — z.md")).toBe("x-y - z.md");
+		expect(sanitizeAttachmentName("..\\evil")).toBe("evil");
+	});
+
+	it("strips the leading dot of hidden files", () => {
+		expect(sanitizeAttachmentName(".env")).toBe("env");
+	});
+
+	it("returns null when nothing usable remains", () => {
+		expect(sanitizeAttachmentName("///")).toBeNull();
+		expect(sanitizeAttachmentName("...")).toBeNull();
+		expect(sanitizeAttachmentName("  ")).toBeNull();
 	});
 });
 

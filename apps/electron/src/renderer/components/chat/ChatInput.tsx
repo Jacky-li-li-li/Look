@@ -10,6 +10,7 @@ import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState } f
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useChatInputMenus } from "../../hooks/useChatInputMenus";
+import { buildAttachmentName, sanitizeAttachmentName } from "../../lib/pasteAttachment";
 import { appStore } from "../../store/appStore";
 import {
 	activeAgentAtom,
@@ -83,7 +84,11 @@ const ChatInput = function ChatInput({
 	const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
 	// Whether a workspace file is currently being dragged over the input box.
 	const [dragActive, setDragActive] = useState(false);
-	// 当前会话所属项目（粘贴转附件需要 projectId + sessionId 定位附件目录）。
+	// 拖拽类型：workspace（@path 引用）| external（外部文件转附件）——决定悬停提示。
+	const [dragKind, setDragKind] = useState<"workspace" | "external" | null>(null);
+	// 拖拽文件序号（sanitize 兜底命名用，避免并发同分钟内撞名）。
+	const droppedSeqRef = useRef(0);
+	// 当前会话所属项目（粘贴/拖拽转附件需要 projectId + sessionId 定位附件目录）。
 	const activeAgent = useAtomValue(activeAgentAtom);
 	const projectId = activeAgent?.projectId ?? null;
 
@@ -201,6 +206,69 @@ const ChatInput = function ChatInput({
 		setPendingAttachments((prev) => prev.filter((item) => item !== attachment));
 	}, []);
 
+	// ── 外部文件拖拽（Finder/VSCode 等）：图片进图片栏，文本转附件 ──
+	const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+	const readDroppedFileAsText = useCallback((file: File): Promise<string> => {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(String(reader.result ?? ""));
+			reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+			reader.readAsText(file);
+		});
+	}, []);
+
+	const handleDragActiveChange = useCallback((active: boolean, kind?: "workspace" | "external") => {
+		setDragActive(active);
+		setDragKind(kind ?? null);
+	}, []);
+
+	const ingestDroppedFile = useCallback(
+		async (file: File) => {
+			// 目录条目（webkitGetAsEntry 标记）或超过上限的大文件直接拒绝。
+			const entry = (file as File & { webkitGetAsEntry?: () => { isDirectory?: boolean } }).webkitGetAsEntry?.();
+			if (entry?.isDirectory) return;
+			if (file.size > MAX_ATTACHMENT_BYTES) {
+				toast.error(t("chat.attachmentTooLarge"));
+				return;
+			}
+			// 图片文件走现有图片通道（缩略图栏，与剪贴板粘贴一致）。
+			if (file.type.startsWith("image/")) {
+				const reader = new FileReader();
+				reader.onload = () => {
+					const dataUrl = reader.result as string;
+					const comma = dataUrl.indexOf(",");
+					const rawBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+					setPendingImages((prev) => [
+						...prev,
+						{ type: "image", data: rawBase64, mimeType: file.type || "image/png" },
+					]);
+				};
+				reader.readAsDataURL(file);
+				return;
+			}
+			try {
+				const content = await readDroppedFileAsText(file);
+				const name = sanitizeAttachmentName(file.name) ?? buildAttachmentName(content, ++droppedSeqRef.current);
+				if (!projectId) return;
+				const result = await window.look.createAttachment(projectId, agentId, name, content);
+				if (!result?.success) throw new Error(result?.error ?? "Failed to create attachment");
+				handleAttachmentCreated(result.attachment);
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : t("chat.attachmentTooLarge"));
+			}
+		},
+		[projectId, agentId, readDroppedFileAsText, handleAttachmentCreated, t],
+	);
+
+	const handleFilesDropped = useCallback(
+		(files: File[]) => {
+			if (files.length === 0) return;
+			for (const file of files) void ingestDroppedFile(file);
+		},
+		[ingestDroppedFile],
+	);
+
 	// Tool 面板选中工具 → 追加引用 token 到输入框末尾（复用 insertRequest 机制）
 	const handleInsertToken = useCallback(
 		(token: string) => {
@@ -283,7 +351,7 @@ const ChatInput = function ChatInput({
 			{/* 拖拽悬停提示 */}
 			{dragActive ? (
 				<div className="pointer-events-none absolute -top-3.5 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full border border-hairline bg-card/95 px-2.5 py-0.5 text-[10px] text-foreground shadow-sm backdrop-blur">
-					{t("chat.dropFileHint", "松手插入文件引用")}
+					{dragKind === "external" ? t("chat.dropFileHintAttachment") : t("chat.dropFileHint", "松手插入文件引用")}
 				</div>
 			) : null}
 			{menus.slashOpen ? (
@@ -326,7 +394,8 @@ const ChatInput = function ChatInput({
 				onAttachmentCreated={handleAttachmentCreated}
 				attachmentCount={pendingAttachments.length + 1}
 				onKeyDown={handleEditorKeyDown}
-				onDragActiveChange={setDragActive}
+				onDragActiveChange={handleDragActiveChange}
+				onFilesDropped={handleFilesDropped}
 			/>
 			<ChatInputToolbar
 				agentId={agentId}

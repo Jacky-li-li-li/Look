@@ -7,7 +7,7 @@
 
 import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { LookUiStreamBlock } from "@shared/types";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Provider } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MessageItem } from "../src/renderer/components/chat/MessageItem";
@@ -62,6 +62,20 @@ describe("MessageItem", () => {
 		});
 		expect(container.textContent).toContain("hello agent");
 		expect(container.querySelector(".whisper-bubble--user")).toBeTruthy();
+	});
+
+	it("renders an attachment block for a user message carrying [Attachment:] markers (array content)", () => {
+		const { container } = renderItem({
+			message: baseUser("分析这个\n\n[Attachment: paste-1.md]\n# 标题\n正文\n[/Attachment]"),
+		});
+		// 附件卡片渲染为 tag 样式：文件名可见、内容默认折叠、原始标记不可见
+		expect(container.textContent).toContain("paste-1.md");
+		expect(container.textContent).not.toContain("[Attachment:");
+		expect(container.textContent).not.toContain("[/Attachment]");
+		expect(container.textContent).not.toContain("# 标题");
+		// 展开后可见内联内容
+		fireEvent.click(screen.getByRole("button", { name: /Show content|展开内容/ }));
+		expect(container.textContent).toContain("# 标题");
 	});
 
 	it("renders streaming blocks when liveBlocks provided", () => {

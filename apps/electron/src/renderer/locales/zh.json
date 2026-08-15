@@ -644,7 +644,9 @@
     "attachmentExpand": "展开内容",
     "attachmentCollapse": "收起",
     "attachmentMissing": "附件文件不存在（可能已被清理）",
-    "attachmentNoContent": "内容未内联，可在查看器中查看完整文件"
+    "attachmentNoContent": "内容未内联，可在查看器中查看完整文件",
+    "dropFileHintAttachment": "松手转为附件",
+    "attachmentTooLarge": "文件超过 10MB，无法转为附件"
   },
   "context": {
     "compressing": "压缩中…",

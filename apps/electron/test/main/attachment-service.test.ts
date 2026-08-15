@@ -53,10 +53,16 @@ describe("AttachmentService", () => {
 	it("rejects attachment names with path traversal or separators", () => {
 		expect(() => mod.assertAttachmentName("../../etc/passwd")).toThrow();
 		expect(() => mod.assertAttachmentName("a/b.md")).toThrow();
+		expect(() => mod.assertAttachmentName("a\\b.md")).toThrow();
 		expect(() => mod.assertAttachmentName("")).toThrow();
 		expect(() => mod.assertAttachmentName(".hidden")).toThrow();
 		expect(() => mod.assertAttachmentName("..")).toThrow();
+		expect(() => mod.assertAttachmentName("name]with]bracket")).toThrow();
+		expect(() => mod.assertAttachmentName("name — note.txt")).toThrow();
+		// 合法名字：ASCII 与 CJK/空格（拖拽转附件保留原始文件名）
 		expect(mod.assertAttachmentName("paste-1.md")).toBe("paste-1.md");
+		expect(mod.assertAttachmentName("需求文档.md")).toBe("需求文档.md");
+		expect(mod.assertAttachmentName("error log 2026.txt")).toBe("error log 2026.txt");
 	});
 
 	it("rejects content larger than the 10MB limit", () => {

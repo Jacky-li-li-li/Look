@@ -95,7 +95,7 @@ export const MessageItem = memo(function MessageItem({
 					isUser={isUser}
 					alignment={messageAlignment}
 				/>
-				<MessageContent isUser={isUser} flash={flash}>
+				<MessageContent isUser={isUser} flash={flash} alignment={messageAlignment}>
 					{hasLive ? (
 						<StreamingBlocksBubble
 							blocks={liveBlocks ?? []}

@@ -69,6 +69,24 @@ export function buildAttachmentName(text: string, sequence: number): string {
 	return `paste-${stamp}-${sequence}.${ext}`;
 }
 
+/**
+ * 把原始文件名清洗为符合附件名守卫的名字（允许 CJK/空格，去掉路径分隔符、
+ * 控制字符、标记冲突字符 `]`/`—`，去掉隐藏文件前导点与首尾横线）。
+ * 清洗结果为空（或只剩分隔符）时返回 null，调用方用 buildAttachmentName 兜底。
+ */
+export function sanitizeAttachmentName(original: string): string | null {
+	const cleaned = original
+		.replace(/[/\\\0\n\r\]]/g, "-")
+		.replace(/—/g, "-")
+		.replace(/\s+/g, " ")
+		.trim()
+		.replace(/^\.+/, "") // 隐藏文件前导点
+		.replace(/-{2,}/g, "-")
+		.replace(/^-+|-+$/g, "");
+	if (cleaned.length === 0 || cleaned === "." || cleaned === "..") return null;
+	return cleaned.length > 120 ? cleaned.slice(0, 120) : cleaned;
+}
+
 /** 人类可读字节数：4 B / 12.4 KB / 1.2 MB。 */
 export function formatBytes(bytes: number): string {
 	if (!Number.isFinite(bytes) || bytes < 0) return "";

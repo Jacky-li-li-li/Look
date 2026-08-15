@@ -644,7 +644,9 @@
     "attachmentExpand": "Show content",
     "attachmentCollapse": "Collapse",
     "attachmentMissing": "Attachment file not found (may have been cleaned up)",
-    "attachmentNoContent": "Content not inlined — open the viewer for the full file"
+    "attachmentNoContent": "Content not inlined — open the viewer for the full file",
+    "dropFileHintAttachment": "Drop to attach as file",
+    "attachmentTooLarge": "File exceeds 10MB — cannot attach"
   },
   "context": {
     "compressing": "Compressing…",
