@@ -3,7 +3,7 @@
 // ============================================================
 // GitStatusBar tests — 只读 git 状态栏渲染
 //   - 分支 + 远程短格式展示 / tooltip
-//   - 非 git 仓库 / 无项目时不渲染
+//   - 非 git 仓库 / 探测失败时保留不可见占位槽位（输入区零跳动）
 //   - detached HEAD 显示短 hash
 //   - projectId 变化重新拉取 + 切换竞态
 //   - IPC 失败 / reject / 卸载后 resolve 不 setState
@@ -110,7 +110,7 @@ describe("GitStatusBar", () => {
 		expect(status.getAttribute("title")).toContain("https://github.com/foo/bar.git");
 	});
 
-	it("非 git 仓库时不渲染内容（仍触发探测）", async () => {
+	it("非 git 仓库时保留不可见占位槽位（输入区零跳动，仍触发探测）", async () => {
 		mocks.getProjectGitInfo.mockResolvedValue({
 			success: true,
 			info: {
@@ -126,7 +126,13 @@ describe("GitStatusBar", () => {
 		const { container } = renderBar("p2");
 
 		await waitFor(() => expect(mocks.getProjectGitInfo).toHaveBeenCalledWith("p2"));
-		expect(container.firstChild).toBeNull();
+		// 常驻 20px 槽位：高度恒定保证输入框不被顶动，但内容对用户不可见。
+		expect(container.firstChild).not.toBeNull();
+		const slot = container.firstChild as HTMLElement;
+		expect(slot.getAttribute("role")).toBeNull();
+		expect(slot.getAttribute("aria-hidden")).toBe("true");
+		expect(slot.style.opacity).toBe("0");
+		expect(slot.textContent).toBe("");
 	});
 
 	it("无 remote 时只渲染分支，无分隔点", async () => {
@@ -254,11 +260,16 @@ describe("GitStatusBar", () => {
 		expect(queryByText(/-/)).toBeNull();
 	});
 
-	it("IPC 返回 success:false 时不更新状态", async () => {
+	it("IPC 返回 success:false 时不更新状态（槽位保持不可见）", async () => {
 		mocks.getProjectGitInfo.mockResolvedValue({ success: false, error: "boom" });
 		const { container } = renderBar("p1");
 		await waitFor(() => expect(mocks.getProjectGitInfo).toHaveBeenCalled());
-		await waitFor(() => expect(container.firstChild).toBeNull());
+		// 探测失败不展示任何 git 信息；常驻槽位仍在但不可见。
+		const slot = container.firstChild as HTMLElement;
+		expect(slot).not.toBeNull();
+		await waitFor(() => expect(slot.style.opacity).toBe("0"));
+		expect(slot.getAttribute("aria-hidden")).toBe("true");
+		expect(slot.textContent).toBe("");
 	});
 
 	it("IPC reject 时静默降级（不 setState、不 crash）", async () => {
@@ -267,7 +278,10 @@ describe("GitStatusBar", () => {
 		const { container } = renderBar("p1");
 		await waitFor(() => expect(mocks.getProjectGitInfo).toHaveBeenCalled());
 		await waitFor(() => expect(warnSpy).toHaveBeenCalled());
-		expect(container.firstChild).toBeNull();
+		// 槽位仍在但不可见，不 crash。
+		const slot = container.firstChild as HTMLElement;
+		expect(slot).not.toBeNull();
+		expect(slot.style.opacity).toBe("0");
 		warnSpy.mockRestore();
 	});
 
