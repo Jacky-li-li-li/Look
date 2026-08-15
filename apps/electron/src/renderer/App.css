@@ -666,12 +666,29 @@ body {
 		 Whisper Bubble — Light message bubbles
 		 ============================================================ */
 
+	/* 用户气泡：墨色洗底 + 发丝描边，包裹内容宽度（fit-content）。
+	   签名细节是"尾巴角"——靠近头像一侧的底角收紧，指向头像；
+	   left 对齐模式下由 .whisper-bubble--user-left 翻转到另一侧。 */
 	.whisper-bubble--user {
+		width: fit-content;
+		max-width: 100%;
+		padding: 0.5rem 0.875rem;
 		color: var(--foreground);
+		background: color-mix(in oklch, var(--foreground), transparent 94%);
+		border: 1px solid var(--hairline);
+		border-radius: calc(var(--radius) * 2.5);
+		border-bottom-right-radius: calc(var(--radius) * 0.8);
+	}
+
+	.whisper-bubble--user-left {
+		border-bottom-right-radius: calc(var(--radius) * 2.5);
+		border-bottom-left-radius: calc(var(--radius) * 0.8);
 	}
 
 	.tone-dark .whisper-bubble--user {
-		color: var(--foreground);
+		color: var(--accent-foreground);
+		background: var(--accent);
+		border-color: color-mix(in oklch, var(--foreground), transparent 88%);
 	}
 
 	.message-prose {

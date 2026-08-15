@@ -95,17 +95,26 @@ export function MessageHeader({
 interface MessageContentProps {
 	isUser: boolean;
 	flash?: boolean;
+	/** 气泡对齐：left 时用户气泡的"尾巴角"翻转到左下（指向左侧头像）。 */
+	alignment?: MessageAlignment;
 	children: ReactNode;
 	className?: string;
 }
 
 /** 气泡内容容器（whisper-bubble）。 */
-export function MessageContent({ isUser, flash, children, className }: MessageContentProps): ReactNode {
+export function MessageContent({
+	isUser,
+	flash,
+	alignment = "left-right",
+	children,
+	className,
+}: MessageContentProps): ReactNode {
 	return (
 		<div
 			className={cn(
 				"whisper-bubble flex flex-col gap-msg-block text-[var(--prose-font-size)] leading-[var(--prose-line-height)]",
 				isUser ? "whisper-bubble--user" : "whisper-bubble--assistant w-full",
+				isUser && alignment === "left" && "whisper-bubble--user-left",
 				flash && "bubble-flash",
 				className,
 			)}
