@@ -218,6 +218,31 @@ function formatStats(file: SessionChangedFile) {
 	);
 }
 
+/** 头部汇总：+N −M 数字 + 5 格比例块（绿=新增占比，红=删除占比），一眼读出本轮增删比。 */
+function DiffstatSummary({ added, deleted }: { added: number; deleted: number }) {
+	const total = added + deleted;
+	if (total === 0) return null;
+	let addBlocks = Math.round((added / total) * 5);
+	if (added > 0 && addBlocks === 0) addBlocks = 1;
+	if (deleted > 0 && addBlocks === 5) addBlocks = 4;
+	return (
+		<span className="flex shrink-0 items-center gap-1.5">
+			<span className="flex items-center gap-1 font-mono text-[10px] tabular-nums">
+				{added > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{added}</span>}
+				{deleted > 0 && <span className="text-red-600 dark:text-red-400">-{deleted}</span>}
+			</span>
+			<span className="flex items-center gap-px" aria-hidden>
+				{Array.from({ length: 5 }, (_, i) => (
+					<span
+						key={i < addBlocks ? `add-${i}` : `del-${i}`}
+						className={`h-2 w-[3px] rounded-[1px] ${i < addBlocks ? "bg-emerald-500/80" : "bg-red-500/70"}`}
+					/>
+				))}
+			</span>
+		</span>
+	);
+}
+
 const SessionChangesCard = memo(function SessionChangesCard({
 	entries,
 	projectCwd = "",
@@ -308,36 +333,29 @@ const SessionChangesCard = memo(function SessionChangesCard({
 				<span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
 					<FileDiff className="size-3.5" aria-hidden />
 				</span>
-				<div className="min-w-0 flex-1">
-					<div className="flex items-center gap-2 text-[12px] font-medium leading-tight text-foreground">
+				<div className="flex min-w-0 flex-1 items-baseline gap-2">
+					<span className="shrink-0 text-[12px] font-medium leading-tight text-foreground">
 						{t("changesCard.title", "本轮变更")}
-						<span className="flex items-center gap-1 text-[10px] font-normal leading-none text-muted-foreground/70">
-							{t("changesCard.saved", "已写入工作区")}
-							<span className="h-3 w-px bg-hairline" aria-hidden />
-							{allStatsReliable && (totalAdded > 0 || totalDeleted > 0) ? (
-								<span className="flex items-center gap-1 font-mono tabular-nums">
-									{totalAdded > 0 && (
-										<span className="text-emerald-600 dark:text-emerald-400">+{totalAdded}</span>
-									)}
-									{totalDeleted > 0 && <span className="text-red-600 dark:text-red-400">-{totalDeleted}</span>}
-								</span>
-							) : totalOperations > files.length ? (
-								<span>
-									{t("changesCard.operationCount", {
-										count: totalOperations,
-										defaultValue: "{{count}} 次修改",
-									})}
-								</span>
-							) : null}
-						</span>
-					</div>
-					<div className="mt-0.5 text-[10px] leading-tight text-muted-foreground/70">
+					</span>
+					<span className="truncate text-[10px] leading-tight text-muted-foreground/70">
 						{t(files.length === 1 ? "changesCard.fileCountOne" : "changesCard.fileCountMany", {
 							count: files.length,
 							defaultValue: "{{count}} 个文件",
 						})}
-					</div>
+						{" · "}
+						{t("changesCard.saved", "已写入工作区")}
+					</span>
 				</div>
+				{allStatsReliable && (totalAdded > 0 || totalDeleted > 0) ? (
+					<DiffstatSummary added={totalAdded} deleted={totalDeleted} />
+				) : totalOperations > files.length ? (
+					<span className="shrink-0 text-[10px] leading-none text-muted-foreground/70">
+						{t("changesCard.operationCount", {
+							count: totalOperations,
+							defaultValue: "{{count}} 次修改",
+						})}
+					</span>
+				) : null}
 				{!isSubagentSession && (
 					<button
 						type="button"
@@ -351,7 +369,7 @@ const SessionChangesCard = memo(function SessionChangesCard({
 									: t("changesCard.review", "审核")
 						}
 						title={reviewSessionId ? t("changesCard.reviewOpen", "查看审核") : t("changesCard.review", "审核")}
-						className="flex shrink-0 items-center gap-1 rounded-md border border-hairline px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+						className="flex shrink-0 items-center gap-1 rounded-md border border-hairline bg-foreground/[0.03] px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-foreground/[0.06] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						{reviewing ? (
 							<Loader2 className="size-3 animate-spin" aria-hidden />
@@ -403,21 +421,21 @@ const SessionChangesCard = memo(function SessionChangesCard({
 							}}
 							title={file.canOpen ? ariaLabel : t("changesCard.pathUnavailable", "无法定位此文件")}
 							aria-label={ariaLabel}
-							className={`group relative flex min-h-10 w-full items-center gap-2 py-1.5 text-left transition-colors ${
+							className={`group relative flex w-full items-center gap-2 py-2 text-left transition-colors ${
 								active
-									? "bg-foreground/[0.07] text-foreground"
+									? "bg-foreground/[0.06] text-foreground"
 									: file.canOpen
 										? "text-foreground/90 hover:bg-foreground/[0.04]"
 										: "cursor-default text-muted-foreground/50"
-							} ${active ? "before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-emerald-500" : ""}`}
+							} ${active ? "before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-emerald-500" : ""}`}
 						>
-							<FileIcon node={iconNode} className="size-4" />
-							<span className="flex min-w-0 flex-1 flex-col gap-0.5">
-								<span className="truncate text-[12px] font-medium leading-tight">
+							<FileIcon node={iconNode} className="size-3.5 shrink-0" />
+							<span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+								<span className="max-w-[55%] shrink-0 truncate text-[12px] font-medium leading-tight">
 									{fileName || file.relativePath}
 								</span>
 								{directory && (
-									<span className="truncate font-mono text-[10px] leading-tight text-muted-foreground/65">
+									<span className="min-w-0 truncate font-mono text-[11px] leading-tight text-muted-foreground/60">
 										{directory}
 									</span>
 								)}
@@ -449,7 +467,7 @@ const SessionChangesCard = memo(function SessionChangesCard({
 					type="button"
 					onClick={() => setExpanded((value) => !value)}
 					aria-expanded={expanded}
-					className="mt-1.5 flex w-full items-center justify-center gap-1 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+					className="mt-1 flex w-full items-center justify-center gap-1 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
 				>
 					{expanded ? (
 						<ChevronDown className="size-3" aria-hidden />
