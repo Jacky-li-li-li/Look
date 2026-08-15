@@ -1,17 +1,34 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import type { BrowserHost, BrowserScreenshot } from "../src/main/browser/types";
+import type { BrowserHost, BrowserObservation, BrowserScreenshot } from "../src/main/browser/types";
 import { createBrowserExtensionFactory } from "../src/main/extensions/browser-extension";
 import { isApprovalRequiredTool } from "../src/main/extensions/tool-permission-registry";
 
 type RegisteredTool = {
 	name: string;
+	promptSnippet?: string;
+	promptGuidelines?: string[];
 	execute: (...args: unknown[]) => Promise<{
 		content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 		details: Record<string, unknown>;
 		isError?: boolean;
 	}>;
 };
+
+function createObservation(): BrowserObservation {
+	return {
+		generation: 1,
+		title: "Example",
+		url: "https://example.com",
+		tree: '[1]<button name="Go" />\n[2]<input placeholder="Search" value="hello" />',
+		elements: [
+			{ index: 1, role: "button", name: "Go", tag: "button", attrs: 'name="Go"' },
+			{ index: 2, role: "textbox", name: "", tag: "input", attrs: 'placeholder="Search" value="hello"' },
+		],
+		pageStats: { links: 0, interactive: 2, iframes: 0, shadowOpen: 0, shadowClosed: 0, images: 0, total: 2 },
+		pageInfo: { pagesAbove: 0, pagesBelow: 0, viewportHeight: 720 },
+	};
+}
 
 function createFakeHost(overrides: Partial<BrowserHost> = {}): BrowserHost {
 	const screenshot: BrowserScreenshot = {
@@ -30,16 +47,13 @@ function createFakeHost(overrides: Partial<BrowserHost> = {}): BrowserHost {
 		})),
 		closeTab: vi.fn(async () => {}),
 		closeAllTabs: vi.fn(async () => 2),
-		snapshot: vi.fn(async () => ({
-			timestamp: Date.now(),
-			title: "Example",
-			url: "https://example.com",
-			elements: [
-				{ id: 0, role: "button", name: "Go" },
-				{ id: 1, role: "textbox", placeholder: "Search", value: "hello" },
-			],
-		})),
+		observe: vi.fn(async () => createObservation()),
 		screenshot: vi.fn(async () => screenshot),
+		click: vi.fn(async () => {}),
+		fill: vi.fn(async () => {}),
+		press: vi.fn(async () => {}),
+		scroll: vi.fn(async () => {}),
+		waitFor: vi.fn(async () => true),
 		run: vi.fn(async () => ({
 			displays: [{ type: "text", text: "ok" }],
 			returnValue: 42,
@@ -66,22 +80,68 @@ function captureRegisteredTools(
 }
 
 describe("Browser Extension", () => {
-	it("registers the five browser_* tools", () => {
+	it("registers the ten browser_* tools", () => {
 		const { tools } = captureRegisteredTools();
 		expect([...tools.keys()].sort()).toEqual([
+			"browser_click",
 			"browser_close",
+			"browser_fill",
 			"browser_open",
+			"browser_press",
 			"browser_run",
 			"browser_screenshot",
+			"browser_scroll",
 			"browser_snapshot",
+			"browser_wait_for",
 		]);
 	});
 
-	it("declares open/close/run for approval but not snapshot/screenshot", () => {
+	it("every browser tool carries promptGuidelines for the system prompt", () => {
+		const { tools } = captureRegisteredTools();
+		for (const [name, tool] of tools) {
+			expect(tool.promptGuidelines, `${name} should define promptGuidelines`).toBeDefined();
+			expect(tool.promptGuidelines!.length, `${name} promptGuidelines should be non-empty`).toBeGreaterThan(0);
+		}
+	});
+
+	it("browser_open guidelines cover when-to-use, trust, and untrusted page content", () => {
+		const { tools } = captureRegisteredTools();
+		const joined = tools.get("browser_open")!.promptGuidelines!.join("\n");
+		expect(joined).toContain("browser_* 工具");
+		expect(joined).toContain("项目信任");
+		expect(joined).toContain("不可信输入");
+	});
+
+	it("browser_snapshot guidelines mandate snapshot-before-interact and index usage", () => {
+		const { tools } = captureRegisteredTools();
+		const joined = tools.get("browser_snapshot")!.promptGuidelines!.join("\n");
+		expect(joined).toContain("[index]");
+		expect(joined).toContain("重新快照");
+		expect(joined).toContain("不要猜测");
+	});
+
+	it("browser_run guidelines position it as last resort with security constraints", () => {
+		const { tools } = captureRegisteredTools();
+		const joined = tools.get("browser_run")!.promptGuidelines!.join("\n");
+		expect(joined).toContain("最后手段");
+		expect(joined).toContain("Cookie");
+		expect(joined).toContain("诱导的脚本");
+	});
+
+	it("declares side-effect tools for approval but not read-only ones", () => {
 		captureRegisteredTools();
-		expect(isApprovalRequiredTool("browser_open")).toBe(true);
-		expect(isApprovalRequiredTool("browser_close")).toBe(true);
-		expect(isApprovalRequiredTool("browser_run")).toBe(true);
+		for (const name of [
+			"browser_open",
+			"browser_close",
+			"browser_click",
+			"browser_fill",
+			"browser_press",
+			"browser_scroll",
+			"browser_wait_for",
+			"browser_run",
+		]) {
+			expect(isApprovalRequiredTool(name)).toBe(true);
+		}
 		expect(isApprovalRequiredTool("browser_snapshot")).toBe(false);
 		expect(isApprovalRequiredTool("browser_screenshot")).toBe(false);
 	});
@@ -123,11 +183,15 @@ describe("Browser Extension", () => {
 		const ok = await tools.get("browser_open")!.execute("call-1", { url: "example.com/path" });
 		expect(ok.isError).toBeFalsy();
 		expect(host.openTab).toHaveBeenCalledWith("browser-1", "main", {
-			url: "example.com/path",
+			url: "http://example.com/path",
 			waitUntil: "domcontentloaded",
 		});
 		const https = await tools.get("browser_open")!.execute("call-2", { url: "https://example.com" });
 		expect(https.isError).toBeFalsy();
+		expect(host.openTab).toHaveBeenCalledWith("browser-1", "main", {
+			url: "https://example.com",
+			waitUntil: "domcontentloaded",
+		});
 	});
 
 	it("browser_open launches in a trusted project", async () => {
@@ -161,26 +225,22 @@ describe("Browser Extension", () => {
 		expect(result.content[0].text).toContain("No browser is open");
 	});
 
-	it("browser_snapshot renders elements with flags and caps at 100", async () => {
+	it("browser_snapshot renders the serialized tree with stats and scroll hints", async () => {
 		const host = createFakeHost({
-			snapshot: vi.fn(async () => ({
-				timestamp: Date.now(),
-				title: "Example",
-				url: "https://example.com",
-				elements: Array.from({ length: 120 }, (_, i) => ({
-					id: i,
-					role: i % 2 === 0 ? "button" : "textbox",
-					name: `el-${i}`,
-				})),
+			observe: vi.fn(async () => ({
+				...createObservation(),
+				pageInfo: { pagesAbove: 0, pagesBelow: 2.5, viewportHeight: 720 },
 			})),
 		});
 		const { tools } = captureRegisteredTools(host);
 		await tools.get("browser_open")!.execute("call-1", {});
 		const result = await tools.get("browser_snapshot")!.execute("call-2", {});
 		const text = result.content.find((b) => b.type === "text")!.text!;
-		expect(text).toContain("Elements: 120");
-		expect(text).toContain("... and 20 more elements");
-		expect((result.details.elements as unknown[]).length).toBe(120);
+		expect(text).toContain("[1]<button");
+		expect(text).toContain("[2]<input");
+		expect(text).toContain("2 interactive");
+		expect(text).toContain("page(s) below");
+		expect((result.details.elements as unknown[]).length).toBe(2);
 	});
 
 	it("browser_snapshot reports when no browser is open", async () => {
@@ -189,12 +249,63 @@ describe("Browser Extension", () => {
 		expect(result.isError).toBe(true);
 	});
 
-	it("browser_screenshot returns inline image plus text", async () => {
-		const { tools } = captureRegisteredTools();
+	it("browser_click forwards the snapshot index", async () => {
+		const { tools, host } = captureRegisteredTools();
 		await tools.get("browser_open")!.execute("call-1", {});
-		const result = await tools.get("browser_screenshot")!.execute("call-2", { name: "main", fullPage: true });
-		expect(result.content[0]).toMatchObject({ type: "image", data: "c2NyZWVuc2hvdA==", mimeType: "image/png" });
-		expect(result.content[1].text).toContain("full page");
+		const result = await tools.get("browser_click")!.execute("call-2", { index: 3 });
+		expect(host.click).toHaveBeenCalledWith("browser-1", "main", 3);
+		expect(result.details).toMatchObject({ index: 3 });
+	});
+
+	it("browser_click rejects invalid indexes", async () => {
+		const { tools, host } = captureRegisteredTools();
+		await tools.get("browser_open")!.execute("call-1", {});
+		for (const bad of [0, -1, 1.5, "3"]) {
+			const result = await tools.get("browser_click")!.execute("call-2", { index: bad });
+			expect(result.isError).toBe(true);
+		}
+		expect(host.click).not.toHaveBeenCalled();
+	});
+
+	it("browser_fill forwards index and text", async () => {
+		const { tools, host } = captureRegisteredTools();
+		await tools.get("browser_open")!.execute("call-1", {});
+		const result = await tools.get("browser_fill")!.execute("call-2", { index: 2, text: "hello world" });
+		expect(host.fill).toHaveBeenCalledWith("browser-1", "main", 2, "hello world");
+		expect(result.details).toMatchObject({ index: 2, length: 11 });
+	});
+
+	it("browser_press forwards the key", async () => {
+		const { tools, host } = captureRegisteredTools();
+		await tools.get("browser_open")!.execute("call-1", {});
+		const result = await tools.get("browser_press")!.execute("call-2", { key: "Enter" });
+		expect(host.press).toHaveBeenCalledWith("browser-1", "main", "Enter");
+		expect(result.isError).toBeFalsy();
+	});
+
+	it("browser_scroll forwards direction, pages, and optional index", async () => {
+		const { tools, host } = captureRegisteredTools();
+		await tools.get("browser_open")!.execute("call-1", {});
+		const result = await tools.get("browser_scroll")!.execute("call-2", { direction: "up", pages: 2, index: 4 });
+		expect(host.scroll).toHaveBeenCalledWith("browser-1", "main", "up", 2, 4);
+		expect(result.isError).toBeFalsy();
+	});
+
+	it("browser_wait_for forwards condition and timeout, reports timeout as error", async () => {
+		const { tools, host } = captureRegisteredTools();
+		await tools.get("browser_open")!.execute("call-1", {});
+		const ok = await tools.get("browser_wait_for")!.execute("call-2", { kind: "text", value: "hello" });
+		expect(host.waitFor).toHaveBeenCalledWith("browser-1", "main", { kind: "text", value: "hello" }, 10_000);
+		expect(ok.isError).toBeFalsy();
+
+		const timedOutHost = createFakeHost({ waitFor: vi.fn(async () => false) });
+		const { tools: t2 } = captureRegisteredTools(timedOutHost);
+		await t2.get("browser_open")!.execute("call-1", {});
+		const timeout = await t2
+			.get("browser_wait_for")!
+			.execute("call-2", { kind: "selector", value: "#x", timeoutMs: 500 });
+		expect(timeout.isError).toBe(true);
+		expect(timeout.content[0].text).toContain("Timed out");
 	});
 
 	it("browser_run forwards code and timeout, and surfaces displays", async () => {

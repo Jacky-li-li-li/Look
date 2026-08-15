@@ -3,17 +3,27 @@
 //
 // 管理 Chromium 的启动、tab 创建、连接维护和资源回收。
 // 实现 BrowserHost 接口，供 browser-extension 调用。
+//
+// 交互设计参考 browser-use：
+//   - observe() 返回带 [index] 编号的序列化 DOM 树；
+//   - click/fill/press 通过 data-look-ref 定位元素，再走
+//     puppeteer 的真实鼠标/键盘事件（CDP Input），对受控组件
+//     兼容性优于页面内 el.click()/value setter；
+//   - 导航/重渲染后 data-look-ref 被移除，交互自动报错，
+//     要求重新 observe（天然世代失效）。
 // ============================================================
 
 import type { Browser, Page } from "puppeteer-core";
-import { buildAriaSnapshotFunction, buildAriaSnapshotScript } from "./aria-snapshot.js";
+import { buildDomSnapshotFunction, buildDomSnapshotScript, LOOK_REF_ATTRIBUTE } from "./dom-snapshot.js";
 import type {
-	AriaSnapshot,
 	BrowserHost,
 	BrowserLaunchOptions,
+	BrowserObservation,
 	BrowserOpenOptions,
 	BrowserRunResult,
 	BrowserScreenshot,
+	BrowserScrollDirection,
+	BrowserWaitCondition,
 	PageInfo,
 } from "./types.js";
 
@@ -28,6 +38,23 @@ interface BrowserState {
 interface PageScreenshotRequest {
 	fullPage?: boolean;
 }
+
+/** 键盘按键输入类型（puppeteer KeyInput 的收窄子集）。 */
+type PressKeyInput =
+	| "Enter"
+	| "Tab"
+	| "Escape"
+	| "Backspace"
+	| "Delete"
+	| "ArrowUp"
+	| "ArrowDown"
+	| "ArrowLeft"
+	| "ArrowRight"
+	| "Home"
+	| "End"
+	| "PageUp"
+	| "PageDown"
+	| "Space";
 
 export class BrowserService implements BrowserHost {
 	private browsers = new Map<string, BrowserState>();
@@ -107,12 +134,35 @@ export class BrowserService implements BrowserHost {
 		return count;
 	}
 
-	async snapshot(handle: string, tabName: string): Promise<AriaSnapshot> {
+	/** 观察页面：序列化 DOM 树 + 元素索引 + 页面统计。 */
+	async observe(handle: string, tabName: string): Promise<BrowserObservation> {
 		const page = this.getPage(handle, tabName);
-		const script = buildAriaSnapshotScript();
-		const result = await page.evaluate(script);
-		// Return as-is; it's already the right shape
-		return result as unknown as AriaSnapshot;
+		const script = buildDomSnapshotScript();
+		const result = (await page.evaluate(script)) as {
+			title?: string;
+			url?: string;
+			tree?: string;
+			elements?: BrowserObservation["elements"];
+			pageStats?: BrowserObservation["pageStats"];
+			pageInfo?: BrowserObservation["pageInfo"];
+		};
+		return {
+			generation: this.nextGeneration(page),
+			title: result.title ?? "",
+			url: result.url ?? page.url(),
+			tree: result.tree ?? "",
+			elements: result.elements ?? [],
+			pageStats: result.pageStats ?? {
+				links: 0,
+				interactive: 0,
+				iframes: 0,
+				shadowOpen: 0,
+				shadowClosed: 0,
+				images: 0,
+				total: 0,
+			},
+			pageInfo: result.pageInfo ?? { pagesAbove: 0, pagesBelow: 0, viewportHeight: 720 },
+		};
 	}
 
 	async screenshot(handle: string, tabName: string, fullPage = false): Promise<BrowserScreenshot> {
@@ -127,7 +177,116 @@ export class BrowserService implements BrowserHost {
 	}
 
 	/**
-	 * 在 tab 中执行模型提供的 JS 代码。
+	 * 点击快照中的元素（真实鼠标事件）。
+	 * 通过 data-look-ref 定位；导航/重渲染后属性消失会抛错，要求重新观察。
+	 */
+	async click(handle: string, tabName: string, index: number): Promise<void> {
+		const page = this.getPage(handle, tabName);
+		const element = await this.resolveRef(page, index);
+		await element.scrollIntoView();
+		// puppeteer click 内部走 CDP Input.dispatchMouseEvent，真实事件序列。
+		await element.click({ delay: 30 });
+	}
+
+	/** 在快照元素中整段填写文本（真实键盘事件：聚焦 → 全选 → 输入）。 */
+	async fill(handle: string, tabName: string, index: number, text: string): Promise<void> {
+		if (text.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
+		const page = this.getPage(handle, tabName);
+		const element = await this.resolveRef(page, index);
+		await element.scrollIntoView();
+		await element.click();
+		const modifier = process.platform === "darwin" ? "Meta" : "Control";
+		await page.keyboard.down(modifier as never);
+		await page.keyboard.press("a");
+		await page.keyboard.up(modifier as never);
+		await page.keyboard.type(text, { delay: 5 });
+	}
+
+	/** 按下导航键（Enter/Tab/Escape/方向键等）或向聚焦元素输入文本。 */
+	async press(handle: string, tabName: string, key: string): Promise<void> {
+		if (!key) throw new Error("press 需要按键或文本。");
+		const page = this.getPage(handle, tabName);
+		const NAV_KEYS = new Set([
+			"Enter",
+			"Tab",
+			"Escape",
+			"Backspace",
+			"Delete",
+			"ArrowUp",
+			"ArrowDown",
+			"ArrowLeft",
+			"ArrowRight",
+			"Home",
+			"End",
+			"PageUp",
+			"PageDown",
+			"Space",
+		]);
+		if (NAV_KEYS.has(key)) {
+			await page.keyboard.press(key as PressKeyInput);
+		} else {
+			// 其余按完整文本插入到聚焦元素（支持空格/标点/Unicode/换行）。
+			if (key.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
+			await page.keyboard.type(key, { delay: 5 });
+		}
+	}
+
+	/** 滚动页面或指定元素。 */
+	async scroll(
+		handle: string,
+		tabName: string,
+		direction: BrowserScrollDirection,
+		pages = 1,
+		index?: number,
+	): Promise<void> {
+		const page = this.getPage(handle, tabName);
+		if (index !== undefined) {
+			await this.resolveRef(page, index);
+			// 页面内执行：滚动一个视口高度（字符串脚本，主进程无 DOM 类型）
+			const dir = direction === "down" ? 1 : -1;
+			const selector = `[${LOOK_REF_ATTRIBUTE}="${index}"]`;
+			await page.evaluate(
+				`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.scrollBy({ top: ${dir} * el.clientHeight, behavior: "smooth" }); return true; })()`,
+			);
+			return;
+		}
+		const deltaY =
+			direction === "down" ? pages * (page.viewport()?.height ?? 720) : -pages * (page.viewport()?.height ?? 720);
+		await page.mouse.wheel({ deltaY });
+	}
+
+	/** 等待页面满足条件（URL 片段/可见文本/CSS selector），不执行模型 JS。 */
+	async waitFor(
+		handle: string,
+		tabName: string,
+		condition: BrowserWaitCondition,
+		timeoutMs: number,
+	): Promise<boolean> {
+		if (!condition.value.trim()) throw new Error("等待条件不能为空。");
+		if (!Number.isFinite(timeoutMs) || timeoutMs < 250) throw new Error("等待超时不能小于 250ms。");
+		const page = this.getPage(handle, tabName);
+		const payload = JSON.stringify(condition)
+			.replace(/\u2028/g, "\\u2028")
+			.replace(/\u2029/g, "\\u2029");
+		const expression = `(() => {
+			const condition = ${payload};
+			try {
+				if (condition.kind === "url") return location.href.includes(condition.value);
+				if (condition.kind === "text") return (document.body?.innerText || "").includes(condition.value);
+				return !!document.querySelector(condition.value);
+			} catch { return false; }
+		})()`;
+		const startedAt = Date.now();
+		while (Date.now() - startedAt <= timeoutMs) {
+			const result = await page.evaluate(expression);
+			if (result === true) return true;
+			await new Promise((resolve) => setTimeout(resolve, 250));
+		}
+		return false;
+	}
+
+	/**
+	 * 在 tab 中执行模型提供的 JS 代码（高级兜底）。
 	 *
 	 * 页面脚本通过 `page.evaluate` 传入的字符串求值，页面内收集
 	 * `display()` 输出与 `tab.screenshot()` 截图，随返回值一并交回
@@ -171,7 +330,7 @@ export class BrowserService implements BrowserHost {
 		// 页面脚本：纯字符串构建，内联快照函数与用户代码。
 		// 注意：这里不是主进程 TypeScript 作用域，避免 `document` 等 DOM
 		// 类型错误（主进程 tsconfig 不含 lib: dom）。
-		const script = buildRunPageScript(code, buildAriaSnapshotFunction());
+		const script = buildRunPageScript(code, buildDomSnapshotFunction());
 
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
@@ -221,6 +380,31 @@ export class BrowserService implements BrowserHost {
 		return this.browsers.get(handle)?.headless ?? true;
 	}
 
+	private generationByPage = new WeakMap<Page, number>();
+
+	/** 每次 observe 递增代际，供扩展层展示/校验。 */
+	private nextGeneration(page: Page): number {
+		const next = (this.generationByPage.get(page) ?? 0) + 1;
+		this.generationByPage.set(page, next);
+		return next;
+	}
+
+	/**
+	 * 通过快照 index 定位元素。元素必须带 data-look-ref 标记——
+	 * 导航/重渲染后标记消失，报错要求重新 observe。
+	 */
+	private async resolveRef(page: Page, index: number): Promise<import("puppeteer-core").ElementHandle<Element>> {
+		if (!Number.isInteger(index) || index < 1)
+			throw new Error("元素 index 必须是大于 0 的整数（来自 browser_snapshot 的 [index]）。");
+		const element = await page.$(`[${LOOK_REF_ATTRIBUTE}="${index}"]`);
+		if (!element) {
+			throw new Error(
+				`元素 [${index}] 不存在或已失效（页面可能已导航/重渲染）。请先重新调用 browser_snapshot 获取最新 index。`,
+			);
+		}
+		return element;
+	}
+
 	private getState(handle: string): BrowserState {
 		const state = this.browsers.get(handle);
 		if (!state) throw new Error(`Browser handle "${handle}" not found. Open a browser first.`);
@@ -250,17 +434,24 @@ export class BrowserService implements BrowserHost {
  * 构建页面运行脚本（纯字符串）。
  *
  * 页面内提供 `tab` 辅助对象与 `display()`，用户代码通过
- * `new Function("display", "tab", userCode)` 求值；结果与页面内
+ * `new Function("display", "tab", ...)` 求值；结果与页面内
  * 收集的 displays 一并返回。
  *
+ * 用户代码被包装进 async 函数体（`return (async () => { ... })()`），
+ * 因此代码内可以使用 `await tab.click(...)` 等异步交互——tab 的
+ * click/fill/screenshot/waitForSelector 都返回 Promise。
+ * 注意：用户代码经 JSON 转义后先作为字符串值取出，再拼接进函数体
+ * 源码，避免引号/反斜杠破坏外层模板。
+ *
  * @param userCode 模型提供的 JS 代码字符串
- * @param ariaSnapshotFn buildAriaSnapshotFunction() 生成的函数声明字符串
+ * @param domSnapshotFn buildDomSnapshotFunction() 生成的函数声明字符串
  */
-function buildRunPageScript(userCode: string, ariaSnapshotFn: string): string {
-	// 用户代码内嵌到字符串（经 JSON 转义，避免引号破坏外层）。
+function buildRunPageScript(userCode: string, domSnapshotFn: string): string {
+	// 用户代码作为字符串字面量嵌入（JSON 转义，避免引号破坏外层模板），
+	// 页面内先取回字符串值，再拼进 async 函数体源码。
 	const codeJson = JSON.stringify(userCode);
 	return `(async () => {
-		${ariaSnapshotFn}
+		${domSnapshotFn}
 		const displays = [];
 		const display = (v) => {
 			displays.push(typeof v === "string" ? v : JSON.stringify(v, null, 2));
@@ -275,21 +466,24 @@ function buildRunPageScript(userCode: string, ariaSnapshotFn: string): string {
 			else el.value = value;
 		}
 
+		// 快照 index -> Element 映射：由 __lookDomSnapshot() 在每次快照时
+		// 重建到 window.__lookAriaElements（见 dom-snapshot.ts）。
+		// tab.click(index)/type(index)/fill(index) 借此用快照编号定位元素。
 		const tab = {
 			observe: () => {
-				const s = __lookAriaSnapshot();
+				const s = __lookDomSnapshot();
 				display(s);
 				return s;
 			},
-			click: async (sel) => {
-				const el = document.querySelector(sel);
-				if (!el) throw new Error("Element not found: " + sel);
+			click: async (index) => {
+				const el = (window.__lookAriaElements || [])[index];
+				if (!el) throw new Error("Element not found for snapshot index: " + index);
 				el.scrollIntoView({ block: "center" });
 				el.click();
 			},
-			type: async (sel, text) => {
-				const el = document.querySelector(sel);
-				if (!el) throw new Error("Element not found: " + sel);
+			type: async (index, text) => {
+				const el = (window.__lookAriaElements || [])[index];
+				if (!el) throw new Error("Element not found for snapshot index: " + index);
 				el.focus();
 				setNativeValue(el, "");
 				for (const ch of String(text)) {
@@ -297,9 +491,9 @@ function buildRunPageScript(userCode: string, ariaSnapshotFn: string): string {
 					el.dispatchEvent(new Event("input", { bubbles: true }));
 				}
 			},
-			fill: async (sel, text) => {
-				const el = document.querySelector(sel);
-				if (!el) throw new Error("Element not found: " + sel);
+			fill: async (index, text) => {
+				const el = (window.__lookAriaElements || [])[index];
+				if (!el) throw new Error("Element not found for snapshot index: " + index);
 				setNativeValue(el, String(text));
 				el.dispatchEvent(new Event("input", { bubbles: true }));
 				el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -329,7 +523,8 @@ function buildRunPageScript(userCode: string, ariaSnapshotFn: string): string {
 			title: () => document.title,
 		};
 
-		const fn = new Function("display", "tab", ${codeJson});
+		const userCode = ${codeJson};
+		const fn = new Function("display", "tab", "return (async () => {" + userCode + "\\n})()");
 		const returnValue = await fn(display, tab);
 		return { returnValue, displays };
 	})()`;
