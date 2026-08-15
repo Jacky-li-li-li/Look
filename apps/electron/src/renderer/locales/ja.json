@@ -56,6 +56,8 @@
     "noProjectsHint": "プロジェクトフォルダを追加してセッションを開始してください。",
     "expandAllProjects": "すべてのプロジェクトを展開",
     "collapseAllProjects": "すべてのプロジェクトを折りたたむ",
+    "expandProject": "プロジェクトを展開",
+    "collapseProject": "プロジェクトを折りたたむ",
     "sessionCount": "{{count}} 件のセッション",
     "runningCount": "{{count}} 件実行中"
   },
@@ -930,10 +932,9 @@
     "questionLabel": "質問 {{index}}",
     "other": "その他...",
     "customPlaceholder": "カスタム回答を入力...",
-    "keyHint": "↑↓ 選択・Enter {{confirm}}",
+    "keyHint": "↑↓/数字キー 選択・Enter {{confirm}}",
     "confirm": "確認",
     "next": "次へ",
-    "questionTimeout": "Agent の質問がタイムアウトで自動クローズしました",
     "submitFailed": "回答の送信に失敗しました",
     "remainingMinutes": "{{minutes}} 分 {{seconds}} 秒",
     "remainingSeconds": "{{seconds}} 秒"

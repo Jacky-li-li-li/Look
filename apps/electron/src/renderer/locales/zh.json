@@ -56,6 +56,8 @@
     "noProjectsHint": "添加项目文件夹后即可创建限定在该目录内的会话。",
     "expandAllProjects": "展开所有项目",
     "collapseAllProjects": "收起所有项目",
+    "expandProject": "展开项目",
+    "collapseProject": "收起项目",
     "sessionCount": "{{count}} 个会话",
     "runningCount": "{{count}} 个运行中"
   },
@@ -931,10 +933,9 @@
     "questionLabel": "问题 {{index}}",
     "other": "其他...",
     "customPlaceholder": "输入自定义答案...",
-    "keyHint": "↑↓ 选择 · Enter {{confirm}}",
+    "keyHint": "↑↓/数字键 选择 · Enter {{confirm}}",
     "confirm": "确认",
     "next": "下一个",
-    "questionTimeout": "Agent 提问已超时自动关闭",
     "submitFailed": "回答提交失败",
     "remainingMinutes": "{{minutes}} 分 {{seconds}} 秒",
     "remainingSeconds": "{{seconds}} 秒"

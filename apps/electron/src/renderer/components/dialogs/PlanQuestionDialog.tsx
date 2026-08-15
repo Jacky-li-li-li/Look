@@ -11,10 +11,16 @@ import { toast } from "sonner";
 import { emptyPlanQuestionDraft, planQuestionDraftAtomFamily, planQuestionRequestAtomFamily } from "../../store/atoms";
 import LookMarkdown from "../markdown/LookMarkdown";
 
-const AUTO_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const AUTO_ADVANCE_DELAY_MS = 150;
+const HOVER_PREVIEW_DELAY_MS = 150;
 
-export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: string | null }) {
+interface PlanQuestionDialogProps {
+	sessionId: string | null;
+	/** 面板消失（提交/取消/外部解决/卸载）后调用 — ChatPanel 用它把焦点还给聊天输入框 */
+	onHandled?: () => void;
+}
+
+export default memo(function PlanQuestionDialog({ sessionId, onHandled }: PlanQuestionDialogProps) {
 	const { t } = useTranslation();
 	const [request, setRequest] = useAtom(planQuestionRequestAtomFamily(sessionId ?? ""));
 	const [storedDraft, setDraft] = useAtom(planQuestionDraftAtomFamily(sessionId ?? ""));
@@ -22,8 +28,7 @@ export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: stri
 	const requestRef = useRef(request);
 	const respondingRef = useRef(false);
 	const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const deadlineRef = useRef<number | null>(null);
+	const rootRef = useRef<HTMLDivElement>(null);
 	const draft = storedDraft.requestId === request?.requestId ? storedDraft : emptyPlanQuestionDraft();
 
 	requestRef.current = request;
@@ -62,26 +67,6 @@ export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: stri
 		}
 		clearDraft();
 	}, [clearAutoAdvanceTimer, clearDraft]);
-
-	useEffect(() => {
-		if (!request || request.sessionId !== sessionId) {
-			deadlineRef.current = null;
-			if (timerRef.current) clearInterval(timerRef.current);
-			return;
-		}
-		const deadline = Date.now() + AUTO_TIMEOUT_MS;
-		deadlineRef.current = deadline;
-		timerRef.current = setInterval(() => {
-			if (deadlineRef.current && Date.now() >= deadlineRef.current) {
-				if (timerRef.current) clearInterval(timerRef.current);
-				toast.info(t("planDialogs.questionTimeout"));
-				dismiss();
-			}
-		}, 1000);
-		return () => {
-			if (timerRef.current) clearInterval(timerRef.current);
-		};
-	}, [dismiss, request, sessionId, t]);
 
 	useEffect(() => () => clearAutoAdvanceTimer(), [clearAutoAdvanceTimer]);
 
@@ -247,6 +232,29 @@ export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: stri
 		t,
 	]);
 
+	// 面板出现时把焦点移入对话框（屏幕阅读器播报 + 后续 Tab 陷阱有起点）；
+	// 消失时归还焦点 —— 覆盖 clearDraft（提交/取消）与 plan:question-resolved
+	// 外部清 atom（会话中止等）两条路径，组件卸载时兜底。
+	const wasActiveRef = useRef(false);
+	useEffect(() => {
+		if (activeRequest) {
+			wasActiveRef.current = true;
+			rootRef.current?.focus();
+			return;
+		}
+		if (wasActiveRef.current) {
+			wasActiveRef.current = false;
+			onHandled?.();
+		}
+	}, [activeRequest, onHandled]);
+
+	useEffect(
+		() => () => {
+			if (wasActiveRef.current) onHandled?.();
+		},
+		[onHandled],
+	);
+
 	useEffect(() => {
 		if (!currentQuestion) return;
 		const itemCount = currentQuestion.options.length + 1;
@@ -256,11 +264,43 @@ export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: stri
 				dismiss();
 				return;
 			}
-			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+			// Tab 圈禁：覆盖层下方的聊天输入框不可达，焦点只在面板内循环
+			if (event.key === "Tab") {
+				event.preventDefault();
+				const focusables = Array.from(
+					rootRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])") ?? [],
+				);
+				if (focusables.length === 0) {
+					rootRef.current?.focus();
+					return;
+				}
+				const currentIndex = focusables.indexOf(document.activeElement as HTMLElement);
+				const nextIndex = event.shiftKey
+					? currentIndex <= 0
+						? focusables.length - 1
+						: currentIndex - 1
+					: (currentIndex + 1) % focusables.length;
+				focusables[nextIndex]?.focus();
+				return;
+			}
+			const isTextEntry = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+			if (isTextEntry) {
 				if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
 					event.preventDefault();
 					if (activeTab === questions.length - 1) void submit();
 					else setActiveTab(activeTab + 1);
+				}
+				return; // 输入自定义答案时数字键照常键入
+			}
+			// 数字键直接选中带对应编号的选项（编号渲染在选项上）
+			if (/^[1-9]$/.test(event.key)) {
+				const index = Number(event.key) - 1;
+				const option = currentQuestion.options[index];
+				if (option || index === currentQuestion.options.length) {
+					event.preventDefault();
+					setFocusedOptionIndex(index);
+					if (option) chooseOption(currentQuestion.question, option.label, currentQuestion.multiSelect === true);
+					else chooseOther(currentQuestion.question, currentQuestion.multiSelect === true);
 				}
 				return;
 			}
@@ -311,7 +351,16 @@ export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: stri
 	const currentState = getSelectionState(currentQuestion.question);
 
 	return (
-		<div className="ask-user-banner mx-4 mb-3 overflow-hidden rounded-xl border border-hairline bg-card shadow-lg animate-in slide-in-from-bottom-2 duration-200">
+		// 底部覆盖层：锚定在 GitStatusBar（20px 常驻槽位）之上，完整盖住 ChatInput，
+		// 不占文档流（消息列表高度不受影响）。max-h 兜底 + 中段滚动，问题选项过多时不会吞掉整个会话区。
+		<div
+			ref={rootRef}
+			role="dialog"
+			aria-modal="true"
+			aria-label={t("planDialogs.questionTitle")}
+			tabIndex={-1}
+			className="ask-user-banner absolute inset-x-0 bottom-5 z-40 mx-4 mb-1 flex max-h-[70%] flex-col overflow-hidden rounded-xl border border-hairline bg-card shadow-lg outline-none animate-in slide-in-from-bottom-2 duration-200"
+		>
 			<div className="px-4 pb-2 pt-3">
 				<div className="mb-2 flex items-center justify-between gap-3">
 					<div className="flex min-w-0 items-center gap-2">
@@ -332,6 +381,7 @@ export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: stri
 						<TooltipTrigger asChild>
 							<button
 								type="button"
+								aria-label={t("planDialogs.closeCancel")}
 								className="flex size-5 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-foreground"
 								onClick={dismiss}
 							>
@@ -369,8 +419,9 @@ export default memo(function PlanQuestionDialog({ sessionId }: { sessionId: stri
 				)}
 			</div>
 
-			<div className="px-4 pb-2">
+			<div className="min-h-0 overflow-y-auto px-4 pb-2">
 				<QuestionCard
+					key={activeTab}
 					question={currentQuestion}
 					questionIndex={activeTab}
 					answer={currentState}
@@ -440,11 +491,48 @@ function QuestionCard({
 	onSubmit: () => void;
 }): React.ReactElement {
 	const { t } = useTranslation();
+	// 悬停预览是瞬时 UI 态（不进 draft）：悬「其他」时无 preview，视为清空预览
+	const [hoveredIndex, setHoveredIndex] = useState(-1);
+	const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const optionRefs = useRef<Array<HTMLElement | null>>([]);
 	const optionCount = question.options.length;
+
+	useEffect(
+		() => () => {
+			if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+		},
+		[],
+	);
+
+	const scheduleHoverPreview = (index: number) => {
+		if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+		hoverTimerRef.current = setTimeout(() => {
+			hoverTimerRef.current = null;
+			setHoveredIndex(index);
+		}, HOVER_PREVIEW_DELAY_MS);
+	};
+	const cancelHoverPreview = () => {
+		if (hoverTimerRef.current) {
+			clearTimeout(hoverTimerRef.current);
+			hoverTimerRef.current = null;
+		}
+		setHoveredIndex(-1);
+	};
+
+	// 键盘聚焦的选项滚进可视区（中段是 overflow-y-auto，方向键可能移出视口）
+	useEffect(() => {
+		if (focusedIndex < 0) return;
+		optionRefs.current[focusedIndex]?.scrollIntoView({ block: "nearest" });
+	}, [focusedIndex]);
+
 	const previewOption =
-		focusedIndex >= 0 && focusedIndex < optionCount
-			? question.options[focusedIndex]
-			: question.options.find((option) => answer.selected.includes(option.label));
+		hoveredIndex >= 0
+			? hoveredIndex < optionCount
+				? question.options[hoveredIndex]
+				: undefined
+			: focusedIndex >= 0 && focusedIndex < optionCount
+				? question.options[focusedIndex]
+				: question.options.find((option) => answer.selected.includes(option.label));
 	const previewContent = previewOption?.preview?.trim();
 
 	return (
@@ -467,6 +555,11 @@ function QuestionCard({
 							key={option.label}
 							type="button"
 							disabled={disabled}
+							ref={(el) => {
+								optionRefs.current[index] = el;
+							}}
+							onMouseEnter={() => scheduleHoverPreview(index)}
+							onMouseLeave={cancelHoverPreview}
 							onClick={() => onToggleOption(option.label)}
 							className={cn(
 								"flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs outline-none transition-all",
@@ -502,6 +595,11 @@ function QuestionCard({
 				<button
 					type="button"
 					disabled={disabled}
+					ref={(el) => {
+						optionRefs.current[optionCount] = el;
+					}}
+					onMouseEnter={() => scheduleHoverPreview(optionCount)}
+					onMouseLeave={cancelHoverPreview}
 					onClick={onToggleCustom}
 					className={cn(
 						"flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs outline-none transition-all",

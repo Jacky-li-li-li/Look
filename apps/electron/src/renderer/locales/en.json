@@ -56,6 +56,8 @@
     "noProjectsHint": "Add a project folder to start a scoped session.",
     "expandAllProjects": "Expand all projects",
     "collapseAllProjects": "Collapse all projects",
+    "expandProject": "Expand project",
+    "collapseProject": "Collapse project",
     "sessionCount": "{{count}} sessions",
     "runningCount": "{{count}} running"
   },
@@ -930,10 +932,9 @@
     "questionLabel": "Question {{index}}",
     "other": "Other...",
     "customPlaceholder": "Type a custom answer...",
-    "keyHint": "↑↓ select · Enter {{confirm}}",
+    "keyHint": "↑↓/1-9 select · Enter {{confirm}}",
     "confirm": "Confirm",
     "next": "Next",
-    "questionTimeout": "Agent question timed out and closed",
     "submitFailed": "Failed to submit answers",
     "remainingMinutes": "{{minutes}}m {{seconds}}s",
     "remainingSeconds": "{{seconds}}s"

@@ -71,8 +71,14 @@ const ChatPanel = memo(function ChatPanel({
 		onAbort?.();
 	}, [onAbort]);
 
+	// 问题面板关闭后把焦点还给聊天输入框，用户无需再点一下输入区
+	const handleQuestionHandled = useCallback(() => {
+		inputRef.current?.focus();
+	}, []);
+
+	// relative：PlanQuestionDialog 以此为包含块做底部绝对定位覆盖层
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			<ChatMessageList
 				agentId={agentId}
 				agentName={agentName}
@@ -86,7 +92,7 @@ const ChatPanel = memo(function ChatPanel({
 			{/* TODO 进度条 — 替代原 SubAgent 进度卡片 */}
 			<TodoPanel />
 			<ChatQueueDrawer agentId={agentId} steerMessages={queue.steering} followUpMessages={queue.followUp} />
-			<PlanQuestionDialog sessionId={agentId} />
+			<PlanQuestionDialog sessionId={agentId} onHandled={handleQuestionHandled} />
 			<ChatInput
 				ref={inputRef}
 				agentId={agentId}
