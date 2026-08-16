@@ -391,12 +391,10 @@ const api: LookAPI = {
 
 	// ---- Built-in browser panel ----
 	getBrowserPanelState: () => invoke({ type: "browser:get-state" }),
-	captureBrowserPanelFrame: () => invoke({ type: "browser:frame" }),
 	browserPanelAction: (action) =>
 		invoke({
 			type: "browser:panel-action",
 			kind: action.kind,
-			...(action.kind === "click" ? { x: action.x, y: action.y } : {}),
 			...(action.kind === "type" ? { text: action.text } : {}),
 			...(action.kind === "press" ? { key: action.key } : {}),
 			...(action.kind === "navigate" ? { url: action.url } : {}),

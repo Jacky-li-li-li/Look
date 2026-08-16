@@ -230,7 +230,6 @@ const EXHAUSTIVE = {
 	"update:download": true,
 	"update:install": true,
 	"browser:get-state": true,
-	"browser:frame": true,
 	"browser:panel-action": true,
 	"browser:open-panel": true,
 	"browser:close-panel": true,

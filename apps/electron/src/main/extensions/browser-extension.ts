@@ -63,7 +63,6 @@ const BrowserOpenParams = Type.Object({
 			},
 		),
 	),
-	headless: Type.Optional(Type.Boolean({ description: "Run browser headless (default: true)" })),
 });
 
 const BrowserCloseParams = Type.Object({
@@ -125,7 +124,7 @@ const BrowserRunParams = Type.Object({
 	name: Type.Optional(Type.String({ description: `Tab name (default: "${DEFAULT_TAB_NAME}")` })),
 	code: Type.String({
 		description:
-			"JavaScript code to run. Prefer dedicated tools (browser_click/browser_fill/browser_press/browser_scroll) — use this only for actions they cannot express. Has access to: tab (with .observe(), .click(index), .type(index,text), .fill(index,text), .screenshot(), .evaluate(fn), .navigate(url), .waitForSelector(sel), .waitForTimeout(ms), .url(), .title()) and display(value) to output results. The code runs in an async context, so `await` works (e.g. `await tab.click(3)`).",
+			"JavaScript code to run. Prefer dedicated tools (browser_click/browser_fill/browser_press/browser_scroll) — use this only for actions they cannot express. Has access to: tab (with .observe(), .click(index), .type(index,text), .fill(index,text), .evaluate(fn), .navigate(url), .waitForSelector(sel), .waitForTimeout(ms), .url(), .title()) and display(value) to output results. The code runs in an async context, so `await` works (e.g. `await tab.click(3)`). For screenshots use the browser_screenshot tool instead — tab.screenshot() is not supported here.",
 	}),
 	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 30)" })),
 });
@@ -211,10 +210,7 @@ export function createBrowserExtensionFactory(
 								cwd,
 							});
 						}
-						browserHandle = await host.launch({
-							headless: params.headless ?? true,
-							viewport: { width: 1280, height: 720 },
-						});
+						browserHandle = await host.launch({ headless: true });
 					}
 
 					const info = await host.openTab(browserHandle, tabName, {
@@ -260,11 +256,11 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserSnapshotParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				try {
 					const tabName = resolveTabName(params);
-					const obs = await host.observe(browserHandle, tabName);
+					const obs = await host.observe(browserHandle, tabName, signal);
 					const lines = [`Page: ${obs.title}`, `URL: ${obs.url}`, ""];
 					lines.push(
 						`Stats: ${obs.pageStats.links} links, ${obs.pageStats.interactive} interactive, ${obs.pageStats.iframes} iframes, ${obs.pageStats.total} total`,
@@ -311,11 +307,11 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserScreenshotParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				try {
 					const tabName = resolveTabName(params);
-					const shot = await host.screenshot(browserHandle, tabName, params.fullPage);
+					const shot = await host.screenshot(browserHandle, tabName, params.fullPage, signal);
 					return {
 						content: [
 							{ type: "image" as const, data: shot.data, mimeType: shot.mimeType },
@@ -349,12 +345,12 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserIndexParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				try {
 					const tabName = resolveTabName(params);
 					const index = requireIndex(params.index);
-					await host.click(browserHandle, tabName, index);
+					await host.click(browserHandle, tabName, index, signal);
 					return {
 						content: [{ type: "text" as const, text: `Clicked element [${index}].` }],
 						details: { tabName, index },
@@ -384,12 +380,12 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserFillParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				try {
 					const tabName = resolveTabName(params);
 					const index = requireIndex(params.index);
-					await host.fill(browserHandle, tabName, index, params.text);
+					await host.fill(browserHandle, tabName, index, params.text, signal);
 					return {
 						content: [
 							{
@@ -424,11 +420,11 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserPressParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				try {
 					const tabName = resolveTabName(params);
-					await host.press(browserHandle, tabName, params.key);
+					await host.press(browserHandle, tabName, params.key, signal);
 					return {
 						content: [{ type: "text" as const, text: `Pressed / typed "${params.key}".` }],
 						details: { tabName },
@@ -456,14 +452,14 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserScrollParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				try {
 					const tabName = resolveTabName(params);
 					const direction = (params.direction as BrowserScrollDirection | undefined) ?? "down";
 					const pages = params.pages && params.pages > 0 ? params.pages : 1;
 					if (params.index !== undefined) requireIndex(params.index);
-					await host.scroll(browserHandle, tabName, direction, pages, params.index);
+					await host.scroll(browserHandle, tabName, direction, pages, params.index, signal);
 					return {
 						content: [
 							{
@@ -496,13 +492,13 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserWaitForParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				try {
 					const tabName = resolveTabName(params);
 					const condition: BrowserWaitCondition = { kind: params.kind, value: params.value };
 					const timeoutMs = params.timeoutMs && params.timeoutMs >= 250 ? params.timeoutMs : 10_000;
-					const matched = await host.waitFor(browserHandle, tabName, condition, timeoutMs);
+					const matched = await host.waitFor(browserHandle, tabName, condition, timeoutMs, signal);
 					if (!matched) {
 						return toolError(`Timed out after ${timeoutMs}ms waiting for ${params.kind} "${params.value}".`, {
 							tabName,
@@ -531,7 +527,6 @@ export function createBrowserExtensionFactory(
 				"browser_press / browser_scroll / browser_wait_for for normal interactions. The code has access to:\n" +
 				"  `tab.observe()` — numbered DOM snapshot (elements with index/role/name)\n" +
 				"  `tab.click(index)` / `tab.type(index, text)` / `tab.fill(index, text)` — interact by snapshot index\n" +
-				"  `tab.screenshot()` — take viewport screenshot (returns base64 PNG)\n" +
 				"  `tab.evaluate(fn)` — run JS in page context\n" +
 				"  `tab.navigate(url)` — navigate to a URL\n" +
 				"  `tab.waitForSelector(sel, {timeout?})` — wait for element\n" +
@@ -547,7 +542,7 @@ export function createBrowserExtensionFactory(
 			],
 			parameters: BrowserRunParams,
 			executionMode: "sequential",
-			async execute(_toolCallId, params, _signal) {
+			async execute(_toolCallId, params, signal) {
 				if (!browserHandle) return toolError("No browser is open. Use browser_open first.");
 				const tabName = resolveTabName(params);
 				if (!params.code?.trim()) {
@@ -555,7 +550,7 @@ export function createBrowserExtensionFactory(
 				}
 				try {
 					const timeoutSeconds = params.timeout && params.timeout > 0 ? params.timeout : 30;
-					const result = await host.run(browserHandle, tabName, params.code, timeoutSeconds * 1000);
+					const result = await host.run(browserHandle, tabName, params.code, timeoutSeconds * 1000, signal);
 
 					const content: Array<
 						{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
@@ -566,6 +561,15 @@ export function createBrowserExtensionFactory(
 						} else if (item.text) {
 							content.push({ type: "text", text: item.text });
 						}
+					}
+					// 运行失败：统一走 isError 错误结果（与其他工具一致），
+					// displays 中的错误详情文本仍随 content 返回供展示。
+					if (result.error) {
+						return {
+							content: [{ type: "text" as const, text: `Error: ${result.error}` }, ...content],
+							details: { tabName, error: result.error },
+							isError: true,
+						};
 					}
 					// 如果有截图，附加最后一张
 					if (result.screenshots && result.screenshots.length > 0) {

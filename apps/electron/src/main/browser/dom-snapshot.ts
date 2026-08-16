@@ -43,7 +43,7 @@ function snapshotFunctionBody(): string {
 	// index -> Element 映射（1 起），交互阶段主进程经 data-look-ref 定位。
 	const elementsByIndex = [];
 	let indexCounter = 0;
-	const stats = { links: 0, interactive: 0, iframes: 0, shadowOpen: 0, shadowClosed: 0, images: 0, total: 0 };
+	const stats = { links: 0, interactive: 0, iframes: 0, shadowOpen: 0, images: 0, total: 0 };
 
 	function getRole(el) {
 		const explicit = el.getAttribute("role");
@@ -89,7 +89,10 @@ function snapshotFunctionBody(): string {
 		for (const name of otherAttrs) {
 			let value = null;
 			if (name === "value" && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
-				if (el.value) value = el.value.slice(0, 60);
+				// 密码框的 value 不进快照（与 browser_fill 返回 masked 的语义一致）。
+				if (!(el instanceof HTMLInputElement && el.type === "password") && el.value) {
+					value = el.value.slice(0, 60);
+				}
 			} else if (name === "checked" && (el.checked || el.getAttribute("aria-checked") === "true")) {
 				value = "true";
 			} else if (name === "selected" && (el.selected || el.getAttribute("aria-selected") === "true")) {
@@ -105,7 +108,9 @@ function snapshotFunctionBody(): string {
 	}
 
 	// 树序列化：交互元素/滚动容器/iframe 入列并编号；文本节点保留可见文本。
-	function walk(node, depth) {
+	// insideShadow：shadow root 内部元素只展示不编号——主进程交互走
+	// document.querySelector 穿不透 shadow root，编号集合必须与可交互集合一致。
+	function walk(node, depth, insideShadow) {
 		const prefix = "  ".repeat(depth);
 		for (const child of node.children) {
 			if (child.nodeType !== 1) continue;
@@ -115,11 +120,11 @@ function snapshotFunctionBody(): string {
 			stats.total++;
 
 			if (tag === "script" || tag === "style" || tag === "noscript" || tag === "template" || tag === "svg") {
-				walk(el, depth);
+				walk(el, depth, insideShadow);
 				continue;
 			}
 			if (role === "none" || role === "presentation") {
-				walk(el, depth);
+				walk(el, depth, insideShadow);
 				continue;
 			}
 			if (tag === "iframe" || tag === "frame") {
@@ -139,7 +144,15 @@ function snapshotFunctionBody(): string {
 
 			const isInteractive = isInteractiveElement(el, role);
 			const scrollable = isScrollable(el);
-			if (isInteractive || scrollable) {
+			if ((isInteractive || scrollable) && insideShadow) {
+				// shadow 内元素不可交互：保留结构展示但不编号、不打 data-look-ref。
+				const attrs = buildAttrs(el, role);
+				const namePart = nameOf(el) ? ' name="' + nameOf(el).slice(0, 80) + '"' : "";
+				const attrPart = attrs ? " " + attrs : "";
+				lines.push(prefix + "<" + tag + attrPart + namePart + " /> (in shadow DOM, not interactable)");
+				const text = visibleText(el);
+				if (text && !nameOf(el)) lines.push(prefix + "  " + text.slice(0, 160));
+			} else if (isInteractive || scrollable) {
 				const index = ++indexCounter;
 				el.setAttribute("${LOOK_REF_ATTRIBUTE}", String(index));
 				elementsByIndex[index] = el;
@@ -162,13 +175,14 @@ function snapshotFunctionBody(): string {
 				if (text) lines.push(prefix + text.slice(0, 160));
 			}
 			// Shadow DOM host：先按普通元素处理（可交互则已编号），再递归开放 shadow root。
+			// shadow root 内部元素不可交互（querySelector 穿不透），只展示不编号。
 			if (el.shadowRoot) {
 				stats.shadowOpen++;
-				lines.push(prefix + "|SHADOW(open)|<" + tag + ">");
-				walk(el.shadowRoot, depth + 1);
+				lines.push(prefix + "|SHADOW(open)|<" + tag + "> (elements inside are not interactable)");
+				walk(el.shadowRoot, depth + 1, true);
 				lines.push(prefix + "|SHADOW(end)|");
 			}
-			walk(el, depth);
+			walk(el, depth, insideShadow);
 		}
 	}
 
@@ -180,7 +194,7 @@ function snapshotFunctionBody(): string {
 	for (const el of document.querySelectorAll("[${LOOK_REF_ATTRIBUTE}]")) {
 		el.removeAttribute("${LOOK_REF_ATTRIBUTE}");
 	}
-	walk(document.body, 0);
+	walk(document.body, 0, false);
 
 	// 滚动信息：告诉模型页面上下还有多少内容。
 	let pixelsAbove = 0;

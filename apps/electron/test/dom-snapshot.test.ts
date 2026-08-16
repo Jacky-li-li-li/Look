@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildDomSnapshotFunction, buildDomSnapshotScript } from "../src/main/browser/dom-snapshot";
 
+// dom-snapshot 生成的是页面内执行的脚本字符串；这里对脚本源码做结构断言
+// （快照逻辑运行在页面上下文，单测无法直接执行 DOM）。
+
 describe("dom-snapshot", () => {
 	it("buildDomSnapshotScript returns an IIFE string", () => {
 		const script = buildDomSnapshotScript();
@@ -8,7 +11,7 @@ describe("dom-snapshot", () => {
 		expect(script.endsWith("})()")).toBe(true);
 		// 脚本包含核心快照逻辑
 		expect(script).toContain("interactiveRoles");
-		expect(script).toContain("walk(document.body, 0)");
+		expect(script).toContain("walk(document.body, 0, false)");
 		expect(script).toContain("window.__lookAriaElements = elementsByIndex");
 	});
 
@@ -58,5 +61,28 @@ describe("dom-snapshot", () => {
 		expect(body).toContain("interactive");
 		expect(body).toContain("iframes");
 		expect(body).toContain("shadowOpen");
+	});
+
+	it("excludes password input values from the snapshot attrs", () => {
+		const script = buildDomSnapshotScript();
+		// value 读取必须排除 type === "password" 的输入框
+		expect(script).toContain('el.type === "password"');
+	});
+
+	it("does not number elements inside shadow roots (they are not interactable)", () => {
+		const script = buildDomSnapshotScript();
+		// shadow root 递归走 insideShadow 分支：只展示、不编号、不打 data-look-ref
+		expect(script).toContain("walk(el.shadowRoot, depth + 1, true)");
+		expect(script).toContain("(in shadow DOM, not interactable)");
+		// 编号（setAttribute data-look-ref）只出现在非 shadow 分支
+		const numberBranch = script.indexOf("el.setAttribute(");
+		const shadowBranch = script.indexOf("(in shadow DOM, not interactable)");
+		expect(shadowBranch).toBeGreaterThan(-1);
+		expect(numberBranch).toBeGreaterThan(shadowBranch);
+	});
+
+	it("marks shadow sections as not interactable in the tree output", () => {
+		const script = buildDomSnapshotScript();
+		expect(script).toContain("elements inside are not interactable");
 	});
 });

@@ -191,7 +191,6 @@ export type RendererToMainEvent =
 	| { type: "update:install" }
 	// ---- Built-in browser panel ----
 	| { type: "browser:get-state" }
-	| { type: "browser:frame" }
 	| { type: "browser:panel-action"; kind: string; [key: string]: unknown }
 	| { type: "browser:open-panel"; force?: boolean }
 	| { type: "browser:close-panel" }

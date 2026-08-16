@@ -581,7 +581,6 @@ const mockApi: LookAPI = {
 
 	// ---- Built-in browser panel ----
 	getBrowserPanelState: () => success({ state: { running: false, headless: true, tabs: [] } }),
-	captureBrowserPanelFrame: () => success({ frame: null }),
 	browserPanelAction: () => ok,
 	openBrowserPanel: () => ok,
 	closeBrowserPanel: () => ok,

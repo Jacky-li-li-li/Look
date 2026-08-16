@@ -4,8 +4,7 @@
 // 面板展示 agent 正在操作的浏览器（活动 handle/tab 由
 // BrowserService 在每次工具调用时更新）：
 //   - browser:get-state      面板状态（tabs / url / title / viewport）
-//   - browser:frame          活动 tab 视口截图帧
-//   - browser:panel-action   用户交互（点击/输入/导航/前进后退/切 tab 等）
+//   - browser:panel-action   用户交互（输入/导航/前进后退/切 tab 等）
 //
 // agent 使用浏览器工具时，BrowserService 触发 activity 回调，本路由
 // 将其转发为 `browser:activity` 事件——renderer 据此（在设置开启时）
@@ -44,8 +43,6 @@ function ensureActivityPush(service: BrowserService, win: BrowserWindow): void {
 
 function parseAction(data: Record<string, unknown>, kind: string): BrowserPanelAction {
 	switch (kind) {
-		case "click":
-			return { kind, x: guardNumber(data.x, "x"), y: guardNumber(data.y, "y") };
 		case "type":
 			return { kind, text: guardString(data.text, "text") };
 		case "press":
@@ -104,12 +101,6 @@ export const browserRouter: IpcRouter = (ctx, register) => {
 		return { success: true, state: await ctx.browser.service.getPanelState() };
 	});
 
-	register("browser:frame", async () => {
-		ensureActivityPush(ctx.browser.service, ctx.mainWindow);
-		const frame = await ctx.browser.service.capturePanelFrame();
-		return { success: true, frame };
-	});
-
 	// renderer BrowserSlot 布局上报 → 原生 WebContentsView setBounds/setVisible。
 	// 高频通道：不返回错误（错误仅日志），晚到旧 revision 由主进程忽略。
 	register("browser:set-layout", (data) => {
@@ -139,10 +130,9 @@ export const browserRouter: IpcRouter = (ctx, register) => {
 		const force = typeof data.force === "boolean" ? data.force : false;
 		if (force && ctx.browser.service.getActiveTarget() === null) {
 			// 用户在空状态下点击“打开浏览器”：启动一个空白页作为交互目标。
-			// launchForPanel 记录归属，close-panel 时会回收该实例。
+			// service 内部串行化（双击只启动一个），失败时回收刚 launch 的实例。
 			try {
-				const handle = await ctx.browser.service.launchForPanel();
-				await ctx.browser.service.openTab(handle, "main", { url: "about:blank" });
+				await ctx.browser.service.launchForPanelIfIdle();
 			} catch (err) {
 				return {
 					success: false,

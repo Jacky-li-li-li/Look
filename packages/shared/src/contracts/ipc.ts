@@ -5,7 +5,6 @@ import type {
 	AttachmentRef,
 	AvailableModel,
 	BrowserPanelAction,
-	BrowserPanelFrame,
 	BrowserPanelState,
 	BrowserViewLayout,
 	CustomProviderInput,
@@ -380,7 +379,6 @@ export interface LookAPI {
 	updateImChannel(appId: string, updates: { name?: string }): Promise<IpcResult>;
 	// ---- Built-in browser panel ----
 	getBrowserPanelState(): Promise<IpcResult<{ state: BrowserPanelState }>>;
-	captureBrowserPanelFrame(): Promise<IpcResult<{ frame: BrowserPanelFrame | null }>>;
 	/** 上报原生浏览器视图布局（renderer BrowserSlot → main WebContentsView setBounds）。 */
 	setAgentBrowserLayout(layout: BrowserViewLayout): Promise<IpcResult>;
 	browserPanelAction(action: BrowserPanelAction): Promise<IpcResult>;

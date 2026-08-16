@@ -14,7 +14,7 @@ const registry = vi.hoisted(() => {
 		url: "https://example.com",
 		tree: '[1]<button name="Go" />',
 		elements: [{ index: 1, role: "button", name: "Go", tag: "button", attrs: 'name="Go"' }],
-		pageStats: { links: 0, interactive: 1, iframes: 0, shadowOpen: 0, shadowClosed: 0, images: 0, total: 1 },
+		pageStats: { links: 0, interactive: 1, iframes: 0, shadowOpen: 0, images: 0, total: 1 },
 		pageInfo: { pagesAbove: 0, pagesBelow: 0, viewportHeight: 720 },
 	};
 
@@ -43,6 +43,8 @@ const registry = vi.hoisted(() => {
 		setWindowOpenHandler: (handler: (details: { url: string }) => { action: "deny" }) => void;
 		/** 测试辅助：触发已注册的事件监听器（模拟真实 webContents 事件）。 */
 		emit: (event: string, ...args: unknown[]) => void;
+		/** 测试辅助：某事件当前挂着的监听器数量（验证监听器清理）。 */
+		listenerCount: (event: string) => number;
 		currentUrl: string;
 	}
 
@@ -111,6 +113,7 @@ const registry = vi.hoisted(() => {
 			emit: (event: string, ...args: unknown[]) => {
 				for (const cb of listeners[event] ?? []) cb(...args);
 			},
+			listenerCount: (event: string) => (listeners[event] ?? []).length,
 			currentUrl: "about:blank",
 		};
 		wcs.push(wc);
@@ -141,15 +144,21 @@ vi.mock("electron", () => ({
 	BrowserWindow: registry.BrowserWindow,
 }));
 
-/** fake 主窗口：contentView 挂载目标。 */
+/** fake 主窗口：contentView 挂载目标；on 记录窗口事件监听（测试可触发 show/restore/focus）。 */
 function createFakeOwner() {
+	const windowListeners: Record<string, Array<(...args: unknown[]) => void>> = {};
 	return {
 		isDestroyed: () => false,
 		isVisible: () => true,
 		webContents: { getZoomFactor: () => 1 },
 		contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
-		on: vi.fn(), // setOwnerWindow 注册 show/restore/focus 重放监听
-	} as unknown as BrowserWindow;
+		on: (event: string, cb: (...args: unknown[]) => void) => {
+			(windowListeners[event] ||= []).push(cb);
+		},
+		emit: (event: string) => {
+			for (const cb of windowListeners[event] ?? []) cb();
+		},
+	} as unknown as BrowserWindow & { emit: (event: string) => void };
 }
 
 describe("BrowserService (WebContentsView + CDP)", () => {
@@ -276,10 +285,6 @@ describe("BrowserService (WebContentsView + CDP)", () => {
 		await expect(service.panelAction({ kind: "navigate", url: "javascript:alert(1)" })).rejects.toThrow(
 			/disallowed protocol/,
 		);
-	});
-
-	it("panelAction click is rejected: native view is interacted directly", async () => {
-		await expect(service.panelAction({ kind: "click", x: 10, y: 20 })).rejects.toThrow(/原生视图/);
 	});
 
 	it("panelAction type/press route to the active tab via CDP", async () => {
@@ -427,23 +432,24 @@ describe("BrowserService (WebContentsView + CDP)", () => {
 
 	it("run kills the tab on a genuine timeout (never-resolving page script)", async () => {
 		const executeMock = wc().executeJavaScript as ReturnType<typeof vi.fn>;
-		// 第一次调用是 __look_screenshot 占位注入（正常返回）；第二次（run 脚本）挂起
-		executeMock.mockImplementationOnce(async () => undefined);
+		// run 脚本挂起（页面内死循环）
 		executeMock.mockImplementationOnce(() => new Promise(() => {}));
 
 		const result = await service.run(handle, "main", "while(true){}", 100);
+		expect(result.error).toContain("timed out");
 		expect(result.displays[0].text).toContain("timed out");
 		// 超时后 tab 被杀并从 map 移除，活动目标回退
 		expect(service.getActiveTarget()).toBeNull();
 	});
 
-	it("run does not kill the tab when the page script error merely mentions timed out", async () => {
+	it("run reports page script errors via the error field without killing the tab", async () => {
 		const executeMock = wc().executeJavaScript as ReturnType<typeof vi.fn>;
-		executeMock.mockImplementationOnce(async () => undefined); // 占位注入
 		executeMock.mockImplementationOnce(async () => {
 			throw new Error("Operation timed out (page-side message)");
 		});
 		const result = await service.run(handle, "main", "throw new Error('timed out')", 5_000);
+		// 错误语义：结果带 error 标记（扩展层据此返回 isError），详情仍在 displays
+		expect(result.error).toContain("Operation timed out");
 		expect(result.displays[0].text).toContain("Browser run error");
 		// 页面侧错误（消息含 timed out）不应触发杀 tab：tab 仍在
 		expect(service.getActiveTarget()?.tab).toBe("main");
@@ -504,5 +510,111 @@ describe("BrowserService (WebContentsView + CDP)", () => {
 			bounds: { x: 10, y: 20, width: 600, height: 400 },
 		});
 		expect(view().visible).toBe(true);
+	});
+
+	it("renderer-initiated visible:false clears the presentation (window focus does not resurrect it)", async () => {
+		await service.setLayout({
+			handle,
+			tab: "main",
+			revision: 1_000,
+			visible: true,
+			bounds: { x: 10, y: 20, width: 600, height: 400 },
+		});
+		expect(view().visible).toBe(true);
+		// 渲染端主动隐藏（关面板/切 tab/浮层遮挡）：清掉前台归属
+		await service.setLayout({
+			handle,
+			tab: "main",
+			revision: 1_001,
+			visible: false,
+			bounds: { x: 0, y: 0, width: 0, height: 0 },
+		});
+		expect(view().visible).toBe(false);
+		// 窗口 focus/show/restore 不应复活用户主动隐藏的视图
+		(owner as unknown as { emit: (event: string) => void }).emit("focus");
+		expect(view().visible).toBe(false);
+	});
+
+	it("window-hidden passive hide keeps the presentation and replays it on restore", async () => {
+		const bounds = { x: 10, y: 20, width: 600, height: 400 };
+		await service.setLayout({ handle, tab: "main", revision: 1_000, visible: true, bounds });
+		expect(view().visible).toBe(true);
+		// 窗口最小化：visible:true 的布局因窗口不可见走隐藏分支，presentation 保留
+		(owner as unknown as { isVisible: () => boolean }).isVisible = () => false;
+		await service.setLayout({ handle, tab: "main", revision: 1_001, visible: true, bounds });
+		expect(view().visible).toBe(false);
+		// 窗口恢复：restore 事件触发 replayPresentation 重放最近一次前台布局
+		(owner as unknown as { isVisible: () => boolean }).isVisible = () => true;
+		(owner as unknown as { emit: (event: string) => void }).emit("restore");
+		expect(view().visible).toBe(true);
+		expect(view().bounds).toEqual(bounds);
+	});
+
+	it("will-redirect enforces the same protocol whitelist as will-navigate", () => {
+		const blocked = vi.fn();
+		wc().emit("will-redirect", { preventDefault: blocked }, "file:///etc/passwd");
+		expect(blocked).toHaveBeenCalled();
+		// 合法 http→https 同站重定向放行
+		const allowed = vi.fn();
+		wc().emit("will-redirect", { preventDefault: allowed }, "https://example.com/next");
+		expect(allowed).not.toHaveBeenCalled();
+	});
+
+	it("loadUrl removes the dom-ready listener when navigation fails", async () => {
+		const target = wc();
+		target.loadURL = async () => {
+			throw new Error("nav failed");
+		};
+		await expect(service.openTab(handle, "main", { url: "https://fail.example" })).rejects.toThrow("nav failed");
+		expect(target.listenerCount("dom-ready")).toBe(0);
+	});
+
+	it("openTab on an existing tab honors waitUntil for the re-navigation", async () => {
+		const target = wc();
+		// loadURL 不触发 dom-ready：waitUntil "load" 不等 dom-ready（等的话会超时失败）
+		target.loadURL = async (url: string) => {
+			target.currentUrl = url;
+		};
+		const info = await service.openTab(handle, "main", { url: "https://reused.example", waitUntil: "load" });
+		expect(info.url).toBe("https://reused.example");
+	});
+
+	it("waitFor rejects immediately on a pre-aborted signal", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			service.waitFor(handle, "main", { kind: "text", value: "x" }, 1_000, controller.signal),
+		).rejects.toThrow(/已停止/);
+	});
+
+	it("waitFor rethrows abort instead of swallowing it like a navigation race", async () => {
+		// 轮询表达式永远以「上下文销毁」失败；abort 必须终止等待而不是继续轮询到超时
+		(wc().executeJavaScript as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+			throw new Error("Execution context was destroyed");
+		});
+		const controller = new AbortController();
+		const promise = service.waitFor(handle, "main", { kind: "text", value: "x" }, 10_000, controller.signal);
+		setTimeout(() => controller.abort(), 10);
+		await expect(promise).rejects.toThrow(/已停止/);
+	});
+
+	it("launchForPanelIfIdle serializes concurrent force launches into one browser", async () => {
+		// 清空活动目标（closeAllTabs 后 getActiveTarget() 为 null）
+		await service.closeAllTabs(handle);
+		const viewsBefore = registry.views.length;
+		await Promise.all([service.launchForPanelIfIdle(), service.launchForPanelIfIdle()]);
+		// 串行化后只启动了一个 panel-owned 浏览器（只新建一个 tab 视图）
+		expect(registry.views.length).toBe(viewsBefore + 1);
+		expect(service.getActiveTarget()?.tab).toBe("main");
+	});
+
+	it("launchForPanelIfIdle disposes the launched browser when openTab fails", async () => {
+		await service.closeAllTabs(handle);
+		vi.spyOn(service, "openTab").mockRejectedValueOnce(new Error("boom"));
+		await expect(service.launchForPanelIfIdle()).rejects.toThrow("boom");
+		// 刚 launch 的实例已被回收：活动目标为空，后续调用可重试成功
+		expect(service.getActiveTarget()).toBeNull();
+		await service.launchForPanelIfIdle();
+		expect(service.getActiveTarget()?.tab).toBe("main");
 	});
 });

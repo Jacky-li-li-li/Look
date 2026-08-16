@@ -57,7 +57,6 @@ export type { AgentDefinitionInfo, AgentDefinitionInput, AgentDefinitionSource, 
 export type { AttachmentRef, PendingAttachment } from "./types/dto/attachment.js";
 export type {
 	BrowserPanelAction,
-	BrowserPanelFrame,
 	BrowserPanelState,
 	BrowserPanelTabInfo,
 	BrowserViewBounds,

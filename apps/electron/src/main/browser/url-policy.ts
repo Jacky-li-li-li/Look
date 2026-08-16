@@ -25,10 +25,9 @@ export function assertSafeUrl(url: string | undefined): void {
 /**
  * 校验并规范化导航 URL。
  *
- * 返回可供 puppeteer 直接导航的绝对 URL：
+ * 返回可供 WebContents.loadURL 直接导航的绝对 URL：
  * - 裸域名 / 裸路径（无协议前缀，如 `example.com/path`）补 `http://`——
- *   puppeteer 的 Page.navigate 需要绝对 URL，不带协议会报
- *   `Cannot navigate to invalid URL`；
+ *   loadURL 需要绝对 URL，不带协议会导航失败；
  * - 有协议前缀的（http:/https:/about:）原样返回；
  * - 非法协议（file:/javascript:/data: 等）抛错拒绝。
  */

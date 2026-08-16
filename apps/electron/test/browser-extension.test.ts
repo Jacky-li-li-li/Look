@@ -25,7 +25,7 @@ function createObservation(): BrowserObservation {
 			{ index: 1, role: "button", name: "Go", tag: "button", attrs: 'name="Go"' },
 			{ index: 2, role: "textbox", name: "", tag: "input", attrs: 'placeholder="Search" value="hello"' },
 		],
-		pageStats: { links: 0, interactive: 2, iframes: 0, shadowOpen: 0, shadowClosed: 0, images: 0, total: 2 },
+		pageStats: { links: 0, interactive: 2, iframes: 0, shadowOpen: 0, images: 0, total: 2 },
 		pageInfo: { pagesAbove: 0, pagesBelow: 0, viewportHeight: 720 },
 	};
 }
@@ -249,11 +249,12 @@ describe("Browser Extension", () => {
 		expect(result.isError).toBe(true);
 	});
 
-	it("browser_click forwards the snapshot index", async () => {
+	it("browser_click forwards the snapshot index and abort signal", async () => {
 		const { tools, host } = captureRegisteredTools();
 		await tools.get("browser_open")!.execute("call-1", {});
-		const result = await tools.get("browser_click")!.execute("call-2", { index: 3 });
-		expect(host.click).toHaveBeenCalledWith("browser-1", "main", 3);
+		const controller = new AbortController();
+		const result = await tools.get("browser_click")!.execute("call-2", { index: 3 }, controller.signal);
+		expect(host.click).toHaveBeenCalledWith("browser-1", "main", 3, controller.signal);
 		expect(result.details).toMatchObject({ index: 3 });
 	});
 
@@ -271,7 +272,7 @@ describe("Browser Extension", () => {
 		const { tools, host } = captureRegisteredTools();
 		await tools.get("browser_open")!.execute("call-1", {});
 		const result = await tools.get("browser_fill")!.execute("call-2", { index: 2, text: "hello world" });
-		expect(host.fill).toHaveBeenCalledWith("browser-1", "main", 2, "hello world");
+		expect(host.fill).toHaveBeenCalledWith("browser-1", "main", 2, "hello world", undefined);
 		expect(result.details).toMatchObject({ index: 2, length: 11 });
 	});
 
@@ -279,7 +280,7 @@ describe("Browser Extension", () => {
 		const { tools, host } = captureRegisteredTools();
 		await tools.get("browser_open")!.execute("call-1", {});
 		const result = await tools.get("browser_press")!.execute("call-2", { key: "Enter" });
-		expect(host.press).toHaveBeenCalledWith("browser-1", "main", "Enter");
+		expect(host.press).toHaveBeenCalledWith("browser-1", "main", "Enter", undefined);
 		expect(result.isError).toBeFalsy();
 	});
 
@@ -287,7 +288,7 @@ describe("Browser Extension", () => {
 		const { tools, host } = captureRegisteredTools();
 		await tools.get("browser_open")!.execute("call-1", {});
 		const result = await tools.get("browser_scroll")!.execute("call-2", { direction: "up", pages: 2, index: 4 });
-		expect(host.scroll).toHaveBeenCalledWith("browser-1", "main", "up", 2, 4);
+		expect(host.scroll).toHaveBeenCalledWith("browser-1", "main", "up", 2, 4, undefined);
 		expect(result.isError).toBeFalsy();
 	});
 
@@ -295,7 +296,13 @@ describe("Browser Extension", () => {
 		const { tools, host } = captureRegisteredTools();
 		await tools.get("browser_open")!.execute("call-1", {});
 		const ok = await tools.get("browser_wait_for")!.execute("call-2", { kind: "text", value: "hello" });
-		expect(host.waitFor).toHaveBeenCalledWith("browser-1", "main", { kind: "text", value: "hello" }, 10_000);
+		expect(host.waitFor).toHaveBeenCalledWith(
+			"browser-1",
+			"main",
+			{ kind: "text", value: "hello" },
+			10_000,
+			undefined,
+		);
 		expect(ok.isError).toBeFalsy();
 
 		const timedOutHost = createFakeHost({ waitFor: vi.fn(async () => false) });
@@ -315,8 +322,25 @@ describe("Browser Extension", () => {
 			code: "display('hi'); return 42;",
 			timeout: 5,
 		});
-		expect(host.run).toHaveBeenCalledWith("browser-1", "main", "display('hi'); return 42;", 5000);
+		expect(host.run).toHaveBeenCalledWith("browser-1", "main", "display('hi'); return 42;", 5000, undefined);
 		expect(result.content[0].text).toBe("ok");
+	});
+
+	it("browser_run returns isError when the host result carries an error", async () => {
+		const host = createFakeHost({
+			run: vi.fn(async () => ({
+				displays: [{ type: "text" as const, text: "Browser run error: boom" }],
+				error: "boom",
+			})),
+		});
+		const { tools } = captureRegisteredTools(host);
+		await tools.get("browser_open")!.execute("call-1", {});
+		const result = await tools.get("browser_run")!.execute("call-2", { code: "throw new Error('boom')" });
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toBe("Error: boom");
+		// displays 中的错误详情文本仍随 content 返回供展示
+		expect(result.content.some((b) => b.text?.includes("Browser run error: boom"))).toBe(true);
+		expect(result.details).toMatchObject({ tabName: "main", error: "boom" });
 	});
 
 	it("browser_run requires code", async () => {

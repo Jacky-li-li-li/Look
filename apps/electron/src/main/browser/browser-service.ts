@@ -28,9 +28,9 @@ import {
 	WebContentsView,
 } from "electron";
 import {
-	BROWSER_CDP_COMMAND_TIMEOUT_MS,
 	BROWSER_OBSERVE_TIMEOUT_MS,
 	BrowserCdp,
+	BrowserOperationAbortedError,
 	throwIfBrowserOperationAborted,
 	withBrowserCdpTimeout,
 } from "./browser-cdp.js";
@@ -41,7 +41,6 @@ import type {
 	BrowserObservation,
 	BrowserOpenOptions,
 	BrowserPanelAction,
-	BrowserPanelFrame,
 	BrowserPanelState,
 	BrowserPanelTabInfo,
 	BrowserRunResult,
@@ -217,6 +216,30 @@ export class BrowserService implements BrowserHost {
 		}
 	}
 
+	/** open-panel force 启动的串行化队列：双击/竞态只启动一个 panel-owned 浏览器。 */
+	private panelLaunchQueue: Promise<void> = Promise.resolve();
+
+	/**
+	 * 面板 force 打开：空闲时启动一个 panel-owned 空白页浏览器。
+	 * 串行化（promise 链）保证并发调用只启动一个；openTab 失败时回收刚
+	 * launch 的实例，避免残留无 tab 的孤儿浏览器。
+	 */
+	async launchForPanelIfIdle(): Promise<void> {
+		const task = this.panelLaunchQueue.then(async () => {
+			if (this.getActiveTarget() !== null) return;
+			const handle = await this.launchForPanel();
+			try {
+				await this.openTab(handle, "main", { url: "about:blank" });
+			} catch (error) {
+				await this.dispose(handle).catch(() => {});
+				throw error;
+			}
+		});
+		// 失败不毒化队列：后续调用仍可在失败任务之后继续。
+		this.panelLaunchQueue = task.catch(() => {});
+		return task;
+	}
+
 	async dispose(handle: string): Promise<void> {
 		const state = this.browsers.get(handle);
 		if (!state) return;
@@ -253,7 +276,7 @@ export class BrowserService implements BrowserHost {
 		const existing = state.tabs.get(tabName);
 		if (existing) {
 			if (url && existing.view.webContents.getURL() !== url) {
-				await this.loadUrl(existing, url);
+				await this.loadUrl(existing, url, undefined, options.waitUntil);
 			}
 			return this.pageInfo(existing);
 		}
@@ -359,6 +382,16 @@ export class BrowserService implements BrowserHost {
 			}
 		});
 
+		// 服务端重定向（含 http→https 同站跳转）也走同一套白名单：
+		// 合法 http/https/about 放行，非法协议（file:/javascript: 等）阻止。
+		contents.on("will-redirect", (event, url) => {
+			try {
+				normalizeNavigationUrl(url);
+			} catch {
+				event.preventDefault();
+			}
+		});
+
 		// 导航/重渲染开始 → 观察代际失效。
 		contents.on("did-start-loading", () => {
 			const tab = state.tabs.get(tabName);
@@ -426,15 +459,23 @@ export class BrowserService implements BrowserHost {
 		if (waitUntil === "domcontentloaded") {
 			// dom-ready 在 did-finish-load（loadURL resolve）之前触发：先挂监听再导航。
 			// loadURL 抛错（导航失败）时 dom-ready 不会触发，由超时护栏兜底。
+			let resolveReady: () => void = () => {};
 			const domReady = new Promise<void>((resolve) => {
-				const onReady = () => {
-					contents.off("dom-ready", onReady);
-					resolve();
-				};
-				contents.on("dom-ready", onReady);
+				resolveReady = resolve;
 			});
-			await navigate();
-			await withBrowserCdpTimeout(() => domReady, "Page.domContentEventFired", BROWSER_OBSERVE_TIMEOUT_MS, signal);
+			contents.on("dom-ready", resolveReady);
+			try {
+				await navigate();
+				await withBrowserCdpTimeout(
+					() => domReady,
+					"Page.domContentEventFired",
+					BROWSER_OBSERVE_TIMEOUT_MS,
+					signal,
+				);
+			} finally {
+				// 导航抛错/超时/abort 时必须摘掉监听器，避免永驻泄漏。
+				contents.off("dom-ready", resolveReady);
+			}
 			return;
 		}
 		// "load" / networkidle0 / networkidle2：loadURL resolve 于 did-finish-load，
@@ -458,10 +499,10 @@ export class BrowserService implements BrowserHost {
 	// ============================================================
 
 	/** 观察页面：序列化 DOM 树 + 元素索引 + 页面统计（页面脚本不变）。 */
-	async observe(handle: string, tabName: string): Promise<BrowserObservation> {
+	async observe(handle: string, tabName: string, signal?: AbortSignal): Promise<BrowserObservation> {
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
-		const result = (await this.evalInTab(tab, buildDomSnapshotScript())) as {
+		const result = (await this.evalInTab(tab, buildDomSnapshotScript(), signal)) as {
 			title?: string;
 			url?: string;
 			tree?: string;
@@ -481,7 +522,6 @@ export class BrowserService implements BrowserHost {
 				interactive: 0,
 				iframes: 0,
 				shadowOpen: 0,
-				shadowClosed: 0,
 				images: 0,
 				total: 0,
 			},
@@ -489,7 +529,12 @@ export class BrowserService implements BrowserHost {
 		};
 	}
 
-	async screenshot(handle: string, tabName: string, fullPage = false): Promise<BrowserScreenshot> {
+	async screenshot(
+		handle: string,
+		tabName: string,
+		fullPage = false,
+		signal?: AbortSignal,
+	): Promise<BrowserScreenshot> {
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
 
@@ -502,6 +547,7 @@ export class BrowserService implements BrowserHost {
 					"Page.captureScreenshot",
 					{ format: "png", captureBeyondViewport: true, fromSurface: true },
 					BROWSER_OBSERVE_TIMEOUT_MS + 5_000,
+					signal,
 				);
 				const data = shot.data as string | undefined;
 				if (typeof data === "string" && data.length > 0) {
@@ -522,6 +568,7 @@ export class BrowserService implements BrowserHost {
 				() => tab.view.webContents.capturePage(),
 				"Page.captureScreenshot",
 				BROWSER_OBSERVE_TIMEOUT_MS + 3_000,
+				signal,
 			);
 		} catch (error) {
 			if (error instanceof Error && /display surface|not available/i.test(error.message)) {
@@ -542,45 +589,66 @@ export class BrowserService implements BrowserHost {
 	}
 
 	/** 点击快照中的元素（CDP 真实鼠标事件；index 来自 observe 的 [index]）。 */
-	async click(handle: string, tabName: string, index: number): Promise<void> {
+	async click(handle: string, tabName: string, index: number, signal?: AbortSignal): Promise<void> {
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
-		const { x, y } = await this.resolveRefCenter(tab, index);
-		await tab.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
-		await tab.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+		const { x, y } = await this.resolveRefCenter(tab, index, signal);
+		await tab.cdp.send(
+			"Input.dispatchMouseEvent",
+			{ type: "mousePressed", x, y, button: "left", clickCount: 1 },
+			undefined,
+			signal,
+		);
+		await tab.cdp.send(
+			"Input.dispatchMouseEvent",
+			{ type: "mouseReleased", x, y, button: "left", clickCount: 1 },
+			undefined,
+			signal,
+		);
 	}
 
 	/** 在快照元素中整段填写文本（聚焦 → 全选 → 真实输入，兼容受控组件）。 */
-	async fill(handle: string, tabName: string, index: number, text: string): Promise<void> {
+	async fill(handle: string, tabName: string, index: number, text: string, signal?: AbortSignal): Promise<void> {
 		if (text.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
-		await this.resolveRefCenter(tab, index);
+		await this.resolveRefCenter(tab, index, signal);
 		const selector = `[${LOOK_REF_ATTRIBUTE}="${index}"]`;
 		await this.evalInTab(
 			tab,
 			`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.focus({ preventScroll: true }); return true; })()`,
+			signal,
 		);
 		const modifier = process.platform === "darwin" ? 4 : 2;
-		await tab.cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "a", code: "KeyA", modifiers: modifier });
-		await tab.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: modifier });
-		await tab.cdp.send("Input.insertText", { text });
+		await tab.cdp.send(
+			"Input.dispatchKeyEvent",
+			{ type: "keyDown", key: "a", code: "KeyA", modifiers: modifier },
+			undefined,
+			signal,
+		);
+		await tab.cdp.send(
+			"Input.dispatchKeyEvent",
+			{ type: "keyUp", key: "a", code: "KeyA", modifiers: modifier },
+			undefined,
+			signal,
+		);
+		await tab.cdp.send("Input.insertText", { text }, undefined, signal);
 	}
 
 	/** 按下导航键（Enter/Tab/Escape/方向键等）或向聚焦元素输入文本。 */
-	async press(handle: string, tabName: string, key: string): Promise<void> {
+	async press(handle: string, tabName: string, key: string, signal?: AbortSignal): Promise<void> {
 		if (!key) throw new Error("press 需要按键或文本。");
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
 		const mapped = NAV_KEY_MAP[key];
 		if (mapped) {
 			const keyEvent = { key, code: mapped.code, windowsVirtualKeyCode: mapped.windowsVirtualKeyCode };
-			await tab.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...keyEvent });
-			await tab.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...keyEvent });
+			await tab.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...keyEvent }, undefined, signal);
+			await tab.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...keyEvent }, undefined, signal);
 		} else {
 			// 其余按完整文本插入到聚焦元素（支持空格/标点/Unicode/换行）。
 			if (key.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
-			await tab.cdp.send("Input.insertText", { text: key });
+			await tab.cdp.send("Input.insertText", { text: key }, undefined, signal);
 		}
 	}
 
@@ -591,6 +659,7 @@ export class BrowserService implements BrowserHost {
 		direction: BrowserScrollDirection,
 		pages = 1,
 		index?: number,
+		signal?: AbortSignal,
 	): Promise<void> {
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
@@ -600,18 +669,24 @@ export class BrowserService implements BrowserHost {
 			await this.evalInTab(
 				tab,
 				`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.scrollBy({ top: ${dir} * el.clientHeight, behavior: "smooth" }); return true; })()`,
+				signal,
 			);
 			return;
 		}
 		const height = tab.lastBounds?.height ?? 720;
 		const deltaY = direction === "down" ? pages * height : -pages * height;
-		await tab.cdp.send("Input.dispatchMouseEvent", {
-			type: "mouseWheel",
-			x: Math.round((tab.lastBounds?.width ?? 1280) / 2),
-			y: Math.round(height / 2),
-			deltaX: 0,
-			deltaY,
-		});
+		await tab.cdp.send(
+			"Input.dispatchMouseEvent",
+			{
+				type: "mouseWheel",
+				x: Math.round((tab.lastBounds?.width ?? 1280) / 2),
+				y: Math.round(height / 2),
+				deltaX: 0,
+				deltaY,
+			},
+			undefined,
+			signal,
+		);
 	}
 
 	/** 等待页面满足条件（URL 片段/可见文本/CSS selector），不执行模型 JS。 */
@@ -620,9 +695,11 @@ export class BrowserService implements BrowserHost {
 		tabName: string,
 		condition: BrowserWaitCondition,
 		timeoutMs: number,
+		signal?: AbortSignal,
 	): Promise<boolean> {
 		if (!condition.value.trim()) throw new Error("等待条件不能为空。");
 		if (!Number.isFinite(timeoutMs) || timeoutMs < 250) throw new Error("等待超时不能小于 250ms。");
+		throwIfBrowserOperationAborted(signal);
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
 		const payload = JSON.stringify(condition)
@@ -638,12 +715,15 @@ export class BrowserService implements BrowserHost {
 		})()`;
 		const startedAt = Date.now();
 		while (Date.now() - startedAt <= timeoutMs) {
+			throwIfBrowserOperationAborted(signal);
 			// 导航会销毁页面执行上下文（"Execution context was destroyed"），
 			// 这恰是等待 URL 变化时的常态——吞掉继续轮询，直到超时或新上下文命中条件。
+			// abort 错误不属于此类：必须重新抛出终止等待。
 			let result = false;
 			try {
-				result = (await this.evalInTab(tab, expression)) === true;
-			} catch {
+				result = (await this.evalInTab(tab, expression, signal)) === true;
+			} catch (error) {
+				if (error instanceof BrowserOperationAbortedError || signal?.aborted) throw error;
 				// context destroyed mid-navigation — keep polling
 			}
 			if (result === true) return true;
@@ -656,22 +736,25 @@ export class BrowserService implements BrowserHost {
 	 * 在 tab 中执行模型提供的 JS 代码（高级兜底）。
 	 *
 	 * 页面脚本通过 executeJavaScript 求值，页面内收集 `display()` 输出。
-	 * WebContentsView 无 puppeteer exposeFunction，页面内 `tab.screenshot()`
-	 * 由 no-op 占位（后续可升级为 CDP Runtime.addBinding 收集真实截图）。
+	 * 页面内 `tab.screenshot()` 不受支持（WebContentsView 无 puppeteer
+	 * exposeFunction），调用会抛错并走下方的错误路径——模型应改用
+	 * browser_screenshot 工具。
+	 *
+	 * 出错时返回的结果带 `error` 字段（扩展层据此标记 isError），错误详情
+	 * 文本仍保留在 displays 中供展示。
 	 *
 	 * @param timeoutMs 超时毫秒；超出后拒绝（页面内死循环无法被 CDP 强杀，
 	 *   但主进程不再等待，并主动关掉该 tab 让下一次操作重建）。
 	 */
-	async run(handle: string, tabName: string, code: string, timeoutMs: number): Promise<BrowserRunResult> {
+	async run(
+		handle: string,
+		tabName: string,
+		code: string,
+		timeoutMs: number,
+		signal?: AbortSignal,
+	): Promise<BrowserRunResult> {
 		this.touchActive(handle, tabName);
 		const tab = this.getTab(handle, tabName);
-
-		// 页面内截图能力占位：返回空字符串，模型可自行处理。
-		try {
-			await this.evalInTab(tab, "window.__look_screenshot = () => '';");
-		} catch {
-			// 页面导航中，忽略注入失败
-		}
 
 		const script = buildRunPageScript(code, buildDomSnapshotFunction());
 		const displays: DisplayItem[] = [];
@@ -683,6 +766,7 @@ export class BrowserService implements BrowserHost {
 					() => tab.view.webContents.executeJavaScript(script, true),
 					"Runtime.evaluate",
 					timeoutMs + 3_000,
+					signal,
 				),
 				new Promise<never>((_, reject) => {
 					timer = setTimeout(() => {
@@ -707,9 +791,10 @@ export class BrowserService implements BrowserHost {
 			return { displays, returnValue: result.returnValue };
 		} catch (error) {
 			if (timer) clearTimeout(timer);
+			const message = error instanceof Error ? error.message : String(error);
 			displays.push({
 				type: "text",
-				text: `Browser run error: ${error instanceof Error ? error.message : String(error)}`,
+				text: `Browser run error: ${message}`,
 			});
 			// 超时可能是页面内同步死循环卡死了 JS 线程；主动关掉该 tab，让下一次操作重建。
 			if (error instanceof Error && (error as Error & { lookRunTimeout?: boolean }).lookRunTimeout) {
@@ -723,7 +808,7 @@ export class BrowserService implements BrowserHost {
 					// 关闭失败不阻塞错误返回
 				}
 			}
-			return { displays };
+			return { displays, error: message };
 		}
 	}
 
@@ -770,34 +855,6 @@ export class BrowserService implements BrowserHost {
 		};
 	}
 
-	/** 活动 tab 的截图帧（保留兼容；renderer 面板已改为原生视图，不再调用）。 */
-	async capturePanelFrame(): Promise<BrowserPanelFrame | null> {
-		const target = this.getActiveTarget();
-		if (!target) return null;
-		const tab = this.getTab(target.handle, target.tab);
-		let image: NativeImage;
-		try {
-			image = await withBrowserCdpTimeout(
-				() => tab.view.webContents.capturePage(),
-				"Page.captureScreenshot",
-				BROWSER_CDP_COMMAND_TIMEOUT_MS,
-			);
-		} catch (error) {
-			if (error instanceof Error && /display surface|not available/i.test(error.message)) {
-				// 窗口最小化等场景：面板截图失败，返回 null（renderer 已不用此通道）。
-				return null;
-			}
-			throw error;
-		}
-		if (image.isEmpty()) return null;
-		const bounds = tab.lastBounds;
-		return {
-			data: image.toPNG().toString("base64"),
-			mimeType: "image/png",
-			viewport: bounds ? { width: bounds.width, height: bounds.height } : { width: 1280, height: 720 },
-		};
-	}
-
 	/**
 	 * 布局桥接：renderer 的 BrowserSlot 上报占位 div 的位置，这里同步
 	 * 对应 WebContentsView 的边界与可见性。revision 全局单调递增，
@@ -822,9 +879,16 @@ export class BrowserService implements BrowserHost {
 
 		if (!visible) {
 			tab.view.setVisible(false);
-			// 保留 presentation（前台归属）：窗口最小化/隐藏导致的隐藏不应丢失
-			// 「谁是前台」的记忆——窗口恢复时 replayPresentation 据此重放视图，
-			// 否则 renderer 去抖不会重发布局，视图会一直隐藏（见 setOwnerWindow）。
+			// 区分两种隐藏：
+			// - 渲染端主动隐藏（layout.visible === false：关面板/切 tab/浮层遮挡）——
+			//   清掉前台归属，窗口 focus/show/restore 的 replayPresentation 不应复活
+			//   用户主动隐藏的视图；
+			// - 窗口最小化/隐藏导致的被动隐藏（visible 为 true 但窗口不可见）——
+			//   保留 presentation（前台归属）供窗口恢复时重放，否则 renderer 去抖
+			//   不会重发布局，视图会一直隐藏（见 setOwnerWindow）。
+			if (!layout.visible && this.presentation?.handle === layout.handle && this.presentation.tab === layout.tab) {
+				this.presentation = null;
+			}
 			return;
 		}
 
@@ -864,14 +928,12 @@ export class BrowserService implements BrowserHost {
 		}
 	}
 
-	/** 执行面板交互动作（原生视图下用户直接交互页面，click 不再需要坐标映射）。 */
+	/** 执行面板交互动作（原生视图下用户直接交互页面，无需坐标映射）。 */
 	async panelAction(action: BrowserPanelAction): Promise<void> {
 		const target = this.getActiveTarget();
 		if (!target) throw new Error("浏览器未启动或没有可交互的 tab。请先让 Agent 打开浏览器。");
 		const tab = this.getTab(target.handle, target.tab);
 		switch (action.kind) {
-			case "click":
-				throw new Error("浏览器面板为原生视图，请直接在页面上点击交互。");
 			case "type":
 				if (action.text.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
 				await tab.cdp.send("Input.insertText", { text: action.text });
@@ -928,7 +990,11 @@ export class BrowserService implements BrowserHost {
 	 * 通过快照 index 定位元素中心点（页面内 getBoundingClientRect）。
 	 * 元素必须带 data-look-ref 标记——导航/重渲染后标记消失，报错要求重新 observe。
 	 */
-	private async resolveRefCenter(tab: TabRecord, index: number): Promise<{ x: number; y: number }> {
+	private async resolveRefCenter(
+		tab: TabRecord,
+		index: number,
+		signal?: AbortSignal,
+	): Promise<{ x: number; y: number }> {
 		if (!Number.isInteger(index) || index < 1)
 			throw new Error("元素 index 必须是大于 0 的整数（来自 browser_snapshot 的 [index]）。");
 		const selector = `[${LOOK_REF_ATTRIBUTE}="${index}"]`;
@@ -941,6 +1007,7 @@ export class BrowserService implements BrowserHost {
 				const r = el.getBoundingClientRect();
 				return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 			})()`,
+			signal,
 		)) as { x?: number; y?: number } | null;
 		if (!result || typeof result.x !== "number" || typeof result.y !== "number") {
 			throw new Error(
@@ -1060,7 +1127,9 @@ function buildRunPageScript(userCode: string, domSnapshotFn: string): string {
 				el.dispatchEvent(new Event("input", { bubbles: true }));
 				el.dispatchEvent(new Event("change", { bubbles: true }));
 			},
-			screenshot: async (opts) => window.__look_screenshot(opts),
+			screenshot: async () => {
+				throw new Error("tab.screenshot() is not supported in browser_run; use the browser_screenshot tool instead.");
+			},
 			evaluate: (fn, ...args) => {
 				const f = new Function("return (" + fn + ")")();
 				return f(...args);

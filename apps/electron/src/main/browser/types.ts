@@ -26,7 +26,6 @@ export interface BrowserPageStats {
 	interactive: number;
 	iframes: number;
 	shadowOpen: number;
-	shadowClosed: number;
 	images: number;
 	total: number;
 }
@@ -90,6 +89,8 @@ export interface BrowserRunResult {
 	returnValue?: unknown;
 	/** 运行期间捕获的截图。 */
 	screenshots?: BrowserScreenshot[];
+	/** 运行失败时的错误信息（存在即视为失败，displays 中仍带错误详情文本）。 */
+	error?: string;
 }
 
 /** 浏览器模式。 */
@@ -98,7 +99,6 @@ export type BrowserMode = "headless" | "headed";
 /** 启动配置。 */
 export interface BrowserLaunchOptions {
 	headless?: boolean;
-	viewport?: { width: number; height: number };
 }
 
 /** 导航等待条件。 */
@@ -108,7 +108,6 @@ export type WaitUntil = "load" | "domcontentloaded" | "networkidle0" | "networki
 export interface BrowserOpenOptions {
 	url?: string;
 	waitUntil?: WaitUntil;
-	timeoutMs?: number;
 }
 
 /** 等待条件（browser_wait_for 用，页面状态轮询，不执行模型 JS）。 */
@@ -124,8 +123,7 @@ export type BrowserScrollDirection = "up" | "down";
 // 内置浏览器面板（Built-in Browser Panel）类型
 //
 // 面板展示 agent 正在操作的浏览器：以活动 handle/tab 为交互目标，
-// 截图由 renderer CSS 缩放显示，点击坐标按“显示尺寸/视口”比例
-// 映射回页面逻辑坐标。
+// 原生 WebContentsView 按 renderer 上报的布局直接显示（browser:set-layout）。
 // ============================================================
 
 /** 面板中的单个 tab。 */
@@ -158,16 +156,8 @@ export interface BrowserPanelState {
 	viewport?: { width: number; height: number };
 }
 
-/** 面板帧：活动 tab 的视口截图（renderer 按显示宽度缩放）。 */
-export interface BrowserPanelFrame {
-	data: string;
-	mimeType: "image/png";
-	viewport: { width: number; height: number };
-}
-
-/** 面板交互动作（browser:panel-action 载荷，坐标均为页面逻辑坐标）。 */
+/** 面板交互动作（browser:panel-action 载荷）。 */
 export type BrowserPanelAction =
-	| { kind: "click"; x: number; y: number }
 	| { kind: "type"; text: string }
 	| { kind: "press"; key: string }
 	| { kind: "navigate"; url: string }
@@ -194,15 +184,15 @@ export interface BrowserHost {
 	/** 关闭所有 tab。 */
 	closeAllTabs(handle: string): Promise<number>;
 	/** 观察页面：序列化 DOM 树 + 元素索引 + 页面统计。 */
-	observe(handle: string, tabName: string): Promise<BrowserObservation>;
+	observe(handle: string, tabName: string, signal?: AbortSignal): Promise<BrowserObservation>;
 	/** 页面截图。 */
-	screenshot(handle: string, tabName: string, fullPage?: boolean): Promise<BrowserScreenshot>;
+	screenshot(handle: string, tabName: string, fullPage?: boolean, signal?: AbortSignal): Promise<BrowserScreenshot>;
 	/** 点击快照中的元素（真实鼠标事件，index 来自 observe）。 */
-	click(handle: string, tabName: string, index: number): Promise<void>;
+	click(handle: string, tabName: string, index: number, signal?: AbortSignal): Promise<void>;
 	/** 在快照元素中整段填写文本（真实键盘事件，清空后输入）。 */
-	fill(handle: string, tabName: string, index: number, text: string): Promise<void>;
+	fill(handle: string, tabName: string, index: number, text: string, signal?: AbortSignal): Promise<void>;
 	/** 按下导航键（Enter/Tab/Escape/方向键等）或向聚焦元素输入文本。 */
-	press(handle: string, tabName: string, key: string): Promise<void>;
+	press(handle: string, tabName: string, key: string, signal?: AbortSignal): Promise<void>;
 	/** 滚动页面或指定元素。 */
 	scroll(
 		handle: string,
@@ -210,11 +200,24 @@ export interface BrowserHost {
 		direction: BrowserScrollDirection,
 		pages?: number,
 		index?: number,
+		signal?: AbortSignal,
 	): Promise<void>;
 	/** 等待页面满足条件（URL 片段/可见文本/CSS selector）。 */
-	waitFor(handle: string, tabName: string, condition: BrowserWaitCondition, timeoutMs: number): Promise<boolean>;
+	waitFor(
+		handle: string,
+		tabName: string,
+		condition: BrowserWaitCondition,
+		timeoutMs: number,
+		signal?: AbortSignal,
+	): Promise<boolean>;
 	/** 在 tab 中执行 JS 代码（高级兜底，暴露 page/tab 辅助对象）。 */
-	run(handle: string, tabName: string, code: string, timeoutMs: number): Promise<BrowserRunResult>;
+	run(
+		handle: string,
+		tabName: string,
+		code: string,
+		timeoutMs: number,
+		signal?: AbortSignal,
+	): Promise<BrowserRunResult>;
 	/** 是否为 headless 模式（无窗口）。 */
 	isHeadless(handle: string): boolean;
 }

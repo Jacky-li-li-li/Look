@@ -58,16 +58,8 @@ export interface BrowserPanelState {
 	viewport?: { width: number; height: number };
 }
 
-/** 面板帧：活动 tab 的视口截图（renderer 按显示宽度缩放）。 */
-export interface BrowserPanelFrame {
-	data: string;
-	mimeType: "image/png";
-	viewport: { width: number; height: number };
-}
-
-/** 面板交互动作（browser:panel-action 载荷，坐标均为页面逻辑坐标）。 */
+/** 面板交互动作（browser:panel-action 载荷）。 */
 export type BrowserPanelAction =
-	| { kind: "click"; x: number; y: number }
 	| { kind: "type"; text: string }
 	| { kind: "press"; key: string }
 	| { kind: "navigate"; url: string }
