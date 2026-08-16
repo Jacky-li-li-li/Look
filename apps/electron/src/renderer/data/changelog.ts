@@ -20,6 +20,42 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.3.5",
+		date: "2026-08-16",
+		items: [
+			{
+				zh: "内置浏览器全面重构：改用系统级 WebContentsView 渲染，与主窗口布局无缝融合，可拖出为独立 Dock 面板；浏览器自动化改为 browser-use 风格（编号快照 + 语义化交互工具），操作更直观稳定；并修复密码快照脱敏、页面视图意外消失后自动复活、停止操作及时透传、重定向仅允许白名单地址等问题",
+				en: "Built-in browser rebuilt: it now renders in a system-level WebContentsView that blends into the main window layout and can pop out as its own Dock panel; browser automation moved to a browser-use style (numbered snapshots + semantic interaction tools) that is more intuitive and reliable; also fixed password masking in snapshots, auto-reviving lost page views, prompt stop propagation, and restricting redirects to a whitelist",
+				ja: "内蔵ブラウザを全面再構築：システムレベルの WebContentsView で描画しメインウィンドウのレイアウトに自然に統合、独立した Dock パネルとして切り離しも可能。ブラウザ自動化は browser-use スタイル（番号付きスナップショット＋意味的操作ツール）に刷新し、より直感的で安定。パスワードのスナップショットをマスク表示、消えたページビューは自動復活、停止操作は即時反映、リダイレクトはホワイトリストのみ許可に修正",
+			},
+			{
+				zh: "主题系统扩展：新增 4 大家族共 8 款配色变体，设置页以预览卡片直观选择，一键切换全新视觉风格",
+				en: "Theme system expanded: 4 new families with 8 color variants total, each shown as a live preview card in Settings — pick a whole new look in one click",
+				ja: "テーマを拡張：4 ファミリー・全 8 バリエーションの配色を追加。設定ページのプレビューカードで直感的に選び、ワンクリックで新しい見た目に切り替え",
+			},
+			{
+				zh: "飞书桥接多项修复：消息发送串行化避免乱序、停止按钮状态更准确、权限范围收窄、测试消息支持指定应用、超时时间可配置",
+				en: "Lark bridge fixes: message sends are serialized to prevent out-of-order delivery, the stop button state is more accurate, permission scopes are narrowed, test messages can target a specific app, and timeouts are configurable",
+				ja: "Lark 連携を修正：メッセージ送信を直列化して順序崩れを防止、停止ボタンの状態を正確化、権限スコープを縮小、テストメッセージはアプリ指定をサポート、タイムアウトも設定可能に",
+			},
+			{
+				zh: "聊天界面多项打磨：你的消息改为气泡样式（墨洗底色 + 发丝描边 + 指向头像的尾巴）；「本轮变更」卡片精简为单行头部并加入 diffstat 块状仪表；AskUserQuestion 面板改为底部覆盖层更顺手；回到底部按钮改用可见的弹簧动画并修正贴底判定",
+				en: "Chat polish: your messages are now bubbles with an ink-wash background, hairline border, and a tail pointing at the avatar; the per-turn change card got a single-line header with a diffstat block meter; AskUserQuestion now appears as a bottom overlay for easier interaction; the scroll-to-bottom button uses a visible spring animation with a fixed bottom-detection",
+				ja: "チャット UI を磨き込み：自分のメッセージは墨染め風の背景＋ヘアライン枠＋アバターを指すしっぽ付きバブルに。「今回の変更」カードは単一行ヘッダー＋diffstat ブロックメーターに刷新。AskUserQuestion は下部オーバーレイになり操作しやすく。最下部へ戻るボタンは目に見えるスプリングアニメーションに変更し、貼り付き判定も修正",
+			},
+			{
+				zh: "会话响应更跟手：切换模型、发送消息不再等待会话初始化完成，意图先行立即生效；外部文件拖入输入框自动转为附件，粘贴图片/文件以附件形式内联注入，历史附件卡片兼容更多数据形态",
+				en: "Snappier sessions: switching models or sending a message no longer waits for session startup — intent takes effect immediately; dragging external files into the composer turns them into attachments, pasted images/files attach inline, and historical attachment cards handle more data shapes",
+				ja: "セッションの操作感を改善：モデル切り替えやメッセージ送信がセッション初期化を待たず即時反映。外部ファイルを入力欄にドラッグすると添付に変換、画像・ファイルの貼り付けもインラインで添付され、履歴の添付カードはより多くのデータ形式に対応",
+			},
+			{
+				zh: "权限与安全强化：computer-use（电脑操控）仅在 macOS 上注册，其他平台不再出现无效工具；MCP 工具纳入审批拦截，敏感操作需经你确认",
+				en: "Permission & security hardening: computer-use is now registered on macOS only, so other platforms no longer show a dead tool; MCP tools join the approval gate, so sensitive operations always ask for your confirmation",
+				ja: "権限とセキュリティを強化：computer-use は macOS でのみ登録され、他のプラットフォームでは無効なツールが表示されません。MCP ツールも承認ゲートに組み込まれ、機密操作は必ず確認を求めます",
+			},
+		],
+	},
+	{
 		version: "2.3.0",
 		date: "2026-08-15",
 		items: [
