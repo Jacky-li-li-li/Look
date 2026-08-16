@@ -17,6 +17,7 @@ import {
 	agentsAtom,
 	aiAvatarAtom,
 	appReadyPhaseAtom,
+	builtinBrowserEnabledAtom,
 	messageAlignmentAtom,
 	openedSessionIdsAtom,
 	openProjectIdsAtom,
@@ -122,6 +123,8 @@ export async function initAppData(api: Window["look"]): Promise<void> {
 			if (settings.aiAvatar !== undefined) appStore.set(aiAvatarAtom, settings.aiAvatar);
 			if (settings.messageAlignment !== undefined) appStore.set(messageAlignmentAtom, settings.messageAlignment);
 			if (settings.showToolExecution !== undefined) appStore.set(showToolExecutionAtom, settings.showToolExecution);
+			if (settings.builtinBrowserEnabled !== undefined)
+				appStore.set(builtinBrowserEnabledAtom, settings.builtinBrowserEnabled);
 			if (settings.sidebarCollapsed !== undefined) appStore.set(sidebarCollapsedAtom, settings.sidebarCollapsed);
 			if (settings.rightPanelCollapsed !== undefined)
 				appStore.set(rightPanelCollapsedAtom, settings.rightPanelCollapsed);

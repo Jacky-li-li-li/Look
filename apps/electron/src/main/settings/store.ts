@@ -63,6 +63,8 @@ const DEFAULTS: UserSettings = {
 	desktopNotifications: "all",
 	messageAlignment: "left-right",
 	showToolExecution: true,
+	/** 内置浏览器面板总开关（开启后 agent 使用浏览器工具时自动滑出面板）。 */
+	builtinBrowserEnabled: false,
 };
 
 /** Subset of UserSettings owned by the SDK's SettingsManager. */
@@ -112,6 +114,8 @@ interface UiSettings {
 	messageAlignment: MessageAlignment;
 	/** 消息流中是否显示工具执行细节（思考 + 工具调用）。 */
 	showToolExecution: ShowToolExecution;
+	/** 内置浏览器面板总开关（agent 使用浏览器工具时自动滑出面板）。 */
+	builtinBrowserEnabled: boolean;
 }
 
 const UI_DEFAULTS: UiSettings = {
@@ -137,6 +141,7 @@ const UI_DEFAULTS: UiSettings = {
 	desktopNotifications: "all",
 	messageAlignment: "left-right",
 	showToolExecution: DEFAULTS.showToolExecution,
+	builtinBrowserEnabled: false,
 };
 
 /** Synchronously read the persisted tone from disk without instantiating the
@@ -299,6 +304,7 @@ export class UserSettingsStore {
 		if (partial.desktopNotifications !== undefined) uiPartial.desktopNotifications = partial.desktopNotifications;
 		if (partial.messageAlignment !== undefined) uiPartial.messageAlignment = partial.messageAlignment;
 		if (partial.showToolExecution !== undefined) uiPartial.showToolExecution = partial.showToolExecution;
+		if (partial.builtinBrowserEnabled !== undefined) uiPartial.builtinBrowserEnabled = partial.builtinBrowserEnabled;
 		if (Object.keys(uiPartial).length > 0) {
 			this.ui = { ...this.ui, ...uiPartial };
 			this.writeUi();

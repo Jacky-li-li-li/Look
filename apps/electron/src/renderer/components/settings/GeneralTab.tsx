@@ -20,7 +20,12 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LOCALES } from "../../i18n";
 import { AI_AVATARS, getAiAvatarUrl } from "../../lib/aiAvatars";
-import { aiAvatarAtom, messageAlignmentAtom, showToolExecutionAtom } from "../../store/settingsAtoms";
+import {
+	aiAvatarAtom,
+	builtinBrowserEnabledAtom,
+	messageAlignmentAtom,
+	showToolExecutionAtom,
+} from "../../store/settingsAtoms";
 import { PixelAgentAvatar } from "../PixelAgentAvatar";
 import { ThemePicker } from "./ThemePicker";
 
@@ -41,6 +46,7 @@ function persistSettings(partial: {
 	desktopNotifications?: "off" | "needs-action" | "all";
 	messageAlignment?: "left" | "left-right";
 	showToolExecution?: boolean;
+	builtinBrowserEnabled?: boolean;
 }) {
 	if (!api) return;
 	api.setGeneralSettings(partial).catch((err) => console.warn("[GeneralTab] setGeneralSettings failed:", err));
@@ -200,6 +206,8 @@ interface GeneralSettingsState {
 	messageAlignment: "left" | "left-right";
 	/** 消息流中是否显示工具执行细节（思考 + 工具调用）。 */
 	showToolExecution: boolean;
+	/** 内置浏览器面板总开关（agent 使用浏览器工具时自动滑出面板）。 */
+	builtinBrowserEnabled: boolean;
 	availableModels: Array<{ provider: string; id: string; name: string }>;
 }
 
@@ -219,11 +227,13 @@ export default function GeneralTab() {
 		desktopNotifications: "all",
 		messageAlignment: "left-right",
 		showToolExecution: true,
+		builtinBrowserEnabled: false,
 		availableModels: [],
 	});
 	const setAiAvatar = useSetAtom(aiAvatarAtom);
 	const setMessageAlignment = useSetAtom(messageAlignmentAtom);
 	const setShowToolExecution = useSetAtom(showToolExecutionAtom);
+	const setBuiltinBrowserEnabled = useSetAtom(builtinBrowserEnabledAtom);
 	const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
 	// 三态：undefined=未悬停（预览跟随已选项），null=悬停在默认像素头像上
 	const [hoveredAvatar, setHoveredAvatar] = useState<string | null | undefined>(undefined);
@@ -238,6 +248,7 @@ export default function GeneralTab() {
 		desktopNotifications,
 		messageAlignment,
 		showToolExecution,
+		builtinBrowserEnabled,
 		availableModels,
 	} = state;
 	// 预览区跟随悬停（试穿），未悬停时跟随已选项
@@ -289,6 +300,9 @@ export default function GeneralTab() {
 							: {}),
 						...("showToolExecution" in settings
 							? { showToolExecution: settings.showToolExecution as boolean }
+							: {}),
+						...("builtinBrowserEnabled" in settings
+							? { builtinBrowserEnabled: settings.builtinBrowserEnabled as boolean }
 							: {}),
 					}));
 				}
@@ -532,6 +546,23 @@ export default function GeneralTab() {
 								persistSettings({ showToolExecution: v });
 								// 同步全局 atom：MessageBlockList 实时过滤，无需重启生效
 								setShowToolExecution(v);
+							}}
+						/>
+					</SettingRow>
+					<SettingRow
+						id="builtin-browser"
+						label={t("settings.builtinBrowser")}
+						desc={t("settings.builtinBrowserDesc")}
+					>
+						<Switch
+							id="builtin-browser"
+							size="sm"
+							checked={builtinBrowserEnabled}
+							onCheckedChange={(v) => {
+								setState((prev) => ({ ...prev, builtinBrowserEnabled: v }));
+								persistSettings({ builtinBrowserEnabled: v });
+								// 同步全局 atom：browserHandlers 据此决定 agent 活动时是否自动打开面板
+								setBuiltinBrowserEnabled(v);
 							}}
 						/>
 					</SettingRow>

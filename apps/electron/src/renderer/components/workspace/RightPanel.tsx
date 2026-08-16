@@ -27,6 +27,7 @@ import {
 	sharedFilesLoadingAtomFamily,
 	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
+import { browserPanelOpenAtom } from "../../store/browserAtoms";
 import ChangesPanel from "./ChangesPanel";
 import { PanelResizeHandle } from "./PanelResizeHandle";
 import { SharedAreaPanel } from "./SharedAreaPanel";
@@ -44,10 +45,13 @@ export function RightPanel() {
 	const setCollapsed = useSetAtom(rightPanelCollapsedAtom);
 	const [rightPanelWidth, setRightPanelWidth] = useAtom(rightPanelWidthAtom);
 	const dockedFile = useAtomValue(dockedFileAtom);
+	const browserOpen = useAtomValue(browserPanelOpenAtom);
 	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
 	const sidebarCollapsed = useAtomValue(sidebarEffectiveCollapsedAtom);
 	const viewportWidth = useViewportWidth();
 	const projectId = activeProject?.id ?? PLACEHOLDER_PROJECT_ID;
+	// Dock 打开 = 文件查看或内置浏览器任一打开（共用右侧 Dock 容器）。
+	const dockOpen = !!dockedFile || browserOpen;
 	const gitInfo = useAtomValue(projectGitInfoAtomFamily(projectId));
 	const dirtyCount = gitInfo?.dirtyCount ?? 0;
 
@@ -153,7 +157,7 @@ export function RightPanel() {
 		sidebarCollapsed,
 		rightPanelCollapsed: collapsed,
 		rightPanelWidth,
-		dockOpen: !!dockedFile,
+		dockOpen,
 		dockPanelWidth,
 	});
 	// 显示宽度被空间压缩时不再隐藏把手：把手始终可拖，拖动会更新存储宽度，
@@ -168,7 +172,7 @@ export function RightPanel() {
 				"right-panel-wrapper relative flex h-full shrink-0 flex-col overflow-hidden bg-background",
 				// Dock 打开时右栏右侧与 Dock 相接：右侧直角 + 去掉右边框（Dock 自带 border-l 作单线分隔），
 				// 左缘保留卡片圆角；Dock 关闭时恢复全圆角全边框
-				dockedFile ? "rounded-l-xl border-y border-l" : "rounded-xl border",
+				dockOpen ? "rounded-l-xl border-y border-l" : "rounded-xl border",
 			)}
 			data-collapsed={collapsed}
 			aria-label={t("rightPanel.label")}
@@ -182,7 +186,7 @@ export function RightPanel() {
 					min={PANEL_LAYOUT.RIGHT_MIN}
 					max={layout.rightMax}
 					linked={
-						dockedFile
+						dockOpen
 							? {
 									cssVar: "--dock-track",
 									map: (right) => linkedDockTrack(layout, right, dockPanelWidth, true),

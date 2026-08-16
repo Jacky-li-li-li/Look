@@ -16,7 +16,7 @@ import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { AgentInfo } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
-import { PanelLeftOpen, StickyNote } from "lucide-react";
+import { Globe, PanelLeftOpen, StickyNote } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { appStore } from "../store/appStore";
@@ -27,6 +27,7 @@ import {
 	sidebarEffectiveCollapsedAtom,
 	stickyNoteExpandRequestAtom,
 } from "../store/atoms";
+import { toggleBrowserPanel } from "../store/browserHandlers";
 
 interface TopSessionBarProps {
 	activeAgent: AgentInfo | null;
@@ -103,7 +104,8 @@ export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 				<div
 					className={cn(
 						"app-no-drag flex h-full min-w-0 flex-1 items-center px-2",
-						rightPanelCollapsed ? "pr-20" : "pr-12",
+						// 右侧 absolute 按钮组（浏览器 + 便利贴）与折叠时的展开按钮预留空间
+						rightPanelCollapsed ? "pr-28" : "pr-20",
 					)}
 				>
 					{editing ? (
@@ -131,24 +133,43 @@ export default function TopSessionBar({ activeAgent }: TopSessionBarProps) {
 					{t("topBar.emptyHint", "Select a session from the sidebar")}
 				</div>
 			)}
-			{/* 便利贴快速记录按钮：点击展开悬浮便利贴 */}
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button
-						size="icon-sm"
-						variant="ghost"
-						data-sticky-toggle
-						className={`absolute top-1/2 -translate-y-1/2 rounded-md border border-hairline ${
-							rightPanelCollapsed ? "right-10" : "right-2"
-						}`}
-						onClick={() => appStore.set(stickyNoteExpandRequestAtom, (n) => n + 1)}
-						aria-label={t("drafts.stickyHint")}
-					>
-						<StickyNote className="size-3.5" />
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent side="bottom">{t("drafts.stickyHint")}</TooltipContent>
-			</Tooltip>
+			{/* 右侧按钮组（absolute 不占流，避免与标题区布局互扰；浏览器 + 便利贴） */}
+			<div
+				className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-1 ${
+					rightPanelCollapsed ? "right-10" : "right-2"
+				}`}
+			>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							size="icon-sm"
+							variant="ghost"
+							className="rounded-md border border-hairline"
+							data-browser-toggle
+							onClick={toggleBrowserPanel}
+							aria-label={t("browser.panelTitle")}
+						>
+							<Globe className="size-3.5" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">{t("browser.panelTitle")}</TooltipContent>
+				</Tooltip>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							size="icon-sm"
+							variant="ghost"
+							data-sticky-toggle
+							className="rounded-md border border-hairline"
+							onClick={() => appStore.set(stickyNoteExpandRequestAtom, (n) => n + 1)}
+							aria-label={t("drafts.stickyHint")}
+						>
+							<StickyNote className="size-3.5" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">{t("drafts.stickyHint")}</TooltipContent>
+				</Tooltip>
+			</div>
 			{rightPanelCollapsed && (
 				<Tooltip>
 					<TooltipTrigger asChild>

@@ -188,4 +188,11 @@ export type RendererToMainEvent =
 	| { type: "mcp:update-server"; name: string; config: Record<string, unknown> }
 	| { type: "update:check" }
 	| { type: "update:download" }
-	| { type: "update:install" };
+	| { type: "update:install" }
+	// ---- Built-in browser panel ----
+	| { type: "browser:get-state" }
+	| { type: "browser:frame" }
+	| { type: "browser:panel-action"; kind: string; [key: string]: unknown }
+	| { type: "browser:open-panel"; force?: boolean }
+	| { type: "browser:close-panel" }
+	| { type: "browser:set-layout"; layout: unknown };

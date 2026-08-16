@@ -19,9 +19,11 @@ import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../system/traffic-light
 import { ensureIpcEnvelopeShape } from "../utils/ipc-envelope.js";
 import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
+import { bindBrowserActivityToWindow } from "./routers/browser-router.js";
 import {
 	agentRouter,
 	attachmentRouter,
+	browserRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -47,6 +49,7 @@ let gitService: GitService | null = null;
 const domainRouters = [
 	agentRouter,
 	attachmentRouter,
+	browserRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -161,6 +164,10 @@ export function registerIpcHandlers(
 			treeService: workspaceTreeService,
 		},
 
+		browser: {
+			service: composition.browserService,
+		},
+
 		im: {
 			channelManager: larkChannelManager,
 			bridgeService: larkBridgeService,
@@ -179,6 +186,9 @@ export function registerIpcHandlers(
 	for (const router of domainRouters) {
 		dispatcher.install(router, ctx);
 	}
+
+	// 内置浏览器面板：启动即绑定 activity 推送（agent 用浏览器工具 → renderer 自动开面板）。
+	bindBrowserActivityToWindow(ctx.browser.service, ctx.mainWindow);
 
 	// Handle renderer → main events (fire-and-forget)
 	ipcMain.on("look:event", (_event, data: unknown) => {

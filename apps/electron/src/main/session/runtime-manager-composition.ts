@@ -35,6 +35,7 @@ export class RuntimeManagerComposition {
 	readonly permissionService;
 	readonly promptStore;
 	readonly mcpManager;
+	readonly browserService;
 	readonly sessionCatalog;
 	readonly draftIndex;
 	readonly projectRuntimeService;
@@ -96,6 +97,7 @@ export class RuntimeManagerComposition {
 		this.permissionService = builder.permissionService!;
 		this.promptStore = builder.promptStore!;
 		this.mcpManager = builder.mcpManager!;
+		this.browserService = builder.browserService!;
 		this.sessionCatalog = builder.sessionCatalog!;
 		this.draftIndex = builder.draftIndex;
 		this.projectRuntimeService = builder.projectRuntimeService!;

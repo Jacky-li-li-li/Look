@@ -111,6 +111,11 @@ export interface InvokeContext {
 		treeService: WorkspaceTreeService;
 	};
 
+	// ── Browser (built-in browser panel) ──
+	browser: {
+		service: import("../browser/browser-service.js").BrowserService;
+	};
+
 	// ── IM / Feishu ──
 	im: {
 		channelManager?: import("../im/lark-channel-manager.js").LarkChannelManager;

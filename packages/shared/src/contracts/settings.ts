@@ -122,4 +122,6 @@ export interface UserSettings {
 	messageAlignment: MessageAlignment;
 	/** Show tool execution details (thinking + tool calls) in the message stream. Default true. */
 	showToolExecution: ShowToolExecution;
+	/** Built-in browser panel master switch; when on, the panel auto-opens while the agent uses browser tools. */
+	builtinBrowserEnabled: boolean;
 }

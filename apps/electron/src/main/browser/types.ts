@@ -120,6 +120,64 @@ export type BrowserWaitCondition =
 /** 滚动方向（browser_scroll 用）。 */
 export type BrowserScrollDirection = "up" | "down";
 
+// ============================================================
+// 内置浏览器面板（Built-in Browser Panel）类型
+//
+// 面板展示 agent 正在操作的浏览器：以活动 handle/tab 为交互目标，
+// 截图由 renderer CSS 缩放显示，点击坐标按“显示尺寸/视口”比例
+// 映射回页面逻辑坐标。
+// ============================================================
+
+/** 面板中的单个 tab。 */
+export interface BrowserPanelTabInfo {
+	name: string;
+	url: string;
+	title: string;
+	active: boolean;
+	/** 页面视口（逻辑像素，点击映射基准）。 */
+	viewport: { width: number; height: number };
+}
+
+/** 面板状态快照（browser:get-state 返回）。 */
+export interface BrowserPanelState {
+	/** 是否有浏览器实例运行。 */
+	running: boolean;
+	/** headless 与否（面板展示不依赖 headed 窗口）。 */
+	headless: boolean;
+	/** 全部 tab。 */
+	tabs: BrowserPanelTabInfo[];
+	/** 当前活动 tab 名。 */
+	activeTab?: string;
+	/** 当前活动会话 handle（renderer 布局上报用）。 */
+	handle?: string;
+	/** 当前活动 tab URL。 */
+	url?: string;
+	/** 当前活动 tab 标题。 */
+	title?: string;
+	/** 当前活动 tab 视口（点击映射基准）。 */
+	viewport?: { width: number; height: number };
+}
+
+/** 面板帧：活动 tab 的视口截图（renderer 按显示宽度缩放）。 */
+export interface BrowserPanelFrame {
+	data: string;
+	mimeType: "image/png";
+	viewport: { width: number; height: number };
+}
+
+/** 面板交互动作（browser:panel-action 载荷，坐标均为页面逻辑坐标）。 */
+export type BrowserPanelAction =
+	| { kind: "click"; x: number; y: number }
+	| { kind: "type"; text: string }
+	| { kind: "press"; key: string }
+	| { kind: "navigate"; url: string }
+	| { kind: "back" }
+	| { kind: "forward" }
+	| { kind: "reload" }
+	| { kind: "selectTab"; name: string }
+	| { kind: "closeTab"; name: string }
+	| { kind: "newTab"; url?: string };
+
 /**
  * 浏览器宿主接口——由主进程 BrowserService 实现。
  * 扩展通过此接口与浏览器层解耦，便于测试。

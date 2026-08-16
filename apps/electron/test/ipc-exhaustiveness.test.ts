@@ -17,6 +17,7 @@ import { InvokeDispatcher } from "../src/main/ipc/invoke-context.js";
 import {
 	agentRouter,
 	attachmentRouter,
+	browserRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -42,6 +43,7 @@ import { makeMockContext } from "./helpers/ipc-test-helpers.js";
 const ALL_ROUTERS: IpcRouter[] = [
 	agentRouter,
 	attachmentRouter,
+	browserRouter,
 	draftRouter,
 	fileRouter,
 	fileViewerRouter,
@@ -227,6 +229,12 @@ const EXHAUSTIVE = {
 	"update:check": true,
 	"update:download": true,
 	"update:install": true,
+	"browser:get-state": true,
+	"browser:frame": true,
+	"browser:panel-action": true,
+	"browser:open-panel": true,
+	"browser:close-panel": true,
+	"browser:set-layout": true,
 } satisfies Record<RendererToMainEvent["type"], boolean>;
 
 describe("IPC contract exhaustiveness", () => {

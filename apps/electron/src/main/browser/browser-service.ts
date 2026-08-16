@@ -1,118 +1,292 @@
 // ============================================================
-// Browser Service — puppeteer 浏览器生命周期管理
+// Browser Service — WebContentsView 浏览器生命周期管理
 //
-// 管理 Chromium 的启动、tab 创建、连接维护和资源回收。
-// 实现 BrowserHost 接口，供 browser-extension 调用。
+// 管理内置于主窗口的原生浏览器视图（Electron WebContentsView），
+// 替代原先 puppeteer + 外部 Chromium 的方案：
+//   - 每个 tab 是一个 WebContentsView，挂到主窗口 contentView，
+//     面板打开时按 renderer 上报的布局 setBounds/setVisible；
+//   - Agent 自动化走 WebContents.debugger（CDP）：observe 复用
+//     dom-snapshot 页面脚本（data-look-ref），click/fill/press 走
+//     CDP Input 真实事件；
+//   - 实现 BrowserHost 接口，browser-extension 无需改动。
 //
-// 交互设计参考 browser-use：
-//   - observe() 返回带 [index] 编号的序列化 DOM 树；
-//   - click/fill/press 通过 data-look-ref 定位元素，再走
-//     puppeteer 的真实鼠标/键盘事件（CDP Input），对受控组件
-//     兼容性优于页面内 el.click()/value setter；
-//   - 导航/重渲染后 data-look-ref 被移除，交互自动报错，
-//     要求重新 observe（天然世代失效）。
+// 面板交互模型（Proma 式取舍）：
+//   - 面板视图区显示真实网页（原生视图），用户直接交互，
+//     不再需要截图流与坐标映射；
+//   - renderer 的 BrowserSlot 持续测量占位 div 布局并上报
+//     browser:set-layout，主进程据此同步原生视图边界；
+//   - revision 全局单调递增，晚到的旧布局被忽略。
 // ============================================================
 
-import type { Browser, Page } from "puppeteer-core";
+import { createHash } from "node:crypto";
+import type { BrowserViewLayout } from "@look/shared";
+import {
+	type BrowserWindow,
+	session as electronSession,
+	type NativeImage,
+	type Session,
+	WebContentsView,
+} from "electron";
+import {
+	BROWSER_CDP_COMMAND_TIMEOUT_MS,
+	BROWSER_OBSERVE_TIMEOUT_MS,
+	BrowserCdp,
+	throwIfBrowserOperationAborted,
+	withBrowserCdpTimeout,
+} from "./browser-cdp.js";
 import { buildDomSnapshotFunction, buildDomSnapshotScript, LOOK_REF_ATTRIBUTE } from "./dom-snapshot.js";
 import type {
 	BrowserHost,
 	BrowserLaunchOptions,
 	BrowserObservation,
 	BrowserOpenOptions,
+	BrowserPanelAction,
+	BrowserPanelFrame,
+	BrowserPanelState,
+	BrowserPanelTabInfo,
 	BrowserRunResult,
 	BrowserScreenshot,
 	BrowserScrollDirection,
 	BrowserWaitCondition,
+	DisplayItem,
 	PageInfo,
+	WaitUntil,
 } from "./types.js";
+import { normalizeNavigationUrl } from "./url-policy.js";
 
-/** 单个浏览器的状态：一个 Browser 实例 + 多个命名 Page。 */
+/** 单个 tab：一个 WebContentsView + CDP 通道 + 观察代际。 */
+interface TabRecord {
+	view: WebContentsView;
+	cdp: BrowserCdp;
+	/** 观察代际：导航/重渲染后递增，refs 随之失效。 */
+	generation: number;
+	/** 最近一次 setBounds（布局去抖：不变则跳过 setBounds）。 */
+	lastBounds?: { x: number; y: number; width: number; height: number };
+}
+
+/** 一个浏览器会话（对应一个 BrowserHost handle）。 */
 interface BrowserState {
-	browser: Browser;
+	handle: string;
+	/** launch 时的 headless 参数（WebContentsView 下视图始终存在，仅记录语义）。 */
 	headless: boolean;
-	pages: Map<string, Page>;
+	/** 面板自启（非 agent 扩展持有）——close-panel 时回收。 */
+	panelOwned: boolean;
+	/** 独立 partition：会话间 cookie/profile 隔离。 */
+	partition: string;
+	tabs: Map<string, TabRecord>;
+	/** 面板 newTab 命名递增计数器。 */
+	nextTabId: number;
+	/** 本会话已应用的最新布局 revision。 */
+	lastLayoutRevision: number;
 }
 
-/** 页面截图回调（通过 exposeFunction 暴露给页面，供 tab.screenshot 使用）。 */
-interface PageScreenshotRequest {
-	fullPage?: boolean;
+/** 当前前台原生视图（跨会话唯一）。 */
+interface Presentation {
+	handle: string;
+	tab: string;
+	revision: number;
 }
 
-/** 键盘按键输入类型（puppeteer KeyInput 的收窄子集）。 */
-type PressKeyInput =
-	| "Enter"
-	| "Tab"
-	| "Escape"
-	| "Backspace"
-	| "Delete"
-	| "ArrowUp"
-	| "ArrowDown"
-	| "ArrowLeft"
-	| "ArrowRight"
-	| "Home"
-	| "End"
-	| "PageUp"
-	| "PageDown"
-	| "Space";
+/** 键盘按键 → CDP 事件映射（非字符导航键需要 code/vk 触发 Chromium 默认行为）。 */
+const NAV_KEY_MAP: Record<string, { code: string; windowsVirtualKeyCode: number }> = {
+	Enter: { code: "Enter", windowsVirtualKeyCode: 13 },
+	Tab: { code: "Tab", windowsVirtualKeyCode: 9 },
+	Escape: { code: "Escape", windowsVirtualKeyCode: 27 },
+	Backspace: { code: "Backspace", windowsVirtualKeyCode: 8 },
+	Delete: { code: "Delete", windowsVirtualKeyCode: 46 },
+	ArrowUp: { code: "ArrowUp", windowsVirtualKeyCode: 38 },
+	ArrowDown: { code: "ArrowDown", windowsVirtualKeyCode: 40 },
+	ArrowLeft: { code: "ArrowLeft", windowsVirtualKeyCode: 37 },
+	ArrowRight: { code: "ArrowRight", windowsVirtualKeyCode: 39 },
+	Home: { code: "Home", windowsVirtualKeyCode: 36 },
+	End: { code: "End", windowsVirtualKeyCode: 35 },
+	PageUp: { code: "PageUp", windowsVirtualKeyCode: 33 },
+	PageDown: { code: "PageDown", windowsVirtualKeyCode: 34 },
+	Space: { code: "Space", windowsVirtualKeyCode: 32 },
+};
+
+/** 会话 partition：按 handle 哈希，避免跨会话共享 cookie；非持久（会话级）。 */
+function buildPartition(handle: string): string {
+	const digest = createHash("sha256").update(handle).digest("hex").slice(0, 16);
+	return `look-browser-${digest}`;
+}
 
 export class BrowserService implements BrowserHost {
+	private owner: BrowserWindow | null = null;
 	private browsers = new Map<string, BrowserState>();
 	private nextId = 1;
-	/** 已暴露过 __look_screenshot 的 Page（puppeteer 重复 exposeFunction 会抛错，只首次注册）。 */
-	private exposedScreenshotPages = new WeakSet<Page>();
-	/** 当前 run 的截图收集器（按 Page 索引），已暴露的回调转发到这里，避免闭包持有单次调用状态。 */
-	private screenshotCollectors = new Map<Page, BrowserScreenshot[]>();
+	/** 面板自启（非 agent 扩展持有）的浏览器 handle——close-panel 时回收。 */
+	private panelOwnedHandles = new Set<string>();
+	/** 已装过网络 guard 的 Electron Session（partition 生命周期长于会话，只注册一次）。 */
+	private guardedSessions = new WeakSet<Session>();
+
+	// ---- 内置浏览器面板：活动目标跟踪 + 活动通知 ----
+	/** 最近被 agent 工具触碰的浏览器会话与 tab（面板展示/交互的目标）。 */
+	private activeHandle: string | null = null;
+	private activeTab: string | null = null;
+	/** 面板活动变更回调（agent 使用浏览器 / tab 变化时触发，由 IPC 层推给 renderer）。 */
+	private activityListener: (() => void) | null = null;
+
+	/** 跨会话唯一的前台原生视图所有权（controller 层保证，不依赖 renderer 卸载顺序）。 */
+	private presentation: Presentation | null = null;
+	/** 即使当前没有 Slot，也保留最新 show 代际以拒绝晚到的旧 show 布局。 */
+	private latestPresentationRevision = 0;
+
+	// ============================================================
+	// 面板活动跟踪
+	// ============================================================
+
+	/** 注册面板活动变更通知（每次 agent 触碰浏览器/tab 变化时触发；传 null 取消）。 */
+	onPanelActivity(listener: (() => void) | null): void {
+		this.activityListener = listener;
+	}
+
+	private touchActive(handle: string, tabName: string): void {
+		this.activeHandle = handle;
+		this.activeTab = tabName;
+		this.activityListener?.();
+	}
+
+	/** 返回活动目标（handle/tab）；无浏览器时返回 null。 */
+	getActiveTarget(): { handle: string; tab: string } | null {
+		if (!this.activeHandle || !this.activeTab) return null;
+		const state = this.browsers.get(this.activeHandle);
+		const tab = state?.tabs.get(this.activeTab);
+		if (!tab || tab.view.webContents.isDestroyed()) return null;
+		return { handle: this.activeHandle, tab: this.activeTab };
+	}
+
+	/** 绑定主窗口（WebContentsView 挂载目标；窗口重建后需重新调用）。 */
+	setOwnerWindow(window: BrowserWindow): void {
+		if (this.owner === window) return;
+		this.owner = window;
+		// 窗口恢复可见时重放最近一次前台布局：最小化/隐藏期间到达的布局上报会被
+		// isVisible() 门吞掉（视图隐藏、revision 已推进），恢复后 renderer 的去抖
+		// 不会再重发，必须由主进程主动恢复（见 replayPresentation）。
+		window.on("show", () => this.replayPresentation());
+		window.on("restore", () => this.replayPresentation());
+		window.on("focus", () => this.replayPresentation());
+	}
+
+	/** 窗口重新可见时，把当前前台原生视图恢复到最近一次布局。 */
+	private replayPresentation(): void {
+		const presentation = this.presentation;
+		if (!presentation || !this.owner?.isVisible()) return;
+		const state = this.browsers.get(presentation.handle);
+		const tab = state?.tabs.get(presentation.tab);
+		if (!tab || tab.view.webContents.isDestroyed()) return;
+		if (tab.lastBounds) tab.view.setBounds(tab.lastBounds);
+		this.hideAllViewsExcept(presentation.handle, presentation.tab);
+		tab.view.setVisible(true);
+	}
+
+	// ============================================================
+	// 生命周期
+	// ============================================================
 
 	async launch(options: BrowserLaunchOptions = {}): Promise<string> {
-		const { launch } = await import("./launch.js");
-		const { browser, headless } = await launch(options);
+		if (!this.owner || this.owner.isDestroyed()) throw new Error("主窗口尚未就绪，无法启动内置浏览器。");
 		const handle = `browser-${this.nextId++}`;
-		this.browsers.set(handle, { browser, headless, pages: new Map() });
+		const state: BrowserState = {
+			handle,
+			headless: options.headless ?? true,
+			panelOwned: false,
+			partition: buildPartition(handle),
+			tabs: new Map(),
+			nextTabId: 1,
+			lastLayoutRevision: 0,
+		};
+		this.installSessionGuards(electronSession.fromPartition(state.partition));
+		this.browsers.set(handle, state);
 		return handle;
+	}
+
+	/** 面板启动的浏览器：记录归属，面板关闭时回收（agent 扩展的实例不受影响）。 */
+	async launchForPanel(): Promise<string> {
+		const handle = await this.launch({ headless: true });
+		const state = this.browsers.get(handle);
+		if (state) state.panelOwned = true;
+		this.panelOwnedHandles.add(handle);
+		return handle;
+	}
+
+	/** 回收面板自启的浏览器实例（close-panel 时调用；agent 扩展的实例由 session_shutdown 负责）。 */
+	async disposePanelBrowsers(): Promise<void> {
+		for (const handle of [...this.panelOwnedHandles]) {
+			await this.dispose(handle);
+		}
 	}
 
 	async dispose(handle: string): Promise<void> {
 		const state = this.browsers.get(handle);
 		if (!state) return;
-		try {
-			await state.browser.close();
-		} catch {
-			// 关闭失败不阻塞清理
+		const wasActive = this.activeHandle === handle;
+		for (const [name, tab] of [...state.tabs]) {
+			try {
+				tab.cdp.detach();
+				if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+			} catch {
+				// 关闭失败不阻塞清理
+			}
+			this.removeTabRecord(state, name, tab);
 		}
 		this.browsers.delete(handle);
+		this.panelOwnedHandles.delete(handle);
+		if (wasActive) {
+			this.activeHandle = null;
+			this.activeTab = null;
+			// 面板状态刷新：agent 会话结束时清理活动目标，renderer 侧需要感知
+			//（否则面板停留在死状态：显示已销毁的 tab、操作全部报错）。
+			this.activityListener?.();
+		}
 	}
+
+	// ============================================================
+	// Tab 管理
+	// ============================================================
 
 	async openTab(handle: string, tabName: string, options: BrowserOpenOptions = {}): Promise<PageInfo> {
 		const state = this.getState(handle);
-		const existing = state.pages.get(tabName);
+		// 协议白名单收口：所有 openTab 调用方（agent 工具 / 面板 newTab）共用同一套校验。
+		const url = normalizeNavigationUrl(options.url);
+		this.touchActive(handle, tabName);
+		const existing = state.tabs.get(tabName);
 		if (existing) {
-			// Reuse existing tab
-			if (options.url && existing.url() !== options.url) {
-				await existing.goto(options.url, { waitUntil: options.waitUntil ?? "domcontentloaded" });
+			if (url && existing.view.webContents.getURL() !== url) {
+				await this.loadUrl(existing, url);
 			}
 			return this.pageInfo(existing);
 		}
-		const page = await state.browser.newPage();
-		state.pages.set(tabName, page);
-		if (options.url) {
-			await page.goto(options.url, { waitUntil: options.waitUntil ?? "domcontentloaded" });
+		const tab = this.createView(state, tabName);
+		if (url) {
+			await this.loadUrl(tab, url, undefined, options.waitUntil);
 		}
-		// Clean up when page closes
-		page.on("close", () => {
-			state.pages.delete(tabName);
-		});
-		return this.pageInfo(page);
+		return this.pageInfo(tab);
 	}
 
 	async closeTab(handle: string, tabName: string): Promise<void> {
 		const state = this.browsers.get(handle);
 		if (!state) return;
-		const page = state.pages.get(tabName);
-		if (page && !page.isClosed()) {
-			await page.close();
+		const tab = state.tabs.get(tabName);
+		// 仅当被关 tab 是当前活动 tab 时才回退活动目标：关闭后台 tab 不应打断
+		// 用户当前正在看的页面（面板无谓跳页）。
+		const wasActive = this.activeHandle === handle && this.activeTab === tabName;
+		if (tab) {
+			try {
+				tab.cdp.detach();
+				if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+			} catch {
+				// 已销毁
+			}
+			this.removeTabRecord(state, tabName, tab);
 		}
-		state.pages.delete(tabName);
+		if (wasActive) {
+			// 活动 tab 被关闭时回退到剩余的第一个 tab（或清空），面板保持跟随。
+			const next = state.tabs.keys().next().value as string | undefined;
+			this.activeTab = next ?? null;
+		}
+		// tab 列表已变化，无论是否活动 tab 都推送刷新。
+		this.activityListener?.();
 		// 如果没 tab 了，不自动关浏览器——允许 agent 再 open 新 tab
 	}
 
@@ -120,25 +294,174 @@ export class BrowserService implements BrowserHost {
 		const state = this.browsers.get(handle);
 		if (!state) return 0;
 		let count = 0;
-		for (const [name, page] of [...state.pages.entries()]) {
+		for (const [name, tab] of [...state.tabs]) {
 			try {
-				if (!page.isClosed()) {
-					await page.close();
-					count++;
-				}
+				tab.cdp.detach();
+				if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+				count++;
 			} catch {
-				// 关闭失败的 tab 仍从 map 移除，但不计入成功数
+				// 关闭失败的 tab 仍从 map 移除
 			}
-			state.pages.delete(name);
+			this.removeTabRecord(state, name, tab);
+		}
+		if (this.activeHandle === handle) {
+			this.activeTab = null;
+			this.activityListener?.();
 		}
 		return count;
 	}
 
-	/** 观察页面：序列化 DOM 树 + 元素索引 + 页面统计。 */
+	/** 创建原生视图并挂到主窗口；初始隐藏，由布局桥接显示。 */
+	private createView(state: BrowserState, tabName: string): TabRecord {
+		if (!this.owner || this.owner.isDestroyed()) throw new Error("主窗口尚未就绪，无法创建浏览器标签。");
+		const view = new WebContentsView({
+			webPreferences: {
+				partition: state.partition,
+				nodeIntegration: false,
+				contextIsolation: true,
+				sandbox: true,
+				webSecurity: true,
+			},
+		});
+		this.owner.contentView.addChildView(view);
+		view.setVisible(false);
+
+		// 弹窗策略：页面 window.open / target=_blank 不弹独立 BrowserWindow——
+		// 独立弹窗会逃出受管视图体系（不受 will-navigate 白名单约束、dispose 不回收、
+		// 可弹窗轰炸）。合法 URL 转为受管体系内的新 tab；非法协议直接拒绝。
+		view.webContents.setWindowOpenHandler(({ url }) => {
+			try {
+				normalizeNavigationUrl(url);
+			} catch {
+				return { action: "deny" };
+			}
+			void this.openTab(state.handle, `popup-${state.nextTabId++}`, { url }).catch(() => {});
+			return { action: "deny" };
+		});
+
+		const cdp = new BrowserCdp(view.webContents);
+		cdp.attach();
+		const tab: TabRecord = { view, cdp, generation: 0 };
+		this.installTabListeners(state, tabName, tab);
+		state.tabs.set(tabName, tab);
+		return tab;
+	}
+
+	private installTabListeners(state: BrowserState, tabName: string, tab: TabRecord): void {
+		const contents = tab.view.webContents;
+
+		// 导航前 URL 校验（协议白名单）；校验失败阻止导航。
+		contents.on("will-navigate", (event, url) => {
+			try {
+				normalizeNavigationUrl(url);
+			} catch {
+				event.preventDefault();
+			}
+		});
+
+		// 导航/重渲染开始 → 观察代际失效。
+		contents.on("did-start-loading", () => {
+			const tab = state.tabs.get(tabName);
+			if (tab) tab.generation++;
+		});
+		contents.on("did-navigate", () => this.notifyActivity());
+		contents.on("did-navigate-in-page", () => this.notifyActivity());
+		contents.on("page-title-updated", () => this.notifyActivity());
+
+		// tab 被销毁（close/崩溃）→ 按记录身份清理：webContents.close() 是异步的，
+		// destroyed 事件可能在同名 tab 已重建后才到达，必须校验 map 中的记录仍是
+		// 本记录才清理（否则会误删重建的新 tab，造成孤儿视图）。
+		contents.on("destroyed", () => {
+			const wasActive = this.activeHandle === state.handle && this.activeTab === tabName;
+			this.removeTabRecord(state, tabName, tab);
+			if (wasActive) {
+				const next = state.tabs.keys().next().value as string | undefined;
+				this.activeTab = next ?? null;
+				this.activityListener?.();
+			}
+		});
+	}
+
+	/**
+	 * 按记录身份从会话移除 tab（幂等）：仅当 map 中仍是该记录时才清理，
+	 * 防止过期 destroyed 事件或重复关闭误删重建的同名 tab。
+	 */
+	private removeTabRecord(state: BrowserState, tabName: string, tab: TabRecord): void {
+		if (state.tabs.get(tabName) !== tab) return;
+		state.tabs.delete(tabName);
+		try {
+			this.owner?.contentView.removeChildView(tab.view);
+		} catch {
+			// owner 已销毁
+		}
+		if (this.presentation?.handle === state.handle && this.presentation.tab === tabName) {
+			this.presentation = null;
+		}
+	}
+
+	/** 触发活动推送（去抖由 IPC 层负责）。 */
+	private notifyActivity(): void {
+		this.activityListener?.();
+	}
+
+	// ============================================================
+	// 导航 / 页面执行
+	// ============================================================
+
+	private async loadUrl(
+		tab: TabRecord,
+		url: string,
+		signal?: AbortSignal,
+		waitUntil: WaitUntil = "domcontentloaded",
+	): Promise<void> {
+		throwIfBrowserOperationAborted(signal);
+		const contents = tab.view.webContents;
+		const navigate = () =>
+			withBrowserCdpTimeout(
+				() => contents.loadURL(url),
+				"Page.navigate",
+				BROWSER_OBSERVE_TIMEOUT_MS + 3_000,
+				signal,
+			);
+		if (waitUntil === "domcontentloaded") {
+			// dom-ready 在 did-finish-load（loadURL resolve）之前触发：先挂监听再导航。
+			// loadURL 抛错（导航失败）时 dom-ready 不会触发，由超时护栏兜底。
+			const domReady = new Promise<void>((resolve) => {
+				const onReady = () => {
+					contents.off("dom-ready", onReady);
+					resolve();
+				};
+				contents.on("dom-ready", onReady);
+			});
+			await navigate();
+			await withBrowserCdpTimeout(() => domReady, "Page.domContentEventFired", BROWSER_OBSERVE_TIMEOUT_MS, signal);
+			return;
+		}
+		// "load" / networkidle0 / networkidle2：loadURL resolve 于 did-finish-load，
+		// networkidle 语义近似（Electron 无直接事件，等加载完成即可）。
+		await navigate();
+	}
+
+	/** 在页面上下文执行脚本（带超时；导航中上下文销毁时抛错，由调用方决定是否吞掉）。 */
+	private async evalInTab(tab: TabRecord, code: string, signal?: AbortSignal): Promise<unknown> {
+		throwIfBrowserOperationAborted(signal);
+		return withBrowserCdpTimeout(
+			() => tab.view.webContents.executeJavaScript(code, true),
+			"Runtime.evaluate",
+			BROWSER_OBSERVE_TIMEOUT_MS,
+			signal,
+		);
+	}
+
+	// ============================================================
+	// Agent 自动化（BrowserHost）
+	// ============================================================
+
+	/** 观察页面：序列化 DOM 树 + 元素索引 + 页面统计（页面脚本不变）。 */
 	async observe(handle: string, tabName: string): Promise<BrowserObservation> {
-		const page = this.getPage(handle, tabName);
-		const script = buildDomSnapshotScript();
-		const result = (await page.evaluate(script)) as {
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
+		const result = (await this.evalInTab(tab, buildDomSnapshotScript())) as {
 			title?: string;
 			url?: string;
 			tree?: string;
@@ -146,10 +469,11 @@ export class BrowserService implements BrowserHost {
 			pageStats?: BrowserObservation["pageStats"];
 			pageInfo?: BrowserObservation["pageInfo"];
 		};
+		tab.generation++;
 		return {
-			generation: this.nextGeneration(page),
+			generation: tab.generation,
 			title: result.title ?? "",
-			url: result.url ?? page.url(),
+			url: result.url ?? tab.view.webContents.getURL(),
 			tree: result.tree ?? "",
 			elements: result.elements ?? [],
 			pageStats: result.pageStats ?? {
@@ -166,68 +490,97 @@ export class BrowserService implements BrowserHost {
 	}
 
 	async screenshot(handle: string, tabName: string, fullPage = false): Promise<BrowserScreenshot> {
-		const page = this.getPage(handle, tabName);
-		const buf = (await page.screenshot({ fullPage, type: "png" })) as Buffer;
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
+
+		// fullPage：用 CDP 渲染管线截图（captureBeyondViewport 覆盖整页）。
+		// 注意 CDP Page.captureScreenshot 在视图隐藏时可能挂起，仅窗口可见时使用，
+		// 否则降级为视口截图（capturePage），避免长时间卡死。
+		if (fullPage && this.owner?.isVisible()) {
+			try {
+				const shot = await tab.cdp.send(
+					"Page.captureScreenshot",
+					{ format: "png", captureBeyondViewport: true, fromSurface: true },
+					BROWSER_OBSERVE_TIMEOUT_MS + 5_000,
+				);
+				const data = shot.data as string | undefined;
+				if (typeof data === "string" && data.length > 0) {
+					const png = Buffer.from(data, "base64");
+					const size = pngSizeFromHeader(png);
+					return { data, mimeType: "image/png", ...size };
+				}
+			} catch (error) {
+				// CDP 全页截图失败（罕见）：降级为视口截图
+				console.warn("[受管浏览器] fullPage CDP 截图失败，降级为视口截图:", error);
+			}
+		}
+
+		let image: NativeImage;
+		try {
+			// capturePage 依赖主窗口可见（与视图可见性无关）；隐藏的视图仍可截图。
+			image = await withBrowserCdpTimeout(
+				() => tab.view.webContents.capturePage(),
+				"Page.captureScreenshot",
+				BROWSER_OBSERVE_TIMEOUT_MS + 3_000,
+			);
+		} catch (error) {
+			if (error instanceof Error && /display surface|not available/i.test(error.message)) {
+				throw new Error("无法截取页面：Look 窗口当前不可见（可能被最小化）。请保持窗口可见后重试。");
+			}
+			throw error;
+		}
+		if (image.isEmpty()) {
+			throw new Error("截图为空：页面尚未完成可捕获布局，请稍后重试或改用 browser_snapshot。");
+		}
+		const { width, height } = image.getSize();
 		return {
-			data: buf.toString("base64"),
+			data: image.toPNG().toString("base64"),
 			mimeType: "image/png",
-			width: page.viewport()?.width ?? 1280,
-			height: page.viewport()?.height ?? 720,
+			width,
+			height,
 		};
 	}
 
-	/**
-	 * 点击快照中的元素（真实鼠标事件）。
-	 * 通过 data-look-ref 定位；导航/重渲染后属性消失会抛错，要求重新观察。
-	 */
+	/** 点击快照中的元素（CDP 真实鼠标事件；index 来自 observe 的 [index]）。 */
 	async click(handle: string, tabName: string, index: number): Promise<void> {
-		const page = this.getPage(handle, tabName);
-		const element = await this.resolveRef(page, index);
-		await element.scrollIntoView();
-		// puppeteer click 内部走 CDP Input.dispatchMouseEvent，真实事件序列。
-		await element.click({ delay: 30 });
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
+		const { x, y } = await this.resolveRefCenter(tab, index);
+		await tab.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
+		await tab.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
 	}
 
-	/** 在快照元素中整段填写文本（真实键盘事件：聚焦 → 全选 → 输入）。 */
+	/** 在快照元素中整段填写文本（聚焦 → 全选 → 真实输入，兼容受控组件）。 */
 	async fill(handle: string, tabName: string, index: number, text: string): Promise<void> {
 		if (text.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
-		const page = this.getPage(handle, tabName);
-		const element = await this.resolveRef(page, index);
-		await element.scrollIntoView();
-		await element.click();
-		const modifier = process.platform === "darwin" ? "Meta" : "Control";
-		await page.keyboard.down(modifier as never);
-		await page.keyboard.press("a");
-		await page.keyboard.up(modifier as never);
-		await page.keyboard.type(text, { delay: 5 });
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
+		await this.resolveRefCenter(tab, index);
+		const selector = `[${LOOK_REF_ATTRIBUTE}="${index}"]`;
+		await this.evalInTab(
+			tab,
+			`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.focus({ preventScroll: true }); return true; })()`,
+		);
+		const modifier = process.platform === "darwin" ? 4 : 2;
+		await tab.cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "a", code: "KeyA", modifiers: modifier });
+		await tab.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: modifier });
+		await tab.cdp.send("Input.insertText", { text });
 	}
 
 	/** 按下导航键（Enter/Tab/Escape/方向键等）或向聚焦元素输入文本。 */
 	async press(handle: string, tabName: string, key: string): Promise<void> {
 		if (!key) throw new Error("press 需要按键或文本。");
-		const page = this.getPage(handle, tabName);
-		const NAV_KEYS = new Set([
-			"Enter",
-			"Tab",
-			"Escape",
-			"Backspace",
-			"Delete",
-			"ArrowUp",
-			"ArrowDown",
-			"ArrowLeft",
-			"ArrowRight",
-			"Home",
-			"End",
-			"PageUp",
-			"PageDown",
-			"Space",
-		]);
-		if (NAV_KEYS.has(key)) {
-			await page.keyboard.press(key as PressKeyInput);
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
+		const mapped = NAV_KEY_MAP[key];
+		if (mapped) {
+			const keyEvent = { key, code: mapped.code, windowsVirtualKeyCode: mapped.windowsVirtualKeyCode };
+			await tab.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...keyEvent });
+			await tab.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...keyEvent });
 		} else {
 			// 其余按完整文本插入到聚焦元素（支持空格/标点/Unicode/换行）。
 			if (key.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
-			await page.keyboard.type(key, { delay: 5 });
+			await tab.cdp.send("Input.insertText", { text: key });
 		}
 	}
 
@@ -239,20 +592,26 @@ export class BrowserService implements BrowserHost {
 		pages = 1,
 		index?: number,
 	): Promise<void> {
-		const page = this.getPage(handle, tabName);
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
 		if (index !== undefined) {
-			await this.resolveRef(page, index);
-			// 页面内执行：滚动一个视口高度（字符串脚本，主进程无 DOM 类型）
 			const dir = direction === "down" ? 1 : -1;
 			const selector = `[${LOOK_REF_ATTRIBUTE}="${index}"]`;
-			await page.evaluate(
+			await this.evalInTab(
+				tab,
 				`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.scrollBy({ top: ${dir} * el.clientHeight, behavior: "smooth" }); return true; })()`,
 			);
 			return;
 		}
-		const deltaY =
-			direction === "down" ? pages * (page.viewport()?.height ?? 720) : -pages * (page.viewport()?.height ?? 720);
-		await page.mouse.wheel({ deltaY });
+		const height = tab.lastBounds?.height ?? 720;
+		const deltaY = direction === "down" ? pages * height : -pages * height;
+		await tab.cdp.send("Input.dispatchMouseEvent", {
+			type: "mouseWheel",
+			x: Math.round((tab.lastBounds?.width ?? 1280) / 2),
+			y: Math.round(height / 2),
+			deltaX: 0,
+			deltaY,
+		});
 	}
 
 	/** 等待页面满足条件（URL 片段/可见文本/CSS selector），不执行模型 JS。 */
@@ -264,7 +623,8 @@ export class BrowserService implements BrowserHost {
 	): Promise<boolean> {
 		if (!condition.value.trim()) throw new Error("等待条件不能为空。");
 		if (!Number.isFinite(timeoutMs) || timeoutMs < 250) throw new Error("等待超时不能小于 250ms。");
-		const page = this.getPage(handle, tabName);
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
 		const payload = JSON.stringify(condition)
 			.replace(/\u2028/g, "\\u2028")
 			.replace(/\u2029/g, "\\u2029");
@@ -278,7 +638,14 @@ export class BrowserService implements BrowserHost {
 		})()`;
 		const startedAt = Date.now();
 		while (Date.now() - startedAt <= timeoutMs) {
-			const result = await page.evaluate(expression);
+			// 导航会销毁页面执行上下文（"Execution context was destroyed"），
+			// 这恰是等待 URL 变化时的常态——吞掉继续轮询，直到超时或新上下文命中条件。
+			let result = false;
+			try {
+				result = (await this.evalInTab(tab, expression)) === true;
+			} catch {
+				// context destroyed mid-navigation — keep polling
+			}
 			if (result === true) return true;
 			await new Promise((resolve) => setTimeout(resolve, 250));
 		}
@@ -288,56 +655,43 @@ export class BrowserService implements BrowserHost {
 	/**
 	 * 在 tab 中执行模型提供的 JS 代码（高级兜底）。
 	 *
-	 * 页面脚本通过 `page.evaluate` 传入的字符串求值，页面内收集
-	 * `display()` 输出与 `tab.screenshot()` 截图，随返回值一并交回
-	 * 主进程——避免把函数暴露给任意网页（提示注入面）。
+	 * 页面脚本通过 executeJavaScript 求值，页面内收集 `display()` 输出。
+	 * WebContentsView 无 puppeteer exposeFunction，页面内 `tab.screenshot()`
+	 * 由 no-op 占位（后续可升级为 CDP Runtime.addBinding 收集真实截图）。
 	 *
-	 * @param timeoutMs 超时毫秒；超出后拒绝（页面内的死循环无法被
-	 *   CDP 强杀，但主进程侧不再等待，避免工具永久挂起）。
+	 * @param timeoutMs 超时毫秒；超出后拒绝（页面内死循环无法被 CDP 强杀，
+	 *   但主进程不再等待，并主动关掉该 tab 让下一次操作重建）。
 	 */
 	async run(handle: string, tabName: string, code: string, timeoutMs: number): Promise<BrowserRunResult> {
-		const page = this.getPage(handle, tabName);
+		this.touchActive(handle, tabName);
+		const tab = this.getTab(handle, tabName);
 
-		const displays: Array<{ type: "text" | "image"; text?: string; data?: string; mimeType?: string }> = [];
-		const screenshots: BrowserScreenshot[] = [];
-
-		// 挂载本次收集器：已暴露的回调会从这里读取，闭包不持有单次调用状态。
-		this.screenshotCollectors.set(page, screenshots);
-
-		// 暴露截图能力到页面（仅截图；页面无法借此注入文本到模型可见输出）。
-		// 只在首次调用时注册一次——puppeteer 对同一 Page 重复 exposeFunction
-		// 会抛 `window['__look_screenshot'] already exists`，导致同一 tab 第二次
-		// browser_run 必然失败。后续调用复用首次注册的回调，转发到上面的收集器。
-		if (!this.exposedScreenshotPages.has(page)) {
-			await page.exposeFunction("__look_screenshot", async (req: PageScreenshotRequest | undefined) => {
-				const collector = this.screenshotCollectors.get(page);
-				const buf = (await page.screenshot({
-					fullPage: req?.fullPage ?? false,
-					type: "png",
-				})) as Buffer;
-				const data = buf.toString("base64");
-				collector?.push({
-					data,
-					mimeType: "image/png",
-					width: page.viewport()?.width ?? 1280,
-					height: page.viewport()?.height ?? 720,
-				});
-				return data;
-			});
-			this.exposedScreenshotPages.add(page);
+		// 页面内截图能力占位：返回空字符串，模型可自行处理。
+		try {
+			await this.evalInTab(tab, "window.__look_screenshot = () => '';");
+		} catch {
+			// 页面导航中，忽略注入失败
 		}
 
-		// 页面脚本：纯字符串构建，内联快照函数与用户代码。
-		// 注意：这里不是主进程 TypeScript 作用域，避免 `document` 等 DOM
-		// 类型错误（主进程 tsconfig 不含 lib: dom）。
 		const script = buildRunPageScript(code, buildDomSnapshotFunction());
+		const displays: DisplayItem[] = [];
 
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
 			const result = (await Promise.race([
-				page.evaluate(script),
+				withBrowserCdpTimeout(
+					() => tab.view.webContents.executeJavaScript(script, true),
+					"Runtime.evaluate",
+					timeoutMs + 3_000,
+				),
 				new Promise<never>((_, reject) => {
-					timer = setTimeout(() => reject(new Error(`Browser run timed out after ${timeoutMs}ms`)), timeoutMs);
+					timer = setTimeout(() => {
+						// 哨兵标记：页面脚本抛出的普通错误若消息恰含 "timed out"
+						// 不应误触发下面的杀 tab 逻辑。
+						const err = new Error(`Browser run timed out after ${timeoutMs}ms`);
+						(err as Error & { lookRunTimeout?: boolean }).lookRunTimeout = true;
+						reject(err);
+					}, timeoutMs);
 				}),
 			])) as { returnValue?: unknown; displays?: unknown[] };
 			if (timer) clearTimeout(timer);
@@ -350,16 +704,15 @@ export class BrowserService implements BrowserHost {
 				}
 			}
 
-			return { displays, returnValue: result.returnValue, screenshots };
+			return { displays, returnValue: result.returnValue };
 		} catch (error) {
 			if (timer) clearTimeout(timer);
 			displays.push({
 				type: "text",
 				text: `Browser run error: ${error instanceof Error ? error.message : String(error)}`,
 			});
-			// 超时可能是页面内同步死循环卡死了 JS 线程；主进程虽已放弃等待，
-			// 但页面后续操作仍会一直超时。主动关掉该 tab，让下一次操作重建。
-			if (error instanceof Error && error.message.includes("timed out")) {
+			// 超时可能是页面内同步死循环卡死了 JS 线程；主动关掉该 tab，让下一次操作重建。
+			if (error instanceof Error && (error as Error & { lookRunTimeout?: boolean }).lookRunTimeout) {
 				try {
 					await this.closeTab(handle, tabName);
 					displays.push({
@@ -370,39 +723,238 @@ export class BrowserService implements BrowserHost {
 					// 关闭失败不阻塞错误返回
 				}
 			}
-			return { displays, screenshots };
-		} finally {
-			this.screenshotCollectors.delete(page);
+			return { displays };
 		}
 	}
 
 	isHeadless(handle: string): boolean {
-		return this.browsers.get(handle)?.headless ?? true;
+		// WebContentsView 方案下视图始终存在（可被面板显示），无真正 headless。
+		return this.browsers.get(handle)?.headless ?? false;
 	}
 
-	private generationByPage = new WeakMap<Page, number>();
+	// ============================================================
+	// 内置浏览器面板 API
+	// ============================================================
 
-	/** 每次 observe 递增代际，供扩展层展示/校验。 */
-	private nextGeneration(page: Page): number {
-		const next = (this.generationByPage.get(page) ?? 0) + 1;
-		this.generationByPage.set(page, next);
-		return next;
+	/** 面板状态快照（无浏览器/无活动 tab 时返回空状态）。 */
+	async getPanelState(): Promise<BrowserPanelState> {
+		const target = this.getActiveTarget();
+		if (!target) return { running: false, headless: false, tabs: [] };
+		const state = this.browsers.get(target.handle);
+		if (!state) return { running: false, headless: false, tabs: [] };
+		const tabs: BrowserPanelTabInfo[] = [];
+		for (const [name, tab] of state.tabs) {
+			const wc = tab.view.webContents;
+			if (wc.isDestroyed()) continue;
+			const bounds = tab.lastBounds;
+			tabs.push({
+				name,
+				url: wc.getURL(),
+				title: wc.getTitle() || "",
+				active: name === target.tab,
+				viewport: bounds ? { width: bounds.width, height: bounds.height } : { width: 1280, height: 720 },
+			});
+		}
+		const active = state.tabs.get(target.tab);
+		const activeWc = active && !active.view.webContents.isDestroyed() ? active.view.webContents : null;
+		const bounds = active?.lastBounds;
+		return {
+			running: true,
+			headless: state.headless,
+			handle: target.handle,
+			tabs,
+			activeTab: target.tab,
+			url: activeWc ? activeWc.getURL() : undefined,
+			title: activeWc ? activeWc.getTitle() || undefined : undefined,
+			viewport: bounds ? { width: bounds.width, height: bounds.height } : undefined,
+		};
+	}
+
+	/** 活动 tab 的截图帧（保留兼容；renderer 面板已改为原生视图，不再调用）。 */
+	async capturePanelFrame(): Promise<BrowserPanelFrame | null> {
+		const target = this.getActiveTarget();
+		if (!target) return null;
+		const tab = this.getTab(target.handle, target.tab);
+		let image: NativeImage;
+		try {
+			image = await withBrowserCdpTimeout(
+				() => tab.view.webContents.capturePage(),
+				"Page.captureScreenshot",
+				BROWSER_CDP_COMMAND_TIMEOUT_MS,
+			);
+		} catch (error) {
+			if (error instanceof Error && /display surface|not available/i.test(error.message)) {
+				// 窗口最小化等场景：面板截图失败，返回 null（renderer 已不用此通道）。
+				return null;
+			}
+			throw error;
+		}
+		if (image.isEmpty()) return null;
+		const bounds = tab.lastBounds;
+		return {
+			data: image.toPNG().toString("base64"),
+			mimeType: "image/png",
+			viewport: bounds ? { width: bounds.width, height: bounds.height } : { width: 1280, height: 720 },
+		};
 	}
 
 	/**
-	 * 通过快照 index 定位元素。元素必须带 data-look-ref 标记——
-	 * 导航/重渲染后标记消失，报错要求重新 observe。
+	 * 布局桥接：renderer 的 BrowserSlot 上报占位 div 的位置，这里同步
+	 * 对应 WebContentsView 的边界与可见性。revision 全局单调递增，
+	 * 只采纳每个会话最新布局，且晚到的旧 show 不能抢回前台。
 	 */
-	private async resolveRef(page: Page, index: number): Promise<import("puppeteer-core").ElementHandle<Element>> {
+	setLayout(layout: BrowserViewLayout): void {
+		const state = this.browsers.get(layout.handle);
+		if (!state) return;
+		if (!Number.isSafeInteger(layout.revision) || layout.revision <= state.lastLayoutRevision) return;
+		state.lastLayoutRevision = layout.revision;
+		const tab = state.tabs.get(layout.tab);
+		if (!tab) return;
+
+		const bounds = layout.bounds;
+		const visible =
+			layout.visible &&
+			bounds.width > 4 &&
+			bounds.height > 4 &&
+			!!this.owner &&
+			!this.owner.isDestroyed() &&
+			this.owner.isVisible();
+
+		if (!visible) {
+			tab.view.setVisible(false);
+			// 保留 presentation（前台归属）：窗口最小化/隐藏导致的隐藏不应丢失
+			// 「谁是前台」的记忆——窗口恢复时 replayPresentation 据此重放视图，
+			// 否则 renderer 去抖不会重发布局，视图会一直隐藏（见 setOwnerWindow）。
+			return;
+		}
+
+		// revision 在 renderer 全局单调递增。A 的旧 show 即使在 B 已显示后晚到，
+		// 也不能重新把 A 的原生 view 放到前台。
+		if (layout.revision <= this.latestPresentationRevision) return;
+
+		const zoomFactor = this.owner?.webContents.getZoomFactor() ?? 1;
+		const adjustedBounds = {
+			x: Math.round(bounds.x * zoomFactor),
+			y: Math.round(bounds.y * zoomFactor),
+			width: Math.round(bounds.width * zoomFactor),
+			height: Math.round(bounds.height * zoomFactor),
+		};
+		this.hideAllViewsExcept(layout.handle, layout.tab);
+		if (
+			!tab.lastBounds ||
+			Object.entries(adjustedBounds).some(
+				([key, value]) => tab.lastBounds?.[key as keyof typeof adjustedBounds] !== value,
+			)
+		) {
+			tab.view.setBounds(adjustedBounds);
+			tab.lastBounds = { ...adjustedBounds };
+		}
+		tab.view.setVisible(true);
+		this.presentation = { handle: layout.handle, tab: layout.tab, revision: layout.revision };
+		this.latestPresentationRevision = layout.revision;
+	}
+
+	/** 隐藏所有其他原生视图（跨会话单前台）。 */
+	private hideAllViewsExcept(targetHandle: string, targetTab: string): void {
+		for (const state of this.browsers.values()) {
+			for (const [name, tab] of state.tabs) {
+				if (state.handle === targetHandle && name === targetTab) continue;
+				tab.view.setVisible(false);
+			}
+		}
+	}
+
+	/** 执行面板交互动作（原生视图下用户直接交互页面，click 不再需要坐标映射）。 */
+	async panelAction(action: BrowserPanelAction): Promise<void> {
+		const target = this.getActiveTarget();
+		if (!target) throw new Error("浏览器未启动或没有可交互的 tab。请先让 Agent 打开浏览器。");
+		const tab = this.getTab(target.handle, target.tab);
+		switch (action.kind) {
+			case "click":
+				throw new Error("浏览器面板为原生视图，请直接在页面上点击交互。");
+			case "type":
+				if (action.text.length > 10_000) throw new Error("单次输入不能超过 10000 个字符。");
+				await tab.cdp.send("Input.insertText", { text: action.text });
+				break;
+			case "press":
+				await this.press(target.handle, target.tab, action.key);
+				break;
+			case "navigate":
+				await this.loadUrl(tab, normalizeNavigationUrl(action.url) ?? "about:blank");
+				break;
+			case "back":
+				tab.view.webContents.navigationHistory.goBack();
+				break;
+			case "forward":
+				tab.view.webContents.navigationHistory.goForward();
+				break;
+			case "reload":
+				tab.view.webContents.reload();
+				break;
+			case "selectTab":
+				this.requireTab(target.handle, action.name);
+				this.activeTab = action.name;
+				this.activityListener?.();
+				break;
+			case "closeTab":
+				await this.closeTab(target.handle, action.name);
+				break;
+			case "newTab": {
+				const state = this.browsers.get(target.handle);
+				if (!state) throw new Error("浏览器实例不存在。");
+				// 递增计数器命名：pages.size 在关闭 tab 后会回退，可能撞上已存在的名字，
+				// openTab 撞名会静默复用旧 tab 并把它导航走。
+				const name = `tab-${state.nextTabId++}`;
+				await this.openTab(target.handle, name, action.url ? { url: action.url } : undefined);
+				break;
+			}
+		}
+	}
+
+	// ============================================================
+	// 内部工具
+	// ============================================================
+
+	/** 校验 tab 存在（不存在抛错）。 */
+	private requireTab(handle: string, tabName: string): void {
+		const state = this.browsers.get(handle);
+		const tab = state?.tabs.get(tabName);
+		if (!tab || tab.view.webContents.isDestroyed()) {
+			throw new Error(`Tab "${tabName}" 不存在。`);
+		}
+	}
+
+	/**
+	 * 通过快照 index 定位元素中心点（页面内 getBoundingClientRect）。
+	 * 元素必须带 data-look-ref 标记——导航/重渲染后标记消失，报错要求重新 observe。
+	 */
+	private async resolveRefCenter(tab: TabRecord, index: number): Promise<{ x: number; y: number }> {
 		if (!Number.isInteger(index) || index < 1)
 			throw new Error("元素 index 必须是大于 0 的整数（来自 browser_snapshot 的 [index]）。");
-		const element = await page.$(`[${LOOK_REF_ATTRIBUTE}="${index}"]`);
-		if (!element) {
+		const selector = `[${LOOK_REF_ATTRIBUTE}="${index}"]`;
+		const result = (await this.evalInTab(
+			tab,
+			`(() => {
+				const el = document.querySelector(${JSON.stringify(selector)});
+				if (!el) return null;
+				el.scrollIntoView({ block: "center", inline: "nearest" });
+				const r = el.getBoundingClientRect();
+				return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+			})()`,
+		)) as { x?: number; y?: number } | null;
+		if (!result || typeof result.x !== "number" || typeof result.y !== "number") {
 			throw new Error(
 				`元素 [${index}] 不存在或已失效（页面可能已导航/重渲染）。请先重新调用 browser_snapshot 获取最新 index。`,
 			);
 		}
-		return element;
+		return { x: result.x, y: result.y };
+	}
+
+	/** 会话 partition 的 Electron Session 网络 guard（权限全拒，只注册一次）。 */
+	private installSessionGuards(browserSession: Session): void {
+		if (this.guardedSessions.has(browserSession)) return;
+		this.guardedSessions.add(browserSession);
+		browserSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
 	}
 
 	private getState(handle: string): BrowserState {
@@ -411,23 +963,35 @@ export class BrowserService implements BrowserHost {
 		return state;
 	}
 
-	private getPage(handle: string, tabName: string): Page {
+	private getTab(handle: string, tabName: string): TabRecord {
 		const state = this.getState(handle);
-		const page = state.pages.get(tabName);
-		if (!page || page.isClosed()) {
+		const tab = state.tabs.get(tabName);
+		if (!tab || tab.view.webContents.isDestroyed()) {
 			throw new Error(`Tab "${tabName}" not found. Open it first with browser_open.`);
 		}
-		return page;
+		return tab;
 	}
 
-	private async pageInfo(page: Page): Promise<PageInfo> {
-		const viewport = page.viewport();
+	private async pageInfo(tab: TabRecord): Promise<PageInfo> {
+		const bounds = tab.lastBounds;
 		return {
-			title: await page.title(),
-			url: page.url(),
-			viewport: viewport ? { width: viewport.width, height: viewport.height } : { width: 1280, height: 720 },
+			title: tab.view.webContents.getTitle(),
+			url: tab.view.webContents.getURL(),
+			viewport: bounds ? { width: bounds.width, height: bounds.height } : { width: 1280, height: 720 },
 		};
 	}
+}
+
+/**
+ * 从 PNG 二进制头解析尺寸（IHDR chunk）。CDP Page.captureScreenshot 不返回
+ * 尺寸信息，而 BrowserScreenshot 契约需要 width/height。
+ * 布局：8 字节签名 + IHDR chunk（4 字节长度 + 4 字节类型 + 4 字节宽 + 4 字节高）。
+ */
+function pngSizeFromHeader(png: Buffer): { width: number; height: number } {
+	if (png.length >= 24 && png.readUInt32BE(12) === 0x49484452 /* "IHDR" */) {
+		return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+	}
+	return { width: 0, height: 0 };
 }
 
 /**
@@ -440,8 +1004,6 @@ export class BrowserService implements BrowserHost {
  * 用户代码被包装进 async 函数体（`return (async () => { ... })()`），
  * 因此代码内可以使用 `await tab.click(...)` 等异步交互——tab 的
  * click/fill/screenshot/waitForSelector 都返回 Promise。
- * 注意：用户代码经 JSON 转义后先作为字符串值取出，再拼接进函数体
- * 源码，避免引号/反斜杠破坏外层模板。
  *
  * @param userCode 模型提供的 JS 代码字符串
  * @param domSnapshotFn buildDomSnapshotFunction() 生成的函数声明字符串

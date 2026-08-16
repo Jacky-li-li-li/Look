@@ -404,6 +404,9 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		if ("showToolExecution" in settings) {
 			guardBoolean(settings.showToolExecution, "settings.showToolExecution");
 		}
+		if ("builtinBrowserEnabled" in settings) {
+			guardBoolean(settings.builtinBrowserEnabled, "settings.builtinBrowserEnabled");
+		}
 		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
 			ctx.mainWindow.setBackgroundColor(LOOK_TONE_WINDOW_BG[settings.themeTone as LookTone] ?? "#030202");
 		}

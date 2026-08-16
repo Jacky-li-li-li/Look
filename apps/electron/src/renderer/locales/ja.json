@@ -539,7 +539,9 @@
     "selectProjectHint": "設定するプロジェクトを選択してください。",
     "noProjectPrompts": "プロジェクト固有のプロンプトはありません",
     "noPrompts": "プロンプトはありません",
-    "noProjects": "開いているプロジェクトはありません"
+    "noProjects": "開いているプロジェクトはありません",
+    "builtinBrowser": "内蔵ブラウザ",
+    "builtinBrowserDesc": "有効にすると、エージェントがブラウザ操作を行う際にパネルが自動で開きます。"
   },
   "agent": {
     "model": "モデル",
@@ -1014,5 +1016,22 @@
     "pin": "メモを固定",
     "unpin": "固定を解除",
     "markFailed": "セッションは作成されましたが、下書きのマークに失敗しました"
+  },
+  "browser": {
+    "panelTitle": "内蔵ブラウザ",
+    "newTab": "新しいタブ",
+    "closeTab": "タブを閉じる",
+    "closePanel": "パネルを閉じる",
+    "urlPlaceholder": "URL を入力して Enter",
+    "emptyTitle": "ブラウザは未起動です",
+    "emptyDesc": "ブラウザを起動して Web ページを操作できます。エージェントも必要に応じて自動で開きます。",
+    "openBrowser": "ブラウザを起動",
+    "loadingFrame": "読み込み中…",
+    "noActivity": "エージェントの操作はまだありません",
+    "clickHint": "ビューをクリックして操作",
+    "actionFailed": "操作に失敗しました",
+    "readyTitle": "ブラウザは準備完了です",
+    "readyDesc": "上部のアドレスバーに URL を入力すると閲覧を開始します。エージェントの操作もここに表示されます。",
+    "launchFailed": "ブラウザの起動に失敗しました"
   }
 }

@@ -389,6 +389,24 @@ const api: LookAPI = {
 			name: updates.name,
 		}),
 
+	// ---- Built-in browser panel ----
+	getBrowserPanelState: () => invoke({ type: "browser:get-state" }),
+	captureBrowserPanelFrame: () => invoke({ type: "browser:frame" }),
+	browserPanelAction: (action) =>
+		invoke({
+			type: "browser:panel-action",
+			kind: action.kind,
+			...(action.kind === "click" ? { x: action.x, y: action.y } : {}),
+			...(action.kind === "type" ? { text: action.text } : {}),
+			...(action.kind === "press" ? { key: action.key } : {}),
+			...(action.kind === "navigate" ? { url: action.url } : {}),
+			...(action.kind === "selectTab" || action.kind === "closeTab" ? { name: action.name } : {}),
+			...(action.kind === "newTab" && action.url !== undefined ? { url: action.url } : {}),
+		}),
+	openBrowserPanel: (force) => invoke({ type: "browser:open-panel", force: force ?? false }),
+	closeBrowserPanel: () => invoke({ type: "browser:close-panel" }),
+	setAgentBrowserLayout: (layout) => invoke({ type: "browser:set-layout", layout }),
+
 	// ---- Custom System Prompts ----
 	listPrompts: () => invoke({ type: "settings:prompts:list" }),
 	createPrompt: (name, content) => invoke({ type: "settings:prompts:create", name, content }),

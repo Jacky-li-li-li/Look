@@ -31,6 +31,7 @@
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { BrowserHost, BrowserScrollDirection, BrowserWaitCondition, WaitUntil } from "../browser/types.js";
+import { normalizeNavigationUrl } from "../browser/url-policy.js";
 import { declareApprovalRequiredTool } from "./tool-permission-registry.js";
 
 /** 有副作用、需要用户审批的操作工具。只读/snapshot/screenshot 不在此列。 */
@@ -46,43 +47,6 @@ const BROWSER_APPROVAL_TOOLS = [
 ] as const;
 
 const DEFAULT_TAB_NAME = "main";
-
-/** 允许导航的 URL 协议（白名单，含冒号）。拒绝 file:/javascript:/data: 等本地/可执行协议。 */
-const ALLOWED_URL_PROTOCOLS = new Set(["http:", "https:", "about:"]);
-
-function assertSafeUrl(url: string | undefined): void {
-	if (!url) return;
-	const trimmed = url.trim();
-	if (!trimmed) return;
-	// 无协议前缀的裸地址（如 example.com）按 http 处理，直接放行；
-	// 有协议前缀时必须命中白名单。
-	const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(trimmed);
-	if (schemeMatch && !ALLOWED_URL_PROTOCOLS.has(`${schemeMatch[1].toLowerCase()}:`)) {
-		throw new Error(
-			`Refusing to navigate to disallowed protocol "${schemeMatch[1]}:". Only http:, https: (or a bare domain) are allowed.`,
-		);
-	}
-}
-
-/**
- * 校验并规范化导航 URL。
- *
- * 返回可供 puppeteer 直接导航的绝对 URL：
- * - 裸域名 / 裸路径（无协议前缀，如 `example.com/path`）补 `http://`——
- *   puppeteer 的 Page.navigate 需要绝对 URL，不带协议会报
- *   `Cannot navigate to invalid URL`；
- * - 有协议前缀的（http:/https:/about:）原样返回；
- * - 非法协议（file:/javascript:/data: 等）抛错拒绝。
- */
-function normalizeNavigationUrl(url: string | undefined): string | undefined {
-	if (!url) return undefined;
-	assertSafeUrl(url);
-	const trimmed = url.trim();
-	if (!trimmed) return undefined;
-	if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) return trimmed;
-	// 裸地址：补 http://（与 assertSafeUrl 的放行语义一致）。
-	return `http://${trimmed}`;
-}
 
 const WAIT_UNTIL_VALUES = ["load", "domcontentloaded", "networkidle0", "networkidle2"] as const;
 
@@ -258,12 +222,13 @@ export function createBrowserExtensionFactory(
 						waitUntil: (params.waitUntil as WaitUntil | undefined) ?? "domcontentloaded",
 					});
 
-					const mode = host.isHeadless(browserHandle) ? "headless" : "visible";
+					// WebContentsView 方案下浏览器始终内置于主窗口面板（无独立 headless/
+					// headed 窗口形态），文案不再提及 mode，避免误导模型。
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `Opened tab "${tabName}" on ${mode} browser.\nURL: ${info.url}\nTitle: ${info.title}\nViewport: ${info.viewport.width}×${info.viewport.height}`,
+								text: `Opened tab "${tabName}" in the built-in browser panel.\nURL: ${info.url}\nTitle: ${info.title}\nViewport: ${info.viewport.width}×${info.viewport.height}`,
 							},
 						],
 						details: { tabName, ...info },

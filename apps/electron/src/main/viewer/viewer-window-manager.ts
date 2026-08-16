@@ -10,6 +10,7 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { LOOK_TONE_WINDOW_BG } from "@look/shared";
 import { getUiSettingsPath } from "@look/shared/look-storage";
 import { app, type BrowserWindow, BrowserWindow as ElectronBrowserWindow } from "electron";
 import { BrowserWindowEventTransport } from "../ipc/renderer-event-transport.js";
@@ -96,7 +97,7 @@ export function openViewerWindow(absolutePath: string, options?: { fadeIn?: bool
 		minWidth: 480,
 		minHeight: 320,
 		title: "文件查看器",
-		backgroundColor: tone === "light" ? "#fbfbfa" : "#030202",
+		backgroundColor: LOOK_TONE_WINDOW_BG[tone],
 		icon: path.join(__dirname, "../assets/icon-1024.png"),
 		webPreferences: {
 			preload: path.join(__dirname, "../preload.cjs"),

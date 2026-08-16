@@ -68,6 +68,9 @@ export const viewingFileAtom = atom<ViewFileTarget | null>(null);
 /** 主窗口右侧 Dock 面板当前展示的文件；非 null 时 DockFilePanel 打开。 */
 export const dockedFileAtom = atom<ViewFileTarget | null>(null);
 
+/** Dock 面板激活的 tab：文件查看 / 内置浏览器（2026-08 起共用一个 Dock 容器）。 */
+export const dockActiveTabAtom = atom<"file" | "browser">("file");
+
 /** 聊天图片放大预览当前目标；非 null 时 ImagePreviewDialog 打开。 */
 export const imagePreviewAtom = atom<{ src: string; alt: string } | null>(null);
 

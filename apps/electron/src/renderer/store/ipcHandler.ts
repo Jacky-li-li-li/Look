@@ -2,6 +2,7 @@ import type { MainToRendererEvent } from "@shared/types";
 import { handleAgentEvent } from "./agentHandlers";
 import { appStore } from "./appStore";
 import { appReadyPhaseAtom } from "./atoms";
+import { handleBrowserEvent } from "./browserHandlers";
 import { handlePermissionEvent } from "./permissionHandlers";
 import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "./projectAtoms";
 import { handleProjectEvent } from "./projectHandlers";
@@ -27,6 +28,7 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 		const event = rawEvent as MainToRendererEvent;
 
 		if (handleAgentEvent(event)) return;
+		if (handleBrowserEvent(event)) return;
 		if (handleProjectEvent(event, sharedRefreshTimers)) return;
 		if (handlePermissionEvent(event)) return;
 		if (handleSystemEvent(event)) return;

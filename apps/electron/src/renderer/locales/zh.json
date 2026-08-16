@@ -539,7 +539,9 @@
     "selectProjectHint": "请先选择要配置的项目。",
     "noProjectPrompts": "暂无项目专属提示词",
     "noPrompts": "暂无提示词",
-    "noProjects": "暂无已打开的项目"
+    "noProjects": "暂无已打开的项目",
+    "builtinBrowser": "内置浏览器",
+    "builtinBrowserDesc": "开启后，Agent 需要浏览网页时自动打开内置浏览器面板。"
   },
   "agent": {
     "model": "模型",
@@ -1014,5 +1016,22 @@
     "pin": "固定便利贴",
     "unpin": "取消固定",
     "markFailed": "会话已创建，但草稿标记失败，请刷新后重试"
+  },
+  "browser": {
+    "panelTitle": "内置浏览器",
+    "newTab": "新建标签页",
+    "closeTab": "关闭标签页",
+    "closePanel": "关闭面板",
+    "urlPlaceholder": "输入网址后按回车",
+    "emptyTitle": "浏览器未启动",
+    "emptyDesc": "启动浏览器即可与网页交互；Agent 需要浏览时也会自动打开。",
+    "openBrowser": "打开浏览器",
+    "loadingFrame": "加载中…",
+    "noActivity": "尚无 Agent 活动",
+    "clickHint": "点击视图可交互",
+    "actionFailed": "操作失败",
+    "readyTitle": "浏览器已就绪",
+    "readyDesc": "在顶部地址栏输入网址开始浏览；Agent 的浏览操作也会显示在这里。",
+    "launchFailed": "浏览器启动失败"
   }
 }

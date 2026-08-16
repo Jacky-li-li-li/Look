@@ -31,6 +31,9 @@ export type MainToRendererEvent =
 	| { type: "plan:question-resolved"; agentId: string; requestId: string }
 	| { type: "plan:approval-requested"; agentId: string; request: PlanApprovalRequest }
 	| { type: "plan:approval-resolved"; agentId: string; requestId: string }
+	// ---- Built-in browser panel ----
+	// Agent 使用浏览器工具 / tab 变化时触发（renderer 据此自动打开面板）。
+	| { type: "browser:activity" }
 	// ---- File viewer window ----
 	| { type: "fileViewer:open-path"; path: string; diffPatch?: string }
 	// 独立查看器窗口请求合并后，主进程通知主窗口打开右侧 Dock 面板。

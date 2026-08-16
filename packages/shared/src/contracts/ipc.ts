@@ -4,6 +4,10 @@ import type {
 	AgentInfo,
 	AttachmentRef,
 	AvailableModel,
+	BrowserPanelAction,
+	BrowserPanelFrame,
+	BrowserPanelState,
+	BrowserViewLayout,
 	CustomProviderInput,
 	Draft,
 	DraftPatch,
@@ -374,6 +378,16 @@ export interface LookAPI {
 	testImConnection(appId: string): Promise<IpcResult<{ message?: string }>>;
 	testImConnectionDirect(appId: string, appSecret: string): Promise<IpcResult<{ message?: string }>>;
 	updateImChannel(appId: string, updates: { name?: string }): Promise<IpcResult>;
+	// ---- Built-in browser panel ----
+	getBrowserPanelState(): Promise<IpcResult<{ state: BrowserPanelState }>>;
+	captureBrowserPanelFrame(): Promise<IpcResult<{ frame: BrowserPanelFrame | null }>>;
+	/** 上报原生浏览器视图布局（renderer BrowserSlot → main WebContentsView setBounds）。 */
+	setAgentBrowserLayout(layout: BrowserViewLayout): Promise<IpcResult>;
+	browserPanelAction(action: BrowserPanelAction): Promise<IpcResult>;
+	/** force=true 时若浏览器未启动则启动一个空白页作为交互目标。 */
+	openBrowserPanel(force?: boolean): Promise<IpcResult>;
+	/** 关闭面板：回收面板自启（非 agent 持有）的浏览器实例；agent 实例不受影响。 */
+	closeBrowserPanel(): Promise<IpcResult>;
 	// ---- Provider OAuth login ----
 	/** Initiate an OAuth login flow for a provider (e.g. OpenRouter, Kimi Code). */
 	providerLogin(provider: string): Promise<IpcResult<ProviderSettingsData>>;

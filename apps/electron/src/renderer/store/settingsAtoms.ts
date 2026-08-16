@@ -34,6 +34,9 @@ export const messageAlignmentAtom = atom<"left" | "left-right">("left-right");
 
 export const showToolExecutionAtom = atom(true);
 
+/** 内置浏览器面板总开关（开启后 agent 使用浏览器工具时自动滑出面板）。 */
+export const builtinBrowserEnabledAtom = atom(false);
+
 export const providerSettingsAtom = atom<ProviderSettingsData>({
 	providers: [],
 	customProviders: [],

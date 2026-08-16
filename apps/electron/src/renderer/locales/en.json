@@ -539,7 +539,9 @@
     "selectProjectHint": "Please select a project to configure.",
     "noProjectPrompts": "No project-specific prompts",
     "noPrompts": "No prompts",
-    "noProjects": "No projects opened yet"
+    "noProjects": "No projects opened yet",
+    "builtinBrowser": "Built-in browser",
+    "builtinBrowserDesc": "When enabled, the browser panel opens automatically when the agent needs to browse."
   },
   "agent": {
     "model": "Model",
@@ -1014,5 +1016,22 @@
     "pin": "Pin note",
     "unpin": "Unpin note",
     "markFailed": "Session created, but marking the draft failed. Refresh and try again."
+  },
+  "browser": {
+    "panelTitle": "Built-in Browser",
+    "newTab": "New tab",
+    "closeTab": "Close tab",
+    "closePanel": "Close panel",
+    "urlPlaceholder": "Enter URL and press Enter",
+    "emptyTitle": "Browser not started",
+    "emptyDesc": "Start a browser to interact with web pages. The agent also opens one automatically when it needs to browse.",
+    "openBrowser": "Open browser",
+    "loadingFrame": "Loading…",
+    "noActivity": "No agent activity yet",
+    "clickHint": "Click the view to interact",
+    "actionFailed": "Action failed",
+    "readyTitle": "Browser ready",
+    "readyDesc": "Enter a URL in the address bar to start browsing. Agent activity shows here too.",
+    "launchFailed": "Failed to start browser"
   }
 }

@@ -49,6 +49,8 @@ export type {
 	AgentInfo,
 	AppUpdatePhase,
 	AvailableModel,
+	BrowserViewBounds,
+	BrowserViewLayout,
 	EventCallback,
 	FileTreeNode,
 	ForkedSessionResult,

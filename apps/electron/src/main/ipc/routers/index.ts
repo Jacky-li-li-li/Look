@@ -1,5 +1,6 @@
 export { agentRouter } from "./agent-router.js";
 export { attachmentRouter } from "./attachment-router.js";
+export { browserRouter } from "./browser-router.js";
 export { draftRouter } from "./draft-router.js";
 export { fileRouter } from "./file-router.js";
 export { fileViewerRouter } from "./file-viewer-router.js";

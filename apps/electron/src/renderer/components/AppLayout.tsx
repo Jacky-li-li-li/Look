@@ -31,6 +31,7 @@ import {
 	sidebarEffectiveCollapsedAtom,
 	windowFullscreenAtom,
 } from "../store/atoms";
+import { browserPanelOpenAtom } from "../store/browserAtoms";
 import { dockedFileAtom, dockPanelWidthAtom, rightPanelWidthAtom } from "../store/projectAtoms";
 import ChatPanel from "./chat/ChatPanel";
 import EmptySessionState from "./chat/EmptySessionState";
@@ -117,6 +118,7 @@ function AppLayout({
 	const rightPanelCollapsed = useAtomValue(rightPanelEffectiveCollapsedAtom);
 	const activeProject = useAtomValue(activeProjectAtom);
 	const dockedFile = useAtomValue(dockedFileAtom);
+	const browserOpen = useAtomValue(browserPanelOpenAtom);
 	const rightPanelWidth = useAtomValue(rightPanelWidthAtom);
 	const dockPanelWidth = useAtomValue(dockPanelWidthAtom);
 	const viewportWidth = useViewportWidth();
@@ -127,7 +129,7 @@ function AppLayout({
 		sidebarCollapsed,
 		rightPanelCollapsed,
 		rightPanelWidth,
-		dockOpen: !!dockedFile,
+		dockOpen: !!dockedFile || browserOpen,
 		dockPanelWidth,
 	});
 	const showAgentSquare = useAtomValue(showAgentSquareAtom);
@@ -274,7 +276,7 @@ function AppLayout({
 			className="app-shell h-screen overflow-hidden bg-background"
 			data-sidebar-collapsed={sidebarCollapsed}
 			data-right-panel-collapsed={rightPanelCollapsed}
-			data-dock-open={!!dockedFile}
+			data-dock-open={!!dockedFile || browserOpen}
 			style={
 				{
 					// 面板宽度由 resolvePanelTracks 统一解析：拖拽把手改 atom，显示时钳制到可用空间；折叠/收起时归 0
@@ -305,7 +307,8 @@ function AppLayout({
 
 			<RightPanel />
 
-			{/* 文件查看器 Dock 面板：位于右侧面板右侧，grid 第 5 列 --dock-track 控制滑入/出 */}
+			{/* Dock 面板（文件查看 / 内置浏览器 共用容器）：位于右侧面板右侧，grid 第 5 列
+			    --dock-track 控制滑入/出；顶部 tab 条切换文件与浏览器内容 */}
 			<DockFilePanel />
 
 			{/* 非聊天视图（草稿/定时任务/广场）的右栏展开入口：这些视图进入时会把右栏
@@ -360,9 +363,10 @@ function AppLayout({
 			<ImagePreviewDialog />
 			<PlanApprovalDialog key={`plan-approval:${activeAgentId ?? "none"}`} sessionId={activeAgentId} />
 
-			{/* 设置页：全屏覆盖层，遮住左侧栏与右侧面板；z-40 低于 Radix Dialog 的 z-50，保证设置页内子弹窗正常显示 */}
+			{/* 设置页：全屏覆盖层，遮住左侧栏与右侧面板；z-40 低于 Radix Dialog 的 z-50，保证设置页内子弹窗正常显示。
+			    data-look-overlay 标记：原生浏览器视图永远盖在 DOM 之上，设置页打开时 BrowserSlot 据此隐藏原生视图 */}
 			{showSettings && (
-				<div className="fixed inset-0 z-40 bg-background">
+				<div className="fixed inset-0 z-40 bg-background" data-look-overlay>
 					<SettingsPage
 						providers={providerSettings.providers}
 						customProviders={providerSettings.customProviders}
