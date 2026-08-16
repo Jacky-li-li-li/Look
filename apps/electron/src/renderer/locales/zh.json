@@ -392,7 +392,7 @@
       "context": "上下文"
     },
     "themeTone": "主题",
-    "themeToneDesc": "在统一的中性色系中切换浅色或深色模式",
+    "themeToneDesc": "选择配色主题，每个主题家族提供明 / 暗变体",
     "themeToneLight": "亮色",
     "themeToneDark": "深色",
     "providers": {

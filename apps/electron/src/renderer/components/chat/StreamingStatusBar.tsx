@@ -67,7 +67,7 @@ const PHASE_LABEL_KEY: Record<StreamingPhase, string> = {
 /** 流式阶段状态行：ThinkingOrb + 状态文字 + 已等待秒数。 */
 export const StreamingStatusBar = memo(function StreamingStatusBar({ phase }: { phase: StreamingPhase }) {
 	const { t } = useTranslation();
-	const { tone } = useLookTheme();
+	const { scheme } = useLookTheme();
 	const [startedAt] = useState(() => Date.now());
 	const [elapsed, setElapsed] = useState(0);
 
@@ -87,7 +87,7 @@ export const StreamingStatusBar = memo(function StreamingStatusBar({ phase }: { 
 			   的 5 信号缩放进 20px）。speed 0.5 使 web 模式的信号跳变 ~21 次/秒
 			   降至 ~1 次/秒，消除跳动；LookThinkingOrb 为自驱动封装（无
 			   IntersectionObserver 离屏暂停），流式期间始终动画。 */}
-			<LookThinkingOrb state="connecting" size={20} speed={0.5} dark={tone === "dark"} />
+			<LookThinkingOrb state="connecting" size={20} speed={0.5} dark={scheme === "dark"} />
 			{/* 阶段文字按自然宽度布局（不设 min-w 占位）：短文案（en/zh）时
 			   计时器紧跟文本（flex gap-2），避免文本与计时器之间出现大段空隙；
 			   三语切换时计时器随文本宽度顺滑移动。 */}

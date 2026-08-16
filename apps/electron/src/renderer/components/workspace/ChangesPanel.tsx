@@ -41,8 +41,8 @@ interface ChangesPanelProps {
 
 const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanelProps) {
 	const { t } = useTranslation();
-	const { tone } = useLookTheme();
-	const isDark = tone === "dark";
+	const { scheme } = useLookTheme();
+	const isDark = scheme === "dark";
 	const [files, setFiles] = useState<GitDiffFile[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);

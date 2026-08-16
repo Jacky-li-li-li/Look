@@ -5,6 +5,7 @@
 // eliminate module-level let variables, and enable testing.
 // ============================================================
 
+import { LOOK_TONE_WINDOW_BG } from "@look/shared";
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
 import { app, BrowserWindow, Notification, powerMonitor, session, shell } from "electron";
@@ -238,7 +239,7 @@ export class Application {
 			title: "Look",
 			titleBarStyle: "hiddenInset",
 			trafficLightPosition: { x: TRAFFIC_LIGHT_X, y: TRAFFIC_LIGHT_INITIAL_Y },
-			backgroundColor: initialTone === "light" ? "#fbfbfa" : "#030202",
+			backgroundColor: LOOK_TONE_WINDOW_BG[initialTone],
 			icon: path.join(__dirname, "assets/icon-1024.png"),
 			webPreferences: {
 				preload: path.join(__dirname, "preload.cjs"),

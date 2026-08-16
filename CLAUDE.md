@@ -229,7 +229,7 @@ Notable UI:
 - **pi SDK first**: align with `@earendil-works/pi-*`. Wrap SDK capabilities; do not reimplement session lifecycle, tool registration, skill loading, or event streaming.
 - **Path alias**: renderer `@shared/*` → `packages/shared/src/*`; main/runtime → `@look/shared` / `@look/ui`.
 - **Formatting**: Biome, tabs, indent width 3, line width 120. Prefer `npm run format` before commit.
-- **Styling**: Tailwind v4 + Ink Wash tokens (hairline borders, frosted glass, `--accent`, `--sidebar`); theme via `next-themes`.
+- **Styling**: Tailwind v4 + Ink Wash tokens (hairline borders, frosted glass, `--accent`, `--sidebar`); themes via `renderer/lib/look-theme.ts` (`tone-{scheme}` class + optional `theme-{id}` palette class, tokens in `App.css`, tone ids in `packages/shared/src/contracts/settings.ts`).
 - **Context isolation**: `nodeIntegration: false`, `contextIsolation: true`, IPC only through preload.
 - **Model id format**: `"provider/model-id"` (e.g. `"anthropic/claude-sonnet-4-20250514"`).
 - **Thinking levels**: `"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"` (`ModelThinkingLevel` from pi-ai). Prefer `session.getAvailableThinkingLevels()` over hardcoding.

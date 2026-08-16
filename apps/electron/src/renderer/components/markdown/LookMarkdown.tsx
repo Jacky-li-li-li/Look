@@ -45,7 +45,7 @@ const literalTagContent = ["skill-tag", "agent-tag", "mcp-tag", "file-tag"];
 const remarkPlugins = [...Object.values(defaultRemarkPlugins), remarkLookReferences];
 
 const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, docs = false }: LookMarkdownProps) {
-	const { tone } = useLookTheme();
+	const { scheme } = useLookTheme();
 	const prepared = useMemo(() => prepareMessageContent(content), [content]);
 	const needsMermaid = useMemo(() => MERMAID_FENCE_RE.test(prepared), [prepared]);
 	const [diagramPlugin, setDiagramPlugin] = useState<DiagramPlugin | null>(null);
@@ -69,11 +69,11 @@ const LookMarkdown = memo(function LookMarkdown({ content, isStreaming = false, 
 	);
 	const mermaidConfig = useMemo<MermaidConfig>(
 		() => ({
-			theme: tone === "dark" ? "dark" : "neutral",
+			theme: scheme === "dark" ? "dark" : "neutral",
 			securityLevel: "strict",
 			fontFamily: '"Geist Variable", system-ui, sans-serif',
 		}),
-		[tone],
+		[scheme],
 	);
 
 	return (

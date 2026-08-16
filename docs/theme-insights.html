@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>开源主题深度洞察 — Look 主题选型报告</title>
+<style>
+  :root {
+    --pg-bg: #fafaf9;
+    --pg-surface: #ffffff;
+    --pg-text: #171717;
+    --pg-sub: #737373;
+    --pg-border: #e7e5e4;
+    --pg-hairline: #efedeb;
+    --pg-accent: #171717;
+    --pg-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+    background: var(--pg-bg);
+    color: var(--pg-text);
+    line-height: 1.65;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 56px 32px 96px; }
+
+  /* ── Header ── */
+  .hero { margin-bottom: 48px; }
+  .hero .kicker {
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--pg-sub); margin-bottom: 10px; font-weight: 600;
+  }
+  .hero h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+  .hero p.lede { margin-top: 14px; max-width: 720px; color: var(--pg-sub); font-size: 15px; }
+  .hero .meta { margin-top: 18px; font-size: 12px; color: var(--pg-sub); font-family: var(--pg-mono); }
+
+  section { margin-top: 56px; }
+  h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .sec-desc { color: var(--pg-sub); font-size: 13.5px; margin-bottom: 22px; max-width: 760px; }
+
+  /* ── Overview table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--pg-surface); border: 1px solid var(--pg-border); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--pg-hairline); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--pg-sub); font-weight: 600; background: #f5f4f2; }
+  tr:last-child td { border-bottom: none; }
+  td .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
+  .trend-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 18px; }
+  .trend { background: var(--pg-surface); border: 1px solid var(--pg-border); border-radius: 12px; padding: 14px 16px; }
+  .trend b { display: block; font-size: 13px; margin-bottom: 4px; }
+  .trend span { font-size: 12.5px; color: var(--pg-sub); }
+
+  /* ── Theme cards ── */
+  .cards { display: grid; grid-template-columns: 1fr; gap: 28px; }
+  .card {
+    background: var(--pg-surface); border: 1px solid var(--pg-border);
+    border-radius: 16px; overflow: hidden;
+  }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 20px 24px 0; }
+  .card-head h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+  .badge {
+    font-size: 10.5px; font-weight: 600; padding: 2px 9px; border-radius: 99px;
+    border: 1px solid var(--pg-border); color: var(--pg-sub); white-space: nowrap;
+  }
+  .badge.t1 { background: #171717; color: #fafaf9; border-color: #171717; }
+  .badge.rec { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+  .card-head .tags { font-size: 12px; color: var(--pg-sub); }
+  .card-body { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; padding: 16px 24px 24px; }
+  @media (max-width: 900px) { .card-body { grid-template-columns: 1fr; } }
+
+  .card-desc { font-size: 13px; color: var(--pg-sub); margin-bottom: 14px; }
+
+  /* mini preview */
+  .mode-toggle { display: inline-flex; border: 1px solid var(--pg-border); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+  .mode-toggle button {
+    font: inherit; font-size: 11.5px; padding: 4px 12px; border: none; background: transparent;
+    color: var(--pg-sub); cursor: pointer;
+  }
+  .mode-toggle button.on { background: #171717; color: #fafaf9; }
+  .mode-toggle button:disabled { opacity: .35; cursor: default; text-decoration: line-through; }
+
+  .pv {
+    border-radius: 12px; overflow: hidden; font-size: 11px;
+    display: grid; grid-template-columns: 128px 1fr; min-height: 208px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px -12px rgba(0,0,0,.25);
+    transition: background .2s;
+  }
+  .pv-side { padding: 10px 8px; display: flex; flex-direction: column; gap: 5px; }
+  .pv-side .pv-logo { font-weight: 700; font-size: 11px; padding: 2px 6px 8px; letter-spacing: .02em; }
+  .pv-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; }
+  .pv-row .sq { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .pv-row .ln { height: 6px; border-radius: 3px; flex: 1; }
+  .pv-main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .pv-hair { height: 1px; margin: 0 -14px; }
+  .pv-msg { display: flex; flex-direction: column; gap: 4px; }
+  .pv-msg .who { font-size: 9.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .pv-line { height: 7px; border-radius: 3.5px; }
+  .pv-bubble { align-self: flex-end; padding: 6px 10px; border-radius: 10px 10px 3px 10px; max-width: 75%; font-size: 10.5px; }
+  .pv-code { border-radius: 8px; padding: 8px 10px; font-family: var(--pg-mono); font-size: 10px; line-height: 1.7; }
+  .pv-actions { display: flex; gap: 6px; margin-top: auto; }
+  .pv-btn { font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+  .pv-btn.ghost { background: transparent; border: 1px solid; }
+
+  /* palette strip */
+  .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin: 14px 0; }
+  .sw { border-radius: 8px; overflow: hidden; border: 1px solid var(--pg-hairline); }
+  .sw .c { height: 30px; }
+  .sw .h { font-family: var(--pg-mono); font-size: 8.5px; padding: 3px 4px; background: #f5f4f2; color: #525252; text-align: center; white-space: nowrap; }
+  .palette.dark-hex .sw .h { background: #262626; color: #a3a3a3; }
+
+  /* stats & fit */
+  .stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px; color: var(--pg-sub); margin-bottom: 12px; }
+  .stats b { color: var(--pg-text); font-weight: 600; }
+  .fit { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; align-items: center; margin-bottom: 12px; }
+  .fit .k { font-size: 11.5px; color: var(--pg-sub); white-space: nowrap; }
+  .dots { display: flex; gap: 4px; }
+  .dots i { width: 16px; height: 5px; border-radius: 3px; background: #e7e5e4; }
+  .dots i.on { background: #171717; }
+  .verdict {
+    font-size: 12.5px; border-left: 3px solid #171717; padding: 6px 12px;
+    background: #f5f4f2; border-radius: 0 8px 8px 0; color: #404040;
+  }
+  .map { margin-top: 12px; font-size: 11px; color: var(--pg-sub); font-family: var(--pg-mono); line-height: 1.8; }
+  .map b { color: var(--pg-text); font-weight: 600; }
+
+  /* shortlist */
+  .shortlist { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+  .sl {
+    border-radius: 14px; padding: 18px; color: #fff; position: relative; overflow: hidden;
+    min-height: 150px; display: flex; flex-direction: column;
+  }
+  .sl h4 { font-size: 16px; margin-bottom: 6px; }
+  .sl p { font-size: 12px; opacity: .85; line-height: 1.6; }
+  .sl .rank { position: absolute; top: 14px; right: 16px; font-size: 22px; font-weight: 800; opacity: .25; font-family: var(--pg-mono); }
+
+  .footnote { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--pg-border); font-size: 11.5px; color: var(--pg-sub); }
+  .footnote code { font-family: var(--pg-mono); font-size: 10.5px; background: #f5f4f2; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Look · Theme Research</div>
+    <h1>开源高评价应用主题深度洞察</h1>
+    <p class="lede">本报告系统调研了开源社区中评价最高的 22 个主题家族（首批 12 个主流家族 + 10 个色调差异化扩展候选），从热度数据、设计语言、明暗变体完整度、与 Look 现有中性设计体系的融合度四个维度进行评估。每个主题附带迷你 UI 实时预览（模拟 Look 的侧边栏 + 对话 + 代码块场景）与色板，可直接点击切换明/暗变体，供你挑选下一批移植到 Look 的主题。</p>
+    <div class="meta">调研时间：2026-08 · 数据来源：GitHub stars / VS Code Marketplace 装机量 / 社区评测 · 数字为量级估计，用于相对比较</div>
+  </header>
+
+  <section>
+    <h2>一、热度总览与梯队</h2>
+    <p class="sec-desc">开源主题已形成明显的"家族化"格局：头部主题不再是一套配色，而是一个覆盖编辑器、终端、浏览器、IM 等数百个应用的移植生态（ports）。选择主题家族意味着继承其整个生态的社区共识。</p>
+    <table>
+      <thead><tr><th>梯队</th><th>主题家族</th><th>热度信号（量级）</th><th>一句话定位</th></tr></thead>
+      <tbody id="tier-body"></tbody>
+    </table>
+    <div class="trend-list">
+      <div class="trend"><b>暖色低饱和成为长时编码首选</b><span>Catppuccin、Gruvbox、Everforest 因"护眼"口碑持续上升；高对比纯黑（如 OLED 系）热度回落。</span></div>
+      <div class="trend"><b>家族化是主流期望</b><span>用户期待一个家族同时提供 dark + light 多变体（Catppuccin 4 变体、Rosé Pine 3 变体）。只做暗色的主题（Dracula）在 2025 后增长明显放缓。</span></div>
+      <div class="trend"><b>设计感主题破圈</b><span>Rosé Pine、Flexoki 凭借"不像终端配色"的高级灰调在设计/笔记工具（Obsidian、Raycast）圈层走红，正在向开发者工具渗透。</span></div>
+      <div class="trend"><b>移植成本趋近于零</b><span>所有主流家族都官方发布标准化 palette（JSON/CSS 变量），映射到 Look 的 shadcn token 体系只需一组 CSS 变量覆盖。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>二、首批 12 个主流主题家族</h2>
+    <p class="sec-desc">每张卡片：左侧为该主题渲染的 Look 迷你界面预览（可切换明/暗变体），右侧为色板、热度数据、四维契合度评分与移植结论。色板 8 色依次对应 Look token 映射：背景 / 表面 / 正文 / 弱文本 / 主色 / 语义红 / 语义绿 / 语义黄。</p>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section>
+    <h2>三、扩展候选 · 色调差异化补充（10 个）</h2>
+    <p class="sec-desc">针对"当前色调单一"的补充调研：这 10 个家族在首批之外提供了不重叠的色调路线——霓虹赛博（Synthwave '84）、极简青蓝（Poimandres / Vitesse）、品牌设计系统（Oxocarbon / Geist）、夜蓝护眼（Night Owl）、橙金优雅（Ayu / Vesper）、高饱和经典（Monokai Pro）、低对比灰调（Zenburn）。部分只有暗色变体（已在卡片中标注并禁用浅色切换）。</p>
+    <div class="cards" id="cards2"></div>
+  </section>
+
+  <section>
+    <h2>四、推荐 Shortlist</h2>
+    <p class="sec-desc">综合热度、明暗完整度、与 Look 中性基底的互补性，建议优先移植以下 4 个（排名分先后）。其余主题可作为长尾候选。</p>
+    <div class="shortlist" id="shortlist"></div>
+  </section>
+
+  <section>
+    <h2>五、Look Token 映射指南</h2>
+    <p class="sec-desc">Look 的主题落点为 <code>App.css</code> 中 <code>.tone-*</code> class 下的一组 CSS 变量（shadcn 语义 token）。任何主题家族都可按以下固定规则映射，单主题工作量约 40 行 CSS。</p>
+    <table>
+      <thead><tr><th>Look token</th><th>取主题 palette 中的</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>--background</code> / <code>--foreground</code></td><td>base bg / primary text</td><td>页面基底与正文色</td></tr>
+        <tr><td><code>--card</code> / <code>--secondary</code> / <code>--muted</code></td><td>surface / overlay</td><td>卡片、浮层、次级表面</td></tr>
+        <tr><td><code>--muted-foreground</code></td><td>subtext / comment</td><td>弱文本、时间戳、占位符</td></tr>
+        <tr><td><code>--primary</code> / <code>--ring</code></td><td>家族主 accent（如 Catppuccin mauve、Nord frost）</td><td>主按钮、焦点环、强调交互</td></tr>
+        <tr><td><code>--accent</code></td><td>surface 的 hover 提亮一档</td><td>悬停态表面，不取彩色 accent，避免界面过花</td></tr>
+        <tr><td><code>--destructive</code></td><td>red</td><td>危险操作</td></tr>
+        <tr><td><code>--border</code> / <code>--input</code> / <code>--hairline</code></td><td>border 色或 text 的 8–14% 透明</td><td>各家族边框定义弱，用透明叠加更稳</td></tr>
+        <tr><td><code>--sidebar-*</code> / <code>--glass-*</code></td><td>base bg 的半透明版本</td><td>保持 Look 的毛玻璃体系，只换底色</td></tr>
+        <tr><td><code>--code-*</code></td><td>mantle / 更深一档 bg</td><td>代码块表面；语法高亮需配套换 shiki 主题（多数家族有官方 shiki 版本）</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="footnote">
+    热度数字为 2025–2026 年公开数据（GitHub stars、VS Code Marketplace installs）的量级估计，仅用于家族间相对比较。Dracula / Solarized 的浅色变体为社区维护，品质与官方暗色存在差距，已在卡片中标注。本报告不改 Look 任何源码；选定主题后的移植路径为：<code>look-theme.ts</code> 扩展 tone 类型 → <code>App.css</code> 新增 <code>.tone-{name}</code> 变量组 → <code>ThemePicker</code> 由开关改为选择器。
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// 数据：12 个主题家族（色值取自各官方 palette）
+// ─────────────────────────────────────────────
+const THEMES = [
+  {
+    id: "catppuccin", name: "Catppuccin", tier: 1, rec: true,
+    tags: "暖粉 pastel · 生态之王",
+    desc: "2022 年后增长最快的主题家族，官方维护 200+ 应用移植，提供 Latte / Frappé / Macchiato / Mocha 四个官方变体。低饱和暖 pastel，长时使用眼部压力最小，是目前社区共识的\"默认答案\"。",
+    stars: "主仓 ~15k · 组织合计 30k+", installs: "VS Code ~1.5M", ports: "200+ 官方移植",
+    lightSupport: "官方（Latte）",
+    fit: { "个性辨识": 5, "明暗双全": 5, "长时阅读": 5, "融合 Look": 5 },
+    verdict: "首选。生态、口碑、明暗完整度全部第一，且暖粉调性与 Look 的中性灰形成鲜明但克制的个性层。",
+    variants: {
+      dark:  { label: "Mocha", bg:"#1e1e2e", surface:"#313244", text:"#cdd6f4", sub:"#a6adc8", accent:"#cba6f7", red:"#f38ba8", green:"#a6e3a1", yellow:"#f9e2af", border:"#45475a", code:"#181825" },
+      light: { label: "Latte", bg:"#eff1f5", surface:"#ccd0da", text:"#4c4f69", sub:"#6c6f85", accent:"#8839ef", red:"#d20f39", green:"#40a02b", yellow:"#df8e1d", border:"#bcc0cc", code:"#e6e9ef" }
+    }
+  },
+  {
+    id: "tokyonight", name: "Tokyo Night", tier: 1, rec: true,
+    tags: "都会夜蓝 · 深色体验标杆",
+    desc: "灵感来自东京夜景的深蓝紫调，深色模式被普遍认为是\"最有氛围感\"的编码主题。folke 的 Neovim 版本是插件生态标杆，VS Code 装机量破百万。",
+    stars: "tokyonight.nvim ~7k+", installs: "VS Code ~1M+", ports: "终端/编辑器全覆盖",
+    lightSupport: "官方（Day，使用率低）",
+    fit: { "个性辨识": 5, "明暗双全": 4, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "深色第一候选。夜景蓝紫与 Look 的玻璃质感天然契合；浅色 Day 变体存在感弱，建议只移植深色。",
+    variants: {
+      dark:  { label: "Night", bg:"#1a1b26", surface:"#24283b", text:"#c0caf5", sub:"#7982a9", accent:"#7aa2f7", red:"#f7768e", green:"#9ece6a", yellow:"#e0af68", border:"#292e42", code:"#16161e" },
+      light: { label: "Day", bg:"#e1e2e7", surface:"#d5d6db", text:"#3760bf", sub:"#6172b0", accent:"#2e7de9", red:"#f52a65", green:"#587539", yellow:"#8c6c3e", border:"#c4c8da", code:"#d0d5e3" }
+    }
+  },
+  {
+    id: "gruvbox", name: "Gruvbox", tier: 1, rec: true,
+    tags: "复古暖黄 · 护眼经典",
+    desc: "十年长红的复古暖色系，米黄纸张质感 + 低蓝光，是\"长时间阅读代码\"评测里的常胜军。明暗变体都经过充分打磨，社区 fork（gruvbox-community）持续维护。",
+    stars: "morhetz/gruvbox ~15k", installs: "各编辑器合计数百万", ports: "全平台",
+    lightSupport: "官方（Light 品质同样高）",
+    fit: { "个性辨识": 4, "明暗双全": 5, "长时阅读": 5, "融合 Look": 4 },
+    verdict: "明暗都强的稳健之选。纸张暖黄与 Look 的中性冷灰反差大，能明显拉开个性；注意其强色温需要用户真的喜欢暖色。",
+    variants: {
+      dark:  { label: "Dark", bg:"#282828", surface:"#3c3836", text:"#ebdbb2", sub:"#bdae93", accent:"#fe8019", red:"#fb4934", green:"#b8bb26", yellow:"#fabd2f", border:"#504945", code:"#1d2021" },
+      light: { label: "Light", bg:"#fbf1c7", surface:"#ebdbb2", text:"#3c3836", sub:"#7c6f64", accent:"#af3a03", red:"#9d0006", green:"#79740e", yellow:"#b57614", border:"#d5c4a1", code:"#f2e5bc" }
+    }
+  },
+  {
+    id: "dracula", name: "Dracula", tier: 1, rec: false,
+    tags: "高饱和紫粉 · 老牌顶流",
+    desc: "装机量意义上的历史第一（VS Code 官方插件 500 万+），紫粉高饱和配色辨识度拉满，官方商业化（Dracula PRO）也最成功。但只提供暗色，且高饱和长时易疲劳。",
+    stars: "dracula-theme ~7k", installs: "VS Code ~5M+", ports: "300+",
+    lightSupport: "仅社区（品质参差）",
+    fit: { "个性辨识": 5, "明暗双全": 2, "长时阅读": 3, "融合 Look": 3 },
+    verdict: "名气最大但短板明显：无官方浅色、饱和度高。适合作为\"个性签名款\"而非主力；优先级低于第一梯队其他三位。",
+    variants: {
+      dark:  { label: "Dark", bg:"#282a36", surface:"#44475a", text:"#f8f8f2", sub:"#6272a4", accent:"#bd93f9", red:"#ff5555", green:"#50fa7b", yellow:"#f1fa8c", border:"#44475a", code:"#21222c" },
+      light: { label: "社区 Alucard", bg:"#f8f8f2", surface:"#edeee6", text:"#282a36", sub:"#6272a4", accent:"#7c5cbf", red:"#cb3a2a", green:"#14710a", yellow:"#836e15", border:"#d6d6cd", code:"#f0efe7" }
+    }
+  },
+  {
+    id: "nord", name: "Nord", tier: 1, rec: false,
+    tags: "极地冷蓝 · 极简克制",
+    desc: "北极灵感的冷蓝灰色系，设计纪律极强（官方 16 色严格分层）。气质冷静专业，但蓝灰低对比在弱光下可读性一般，且官方仓库已归档、维护停滞。",
+    stars: "nord 主仓 ~6k（已归档）", installs: "各编辑器合计百万级", ports: "全平台",
+    lightSupport: "社区（Snow Storm 方案）",
+    fit: { "个性辨识": 3, "明暗双全": 3, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "气质与 Look 最接近，融合度高但也意味着个性增量小；官方停更是长期风险。可作候选，不必优先。",
+    variants: {
+      dark:  { label: "Polar Night", bg:"#2e3440", surface:"#3b4252", text:"#d8dee9", sub:"#7b88a1", accent:"#88c0d0", red:"#bf616a", green:"#a3be8c", yellow:"#ebcb8b", border:"#434c5e", code:"#242933" },
+      light: { label: "Snow Storm", bg:"#eceff4", surface:"#e5e9f0", text:"#2e3440", sub:"#4c566a", accent:"#5e81ac", red:"#bf616a", green:"#a3be8c", yellow:"#ebcb8b", border:"#d8dee9", code:"#e5e9f0" }
+    }
+  },
+  {
+    id: "rosepine", name: "Rosé Pine", tier: 2, rec: true,
+    tags: "玫瑰松木 · 设计感担当",
+    desc: "\"不像代码配色\"的高级灰粉调，被设计圈反复评为最美主题，在 Raycast / Obsidian 等工具圈口碑极高。Main / Moon / Dawn 三变体，Dawn 的米白玫瑰质感尤其出色。",
+    stars: "rose-pine ~4k", installs: "设计/笔记工具圈高渗透", ports: "100+",
+    lightSupport: "官方（Dawn，口碑极佳）",
+    fit: { "个性辨识": 5, "明暗双全": 4, "长时阅读": 4, "融合 Look": 5 },
+    verdict: "与 Look 气质最互补的个性款：低饱和、有高级感、明暗都好看。作为第四优先推荐，能覆盖\"不想要程序员配色\"的用户。",
+    variants: {
+      dark:  { label: "Main", bg:"#191724", surface:"#1f1d2e", text:"#e0def4", sub:"#908caa", accent:"#c4a7e7", red:"#eb6f92", green:"#9ccfd8", yellow:"#f6c177", border:"#26233a", code:"#12101a" },
+      light: { label: "Dawn", bg:"#faf4ed", surface:"#fffaf3", text:"#575279", sub:"#797593", accent:"#907aa9", red:"#b4637a", green:"#56949f", yellow:"#ea9d34", border:"#f2e9e1", code:"#f4ede8" }
+    }
+  },
+  {
+    id: "solarized", name: "Solarized", tier: 2, rec: false,
+    tags: "学术经典 · 精密对比度",
+    desc: "2011 年的开山之作，第一套基于 CIELAB 明度精密设计的配色，明暗共用同一组 accent 的思路影响了后来所有主题。历史地位崇高，但青绿底色审美已显年代感。",
+    stars: "altercation/solarized ~15k", installs: "全平台内置常客", ports: "几乎所有工具自带",
+    lightSupport: "官方（Light 同样经典）",
+    fit: { "个性辨识": 3, "明暗双全": 5, "长时阅读": 3, "融合 Look": 3 },
+    verdict: "致敬价值大于增量价值：青绿底辨识度有，但与现代 UI 审美有代沟。不建议优先移植。",
+    variants: {
+      dark:  { label: "Dark", bg:"#002b36", surface:"#073642", text:"#93a1a1", sub:"#586e75", accent:"#268bd2", red:"#dc322f", green:"#859900", yellow:"#b58900", border:"#094656", code:"#00212b" },
+      light: { label: "Light", bg:"#fdf6e3", surface:"#eee8d5", text:"#657b83", sub:"#93a1a1", accent:"#268bd2", red:"#dc322f", green:"#859900", yellow:"#b58900", border:"#e4ddc8", code:"#f5eeda" }
+    }
+  },
+  {
+    id: "onedark", name: "One Dark / One Light", tier: 2, rec: false,
+    tags: "Atom 遗产 · 最稳妥深色",
+    desc: "Atom 编辑器遗产，One Dark Pro 是 VS Code 装机量最高的主题之一（500 万+）。配色均衡无短板也无强个性，是\"不知道选什么时的安全牌\"。",
+    stars: "One Dark Pro ~3k", installs: "VS Code ~5M+", ports: "全平台",
+    lightSupport: "官方（One Light）",
+    fit: { "个性辨识": 3, "明暗双全": 4, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "安全但平庸：装上不会错，也带不来记忆点。若追求主题数量覆盖可纳入，追求差异化则跳过。",
+    variants: {
+      dark:  { label: "One Dark", bg:"#282c34", surface:"#21252b", text:"#abb2bf", sub:"#5c6370", accent:"#61afef", red:"#e06c75", green:"#98c379", yellow:"#e5c07b", border:"#3e4452", code:"#21252b" },
+      light: { label: "One Light", bg:"#fafafa", surface:"#eaeaeb", text:"#383a42", sub:"#a0a1a7", accent:"#4078f2", red:"#e45649", green:"#50a14f", yellow:"#c18401", border:"#e5e5e6", code:"#f0f0f0" }
+    }
+  },
+  {
+    id: "everforest", name: "Everforest", tier: 2, rec: false,
+    tags: "森林绿棕 · 护眼口碑王",
+    desc: "专为低眼压设计的绿棕自然色系，在\"护眼主题\"讨论中提及率第一。提供 soft/medium/hard 三档背景深度，明暗双全套。受众相对垂直（ vim 重度用户），大众认知度一般。",
+    stars: "sainnhe/everforest ~3k", installs: "vim 圈高渗透", ports: "50+",
+    lightSupport: "官方（Light 完整）",
+    fit: { "个性辨识": 3, "明暗双全": 5, "长时阅读": 5, "融合 Look": 4 },
+    verdict: "护眼赛道的最佳选择，但绿棕调接受度两极。适合作为 Gruvbox 之外的第二个暖色选项，优先级中等。",
+    variants: {
+      dark:  { label: "Dark Medium", bg:"#2d353b", surface:"#3d484d", text:"#d3c6aa", sub:"#859289", accent:"#a7c080", red:"#e67e80", green:"#a7c080", yellow:"#dbbc7f", border:"#4f5b58", code:"#272e33" },
+      light: { label: "Light Medium", bg:"#fdf6e3", surface:"#efebd4", text:"#5c6a72", sub:"#939f91", accent:"#8da101", red:"#f85552", green:"#8da101", yellow:"#dfa000", border:"#e0dcc7", code:"#f4f0d9" }
+    }
+  },
+  {
+    id: "kanagawa", name: "Kanagawa", tier: 2, rec: false,
+    tags: "浮世绘 · 东方墨色",
+    desc: "灵感来自葛饰北斋浮世绘的墨蓝 + 暖纸色系，Neovim 社区近两年口碑上升最快的新贵。Wave（暗）/ Dragon（更暗）/ Lotus（亮）三变体，东方美学辨识度独特。",
+    stars: "kanagawa.nvim ~5k", installs: "Neovim 圈快速上升", ports: "30+",
+    lightSupport: "官方（Lotus）",
+    fit: { "个性辨识": 4, "明暗双全": 3, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "调性独特且有文化故事可讲，适合做差异化；但移植生态尚年轻，浅色 Lotus 受众窄。候选中游。",
+    variants: {
+      dark:  { label: "Wave", bg:"#1f1f28", surface:"#2a2a37", text:"#dcd7ba", sub:"#727169", accent:"#7e9cd8", red:"#c34043", green:"#76946a", yellow:"#c0a36e", border:"#363646", code:"#16161d" },
+      light: { label: "Lotus", bg:"#f2ecbc", surface:"#e7dba0", text:"#545464", sub:"#8a8980", accent:"#4d699b", red:"#c84053", green:"#6f894e", yellow:"#77713f", border:"#d9c98f", code:"#e5ddb0" }
+    }
+  },
+  {
+    id: "github", name: "GitHub (Primer)", tier: 2, rec: false,
+    tags: "大厂中性 · 零学习成本",
+    desc: "GitHub Primer 设计系统的官方配色，全球开发者最熟悉的界面色。明暗全套、对比度经过无障碍审计，但作为应用主题个性最弱——和网页版 GitHub 太像。",
+    stars: "primer/design 官方维护", installs: "GitHub 全量用户", ports: "官方设计系统",
+    lightSupport: "官方（含高对比变体）",
+    fit: { "个性辨识": 2, "明暗双全": 5, "长时阅读": 4, "融合 Look": 5 },
+    verdict: "工程上最稳（无障碍合规现成），但与 Look 现有中性主题差异太小，移植收益低。不建议占用名额。",
+    variants: {
+      dark:  { label: "Dark Default", bg:"#0d1117", surface:"#161b22", text:"#e6edf3", sub:"#7d8590", accent:"#58a6ff", red:"#f85149", green:"#3fb950", yellow:"#d29922", border:"#30363d", code:"#0d1117" },
+      light: { label: "Light", bg:"#ffffff", surface:"#f6f8fa", text:"#1f2328", sub:"#59636e", accent:"#0969da", red:"#d1242f", green:"#1a7f37", yellow:"#9a6700", border:"#d1d9e0", code:"#f6f8fa" }
+    }
+  },
+  {
+    id: "flexoki", name: "Flexoki", tier: 3, rec: false,
+    tags: "纸墨质感 · 设计圈新宠",
+    desc: "Obsidian 作者 Steph Ango 设计的纸墨色系，模拟纸张与油墨的物理质感，2023 年发布后在笔记/写作工具圈病毒式传播。代码语义色完整但偏新，移植生态仍在早期。",
+    stars: "stephango/flexoki ~3k", installs: "Obsidian 圈现象级", ports: "30+（增长中）",
+    lightSupport: "官方（Light 是主场）",
+    fit: { "个性辨识": 4, "明暗双全": 5, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "浅色质感在所有候选中数一数二，但代码场景验证时间短。可作为\"写作感\"浅色主题观察，明年再评估。",
+    variants: {
+      dark:  { label: "Dark", bg:"#100f0f", surface:"#1c1b1a", text:"#cecdc3", sub:"#878580", accent:"#4385be", red:"#d14d41", green:"#879a39", yellow:"#d0a215", border:"#282726", code:"#100f0f" },
+      light: { label: "Light", bg:"#fffcf0", surface:"#f2f0e5", text:"#100f0f", sub:"#6f6e69", accent:"#205ea6", red:"#af3029", green:"#66800b", yellow:"#ad8301", border:"#e6e4d9", code:"#f2f0e5" }
+    }
+  },
+
+  // ── 扩展候选（第二批，色调差异化补充）──
+  {
+    id: "ayu", name: "Ayu", tier: 4, batch: 2, rec: false,
+    tags: "橙金点缀 · 简洁优雅",
+    desc: "极简设计 + 克制的橙金强调色，Dark / Mirage / Light 三变体，Mirage 的午夜蓝灰最受欢迎。GitKraken 2025 年 VS Code 主题榜单常驻前十，气质干净不喧闹。",
+    stars: "ayu-theme ~4k", installs: "VS Code 前十常客", ports: "主流编辑器全覆盖",
+    lightSupport: "官方（Light）",
+    fit: { "个性辨识": 4, "明暗双全": 5, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "首批暖色系之外的优雅选项：比 Gruvbox 收敛、比 Nord 有温度。明暗都完整，值得纳入扩展名单。",
+    variants: {
+      dark:  { label: "Mirage", bg:"#1f2430", surface:"#242936", text:"#cbccc6", sub:"#707a8c", accent:"#ffcc66", red:"#f28779", green:"#bae67e", yellow:"#ffd580", border:"#323a4c", code:"#191e2a" },
+      light: { label: "Light", bg:"#fafafa", surface:"#f0f0f0", text:"#5c6773", sub:"#8f9aa3", accent:"#ff9940", red:"#e65050", green:"#86b300", yellow:"#f2ae49", border:"#e7e8e9", code:"#f3f4f5" }
+    }
+  },
+  {
+    id: "poimandres", name: "Poimandres", tier: 4, batch: 2, rec: false,
+    tags: "深青蓝 · 极简新贵",
+    desc: "深青蓝底 + teal 签名色的极简主题，2022 年发布后在极简圈快速走红，二创衍生（Kaimandres 等）不断。色数极少、对比克制，是\"少即是多\"路线的代表。",
+    stars: "poimandres-theme ~1k（心智占有率高）", installs: "VS Code / Neovim 圈高口碑", ports: "30+（增长中）",
+    lightSupport: "社区（Light 变体）",
+    fit: { "个性辨识": 4, "明暗双全": 3, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "与 Tokyo Night 同属蓝调但更灰更克制，二选一即可。作为深色扩展候选有辨识度，浅色靠社区。",
+    variants: {
+      dark:  { label: "Dark", bg:"#1b1e28", surface:"#23262f", text:"#e4f0fb", sub:"#a6accd", accent:"#5de4c7", red:"#d0679d", green:"#5fb3a1", yellow:"#fffac2", border:"#2e3242", code:"#171922" },
+      light: { label: "社区 Light", bg:"#f4f6fa", surface:"#e8ecf3", text:"#1b1e28", sub:"#767c9d", accent:"#0f766e", red:"#b0447b", green:"#3f7a6d", yellow:"#a8872a", border:"#d8dee8", code:"#eceff5" }
+    }
+  },
+  {
+    id: "vitesse", name: "Vitesse", tier: 4, batch: 2, rec: false,
+    tags: "软灰绿 · Vue 圈标准",
+    desc: "Anthony Fu（Vue/Vite 核心成员）出品的软灰绿主题，明暗双全套且语法高亮逻辑细腻。在前端圈（尤其中文前端社区）几乎是默认配置，心智占有率远超其 star 数。",
+    stars: "vscode-theme-vitesse ~2k", installs: "前端圈高渗透", ports: "编辑器/终端齐全",
+    lightSupport: "官方（Vitesse Light）",
+    fit: { "个性辨识": 3, "明暗双全": 5, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "低饱和灰绿对眼睛友好，与 Look 灰底融合度高；个性增量温和，适合作为\"安静的第二选择\"。",
+    variants: {
+      dark:  { label: "Dark", bg:"#121212", surface:"#181818", text:"#dbd7ca", sub:"#758575", accent:"#4d9375", red:"#cb7676", green:"#80a665", yellow:"#e6cc77", border:"#2e2e2e", code:"#0f0f0f" },
+      light: { label: "Light", bg:"#ffffff", surface:"#f7f7f7", text:"#393a34", sub:"#a0ada0", accent:"#1e754f", red:"#ab5959", green:"#59873a", yellow:"#bda437", border:"#e5e5e5", code:"#f5f5f5" }
+    }
+  },
+  {
+    id: "oxocarbon", name: "Oxocarbon", tier: 4, batch: 2, rec: false,
+    tags: "IBM Carbon · 未来感深灰",
+    desc: "基于 IBM Carbon 设计系统的深色主题，冷灰底 + 高亮霓虹语义色，post-modern 极简圈的热门。浅色直接对应 Carbon White，等于继承一套大厂设计系统的无障碍审计成果。",
+    stars: "oxocarbon.nvim ~1k", installs: "Neovim/极简圈热门", ports: "30+",
+    lightSupport: "官方同源（Carbon White）",
+    fit: { "个性辨识": 4, "明暗双全": 5, "长时阅读": 3, "融合 Look": 4 },
+    verdict: "明暗可成套移植（Carbon Dark + Carbon White），是\"品牌设计系统\"路线里最适合 Look 的候选；深色对比偏强，敏感用户慎用。",
+    variants: {
+      dark:  { label: "Dark", bg:"#161616", surface:"#262626", text:"#dde1e6", sub:"#6f6f76", accent:"#78a9ff", red:"#ee5396", green:"#42be65", yellow:"#fddc69", border:"#393939", code:"#0d0d0d" },
+      light: { label: "Carbon White", bg:"#ffffff", surface:"#f4f4f4", text:"#161616", sub:"#6f6f6f", accent:"#0f62fe", red:"#da1e28", green:"#198038", yellow:"#b28600", border:"#e0e0e0", code:"#f4f4f4" }
+    }
+  },
+  {
+    id: "nightowl", name: "Night Owl / Light Owl", tier: 4, batch: 2, rec: false,
+    tags: "夜海军蓝 · 无障碍导向",
+    desc: "Sarah Drasner 为夜间与弱光环境设计的深海军蓝主题，其对比度论证文章是无障碍配色的经典引用。Light Owl 是少见的\"为白天认真设计\"的配套浅色。",
+    stars: "sdras/night-owl-vscode-theme ~3k", installs: "VS Code ~1M", ports: "主流编辑器",
+    lightSupport: "官方（Light Owl）",
+    fit: { "个性辨识": 4, "明暗双全": 4, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "深蓝夜色系里论证最扎实的一个；与 Tokyo Night 色调接近但更偏海蓝。若选深蓝只取其一。",
+    variants: {
+      dark:  { label: "Night Owl", bg:"#011627", surface:"#0b253a", text:"#d6deeb", sub:"#637777", accent:"#82aaff", red:"#ef5350", green:"#addb67", yellow:"#ecc48d", border:"#122d42", code:"#01111d" },
+      light: { label: "Light Owl", bg:"#fbfbfb", surface:"#f0f0f0", text:"#403f53", sub:"#989fb1", accent:"#4876d6", red:"#de3d3b", green:"#2aa298", yellow:"#daaa01", border:"#d9d9d9", code:"#f3f3f3" }
+    }
+  },
+  {
+    id: "synthwave", name: "Synthwave '84", tier: 4, batch: 2, noLight: true, rec: false,
+    tags: "霓虹赛博 · 氛围感极限",
+    desc: "80 年代合成波霓虹美学，粉紫荧光 + 辉光效果是\"个性签名款\"的极致。装机量证明其号召力，但强风格注定小众日常，更适合做彩蛋主题而非主力。",
+    stars: "synthwave-vscode ~5k", installs: "VS Code 百万级", ports: "编辑器为主",
+    lightSupport: "无官方浅色",
+    fit: { "个性辨识": 5, "明暗双全": 1, "长时阅读": 2, "融合 Look": 2 },
+    verdict: "只作暗色彩蛋：节日感/玩梗属性强，日常生产力弱。若做主题商店可收，内置主题不优先。",
+    variants: {
+      dark:  { label: "Dark", bg:"#262335", surface:"#34294f", text:"#f4eee4", sub:"#848bbd", accent:"#ff7edb", red:"#fe4450", green:"#72f1b8", yellow:"#fede5d", border:"#495495", code:"#241b2f" },
+      light: { label: "", bg:"", surface:"", text:"", sub:"", accent:"", red:"", green:"", yellow:"", border:"", code:"" }
+    }
+  },
+  {
+    id: "vesper", name: "Vesper", tier: 4, batch: 2, noLight: true, rec: false,
+    tags: "Raycast 橙黑 · 2024 新贵",
+    desc: "Raycast 团队 2024 年推出的极简暗色主题：近黑底 + 暖橙强调 + 薄荷绿辅助，配色克制但记忆点强，发布后迅速成为\"新酷\"代表，工具类 App 气质与 Look 相近。",
+    stars: "vesper-theme 官方仓 ~2k（增速快）", installs: "Raycast/VS Code 圈高热", ports: "20+（增长中）",
+    lightSupport: "无官方浅色",
+    fit: { "个性辨识": 4, "明暗双全": 2, "长时阅读": 4, "融合 Look": 4 },
+    verdict: "和 Look 同为工具型产品气质，橙黑搭配高级且独特。只作暗色主题移植成本低，是扩展批里最值得考虑的一个。",
+    variants: {
+      dark:  { label: "Dark", bg:"#101010", surface:"#1c1c1c", text:"#ffffff", sub:"#a0a0a0", accent:"#ffc799", red:"#ff8080", green:"#99ffe4", yellow:"#f5d191", border:"#232323", code:"#0a0a0a" },
+      light: { label: "", bg:"", surface:"", text:"", sub:"", accent:"", red:"", green:"", yellow:"", border:"", code:"" }
+    }
+  },
+  {
+    id: "monokaipro", name: "Monokai Pro", tier: 4, batch: 2, rec: false,
+    tags: "Sublime 图腾 · 高饱和暖灰",
+    desc: "Sublime Text 时代图腾 Monokai 的商业精修版，暖灰底 + 标志性柠黄。装机量常年顶部（有免费档），Filter 系列（Spectrum/Octagon 等）提供同族多变体。",
+    stars: "Monokai Pro 商业产品", installs: "VS Code 数百万级", ports: "全平台",
+    lightSupport: "官方（Filter Light）",
+    fit: { "个性辨识": 4, "明暗双全": 4, "长时阅读": 3, "融合 Look": 3 },
+    verdict: "历史装机量巨大但审美偏编辑器旧时代；与 Dracula 定位重叠（高饱和暗色），二者取其一即可。",
+    variants: {
+      dark:  { label: "Classic", bg:"#2d2a2e", surface:"#403e41", text:"#fcfcfa", sub:"#939293", accent:"#ffd866", red:"#ff6188", green:"#a9dc76", yellow:"#fc9867", border:"#5b595c", code:"#221f22" },
+      light: { label: "Filter Light", bg:"#faf4f2", surface:"#efe6e3", text:"#403e41", sub:"#948b89", accent:"#e14775", red:"#e14775", green:"#269d69", yellow:"#cc7a0a", border:"#ddd0cc", code:"#f2e9e6" }
+    }
+  },
+  {
+    id: "zenburn", name: "Zenburn", tier: 4, batch: 2, noLight: true, rec: false,
+    tags: "低对比鼻祖 · 老兵情怀",
+    desc: "2002 年诞生的低对比灰调鼻祖，\"不刺眼的灰色世界\"理念影响了后来所有护眼主题。vim/emacs 老兵的情怀款，在极简低刺激讨论中仍被反复引用。",
+    stars: "各实现合计数千", installs: "vim/emacs 内置常客", ports: "几乎所有编辑器",
+    lightSupport: "无官方浅色",
+    fit: { "个性辨识": 3, "明暗双全": 2, "长时阅读": 5, "融合 Look": 3 },
+    verdict: "阅读舒适度满分但视觉陈旧、无浅色。情怀价值大于增量，不建议为 Look 移植。",
+    variants: {
+      dark:  { label: "Dark", bg:"#3f3f3f", surface:"#4f4f4f", text:"#dcdccc", sub:"#9fafaf", accent:"#f0dfaf", red:"#cc9393", green:"#7f9f7f", yellow:"#efef8f", border:"#5b605e", code:"#383838" },
+      light: { label: "", bg:"", surface:"", text:"", sub:"", accent:"", red:"", green:"", yellow:"", border:"", code:"" }
+    }
+  },
+  {
+    id: "geist", name: "Geist (Vercel)", tier: 4, batch: 2, rec: false,
+    tags: "Vercel 设计系统 · 与 Look 字体同源",
+    desc: "Vercel 的 Geist 设计系统配色：纯黑/纯白底 + 高亮蓝红的强品牌路线。Look 界面已使用 Geist 字体，配色同源后整体品牌感会非常统一。",
+    stars: "vercel/geist-font ~4k", installs: "Next.js 生态全量", ports: "官方设计 token",
+    lightSupport: "官方（Light）",
+    fit: { "个性辨识": 3, "明暗双全": 5, "长时阅读": 4, "融合 Look": 5 },
+    verdict: "融合度满分——但这也正是问题：与 Look 现有中性主题差异最小。除非要做\"Vercel 风\"品牌联动，否则增量有限。",
+    variants: {
+      dark:  { label: "Dark", bg:"#000000", surface:"#111111", text:"#ededed", sub:"#a1a1a1", accent:"#3291ff", red:"#ff3333", green:"#50e3c2", yellow:"#f5a623", border:"#333333", code:"#0a0a0a" },
+      light: { label: "Light", bg:"#ffffff", surface:"#fafafa", text:"#000000", sub:"#666666", accent:"#0070f3", red:"#ee0000", green:"#007f5f", yellow:"#b25e09", border:"#eaeaea", code:"#fafafa" }
+    }
+  }
+];
+
+const SHORTLIST = [
+  { name: "Catppuccin", rank: 1, bg: "#1e1e2e", accent: "#cba6f7",
+    why: "生态与口碑双第一，Latte/Mocha 明暗皆强。暖粉 pastel 为 Look 注入个性而不破坏克制感，是风险最低的起点。" },
+  { name: "Tokyo Night", rank: 2, bg: "#1a1b26", accent: "#7aa2f7",
+    why: "深色氛围感天花板，蓝紫调与 Look 毛玻璃体系天然契合。建议只移植深色 Night，作为深色档的个性担当。" },
+  { name: "Gruvbox", rank: 3, bg: "#282828", accent: "#fe8019",
+    why: "明暗双优的复古暖色，覆盖\"护眼长时阅读\"刚需人群，与 Catppuccin 的粉调形成风格差异。" },
+  { name: "Rosé Pine", rank: 4, bg: "#191724", accent: "#ebbcba",
+    why: "设计感最强的一档，Dawn 浅色口碑极佳。吸引非程序员审美用户，与前三者气质互不重叠。" }
+];
+
+const TIERS = [
+  { t: "第一梯队 · 事实标准", items: "Catppuccin · Tokyo Night · Gruvbox · Dracula · Nord", sig: "GitHub 6k–15k+ / VS Code 1M–5M+ 装机 / 全平台移植", pos: "社区讨论中默认被提及的名字，生态成熟、移植成本最低" },
+  { t: "第二梯队 · 高口碑", items: "Rosé Pine · Solarized · One Dark · Everforest · Kanagawa", sig: "GitHub 3k–15k / 垂直圈层高渗透", pos: "各有王牌场景（设计感 / 经典 / 稳妥 / 护眼 / 东方美学），适合差异化补充" },
+  { t: "第三梯队 · 上升观察", items: "GitHub Primer · Flexoki", sig: "官方背书或设计圈现象级", pos: "工程稳但增量小（GitHub），或太新待验证（Flexoki）" },
+  { t: "扩展候选 · 色调补充", items: "Ayu · Poimandres · Vitesse · Oxocarbon · Night Owl · Synthwave '84 · Vesper · Monokai Pro · Zenburn · Geist", sig: "垂直圈层高口碑 / 大厂设计系统官方", pos: "补齐主流家族未覆盖的色调路线：霓虹、极简青蓝、品牌感、低对比灰调" }
+];
+
+// ─────────────────────────────────────────────
+// 渲染
+// ─────────────────────────────────────────────
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+function previewHTML(t, mode) {
+  const v = t.variants[mode];
+  const c = {
+    bg: v.bg, surface: v.surface, text: v.text, sub: v.sub, accent: v.accent,
+    red: v.red, green: v.green, yellow: v.yellow, border: v.border, code: v.code
+  };
+  const style = Object.entries({
+    "--t-bg":c.bg,"--t-surface":c.surface,"--t-text":c.text,"--t-sub":c.sub,
+    "--t-accent":c.accent,"--t-red":c.red,"--t-green":c.green,"--t-yellow":c.yellow,
+    "--t-border":c.border,"--t-code":c.code
+  }).map(([k,val])=>k+":"+val).join(";");
+  return `
+  <div class="pv" data-mode="${mode}" style="${style};background:var(--t-bg);border:1px solid var(--t-border)">
+    <div class="pv-side" style="background:var(--t-code);border-right:1px solid var(--t-border)">
+      <div class="pv-logo" style="color:var(--t-text)">Look</div>
+      ${["会话 A","会话 B","会话 C"].map((n,i)=>`
+        <div class="pv-row" style="${i===0?`background:var(--t-surface);`:``}">
+          <span class="sq" style="background:${i===0?"var(--t-accent)":"var(--t-border)"}"></span>
+          <span class="ln" style="background:var(--t-border);opacity:${i===0?1:.6}"></span>
+        </div>`).join("")}
+    </div>
+    <div class="pv-main">
+      <div class="pv-msg">
+        <span class="who" style="color:var(--t-sub)">Assistant</span>
+        <div class="pv-line" style="background:var(--t-sub);opacity:.55;width:92%"></div>
+        <div class="pv-line" style="background:var(--t-sub);opacity:.4;width:64%"></div>
+      </div>
+      <div class="pv-bubble" style="background:var(--t-accent);color:var(--t-bg)">帮我重构这个函数 →</div>
+      <div class="pv-code" style="background:var(--t-code);border:1px solid var(--t-border)">
+        <div><span style="color:var(--t-red)">function</span> <span style="color:var(--t-accent)">greet</span><span style="color:var(--t-text)">(name) {</span></div>
+        <div>&nbsp;&nbsp;<span style="color:var(--t-red)">return</span> <span style="color:var(--t-green)">\`Hello, \${name}\`</span><span style="color:var(--t-text)">;</span></div>
+        <div><span style="color:var(--t-text)">}</span> <span style="color:var(--t-yellow)">// ✓ done</span></div>
+      </div>
+      <div class="pv-actions">
+        <span class="pv-btn" style="background:var(--t-accent);color:var(--t-bg)">应用更改</span>
+        <span class="pv-btn ghost" style="color:var(--t-sub);border-color:var(--t-border)">撤销</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function paletteHTML(v, dark) {
+  const items = [
+    ["背景", v.bg], ["表面", v.surface], ["正文", v.text], ["弱文本", v.sub],
+    ["主色", v.accent], ["红", v.red], ["绿", v.green], ["黄", v.yellow]
+  ];
+  return `<div class="palette${dark?" dark-hex":""}">${items.map(([n,c])=>`
+    <div class="sw"><div class="c" style="background:${c}"></div><div class="h">${n} ${c}</div></div>`).join("")}
+  </div>`;
+}
+
+function fitHTML(fit) {
+  return `<div class="fit">${Object.entries(fit).map(([k,n])=>`
+    <span class="k">${k}</span>
+    <span class="dots">${[1,2,3,4,5].map(i=>`<i class="${i<=n?"on":""}"></i>`).join("")}</span>`).join("")}
+  </div>`;
+}
+
+function cardHTML(t) {
+  const defaultMode = "dark";
+  return `
+  <article class="card" id="theme-${t.id}">
+    <div class="card-head">
+      <h3>${t.name}</h3>
+      <span class="badge t${t.tier}">${["","第一梯队","第二梯队","第三梯队","扩展候选"][t.tier]}</span>
+      ${t.rec?`<span class="badge rec">★ 推荐</span>`:""}
+      <span class="tags">${t.tags}</span>
+    </div>
+    <div class="card-body">
+      <div>
+        <div class="mode-toggle" data-theme="${t.id}">
+          <button class="${defaultMode==="dark"?"on":""}" data-mode="dark">暗色 · ${t.variants.dark.label}</button>
+          <button data-mode="light"${t.noLight?" disabled":""}>浅色 · ${t.noLight?"无官方变体":t.variants.light.label}</button>
+        </div>
+        <div class="pv-slot">${previewHTML(t, defaultMode)}</div>
+        ${paletteHTML(t.variants[defaultMode], defaultMode==="dark")}
+      </div>
+      <div>
+        <p class="card-desc">${t.desc}</p>
+        <div class="stats">
+          <span>热度 <b>${t.stars}</b></span>
+          <span>装机 <b>${t.installs}</b></span>
+          <span>移植 <b>${t.ports}</b></span>
+          <span>浅色 <b>${t.lightSupport}</b></span>
+        </div>
+        ${fitHTML(t.fit)}
+        <div class="verdict">${t.verdict}</div>
+        <div class="map">
+          <b>映射要点</b><br>
+          --background ← ${t.variants.dark.bg} · --primary ← ${t.variants.dark.accent}<br>
+          --card/--muted ← ${t.variants.dark.surface} · --destructive ← ${t.variants.dark.red}
+        </div>
+      </div>
+    </div>
+  </article>`;
+}
+
+document.getElementById("cards").innerHTML = THEMES.filter(t => t.batch !== 2).map(cardHTML).join("");
+document.getElementById("cards2").innerHTML = THEMES.filter(t => t.batch === 2).map(cardHTML).join("");
+
+document.getElementById("tier-body").innerHTML = TIERS.map(r=>`
+  <tr><td style="white-space:nowrap"><b>${r.t}</b></td><td>${r.items}</td><td>${r.sig}</td><td>${r.pos}</td></tr>`).join("");
+
+document.getElementById("shortlist").innerHTML = SHORTLIST.map(s=>`
+  <div class="sl" style="background:linear-gradient(135deg, ${s.bg}, ${s.bg}f2 60%, ${s.accent}33);border:1px solid ${s.accent}55">
+    <span class="rank">0${s.rank}</span>
+    <h4>${s.name}</h4>
+    <p>${s.why}</p>
+  </div>`).join("");
+
+// 明/暗切换
+document.querySelectorAll(".mode-toggle").forEach(tg => {
+  tg.addEventListener("click", e => {
+    const btn = e.target.closest("button");
+    if (!btn || btn.disabled) return;
+    const id = tg.dataset.theme;
+    const theme = THEMES.find(t => t.id === id);
+    const mode = btn.dataset.mode;
+    tg.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+    const card = tg.closest(".card");
+    card.querySelector(".pv-slot").innerHTML = previewHTML(theme, mode);
+    card.querySelector(".palette").outerHTML = paletteHTML(theme.variants[mode], mode === "dark");
+  });
+});
+</script>
+</body>
+</html>

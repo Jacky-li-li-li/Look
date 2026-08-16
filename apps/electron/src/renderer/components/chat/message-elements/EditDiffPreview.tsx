@@ -148,9 +148,9 @@ export function extractEditPatch(
 }
 
 const EditDiffPreview = memo(function EditDiffPreview({ toolName, path, args, result }: EditDiffPreviewProps) {
-	const { tone } = useLookTheme();
+	const { scheme } = useLookTheme();
 	const extracted = useMemo(() => extractEditPatch(toolName, args, result, path), [toolName, args, result, path]);
-	const isDark = tone === "dark";
+	const isDark = scheme === "dark";
 
 	if (!extracted) return null;
 

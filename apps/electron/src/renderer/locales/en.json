@@ -392,7 +392,7 @@
       "context": "Context"
     },
     "themeTone": "Theme",
-    "themeToneDesc": "Use the neutral palette in light or dark mode",
+    "themeToneDesc": "Pick a color theme — each family ships light and dark variants",
     "themeToneLight": "Light",
     "themeToneDark": "Dark",
     "providers": {

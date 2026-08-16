@@ -55,4 +55,37 @@ describe("Look theme boot state", () => {
 		expect(themeFromSettings({ themeStyle: "ink-wash", themeTone: "system" })).toBe("dark");
 		expect(themeFromSettings(undefined)).toBe("dark");
 	});
+
+	it("accepts theme-family tones from persisted settings", () => {
+		expect(themeFromSettings({ themeTone: "catppuccin-mocha" })).toBe("catppuccin-mocha");
+		expect(themeFromSettings({ themeTone: "rose-pine-dawn" })).toBe("rose-pine-dawn");
+		expect(themeFromSettings({ themeTone: "solarized-dark" })).toBe("dark");
+	});
+
+	it("applies a themed tone as scheme class + palette class", () => {
+		writeLookThemeToDom("catppuccin-mocha");
+
+		expect(readLookThemeFromDom()).toBe("catppuccin-mocha");
+		expect(document.documentElement.classList.contains("tone-dark")).toBe(true);
+		expect(document.documentElement.classList.contains("theme-catppuccin-mocha")).toBe(true);
+		expect(document.documentElement.style.colorScheme).toBe("dark");
+		expect(new URL(window.location.href).searchParams.get("theme")).toBe("catppuccin-mocha");
+	});
+
+	it("applies light-scheme themed tones with the light scheme class", () => {
+		writeLookThemeToDom("rose-pine-dawn");
+
+		expect(readLookThemeFromDom()).toBe("rose-pine-dawn");
+		expect(document.documentElement.classList.contains("tone-light")).toBe(true);
+		expect(document.documentElement.classList.contains("theme-rose-pine-dawn")).toBe(true);
+		expect(document.documentElement.style.colorScheme).toBe("light");
+	});
+
+	it("drops the palette class when switching back to a neutral tone", () => {
+		writeLookThemeToDom("tokyo-night");
+		writeLookThemeToDom("light");
+
+		expect(readLookThemeFromDom()).toBe("light");
+		expect([...document.documentElement.classList].some((name) => name.startsWith("theme-"))).toBe(false);
+	});
 });

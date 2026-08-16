@@ -1,5 +1,12 @@
 // Shared package entry point — types, storage helpers, and domain contracts.
 // UI components have moved to @look/ui.
+
+export {
+	isLookTone,
+	LOOK_TONE_SCHEME,
+	LOOK_TONE_VALUES,
+	LOOK_TONE_WINDOW_BG,
+} from "./contracts/settings.js";
 export {
 	ensureLookDir,
 	ensureProjectDir,

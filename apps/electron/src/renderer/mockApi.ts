@@ -12,10 +12,7 @@ import type { Draft, MainToRendererEvent, ScheduledTask } from "@shared/types";
 const noop = () => {};
 
 const mockScenario = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mock") : null;
-const mockTone =
-	typeof window !== "undefined" && new URLSearchParams(window.location.search).get("theme") === "light"
-		? "light"
-		: "dark";
+const mockTone = (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("theme")) || "dark";
 const MOCK_SESSION_ID = "dev-chat-session";
 let mockSnapshotSequence = 0;
 

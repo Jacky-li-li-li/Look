@@ -184,7 +184,7 @@ This is **bold**.`;
 		expect(SRC).toMatch(/import\("@streamdown\/mermaid"\)/);
 		expect(SRC).toMatch(/mermaid:\s*diagramPlugin/);
 		expect(SRC).toMatch(/securityLevel:\s*"strict"/);
-		expect(SRC).toMatch(/theme:\s*tone === "dark" \? "dark" : "neutral"/);
+		expect(SRC).toMatch(/theme:\s*scheme === "dark" \? "dark" : "neutral"/);
 	});
 
 	it("does not depend on Markstream workarounds", () => {

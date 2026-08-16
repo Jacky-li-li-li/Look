@@ -396,7 +396,7 @@
       "context": "コンテキスト"
     },
     "themeTone": "テーマ",
-    "themeToneDesc": "ニュートラルな配色をライトまたはダークで使用します",
+    "themeToneDesc": "配色テーマを選択 — 各テーマファミリーにライト／ダークのバリアントがあります",
     "themeToneLight": "ライト",
     "themeToneDark": "ダーク",
     "customProviders": {

@@ -241,8 +241,8 @@ void (async () => {
 	}
 
 	function ThemedToaster() {
-		const { tone } = useLookTheme();
-		return <Toaster theme={tone} />;
+		const { scheme } = useLookTheme();
+		return <Toaster theme={scheme} />;
 	}
 
 	const root = createRoot(document.getElementById("root")!);

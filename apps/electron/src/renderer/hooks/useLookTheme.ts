@@ -2,6 +2,7 @@
 // useLookTheme — global light / dark state synced from <html>
 // ============================================================
 
+import { LOOK_TONE_SCHEME } from "@shared/contracts/settings";
 import { useCallback, useSyncExternalStore } from "react";
 import { DEFAULT_THEME, type LookTone, readLookThemeFromDom, writeLookThemeToDom } from "../lib/look-theme";
 
@@ -16,6 +17,9 @@ function getSnapshot(): LookTone {
 
 export interface UseLookThemeResult {
 	tone: LookTone;
+	/** Resolved color scheme ("light" | "dark") — use this for third-party
+	 *  components (mermaid, diff viewers) that only understand two modes. */
+	scheme: "light" | "dark";
 	setTheme: (tone: LookTone) => void;
 }
 
@@ -43,5 +47,5 @@ export function useLookTheme(): UseLookThemeResult {
 		});
 	}, []);
 
-	return { tone, setTheme };
+	return { tone, scheme: LOOK_TONE_SCHEME[tone], setTheme };
 }

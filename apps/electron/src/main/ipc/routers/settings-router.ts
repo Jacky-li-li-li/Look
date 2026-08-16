@@ -5,7 +5,9 @@
 import type { ProviderResponse } from "@earendil-works/pi-ai";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { LOOK_TONE_VALUES, LOOK_TONE_WINDOW_BG } from "@look/shared";
 import { maskSecret } from "@look/shared/secret-mask";
+import type { LookTone } from "@look/shared/types";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
 import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
@@ -353,7 +355,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 			guardStringArray(settings.openedSessionIds, "settings.openedSessionIds");
 		}
 		if ("themeTone" in settings) {
-			guardEnum(settings.themeTone, "settings.themeTone", ["light", "dark"] as const);
+			guardEnum(settings.themeTone, "settings.themeTone", LOOK_TONE_VALUES);
 		}
 		if ("autoTitleModel" in settings) {
 			guardNullableString(settings.autoTitleModel, "settings.autoTitleModel");
@@ -403,7 +405,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 			guardBoolean(settings.showToolExecution, "settings.showToolExecution");
 		}
 		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
-			ctx.mainWindow.setBackgroundColor(settings.themeTone === "light" ? "#fbfbfa" : "#030202");
+			ctx.mainWindow.setBackgroundColor(LOOK_TONE_WINDOW_BG[settings.themeTone as LookTone] ?? "#030202");
 		}
 		const updated = await ctx.session.settings.update(settings);
 

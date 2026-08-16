@@ -22,6 +22,7 @@
 // callers see a single `UserSettings` object.
 // ============================================================
 
+import { isLookTone } from "@look/shared";
 import type {
 	DesktopNotificationMode,
 	LookTone,
@@ -144,7 +145,7 @@ export function readThemeToneSync(uiSettingsPath: string): LookTone {
 	try {
 		if (fs.existsSync(uiSettingsPath)) {
 			const parsed = JSON.parse(fs.readFileSync(uiSettingsPath, "utf-8")) as Record<string, unknown>;
-			if (parsed.themeTone === "light" || parsed.themeTone === "dark") return parsed.themeTone;
+			if (isLookTone(parsed.themeTone)) return parsed.themeTone;
 		}
 	} catch {
 		/* fall through to default */
@@ -226,7 +227,7 @@ export class UserSettingsStore {
 					delete parsed.themeStyle;
 					migrated = true;
 				}
-				if (parsed.themeTone !== "light" && parsed.themeTone !== "dark") {
+				if (!isLookTone(parsed.themeTone)) {
 					parsed.themeTone = UI_DEFAULTS.themeTone;
 					migrated = true;
 				}

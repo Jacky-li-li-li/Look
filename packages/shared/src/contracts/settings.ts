@@ -1,7 +1,68 @@
 import type { PermissionMode } from "./permission.js";
 
 export type UILanguage = "en" | "zh" | "ja";
-export type LookTone = "light" | "dark";
+
+/**
+ * Look color theme ids. "light" / "dark" are the neutral palette; every other
+ * id is a theme-family variant whose palette lives in App.css under
+ * `.tone-{scheme}.theme-{id}`.
+ */
+export type LookTone =
+	| "light"
+	| "dark"
+	| "catppuccin-mocha"
+	| "catppuccin-latte"
+	| "tokyo-night"
+	| "gruvbox-dark"
+	| "gruvbox-light"
+	| "rose-pine"
+	| "rose-pine-dawn";
+
+export const LOOK_TONE_VALUES: readonly LookTone[] = [
+	"light",
+	"dark",
+	"catppuccin-mocha",
+	"catppuccin-latte",
+	"tokyo-night",
+	"gruvbox-dark",
+	"gruvbox-light",
+	"rose-pine",
+	"rose-pine-dawn",
+] as const;
+
+export function isLookTone(value: unknown): value is LookTone {
+	return typeof value === "string" && (LOOK_TONE_VALUES as readonly string[]).includes(value);
+}
+
+/** color-scheme each tone resolves to (drives `tone-light` / `tone-dark` classes). */
+export const LOOK_TONE_SCHEME: Record<LookTone, "light" | "dark"> = {
+	light: "light",
+	dark: "dark",
+	"catppuccin-mocha": "dark",
+	"catppuccin-latte": "light",
+	"tokyo-night": "dark",
+	"gruvbox-dark": "dark",
+	"gruvbox-light": "light",
+	"rose-pine": "dark",
+	"rose-pine-dawn": "light",
+};
+
+/**
+ * BrowserWindow backgroundColor per tone — matches the theme's `--background`
+ * so window creation and theme switches never flash the wrong color.
+ * Keep in sync with App.css and public/theme-bootstrap.js.
+ */
+export const LOOK_TONE_WINDOW_BG: Record<LookTone, string> = {
+	light: "#fbfbfa",
+	dark: "#030202",
+	"catppuccin-mocha": "#1e1e2e",
+	"catppuccin-latte": "#eff1f5",
+	"tokyo-night": "#1a1b26",
+	"gruvbox-dark": "#282828",
+	"gruvbox-light": "#fbf1c7",
+	"rose-pine": "#191724",
+	"rose-pine-dawn": "#faf4ed",
+};
 
 /**
  * Desktop notification delivery mode.

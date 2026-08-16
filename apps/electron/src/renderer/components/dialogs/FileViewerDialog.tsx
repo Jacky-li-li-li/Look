@@ -173,7 +173,7 @@ export default function FileViewerDialog({
 }: FileViewerDialogProps) {
 	const { t } = useTranslation();
 	const [viewingFile, setViewingFile] = useAtom(viewingFileAtom);
-	const { tone: viewerTone } = useLookTheme();
+	const { scheme: viewerScheme } = useLookTheme();
 	const diffPatch = dockMode ? dockDiffPatch : viewingFile?.diffPatch;
 	const activeProject = useAtomValue(activeProjectAtom);
 	const [oldContent, setOldContent] = useState<string | null>(null);
@@ -326,7 +326,7 @@ export default function FileViewerDialog({
 				renderCustomHeader={() => null}
 				className="h-full"
 				options={{
-					themeType: viewerTone === "dark" ? "dark" : "light",
+					themeType: viewerScheme,
 					diffStyle: "unified",
 					hunkSeparators: "line-info",
 					disableBackground: false,
@@ -365,7 +365,7 @@ export default function FileViewerDialog({
 						disableWorkerPool
 						renderCustomHeader={() => null}
 						options={{
-							themeType: viewerTone === "dark" ? "dark" : "light",
+							themeType: viewerScheme,
 							diffStyle: "unified",
 							hunkSeparators: "simple",
 							disableBackground: false,

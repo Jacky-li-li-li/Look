@@ -11,13 +11,20 @@
 		<script vite-ignore src="./theme-bootstrap.js"></script>
 		<!-- Critical inline theme: prevents white flash on reload by defining
 		     the CSS variable chain before App.css loads asynchronously.
-		     Matches BrowserWindow backgroundColor and App.css .tone-dark values. -->
+		     Matches BrowserWindow backgroundColor and App.css .tone-dark values.
+		     Scoped to neutral boots (`:not([class*="theme-"])`) — themed boots
+		     get their background from theme-bootstrap.js's injected style,
+		     otherwise these `--background` overrides on #root/.app-shell would
+		     hijack the theme palette inside the app tree. -->
 		<style>
 			:root {
 				--ink-0: oklch(0.985 0.002 85);
 				--ink-8: oklch(0.09 0.002 85);
 			}
-			html, body, #root, .app-shell {
+			html:not([class*="theme-"]),
+			html:not([class*="theme-"]) body,
+			html:not([class*="theme-"]) #root,
+			html:not([class*="theme-"]) .app-shell {
 				--background: var(--ink-8);
 				--foreground: var(--ink-0);
 				--color-background: var(--background);
@@ -26,7 +33,10 @@
 				color: var(--foreground);
 			}
 			html { color-scheme: dark; }
-			html.tone-light, html.tone-light body, html.tone-light #root, html.tone-light .app-shell {
+			html.tone-light:not([class*="theme-"]),
+			html.tone-light:not([class*="theme-"]) body,
+			html.tone-light:not([class*="theme-"]) #root,
+			html.tone-light:not([class*="theme-"]) .app-shell {
 				--background: var(--ink-0);
 				--foreground: var(--ink-8);
 				--color-background: var(--background);
