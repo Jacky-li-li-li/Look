@@ -1051,7 +1051,7 @@ const ChatMessageList = memo(function ChatMessageList(props: ChatMessageListProp
 			// syncSticky：流式期间同帧同步贴底，消除库 rAF 一帧滞后造成的蹦跳。
 			// endTransition：流式结束后 450ms 保持 instant，吸收状态行消失/分组
 			// 折叠造成的高度突变，避免 smooth 弹簧回弹抖动（见上方 endTransition 注释）。
-			resize={isBusy || endTransition || !chunking || !ready ? "instant" : "smooth"}
+			resize={isBusy || endTransition || chunking || !ready ? "instant" : "smooth"}
 			syncSticky={isBusy}
 			className={cn(ready ? "opacity-100" : "opacity-0", "min-h-0 flex-1")}
 		>

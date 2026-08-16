@@ -13,6 +13,7 @@ import { ArrowDown } from "lucide-react";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import type { ScrollToBottomOptions } from "use-stick-to-bottom";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
 /**
@@ -28,6 +29,16 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
  */
 export const FOLLOW_SPRING = { damping: 0.75, stiffness: 0.25, mass: 1.0 } as const;
 
+/**
+ * 回底按钮点击的可见弹簧（比 FOLLOW_SPRING 慢一个量级）。
+ * FOLLOW_SPRING 为流式跟随调的快弹簧（约 3~4 帧收敛，肉眼近似瞬跳），
+ * 按钮点击若沿用它会丢失「平滑滚到底」的可感知反馈；
+ * 本参数约 200ms 收敛，缓动可见但不拖沓。
+ * 参数选择依据（与 FOLLOW_SPRING 同源）：速度衰减率 d/m≈0.77<1 不会自我放大；
+ * 数值验证 5~2000px 全部目标距离单调收敛不过冲。
+ */
+export const CLICK_SPRING = { damping: 0.85, stiffness: 0.06, mass: 1.1 } as const;
+
 // ===== Context（兼容旧接口） =====
 
 interface ConversationContextValue {
@@ -40,8 +51,12 @@ interface ConversationContextValue {
 	 * 回底按钮据此显示，避免"差一点没到底且无按钮可点"。
 	 */
 	isStrictlyAtBottom: boolean;
-	/** Re-enable following and move to the latest content. */
-	scrollToBottom: () => void;
+	/**
+	 * Re-enable following and move to the latest content.
+	 * 可传库的 ScrollToBottomOptions（如 animation）定制滚动动画；
+	 * 不传时沿用 options 里的默认弹簧（FOLLOW_SPRING）。
+	 */
+	scrollToBottom: (options?: ScrollToBottomOptions) => void;
 	/** Keep following only when the user has not intentionally scrolled away. */
 	followToBottom: () => void;
 	stopScroll: () => void;
@@ -184,8 +199,8 @@ function ConversationContextBridge({
 			contentRef: lib.contentRef,
 			isAtBottom: lib.isAtBottom,
 			isStrictlyAtBottom: lib.state.isAtBottom,
-			scrollToBottom: () => {
-				void lib.scrollToBottom();
+			scrollToBottom: (options?: ScrollToBottomOptions) => {
+				void lib.scrollToBottom(options);
 			},
 			followToBottom: () => {
 				// 只在已贴底时跟随，避免把已滚离的用户强行拽回底部。
@@ -243,7 +258,7 @@ export function ConversationScrollButton({ className, ...props }: ConversationSc
 				className,
 			)}
 			aria-label={t("chat.scrollToBottom")}
-			onClick={() => scrollToBottom()}
+			onClick={() => scrollToBottom({ animation: CLICK_SPRING })}
 			type="button"
 			variant="ghost"
 			size="icon-xs"
