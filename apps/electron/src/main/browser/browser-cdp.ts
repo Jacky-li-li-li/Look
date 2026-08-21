@@ -73,6 +73,8 @@ type CdpResponse = Record<string, unknown>;
 /** 单个 WebContents 的 CDP 通道（debugger attach/detach/命令/超时恢复）。 */
 export class BrowserCdp {
 	private readonly wc: WebContents;
+	/** 通道重连回调：recover() 后调用，让上层失效所有代际/ref。 */
+	onRecover?: () => void;
 
 	constructor(wc: WebContents) {
 		this.wc = wc;
@@ -126,6 +128,9 @@ export class BrowserCdp {
 			if (this.wc.debugger.isAttached()) this.wc.debugger.detach();
 			this.wc.debugger.attach("1.3");
 			console.warn("[受管浏览器] CDP 命令超时，已重连调试通道。");
+			// 通道已重置：所有基于旧通道的节点/ref 代际立即失效，
+			// 让旧 ref 在下次操作时直接 miss，而非命中陈旧快照。
+			this.onRecover?.();
 		} catch (error) {
 			console.warn("[受管浏览器] CDP 超时后无法重连调试通道:", error);
 		}

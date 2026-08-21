@@ -189,7 +189,12 @@ export class LarkBridgeService {
 			const info = await this.channelManager?.getChatInfo(binding.chatId, appId).catch(() => null);
 			if (!info?.chatType) continue;
 			binding.chatType = info.chatType;
+			const wasLegacy = !binding.appId;
 			binding.appId = binding.appId ?? appId;
+			// heal 前是 legacy 绑定（以裸 chatId 为键）：认领 appId 后必须删掉旧键，
+			// 否则同一 binding 会以两个键同时存在于 map，getBindings()/saveDurableBindings()
+			// 会返回/持久化重复条目（转规后 loadBindings 又被 key 覆盖合并，但内存期不一致）。
+			if (wasLegacy) this.bindings.delete(binding.chatId);
 			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
 			healed = true;
 		}
@@ -332,9 +337,14 @@ export class LarkBridgeService {
 	 */
 	private backfillBindingMetadata(binding: ChatBinding, appId: string, msg: NormalizedMessage): void {
 		let changed = false;
+		// appId 从 undefined → 有值时需要 rekey（删掉裸 chatId 旧键）。
+		// 正常路径下 backfill 接收的 binding 已由 findBinding 认领过（appId 已设），
+		// 此分支为防御性死代码；仍保处理以免未来调用方不走 findBinding 时产生重复键。
+		let rekey = false;
 		if (!binding.appId) {
 			binding.appId = appId;
 			changed = true;
+			rekey = true;
 		}
 		if (!binding.chatType && msg.chatType) {
 			binding.chatType = msg.chatType;
@@ -349,6 +359,7 @@ export class LarkBridgeService {
 			changed = true;
 		}
 		if (changed) {
+			if (rekey) this.bindings.delete(binding.chatId);
 			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
 			this.saveDurableBindings();
 		}
@@ -701,8 +712,23 @@ export class LarkBridgeService {
 			return;
 		}
 
+		const sessionId = binding.sessionId;
+		// 先终结累加器：与卡片「停止」按钮同一套语义——标记 done、resolveDone、
+		// 刷新最终卡片后释放。abortAgent 可能因会话已 idle 而不发出 error/agent_end
+		// 事件，靠 SDK 事件回收累加器会让该会话的回复卡占着内存直到 5 分钟超时。
+		const acc = this.replyAccumulators.get(sessionId);
+		if (acc && !acc.done) {
+			acc.status = "error";
+			acc.error = "已停止";
+			acc.logs.push("用户通过 /stop 停止了会话。");
+			acc.done = true;
+			acc.resolveDone();
+			await this.replyPresenter.flushUpdate(acc, true);
+			this.releaseAccumulator(sessionId, "用户已停止");
+		}
+
 		try {
-			await this.runtimeManager.abortAgent(binding.sessionId);
+			await this.runtimeManager.abortAgent(sessionId);
 			await channel.send(chatId, { text: "⏹️ 已停止当前 Agent 会话。" });
 		} catch {
 			await channel.send(chatId, { text: "⚠️ 停止会话时出错（可能已经处于空闲状态）。" });

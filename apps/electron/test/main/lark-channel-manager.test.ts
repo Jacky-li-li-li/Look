@@ -756,6 +756,32 @@ describe("LarkChannelManager", () => {
 		expect(JSON.stringify(controller.current)).not.toContain("Agent 未返回文本回复");
 	});
 
+	it("/stop releases the accumulator even when the agent never emits agent_end", async () => {
+		const manager = new LarkChannelManager(createMainWindow());
+		const bridge = new LarkBridgeService();
+		// sendMessage 挂住不发出任何事件（模拟会话已 idle / abort 不发 error/agent_end）：
+		// 靠 SDK 事件回收累加器的路径不会触发，必须由 /stop 兑底释放。
+		const runtime = createRuntimeMock(async () => {
+			await new Promise<void>(() => {});
+		});
+		manager.onConnectionReady = () => bridge.init(runtime as unknown as IImAgentHost, manager);
+
+		await manager.connectManual({ appId: "cli_manual", appSecret: "secret" });
+		// 不 await：该消息会挂住整个轮次，/stop 作为命令不走串行队列，可与挂起轮次并发执行。
+		void larkMocks.channels[0].emit("message", sampleMessage("hello agent"));
+		await flushAsync();
+
+		// 消息入列后累加器应处于运行中。
+		expect(bridge.getStatus().runningSessions).toEqual(["session_1"]);
+
+		await larkMocks.channels[0].emit("message", sampleMessage("/stop"));
+		await flushAsync();
+
+		// 兑底释放后累加器不再占内存；abortAgent 仍被调。
+		expect(bridge.getStatus().runningSessions).toEqual([]);
+		expect(runtime.abortAgent).toHaveBeenCalledWith("session_1");
+	});
+
 	it("reuses the /new session when the next chat message arrives before binding creation finishes", async () => {
 		const manager = new LarkChannelManager(createMainWindow());
 		const bridge = new LarkBridgeService();
@@ -1191,6 +1217,12 @@ describe("LarkChannelManager", () => {
 		expect(stray?.chatType).toBeUndefined();
 		// A different bot never resolves these bindings as its own p2p channel.
 		expect(await bridge.resolveP2pBinding("cli_bot_b")).toBeNull();
+
+		// Heal 必须删掉裸 chatId 旧键，同一 binding 不得以两个键同时存在
+		// （否则 getBindings()/saveDurableBindings() 会返回/持久化重复条目）。
+		const all = bridge.getBindings();
+		expect(all.filter((b) => b.chatId === "oc_legacy")).toHaveLength(1);
+		expect(all).toHaveLength(2);
 	});
 
 	it("routes sends through per-channel credentials with cached ad-hoc clients", async () => {

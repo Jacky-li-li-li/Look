@@ -232,6 +232,38 @@ describe("BrowserService (WebContentsView + CDP)", () => {
 		await expect(service.click(handle, "main", 5)).rejects.toThrow(/已失效|重新调用 browser_snapshot/);
 	});
 
+	it("click dispatches CDP mousePressed/Released at the resolved element center", async () => {
+		// 正向覆盖：resolveRefCenter 返回中心坐标后，CDP 事件必须用该坐标。
+		const sendCommand = wc().debugger.sendCommand as ReturnType<typeof vi.fn>;
+		(wc().executeJavaScript as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => ({
+			x: 100,
+			y: 50,
+		}));
+		await service.click(handle, "main", 3);
+		const pressed = sendCommand.mock.calls.find(
+			(call) => call[0] === "Input.dispatchMouseEvent" && call[1]?.type === "mousePressed",
+		);
+		const released = sendCommand.mock.calls.find(
+			(call) => call[0] === "Input.dispatchMouseEvent" && call[1]?.type === "mouseReleased",
+		);
+		expect(pressed?.[1]).toMatchObject({ x: 100, y: 50, button: "left", clickCount: 1 });
+		expect(released?.[1]).toMatchObject({ x: 100, y: 50, button: "left", clickCount: 1 });
+	});
+
+	it("click uses behavior:instant scrollIntoView so smooth-scroll pages do not mis-target", async () => {
+		// 页面设 scroll-behavior: smooth 时 scrollIntoView 默认行为会启动动画后同步返回，
+		// 拿到中间帧坐标会让 CDP 点击落空——脚本必须强制 behavior: "instant"。
+		(wc().executeJavaScript as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => ({
+			x: 1,
+			y: 2,
+		}));
+		await service.click(handle, "main", 1);
+		const script = (wc().executeJavaScript as ReturnType<typeof vi.fn>).mock.calls.find((call) =>
+			String(call[0]).includes('behavior: "instant"'),
+		)?.[0] as string;
+		expect(script).toContain('behavior: "instant"');
+	});
+
 	it("click/fill dispatch real CDP input events", async () => {
 		const sendCommand = wc().debugger.sendCommand as ReturnType<typeof vi.fn>;
 		// fake 对 data-look-ref 查询返回 null → click/fill 抛 stale-ref

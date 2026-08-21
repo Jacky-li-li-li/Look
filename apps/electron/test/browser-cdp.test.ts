@@ -1,5 +1,7 @@
+import type { WebContents } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	BrowserCdp,
 	BrowserCdpTimeoutError,
 	BrowserOperationAbortedError,
 	withBrowserCdpTimeout,
@@ -89,5 +91,64 @@ describe("withBrowserCdpTimeout", () => {
 		await vi.advanceTimersByTimeAsync(10);
 		await assertion;
 		expect(vi.getTimerCount()).toBe(0);
+	});
+});
+
+describe("BrowserCdp.recover", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function createWebContentsMock(): WebContents {
+		const attached = { current: false };
+		return {
+			debugger: {
+				isAttached: () => attached.current,
+				attach: () => {
+					attached.current = true;
+				},
+				detach: () => {
+					attached.current = false;
+				},
+				sendCommand: vi.fn(() => new Promise(() => {})), // never settles → 超时
+			},
+		} as unknown as WebContents;
+	}
+
+	it("invokes onRecover after a command times out (channel reset invalidates generations)", async () => {
+		const wc = createWebContentsMock();
+		const cdp = new BrowserCdp(wc);
+		let recoverCount = 0;
+		cdp.onRecover = () => {
+			recoverCount += 1;
+		};
+
+		const send = cdp.send("Page.navigate", undefined, 100);
+		const assertion = expect(send).rejects.toBeInstanceOf(BrowserCdpTimeoutError);
+		await vi.advanceTimersByTimeAsync(1_000);
+		await assertion;
+
+		// recover() 应被调一次：detach+重 attach，并触发 onRecover 回调。
+		expect(recoverCount).toBe(1);
+		expect(wc.debugger.isAttached()).toBe(true);
+	});
+
+	it("does not invoke onRecover when the command resolves in time", async () => {
+		const wc = createWebContentsMock();
+		(wc.debugger.sendCommand as ReturnType<typeof vi.fn>).mockImplementation(async () => ({ ok: true }));
+		const cdp = new BrowserCdp(wc);
+		let recoverCount = 0;
+		cdp.onRecover = () => {
+			recoverCount += 1;
+		};
+
+		const send = cdp.send("Page.navigate", undefined, 1_000);
+		const assertion = expect(send).resolves.toEqual({ ok: true });
+		await vi.advanceTimersByTimeAsync(50);
+		await assertion;
+		expect(recoverCount).toBe(0);
 	});
 });

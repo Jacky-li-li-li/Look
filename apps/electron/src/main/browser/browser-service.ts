@@ -365,6 +365,11 @@ export class BrowserService implements BrowserHost {
 		const cdp = new BrowserCdp(view.webContents);
 		cdp.attach();
 		const tab: TabRecord = { view, cdp, generation: 0 };
+		// CDP 超时重连后通道重置，主动递增代际让旧 ref 立即失效
+		// （否则旧 ref 要等下一次 observe() 才失效，期间 click/fill 会命中陈旧快照）。
+		cdp.onRecover = () => {
+			tab.generation++;
+		};
 		this.installTabListeners(state, tabName, tab);
 		state.tabs.set(tabName, tab);
 		return tab;
@@ -1003,7 +1008,10 @@ export class BrowserService implements BrowserHost {
 			`(() => {
 				const el = document.querySelector(${JSON.stringify(selector)});
 				if (!el) return null;
-				el.scrollIntoView({ block: "center", inline: "nearest" });
+				// behavior: "instant" 强制瞬时滚动：页面若设了 scroll-behavior: smooth，
+				// scrollIntoView 会启动平滑动画后同步返回，此时 getBoundingClientRect 拿到的是
+				// 动画当前帧位置而非最终位置，CDP mousePressed 会点到元素移走后的空位/错位元素。
+				el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
 				const r = el.getBoundingClientRect();
 				return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 			})()`,
