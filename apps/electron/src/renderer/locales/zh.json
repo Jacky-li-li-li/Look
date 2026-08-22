@@ -1040,7 +1040,10 @@
     "minimize": "最小化",
     "pin": "固定便利贴",
     "unpin": "取消固定",
-    "markFailed": "会话已创建，但草稿标记失败，请刷新后重试"
+    "markFailed": "会话已创建，但草稿标记失败，请刷新后重试",
+    "today": "今天",
+    "yesterday": "昨天",
+    "earlier": "更早"
   },
   "browser": {
     "panelTitle": "内置浏览器",

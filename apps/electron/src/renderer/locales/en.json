@@ -1040,7 +1040,10 @@
     "minimize": "Minimize",
     "pin": "Pin note",
     "unpin": "Unpin note",
-    "markFailed": "Session created, but marking the draft failed. Refresh and try again."
+    "markFailed": "Session created, but marking the draft failed. Refresh and try again.",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "earlier": "Earlier"
   },
   "browser": {
     "panelTitle": "Built-in Browser",

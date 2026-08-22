@@ -1040,7 +1040,10 @@
     "minimize": "最小化",
     "pin": "メモを固定",
     "unpin": "固定を解除",
-    "markFailed": "セッションは作成されましたが、下書きのマークに失敗しました"
+    "markFailed": "セッションは作成されましたが、下書きのマークに失敗しました",
+    "today": "今日",
+    "yesterday": "昨日",
+    "earlier": "それ以前"
   },
   "browser": {
     "panelTitle": "内蔵ブラウザ",
