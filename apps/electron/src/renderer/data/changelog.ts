@@ -20,6 +20,37 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.4.0",
+		date: "2026-08-22",
+		items: [
+			{
+				zh: "主题系统重构：配色主题与明暗模式解耦，现在可独立选择固定配色主题（暖阳/黛蓝/森林/暮紫等家族）与全局明暗模式，主题选择更清晰、风格切换不再互相影响",
+				en: "Theme system rebuilt: color themes and light/dark mode are now decoupled — pick a fixed color family (warm sun, ink blue, forest, dusk purple, …) and a global light/dark mode independently, so switching styles no longer interferes with your palette",
+				ja: "テーマシステムを再構築：配色テーマとライト／ダークモードを分離し、固定配色テーマ（サンセット・インクブルー・フォレスト・ダスクパープルなど）と全体の明暗モードをそれぞれ独立に選択可能に。スタイル切替が配色に影響しなくなりました",
+			},
+			{
+				zh: "草稿页重设为便签墙布局：所有草稿以便签卡片形式铺陈在墙面上，随手记录、一目了然，并适配多语言",
+				en: "Drafts page redesigned as a sticky-note wall: every draft is now a note card laid out on the wall, easy to scan and capture on the fly, with localization support",
+				ja: "下書きページを付箋ウォール風に刷新：すべての下書きがカード形式で壁面に並び、パッと見渡せて手軽に記録できます。多言語対応も追加",
+			},
+			{
+				zh: "文件查看器全面重构：拆分为独立模块并新增侧边目录（TOC）、悬浮面板与代码高亮，大文件打开更流畅稳定",
+				en: "File viewer rebuilt from the ground up: now split into modular pieces with a side table of contents, floating panel, and code highlighting — opening large files is smoother and more reliable",
+				ja: "ファイルビューアを全面再構築：モジュール化に加え、サイド目次（TOC）・フローティングパネル・コードハイライトを新設。大きなファイルもよりスムーズで安定して開けます",
+			},
+			{
+				zh: "新增 OAuth 网页授权登录流程，支持通过浏览器完成第三方授权登录",
+				en: "New OAuth web authorization flow: third-party sign-in can now be completed through an in-app browser window",
+				ja: "OAuth のウェブ認証フローを新設：アプリ内ブラウザから第三者サービスへの承認ログインが可能に",
+			},
+			{
+				zh: "多项稳定性修复：浏览器自动化 CDP 代际失效、停止操作（/stop）兜底、消息滚动竞态、飞书 legacy 绑定去重等问题一并修复",
+				en: "Stability fixes: browser automation CDP generation invalidation, a /stop fallback, message scroll race conditions, and Lark legacy binding dedup are all fixed",
+				ja: "安定性を修正：ブラウザ自動化の CDP 世代無効化、/stop フォールバック、メッセージスクロールの競合、Lark レガシー binding の重複などを修正",
+			},
+		],
+	},
+	{
 		version: "2.3.5",
 		date: "2026-08-16",
 		items: [
