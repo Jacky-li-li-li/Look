@@ -9,8 +9,8 @@ import type {
 	ScheduledTaskExecutor,
 } from "../../src/main/scheduler/agent-task-executor.js";
 import { cronFromSchedule, SchedulerService } from "../../src/main/scheduler/scheduler-service.js";
-import { FileTaskLock } from "../../src/main/scheduler/task-lock.js";
 import { ScheduledTaskStore } from "../../src/main/scheduler/task-store.js";
+import { FileTaskLock } from "../../src/main/utils/task-lock.js";
 
 const cleanupPaths: string[] = [];
 const services: SchedulerService[] = [];

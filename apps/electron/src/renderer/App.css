@@ -1411,19 +1411,6 @@ body {
 		overflow-anchor: none;
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		[data-tool-panel-body],
-		[data-execution-group-body] {
-			transition-duration: 1ms;
-		}
-		/* reveal 动画（含 animation-delay 的 opacity:0 空白窗口）对减少动效
-		   用户同样应关闭，否则展开内容仍会先空白一段时间再显现。 */
-		[data-tool-panel-body][data-open="true"] > .overflow-hidden > *,
-		[data-execution-group-body][data-open="true"] > .overflow-hidden > * > [data-tool-group-item] {
-			animation: none;
-		}
-	}
-
 	.look-markdown--streaming [data-sd-animate] {
 		position: relative;
 		top: 0;
@@ -1448,6 +1435,19 @@ body {
 
 	[data-execution-group-body][data-open="true"] > .overflow-hidden > * > [data-tool-group-item] {
 		animation: tool-reveal 160ms cubic-bezier(0, 0, 0.2, 1) both;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		[data-tool-panel-body],
+		[data-execution-group-body] {
+			transition-duration: 1ms;
+		}
+		/* reveal 动画（含 animation-delay 的 opacity:0 空白窗口）对减少动效
+		   用户同样应关闭，否则展开内容仍会先空白一段时间再显现。 */
+		[data-tool-panel-body][data-open="true"] > .overflow-hidden > *,
+		[data-execution-group-body][data-open="true"] > .overflow-hidden > * > [data-tool-group-item] {
+			animation: none;
+		}
 	}
 
 	/* ============================================================

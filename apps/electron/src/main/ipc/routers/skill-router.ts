@@ -12,7 +12,10 @@ export const skillRouter: IpcRouter = (ctx, register) => {
 
 	register("skills:import-paths", async (data) => {
 		guardStringArray(data.paths, "paths");
-		return await ctx.skill.importPaths(data.paths);
+		const imported = await ctx.skill.importPaths(data.paths);
+		return imported.success
+			? { success: true, importedCount: imported.importedCount }
+			: { success: false, error: imported.error ?? "import failed" };
 	});
 
 	register("skills:detect-common", async () => {

@@ -11,7 +11,7 @@ import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "..
 import type { AutoTitleService } from "../../services/auto-title.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import { withDeadline } from "../../utils/with-deadline.js";
-import { SESSION_INIT_TIMEOUT_MS } from "../constants.js";
+import { DISPOSE_AWAIT_TIMEOUT_MS, SESSION_INIT_TIMEOUT_MS } from "../constants.js";
 import type { SessionEventProcessor } from "../events/session-event-processor.js";
 import type { SessionNotifier } from "../events/session-notifier.js";
 import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
@@ -266,7 +266,18 @@ export class RuntimeLifecycleCoordinator {
 	}
 
 	async disposeAllRuntimes(): Promise<void> {
-		await this.options.runtimeRegistry.awaitAllInitializations();
+		// 关停不能被挂死的初始化无限吊住（见 DISPOSE_AWAIT_TIMEOUT_MS 注释）：
+		// 超时后放弃等待 in-flight 创建，直接处置已注册的 runtime。
+		try {
+			await withDeadline(
+				this.options.runtimeRegistry.awaitAllInitializations(),
+				DISPOSE_AWAIT_TIMEOUT_MS,
+				`Runtime initializations did not settle within ${DISPOSE_AWAIT_TIMEOUT_MS / 1000}s during shutdown`,
+			);
+		} catch {
+			const pending = this.options.runtimeRegistry.pendingInitializations();
+			console.error(`[Look] Shutdown timed out waiting for session initializations: ${pending.join(", ")}`);
+		}
 		const sessionIds = [...this.options.runtimeRegistry.keys()];
 		await Promise.all(sessionIds.map((sessionId) => this.disposeRuntime(sessionId, true)));
 	}
@@ -405,7 +416,13 @@ export class RuntimeLifecycleCoordinator {
 		}
 		const nextBinding = this.bindingFor(session);
 		if (session.sessionId !== previousSessionId) {
-			await this.options.runtimeRegistry.awaitInitialization(session.sessionId);
+			// 有界等待新 id 的 in-flight 初始化（防止挂死吊住 rebind）；超时继续
+			// 走碰撞检查，迟到注册的冲突由 bindRuntime 的冲突检测兜底。
+			await withDeadline(
+				this.options.runtimeRegistry.awaitInitialization(session.sessionId),
+				DISPOSE_AWAIT_TIMEOUT_MS,
+				`Session ${session.sessionId} initialization did not settle before rebind`,
+			).catch(() => undefined);
 		}
 		const collision = this.options.runtimeRegistry.get(session.sessionId);
 		if (session.sessionId !== previousSessionId && collision) {
@@ -544,7 +561,18 @@ export class RuntimeLifecycleCoordinator {
 	}
 
 	private async performDisposeRuntime(sessionId: string, abort: boolean): Promise<void> {
-		await this.options.runtimeRegistry.awaitInitialization(sessionId);
+		// 等待 in-flight 初始化必须有界：销毁（删除会话/关停）不该为挂死的
+		// 初始化永久等待。超时后处置当前已注册状态；迟到的初始化结果由
+		// bindRuntime 的冲突检测去重（后到者被 dispose）。
+		try {
+			await withDeadline(
+				this.options.runtimeRegistry.awaitInitialization(sessionId),
+				DISPOSE_AWAIT_TIMEOUT_MS,
+				`Session ${sessionId} initialization did not settle within ${DISPOSE_AWAIT_TIMEOUT_MS / 1000}s before dispose`,
+			);
+		} catch {
+			console.error(`[Look] Timed out waiting for initialization before disposing session ${sessionId}`);
+		}
 		const managed = this.options.runtimeRegistry.get(sessionId);
 		if (!managed) return;
 		const errors: unknown[] = [];

@@ -1,6 +1,12 @@
 // Shared package entry point — types, storage helpers, and domain contracts.
 // UI components have moved to @look/ui.
 
+export type {
+	InvokeResponse,
+	InvokeResponseMap,
+	InvokeResult,
+} from "./contracts/invoke-response.js";
+export type { IpcResult } from "./contracts/ipc.js";
 export {
 	isLookTone,
 	LOOK_TONE_SCHEME,
@@ -51,6 +57,8 @@ export type {
 	AvailableModel,
 	BrowserViewBounds,
 	BrowserViewLayout,
+	CustomProviderInput,
+	CustomProviderModelInput,
 	EventCallback,
 	FileTreeNode,
 	ForkedSessionResult,

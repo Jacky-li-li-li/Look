@@ -91,6 +91,11 @@ export class RuntimeRegistry {
 		);
 	}
 
+	/** 仍在初始化中的会话 id（关停超时诊断日志用）。 */
+	pendingInitializations(): string[] {
+		return Array.from(this.initializations.keys());
+	}
+
 	async withExclusive<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
 		return this.serial.run(sessionId, task);
 	}

@@ -126,10 +126,7 @@ export interface LookAPI {
 	runScheduledTaskNow(taskId: string): Promise<IpcResult<{ accepted: true }>>;
 	testScheduledTask(task: ScheduledTaskInput, taskId?: string): Promise<IpcResult<ScheduledTaskTestResult>>;
 	listScheduledTaskLogs(taskId?: string, limit?: number): Promise<IpcResult<{ logs: ScheduledTaskRunLog[] }>>;
-	validateCron(
-		cron: string,
-		timezone?: string,
-	): Promise<IpcResult<{ valid: boolean; error?: string; nextRunAt?: string }>>;
+	validateCron(cron: string, timezone?: string): Promise<IpcResult<{ valid: boolean; nextRunAt?: string }>>;
 	switchModel(agentId: string, model: string): Promise<IpcResult>;
 	updateThinking(agentId: string, level: ThinkingLevel): Promise<IpcResult>;
 	abortAgent(agentId: string): Promise<IpcResult>;
@@ -416,7 +413,7 @@ export interface LookAPI {
 	listMcpTools(name: string): Promise<IpcResult<{ tools: unknown[] }>>;
 	addMcpServer(config: Record<string, unknown>): Promise<IpcResult>;
 	removeMcpServer(name: string): Promise<IpcResult>;
-	testMcpServer(name: string): Promise<IpcResult<{ tools: unknown[]; error?: string }>>;
+	testMcpServer(name: string): Promise<IpcResult<{ tools?: unknown[] }>>;
 	toggleMcpServer(name: string, enabled: boolean): Promise<IpcResult>;
 	updateMcpServer(name: string, config: Record<string, unknown>): Promise<IpcResult>;
 

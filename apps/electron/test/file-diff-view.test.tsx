@@ -21,7 +21,7 @@ describe("segmentDiffLines", () => {
 	it("连续 context 超过阈值折叠", () => {
 		// 10 行 context + 1 行变更
 		const oldContent = Array.from({ length: 10 }, (_, i) => `line ${i}`).join("\n");
-		const newContent = Array.from({ length: 10 }, (_, i) => `line ${i}`).join("\n") + "\nnew line";
+		const newContent = `${Array.from({ length: 10 }, (_, i) => `line ${i}`).join("\n")}\nnew line`;
 		const lines = lineDiff(oldContent, newContent);
 		const segments = segmentDiffLines(lines);
 		expect(segments[0]?.kind).toBe("fold");
@@ -41,7 +41,7 @@ describe("FileDiffView 组件", () => {
 
 	it("大段 context 显示折叠按钮，点击展开", () => {
 		const oldContent = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
-		const newContent = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n") + "\nadded";
+		const newContent = `${Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n")}\nadded`;
 		const { getByText, queryByText } = render(<FileDiffView oldContent={oldContent} newContent={newContent} />);
 
 		// 折叠按钮存在（20 - 4 = 16 行未变更）

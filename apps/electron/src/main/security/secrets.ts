@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { safeStorage } from "electron";
+import { writeJsonFile } from "../utils/atomic-writer.js";
 
 const ENCRYPTED_PREFIX = "enc:";
 
@@ -96,11 +97,8 @@ export class EncryptedCredentialStore implements CredentialStore {
 	}
 
 	private writeData(data: Record<string, Credential>): void {
-		const dir = path.dirname(this.filePath);
-		fs.mkdirSync(dir, { recursive: true });
-		const tmp = `${this.filePath}.tmp`;
-		fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
-		fs.renameSync(tmp, this.filePath);
+		// mode 0o600：密钥文件不给同组/其他用户读权限。
+		writeJsonFile(this.filePath, data, 2, 0o600);
 	}
 
 	private decrypt(credential: Credential): Credential {

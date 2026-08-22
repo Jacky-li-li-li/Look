@@ -85,7 +85,8 @@ export const imRouter: IpcRouter = (ctx, register) => {
 		if (!ctx.im.channelManager) {
 			return { success: false, error: "Feishu channel manager is not available" };
 		}
-		return await ctx.im.channelManager.sendTestMessage({ appId, receiveIdType, receiveId, text });
+		const sent = await ctx.im.channelManager.sendTestMessage({ appId, receiveIdType, receiveId, text });
+		return sent.success ? { success: true } : { success: false, error: sent.error ?? "send failed" };
 	});
 
 	register("im:test-connection", async (data) => {
@@ -93,7 +94,10 @@ export const imRouter: IpcRouter = (ctx, register) => {
 		if (!ctx.im.channelManager) {
 			return { success: false, error: "Feishu channel manager is not available" };
 		}
-		return await ctx.im.channelManager.testConnection(appId);
+		const tested = await ctx.im.channelManager.testConnection(appId);
+		// service 的失败信息在 message 字段；envelope 化时提到 error，
+		// 否则渲染端失败分支读 error 只能拿到兜底文案（真实错误被吞）。
+		return tested.success ? { success: true, message: tested.message } : { success: false, error: tested.message };
 	});
 
 	register("im:test-connection-direct", async (data) => {
@@ -103,7 +107,8 @@ export const imRouter: IpcRouter = (ctx, register) => {
 		if (!ctx.im.channelManager) {
 			return { success: false, error: "Feishu channel manager is not available" };
 		}
-		return await ctx.im.channelManager.testConnectionDirect(appId, appSecret);
+		const tested = await ctx.im.channelManager.testConnectionDirect(appId, appSecret);
+		return tested.success ? { success: true, message: tested.message } : { success: false, error: tested.message };
 	});
 
 	register("im:update-channel", async (data) => {

@@ -44,8 +44,12 @@ export interface SessionInfoServiceDependencies {
 export class SessionInfoService {
 	private imBindingsCache: ReturnType<typeof loadBindings> | undefined;
 	private imBindingsCacheTime = 0;
-	/** Cache for non-live persisted sessions; key is derived from stable metadata. */
+	/**
+	 * Cache for non-live persisted sessions; key is derived from stable metadata.
+	 * FIFO 上限：已删除会话的条目没有显式回收点，避免长会话期无限增长。
+	 */
 	private readonly persistedInfoCache = new Map<string, { key: string; info: AgentInfo }>();
+	private static readonly PERSISTED_CACHE_MAX = 500;
 
 	constructor(private readonly deps: SessionInfoServiceDependencies) {}
 
@@ -172,6 +176,10 @@ export class SessionInfoService {
 			...this.subagentFields(session.id, session),
 		};
 		this.persistedInfoCache.set(session.id, { key: cacheKey, info });
+		if (this.persistedInfoCache.size > SessionInfoService.PERSISTED_CACHE_MAX) {
+			const oldest = this.persistedInfoCache.keys().next().value;
+			if (oldest !== undefined) this.persistedInfoCache.delete(oldest);
+		}
 		return info;
 	}
 

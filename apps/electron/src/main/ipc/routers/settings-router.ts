@@ -2,28 +2,17 @@
 // Settings router — API keys, custom providers, general settings, prompts
 // ============================================================
 
-import type { ProviderResponse } from "@earendil-works/pi-ai";
-import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { LOOK_TONE_VALUES, LOOK_TONE_WINDOW_BG } from "@look/shared";
+import { LOOK_TONE_WINDOW_BG } from "@look/shared";
 import { maskSecret } from "@look/shared/secret-mask";
 import type { LookTone } from "@look/shared/types";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
-import { testApiKey, testConfiguredProvider } from "../../models/validator.js";
+import { testApiKey, testConfiguredProvider, testCustomProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
 import { assertValid, toProviderConfig } from "../../settings/custom-providers.js";
-import {
-	guardBoolean,
-	guardCustomProviderInput,
-	guardEnum,
-	guardNullableString,
-	guardNumber,
-	guardObject,
-	guardProvider,
-	guardString,
-	guardStringArray,
-} from "../guards.js";
+import { OAuthLoginService } from "../../settings/oauth-login-service.js";
+import { guardCustomProviderInput, guardObject, guardProvider, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
+import { guardGeneralSettingsPatch } from "./settings-general-guards.js";
 
 /**
  * 网络模型刷新的硬性超时。刷新内部每个 provider 的 fetchModels 可能
@@ -33,6 +22,13 @@ import type { IpcRouter } from "../invoke-context.js";
 const MODEL_NETWORK_REFRESH_TIMEOUT_MS = 30_000;
 
 export const settingsRouter: IpcRouter = (ctx, register) => {
+	// 有状态登录编排（pending prompt / 超时 / 窗口关闭拒绝）在服务内；
+	// router 每次注册时随当前主窗口重建，与旧闭包实现生命周期一致。
+	const oauthLogin = new OAuthLoginService({
+		emit: (event) => ctx.session.notifier.emit(event),
+		mainWindow: ctx.mainWindow,
+	});
+
 	register("settings:get", async () => {
 		const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 		return { success: true, ...result };
@@ -85,124 +81,24 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		return { success: true, result };
 	});
 
-	// Track pending OAuth prompts that need renderer interaction.
-	const pendingPrompts = new Map<
-		string,
-		{ resolve: (value: string) => void; reject: (err: Error) => void; timer: NodeJS.Timeout }
-	>();
-	/** 渲染端崩溃/未响应时 prompt 的最大等待时间，超时 reject 避免主进程永久挂起。 */
-	const PROMPT_TIMEOUT_MS = 5 * 60 * 1000;
-
-	// 窗口关闭（渲染端崩溃/退出）时拒绝所有 pending prompt，避免主进程泄漏。
-	ctx.mainWindow.once("closed", () => {
-		for (const [, pending] of pendingPrompts) {
-			clearTimeout(pending.timer);
-			pending.reject(new Error("Renderer window closed"));
-		}
-		pendingPrompts.clear();
-	});
-
 	register("login:prompt-respond", async (data) => {
 		const promptId = guardString(data.promptId, "promptId");
 		const value = guardString(data.value, "value");
-		const pending = pendingPrompts.get(promptId);
-		if (pending) {
-			pendingPrompts.delete(promptId);
-			clearTimeout(pending.timer);
-			pending.resolve(value);
-		}
+		oauthLogin.respond(promptId, value);
 		return { success: true };
 	});
 
 	register("login:prompt-cancel", async (data) => {
 		const promptId = guardString(data.promptId, "promptId");
-		const pending = pendingPrompts.get(promptId);
-		if (pending) {
-			pendingPrompts.delete(promptId);
-			clearTimeout(pending.timer);
-			pending.reject(new Error("Login cancelled"));
-		}
+		oauthLogin.cancel(promptId);
 		return { success: true };
 	});
 
 	register("settings:provider-login", async (data) => {
 		const _provider = guardProvider(data.provider);
 
-		const providerObj = ctx.model.runtime.getProvider(_provider);
-		const providerName = providerObj?.name ?? _provider;
-
-		if (!providerObj?.auth?.oauth) {
-			return {
-				success: false,
-				error: `${providerName} does not support OAuth login`,
-			};
-		}
-
-		const interaction: import("@earendil-works/pi-ai").AuthInteraction = {
-			signal: undefined,
-			prompt: async (prompt) => {
-				const promptId = crypto.randomUUID();
-				const promptEvent: import("@look/shared/types").MainToRendererEvent = {
-					type: "login:prompt",
-					providerId: _provider,
-					promptId,
-					prompt:
-						prompt.type === "select"
-							? { type: "select", message: prompt.message, options: [...prompt.options] }
-							: prompt.type === "manual_code"
-								? { type: "manual_code", message: prompt.message, placeholder: prompt.placeholder }
-								: { type: "info", message: prompt.message },
-				};
-				ctx.session.notifier.emit(promptEvent);
-
-				return new Promise<string>((resolve, reject) => {
-					// 超时兜底：渲染端崩溃 / 用户长期不响应时 reject，
-					// 否则 pendingPrompts 永久挂起导致 runtime.login() 泄漏。
-					const timer = setTimeout(() => {
-						pendingPrompts.delete(promptId);
-						reject(new Error("Login prompt timed out"));
-					}, PROMPT_TIMEOUT_MS);
-					timer.unref?.();
-					pendingPrompts.set(promptId, { resolve, reject, timer });
-				});
-			},
-			notify: (event) => {
-				if (event.type === "auth_url") {
-					ctx.session.notifier.emit({
-						type: "login:prompt",
-						providerId: _provider,
-						promptId: crypto.randomUUID(),
-						prompt: { type: "auth_url", url: event.url, instructions: event.instructions },
-					});
-				} else if (event.type === "device_code") {
-					ctx.session.notifier.emit({
-						type: "login:prompt",
-						providerId: _provider,
-						promptId: crypto.randomUUID(),
-						prompt: {
-							type: "device_code",
-							userCode: event.userCode,
-							verificationUri: event.verificationUri,
-						},
-					});
-				} else if (event.type === "progress" || event.type === "info") {
-					ctx.session.notifier.emit({
-						type: "login:prompt",
-						providerId: _provider,
-						promptId: crypto.randomUUID(),
-						prompt: { type: "progress", message: event.message },
-					});
-				}
-			},
-		};
-
-		try {
-			await ctx.model.runtime.login(_provider, "oauth", interaction);
-			ctx.session.notifier.emit({
-				type: "login:completed",
-				providerId: _provider,
-				success: true,
-			});
+		const outcome = await oauthLogin.loginWithInteraction(ctx.model.runtime, _provider);
+		if (outcome.ok) {
 			await ctx.model.runtime.refresh({
 				allowNetwork: true,
 				signal: AbortSignal.timeout(MODEL_NETWORK_REFRESH_TIMEOUT_MS),
@@ -210,20 +106,13 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 			ctx.session.notifier.emit({ type: "model:updated" });
 			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
 			return { success: true, ...result };
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			ctx.session.notifier.emit({
-				type: "login:completed",
-				providerId: _provider,
-				success: false,
-				error: message,
-			});
-			if (message === "Login cancelled") {
-				const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
-				return { success: false, ...result, error: message };
-			}
-			return { success: false, error: message };
 		}
+		if (outcome.cancelled) {
+			const result = getProviderSettings(ctx.model.registry, ctx.model.customProviders);
+			// cancelled 必有错误文案（"Login cancelled"），兜底满足 IpcResult 的 error: string。
+			return { success: false, ...result, error: outcome.error ?? "Login cancelled" };
+		}
+		return { success: false, error: outcome.error ?? "Login failed" };
 	});
 
 	register("settings:provider-logout", async (data) => {
@@ -270,55 +159,13 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:test-custom-provider", async (data) => {
 		const input = guardCustomProviderInput(data.payload, "payload");
 		assertValid(input);
-		const memCredentials = new InMemoryCredentialStore();
-		if (input.apiKey) {
-			await memCredentials.modify(input.name, async () => ({ type: "api_key" as const, key: input.apiKey }));
-		}
-		const memRuntime = await ModelRuntime.create({ credentials: memCredentials });
-		try {
-			memRuntime.registerProvider(input.name, toProviderConfig(input));
-		} catch (e) {
-			return {
-				success: true,
-				result: {
-					overall: "fail",
-					results: [{ modelId: "registration", ok: false, error: e instanceof Error ? e.message : String(e) }],
-				},
-			};
-		}
-
-		const results = await Promise.all(
-			input.models.map(async (m) => {
-				const start = Date.now();
-				try {
-					const model = memRuntime.getModel(input.name, m.id);
-					if (!model) {
-						return { modelId: m.id, ok: false, error: "model not found in in-memory registry" };
-					}
-					let status = 0;
-					const message = await memRuntime.completeSimple(
-						model,
-						{ messages: [{ role: "user", content: "Hi", timestamp: Date.now() }] },
-						{
-							maxTokens: 1,
-							timeoutMs: 10_000,
-							maxRetries: 0,
-							onResponse: (response: ProviderResponse) => {
-								status = response.status;
-							},
-						},
-					);
-					if (message.stopReason === "error") {
-						return { modelId: m.id, ok: false, error: message.errorMessage ?? `HTTP ${status}` };
-					}
-					return { modelId: m.id, ok: true, latencyMs: Date.now() - start };
-				} catch (e) {
-					return { modelId: m.id, ok: false, error: e instanceof Error ? e.message : String(e) };
-				}
-			}),
-		);
-		const overall = results.every((r) => r.ok) ? "ok" : "fail";
-		return { success: true, result: { overall, results } };
+		const result = await testCustomProvider({
+			name: input.name,
+			apiKey: input.apiKey,
+			models: input.models,
+			providerConfig: toProviderConfig(input),
+		});
+		return { success: true, result };
 	});
 
 	register("settings:general:get", async () => {
@@ -327,86 +174,7 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 
 	register("settings:general:set", async (data) => {
 		const settings = guardObject(data.settings, "settings");
-		if ("language" in settings) {
-			guardEnum(settings.language, "settings.language", ["en", "zh", "ja"] as const);
-		}
-		if ("autoCollapse" in settings) {
-			guardBoolean(settings.autoCollapse, "settings.autoCollapse");
-		}
-		if ("compactionEnabled" in settings) {
-			guardBoolean(settings.compactionEnabled, "settings.compactionEnabled");
-		}
-		if ("permissionMode" in settings) {
-			guardEnum(settings.permissionMode, "settings.permissionMode", ["always", "ask", "plan"] as const);
-		}
-		if ("preferredModel" in settings && settings.preferredModel !== null) {
-			guardString(settings.preferredModel, "settings.preferredModel");
-		}
-		if ("lastActiveSessionId" in settings) {
-			guardString(settings.lastActiveSessionId, "settings.lastActiveSessionId");
-		}
-		if ("lastActiveProjectId" in settings) {
-			guardString(settings.lastActiveProjectId, "settings.lastActiveProjectId");
-		}
-		if ("openProjectIds" in settings) {
-			guardStringArray(settings.openProjectIds, "settings.openProjectIds");
-		}
-		if ("openedSessionIds" in settings) {
-			guardStringArray(settings.openedSessionIds, "settings.openedSessionIds");
-		}
-		if ("themeTone" in settings) {
-			guardEnum(settings.themeTone, "settings.themeTone", LOOK_TONE_VALUES);
-		}
-		if ("autoTitleModel" in settings) {
-			guardNullableString(settings.autoTitleModel, "settings.autoTitleModel");
-		}
-		if ("planModel" in settings) {
-			guardNullableString(settings.planModel, "settings.planModel");
-		}
-		if ("subagentEnabled" in settings) {
-			guardBoolean(settings.subagentEnabled, "settings.subagentEnabled");
-		}
-		if ("enabledAgentDefinitions" in settings) {
-			if (settings.enabledAgentDefinitions !== null) {
-				guardStringArray(settings.enabledAgentDefinitions, "settings.enabledAgentDefinitions");
-			}
-		}
-		if ("enabledSkills" in settings) {
-			if (settings.enabledSkills !== null) {
-				guardStringArray(settings.enabledSkills, "settings.enabledSkills");
-			}
-		}
-		if ("aiAvatar" in settings) {
-			guardNullableString(settings.aiAvatar, "settings.aiAvatar");
-		}
-		if ("sidebarCollapsed" in settings) {
-			guardBoolean(settings.sidebarCollapsed, "settings.sidebarCollapsed");
-		}
-		if ("rightPanelCollapsed" in settings) {
-			guardBoolean(settings.rightPanelCollapsed, "settings.rightPanelCollapsed");
-		}
-		if ("rightPanelWidth" in settings) {
-			guardNumber(settings.rightPanelWidth, "settings.rightPanelWidth", { min: 200, max: 480 });
-		}
-		if ("dockPanelWidth" in settings) {
-			guardNumber(settings.dockPanelWidth, "settings.dockPanelWidth", { min: 320, max: 720 });
-		}
-		if ("desktopNotifications" in settings) {
-			guardEnum(settings.desktopNotifications, "settings.desktopNotifications", [
-				"off",
-				"needs-action",
-				"all",
-			] as const);
-		}
-		if ("messageAlignment" in settings) {
-			guardEnum(settings.messageAlignment, "settings.messageAlignment", ["left", "left-right"] as const);
-		}
-		if ("showToolExecution" in settings) {
-			guardBoolean(settings.showToolExecution, "settings.showToolExecution");
-		}
-		if ("builtinBrowserEnabled" in settings) {
-			guardBoolean(settings.builtinBrowserEnabled, "settings.builtinBrowserEnabled");
-		}
+		guardGeneralSettingsPatch(settings);
 		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
 			ctx.mainWindow.setBackgroundColor(LOOK_TONE_WINDOW_BG[settings.themeTone as LookTone] ?? "#030202");
 		}

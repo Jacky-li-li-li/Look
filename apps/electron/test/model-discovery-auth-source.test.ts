@@ -30,7 +30,7 @@ describe("Model discovery auth source consistency", () => {
 	it("runtime override makes models available through getAvailable", async () => {
 		const creds = new InMemoryCredentialStore();
 		const mr = await ModelRuntime.create({ credentials: creds, modelsPath });
-		mr.setRuntimeApiKey("openai", "sk-runtime");
+		await mr.setRuntimeApiKey("openai", "sk-runtime");
 		const registry = new ModelRegistry(mr);
 
 		// getAvailable() considers runtime overrides as configured.

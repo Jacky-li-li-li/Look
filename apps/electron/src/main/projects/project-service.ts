@@ -22,6 +22,7 @@ import {
 } from "@look/shared/look-storage";
 import { DEFAULT_PROJECT_ID, type ProjectInfo } from "@look/shared/types";
 import { v4 as uuidv4 } from "uuid";
+import { writeJsonFile } from "../utils/atomic-writer.js";
 
 export class ProjectService {
 	private readonly projects = new Map<string, ProjectInfo>();
@@ -241,9 +242,7 @@ export class ProjectService {
 
 	saveProjects(): void {
 		const projects = Array.from(this.projects.values()).map(({ valid: _valid, ...project }) => project);
-		const tmp = `${this.projectsIndexPath}.tmp`;
-		fs.writeFileSync(tmp, JSON.stringify({ projects }, null, 2));
-		fs.renameSync(tmp, this.projectsIndexPath);
+		writeJsonFile(this.projectsIndexPath, { projects }, 2);
 	}
 
 	// ── Queries ──

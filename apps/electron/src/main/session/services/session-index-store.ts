@@ -18,6 +18,7 @@ import { existsSync } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { getWorkspaceDir } from "@look/shared/look-storage";
+import { writeJsonFileAsync } from "../../utils/atomic-writer.js";
 import type { StoredSession } from "./session-catalog.js";
 
 /** 索引版本：v2 起子会话 path 使用真实文件路径（v1 拼接 <sessionId>.jsonl 无时间戳，
@@ -116,7 +117,7 @@ export class SessionIndexStore {
 		}
 	}
 
-	/** 原子写入索引快照（tmp + rename）；失败静默（下次 refresh 重扫重建）。 */
+	/** 原子写入索引快照（唯一临时文件 + rename）；失败静默（下次 refresh 重扫重建）。 */
 	async save(projectId: string, snapshot: SessionIndexSnapshot): Promise<void> {
 		const data: SessionIndexFile = {
 			version: INDEX_VERSION,
@@ -135,13 +136,11 @@ export class SessionIndexStore {
 				subagentAgentName: s.subagentAgentName,
 			})),
 		};
-		const tmpPath = `${this.indexPath(projectId)}.tmp-${process.pid}`;
 		try {
-			await fsp.writeFile(tmpPath, JSON.stringify(data), "utf8");
-			await fsp.rename(tmpPath, this.indexPath(projectId));
+			// 索引可能很大，保持压缩（pretty=false）。
+			await writeJsonFileAsync(this.indexPath(projectId), data, false);
 		} catch (error) {
 			console.error(`[Look][SessionIndex] Failed to write index for ${projectId}:`, error);
-			await fsp.rm(tmpPath, { force: true }).catch(() => {});
 		}
 	}
 }

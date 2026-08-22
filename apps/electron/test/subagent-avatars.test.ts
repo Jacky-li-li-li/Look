@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { OPEN_PEEPS } from "../src/renderer/components/AgentMarketplace/openPeeps";
+import { OPEN_PEEPS } from "../src/renderer/lib/openPeeps";
 import { assignPeepId, resetPeepAssignmentsForTest } from "../src/renderer/lib/subagentAvatars";
 
 beforeEach(() => {

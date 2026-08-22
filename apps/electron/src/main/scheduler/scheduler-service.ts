@@ -8,6 +8,7 @@ import type {
 	ScheduledTaskTestResult,
 } from "@look/shared/types";
 import cron, { type ScheduledTask as CronTask } from "node-cron";
+import type { FileTaskLock } from "../utils/task-lock.js";
 import type { ScheduledTaskExecutor } from "./agent-task-executor.js";
 import {
 	cronFromSchedule,
@@ -21,7 +22,6 @@ import {
 	truncateLogValue,
 	validateTimezone,
 } from "./scheduler-utils.js";
-import type { FileTaskLock } from "./task-lock.js";
 import type { ScheduledTaskStore } from "./task-store.js";
 export interface ScheduledTaskAlert {
 	task: ScheduledTask;

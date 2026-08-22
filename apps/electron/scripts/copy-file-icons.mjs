@@ -2,18 +2,18 @@
 // ============================================================
 // copy-file-icons.mjs
 //
-// Copies a curated subset of Material Icon Theme SVGs from
-// node_modules/material-icon-theme/icons/ into public/file-icons/
-// and generates src/renderer/lib/fileIconMap.ts with the resolved
-// extension / fileName / folderName mappings.
+// Generates src/renderer/lib/fileIconMap.ts from a curated subset of
+// Material Icon Theme SVGs (node_modules/material-icon-theme/icons/):
+// resolved extension / fileName / folderName mappings plus the SVG
+// contents embedded as strings. Nothing is staged to disk — the
+// renderer consumes ICON_SVGS directly.
 //
 // Run manually: node scripts/copy-file-icons.mjs
 // Or via npm postinstall.
 // ============================================================
 
-
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,13 +32,10 @@ function resolveMaterialIconTheme(...subpath) {
 	for (const candidate of candidates) {
 		if (existsSync(candidate)) return candidate;
 	}
-	throw new Error(
-		`material-icon-theme not found. Checked:\n  ${candidates.join("\n  ")}`,
-	);
+	throw new Error(`material-icon-theme not found. Checked:\n  ${candidates.join("\n  ")}`);
 }
 
 const SOURCE_ICONS_DIR = resolveMaterialIconTheme("icons");
-const TARGET_ICONS_DIR = join(ROOT, "src", "renderer", "file-icons");
 const MANIFEST_PATH = resolveMaterialIconTheme("dist", "material-icons.json");
 const MAP_OUTPUT_PATH = join(ROOT, "src", "renderer", "lib", "fileIconMap.ts");
 
@@ -352,7 +349,6 @@ function loadManifest() {
 }
 
 function ensureDirs() {
-	mkdirSync(TARGET_ICONS_DIR, { recursive: true });
 	mkdirSync(dirname(MAP_OUTPUT_PATH), { recursive: true });
 }
 
@@ -361,24 +357,23 @@ function resolveIconName(manifest, kind, key) {
 	return map[key] ?? null;
 }
 
-function copyIcon(iconName, copied) {
-	if (!iconName || copied.has(iconName)) return;
+function collectIcon(iconName, collected) {
+	if (!iconName || collected.has(iconName)) return;
 	const src = join(SOURCE_ICONS_DIR, `${iconName}.svg`);
 	if (!existsSync(src)) {
 		console.warn(`  ⚠️  icon not found: ${iconName}.svg`);
 		return;
 	}
-	copyFileSync(src, join(TARGET_ICONS_DIR, `${iconName}.svg`));
-	copied.add(iconName);
+	collected.add(iconName);
 }
 
 function main() {
-	console.log("Copying Material Icon Theme file icons...");
+	console.log("Generating file icon map from Material Icon Theme...");
 
 	const manifest = loadManifest();
 	ensureDirs();
 
-	const copied = new Set();
+	const collected = new Set();
 
 	const fileExtensionIcons = {};
 	const fileNameIcons = {};
@@ -390,7 +385,7 @@ function main() {
 		const icon = resolveIconName(manifest, "fileExtensions", ext);
 		if (icon) {
 			fileExtensionIcons[ext] = icon;
-			copyIcon(icon, copied);
+			collectIcon(icon, collected);
 		}
 	}
 
@@ -400,7 +395,7 @@ function main() {
 		const icon = resolveIconName(manifest, "fileNames", lower);
 		if (icon) {
 			fileNameIcons[lower] = icon;
-			copyIcon(icon, copied);
+			collectIcon(icon, collected);
 		}
 	}
 
@@ -412,8 +407,8 @@ function main() {
 		if (closed || open) {
 			folderClosedIcons[lower] = closed ?? open;
 			folderOpenIcons[lower] = open ?? closed;
-			copyIcon(closed, copied);
-			copyIcon(open, copied);
+			collectIcon(closed, collected);
+			collectIcon(open, collected);
 		}
 	}
 
@@ -421,13 +416,13 @@ function main() {
 	const defaultFile = manifest.file ?? "file";
 	const defaultFolder = manifest.folder ?? "folder";
 	const defaultFolderOpen = manifest.folderExpanded ?? "folder-open";
-	copyIcon(defaultFile, copied);
-	copyIcon(defaultFolder, copied);
-	copyIcon(defaultFolderOpen, copied);
+	collectIcon(defaultFile, collected);
+	collectIcon(defaultFolder, collected);
+	collectIcon(defaultFolderOpen, collected);
 
 	// Build the SVG lookup table.
 	const iconSvgs = {};
-	for (const name of copied) {
+	for (const name of collected) {
 		const src = join(SOURCE_ICONS_DIR, `${name}.svg`);
 		iconSvgs[name] = readFileSync(src, "utf-8");
 	}
@@ -456,7 +451,7 @@ export const ICON_SVGS: Record<string, string> = ${JSON.stringify(iconSvgs, null
 	// Format the generated file so keys don't have unnecessary quotes.
 	execSync(`npx biome format --write "${MAP_OUTPUT_PATH}"`, { cwd: ROOT, stdio: "inherit" });
 
-	console.log(`Copied ${copied.size} icons to src/renderer/file-icons/`);
+	console.log(`Collected ${collected.size} icons into the embedded map`);
 	console.log(`Generated ${MAP_OUTPUT_PATH}`);
 }
 

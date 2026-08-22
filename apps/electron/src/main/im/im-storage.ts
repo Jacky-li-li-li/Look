@@ -6,6 +6,7 @@ import { getLookDir } from "@look/shared/look-storage";
 import { safeStorage } from "electron";
 import fs from "fs";
 import path from "path";
+import { writeJsonFile } from "../utils/atomic-writer.js";
 
 export type ImProvider = "feishu";
 
@@ -52,11 +53,7 @@ export function loadBindings(): ChatBinding[] {
 }
 
 export function saveBindings(bindings: ChatBinding[]): void {
-	const dir = path.dirname(BINDINGS_FILE);
-	fs.mkdirSync(dir, { recursive: true });
-	const tempPath = `${BINDINGS_FILE}.tmp`;
-	fs.writeFileSync(tempPath, JSON.stringify(bindings, null, 2));
-	fs.renameSync(tempPath, BINDINGS_FILE);
+	writeJsonFile(BINDINGS_FILE, bindings, 2);
 }
 
 export interface ImChannelConfig {
@@ -98,11 +95,7 @@ export function loadChannels(): ImChannelConfig[] {
 }
 
 export function saveChannels(channels: ImChannelConfig[]): void {
-	const dir = path.dirname(CHANNELS_FILE);
-	fs.mkdirSync(dir, { recursive: true });
-	const tempPath = `${CHANNELS_FILE}.tmp`;
-	fs.writeFileSync(tempPath, JSON.stringify(channels, null, 2));
-	fs.renameSync(tempPath, CHANNELS_FILE);
+	writeJsonFile(CHANNELS_FILE, channels, 2);
 }
 
 export function encryptSecret(secret: string): EncryptedSecretResult {

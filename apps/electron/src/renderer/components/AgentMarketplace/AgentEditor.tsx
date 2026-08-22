@@ -17,9 +17,9 @@ import { Textarea } from "@look/ui/components/ui/textarea";
 import type { AgentDefinitionInfo, AgentDefinitionInput } from "@shared/types";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import { getOpenPeepId, getOpenPeepPreset, isOpenPeepIcon, makeOpenPeepIcon, OPEN_PEEPS } from "../../lib/openPeeps";
 import AgentAvatarPicker from "./AgentAvatarPicker";
 import AgentModelSelect from "./AgentModelSelect";
-import { getOpenPeepId, getOpenPeepPreset, isOpenPeepIcon, makeOpenPeepIcon, OPEN_PEEPS } from "./openPeeps";
 
 interface AgentEditorProps {
 	/** null = 关闭；"create" = 新建；AgentDefinitionInfo = 编辑现有 */

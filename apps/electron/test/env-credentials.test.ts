@@ -51,7 +51,7 @@ describe("environment-variable credentials are recognized as configured by Look"
 		const creds = new InMemoryCredentialStore();
 		const mr = await ModelRuntime.create({ credentials: creds, modelsPath });
 		// 真实存储在 Look 的 key（runtime source）仍然算已配置
-		mr.setRuntimeApiKey("openai", "sk-stored");
+		await mr.setRuntimeApiKey("openai", "sk-stored");
 		const registry = new ModelRegistry(mr);
 		const store = new CustomProvidersStore(mr, customProvidersPath);
 

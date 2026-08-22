@@ -6,21 +6,21 @@
 
 已实现的代码入口：
 
-- [SessionRuntimeManager](/Users/jacky/Desktop/pi/apps/electron/src/main/session/runtime-manager.ts)：兼容 façade 与跨领域编排。
-- [SessionCatalog](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-catalog.ts)：持久化会话发现、索引与子会话元数据恢复。
-- [RuntimeRegistry](/Users/jacky/Desktop/pi/apps/electron/src/main/session/runtime-registry.ts)：运行时身份、并发初始化去重与按会话互斥操作。
-- [SessionEventBus](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-event-bus.ts)：主进程到消费者的进程内事件扇出。
-- [SessionRuntimeFactory](/Users/jacky/Desktop/pi/apps/electron/src/main/session/runtime-factory.ts)：cwd-bound pi 服务、资源初始化串行化与 runtime 创建。
-- [SessionHistoryService](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-history-service.ts)：树导航、标签和可回滚的 fork 事务。
-- [SessionControlService](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-control-service.ts)：模型、思考级别、压缩和名称命令。
-- [SessionNotifier](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-notifier.ts)：session 快照、列表、TODO 和 context 使用量的 UI 投影。
-- [SessionInfoService](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-info-service.ts)：从 stored session、live runtime、子代理与 IM 绑定构建 renderer 所需的 `AgentInfo`。
-- [ProjectRuntimeService](/Users/jacky/Desktop/pi/apps/electron/src/main/session/project-runtime-service.ts)：项目创建 onboarding 与信任变更后的 runtime reload。
-- [SessionLifecycleService](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-lifecycle-service.ts)：会话创建、销毁与中止的跨服务编排。
-- [ProjectDeletionService](/Users/jacky/Desktop/pi/apps/electron/src/main/projects/project-deletion-service.ts)：项目删除的跨领域编排（runtime dispose、文件清理、目录删除、事件发送）。
-- [SessionSubagentService](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-subagent-service.ts)：子会话创建、SubAgent 开关与 Agent 定义重载。
-- [SessionMessagingService](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-messaging-service.ts)：用户 prompt 发送与 `/agent:name` chip 解析。
-- [SessionPermissionOrchestrator](/Users/jacky/Desktop/pi/apps/electron/src/main/session/session-permission-orchestrator.ts)：permission/plan 模式切换的跨服务协调。
+- [SessionRuntimeManager](../apps/electron/src/main/session/runtime/runtime-manager.ts)：兼容 façade 与跨领域编排。
+- [SessionCatalog](../apps/electron/src/main/session/services/session-catalog.ts)：持久化会话发现、索引与子会话元数据恢复。
+- [RuntimeRegistry](../apps/electron/src/main/session/runtime/runtime-registry.ts)：运行时身份、并发初始化去重与按会话互斥操作。
+- [SessionEventBus](../apps/electron/src/main/session/events/session-event-bus.ts)：主进程到消费者的进程内事件扇出。
+- [SessionRuntimeFactory](../apps/electron/src/main/session/runtime/runtime-factory.ts)：cwd-bound pi 服务、资源初始化串行化与 runtime 创建。
+- [SessionHistoryService](../apps/electron/src/main/session/services/session-history-service.ts)：树导航、标签和可回滚的 fork 事务。
+- [SessionControlService](../apps/electron/src/main/session/services/session-control-service.ts)：模型、思考级别、压缩和名称命令。
+- [SessionNotifier](../apps/electron/src/main/session/events/session-notifier.ts)：session 快照、列表、TODO 和 context 使用量的 UI 投影。
+- [SessionInfoService](../apps/electron/src/main/session/services/session-info-service.ts)：从 stored session、live runtime、子代理与 IM 绑定构建 renderer 所需的 `AgentInfo`。
+- [ProjectRuntimeService](../apps/electron/src/main/session/services/project-runtime-service.ts)：项目创建 onboarding 与信任变更后的 runtime reload。
+- [SessionLifecycleService](../apps/electron/src/main/session/services/session-lifecycle-service.ts)：会话创建、销毁与中止的跨服务编排。
+- [ProjectDeletionService](../rojects/project-deletion-service.ts)：项目删除的跨领域编排（runtime dispose、文件清理、目录删除、事件发送）。
+- [SessionSubagentService](../apps/electron/src/main/session/services/session-subagent-service.ts)：子会话创建、SubAgent 开关与 Agent 定义重载。
+- [SessionMessagingService](../apps/electron/src/main/session/services/session-messaging-service.ts)：用户 prompt 发送与 `/agent:name` chip 解析。
+- [SessionPermissionOrchestrator](../apps/electron/src/main/session/services/session-permission-orchestrator.ts)：permission/plan 模式切换的跨服务协调。
 
 ## 1. 改造前的职责与依赖分析
 
@@ -83,7 +83,7 @@ flowchart TB
 4. UI/IM 观察事件只订阅 `IEventBus`。`SessionNotifier` 负责 event payload 投影，模块不得保存 renderer callback 数组，也不得直接触碰 Electron `webContents`。
 5. pi SDK 原始事件只进入 `SessionEventProcessor`；其副作用仅通过 `ISessionEventHost` 回调，避免处理器依赖 façade 的内部字段。
 6. `SessionScopeRegistry` 的 acquire/release 与 runtime bind/dispose 成对执行。session ID rebind 时必须释放旧 scope、创建新 scope。
-7. 所有领域服务仅依赖 [core contracts](/Users/jacky/Desktop/pi/apps/electron/src/main/core/contracts.ts) 或窄 host 接口；禁止从领域服务反向 import `SessionRuntimeManager`。现存 IM/IPC 对 façade 的依赖是兼容边界，而不是服务内部依赖。
+7. 所有领域服务仅依赖 [core contracts](../ore/contracts.ts) 或窄 host 接口；禁止从领域服务反向 import `SessionRuntimeManager`。现存 IM/IPC 对 façade 的依赖是兼容边界，而不是服务内部依赖。
 
 ### 目标架构图
 
@@ -199,23 +199,23 @@ sequenceDiagram
 
 | 类型 | 覆盖内容 | 用例 |
 | --- | --- | --- |
-| 单元 | `SessionEventBus` 的订阅、退订、自退订时的快照分发 | [session-event-bus.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-event-bus.test.ts) |
-| 单元 | `RuntimeRegistry` 的并发初始化去重和排他队列 | [runtime-registry.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/runtime-registry.test.ts) |
-| 单元/SDK 集成 | `SessionRuntimeFactory` 的 cwd-bound pi runtime 创建与 extension 注入边界 | [runtime-factory.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/runtime-factory.test.ts) |
-| 单元 | `SessionHistoryService` 的导航、标签更新、streaming fork 拒绝 | [session-history-service.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-history-service.test.ts) |
-| 单元 | `SessionControlService` 的模型校验/变更、命名、压缩保护 | [session-control-service.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-control-service.test.ts) |
-| 单元 | `SessionNotifier` 的 context 节流和通过 event bus 的 UI 投影 | [session-notifier.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-notifier.test.ts) |
+| 单元 | `SessionEventBus` 的订阅、退订、自退订时的快照分发 | [session-event-bus.test.ts](../on-event-bus.test.ts) |
+| 单元 | `RuntimeRegistry` 的并发初始化去重和排他队列 | [runtime-registry.test.ts](../me-registry.test.ts) |
+| 单元/SDK 集成 | `SessionRuntimeFactory` 的 cwd-bound pi runtime 创建与 extension 注入边界 | [runtime-factory.test.ts](../me-factory.test.ts) |
+| 单元 | `SessionHistoryService` 的导航、标签更新、streaming fork 拒绝 | [session-history-service.test.ts](../on-history-service.test.ts) |
+| 单元 | `SessionControlService` 的模型校验/变更、命名、压缩保护 | [session-control-service.test.ts](../on-control-service.test.ts) |
+| 单元 | `SessionNotifier` 的 context 节流和通过 event bus 的 UI 投影 | [session-notifier.test.ts](../on-notifier.test.ts) |
 | 单元 | `SessionInfoService` 的 AgentInfo 投影构建 | 由 `session-notifier.test.ts` 与回归测试覆盖；新增服务自身无状态 |
-| 单元 | `ProjectRuntimeService` 的项目创建 onboarding 与信任变更 reload | [project-runtime-service.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/project-runtime-service.test.ts) |
-| 单元 | `SessionLifecycleService` 的创建/销毁/中止编排 | [session-lifecycle-service.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-lifecycle-service.test.ts) |
-| 单元 | `SessionCatalog` 的项目索引和 JSONL 子会话元数据解析 | [session-catalog.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-catalog.test.ts) |
-| 集成 | `SessionCatalog.refresh` → `SubAgentRegistry`：恢复顶层/子会话并建立父子链接 | [session-infrastructure.integration.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-infrastructure.integration.test.ts) |
-| 回归 | 使用新注册表 seam 的子代理开关、子会话删除与项目删除 | [subagent-toggle.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/subagent-toggle.test.ts)、[subagent-delete.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/subagent-delete.test.ts) |
-| 单元 | `ProjectDeletionService` 的项目删除编排 | [project-deletion-service.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/project-deletion-service.test.ts) |
-| 单元 | `SessionSubagentService` 的默认开关、递归深度保护与 runSubSession | [session-subagent-service.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-subagent-service.test.ts) |
-| 单元 | `SessionMessagingService` 的 prompt 发送与 `/agent:name` chip 解析 | [session-messaging-service.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-messaging-service.test.ts) |
-| 单元 | `SessionPermissionOrchestrator` 的模式切换与 no-op 路径 | [session-permission-orchestrator.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/session-permission-orchestrator.test.ts) |
-| 结构 | IPC handler 已按领域拆分为 router 文件 | [ipc-router-structure.test.ts](/Users/jacky/Desktop/pi/apps/electron/test/ipc-router-structure.test.ts) |
+| 单元 | `ProjectRuntimeService` 的项目创建 onboarding 与信任变更 reload | [project-runtime-service.test.ts](../ct-runtime-service.test.ts) |
+| 单元 | `SessionLifecycleService` 的创建/销毁/中止编排 | [session-lifecycle-service.test.ts](../on-lifecycle-service.test.ts) |
+| 单元 | `SessionCatalog` 的项目索引和 JSONL 子会话元数据解析 | [session-catalog.test.ts](../on-catalog.test.ts) |
+| 集成 | `SessionCatalog.refresh` → `SubAgentRegistry`：恢复顶层/子会话并建立父子链接 | [session-infrastructure.integration.test.ts](../on-infrastructure.integration.test.ts) |
+| 回归 | 使用新注册表 seam 的子代理开关、子会话删除与项目删除 | [subagent-toggle.test.ts](../ent-toggle.test.ts)、[subagent-delete.test.ts](../ent-delete.test.ts) |
+| 单元 | `ProjectDeletionService` 的项目删除编排 | [project-deletion-service.test.ts](../ct-deletion-service.test.ts) |
+| 单元 | `SessionSubagentService` 的默认开关、递归深度保护与 runSubSession | [session-subagent-service.test.ts](../on-subagent-service.test.ts) |
+| 单元 | `SessionMessagingService` 的 prompt 发送与 `/agent:name` chip 解析 | [session-messaging-service.test.ts](../on-messaging-service.test.ts) |
+| 单元 | `SessionPermissionOrchestrator` 的模式切换与 no-op 路径 | [session-permission-orchestrator.test.ts](../on-permission-orchestrator.test.ts) |
+| 结构 | IPC handler 已按领域拆分为 router 文件 | [ipc-router-structure.test.ts](../outer-structure.test.ts) |
 
 验收命令：
 

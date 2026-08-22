@@ -3,6 +3,7 @@ import { handleAgentEvent } from "./agentHandlers";
 import { appStore } from "./appStore";
 import { appReadyPhaseAtom } from "./atoms";
 import { handleBrowserEvent } from "./browserHandlers";
+import { handleImEvent } from "./imHandlers";
 import { handlePermissionEvent } from "./permissionHandlers";
 import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "./projectAtoms";
 import { handleProjectEvent } from "./projectHandlers";
@@ -29,6 +30,7 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 
 		if (handleAgentEvent(event)) return;
 		if (handleBrowserEvent(event)) return;
+		if (handleImEvent(event)) return;
 		if (handleProjectEvent(event, sharedRefreshTimers)) return;
 		if (handlePermissionEvent(event)) return;
 		if (handleSystemEvent(event)) return;

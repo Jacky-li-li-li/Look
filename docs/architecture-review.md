@@ -1,6 +1,6 @@
 # Look 项目架构审查报告
 
-> ⚠️ **2026-07-11 复核说明**：当前报告中的部分定量数据已过期，最新审计见 [`docs/architecture-audit-2026-07-11.md`](./architecture-audit-2026-07-11.md)。下文保留原审查结论供历史参考，执行整改前请以最新审计报告为准。
+> ⚠️ **历史文档**：本报告为 2026-07 时期的架构审查快照，文中引用的部分路径为拆分前布局（如 `src/main/ipc-handlers.ts`、根级 `session/*.ts`；现分布在 `src/main/ipc/routers/` 与 `src/main/session/{runtime,services,events}/`）。原计划的后续审计文档未归档，阅读时以 [`CLAUDE.md`](../CLAUDE.md) 的当前架构图为准。
 
 **审查对象**：Look（基于 Electron + React 的 pi SDK 桌面客户端）  
 **审查版本**：`v1.0.0`（commit 基线：当前工作区）  
@@ -80,7 +80,7 @@
 
 - **证据**：原 `src/main/session-runtime-manager.ts`（`2,432` 行）已不存在；当前 `src/main/session/runtime-manager.ts` 为 `1,312` 行，并拆出 `session-catalog.ts`、`runtime-registry.ts`、`runtime-factory.ts`、`session-event-bus.ts`、`session-lifecycle-service.ts`、`session-history-service.ts`、`session-control-service.ts`、`session-messaging-service.ts`、`session-notifier.ts`、`session-subagent-service.ts`、`session-permission-orchestrator.ts`、`event-translator.ts`、`ui-event-batcher.ts`。
 - **影响**：SRT 现在主要作为 facade 与跨领域编排器；但 1,312 行仍偏大，模型/设置查询等仍可继续下沉。
-- **状态**：Phase 1 拆分已完成，剩余 facade 精简与新增问题见最新审计报告 `docs/architecture-audit-2026-07-11.md`。
+- **状态**：Phase 1 拆分已完成（后续审计文档未归档，现状以 `CLAUDE.md` 架构图为准）。
 
 #### P2 — IPC Handler 已拆分为领域 Router，但 renderer store 仍庞大
 

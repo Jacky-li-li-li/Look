@@ -13,10 +13,10 @@
 // ============================================================
 
 import fs from "node:fs";
-import path from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { decryptApiKey, encryptApiKey } from "../security/secrets.js";
+import { writeJsonFile } from "../utils/atomic-writer.js";
 
 // ProviderConfigInput is exported from the SDK's model-registry module but not
 // re-exported from the package entry point. Re-declare it here so callers can
@@ -264,14 +264,10 @@ export class CustomProvidersStore {
 	}
 
 	private persist(list: CustomProviderInput[]): void {
-		const dir = path.dirname(this.filePath);
-		fs.mkdirSync(dir, { recursive: true });
-		const tmp = `${this.filePath}.tmp`;
 		const persisted = list.map((p) => ({
 			...p,
 			apiKey: p.apiKey ? encryptApiKey(p.apiKey) : undefined,
 		}));
-		fs.writeFileSync(tmp, JSON.stringify({ providers: persisted }, null, 2));
-		fs.renameSync(tmp, this.filePath);
+		writeJsonFile(this.filePath, { providers: persisted }, 2);
 	}
 }

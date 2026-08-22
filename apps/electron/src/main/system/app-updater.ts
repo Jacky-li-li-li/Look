@@ -9,6 +9,7 @@
 // 窗口 did-finish-load / 系统唤醒时重放并节流补检。
 // ============================================================
 
+import type { IpcResult } from "@look/shared";
 import type { AppUpdatePhase, MainToRendererEvent } from "@look/shared/types";
 import { app } from "electron";
 import updater from "electron-updater";
@@ -103,7 +104,7 @@ export function initAppUpdater(send: SendEvent): void {
 	timer.unref();
 }
 
-export async function checkForUpdates(): Promise<{ success: boolean; error?: string }> {
+export async function checkForUpdates(): Promise<IpcResult> {
 	if (!app.isPackaged) return devError();
 	lastCheckAt = Date.now();
 	try {
@@ -114,7 +115,7 @@ export async function checkForUpdates(): Promise<{ success: boolean; error?: str
 	}
 }
 
-export async function downloadUpdate(): Promise<{ success: boolean; error?: string }> {
+export async function downloadUpdate(): Promise<IpcResult> {
 	if (!app.isPackaged) return devError();
 	try {
 		await getAutoUpdater().downloadUpdate();
@@ -124,7 +125,7 @@ export async function downloadUpdate(): Promise<{ success: boolean; error?: stri
 	}
 }
 
-export async function installUpdate(): Promise<{ success: boolean; error?: string }> {
+export async function installUpdate(): Promise<IpcResult> {
 	if (!app.isPackaged) return devError();
 	// 幂等守卫：侧边栏胶囊与设置页 About 双入口可能先后触发，第二次直接返回
 	// success，避免重复调用 quitAndInstall（electron-updater 对重复调用可能抛错）。

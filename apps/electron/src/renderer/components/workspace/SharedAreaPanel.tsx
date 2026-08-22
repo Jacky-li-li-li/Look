@@ -46,6 +46,11 @@ import {
 	selectedSharedPathAtomFamily,
 } from "../../store/atoms";
 import { FileIcon } from "./FileIcon";
+import { type FlatRow, flattenTree, INDENT_PX } from "./fileTreeUtils";
+
+// 根列表高频刷新时（watcher 推送）批量校验已展开目录的防抖窗口，与 main 侧 watcher debounce 对齐。
+const CHILD_REVALIDATE_DEBOUNCE_MS = 300;
+const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
 
 interface SharedAreaPanelProps {
 	projectId: string;
@@ -53,35 +58,6 @@ interface SharedAreaPanelProps {
 	isLoading: boolean;
 	error: string | null;
 	onAfterChange: () => Promise<void>;
-}
-
-interface FlatRow {
-	node: FileTreeNode;
-	depth: number;
-}
-
-const INDENT_PX = 14;
-// 根列表高频刷新时（watcher 推送）批量校验已展开目录的防抖窗口，与 main 侧 watcher debounce 对齐。
-const CHILD_REVALIDATE_DEBOUNCE_MS = 300;
-const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
-
-function flattenSharedTree(
-	rootChildren: FileTreeNode[],
-	expanded: Set<string>,
-	loaded: Map<string, FileTreeNode[]>,
-): FlatRow[] {
-	const rows: FlatRow[] = [];
-	const walk = (children: FileTreeNode[], depth: number) => {
-		for (const node of children) {
-			rows.push({ node, depth });
-			if (node.type === "directory" && expanded.has(node.path)) {
-				const childNodes = loaded.get(node.path);
-				if (childNodes) walk(childNodes, depth + 1);
-			}
-		}
-	};
-	walk(rootChildren, 0);
-	return rows;
 }
 
 function isPathAtOrBelow(path: string, ancestorPath: string): boolean {
@@ -348,10 +324,7 @@ export function SharedAreaPanel({ projectId, files, isLoading, error, onAfterCha
 		}
 	};
 
-	const flatRows = useMemo(
-		() => flattenSharedTree(files, expanded, loadedChildren),
-		[files, expanded, loadedChildren],
-	);
+	const flatRows = useMemo(() => flattenTree(files, expanded, loadedChildren), [files, expanded, loadedChildren]);
 
 	// roving tabindex：焦点行变更后把 DOM 焦点移到对应行；虚拟列表未渲染时静默跳过。
 	useEffect(() => {

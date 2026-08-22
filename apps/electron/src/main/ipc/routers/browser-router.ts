@@ -41,7 +41,8 @@ function ensureActivityPush(service: BrowserService, win: BrowserWindow): void {
 	});
 }
 
-function parseAction(data: Record<string, unknown>, kind: string): BrowserPanelAction {
+/** 解析 browser:panel-action 载荷为类型化 action（测试导出）。 */
+export function parseAction(data: Record<string, unknown>, kind: string): BrowserPanelAction {
 	switch (kind) {
 		case "type":
 			return { kind, text: guardString(data.text, "text") };
@@ -73,8 +74,8 @@ export function bindBrowserActivityToWindow(service: BrowserService, win: Browse
 	ensureActivityPush(service, win);
 }
 
-/** 校验 browser:set-layout 载荷形状（renderer 输入不可信）。 */
-function parseLayout(data: Record<string, unknown>): BrowserViewLayout {
+/** 校验 browser:set-layout 载荷形状（renderer 输入不可信，测试导出）。 */
+export function parseLayout(data: Record<string, unknown>): BrowserViewLayout {
 	const layout = data.layout;
 	if (!layout || typeof layout !== "object") throw new Error("browser:set-layout 缺少 layout。");
 	const record = layout as Record<string, unknown>;

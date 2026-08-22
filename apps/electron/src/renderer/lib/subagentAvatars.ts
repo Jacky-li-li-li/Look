@@ -8,7 +8,7 @@
 // OPEN_PEEPS 共 20 个预设，耗尽后回退为纯随机（允许重复）。
 // ============================================================
 
-import { DEFAULT_PEEP_ID, OPEN_PEEPS } from "../components/AgentMarketplace/openPeeps";
+import { DEFAULT_PEEP_ID, OPEN_PEEPS } from "./openPeeps";
 
 const assignments = new Map<string, Map<string, string>>();
 

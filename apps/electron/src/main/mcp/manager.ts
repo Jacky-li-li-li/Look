@@ -6,10 +6,11 @@
 // ============================================================
 
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { getLookDir } from "@look/shared/look-storage";
+import { writeJsonFileAsync } from "../utils/atomic-writer.js";
 import { SerialTail } from "../utils/serial-tail.js";
 import { McpClient } from "./client.js";
 import type { McpCallResult, McpServerConfig, McpServerStatus, McpTestResult, McpTool } from "./types.js";
@@ -108,9 +109,7 @@ export class MCPManager {
 	}
 
 	async persistConfig(projectId = "global"): Promise<void> {
-		const lookDir = getLookDir();
-		const configPath = path.join(lookDir, "mcp.json");
-		await mkdir(lookDir, { recursive: true });
+		const configPath = path.join(getLookDir(), "mcp.json");
 		const prefix = this.projectPrefix(projectId);
 		const servers: Record<string, unknown> = {};
 		for (const [key, config] of this.configs) {
@@ -119,13 +118,12 @@ export class MCPManager {
 			const { name: _name, _source: _src, _discoveredFrom: _disc, ...rest } = config;
 			servers[config.name] = rest;
 		}
-		await writeFile(configPath, JSON.stringify({ mcpServers: servers }, null, 2), "utf-8");
+		// 原子写：与其它 Look JSON 存储一致，进程崩溃不会留下截断的 mcp.json。
+		await writeJsonFileAsync(configPath, { mcpServers: servers }, 2);
 	}
 
 	async persistProjectConfig(projectId: string, cwd: string): Promise<void> {
-		const lookDir = path.join(cwd, ".look");
-		const configPath = path.join(lookDir, "mcp.json");
-		await mkdir(lookDir, { recursive: true });
+		const configPath = path.join(cwd, ".look", "mcp.json");
 		const prefix = this.projectPrefix(projectId);
 		const servers: Record<string, unknown> = {};
 		for (const [key, config] of this.configs) {
@@ -134,7 +132,7 @@ export class MCPManager {
 			const { name: _name, _source: _src, _discoveredFrom: _disc, ...rest } = config;
 			servers[config.name] = rest;
 		}
-		await writeFile(configPath, JSON.stringify({ mcpServers: servers }, null, 2), "utf-8");
+		await writeJsonFileAsync(configPath, { mcpServers: servers }, 2);
 	}
 
 	/**

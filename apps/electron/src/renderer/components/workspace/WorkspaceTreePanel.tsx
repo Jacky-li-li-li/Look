@@ -41,41 +41,12 @@ import {
 	workspaceTreeLoadingAtomFamily,
 } from "../../store/atoms";
 import { FileIcon } from "./FileIcon";
+import { type FlatRow, flattenTree, INDENT_PX } from "./fileTreeUtils";
 
 interface WorkspaceTreePanelProps {
 	projectId: string;
 	cwd: string;
 }
-
-interface FlatRow {
-	node: FileTreeNode;
-	depth: number;
-	parentPath: string; // 父目录相对路径,"" = 根
-}
-
-// 递归把树压平成线性行,展开的节点按 depth 缩进
-function flattenTree(
-	rootChildren: FileTreeNode[],
-	expanded: Set<string>,
-	loaded: Map<string, FileTreeNode[]>,
-): FlatRow[] {
-	const rows: FlatRow[] = [];
-
-	const walk = (children: FileTreeNode[], depth: number, parentPath: string) => {
-		for (const node of children) {
-			rows.push({ node, depth, parentPath });
-			if (node.type === "directory" && expanded.has(node.path)) {
-				const grandChildren = loaded.get(node.path);
-				if (grandChildren) walk(grandChildren, depth + 1, node.path);
-			}
-		}
-	};
-
-	walk(rootChildren, 0, "");
-	return rows;
-}
-
-const INDENT_PX = 14;
 
 /** Initialize a ref lazily so expensive values are not rebuilt on every render. */
 function useLazyRef<T>(factory: () => T): React.MutableRefObject<T> {
@@ -184,7 +155,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 		};
 	}, [projectId, watchedPathsRef, pendingWatchRef]);
 
-	const flatRows = useMemo(() => flattenTree(rootChildren, expanded, loaded), [rootChildren, expanded, loaded]);
+	const flatRows = useMemo(() => flattenTree(rootChildren, expanded, loaded, true), [rootChildren, expanded, loaded]);
 
 	// 关键:用 ref 模式稳定 toggleRow 引用,避免 itemContent 里每次渲染
 	// 创建新闭包导致 WorkspaceTreeNodeRow 的 onToggle props 变化。

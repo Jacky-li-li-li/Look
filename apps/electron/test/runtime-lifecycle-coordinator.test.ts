@@ -5,6 +5,7 @@ import type {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
+import { DISPOSE_AWAIT_TIMEOUT_MS } from "../src/main/session/constants.js";
 import {
 	RuntimeLifecycleCoordinator,
 	type RuntimeLifecycleCoordinatorOptions,
@@ -577,6 +578,43 @@ describe("RuntimeLifecycleCoordinator", () => {
 
 		expect(runtime.dispose).toHaveBeenCalledTimes(1);
 		expect(fixture.runtimeRegistry.has("session-1")).toBe(false);
+	});
+
+	it("gives up on a hung initialization during shutdown and still disposes registered runtimes", async () => {
+		const hungSession = makeSession("session-hung");
+		const liveSession = makeSession("session-live");
+		const liveRuntime = makeRuntime(liveSession);
+		const fixture = makeCoordinator(liveRuntime);
+		// 挂死的初始化：永不 settle（模拟 pi modelRuntime.refresh 挂起的真实事故类别）。
+		vi.mocked(fixture.dependencies.runtimeFactory.create).mockImplementation(
+			async (_cwd: string, manager: SessionManager) => {
+				if (manager === hungSession.session.sessionManager) await new Promise<void>(() => {});
+				return liveRuntime.runtime;
+			},
+		);
+
+		await fixture.coordinator.createManagedRuntime("/project", liveSession.session.sessionManager, "project-1");
+		const hungCreation = fixture.coordinator.createManagedRuntime(
+			"/project",
+			hungSession.session.sessionManager,
+			"project-1",
+		);
+
+		vi.useFakeTimers();
+		try {
+			const disposal = fixture.coordinator.disposeAllRuntimes();
+			await vi.advanceTimersByTimeAsync(DISPOSE_AWAIT_TIMEOUT_MS + 100);
+			await disposal;
+
+			// 已注册的 runtime 正常处置；挂死的初始化不再阻塞关停。
+			expect(liveRuntime.dispose).toHaveBeenCalledTimes(1);
+			expect(fixture.runtimeRegistry.has("session-live")).toBe(false);
+			expect(fixture.runtimeRegistry.has("session-hung")).toBe(false);
+		} finally {
+			vi.useRealTimers();
+			// 挂死 promise 永不 settle，吞掉 unhandled rejection 噪音（如有）。
+			hungCreation.catch(() => undefined);
+		}
 	});
 
 	it("finishes teardown when abort fails and reports the disposal error", async () => {

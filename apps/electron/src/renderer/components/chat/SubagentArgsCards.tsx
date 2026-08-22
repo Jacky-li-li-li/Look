@@ -14,11 +14,11 @@ import { useAtomValue } from "jotai";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { makeOpenPeepIcon } from "../../lib/openPeeps";
 import { assignPeepId } from "../../lib/subagentAvatars";
 import { activeAgentIdAtom } from "../../store/agentAtoms";
 import { type SubagentCardStatus, subagentCardStatusAtom } from "../../store/subagentAtoms";
 import AgentAvatar from "../AgentMarketplace/AgentAvatar";
-import { makeOpenPeepIcon } from "../AgentMarketplace/openPeeps";
 import LookMarkdown from "../markdown/LookMarkdown";
 import type { ToolCallViewModel } from "./ToolCallCard";
 

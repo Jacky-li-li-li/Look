@@ -27,6 +27,7 @@ export interface ProviderInfo {
 	name: string;
 	hasCredentials: boolean;
 	models: string[];
+	supportsLogin: boolean;
 }
 
 export interface ProviderSetting {
@@ -36,7 +37,7 @@ export interface ProviderSetting {
 	envVar?: string;
 	modelsAvailable: number;
 	models: AvailableModel[];
-	authSource?: string;
+	authSource?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
 	envLabel?: string;
 	hasLogin: boolean;
 	supportsApiKey: boolean;

@@ -605,6 +605,10 @@ export class CompositionBuilder {
 			MAX_NAME_LENGTH,
 		);
 
+		// 必须先构造再注入：SessionLifecycleService / ProjectDeletionService 在下方
+		// 以 `!` 取用该字段，若此行晚于注入点，null 会在运行期才暴露（validate 拦不住）。
+		this.attachmentService = new AttachmentService();
+
 		this.sessionLifecycleService = new SessionLifecycleService({
 			host: {
 				createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
@@ -651,8 +655,6 @@ export class CompositionBuilder {
 			attachments: this.attachmentService!,
 			deleteScheduledTasksByProject: async (projectId) => this.schedulerRef.current?.deleteTasksByProject(projectId),
 		});
-
-		this.attachmentService = new AttachmentService();
 
 		this.sessionMessagingService = new SessionMessagingService({
 			getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
@@ -740,7 +742,9 @@ export class CompositionBuilder {
 			permissionService: this.permissionService,
 			promptStore: this.promptStore,
 			mcpManager: this.mcpManager,
-			computerUseService: this.computerUseService,
+			// computerUseService 仅在 darwin 构造（见构造处注释），按平台条件参与必填校验，
+			// 否则非 macOS 会因合法的 null 直接启动失败。
+			...(process.platform === "darwin" ? { computerUseService: this.computerUseService } : {}),
 			browserService: this.browserService,
 			sessionCatalog: this.sessionCatalog,
 			projectRuntimeService: this.projectRuntimeService,

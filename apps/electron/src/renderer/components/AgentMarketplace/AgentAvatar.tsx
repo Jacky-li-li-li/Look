@@ -7,7 +7,7 @@
 
 import { cn } from "@look/ui";
 import { useState } from "react";
-import { DEFAULT_PEEP_ID, getOpenPeepId, getOpenPeepPreset, makeOpenPeepIcon, OPEN_PEEPS } from "./openPeeps";
+import { DEFAULT_PEEP_ID, getOpenPeepId, getOpenPeepPreset, makeOpenPeepIcon, OPEN_PEEPS } from "../../lib/openPeeps";
 
 const peepModules = import.meta.glob("./peeps/*.svg", {
 	eager: true,

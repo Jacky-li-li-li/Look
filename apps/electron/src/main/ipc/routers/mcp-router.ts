@@ -44,7 +44,10 @@ export const mcpRouter: IpcRouter = (ctx, register) => {
 
 	register("mcp:test-server", async (data) => {
 		const { projectId } = getProjectContext();
-		return ctx.mcp.testServer(projectId, guardString(data.name, "name"));
+		const tested = await ctx.mcp.testServer(projectId, guardString(data.name, "name"));
+		return tested.success
+			? { success: true, tools: tested.tools }
+			: { success: false, error: tested.error ?? "test failed" };
 	});
 
 	register("mcp:list-tools", async (data) => {

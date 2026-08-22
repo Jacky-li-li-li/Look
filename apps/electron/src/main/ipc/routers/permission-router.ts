@@ -28,7 +28,7 @@ export const permissionRouter: IpcRouter = (ctx, register) => {
 		const requestId = guardString(payload.requestId, "payload.requestId");
 		const action = guardEnum(payload.action, "payload.action", ["allow", "deny", "allow_always"] as const);
 		const accepted = ctx.permission.service.handleResponse({ requestId, action });
-		return { success: accepted, error: accepted ? undefined : "Permission request is no longer pending" };
+		return accepted ? { success: true } : { success: false, error: "Permission request is no longer pending" };
 	});
 
 	register("plan:question-respond", async (data) => {
@@ -41,10 +41,9 @@ export const permissionRouter: IpcRouter = (ctx, register) => {
 			answers[question] = guardString(answer, `payload.answers[${JSON.stringify(question)}]`);
 		}
 		const accepted = ctx.permission.plan.handleQuestionResponse({ requestId, sessionId, answers });
-		return {
-			success: accepted,
-			error: accepted ? undefined : "Plan question request is no longer pending or invalid",
-		};
+		return accepted
+			? { success: true }
+			: { success: false, error: "Plan question request is no longer pending or invalid" };
 	});
 
 	register("plan:approval-respond", async (data) => {
@@ -53,6 +52,6 @@ export const permissionRouter: IpcRouter = (ctx, register) => {
 		const sessionId = guardAgentId(payload.sessionId, "payload.sessionId");
 		const action = guardEnum(payload.action, "payload.action", ["approve", "reject"] as const);
 		const accepted = await ctx.permission.plan.handleApprovalResponse({ requestId, sessionId, action });
-		return { success: accepted, error: accepted ? undefined : "Plan approval request is no longer pending" };
+		return accepted ? { success: true } : { success: false, error: "Plan approval request is no longer pending" };
 	});
 };

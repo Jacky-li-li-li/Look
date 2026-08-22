@@ -85,6 +85,6 @@ describe("SessionDraftIndex", () => {
 		index.add(entry("draft-1"));
 		const raw = readFileSync(filePath, "utf8");
 		expect(() => JSON.parse(raw)).not.toThrow();
-		expect(existsSync(filePath + ".tmp")).toBe(false);
+		expect(existsSync(`${filePath}.tmp`)).toBe(false);
 	});
 });

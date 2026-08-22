@@ -1,6 +1,6 @@
 import type { AppUpdatePhase } from "@shared/types";
 import { atom } from "jotai";
-import type { CustomProviderInput, ProviderInfo } from "../components/settings/types";
+import type { CustomProviderInput, ProviderInfo } from "../lib/settings-provider-types.js";
 
 export interface AppUpdateState {
 	phase: AppUpdatePhase;

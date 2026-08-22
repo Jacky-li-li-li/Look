@@ -6,8 +6,8 @@
 
 import { cn } from "@look/ui";
 import { useTranslation } from "react-i18next";
+import { getOpenPeepId, getOpenPeepPreset, makeOpenPeepIcon, OPEN_PEEPS } from "../../lib/openPeeps";
 import AgentAvatar from "./AgentAvatar";
-import { getOpenPeepId, getOpenPeepPreset, makeOpenPeepIcon, OPEN_PEEPS } from "./openPeeps";
 
 interface AgentAvatarPickerProps {
 	value?: string;

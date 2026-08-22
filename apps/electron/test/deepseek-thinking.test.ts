@@ -14,13 +14,13 @@ describe("DeepSeek thinking capability", () => {
 		expect(model?.reasoning).toBe(true);
 		expect(model?.thinkingLevelMap).toMatchObject({
 			minimal: null,
-			low: null,
+			low: "low",
 			medium: null,
 			high: "high",
 			max: "max",
 		});
 		const available = getSupportedThinkingLevels(model!);
-		expect(available).toEqual(["off", "high", "max"]);
+		expect(available).toEqual(["off", "low", "high", "max"]);
 	});
 
 	it("built-in deepseek-v4-pro advertises reasoning", async () => {

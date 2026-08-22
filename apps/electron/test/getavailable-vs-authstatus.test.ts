@@ -64,7 +64,7 @@ describe("getAvailable model discovery consistency", () => {
 
 		const creds = new InMemoryCredentialStore();
 		const mr = await ModelRuntime.create({ credentials: creds, modelsPath });
-		mr.setRuntimeApiKey("openai", "sk-runtime");
+		await mr.setRuntimeApiKey("openai", "sk-runtime");
 		const registry = new ModelRegistry(mr);
 		const store = new CustomProvidersStore(mr, customProvidersPath);
 

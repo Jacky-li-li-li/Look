@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { FileTaskLock } from "../../src/main/scheduler/task-lock.js";
+import { FileTaskLock } from "../../src/main/utils/task-lock.js";
 
 const dirs: string[] = [];
 

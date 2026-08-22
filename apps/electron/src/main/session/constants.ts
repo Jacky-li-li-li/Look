@@ -15,3 +15,11 @@ export const MAX_NAME_LENGTH = 80;
  * 用 30s AbortSignal 兜底。新建与草稿恢复两条路径共用。
  */
 export const SESSION_INIT_TIMEOUT_MS = 120_000;
+
+/**
+ * 关停/处置路径等待 in-flight 初始化的兜底时限。比 SESSION_INIT_TIMEOUT_MS
+ * 短得多：应用退出与单个会话的销毁不该为慢初始化等满 120s；超时后放弃
+ * 等待、直接处置已注册状态（未完成的初始化随进程退出或在 bind 冲突
+ * 检测中被去重）。此前此处无超时，挂死的初始化会无限阻塞应用关停。
+ */
+export const DISPOSE_AWAIT_TIMEOUT_MS = 10_000;

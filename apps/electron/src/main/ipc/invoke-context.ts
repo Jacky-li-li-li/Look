@@ -7,6 +7,7 @@
 
 import type { CredentialStore } from "@earendil-works/pi-ai";
 import type { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { InvokeResult } from "@look/shared";
 import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
 import type { AgentDefinitionService } from "../agents/definition-service.js";
@@ -136,7 +137,7 @@ export interface InvokeContext {
 
 type InvokeHandler<T extends RendererToMainEvent["type"] = RendererToMainEvent["type"]> = (
 	data: Extract<RendererToMainEvent, { type: T }>,
-) => unknown;
+) => InvokeResult<T> | Promise<InvokeResult<T>>;
 
 export type RegisterHandler = <T extends RendererToMainEvent["type"]>(type: T, handler: InvokeHandler<T>) => void;
 

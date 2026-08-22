@@ -64,7 +64,7 @@ AI 调用 edit("TODO.md", ...)   ──→  tool_execution_end  ──→  ↑ �
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `src/main/session/todo-parser.ts` | ~25 | 纯函数：解析 TODO.md → TodoItem[] |
+| `src/main/session/services/todo-parser.ts` | ~25 | 纯函数：解析 TODO.md → TodoItem[] |
 | `src/renderer/components/TodoPanel.tsx` | ~60 | 紧凑进度条 + 可展开任务列表 |
 
 ### 修改文件（3 个）
@@ -72,8 +72,8 @@ AI 调用 edit("TODO.md", ...)   ──→  tool_execution_end  ──→  ↑ �
 | 文件 | 改动量 | 内容 |
 |------|--------|------|
 | `packages/shared/src/types.ts` | +5 行 | 新增 `TodoItem` interface + `todo:update` 事件 |
-| `src/main/session/event-processor.ts` | +3 行 | `tool_execution_end` case 调用 `host.emitTodoUpdate` |
-| `src/main/session/runtime-manager.ts` | +8 行 | 实现 `emitTodoUpdate` 方法 |
+| `src/main/session/events/session-event-processor.ts` | +3 行 | `tool_execution_end` case 调用 `host.emitTodoUpdate` |
+| `src/main/session/runtime/runtime-manager.ts` | +8 行 | 实现 `emitTodoUpdate` 方法 |
 | `src/renderer/components/ChatPanel.tsx` | -20 +6 行 | 删除 SubAgent 进度卡片，替换为 `<TodoPanel />` |
 
 ### 渲染层（不改文件结构）
@@ -108,7 +108,7 @@ export interface TodoItem {
   }
 ```
 
-### 2. `src/main/session/todo-parser.ts`
+### 2. `src/main/session/services/todo-parser.ts`
 
 ```typescript
 // 纯函数，零依赖（仅 fs），可独立测试
@@ -163,7 +163,7 @@ export function parseTodoFile(cwd: string): TodoItem[] | null {
 - 非 checkbox 行忽略
 - 无 checkbox 的文件返回 null（不展示面板）
 
-### 3. `src/main/session/event-processor.ts`
+### 3. `src/main/session/events/session-event-processor.ts`
 
 在 `tool_execution_end` case 增加 TODO 检查：
 
@@ -183,7 +183,7 @@ case "tool_execution_end":
   break;
 ```
 
-### 4. `src/main/session/runtime-manager.ts`
+### 4. `src/main/session/runtime/runtime-manager.ts`
 
 实现 `emitTodoUpdate`：
 

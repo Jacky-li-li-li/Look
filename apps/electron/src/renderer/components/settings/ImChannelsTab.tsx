@@ -6,34 +6,22 @@ import { Badge } from "@look/ui/components/ui/badge";
 import { Button } from "@look/ui/components/ui/button";
 import { Input } from "@look/ui/components/ui/input";
 import { Label } from "@look/ui/components/ui/label";
+import { useAtomValue, useSetAtom } from "jotai";
 import { Check, Eye, EyeOff, KeyRound, Loader2, QrCode, Save, Send, ToggleLeft, ToggleRight, X } from "lucide-react";
 import QRCode from "qrcode";
 import { createElement, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import {
+	type ImMessageReceived,
+	type ImRegistrationState,
+	imChannelsAtom,
+	imRecentMessageAtom,
+	imRegistrationAtom,
+} from "../../store/imAtoms";
 import type { ImChannelInfo } from "./types";
 
 const api = window.look;
-
-type RegistrationPhase = "qr" | "polling" | "success" | "error";
-
-interface RegistrationState {
-	registrationId: string;
-	phase: RegistrationPhase;
-	url?: string;
-	expireIn?: number;
-	error?: string;
-	appId?: string;
-}
-
-interface IncomingMessage {
-	provider: string;
-	messageId: string;
-	chatId: string;
-	senderOpenId: string;
-	content: unknown;
-	createTime: number;
-}
 
 function maskAppId(appId: string): string {
 	if (appId.length <= 8) return "****";
@@ -103,7 +91,7 @@ function QrRegisterPanel({
 	qrSvg,
 	onCancel,
 }: {
-	registration: RegistrationState;
+	registration: ImRegistrationState;
 	qrSvg: { viewBox?: string; nodes: ReactNode[] } | null;
 	onCancel: () => void;
 }) {
@@ -478,7 +466,7 @@ function ChannelDetailPanel({
 
 // ─── Recent Message Card ────────────────────────────────────────
 
-function RecentMessageCard({ message }: { message: IncomingMessage }) {
+function RecentMessageCard({ message }: { message: ImMessageReceived }) {
 	const { t } = useTranslation();
 	return (
 		<div className="rounded-lg border border-hairline bg-background/45 p-4">
@@ -490,11 +478,9 @@ function RecentMessageCard({ message }: { message: IncomingMessage }) {
 				</div>
 				<div className="flex gap-2">
 					<span className="text-muted-foreground">sender:</span>
-					<span className="font-mono">{message.senderOpenId}</span>
+					<span className="font-mono">{message.senderName ?? message.senderId}</span>
 				</div>
-				<div className="mt-1 rounded bg-muted/45 p-2 font-mono text-[10px]">
-					{JSON.stringify(message.content, null, 2)}
-				</div>
+				<div className="mt-1 rounded bg-muted/45 p-2 font-mono text-[10px] break-all">{message.content}</div>
 			</div>
 		</div>
 	);
@@ -504,20 +490,25 @@ function RecentMessageCard({ message }: { message: IncomingMessage }) {
 
 // ─── grouped state types ────────────────────────────────────────
 
+/** 组件完整视图状态（channels/recentMessage/registration 三个事件驱动键由 store atoms 提供）。 */
 interface ListState {
 	channels: ImChannelInfo[];
 	loading: boolean;
 	selectedChannelId: string | null;
 	sendingTest: boolean;
 	testResult: { success: boolean; message: string } | null;
-	recentMessage: IncomingMessage | null;
+	recentMessage: ImMessageReceived | null;
 }
 
 interface QrState {
 	showPanel: boolean;
-	registration: RegistrationState | null;
+	registration: ImRegistrationState | null;
 	qrSvg: { viewBox?: string; nodes: ReactNode[] } | null;
 }
+
+/** 组件本地持有的分组状态（事件驱动键 channels/recentMessage/registration 除外，见 atoms）。 */
+type ListLocalState = Omit<ListState, "channels" | "recentMessage">;
+type QrLocalState = Omit<QrState, "registration">;
 
 interface ManualState {
 	connecting: boolean;
@@ -539,18 +530,22 @@ interface DetailState {
 export default function ImChannelsTab() {
 	const { t } = useTranslation();
 
-	// ── grouped state (20 → 4 useState) ──
-	const [list, setList] = useState<ListState>({
-		channels: [],
+	// ── 事件驱动状态（store atoms；im:registration/channel-status/message-received 写入）──
+	const channels = useAtomValue(imChannelsAtom);
+	const setChannels = useSetAtom(imChannelsAtom);
+	const recentMessage = useAtomValue(imRecentMessageAtom);
+	const registration = useAtomValue(imRegistrationAtom);
+	const setRegistration = useSetAtom(imRegistrationAtom);
+
+	// ── grouped local state (20 → 4 useState；事件驱动键除外) ──
+	const [listLocal, setList] = useState<Omit<ListState, "channels" | "recentMessage">>({
 		loading: false,
 		selectedChannelId: null,
 		sendingTest: false,
 		testResult: null,
-		recentMessage: null,
 	});
-	const [qr, setQr] = useState<QrState>({
+	const [qr, setQr] = useState<Omit<QrState, "registration">>({
 		showPanel: false,
-		registration: null,
 		qrSvg: null,
 	});
 	const [manual, setManual] = useState<ManualState>({
@@ -569,21 +564,28 @@ export default function ImChannelsTab() {
 		saving: false,
 	});
 
-	// ── patch helpers ──
+	// 组合视图：保持 list./qr. 引用形状不变，事件驱动键来自 atoms。
+	const list: ListState = { ...listLocal, channels, recentMessage };
+
+	// ── patch helpers（仅本地键；channels/recentMessage/registration 用对应 atom setter）──
 	// 支持函数式更新：patch(key, prev => ...) 时把 value 当函数调用，语义与 setX((prev) => ...) 一致
 	const patchList = useCallback(
-		<K extends keyof ListState>(key: K, value: ListState[K] | ((prev: ListState[K]) => ListState[K])) =>
+		<K extends keyof ListLocalState>(
+			key: K,
+			value: ListLocalState[K] | ((prev: ListLocalState[K]) => ListLocalState[K]),
+		) =>
 			setList((prev) => ({
 				...prev,
-				[key]: typeof value === "function" ? value(prev[key]) : value,
+				[key]:
+					typeof value === "function" ? (value as (p: ListLocalState[K]) => ListLocalState[K])(prev[key]) : value,
 			})),
 		[],
 	);
 	const patchQr = useCallback(
-		<K extends keyof QrState>(key: K, value: QrState[K] | ((prev: QrState[K]) => QrState[K])) =>
+		<K extends keyof QrLocalState>(key: K, value: QrLocalState[K] | ((prev: QrLocalState[K]) => QrLocalState[K])) =>
 			setQr((prev) => ({
 				...prev,
-				[key]: typeof value === "function" ? value(prev[key]) : value,
+				[key]: typeof value === "function" ? (value as (p: QrLocalState[K]) => QrLocalState[K])(prev[key]) : value,
 			})),
 		[],
 	);
@@ -615,86 +617,38 @@ export default function ImChannelsTab() {
 		try {
 			const result = await api.getImChannels();
 			if (result?.success && Array.isArray(result.channels)) {
-				patchList("channels", result.channels as ImChannelInfo[]);
+				setChannels(result.channels as ImChannelInfo[]);
 			}
 		} catch (_err) {
 			toast.error(t("settings.imConnectionError"));
 		}
-	}, [patchList, t]);
+	}, [setChannels, t]);
 
 	useEffect(() => {
 		loadChannels();
 	}, [loadChannels]);
 
-	// Listen for backend events
+	// 注册流程展示副作用：事件由 store imHandlers 写入 imRegistrationAtom，
+	// 这里只做 toast / 重载渠道列表 / 收起面板（registration 引用随每次事件变化）。
 	useEffect(() => {
-		if (!api) return;
-		const unsubscribe = api.onEvent((event: unknown) => {
-			if (!event || typeof event !== "object") return;
-			const e = event as Record<string, unknown>;
-			const type = e.type;
-
-			if (type === "im:registration-update") {
-				const update = e as {
-					type: string;
-					registrationId: string;
-					phase: RegistrationPhase;
-					url?: string;
-					expireIn?: number;
-					error?: string;
-					appId?: string;
-				};
-				patchQr("registration", {
-					registrationId: update.registrationId,
-					phase: update.phase,
-					url: update.url,
-					expireIn: update.expireIn,
-					error: update.error,
-					appId: update.appId,
-				});
-				if (update.phase === "success") {
-					toast.success(t("settings.feishuConnected"));
-					loadChannels();
-					patchQr("registration", null);
-					patchQr("qrSvg", null);
-					patchQr("showPanel", false);
-				} else if (update.phase === "error") {
-					toast.error(update.error || t("settings.imConnectionError"));
-				}
-			} else if (type === "im:channel-status") {
-				const statusEvent = e as {
-					type: string;
-					provider: string;
-					status: ImChannelInfo["status"];
-					appId?: string;
-					error?: string;
-				};
-				patchList("channels", (prev) =>
-					prev.map((ch) =>
-						ch.provider === statusEvent.provider && ch.appId === statusEvent.appId
-							? {
-									...ch,
-									status: statusEvent.status,
-									connected: statusEvent.status === "connected",
-									error: statusEvent.error,
-								}
-							: ch,
-					),
-				);
-			} else if (type === "im:message-received") {
-				const msg = e as unknown as IncomingMessage & { type: string };
-				patchList("recentMessage", msg);
-			}
-		});
-		return unsubscribe;
-	}, [loadChannels, patchList, patchQr, t]);
+		if (!registration) return;
+		if (registration.phase === "success") {
+			toast.success(t("settings.feishuConnected"));
+			loadChannels();
+			setRegistration(null);
+			patchQr("qrSvg", null);
+			patchQr("showPanel", false);
+		} else if (registration.phase === "error") {
+			toast.error(registration.error || t("settings.imConnectionError"));
+		}
+	}, [registration, loadChannels, patchQr, setRegistration, t]);
 
 	// Generate QR code when registration URL changes
 	useEffect(() => {
-		if (!qr.registration?.url || qr.registration.url === qrUrlRef.current) return;
-		qrUrlRef.current = qr.registration.url;
+		if (!registration?.url || registration.url === qrUrlRef.current) return;
+		qrUrlRef.current = registration.url;
 		let cancelled = false;
-		QRCode.toString(qr.registration.url, {
+		QRCode.toString(registration.url, {
 			type: "svg",
 			width: 200,
 			margin: 2,
@@ -710,19 +664,19 @@ export default function ImChannelsTab() {
 		return () => {
 			cancelled = true;
 		};
-	}, [patchQr, qr.registration?.url]);
+	}, [patchQr, registration?.url]);
 
 	// QR countdown timer
 	useEffect(() => {
-		if (qr.registration?.expireIn == null || qr.registration.phase !== "qr") return;
+		if (registration?.expireIn == null || registration.phase !== "qr") return;
 		const interval = setInterval(() => {
-			patchQr("registration", (prev) => {
+			setRegistration((prev) => {
 				if (!prev || prev.expireIn == null || prev.expireIn <= 0) return prev;
 				return { ...prev, expireIn: prev.expireIn - 1 };
 			});
 		}, 1000);
 		return () => clearInterval(interval);
-	}, [patchQr, qr.registration?.expireIn, qr.registration?.phase]);
+	}, [setRegistration, registration?.expireIn, registration?.phase]);
 
 	// ─── Handlers ───────────────────────────────────────────
 
@@ -731,7 +685,7 @@ export default function ImChannelsTab() {
 		patchList("loading", true);
 		patchQr("showPanel", true);
 		patchManual("showPanel", false);
-		patchQr("registration", null);
+		setRegistration(null);
 		patchQr("qrSvg", null);
 		try {
 			const result = await api.connectFeishuChannel({
@@ -739,7 +693,7 @@ export default function ImChannelsTab() {
 				description: t("settings.defaultDesc"),
 			});
 			if (result?.success && result.registrationId) {
-				patchQr("registration", { registrationId: result.registrationId, phase: "polling" });
+				setRegistration({ registrationId: result.registrationId, phase: "polling" });
 			} else {
 				toast.error(t("settings.imConnectionError"));
 				patchQr("showPanel", false);
@@ -873,13 +827,13 @@ export default function ImChannelsTab() {
 	};
 
 	const handleCancelRegistration = async () => {
-		if (!api || !qr.registration?.registrationId) return;
+		if (!api || !registration?.registrationId) return;
 		try {
-			await api.cancelFeishuRegistration(qr.registration.registrationId);
+			await api.cancelFeishuRegistration(registration.registrationId);
 		} catch (_err) {
 			// ignore
 		} finally {
-			patchQr("registration", null);
+			setRegistration(null);
 			patchQr("qrSvg", null);
 			patchQr("showPanel", false);
 		}
@@ -888,7 +842,7 @@ export default function ImChannelsTab() {
 	const openManualPanel = () => {
 		patchManual("showPanel", (prev) => !prev);
 		patchQr("showPanel", false);
-		patchQr("registration", null);
+		setRegistration(null);
 		patchQr("qrSvg", null);
 		patchManual("testResult", null);
 		patchManual("testPassed", false);
@@ -922,8 +876,8 @@ export default function ImChannelsTab() {
 			</div>
 
 			{/* ── QR Connect Panel (inline) ── */}
-			{qr.showPanel && qr.registration && (
-				<QrRegisterPanel registration={qr.registration} qrSvg={qr.qrSvg} onCancel={handleCancelRegistration} />
+			{qr.showPanel && registration && (
+				<QrRegisterPanel registration={registration} qrSvg={qr.qrSvg} onCancel={handleCancelRegistration} />
 			)}
 
 			{/* ── Manual Connect Panel (inline) ── */}
