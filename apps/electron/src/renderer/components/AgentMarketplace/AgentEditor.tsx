@@ -149,7 +149,7 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 
 	return (
 		<Dialog open={target !== null} onOpenChange={(o) => !o && onClose()}>
-			<DialogContent className="flex max-h-[85vh] max-w-lg flex-col" showCloseButton>
+			<DialogContent className="glass-dialog flex max-h-[88vh] max-w-xl flex-col" showCloseButton>
 				<DialogHeader>
 					<DialogTitle>
 						{isEdit
@@ -159,7 +159,7 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 					<DialogDescription>填写 Agent 定义信息，保存为 ~/.look/agents/ 下的 Markdown 文件。</DialogDescription>
 				</DialogHeader>
 
-				<div className="flex-1 space-y-3 overflow-y-auto py-2 pr-1">
+				<div className="flex-1 space-y-4 overflow-y-auto py-2 pr-1">
 					{/* 名称 */}
 					<div className="space-y-1">
 						<Label htmlFor="agent-name">名称 *</Label>
@@ -246,7 +246,7 @@ export default function AgentEditor({ target, onClose, onSaved }: AgentEditorPro
 					</div>
 				</div>
 
-				<DialogFooter className="shrink-0 sm:justify-between">
+				<DialogFooter className="shrink-0 border-t border-hairline pt-3 sm:justify-between">
 					{isEdit ? (
 						<Button variant="line" size="sm" className="h-7 text-[11px] text-destructive" onClick={handleDelete}>
 							删除

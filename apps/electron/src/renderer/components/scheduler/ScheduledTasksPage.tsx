@@ -2,12 +2,13 @@ import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import type { ProjectInfo, ScheduledTask, ScheduledTaskRunLog } from "@shared/types";
 import { useAtomValue, useSetAtom } from "jotai";
-import { ArrowLeft, Plus, RotateCw } from "lucide-react";
+import { CalendarClock, Plus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { activeAgentIdAtom, sidebarEffectiveCollapsedAtom } from "../../store/atoms";
 import { navigateMainView } from "../../store/viewNavigation";
+import { WorkspacePageHeader, WorkspaceSectionHeading, WorkspaceStat } from "../workspace/WorkspacePageChrome";
 import { ExecutionHistory } from "./ExecutionHistory";
 import {
 	buildScheduledTaskInput,
@@ -261,57 +262,45 @@ export default function ScheduledTasksPage() {
 	);
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<header
-				className={cn(
-					"app-drag flex h-12 items-center justify-between gap-4 border-b border-hairline px-5",
-					sidebarCollapsed && "mac-titlebar-pad",
-				)}
-			>
-				<div className="flex min-w-0 items-center gap-3">
-					<Button
-						variant="outline"
-						size="sm"
-						className="gap-1 px-2.5 text-[11px]"
-						onClick={() => navigateMainView("chat")}
-					>
-						<ArrowLeft className="size-3.5" />
-						{t("marketplace.back")}
-					</Button>
-					<div className="min-w-0">
-						<h1 className="text-sm font-semibold">{t("scheduledTasks.title")}</h1>
-						<p className="text-[11px] text-muted-foreground">{t("scheduledTasks.description")}</p>
-					</div>
-				</div>
-				<div className="flex shrink-0 items-center gap-4">
-					<div className="hidden items-center gap-3 text-[11px] text-muted-foreground sm:flex">
-						<span className="flex items-center gap-1.5">
-							<span className="size-1.5 rounded-full bg-emerald-500" />
-							{activeCount} {t("scheduledTasks.active")}
-						</span>
-						<span className="flex items-center gap-1.5">
-							<span className="size-1.5 rounded-full bg-muted-foreground/40" />
-							{pausedCount} {t("scheduledTasks.paused")}
-						</span>
-					</div>
+		<div className="flex h-full min-h-0 flex-col bg-background">
+			<WorkspacePageHeader
+				title={t("scheduledTasks.title")}
+				description={t("scheduledTasks.description")}
+				backLabel={t("marketplace.back")}
+				onBack={() => navigateMainView("chat")}
+				sidebarCollapsed={sidebarCollapsed}
+				icon={CalendarClock}
+				stats={
+					<>
+						<WorkspaceStat value={activeCount} label={t("scheduledTasks.active")} tone="success" />
+						<WorkspaceStat value={pausedCount} label={t("scheduledTasks.paused")} />
+					</>
+				}
+				action={
 					<Button size="sm" onClick={openCreate}>
 						<Plus className="size-3.5" />
 						{t("scheduledTasks.newTask")}
 					</Button>
-				</div>
-			</header>
+				}
+			/>
 
-			<div className="flex min-h-0 flex-1">
-				<aside className="flex w-72 shrink-0 flex-col border-r border-hairline bg-muted/10">
-					<div className="flex items-center justify-between border-b border-hairline px-3 py-2">
-						<span className="text-[11px] font-medium text-muted-foreground">{t("scheduledTasks.tasks")}</span>
-						<span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
-							{tasks.length}
-						</span>
+			<div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,30%)_minmax(0,1fr)] max-[900px]:grid-cols-1">
+				<aside
+					className={cn(
+						"flex min-h-0 min-w-0 flex-col border-r border-hairline bg-muted/[0.12] max-[900px]:max-h-[34vh] max-[900px]:border-b max-[900px]:border-r-0",
+						showEditor && "max-[900px]:hidden",
+					)}
+				>
+					<div className="border-b border-hairline px-3 py-3">
+						<WorkspaceSectionHeading
+							icon={CalendarClock}
+							title={t("scheduledTasks.tasks")}
+							count={tasks.length}
+						/>
 					</div>
-					<div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+					<div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
 						{tasks.length === 0 ? (
-							<EmptyTaskList />
+							<EmptyTaskList onCreate={openCreate} />
 						) : (
 							tasks.map((task) => (
 								<TaskListItem
@@ -327,17 +316,22 @@ export default function ScheduledTasksPage() {
 					</div>
 				</aside>
 
-				<main className="flex min-h-0 min-w-0 flex-1 flex-col">
+				<main className="flex min-h-0 min-w-0 flex-col bg-background/35">
 					{selected && !showEditor && (
-						<div className="flex items-center justify-between border-b border-hairline px-4 py-1.5">
-							<div className="flex items-center gap-1">
+						<div className="flex min-h-11 items-center justify-between gap-3 border-b border-hairline bg-background/55 px-3 py-2 sm:px-5">
+							<div
+								className="flex items-center gap-1 rounded-lg border border-hairline bg-muted/25 p-0.5"
+								role="tablist"
+							>
 								<button
 									type="button"
+									role="tab"
+									aria-selected={activeTab === "detail"}
 									onClick={() => setActiveTab("detail")}
 									className={cn(
 										"rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
 										activeTab === "detail"
-											? "bg-accent text-foreground"
+											? "bg-background text-foreground shadow-sm"
 											: "text-muted-foreground hover:text-foreground",
 									)}
 								>
@@ -345,29 +339,31 @@ export default function ScheduledTasksPage() {
 								</button>
 								<button
 									type="button"
+									role="tab"
+									aria-selected={activeTab === "history"}
 									onClick={() => setActiveTab("history")}
 									className={cn(
 										"rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
 										activeTab === "history"
-											? "bg-accent text-foreground"
+											? "bg-background text-foreground shadow-sm"
 											: "text-muted-foreground hover:text-foreground",
 									)}
 								>
 									{t("scheduledTasks.history")}
 								</button>
 							</div>
-							<div className="flex items-center gap-2">
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									onClick={() => void refreshLogs(selectedId ?? undefined)}
-								>
-									<RotateCw className="size-3" />
-								</Button>
-							</div>
+							<Button
+								variant="line-ghost"
+								size="icon-xs"
+								onClick={() => void refreshLogs(selectedId ?? undefined)}
+								aria-label={t("scheduledTasks.refresh", "Refresh execution history")}
+								title={t("scheduledTasks.refresh", "Refresh execution history")}
+							>
+								<RotateCw className="size-3" />
+							</Button>
 						</div>
 					)}
-					<div className="min-h-0 flex-1 overflow-y-auto p-5">
+					<div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
 						{showEditor ? (
 							<TaskEditor
 								editingId={editingId}
@@ -400,7 +396,7 @@ export default function ScheduledTasksPage() {
 								<ExecutionHistory logs={logs} selected={selected} navigateToSession={navigateToSession} />
 							)
 						) : (
-							<EmptyWorkspace />
+							<EmptyWorkspace onCreate={openCreate} />
 						)}
 					</div>
 				</main>

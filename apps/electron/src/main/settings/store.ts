@@ -22,9 +22,11 @@
 // callers see a single `UserSettings` object.
 // ============================================================
 
-import { isLookTone } from "@look/shared";
+import { DEFAULT_LOOK_THEME, resolveLookTheme } from "@look/shared";
 import type {
 	DesktopNotificationMode,
+	LookTheme,
+	LookThemeStyle,
 	LookTone,
 	MessageAlignment,
 	PermissionMode,
@@ -50,6 +52,7 @@ const DEFAULTS: UserSettings = {
 	lastActiveProjectId: "",
 	openProjectIds: [],
 	openedSessionIds: [],
+	themeStyle: "graphite",
 	themeTone: "dark",
 	autoTitleModel: null,
 	subagentEnabled: true,
@@ -86,7 +89,9 @@ interface UiSettings {
 	openProjectIds: string[];
 	/** Session IDs opened as sheets in the top bar. */
 	openedSessionIds: string[];
-	/** Active tone variant (light / dark). */
+	/** Fixed color theme, independent from the light/dark display mode. */
+	themeStyle: LookThemeStyle;
+	/** Global light/dark display mode. */
 	themeTone: LookTone;
 	/** Model used to auto-generate the first session title. See UserSettings.autoTitleModel. */
 	autoTitleModel: string | null;
@@ -127,6 +132,7 @@ const UI_DEFAULTS: UiSettings = {
 	lastActiveProjectId: "",
 	openProjectIds: [],
 	openedSessionIds: [],
+	themeStyle: "graphite",
 	themeTone: "dark",
 	autoTitleModel: null,
 	planModel: null,
@@ -144,18 +150,20 @@ const UI_DEFAULTS: UiSettings = {
 	builtinBrowserEnabled: false,
 };
 
-/** Synchronously read the persisted tone from disk without instantiating the
- *  full store. Used at window-creation time before the runtime manager exists. */
-export function readThemeToneSync(uiSettingsPath: string): LookTone {
+/** Synchronously read the persisted theme settings from disk without
+ *  instantiating the full store. Used at window-creation time before the
+ *  runtime manager exists. Legacy composite values resolve to separate fields
+ *  so the native window background always matches the renderer. */
+export function readThemeSettingsSync(uiSettingsPath: string): LookTheme {
 	try {
 		if (fs.existsSync(uiSettingsPath)) {
-			const parsed = JSON.parse(fs.readFileSync(uiSettingsPath, "utf-8")) as Record<string, unknown>;
-			if (isLookTone(parsed.themeTone)) return parsed.themeTone;
+			const parsed = JSON.parse(fs.readFileSync(uiSettingsPath, "utf-8"));
+			return resolveLookTheme(parsed);
 		}
 	} catch {
 		/* fall through to default */
 	}
-	return UI_DEFAULTS.themeTone;
+	return { ...DEFAULT_LOOK_THEME };
 }
 
 /** Minimal surface we need from `SettingsManager` — the SDK
@@ -228,12 +236,10 @@ export class UserSettingsStore {
 				}
 				if (!Array.isArray(parsed.openProjectIds)) parsed.openProjectIds = [];
 				if (!Array.isArray(parsed.openedSessionIds)) parsed.openedSessionIds = [];
-				if ("themeStyle" in parsed) {
-					delete parsed.themeStyle;
-					migrated = true;
-				}
-				if (!isLookTone(parsed.themeTone)) {
-					parsed.themeTone = UI_DEFAULTS.themeTone;
+				const theme = resolveLookTheme(parsed);
+				if (parsed.themeStyle !== theme.themeStyle || parsed.themeTone !== theme.themeTone) {
+					parsed.themeStyle = theme.themeStyle;
+					parsed.themeTone = theme.themeTone;
 					migrated = true;
 				}
 				// 数值字段防御：手工改坏 ui-settings.json（字符串/null/NaN）时回退默认值
@@ -287,6 +293,7 @@ export class UserSettingsStore {
 		if (partial.lastActiveProjectId !== undefined) uiPartial.lastActiveProjectId = partial.lastActiveProjectId;
 		if (partial.openProjectIds !== undefined) uiPartial.openProjectIds = [...partial.openProjectIds];
 		if (partial.openedSessionIds !== undefined) uiPartial.openedSessionIds = [...partial.openedSessionIds];
+		if (partial.themeStyle !== undefined) uiPartial.themeStyle = partial.themeStyle;
 		if (partial.themeTone !== undefined) uiPartial.themeTone = partial.themeTone;
 		if (partial.autoTitleModel !== undefined) uiPartial.autoTitleModel = partial.autoTitleModel;
 		if (partial.planModel !== undefined) uiPartial.planModel = partial.planModel;

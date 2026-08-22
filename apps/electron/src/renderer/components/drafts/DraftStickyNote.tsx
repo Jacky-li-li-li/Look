@@ -276,7 +276,15 @@ export default function DraftStickyNote() {
 			onPointerUp={onPointerUp}
 			onPointerCancel={onPointerCancel}
 			role="complementary"
+			tabIndex={expanded ? -1 : 0}
+			aria-expanded={expanded}
 			aria-label={t("drafts.stickyLabel")}
+			onKeyDown={(event) => {
+				if (!expanded && (event.key === "Enter" || event.key === " ")) {
+					event.preventDefault();
+					setExpanded(true);
+				}
+			}}
 		>
 			{/* 三张纸交错折叠：底层两张纸从主卡片下方露出边角，微旋转交错 */}
 			<div className="relative h-full w-full">
@@ -346,7 +354,7 @@ export default function DraftStickyNote() {
 								value={input}
 								onChange={(event) => setInput(event.target.value)}
 								onKeyDown={(event) => {
-									if (event.key === "Enter" && !event.shiftKey) {
+									if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
 										event.preventDefault();
 										void save();
 									}

@@ -68,5 +68,5 @@ export function useToggleEnabled({ getAllNames, setEnabled, onChange }: UseToggl
 		setEnabledNames(null);
 	}, [setEnabledNames]);
 
-	return { enabledNames, setEnabledNames: reset, isEnabled, toggle };
+	return { enabledNames, setEnabledNames, reset, isEnabled, toggle };
 }

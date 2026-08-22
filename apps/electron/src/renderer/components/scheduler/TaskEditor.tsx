@@ -136,18 +136,18 @@ export function TaskEditor({
 	const selectedChatId = effectiveChatId(chatCandidates, form.notificationChatId);
 
 	return (
-		<div className="mx-auto max-w-3xl space-y-6">
-			<div className="flex items-center justify-between gap-4">
+		<div className="mx-auto w-full max-w-4xl space-y-5">
+			<div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline pb-3">
 				<h2 className="text-lg font-semibold tracking-tight">
 					{editingId ? t("scheduledTasks.edit") : t("scheduledTasks.newTask")}
 				</h2>
-				<Button variant="ghost" size="sm" onClick={closeEditor}>
+				<Button variant="line-ghost" size="sm" className="h-7" onClick={closeEditor}>
 					<X className="size-3.5" />
 					{t("common.cancel")}
 				</Button>
 			</div>
 
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<Field id={`${id}-name`} label={t("scheduledTasks.name")}>
 					<Input id={`${id}-name`} value={form.name} onChange={handleNameChange} autoComplete="off" />
 				</Field>
@@ -167,7 +167,7 @@ export function TaskEditor({
 				</Field>
 			</div>
 
-			<div className="rounded-lg border border-hairline bg-muted/15 p-4 pl-3.5 border-l-4 border-l-primary/30">
+			<div className="rounded-xl border border-primary/20 bg-primary/[0.045] p-4 shadow-[0_8px_24px_var(--material-shadow-soft)] sm:p-5">
 				<div className="mb-3 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
 					<CalendarDays className="size-3.5" />
 					{t("scheduledTasks.executionPlan")}
@@ -275,7 +275,7 @@ export function TaskEditor({
 				</p>
 			</div>
 
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<Field id={`${id}-model`} label={t("scheduledTasks.model")}>
 					<Select value={form.model} onValueChange={handleModelChange}>
 						<SelectTrigger id={`${id}-model`}>
@@ -291,7 +291,7 @@ export function TaskEditor({
 					</Select>
 				</Field>
 
-				<div className="rounded-lg border border-hairline bg-muted/15 p-3">
+				<div className="rounded-xl border border-hairline bg-muted/[0.14] p-3.5">
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0">
 							<div className="flex items-center gap-2">
@@ -358,7 +358,7 @@ export function TaskEditor({
 				</div>
 			</div>
 
-			<div className="space-y-4">
+			<div className="space-y-3">
 				<Field id={`${id}-prompt`} label={t("scheduledTasks.prompt")}>
 					<Textarea
 						id={`${id}-prompt`}
@@ -410,7 +410,7 @@ export function TaskEditor({
 				</div>
 			)}
 
-			<div className="flex items-center justify-between gap-3 pt-2">
+			<div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline bg-background/80 pt-4 backdrop-blur-sm">
 				<Button variant="outline" size="sm" disabled={busy || testing} onClick={() => void testTask()}>
 					{testing ? <LoaderCircle className="size-3.5 animate-spin" /> : <FlaskConical className="size-3.5" />}
 					{testing ? t("scheduledTasks.testingTask") : t("scheduledTasks.testTask")}

@@ -29,6 +29,8 @@ export type EventCallback = (event: MainToRendererEvent) => void;
 export type { PermissionMode } from "./contracts/permission.js";
 export type {
 	DesktopNotificationMode,
+	LookTheme,
+	LookThemeStyle,
 	LookTone,
 	MessageAlignment,
 	ShowToolExecution,

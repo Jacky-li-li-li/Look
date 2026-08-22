@@ -1,13 +1,11 @@
 // ============================================================
 // SkillCard — Agent Skill 页面中的单个 Skill 卡片
-//
-// 两行布局：Row1=图标+名称+Switch，Row2=描述。
-// 充分利用卡片纵向空间，与 AgentCard 视觉密度对齐。
 // ============================================================
 
 import { Switch } from "@look/ui/components/ui/switch";
 import { Sparkles } from "lucide-react";
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 
 interface SkillCardProps {
 	skill: {
@@ -20,22 +18,33 @@ interface SkillCardProps {
 }
 
 const SkillCard = memo(function SkillCard({ skill, enabled, onToggle }: SkillCardProps) {
+	const { t } = useTranslation();
 	return (
 		<div
-			className={`flex w-full flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors border-hairline bg-card/40 hover:bg-accent/5 ${
-				!enabled ? "opacity-50 hover:opacity-70" : ""
-			}`}
+			className={`flex min-h-[142px] w-full flex-col gap-3 rounded-xl border p-3.5 text-left transition-[border-color,background-color,opacity] ${enabled ? "border-hairline bg-card/40 hover:border-primary/25 hover:bg-card/65" : "border-hairline bg-card/25 opacity-55 hover:opacity-75"}`}
 		>
-			{/* Row 1: 图标 + 名称 + Switch */}
-			<div className="flex w-full items-center gap-2">
-				<Sparkles className="size-5 shrink-0 text-foreground" />
-				<span className="min-w-0 flex-1 truncate text-[13px] font-medium">{skill.name}</span>
-				<Switch checked={enabled} onCheckedChange={onToggle} className="scale-75 shrink-0" />
+			<div className="flex w-full items-start gap-2.5">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+					<Sparkles className="size-4" />
+				</span>
+				<div className="min-w-0 flex-1">
+					<div className="flex items-start justify-between gap-2">
+						<span className="min-w-0 truncate text-[13px] font-semibold text-foreground">{skill.name}</span>
+						<Switch
+							size="sm"
+							checked={enabled}
+							aria-label={enabled ? t("marketplace.disableSkill") : t("marketplace.enableSkill")}
+							onCheckedChange={onToggle}
+						/>
+					</div>
+					<span className="mt-0.5 block text-[9px] text-muted-foreground/60">
+						{skill.category === "builtin" ? t("marketplace.builtin") : t("marketplace.mine")}
+					</span>
+				</div>
 			</div>
 
-			{/* Row 2: 描述 */}
-			<p className="line-clamp-2 w-full text-[11px] leading-snug text-muted-foreground">
-				{skill.description || "暂无描述"}
+			<p className="line-clamp-4 min-h-[4.2rem] w-full text-[11px] leading-relaxed text-muted-foreground">
+				{skill.description || t("marketplace.noDescription")}
 			</p>
 		</div>
 	);

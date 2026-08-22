@@ -65,6 +65,16 @@ export default function SimplePopover({
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 
+		// Optional containment: an ancestor marked `data-popover-boundary`
+		// clamps the panel to its rect instead of the raw viewport, so a
+		// portaled panel never spills over neighboring regions (session
+		// bar, sidebar, right panel). Falls back to viewport edges.
+		const boundary = triggerEl.closest("[data-popover-boundary]")?.getBoundingClientRect();
+		const edgeTop = (boundary?.top ?? 0) + VIEWPORT_MARGIN;
+		const edgeBottom = boundary?.bottom ?? vh - VIEWPORT_MARGIN;
+		const edgeLeft = (boundary?.left ?? 0) + VIEWPORT_MARGIN;
+		const edgeRight = boundary?.right ?? vw - VIEWPORT_MARGIN;
+
 		// Use the panel's real measured size if it's mounted and has any
 		// height, else fall back to the consumer's preferred estimate so
 		// the first frame is close enough to pick a sensible placement.
@@ -79,8 +89,8 @@ export default function SimplePopover({
 		const panelH = measuredH > 0 ? measuredH : preferredHeight;
 		const panelW = measuredW > 0 ? measuredW : 288;
 
-		const spaceAbove = rect.top - VIEWPORT_MARGIN;
-		const spaceBelow = vh - rect.bottom - VIEWPORT_MARGIN;
+		const spaceAbove = rect.top - edgeTop;
+		const spaceBelow = edgeBottom - rect.bottom;
 		// Prefer "up" (trigger lives near the bottom of the screen) but
 		// flip "down" if there's clearly more room below.
 		const placement: "up" | "down" = spaceAbove >= panelH + GAP || spaceAbove >= spaceBelow ? "up" : "down";
@@ -92,8 +102,8 @@ export default function SimplePopover({
 
 		const top =
 			placement === "up"
-				? Math.max(VIEWPORT_MARGIN, rect.top - maxHeight - GAP)
-				: Math.min(vh - maxHeight - VIEWPORT_MARGIN, rect.bottom + GAP);
+				? Math.max(edgeTop, rect.top - maxHeight - GAP)
+				: Math.min(edgeBottom - maxHeight, rect.bottom + GAP);
 
 		let left: number;
 		if (align === "end") {
@@ -104,7 +114,7 @@ export default function SimplePopover({
 			left = rect.left;
 		}
 		// Clamp horizontally so the panel never leaves the viewport.
-		left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - panelW - VIEWPORT_MARGIN));
+		left = Math.max(edgeLeft, Math.min(left, edgeRight - panelW));
 
 		return { top, left, placement, maxHeight };
 	}, [align, preferredHeight]);

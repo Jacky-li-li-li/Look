@@ -344,8 +344,8 @@ const ChatInput = function ChatInput({
 	return (
 		<div
 			className={[
-				"relative mx-5 mb-2.5 rounded-lg border bg-background/30 shadow-none backdrop-blur-sm transition-all",
-				dragActive ? "border-foreground/60 bg-foreground/[0.04] ring-2 ring-foreground/30" : "border-hairline",
+				"chat-composer relative mx-5 mb-2.5 rounded-lg border transition-all",
+				dragActive ? "chat-composer--drag-active" : "",
 			].join(" ")}
 		>
 			{/* 拖拽悬停提示 */}

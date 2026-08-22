@@ -1,68 +1,69 @@
 // ============================================================
-// Look theme system — neutral palette + theme-family variants
+// Look theme system - fixed color themes plus a global light/dark mode
 //
 // HTML class shape:
-//   neutral:  <html class="tone-dark">
-//   themed:   <html class="tone-dark theme-catppuccin-mocha">
+//   graphite: <html class="tone-dark">
+//   family:   <html class="tone-dark theme-azure">
 //
 // `tone-{scheme}` keeps Tailwind's dark variant and all `.tone-*`
-// selectors working; `theme-{id}` layers palette overrides from
-// App.css on top. Tone ids and schemes come from the shared contract
-// (`@shared/contracts/settings`) so main / preload / renderer agree.
+// selectors working. `theme-{style}` layers one fixed palette family
+// on top. Both dimensions come from the shared settings contract so
+// main, preload, and renderer agree.
 // ============================================================
 
-import { LOOK_TONE_SCHEME, LOOK_TONE_VALUES, type LookTone } from "@shared/contracts/settings";
+import {
+	DEFAULT_LOOK_THEME,
+	LOOK_THEME_STYLE_VALUES,
+	type LookTheme,
+	type LookThemeStyle,
+	type LookTone,
+	resolveLookTheme,
+} from "@shared/contracts/settings";
 
-export type { LookTone } from "@shared/contracts/settings";
+export type { LookTheme, LookThemeStyle, LookTone } from "@shared/contracts/settings";
 
-export const ALL_TONES: readonly LookTone[] = LOOK_TONE_VALUES;
+export const DEFAULT_THEME: LookTheme = { ...DEFAULT_LOOK_THEME };
 
-export const DEFAULT_THEME: LookTone = "dark";
-
-/** True if a value is a supported theme tone. */
-export function isLookTone(value: unknown): value is LookTone {
-	return typeof value === "string" && (ALL_TONES as readonly string[]).includes(value);
+/** DOM class carrying palette overrides, or null for the Graphite base theme. */
+export function themeClassFor(themeStyle: LookThemeStyle): string | null {
+	return themeStyle === "graphite" ? null : `theme-${themeStyle}`;
 }
 
-/** DOM class carrying palette overrides, or null for the neutral tones. */
-export function themeClassFor(tone: LookTone): string | null {
-	return tone === "light" || tone === "dark" ? null : `theme-${tone}`;
-}
-
-/** Read the active tone from the document root. */
-export function readLookThemeFromDom(): LookTone {
-	if (typeof document === "undefined") return DEFAULT_THEME;
+/** Read the active independent theme settings from the document root. */
+export function readLookThemeFromDom(): LookTheme {
+	if (typeof document === "undefined") return { ...DEFAULT_THEME };
 	const classes = document.documentElement.classList;
-	for (const tone of ALL_TONES) {
-		const themeClass = themeClassFor(tone);
-		if (themeClass && classes.contains(themeClass)) return tone;
-	}
-	return classes.contains("tone-light") ? "light" : "dark";
+	const themeStyle =
+		LOOK_THEME_STYLE_VALUES.find((style) => {
+			const themeClass = themeClassFor(style);
+			return themeClass !== null && classes.contains(themeClass);
+		}) ?? "graphite";
+
+	return {
+		themeStyle,
+		themeTone: classes.contains("tone-light") ? "light" : "dark",
+	};
 }
 
-/**
- * Read the boot-time tone from general settings. Legacy `themeStyle` is
- * intentionally ignored so existing users keep their light/dark preference.
- */
-export function themeFromSettings(settings: unknown): LookTone {
-	if (!settings || typeof settings !== "object") return DEFAULT_THEME;
-	const tone = (settings as Record<string, unknown>).themeTone;
-	return isLookTone(tone) ? tone : DEFAULT_THEME;
+/** Resolve persisted settings, including old composite theme ids. */
+export function themeFromSettings(settings: unknown): LookTheme {
+	return resolveLookTheme(settings);
 }
 
 /**
  * Keep the boot-time URL handoff aligned with the live theme. Electron reloads
- * the current renderer URL without recreating BrowserWindow, so leaving the
- * original query value untouched would make the next document start in the
- * theme that was active when the window was first created.
+ * the current renderer URL without recreating BrowserWindow, so both the fixed
+ * theme and display mode need to be synchronized for the next document.
  */
-export function syncLookThemeToLocation(tone: LookTone): void {
+export function syncLookThemeToLocation(theme: LookTheme): void {
 	if (typeof window === "undefined") return;
 
 	try {
 		const url = new URL(window.location.href);
-		if (url.searchParams.get("theme") === tone) return;
-		url.searchParams.set("theme", tone);
+		if (url.searchParams.get("theme") === theme.themeStyle && url.searchParams.get("tone") === theme.themeTone)
+			return;
+		url.searchParams.set("theme", theme.themeStyle);
+		url.searchParams.set("tone", theme.themeTone);
 		window.history.replaceState(window.history.state, "", url.href);
 	} catch (error) {
 		// Theme application must still succeed in non-browser test harnesses or
@@ -71,34 +72,33 @@ export function syncLookThemeToLocation(tone: LookTone): void {
 	}
 }
 
-/** Write the active tone: scheme class + optional palette class. */
-export function writeLookThemeToDom(tone: LookTone): void {
+/** Write the active theme: display mode class plus optional palette class. */
+export function writeLookThemeToDom(theme: LookTheme): void {
 	if (typeof document === "undefined") return;
 	const html = document.documentElement;
-	const scheme = LOOK_TONE_SCHEME[tone];
-	const themeClass = themeClassFor(tone);
-	syncLookThemeToLocation(tone);
+	const { themeStyle, themeTone } = theme;
+	const themeClass = themeClassFor(themeStyle);
+	syncLookThemeToLocation(theme);
 
 	// The URL still needs synchronization above even when the DOM already has
-	// the right theme; this is the common path after the early boot script.
+	// the right classes; this is the common path after the early boot script.
 	const hasThemeClass = [...html.classList].some((name) => name.startsWith("theme-"));
 	const alreadyApplied =
-		html.style.colorScheme === scheme &&
-		html.classList.contains(`tone-${scheme}`) &&
+		html.style.colorScheme === themeTone &&
+		html.classList.contains(`tone-${themeTone}`) &&
 		(themeClass ? html.classList.contains(themeClass) : !hasThemeClass);
 	if (alreadyApplied) return;
 
 	const apply = () => {
-		html.style.colorScheme = scheme;
+		html.style.colorScheme = themeTone;
 
 		for (const className of [...html.classList]) {
 			if (className.startsWith("theme-")) html.classList.remove(className);
 		}
 
 		html.style.setProperty("--theme-transitioning", "1");
-
 		html.classList.remove("tone-light", "tone-dark");
-		html.classList.add(`tone-${scheme}`);
+		html.classList.add(`tone-${themeTone}`);
 		if (themeClass) html.classList.add(themeClass);
 	};
 
@@ -124,9 +124,10 @@ export function writeLookThemeToDom(tone: LookTone): void {
 	}
 }
 
-// ─────────────────────────────────────────────
-// Theme family registry — drives the settings picker
-// ─────────────────────────────────────────────
+// -------------------------------------------------------------
+// Theme family registry - drives the settings picker.
+// Each fixed family provides previews for either display mode.
+// -------------------------------------------------------------
 
 /** Colors painting the mini window preview in the settings picker.
  *  Mirrors the tone's App.css token group: bg / sidebar / text / subtext /
@@ -143,184 +144,153 @@ export interface LookThemePreview {
 	str: string;
 }
 
-export interface LookThemeVariant {
-	tone: LookTone;
-	/** Variant display name (proper noun, not translated). */
-	label: string;
-	preview: LookThemePreview;
-}
-
 export interface LookThemeFamily {
-	id: string;
+	id: LookThemeStyle;
 	/** Family display name (proper noun, not translated). */
 	name: string;
-	variants: LookThemeVariant[];
+	/** Mini-window previews for the independent global display mode. */
+	previews: Record<LookTone, LookThemePreview>;
 }
 
 export const LOOK_THEME_FAMILIES: readonly LookThemeFamily[] = [
 	{
-		id: "neutral",
-		name: "Neutral",
-		variants: [
-			{
-				tone: "light",
-				label: "Light",
-				preview: {
-					bg: "#fbfbfa",
-					side: "#f4f4f2",
-					fg: "#171716",
-					sub: "#83837f",
-					accent: "#171716",
-					border: "#e8e8e5",
-					code: "#f4f4f2",
-					kw: "#8a8a86",
-					str: "#8a8a86",
-				},
+		id: "graphite",
+		name: "Graphite",
+		previews: {
+			light: {
+				bg: "#fbfbfa",
+				side: "#f4f4f2",
+				fg: "#171716",
+				sub: "#83837f",
+				accent: "#171716",
+				border: "#e8e8e5",
+				code: "#f4f4f2",
+				kw: "#8a8a86",
+				str: "#8a8a86",
 			},
-			{
-				tone: "dark",
-				label: "Dark",
-				preview: {
-					bg: "#131211",
-					side: "#0c0b0a",
-					fg: "#f5f5f3",
-					sub: "#83837f",
-					accent: "#f5f5f3",
-					border: "#2a2927",
-					code: "#1a1918",
-					kw: "#83837f",
-					str: "#83837f",
-				},
+			dark: {
+				bg: "#131211",
+				side: "#0c0b0a",
+				fg: "#f5f5f3",
+				sub: "#83837f",
+				accent: "#f5f5f3",
+				border: "#2a2927",
+				code: "#1a1918",
+				kw: "#83837f",
+				str: "#83837f",
 			},
-		],
+		},
 	},
 	{
-		id: "catppuccin",
-		name: "Catppuccin",
-		variants: [
-			{
-				tone: "catppuccin-mocha",
-				label: "Mocha",
-				preview: {
-					bg: "#1e1e2e",
-					side: "#181825",
-					fg: "#cdd6f4",
-					sub: "#a6adc8",
-					accent: "#cba6f7",
-					border: "#45475a",
-					code: "#181825",
-					kw: "#f38ba8",
-					str: "#a6e3a1",
-				},
+		id: "azure",
+		name: "Azure",
+		previews: {
+			light: {
+				bg: "#eff4f8",
+				side: "#e7eef4",
+				fg: "#202938",
+				sub: "#5c6b7a",
+				accent: "#1c62b3",
+				border: "#d7e1e9",
+				code: "#e7eef4",
+				kw: "#b2417f",
+				str: "#307a4f",
 			},
-			{
-				tone: "catppuccin-latte",
-				label: "Latte",
-				preview: {
-					bg: "#eff1f5",
-					side: "#e6e9ef",
-					fg: "#4c4f69",
-					sub: "#6c6f85",
-					accent: "#8839ef",
-					border: "#bcc0cc",
-					code: "#e6e9ef",
-					kw: "#d20f39",
-					str: "#40a02b",
-				},
+			dark: {
+				bg: "#0a0f19",
+				side: "#060a13",
+				fg: "#dbe2ea",
+				sub: "#8694a3",
+				accent: "#6da9eb",
+				border: "#20293a",
+				code: "#060a13",
+				kw: "#da7baa",
+				str: "#78c192",
 			},
-		],
+		},
 	},
 	{
-		id: "tokyo-night",
-		name: "Tokyo Night",
-		variants: [
-			{
-				tone: "tokyo-night",
-				label: "Night",
-				preview: {
-					bg: "#1a1b26",
-					side: "#16161e",
-					fg: "#c0caf5",
-					sub: "#7982a9",
-					accent: "#7aa2f7",
-					border: "#292e42",
-					code: "#16161e",
-					kw: "#bb9af7",
-					str: "#9ece6a",
-				},
+		id: "dune",
+		name: "Dune",
+		previews: {
+			light: {
+				bg: "#f7f3e8",
+				side: "#f0ebdc",
+				fg: "#362c21",
+				sub: "#756653",
+				accent: "#9e5209",
+				border: "#e6e0cb",
+				code: "#f0ebdc",
+				kw: "#af3e30",
+				str: "#546c3a",
 			},
-		],
+			dark: {
+				bg: "#1a150f",
+				side: "#14100a",
+				fg: "#e4dece",
+				sub: "#9e9482",
+				accent: "#db9657",
+				border: "#342d21",
+				code: "#14100a",
+				kw: "#d76a5a",
+				str: "#80b38a",
+			},
+		},
 	},
 	{
-		id: "gruvbox",
-		name: "Gruvbox",
-		variants: [
-			{
-				tone: "gruvbox-dark",
-				label: "Dark",
-				preview: {
-					bg: "#282828",
-					side: "#1d2021",
-					fg: "#ebdbb2",
-					sub: "#bdae93",
-					accent: "#fe8019",
-					border: "#504945",
-					code: "#1d2021",
-					kw: "#fb4934",
-					str: "#b8bb26",
-				},
+		id: "iris",
+		name: "Iris",
+		previews: {
+			light: {
+				bg: "#f6f1fa",
+				side: "#eee8f3",
+				fg: "#302a3d",
+				sub: "#70677c",
+				accent: "#784fb3",
+				border: "#e4dceb",
+				code: "#eee8f3",
+				kw: "#af467e",
+				str: "#307a4f",
 			},
-			{
-				tone: "gruvbox-light",
-				label: "Light",
-				preview: {
-					bg: "#fbf1c7",
-					side: "#f2e5bc",
-					fg: "#3c3836",
-					sub: "#7c6f64",
-					accent: "#af3a03",
-					border: "#d5c4a1",
-					code: "#f2e5bc",
-					kw: "#9d0006",
-					str: "#79740e",
-				},
+			dark: {
+				bg: "#130f1c",
+				side: "#0d0a15",
+				fg: "#e3dfeb",
+				sub: "#9891a6",
+				accent: "#ba9ae0",
+				border: "#2d273c",
+				code: "#0d0a15",
+				kw: "#d375a4",
+				str: "#7fbf95",
 			},
-		],
+		},
 	},
 	{
-		id: "rose-pine",
-		name: "Rosé Pine",
-		variants: [
-			{
-				tone: "rose-pine",
-				label: "Main",
-				preview: {
-					bg: "#191724",
-					side: "#12101a",
-					fg: "#e0def4",
-					sub: "#908caa",
-					accent: "#c4a7e7",
-					border: "#26233a",
-					code: "#1f1d2e",
-					kw: "#eb6f92",
-					str: "#9ccfd8",
-				},
+		id: "pine",
+		name: "Pine",
+		previews: {
+			light: {
+				bg: "#eff5f0",
+				side: "#e5eee6",
+				fg: "#1d2d24",
+				sub: "#57685c",
+				accent: "#106847",
+				border: "#d7e4d9",
+				code: "#e5eee6",
+				kw: "#a52a24",
+				str: "#546c3a",
 			},
-			{
-				tone: "rose-pine-dawn",
-				label: "Dawn",
-				preview: {
-					bg: "#faf4ed",
-					side: "#fffaf3",
-					fg: "#575279",
-					sub: "#797593",
-					accent: "#907aa9",
-					border: "#e7ddd3",
-					code: "#fffaf3",
-					kw: "#b4637a",
-					str: "#56949f",
-				},
+			dark: {
+				bg: "#07120d",
+				side: "#040d08",
+				fg: "#dce4dd",
+				sub: "#85988c",
+				accent: "#6fc29b",
+				border: "#1a2e25",
+				code: "#040d08",
+				kw: "#d15c56",
+				str: "#86a468",
 			},
-		],
+		},
 	},
 ];

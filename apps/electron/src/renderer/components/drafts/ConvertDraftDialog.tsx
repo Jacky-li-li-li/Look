@@ -17,7 +17,7 @@ import { Label } from "@look/ui/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@look/ui/components/ui/select";
 import type { Draft, ProjectInfo } from "@shared/types";
 import { FolderPlus, LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 export type ConvertDraftDialogProps = {
@@ -33,12 +33,15 @@ export function ConvertDraftDialog({ open, draft, projects, busy, onClose, onCon
 	const { t } = useTranslation();
 	const [projectId, setProjectId] = useState("");
 
-	// 打开时默认选中第一个项目（有则选中，避免用户手动展开下拉）
 	const effectiveProjectId = projectId || projects[0]?.id || "";
+
+	useEffect(() => {
+		if (open) setProjectId(projects[0]?.id ?? "");
+	}, [open, projects]);
 
 	return (
 		<Dialog open={open} onOpenChange={(next) => !busy && !next && onClose()}>
-			<DialogContent className="max-w-md">
+			<DialogContent className="glass-dialog max-w-md">
 				<DialogHeader>
 					<DialogTitle>{t("drafts.convertTitle")}</DialogTitle>
 					<DialogDescription>{t("drafts.convertHint")}</DialogDescription>

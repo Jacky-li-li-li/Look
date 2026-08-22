@@ -14,6 +14,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 // 应用真实图标（与 Dock/Finder 的 Look.app 一致），由 Vite 打包进渲染产物
 import appIconUrl from "../../../assets/icon-1024.png";
+// 登录页背景图（蓝→米双色海报，2K 超分版），由 Vite 打包进渲染产物
+import loginBgUrl from "../../../assets/login-bg.jpg";
 import { writeAuthCache } from "../lib/authCache";
 import { OAUTH_REDIRECT_URL, parseOAuthCallback } from "../lib/oauth-callback";
 import { getSupabase, resetSupabaseClient } from "../lib/supabase";
@@ -627,91 +629,101 @@ export default function LoginScreen() {
 	}
 
 	return (
-		<div className="flex h-screen flex-col items-center justify-center bg-background p-6">
-			<div className="w-full max-w-sm">
-				<div className="mb-8 flex flex-col items-center gap-3">
-					<img src={appIconUrl} alt="Look" className="size-16 rounded-[1.25rem] shadow-lg" draggable={false} />
-					<h1 className="text-xl font-semibold tracking-tight text-foreground">Look</h1>
-					<p className="text-xs text-muted-foreground">
-						{mode === "login" && t("auth.loginDesc")}
-						{mode === "register" && t("auth.registerDesc")}
-						{mode === "forgot" && t("auth.forgotDesc")}
-					</p>
+		<div className="flex h-screen overflow-hidden bg-background">
+			{/* 左侧 2/3：品牌背景图，以图片中心为基准 cover 裁切（4K 图，任何窗口不放大） */}
+			<div className="relative flex-[2] bg-cover bg-center" style={{ backgroundImage: `url(${loginBgUrl})` }}>
+				{/* 品牌标语：避开 macOS 红绿灯（x 12-78 / y 17-33） */}
+				<p className="absolute left-10 top-14 select-none text-4xl font-[MaShanZheng] text-white/90">
+					{t("auth.tagline")}
+				</p>
+			</div>
+			{/* 右侧 1/3：登录模块 */}
+			<div className="flex min-w-[340px] flex-1 flex-col items-center justify-center overflow-y-auto border-l border-hairline bg-background p-6">
+				<div className="w-full max-w-sm">
+					<div className="mb-8 flex flex-col items-center gap-3">
+						<img src={appIconUrl} alt="Look" className="size-16 rounded-[1.25rem] shadow-lg" draggable={false} />
+						<h1 className="text-xl font-semibold tracking-tight text-foreground">Look</h1>
+						<p className="text-xs text-muted-foreground">
+							{mode === "login" && t("auth.loginDesc")}
+							{mode === "register" && t("auth.registerDesc")}
+							{mode === "forgot" && t("auth.forgotDesc")}
+						</p>
+					</div>
+
+					{mode === "login" && (
+						<LoginForm
+							email={email}
+							setEmail={setEmail}
+							password={password}
+							setPassword={setPassword}
+							error={error}
+							rememberMe={rememberMe}
+							setRememberMe={setRememberMe}
+							handleLogin={handleLogin}
+							onGithubLogin={handleGithubLogin}
+							onGoogleLogin={handleGoogleLogin}
+							loginSubmitting={submitting}
+							onSwitchToForgot={() => {
+								setMode("forgot");
+								reset();
+							}}
+							onSwitchToRegister={() => {
+								setMode("register");
+								reset();
+							}}
+						/>
+					)}
+
+					{mode === "register" && !sent && (
+						<RegisterForm
+							email={email}
+							setEmail={setEmail}
+							password={password}
+							setPassword={setPassword}
+							submitting={submitting}
+							error={error}
+							handleRegister={handleRegister}
+							onSwitchToLogin={() => {
+								setMode("login");
+								reset();
+							}}
+						/>
+					)}
+
+					{mode === "register" && sent && (
+						<RegisterSent
+							email={email}
+							onBackToLogin={() => {
+								setMode("login");
+								reset();
+							}}
+						/>
+					)}
+
+					{mode === "forgot" && !sent && (
+						<ForgotForm
+							email={email}
+							setEmail={setEmail}
+							submitting={submitting}
+							error={error}
+							handleForgot={handleForgot}
+							onBackToLogin={() => {
+								setMode("login");
+								reset();
+							}}
+						/>
+					)}
+
+					{mode === "forgot" && sent && (
+						<ForgotSent
+							email={email}
+							onBackToLogin={() => {
+								setMode("login");
+								reset();
+							}}
+						/>
+					)}
 				</div>
-
-				{mode === "login" && (
-					<LoginForm
-						email={email}
-						setEmail={setEmail}
-						password={password}
-						setPassword={setPassword}
-						error={error}
-						rememberMe={rememberMe}
-						setRememberMe={setRememberMe}
-						handleLogin={handleLogin}
-						onGithubLogin={handleGithubLogin}
-						onGoogleLogin={handleGoogleLogin}
-						loginSubmitting={submitting}
-						onSwitchToForgot={() => {
-							setMode("forgot");
-							reset();
-						}}
-						onSwitchToRegister={() => {
-							setMode("register");
-							reset();
-						}}
-					/>
-				)}
-
-				{mode === "register" && !sent && (
-					<RegisterForm
-						email={email}
-						setEmail={setEmail}
-						password={password}
-						setPassword={setPassword}
-						submitting={submitting}
-						error={error}
-						handleRegister={handleRegister}
-						onSwitchToLogin={() => {
-							setMode("login");
-							reset();
-						}}
-					/>
-				)}
-
-				{mode === "register" && sent && (
-					<RegisterSent
-						email={email}
-						onBackToLogin={() => {
-							setMode("login");
-							reset();
-						}}
-					/>
-				)}
-
-				{mode === "forgot" && !sent && (
-					<ForgotForm
-						email={email}
-						setEmail={setEmail}
-						submitting={submitting}
-						error={error}
-						handleForgot={handleForgot}
-						onBackToLogin={() => {
-							setMode("login");
-							reset();
-						}}
-					/>
-				)}
-
-				{mode === "forgot" && sent && (
-					<ForgotSent
-						email={email}
-						onBackToLogin={() => {
-							setMode("login");
-							reset();
-						}}
-					/>
-				)}
 			</div>
 		</div>
 	);

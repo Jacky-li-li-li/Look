@@ -5,7 +5,7 @@
 // eliminate module-level let variables, and enable testing.
 // ============================================================
 
-import { LOOK_TONE_WINDOW_BG } from "@look/shared";
+import { getLookThemeWindowBackground } from "@look/shared";
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
 import { app, BrowserWindow, Notification, powerMonitor, session, shell } from "electron";
@@ -25,7 +25,7 @@ import { buildTaskFinishedNotification } from "./scheduler/notification-builder.
 import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
 import { SessionRuntimeManager } from "./session/runtime/runtime-manager.js";
-import { readThemeToneSync } from "./settings/store.js";
+import { readThemeSettingsSync } from "./settings/store.js";
 import { initAppUpdater, replayUpdateStatus, requestFreshCheck } from "./system/app-updater.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { registerOAuthProtocol } from "./system/oauth-callback.js";
@@ -229,7 +229,7 @@ export class Application {
 	// ============================================================
 
 	private createWindow(): void {
-		const initialTone = readThemeToneSync(getUiSettingsPath());
+		const initialTheme = readThemeSettingsSync(getUiSettingsPath());
 
 		this.services.mainWindow = new BrowserWindow({
 			width: 1400,
@@ -239,7 +239,7 @@ export class Application {
 			title: "Look",
 			titleBarStyle: "hiddenInset",
 			trafficLightPosition: { x: TRAFFIC_LIGHT_X, y: TRAFFIC_LIGHT_INITIAL_Y },
-			backgroundColor: LOOK_TONE_WINDOW_BG[initialTone],
+			backgroundColor: getLookThemeWindowBackground(initialTheme.themeStyle, initialTheme.themeTone),
 			icon: path.join(__dirname, "assets/icon-1024.png"),
 			webPreferences: {
 				preload: path.join(__dirname, "preload.cjs"),
@@ -253,12 +253,14 @@ export class Application {
 			// 前发出会因 webContents.send 不排队而静默丢失（曾导致 activeProject 为
 			// null、新建会话按钮禁用且无任何报错）。flush 在 did-finish-load 中调用。
 			this.rendererEvents.buffer();
-			this.services.mainWindow.loadURL(`http://localhost:5174?theme=${initialTone}`);
+			this.services.mainWindow.loadURL(
+				`http://localhost:5174?theme=${initialTheme.themeStyle}&tone=${initialTheme.themeTone}`,
+			);
 			this.services.mainWindow.webContents.openDevTools();
 		} else {
 			this.rendererEvents.buffer();
 			this.services.mainWindow.loadFile(getPackagedRendererIndexPath(__dirname), {
-				query: { theme: initialTone },
+				query: { theme: initialTheme.themeStyle, tone: initialTheme.themeTone },
 			});
 		}
 

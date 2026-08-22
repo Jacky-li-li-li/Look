@@ -2,67 +2,100 @@ import type { PermissionMode } from "./permission.js";
 
 export type UILanguage = "en" | "zh" | "ja";
 
-/**
- * Look color theme ids. "light" / "dark" are the neutral palette; every other
- * id is a theme-family variant whose palette lives in App.css under
- * `.tone-{scheme}.theme-{id}`.
- */
-export type LookTone =
-	| "light"
-	| "dark"
-	| "catppuccin-mocha"
-	| "catppuccin-latte"
-	| "tokyo-night"
-	| "gruvbox-dark"
-	| "gruvbox-light"
-	| "rose-pine"
-	| "rose-pine-dawn";
+/** Display mode is a global setting, independent from the color theme. */
+export type LookTone = "light" | "dark";
 
-export const LOOK_TONE_VALUES: readonly LookTone[] = [
-	"light",
-	"dark",
-	"catppuccin-mocha",
-	"catppuccin-latte",
-	"tokyo-night",
-	"gruvbox-dark",
-	"gruvbox-light",
-	"rose-pine",
-	"rose-pine-dawn",
-] as const;
+export const LOOK_TONE_VALUES: readonly LookTone[] = ["light", "dark"] as const;
 
 export function isLookTone(value: unknown): value is LookTone {
 	return typeof value === "string" && (LOOK_TONE_VALUES as readonly string[]).includes(value);
 }
 
-/** color-scheme each tone resolves to (drives `tone-light` / `tone-dark` classes). */
-export const LOOK_TONE_SCHEME: Record<LookTone, "light" | "dark"> = {
-	light: "light",
-	dark: "dark",
-	"catppuccin-mocha": "dark",
-	"catppuccin-latte": "light",
-	"tokyo-night": "dark",
-	"gruvbox-dark": "dark",
-	"gruvbox-light": "light",
-	"rose-pine": "dark",
-	"rose-pine-dawn": "light",
+/** Fixed color-theme families. Their light/dark palettes live in App.css. */
+export type LookThemeStyle = "graphite" | "azure" | "dune" | "iris" | "pine";
+
+export const LOOK_THEME_STYLE_VALUES: readonly LookThemeStyle[] = [
+	"graphite",
+	"azure",
+	"dune",
+	"iris",
+	"pine",
+] as const;
+
+export function isLookThemeStyle(value: unknown): value is LookThemeStyle {
+	return typeof value === "string" && (LOOK_THEME_STYLE_VALUES as readonly string[]).includes(value);
+}
+
+/** The complete visual preference persisted in ui-settings.json. */
+export interface LookTheme {
+	themeStyle: LookThemeStyle;
+	themeTone: LookTone;
+}
+
+export const DEFAULT_LOOK_THEME: LookTheme = {
+	themeStyle: "graphite",
+	themeTone: "dark",
 };
 
 /**
- * BrowserWindow backgroundColor per tone — matches the theme's `--background`
- * so window creation and theme switches never flash the wrong color.
+ * Values persisted before themes and display mode became independent. The first
+ * group is from the immediately preceding theme matrix; the rest are retired
+ * designer palettes. Keeping this map lets upgraded installs retain both their
+ * palette family and their light/dark preference.
+ */
+export const LOOK_THEME_LEGACY_MAP: Readonly<Record<string, LookTheme>> = {
+	"azure-light": { themeStyle: "azure", themeTone: "light" },
+	"azure-dark": { themeStyle: "azure", themeTone: "dark" },
+	"dune-light": { themeStyle: "dune", themeTone: "light" },
+	"dune-dark": { themeStyle: "dune", themeTone: "dark" },
+	"iris-light": { themeStyle: "iris", themeTone: "light" },
+	"iris-dark": { themeStyle: "iris", themeTone: "dark" },
+	"pine-light": { themeStyle: "pine", themeTone: "light" },
+	"pine-dark": { themeStyle: "pine", themeTone: "dark" },
+	"catppuccin-mocha": { themeStyle: "iris", themeTone: "dark" },
+	"catppuccin-latte": { themeStyle: "iris", themeTone: "light" },
+	"tokyo-night": { themeStyle: "azure", themeTone: "dark" },
+	"gruvbox-dark": { themeStyle: "dune", themeTone: "dark" },
+	"gruvbox-light": { themeStyle: "dune", themeTone: "light" },
+	"rose-pine": { themeStyle: "iris", themeTone: "dark" },
+	"rose-pine-dawn": { themeStyle: "iris", themeTone: "light" },
+};
+
+/**
+ * Normalize any persisted settings object to the current independent model.
+ * A valid modern field wins over an inferred legacy value, so a manually chosen
+ * fixed theme is preserved even if an old composite tone remains on disk.
+ */
+export function resolveLookTheme(value: unknown): LookTheme {
+	const settings = value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+	const legacyTone = typeof settings?.themeTone === "string" ? LOOK_THEME_LEGACY_MAP[settings.themeTone] : undefined;
+
+	return {
+		themeStyle: isLookThemeStyle(settings?.themeStyle)
+			? settings.themeStyle
+			: (legacyTone?.themeStyle ?? DEFAULT_LOOK_THEME.themeStyle),
+		themeTone: isLookTone(settings?.themeTone)
+			? settings.themeTone
+			: (legacyTone?.themeTone ?? DEFAULT_LOOK_THEME.themeTone),
+	};
+}
+
+/**
+ * BrowserWindow background colors mirror each theme's `--background` token,
+ * preventing a flash of the wrong surface during window creation or a switch.
  * Keep in sync with App.css and public/theme-bootstrap.js.
  */
-export const LOOK_TONE_WINDOW_BG: Record<LookTone, string> = {
-	light: "#fbfbfa",
-	dark: "#030202",
-	"catppuccin-mocha": "#1e1e2e",
-	"catppuccin-latte": "#eff1f5",
-	"tokyo-night": "#1a1b26",
-	"gruvbox-dark": "#282828",
-	"gruvbox-light": "#fbf1c7",
-	"rose-pine": "#191724",
-	"rose-pine-dawn": "#faf4ed",
+const LOOK_THEME_WINDOW_BACKGROUNDS: Record<LookThemeStyle, Record<LookTone, string>> = {
+	graphite: { light: "#fbfbfa", dark: "#030202" },
+	azure: { light: "#eff4f8", dark: "#0a0f19" },
+	dune: { light: "#f7f3e8", dark: "#1a150f" },
+	iris: { light: "#f6f1fa", dark: "#130f1c" },
+	pine: { light: "#eff5f0", dark: "#07120d" },
 };
+
+export function getLookThemeWindowBackground(themeStyle: LookThemeStyle, themeTone: LookTone): string {
+	return LOOK_THEME_WINDOW_BACKGROUNDS[themeStyle][themeTone];
+}
 
 /**
  * Desktop notification delivery mode.
@@ -104,6 +137,8 @@ export interface UserSettings {
 	lastActiveProjectId: string;
 	openProjectIds: string[];
 	openedSessionIds: string[];
+	/** Fixed color theme, independent from the light/dark display mode. */
+	themeStyle: LookThemeStyle;
 	themeTone: LookTone;
 	autoTitleModel: string | null;
 	subagentEnabled: boolean;

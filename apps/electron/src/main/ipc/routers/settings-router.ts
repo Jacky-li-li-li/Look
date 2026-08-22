@@ -2,9 +2,8 @@
 // Settings router — API keys, custom providers, general settings, prompts
 // ============================================================
 
-import { LOOK_TONE_WINDOW_BG } from "@look/shared";
+import { getLookThemeWindowBackground } from "@look/shared";
 import { maskSecret } from "@look/shared/secret-mask";
-import type { LookTone } from "@look/shared/types";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
 import { testApiKey, testConfiguredProvider, testCustomProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
@@ -175,10 +174,10 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 	register("settings:general:set", async (data) => {
 		const settings = guardObject(data.settings, "settings");
 		guardGeneralSettingsPatch(settings);
-		if ("themeTone" in settings && !ctx.mainWindow.isDestroyed()) {
-			ctx.mainWindow.setBackgroundColor(LOOK_TONE_WINDOW_BG[settings.themeTone as LookTone] ?? "#030202");
-		}
 		const updated = await ctx.session.settings.update(settings);
+		if (("themeTone" in settings || "themeStyle" in settings) && !ctx.mainWindow.isDestroyed()) {
+			ctx.mainWindow.setBackgroundColor(getLookThemeWindowBackground(updated.themeStyle, updated.themeTone));
+		}
 
 		return { success: true, settings: updated };
 	});

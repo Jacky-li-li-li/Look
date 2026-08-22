@@ -3,42 +3,93 @@
 // intentionally blocks inline scripts, while parser-blocking `self` scripts
 // are allowed.
 //
-// Keep TONES in sync with LOOK_TONE_SCHEME / LOOK_TONE_WINDOW_BG in
-// packages/shared/src/contracts/settings.ts.
+// Keep THEMES / LEGACY in sync with getLookThemeWindowBackground and
+// LOOK_THEME_LEGACY_MAP in packages/shared/src/contracts/settings.ts.
 (function bootstrapThemeFromLocation() {
-	var TONES = {
-		light: { scheme: "light", bg: "#fbfbfa", fg: "#171717" },
-		dark: { scheme: "dark", bg: "#030202", fg: "#fafaf9" },
-		"catppuccin-mocha": { scheme: "dark", bg: "#1e1e2e", fg: "#cdd6f4" },
-		"catppuccin-latte": { scheme: "light", bg: "#eff1f5", fg: "#4c4f69" },
-		"tokyo-night": { scheme: "dark", bg: "#1a1b26", fg: "#c0caf5" },
-		"gruvbox-dark": { scheme: "dark", bg: "#282828", fg: "#ebdbb2" },
-		"gruvbox-light": { scheme: "light", bg: "#fbf1c7", fg: "#3c3836" },
-		"rose-pine": { scheme: "dark", bg: "#191724", fg: "#e0def4" },
-		"rose-pine-dawn": { scheme: "light", bg: "#faf4ed", fg: "#575279" },
+	var THEMES = {
+		graphite: {
+			light: { bg: "#fbfbfa", fg: "#171717" },
+			dark: { bg: "#030202", fg: "#fafaf9" },
+		},
+		azure: {
+			light: { bg: "#eff4f8", fg: "#202938" },
+			dark: { bg: "#0a0f19", fg: "#dbe2ea" },
+		},
+		dune: {
+			light: { bg: "#f7f3e8", fg: "#362c21" },
+			dark: { bg: "#1a150f", fg: "#e4dece" },
+		},
+		iris: {
+			light: { bg: "#f6f1fa", fg: "#302a3d" },
+			dark: { bg: "#130f1c", fg: "#e3dfeb" },
+		},
+		pine: {
+			light: { bg: "#eff5f0", fg: "#1d2d24" },
+			dark: { bg: "#07120d", fg: "#dce4dd" },
+		},
+	};
+
+	// Pre-toggle composite ids and retired designer palettes stay valid in
+	// bookmarks and stale renderer URLs after upgrading.
+	var LEGACY = {
+		"azure-light": { style: "azure", tone: "light" },
+		"azure-dark": { style: "azure", tone: "dark" },
+		"dune-light": { style: "dune", tone: "light" },
+		"dune-dark": { style: "dune", tone: "dark" },
+		"iris-light": { style: "iris", tone: "light" },
+		"iris-dark": { style: "iris", tone: "dark" },
+		"pine-light": { style: "pine", tone: "light" },
+		"pine-dark": { style: "pine", tone: "dark" },
+		"catppuccin-mocha": { style: "iris", tone: "dark" },
+		"catppuccin-latte": { style: "iris", tone: "light" },
+		"tokyo-night": { style: "azure", tone: "dark" },
+		"gruvbox-dark": { style: "dune", tone: "dark" },
+		"gruvbox-light": { style: "dune", tone: "light" },
+		"rose-pine": { style: "iris", tone: "dark" },
+		"rose-pine-dawn": { style: "iris", tone: "light" },
 	};
 
 	var params = new URLSearchParams(window.location.search);
-	var tone = params.get("theme");
-	if (!tone || !TONES[tone]) tone = "dark";
-	var def = TONES[tone];
+	var rawTheme = params.get("theme");
+	var rawTone = params.get("tone");
+	var legacy = rawTheme && LEGACY[rawTheme];
+	var theme = rawTheme && THEMES[rawTheme] ? rawTheme : legacy ? legacy.style : "graphite";
+	var tone =
+		rawTone === "light" || rawTone === "dark"
+			? rawTone
+			: legacy
+				? legacy.tone
+				: rawTheme === "light" || rawTheme === "dark"
+					? rawTheme
+					: "dark";
+	var def = THEMES[theme][tone];
 	var root = document.documentElement;
 
 	root.classList.remove("tone-light", "tone-dark");
-	root.classList.add("tone-" + def.scheme);
-	root.style.colorScheme = def.scheme;
+	root.classList.add("tone-" + tone);
+	root.style.colorScheme = tone;
 
-	// Themed (non-neutral) boots need their palette background before App.css
-	// finishes loading — index.html's critical inline style only covers the
-	// neutral tones. The injected rule is class-scoped, so it stops matching
-	// as soon as the user switches themes at runtime.
-	if (tone !== "light" && tone !== "dark") {
-		root.classList.add("theme-" + tone);
+	// Themed boots need their palette background before App.css finishes loading.
+	// The injected rule is class-scoped, so it stops matching after a runtime
+	// theme switch removes the class.
+	if (theme !== "graphite") {
+		root.classList.add("theme-" + theme);
 		var style = document.createElement("style");
 		style.id = "boot-theme";
-		var sel = "html.theme-" + tone;
+		var sel = "html.theme-" + theme;
 		style.textContent =
-			sel + ", " + sel + " body, " + sel + " #root, " + sel + " .app-shell { background-color: " + def.bg + "; color: " + def.fg + "; }";
+			sel +
+			", " +
+			sel +
+			" body, " +
+			sel +
+			" #root, " +
+			sel +
+			" .app-shell { background-color: " +
+			def.bg +
+			"; color: " +
+			def.fg +
+			"; }";
 		document.head.appendChild(style);
 	}
 })();

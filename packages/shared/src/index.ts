@@ -8,10 +8,14 @@ export type {
 } from "./contracts/invoke-response.js";
 export type { IpcResult } from "./contracts/ipc.js";
 export {
+	DEFAULT_LOOK_THEME,
+	getLookThemeWindowBackground,
+	isLookThemeStyle,
 	isLookTone,
-	LOOK_TONE_SCHEME,
+	LOOK_THEME_LEGACY_MAP,
+	LOOK_THEME_STYLE_VALUES,
 	LOOK_TONE_VALUES,
-	LOOK_TONE_WINDOW_BG,
+	resolveLookTheme,
 } from "./contracts/settings.js";
 export {
 	ensureLookDir,
@@ -64,6 +68,8 @@ export type {
 	ForkedSessionResult,
 	ImSessionProvider,
 	LookMessageDurationEntryData,
+	LookTheme,
+	LookThemeStyle,
 	LookTone,
 	LookUiEvent,
 	LookUiPhase,

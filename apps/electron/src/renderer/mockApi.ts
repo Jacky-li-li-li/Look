@@ -7,12 +7,24 @@
 // ============================================================
 
 import type { IpcResult, LookAPI } from "@shared/contracts/ipc";
-import type { Draft, MainToRendererEvent, ScheduledTask } from "@shared/types";
+import { resolveLookTheme } from "@shared/contracts/settings";
+import type {
+	AgentDefinitionInfo,
+	Draft,
+	MainToRendererEvent,
+	ScheduledTask,
+	ScheduledTaskRunLog,
+} from "@shared/types";
 
 const noop = () => {};
 
 const mockScenario = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mock") : null;
-const mockTone = (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("theme")) || "dark";
+const mockPageScenario = mockScenario === "pages";
+const mockThemeQuery = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+const mockTheme = resolveLookTheme({
+	themeStyle: mockThemeQuery?.get("theme"),
+	themeTone: mockThemeQuery?.get("tone") ?? mockThemeQuery?.get("theme"),
+});
 const MOCK_SESSION_ID = "dev-chat-session";
 let mockSnapshotSequence = 0;
 
@@ -30,6 +42,233 @@ let mockDrafts: Draft[] = [
 	},
 ];
 let mockDraftSeq = 3;
+
+const MOCK_NOW = Date.now();
+const mockDate = (offsetMs: number) => new Date(MOCK_NOW + offsetMs).toISOString();
+const MOCK_PROJECTS = [
+	{ id: "dev-browser", name: "pi (浏览器预览)", cwd: "/Users/jacky/Desktop/pi", createdAt: MOCK_NOW, valid: true },
+	{
+		id: "look-docs",
+		name: "Look 文档",
+		cwd: "/Users/jacky/Projects/look-docs",
+		createdAt: MOCK_NOW - 86_400_000,
+		valid: true,
+	},
+];
+const MOCK_MODELS = [
+	{
+		provider: "openai",
+		id: "gpt-5",
+		name: "GPT-5",
+		reasoning: true,
+		contextWindow: 128_000,
+		maxTokens: 16_384,
+		cost: { input: 0, output: 0 },
+	},
+	{
+		provider: "anthropic",
+		id: "claude-sonnet",
+		name: "Claude Sonnet",
+		reasoning: true,
+		contextWindow: 200_000,
+		maxTokens: 16_384,
+		cost: { input: 0, output: 0 },
+	},
+];
+const MOCK_SCHEDULED_TASKS: ScheduledTask[] = [
+	{
+		id: "mock-task-1",
+		name: "每日仓库巡检",
+		projectId: "dev-browser",
+		cron: "0 9 * * *",
+		schedule: { kind: "daily", time: "09:00" },
+		timezone: "Asia/Shanghai",
+		prompt: "检查最近 24 小时的代码变更，汇总风险并给出下一步建议。",
+		parameters: { scope: "last 24 hours", format: "concise" },
+		model: "openai/gpt-5",
+		notification: { enabled: true, provider: "feishu", channelAppId: "mock-feishu", targetChatId: "mock-chat" },
+		status: "scheduled",
+		retry: { maxAttempts: 3, initialDelayMs: 5_000, backoffMultiplier: 2, maxDelayMs: 60_000 },
+		executionTimeoutMs: 1_800_000,
+		createdAt: mockDate(-4 * 86_400_000),
+		updatedAt: mockDate(-2 * 86_400_000),
+		lastRunAt: mockDate(-2 * 60 * 60_000),
+		nextRunAt: mockDate(11 * 60 * 60_000),
+	},
+	{
+		id: "mock-task-2",
+		name: "每周竞品摘要",
+		projectId: "look-docs",
+		cron: "0 10 * * 1",
+		schedule: { kind: "weekly", weekday: 1, time: "10:00" },
+		timezone: "Asia/Shanghai",
+		prompt: "整理本周竞品动态，标注值得验证的产品变化。",
+		parameters: { sources: "public web" },
+		model: "anthropic/claude-sonnet",
+		status: "paused",
+		retry: { maxAttempts: 2, initialDelayMs: 10_000, backoffMultiplier: 2, maxDelayMs: 60_000 },
+		executionTimeoutMs: 1_800_000,
+		createdAt: mockDate(-12 * 86_400_000),
+		updatedAt: mockDate(-3 * 86_400_000),
+		nextRunAt: mockDate(4 * 86_400_000),
+	},
+	{
+		id: "mock-task-3",
+		name: "发布前检查",
+		projectId: "dev-browser",
+		cron: "0 16 25 8 *",
+		schedule: { kind: "once", runAt: mockDate(2 * 86_400_000) },
+		timezone: "Asia/Shanghai",
+		prompt: "在发布前检查构建、测试和版本说明。",
+		parameters: {},
+		model: "openai/gpt-5",
+		status: "scheduled",
+		retry: { maxAttempts: 3, initialDelayMs: 5_000, backoffMultiplier: 2, maxDelayMs: 60_000 },
+		executionTimeoutMs: 1_800_000,
+		createdAt: mockDate(-2 * 86_400_000),
+		updatedAt: mockDate(-2 * 86_400_000),
+		nextRunAt: mockDate(2 * 86_400_000),
+	},
+];
+const MOCK_TASK_LOGS: ScheduledTaskRunLog[] = [
+	{
+		id: "mock-log-1",
+		taskId: "mock-task-1",
+		taskName: "每日仓库巡检",
+		scheduledAt: mockDate(-2 * 60 * 60_000),
+		startedAt: mockDate(-2 * 60 * 60_000),
+		finishedAt: mockDate(-105 * 60_000),
+		status: "success",
+		attempt: 1,
+		maxAttempts: 3,
+		output: "发现 2 个待跟进变更，已生成摘要。",
+		sessionId: "mock-run-session-1",
+		notificationStatus: "sent",
+		ownerId: "mock",
+	},
+	{
+		id: "mock-log-2",
+		taskId: "mock-task-1",
+		taskName: "每日仓库巡检",
+		scheduledAt: mockDate(-26 * 60 * 60_000),
+		startedAt: mockDate(-26 * 60 * 60_000),
+		finishedAt: mockDate(-25 * 60 * 60_000),
+		status: "failed",
+		attempt: 3,
+		maxAttempts: 3,
+		errorMessage: "模型请求超时，请检查网络或提高执行超时时间。",
+		ownerId: "mock",
+	},
+	{
+		id: "mock-log-3",
+		taskId: "mock-task-2",
+		taskName: "每周竞品摘要",
+		scheduledAt: mockDate(-8 * 86_400_000),
+		startedAt: mockDate(-8 * 86_400_000),
+		finishedAt: mockDate(-8 * 86_400_000 + 45 * 60_000),
+		status: "success",
+		attempt: 1,
+		maxAttempts: 2,
+		output: "完成 4 个来源的变化整理。",
+		ownerId: "mock",
+	},
+];
+const MOCK_AGENT_DEFINITIONS: AgentDefinitionInfo[] = [
+	{
+		name: "scout",
+		title: "Scout",
+		description: "快速探索代码库、依赖和外部资料，输出结构化发现。",
+		systemPrompt: "Explore and summarize findings.",
+		source: "builtin",
+		filePath: "/mock/agents/scout.md",
+		icon: "open-peeps:explorer",
+		tags: ["探索", "只读"],
+		model: "openai/gpt-5",
+	},
+	{
+		name: "planner",
+		title: "Planner",
+		description: "把模糊目标拆成可执行计划，识别依赖和验收条件。",
+		systemPrompt: "Plan work with explicit verification steps.",
+		source: "builtin",
+		filePath: "/mock/agents/planner.md",
+		icon: "open-peeps:planner",
+		tags: ["规划"],
+		model: "anthropic/claude-sonnet",
+	},
+	{
+		name: "reviewer",
+		title: "Reviewer",
+		description: "从缺陷、回归和测试缺口角度审查本轮变更。",
+		systemPrompt: "Review changes and prioritize actionable findings.",
+		source: "builtin",
+		filePath: "/mock/agents/reviewer.md",
+		icon: "open-peeps:inspector",
+		tags: ["审查", "质量"],
+		model: "openai/gpt-5",
+	},
+	{
+		name: "release-notes",
+		title: "Release notes editor",
+		description: "将技术变更整理成面向用户的版本说明，保持语气清晰。",
+		systemPrompt: "Write concise release notes.",
+		source: "user",
+		filePath: "/mock/agents/release-notes.md",
+		icon: "open-peeps:writer",
+		tags: ["写作", "发布"],
+		model: "openai/gpt-5",
+		createdBy: "editor",
+	},
+	{
+		name: "ui-auditor",
+		title: "UI auditor",
+		description: "检查响应式布局、可访问性和交互反馈，输出可复现问题。",
+		systemPrompt: "Audit UI behavior across viewports.",
+		source: "project",
+		filePath: "/mock/project/.look/agents/ui-auditor.md",
+		icon: "open-peeps:inspector",
+		tags: ["UI", "可访问性"],
+		model: "anthropic/claude-sonnet",
+	},
+];
+const MOCK_SKILLS = [
+	{
+		name: "look-agent-builder",
+		description: "通过对话创建或更新一个可复用的 Agent 定义。",
+		category: "builtin" as const,
+		filePath: "/mock/skills/look-agent-builder/SKILL.md",
+		baseDir: "/mock/skills/look-agent-builder",
+		source: "path" as const,
+		disableModelInvocation: false,
+	},
+	{
+		name: "writing-plans",
+		description: "将复杂需求整理成可执行、可验证的分步计划。",
+		category: "builtin" as const,
+		filePath: "/mock/skills/writing-plans/SKILL.md",
+		baseDir: "/mock/skills/writing-plans",
+		source: "path" as const,
+		disableModelInvocation: false,
+	},
+	{
+		name: "session-cleaner",
+		description: "把长会话整理为干净可读的 Markdown，并支持渐进式读取。",
+		category: "builtin" as const,
+		filePath: "/mock/skills/session-cleaner/SKILL.md",
+		baseDir: "/mock/skills/session-cleaner",
+		source: "path" as const,
+		disableModelInvocation: false,
+	},
+	{
+		name: "release-checklist",
+		description: "检查发布前的版本、构建、测试和变更说明。",
+		category: "mine" as const,
+		filePath: "/mock/project/.look/skills/release-checklist/SKILL.md",
+		baseDir: "/mock/project/.look/skills/release-checklist",
+		source: "project" as const,
+		disableModelInvocation: false,
+	},
+];
 
 /** 泛型成功响应 */
 function success<T extends object>(data: T): Promise<IpcResult<T>> {
@@ -304,15 +543,20 @@ const mockApi: LookAPI = {
 	compressSession: () => ok,
 
 	// ---- Model ----
-	getModels: () => success({ models: [] }),
+	getModels: () => success({ models: mockPageScenario ? MOCK_MODELS : [] }),
 
 	// ---- Scheduled tasks ----
-	listScheduledTasks: () => success({ tasks: [] }),
-	createScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
-	updateScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
-	startScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
-	pauseScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
-	resumeScheduledTask: () => success({ task: null as unknown as ScheduledTask }),
+	listScheduledTasks: () => success({ tasks: mockPageScenario ? [...MOCK_SCHEDULED_TASKS] : [] }),
+	createScheduledTask: () =>
+		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[0] : (null as unknown as ScheduledTask) }),
+	updateScheduledTask: () =>
+		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[0] : (null as unknown as ScheduledTask) }),
+	startScheduledTask: () =>
+		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[0] : (null as unknown as ScheduledTask) }),
+	pauseScheduledTask: () =>
+		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[1] : (null as unknown as ScheduledTask) }),
+	resumeScheduledTask: () =>
+		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[0] : (null as unknown as ScheduledTask) }),
 	deleteScheduledTask: () => ok,
 	runScheduledTaskNow: () => success({ accepted: true }),
 	testScheduledTask: () =>
@@ -331,7 +575,10 @@ const mockApi: LookAPI = {
 				ownerId: "mock",
 			},
 		}),
-	listScheduledTaskLogs: () => success({ logs: [] }),
+	listScheduledTaskLogs: (taskId?: string) =>
+		success({
+			logs: mockPageScenario ? MOCK_TASK_LOGS.filter((log) => !taskId || log.taskId === taskId) : [],
+		}),
 	validateCron: () => success({ valid: true }),
 
 	// ---- Drafts (内存态 mock：浏览器预览用，刷新后重置) ----
@@ -360,7 +607,7 @@ const mockApi: LookAPI = {
 	getAgents: () =>
 		success({
 			agents:
-				mockScenario === "chat"
+				mockScenario === "chat" || mockPageScenario
 					? [
 							{
 								id: MOCK_SESSION_ID,
@@ -391,8 +638,14 @@ const mockApi: LookAPI = {
 	setApiKey: () => success({ providers: [], customProviders: [], customStats: { configured: 0, totalModels: 0 } }),
 	getGeneralSettings: () =>
 		success({
-			settings: (mockScenario === "chat"
-				? { openedSessionIds: [MOCK_SESSION_ID], themeTone: mockTone }
+			settings: (mockScenario === "chat" || mockPageScenario
+				? {
+						openedSessionIds: mockScenario === "chat" ? [MOCK_SESSION_ID] : [],
+						themeStyle: mockTheme.themeStyle,
+						themeTone: mockTheme.themeTone,
+						enabledAgentDefinitions: mockPageScenario ? ["scout", "planner"] : null,
+						enabledSkills: mockPageScenario ? ["look-agent-builder", "writing-plans"] : null,
+					}
 				: {}) as unknown as import("@shared/types").UserSettings,
 		}),
 	setGeneralSettings: () => ok,
@@ -406,7 +659,7 @@ const mockApi: LookAPI = {
 	testCustomProvider: () => success({ result: {} as unknown as import("@shared/types").TestCustomProviderResult }),
 
 	// ---- Skills ----
-	listSkills: () => success({ skills: [] }),
+	listSkills: () => success({ skills: mockPageScenario ? [...MOCK_SKILLS] : [] }),
 	importSkillPaths: () => Promise.resolve({ success: true, importedCount: 0 }),
 	detectCommonSkillPaths: () => success({ paths: [] }),
 
@@ -434,15 +687,17 @@ const mockApi: LookAPI = {
 	// ---- Project CRUD ----
 	listProjects: () =>
 		success({
-			projects: [
-				{
-					id: "dev-browser",
-					name: "pi (浏览器预览)",
-					cwd: "/Users/jacky/Desktop/pi",
-					createdAt: Date.now(),
-					valid: true,
-				},
-			],
+			projects: mockPageScenario
+				? MOCK_PROJECTS
+				: [
+						{
+							id: "dev-browser",
+							name: "pi (浏览器预览)",
+							cwd: "/Users/jacky/Desktop/pi",
+							createdAt: Date.now(),
+							valid: true,
+						},
+					],
 			activeProjectId: "dev-browser",
 		}),
 	createProject: () =>
@@ -538,7 +793,7 @@ const mockApi: LookAPI = {
 	reviewChanges: () => success({ childSessionId: null, title: "审核本轮变更" }),
 
 	// ---- Agent Definitions ----
-	listAgentDefinitions: () => success({ agents: [] }),
+	listAgentDefinitions: () => success({ agents: mockPageScenario ? [...MOCK_AGENT_DEFINITIONS] : [] }),
 	createAgentDefinition: () => ok,
 	updateAgentDefinition: () => ok,
 	deleteAgentDefinition: () => ok,
@@ -566,8 +821,37 @@ const mockApi: LookAPI = {
 	getUsage: () => success({ usage: { usage: {}, modelCost: {}, modelUsage: {}, years: [] } }),
 
 	// ---- IM Channels ----
-	getImChannels: () => success({ channels: [] }),
-	getImBindings: () => success({ bindings: [] }),
+	getImChannels: () =>
+		success({
+			channels: mockPageScenario
+				? [
+						{
+							provider: "feishu",
+							appId: "mock-feishu",
+							name: "Look Bot",
+							connected: true,
+							enabled: true,
+							status: "connected",
+						},
+					]
+				: [],
+		}),
+	getImBindings: () =>
+		success({
+			bindings: mockPageScenario
+				? [
+						{
+							chatId: "mock-chat",
+							sessionId: "mock-session",
+							projectId: "dev-browser",
+							createdAt: MOCK_NOW,
+							appId: "mock-feishu",
+							chatType: "p2p",
+							peerName: "Jacky",
+						},
+					]
+				: [],
+		}),
 	connectFeishuChannel: () => ok,
 	connectFeishuManualChannel: () => ok,
 	cancelFeishuRegistration: () => ok,

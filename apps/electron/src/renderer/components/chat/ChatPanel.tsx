@@ -82,8 +82,10 @@ const ChatPanel = memo(function ChatPanel({
 	}, []);
 
 	// relative：PlanQuestionDialog 以此为包含块做底部绝对定位覆盖层
+	// data-popover-boundary：SimplePopover 据此把工具栏弹窗钳制在聊天列内，
+	// 不越过顶部的会话栏与左右相邻面板。
 	return (
-		<div className="relative flex min-h-0 flex-1 flex-col">
+		<div data-popover-boundary className="relative flex min-h-0 flex-1 flex-col">
 			<ChatMessageList
 				agentId={agentId}
 				agentName={agentName}

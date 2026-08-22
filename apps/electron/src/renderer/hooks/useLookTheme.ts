@@ -1,30 +1,33 @@
 // ============================================================
-// useLookTheme — global light / dark state synced from <html>
+// useLookTheme - fixed color theme and independent display mode
 // ============================================================
 
-import { LOOK_TONE_SCHEME } from "@shared/contracts/settings";
+import type { LookTheme, LookThemeStyle, LookTone } from "@shared/contracts/settings";
 import { useCallback, useSyncExternalStore } from "react";
-import { DEFAULT_THEME, type LookTone, readLookThemeFromDom, writeLookThemeToDom } from "../lib/look-theme";
+import { DEFAULT_THEME, readLookThemeFromDom, writeLookThemeToDom } from "../lib/look-theme";
 
-let cachedTone: LookTone | null = null;
+let cachedTheme: LookTheme | null = null;
 
-function getSnapshot(): LookTone {
+function getSnapshot(): LookTheme {
 	const next = readLookThemeFromDom();
-	if (cachedTone === next) return cachedTone!;
-	cachedTone = next;
+	if (cachedTheme?.themeStyle === next.themeStyle && cachedTheme.themeTone === next.themeTone) {
+		return cachedTheme;
+	}
+	cachedTheme = next;
 	return next;
 }
 
 export interface UseLookThemeResult {
-	tone: LookTone;
-	/** Resolved color scheme ("light" | "dark") — use this for third-party
-	 *  components (mermaid, diff viewers) that only understand two modes. */
-	scheme: "light" | "dark";
-	setTheme: (tone: LookTone) => void;
+	themeStyle: LookThemeStyle;
+	themeTone: LookTone;
+	/** Resolved color scheme for components that only understand two modes. */
+	scheme: LookTone;
+	setThemeStyle: (themeStyle: LookThemeStyle) => void;
+	setThemeTone: (themeTone: LookTone) => void;
 }
 
 export function useLookTheme(): UseLookThemeResult {
-	const tone = useSyncExternalStore(
+	const theme = useSyncExternalStore(
 		(callback) => {
 			if (typeof document === "undefined") return () => {};
 			const observer = new MutationObserver(callback);
@@ -35,17 +38,28 @@ export function useLookTheme(): UseLookThemeResult {
 		() => DEFAULT_THEME,
 	);
 
-	const setTheme = useCallback((nextTone: LookTone) => {
-		writeLookThemeToDom(nextTone);
+	const updateTheme = useCallback((patch: Pick<LookTheme, "themeStyle"> | Pick<LookTheme, "themeTone">) => {
+		const nextTheme = { ...readLookThemeFromDom(), ...patch };
+		writeLookThemeToDom(nextTheme);
+
 		const api = window.look;
 		if (!api?.setGeneralSettings) {
 			console.warn("[useLookTheme] window.look.setGeneralSettings is not available");
 			return;
 		}
-		api.setGeneralSettings({ themeTone: nextTone } as Record<string, unknown>).catch((err: unknown) => {
-			console.error("[useLookTheme] Failed to persist theme tone:", err);
+		api.setGeneralSettings(patch as Record<string, unknown>).catch((err: unknown) => {
+			console.error("[useLookTheme] Failed to persist theme settings:", err);
 		});
 	}, []);
 
-	return { tone, scheme: LOOK_TONE_SCHEME[tone], setTheme };
+	const setThemeStyle = useCallback((themeStyle: LookThemeStyle) => updateTheme({ themeStyle }), [updateTheme]);
+	const setThemeTone = useCallback((themeTone: LookTone) => updateTheme({ themeTone }), [updateTheme]);
+
+	return {
+		themeStyle: theme.themeStyle,
+		themeTone: theme.themeTone,
+		scheme: theme.themeTone,
+		setThemeStyle,
+		setThemeTone,
+	};
 }

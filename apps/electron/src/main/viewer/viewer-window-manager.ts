@@ -10,11 +10,11 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { LOOK_TONE_WINDOW_BG } from "@look/shared";
+import { getLookThemeWindowBackground } from "@look/shared";
 import { getUiSettingsPath } from "@look/shared/look-storage";
 import { app, type BrowserWindow, BrowserWindow as ElectronBrowserWindow } from "electron";
 import { BrowserWindowEventTransport } from "../ipc/renderer-event-transport.js";
-import { readThemeToneSync } from "../settings/store.js";
+import { readThemeSettingsSync } from "../settings/store.js";
 import { getPackagedRendererIndexPath } from "../system/renderer-paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,7 +88,7 @@ export function openViewerWindow(absolutePath: string, options?: { fadeIn?: bool
 		path: absolutePath,
 		...(options?.diffPatch !== undefined ? { diffPatch: options.diffPatch } : {}),
 	};
-	const tone = readThemeToneSync(getUiSettingsPath());
+	const theme = readThemeSettingsSync(getUiSettingsPath());
 	const fadeIn = options?.fadeIn ?? false;
 
 	viewerWindow = new ElectronBrowserWindow({
@@ -97,7 +97,7 @@ export function openViewerWindow(absolutePath: string, options?: { fadeIn?: bool
 		minWidth: 480,
 		minHeight: 320,
 		title: "文件查看器",
-		backgroundColor: LOOK_TONE_WINDOW_BG[tone],
+		backgroundColor: getLookThemeWindowBackground(theme.themeStyle, theme.themeTone),
 		icon: path.join(__dirname, "../assets/icon-1024.png"),
 		webPreferences: {
 			preload: path.join(__dirname, "../preload.cjs"),
@@ -130,10 +130,10 @@ export function openViewerWindow(absolutePath: string, options?: { fadeIn?: bool
 	}
 
 	if (isDev()) {
-		viewerWindow.loadURL(`http://localhost:5174?theme=${tone}&mode=file-viewer`);
+		viewerWindow.loadURL(`http://localhost:5174?theme=${theme.themeStyle}&tone=${theme.themeTone}&mode=file-viewer`);
 	} else {
 		viewerWindow.loadFile(getPackagedRendererIndexPath(path.join(__dirname, "..")), {
-			query: { theme: tone, mode: "file-viewer" },
+			query: { theme: theme.themeStyle, tone: theme.themeTone, mode: "file-viewer" },
 		});
 	}
 }

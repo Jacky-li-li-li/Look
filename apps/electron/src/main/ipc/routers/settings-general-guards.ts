@@ -7,7 +7,7 @@
 // 新增字段静默跳过校验的漂移。未知键与只读键在运行期拒绝。
 // ============================================================
 
-import { LOOK_TONE_VALUES } from "@look/shared";
+import { LOOK_THEME_STYLE_VALUES, LOOK_TONE_VALUES } from "@look/shared";
 import type { UserSettings } from "@look/shared/types";
 import { guardBoolean, guardEnum, guardNullableString, guardNumber, guardString, guardStringArray } from "../guards.js";
 
@@ -31,6 +31,7 @@ const GENERAL_SETTING_GUARDS: { [K in keyof UserSettings]: (value: UserSettings[
 	lastActiveProjectId: (v) => guardString(v, "settings.lastActiveProjectId"),
 	openProjectIds: (v) => guardStringArray(v, "settings.openProjectIds"),
 	openedSessionIds: (v) => guardStringArray(v, "settings.openedSessionIds"),
+	themeStyle: (v) => guardEnum(v, "settings.themeStyle", LOOK_THEME_STYLE_VALUES),
 	themeTone: (v) => guardEnum(v, "settings.themeTone", LOOK_TONE_VALUES),
 	autoTitleModel: (v) => guardNullableString(v, "settings.autoTitleModel"),
 	subagentEnabled: (v) => guardBoolean(v, "settings.subagentEnabled"),
