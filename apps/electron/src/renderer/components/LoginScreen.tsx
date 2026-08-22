@@ -633,7 +633,7 @@ export default function LoginScreen() {
 			{/* 左侧 2/3：品牌背景图，以图片中心为基准 cover 裁切（4K 图，任何窗口不放大） */}
 			<div className="relative flex-[2] bg-cover bg-center" style={{ backgroundImage: `url(${loginBgUrl})` }}>
 				{/* 品牌标语：避开 macOS 红绿灯（x 12-78 / y 17-33） */}
-				<p className="absolute left-10 top-14 select-none text-4xl font-[MaShanZheng] text-white/90">
+				<p className="absolute left-10 top-14 select-none text-4xl font-[MaShanZheng] text-[oklch(0.91_0.07_90)]/90">
 					{t("auth.tagline")}
 				</p>
 			</div>
