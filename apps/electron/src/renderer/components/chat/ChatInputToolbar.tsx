@@ -6,7 +6,7 @@ import { Button } from "@look/ui/components/ui/button";
 import SimplePopover from "@look/ui/components/ui/simple-popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { AgentDefinitionInfo, PermissionMode, ThinkingLevel } from "@shared/types";
-import { Send, Square, Wrench } from "lucide-react";
+import { Paperclip, Send, Square, Wrench } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import ContextRing from "./ContextRing";
@@ -41,6 +41,8 @@ interface ChatInputToolbarProps {
 	toolData: ToolPickerData;
 	/** Tool 面板选中后插入引用 token。 */
 	onInsertToken: (token: string) => void;
+	/** 点击「附加文件」按钮（打开文件选择器，复用拖拽转附件逻辑）。 */
+	onAttachClick?: () => void;
 }
 
 const ChatInputToolbar = memo(function ChatInputToolbar({
@@ -59,6 +61,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 	onAbort,
 	toolData,
 	onInsertToken,
+	onAttachClick,
 }: ChatInputToolbarProps) {
 	const { t } = useTranslation();
 
@@ -105,6 +108,23 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 					)}
 				</SimplePopover>
 				<SubagentToggle />
+				{onAttachClick && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant="line-ghost"
+								size="icon-sm"
+								className="shrink-0"
+								aria-label={t("chat.attachFile", "Attach file")}
+								title={t("chat.attachFile", "Attach file")}
+								onClick={onAttachClick}
+							>
+								<Paperclip className="size-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">{t("chat.attachFile", "Attach file")}</TooltipContent>
+					</Tooltip>
+				)}
 			</div>
 			<div className="flex shrink-0 items-center gap-1.5">
 				<ContextRing />

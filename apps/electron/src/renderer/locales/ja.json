@@ -661,7 +661,8 @@
     "attachmentMissing": "添付ファイルが見つかりません（削除された可能性があります）",
     "attachmentNoContent": "内容はインライン化されていません — ビューアで全文を表示",
     "dropFileHintAttachment": "ドロップで添付ファイルに変換",
-    "attachmentTooLarge": "ファイルが 10MB を超えているため添付できません"
+    "attachmentTooLarge": "ファイルが 10MB を超えているため添付できません",
+    "attachFile": "ファイルを添付"
   },
   "context": {
     "compressing": "圧縮中…",

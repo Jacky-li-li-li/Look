@@ -88,6 +88,8 @@ const ChatInput = function ChatInput({
 	const [dragKind, setDragKind] = useState<"workspace" | "external" | null>(null);
 	// 拖拽文件序号（sanitize 兜底命名用，避免并发同分钟内撞名）。
 	const droppedSeqRef = useRef(0);
+	// 「附加文件」按钮背后的隐藏文件选择器（与拖拽共用 ingestDroppedFile 通道）。
+	const fileInputRef = useRef<HTMLInputElement>(null);
 	// 当前会话所属项目（粘贴/拖拽转附件需要 projectId + sessionId 定位附件目录）。
 	const activeAgent = useAtomValue(activeAgentAtom);
 	const projectId = activeAgent?.projectId ?? null;
@@ -269,6 +271,20 @@ const ChatInput = function ChatInput({
 		[ingestDroppedFile],
 	);
 
+	// 文件选择器选中 → 与拖拽完全相同的转附件通道（图片进缩略图栏，其余转附件）。
+	const handleFileInputChange = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			const files = Array.from(e.target.files ?? []);
+			// 清空 value，保证重复选择同一文件也会触发 change。
+			e.target.value = "";
+			if (files.length === 0) return;
+			for (const file of files) void ingestDroppedFile(file);
+			// 选择完成后焦点还给输入框，方便直接打字补充说明。
+			inputRef.current?.focus();
+		},
+		[ingestDroppedFile],
+	);
+
 	// Tool 面板选中工具 → 追加引用 token 到输入框末尾（复用 insertRequest 机制）
 	const handleInsertToken = useCallback(
 		(token: string) => {
@@ -348,6 +364,16 @@ const ChatInput = function ChatInput({
 				dragActive ? "chat-composer--drag-active" : "",
 			].join(" ")}
 		>
+			{/* 「附加文件」按钮的文件选择器（hidden 原生 input，点击由工具栏按钮触发）。 */}
+			<input
+				ref={fileInputRef}
+				type="file"
+				multiple
+				className="hidden"
+				onChange={handleFileInputChange}
+				aria-hidden="true"
+				tabIndex={-1}
+			/>
 			{/* 拖拽悬停提示 */}
 			{dragActive ? (
 				<div className="pointer-events-none absolute -top-3.5 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full border border-hairline bg-card/95 px-2.5 py-0.5 text-[10px] text-foreground shadow-sm backdrop-blur">
@@ -417,6 +443,7 @@ const ChatInput = function ChatInput({
 					mcpTools: menus.mcpTools,
 				}}
 				onInsertToken={handleInsertToken}
+				onAttachClick={() => fileInputRef.current?.click()}
 			/>
 		</div>
 	);
