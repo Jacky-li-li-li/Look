@@ -1,6 +1,6 @@
 {
   "name": "@look/electron",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "Electron desktop agent app — Look",
   "private": true,
   "type": "module",

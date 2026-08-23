@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.5.2",
+		date: "2026-08-23",
+		items: [
+			{
+				zh: "修复正式版使用语音输入时原生库加载失败（dlopen ENOTDIR）的问题：转写动态库改从解包后的真实路径加载，语音输入与本地转写在打包版恢复正常",
+				en: "Fixed native library loading failure (dlopen ENOTDIR) when using voice input in the packaged app: the transcription library now loads from the unpacked path, so voice input and local transcription work in release builds",
+				ja: "パッケージ版で音声入力時にネイティブライブラリの読み込みに失敗する問題（dlopen ENOTDIR）を修正：文字起こしライブラリを解凍済みパスから読み込むようにし、リリース版でも音声入力とローカル文字起こしが動作します",
+			},
+		],
+	},
+	{
 		version: "2.5.1",
 		date: "2026-08-23",
 		items: [
