@@ -62,4 +62,14 @@ export const attachmentRouter: IpcRouter = (ctx, register) => {
 		}
 		return { success: true, path: filePath };
 	});
+
+	register("attachment:import", async (data) => {
+		const projectId = guardString(data.projectId, "projectId");
+		const sessionId = guardAgentId(data.sessionId, "sessionId");
+		const name = assertAttachmentName(data.name);
+		const sourcePath = guardString(data.sourcePath, "sourcePath");
+		const mimeType = typeof data.mimeType === "string" && data.mimeType.length > 0 ? data.mimeType : undefined;
+		const attachment = service.importAttachmentFromPath(projectId, sessionId, name, sourcePath, mimeType);
+		return { success: true, attachment };
+	});
 };

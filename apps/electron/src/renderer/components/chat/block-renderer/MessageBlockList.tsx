@@ -126,6 +126,7 @@ const UnifiedBlockView = memo(function UnifiedBlockView({
 					name={block.attachmentName}
 					note={block.attachmentNote}
 					content={block.attachmentContent ?? ""}
+					isMedia={block.attachmentIsMedia}
 					projectId={attachmentProjectId}
 					sessionId={attachmentSessionId}
 				/>

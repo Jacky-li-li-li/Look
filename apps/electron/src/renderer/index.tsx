@@ -242,7 +242,9 @@ void (async () => {
 
 	function ThemedToaster() {
 		const { scheme } = useLookTheme();
-		return <Toaster theme={scheme} />;
+		// 顶部居中：右下角 toast 会悬浮在底部输入框（发送/麦克风等按钮）上方拦截点击，
+		// 顶部展示完全不与输入区重叠（toast 仍保持可点击，见 App.css 的 pointer-events 规则）。
+		return <Toaster theme={scheme} position="top-center" />;
 	}
 
 	const root = createRoot(document.getElementById("root")!);

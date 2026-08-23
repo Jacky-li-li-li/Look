@@ -33,6 +33,8 @@ export interface UnifiedBlock {
 	attachmentName?: string;
 	attachmentNote?: string;
 	attachmentContent?: string;
+	/** 附件是否为音视频（渲染为文件名 tag，不展示路径说明）。 */
+	attachmentIsMedia?: boolean;
 	/** 工具调用 ID（kind === "toolcall"）。 */
 	toolCallId?: string;
 	toolName?: string;
@@ -61,6 +63,8 @@ export interface AttachmentContentBlock {
 	name: string;
 	note?: string;
 	content: string;
+	/** 音视频附件（[Media attachment: …] 块）。 */
+	isMedia?: boolean;
 }
 
 /**
@@ -82,6 +86,7 @@ export function toUnifiedFromPiAi(
 					attachmentName: block.name,
 					attachmentNote: block.note,
 					attachmentContent: block.content,
+					attachmentIsMedia: block.isMedia,
 					sourceIndex: index,
 				};
 			case "thinking":

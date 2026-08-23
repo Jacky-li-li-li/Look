@@ -5,7 +5,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildAttachmentName,
+	buildMediaAttachmentName,
 	guessAttachmentExtension,
+	isMediaFile,
 	parseAttachmentMessage,
 	sanitizeAttachmentName,
 	shouldConvertPasteToAttachment,
@@ -83,6 +85,33 @@ describe("sanitizeAttachmentName", () => {
 	});
 });
 
+describe("isMediaFile", () => {
+	it("detects audio/video by MIME prefix", () => {
+		expect(isMediaFile({ type: "video/mp4", name: "a.mp4" })).toBe(true);
+		expect(isMediaFile({ type: "audio/mpeg", name: "a.mp3" })).toBe(true);
+		expect(isMediaFile({ type: "text/plain", name: "a.txt" })).toBe(false);
+		expect(isMediaFile({ type: "", name: "a.md" })).toBe(false);
+	});
+
+	it("falls back to extension when MIME is empty", () => {
+		expect(isMediaFile({ type: "", name: "recording.m4a" })).toBe(true);
+		expect(isMediaFile({ type: "", name: "clip.webm" })).toBe(true);
+		// .ts 不应被当作媒体（TypeScript 源码）
+		expect(isMediaFile({ type: "", name: "main.ts" })).toBe(false);
+	});
+});
+
+describe("buildMediaAttachmentName", () => {
+	it("produces media-<stamp>-<seq>.<ext> keeping the original extension", () => {
+		const name = buildMediaAttachmentName("meeting.mp4", 3);
+		expect(name).toMatch(/^media-\d{8}-\d{4}-3\.mp4$/);
+	});
+
+	it("falls back to no extension when none present", () => {
+		expect(buildMediaAttachmentName("noext", 1)).toMatch(/^media-\d{8}-\d{4}-1$/);
+	});
+});
+
 describe("parseAttachmentMessage", () => {
 	it("returns a single text segment when there is no marker", () => {
 		expect(parseAttachmentMessage("plain text")).toEqual([{ type: "text", text: "plain text" }]);
@@ -119,6 +148,21 @@ describe("parseAttachmentMessage", () => {
 			{ type: "text", text: "\nmid\n" },
 			{ type: "attachment", name: "two.txt", note: undefined, content: "2" },
 			{ type: "text", text: "\nz" },
+		]);
+	});
+
+	it("parses a media attachment block as an attachment segment", () => {
+		const segments = parseAttachmentMessage(
+			"[Media attachment: demo.mp4 — stored at /x/demo.mp4]\nThis is an audio/video file\n[/Attachment]",
+		);
+		expect(segments).toEqual([
+			{
+				type: "attachment",
+				name: "demo.mp4",
+				note: "stored at /x/demo.mp4",
+				content: "This is an audio/video file",
+				isMedia: true,
+			},
 		]);
 	});
 });

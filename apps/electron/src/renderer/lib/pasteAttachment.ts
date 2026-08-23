@@ -70,6 +70,55 @@ export function buildAttachmentName(text: string, sequence: number): string {
 }
 
 /**
+ * 音视频扩展名（渲染端路由用，与主进程 buildPrompt 的媒体分支对应）。
+ * 不含 `.ts`：在该开发工具里 TypeScript 源码远比 MPEG-TS 视频常见，
+ * 误判会把源码附件当媒体处理。
+ */
+const MEDIA_EXTENSIONS = new Set([
+	".mp3",
+	".wav",
+	".m4a",
+	".aac",
+	".flac",
+	".ogg",
+	".opus",
+	".aiff",
+	".aif",
+	".wma",
+	".amr",
+	".mp4",
+	".mov",
+	".mkv",
+	".avi",
+	".webm",
+	".m4v",
+	".flv",
+	".3gp",
+	".m4b",
+	".caf",
+]);
+
+/** 外部文件（拖拽 / 文件选择器）是否为音视频：MIME 前缀优先，扩展名兜底。 */
+export function isMediaFile(file: Pick<File, "type" | "name">): boolean {
+	if (file.type.startsWith("audio/") || file.type.startsWith("video/")) return true;
+	const match = /\.[A-Za-z0-9]+$/.exec(file.name.trim());
+	return match ? MEDIA_EXTENSIONS.has(match[0].toLowerCase()) : false;
+}
+
+/**
+ * 媒体附件文件名兜底：media-<yyyyMMdd-HHmm>-<序号><原扩展名>。
+ * 保留原扩展名，主进程 buildPrompt 才能识别为音视频走媒体分支。
+ */
+export function buildMediaAttachmentName(fileName: string, sequence: number): string {
+	const match = /\.[A-Za-z0-9]+$/.exec(fileName.trim());
+	const ext = match ? match[0].toLowerCase() : "";
+	const now = new Date();
+	const pad = (n: number) => String(n).padStart(2, "0");
+	const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+	return `media-${stamp}-${sequence}${ext}`;
+}
+
+/**
  * 把原始文件名清洗为符合附件名守卫的名字（允许 CJK/空格，去掉路径分隔符、
  * 控制字符、标记冲突字符 `]`/`—`，去掉隐藏文件前导点与首尾横线）。
  * 清洗结果为空（或只剩分隔符）时返回 null，调用方用 buildAttachmentName 兜底。
@@ -108,6 +157,7 @@ export function formatBytes(bytes: number): string {
 // 一一对应，双方必须同步修改）：
 //   [Attachment: <name>]\n<content>\n[/Attachment]            ← 内联
 //   [Attachment: <name> — <note>]\n<preview>\n[/Attachment]    ← 超限/缺失
+//   [Media attachment: <name> — <note>]\n<说明>\n[/Attachment]  ← 音视频
 // ============================================================
 
 export interface AttachmentTextSegment {
@@ -123,34 +173,38 @@ export interface AttachmentMarkerSegment {
 	note?: string;
 	/** 内联内容（超限/缺失场景为空字符串）。 */
 	content: string;
+	/** 是否为音视频附件（`[Media attachment: …]` 块）：渲染为文件名 tag，不展示路径说明。 */
+	isMedia?: boolean;
 }
 
 export type AttachmentMessageSegment = AttachmentTextSegment | AttachmentMarkerSegment;
 
-/** 附件标记正则：`[Attachment: name — note]\ncontent\n[/Attachment]`，全局匹配。 */
-const ATTACHMENT_BLOCK_RE = /\[Attachment: ([^\]]*)\]\n([\s\S]*?)\n\[\/Attachment\]/g;
+/** 附件标记正则：`[Attachment: name — note]` / `[Media attachment: name — note]` + 内容 + `[/Attachment]`，全局匹配。 */
+const ATTACHMENT_BLOCK_RE = /\[(Attachment|Media attachment): ([^\]]*)\]\n([\s\S]*?)\n\[\/Attachment\]/g;
 
 /**
  * 把发送后的用户消息文本按附件标记切成段落。
  * 未命中任何标记时返回单个 text 段（原样文本，零开销）。
  */
 export function parseAttachmentMessage(text: string): AttachmentMessageSegment[] {
-	if (!text.includes("[Attachment:") || !text.includes("[/Attachment]")) {
+	if (!text.includes("[Attachment:") && !text.includes("[Media attachment:")) {
 		return [{ type: "text", text }];
 	}
 	const segments: AttachmentMessageSegment[] = [];
 	let cursor = 0;
 	for (const match of text.matchAll(ATTACHMENT_BLOCK_RE)) {
 		const matchStart = match.index ?? 0;
-		const marker = match[1] ?? "";
-		const content = match[2] ?? "";
+		const isMedia = match[1] === "Media attachment";
+		const marker = match[2] ?? "";
+		const content = match[3] ?? "";
 		if (matchStart > cursor) {
 			segments.push({ type: "text", text: text.slice(cursor, matchStart) });
 		}
 		const dash = marker.indexOf(" — ");
 		const name = dash >= 0 ? marker.slice(0, dash) : marker;
 		const note = dash >= 0 ? marker.slice(dash + 3) : undefined;
-		segments.push({ type: "attachment", name, note, content });
+		// isMedia 仅在媒体块时为 true（undefined = 普通文本附件）。
+		segments.push({ type: "attachment", name, note, content, isMedia: isMedia || undefined });
 		cursor = matchStart + match[0].length;
 	}
 	if (cursor < text.length) {

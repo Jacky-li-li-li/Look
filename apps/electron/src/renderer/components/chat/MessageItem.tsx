@@ -291,7 +291,13 @@ function messageBlocks(
 				for (const segment of parseAttachmentMessage(block.text)) {
 					segments.push(
 						segment.type === "attachment"
-							? { type: "attachment", name: segment.name, note: segment.note, content: segment.content }
+							? {
+									type: "attachment",
+									name: segment.name,
+									note: segment.note,
+									content: segment.content,
+									isMedia: segment.isMedia,
+								}
 							: { type: "text", text: segment.text },
 					);
 				}

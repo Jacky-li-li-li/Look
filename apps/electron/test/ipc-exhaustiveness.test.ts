@@ -174,6 +174,7 @@ const EXHAUSTIVE = {
 	"attachment:update": true,
 	"attachment:delete": true,
 	"attachment:resolve": true,
+	"attachment:import": true,
 	"fileViewer:open": true,
 	"fileViewer:ready": true,
 	"fileViewer:dock": true,

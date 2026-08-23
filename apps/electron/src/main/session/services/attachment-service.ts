@@ -75,6 +75,31 @@ function mimeForName(name: string): string {
 	return MIME_BY_EXT[path.extname(name).toLowerCase()] ?? "text/plain";
 }
 
+/** 音视频附件扩展名：buildPrompt 不按文本读取，提示先询问用户再转写。 */
+const AUDIO_VIDEO_EXTENSIONS = new Set([
+	".mp3",
+	".wav",
+	".m4a",
+	".aac",
+	".flac",
+	".ogg",
+	".opus",
+	".aiff",
+	".aif",
+	".wma",
+	".amr",
+	".mp4",
+	".mov",
+	".mkv",
+	".avi",
+	".webm",
+	".m4v",
+	".flv",
+	".3gp",
+	".m4b",
+	".caf",
+]);
+
 /** 从路径解析出附件的 sessionId/name 段（用于校验给定 ref 与路径一致）。 */
 export function resolveAttachmentPath(projectId: string, sessionId: string, name: string): string {
 	assertAttachmentName(name);
@@ -100,6 +125,41 @@ export class AttachmentService {
 			sizeBytes,
 			mimeType: mimeForName(name),
 			createdAt: stat.birthtimeMs || Date.now(),
+		};
+	}
+
+	/**
+	 * 从本地路径按字节导入附件（音视频等二进制文件原样拷贝）。
+	 * 渲染端拿不到二进制内容（FileReader.readAsText 会按 UTF-8 解码毁掉字节），
+	 * 因此由主进程直接拷贝源文件，保证 attachments 目录里是真实媒体文件，
+	 * buildPrompt 的媒体分支指向的路径可被 transcribe_file 等正常读取。
+	 */
+	importAttachmentFromPath(
+		projectId: string,
+		sessionId: string,
+		name: string,
+		sourcePath: string,
+		mimeType?: string,
+	): PendingAttachment {
+		assertAttachmentName(name);
+		const srcStat = fs.statSync(sourcePath); // ENOENT 原样抛出
+		if (!srcStat.isFile()) {
+			throw new Error(`Attachment source is not a regular file: ${sourcePath}`);
+		}
+		if (srcStat.size > ATTACHMENT_MAX_BYTES) {
+			throw new Error(`Attachment exceeds max size ${ATTACHMENT_MAX_BYTES} bytes`);
+		}
+		const dir = ensureAttachmentsDir(projectId, sessionId);
+		const filePath = path.join(dir, name);
+		fs.copyFileSync(sourcePath, filePath);
+		return {
+			projectId,
+			sessionId,
+			name,
+			path: filePath,
+			sizeBytes: srcStat.size,
+			mimeType: (mimeType && mimeType.length > 0 ? mimeType : undefined) ?? mimeForName(name),
+			createdAt: srcStat.birthtimeMs || Date.now(),
 		};
 	}
 
@@ -157,6 +217,18 @@ export class AttachmentService {
 		const blocks: string[] = [];
 		for (const ref of attachments) {
 			const filePath = resolveAttachmentPath(ref.projectId, ref.sessionId, ref.name);
+			// 音视频附件：不按文本读取（会产出乱码污染上下文），改为结构化提示，
+			// 并明确要求先征得用户同意再使用本地转写。
+			if (AUDIO_VIDEO_EXTENSIONS.has(path.extname(ref.name).toLowerCase())) {
+				blocks.push(
+					`[Media attachment: ${ref.name} — stored at ${filePath}]\n` +
+						"This is an audio/video file; do not read it as text. " +
+						"If the user asks to transcribe, summarize, or process its speech content, " +
+						"ask the user first whether they want local transcription (transcribe_file tool), " +
+						"and only transcribe after explicit confirmation.\n[/Attachment]",
+				);
+				continue;
+			}
 			let content: string;
 			try {
 				content = fs.readFileSync(filePath, "utf8");

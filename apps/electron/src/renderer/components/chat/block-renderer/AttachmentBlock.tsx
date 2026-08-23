@@ -12,7 +12,7 @@
 // ============================================================
 
 import type { AttachmentRef } from "@shared/types";
-import { ChevronDown, ChevronRight, FileText, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, FileVideo, FolderOpen } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -25,12 +25,14 @@ interface AttachmentBlockProps {
 	note?: string;
 	/** 内联内容（超限/缺失场景为空）。 */
 	content: string;
+	/** 音视频附件：渲染为文件名 tag，不展示路径/说明。 */
+	isMedia?: boolean;
 	/** 消息所属会话；缺失时禁用「打开查看器」。 */
 	projectId?: string;
 	sessionId?: string;
 }
 
-export function AttachmentBlock({ name, note, content, projectId, sessionId }: AttachmentBlockProps) {
+export function AttachmentBlock({ name, note, content, isMedia, projectId, sessionId }: AttachmentBlockProps) {
 	const { t } = useTranslation();
 	const [expanded, setExpanded] = useState(false);
 	const canOpen = typeof projectId === "string" && typeof sessionId === "string";
@@ -55,6 +57,24 @@ export function AttachmentBlock({ name, note, content, projectId, sessionId }: A
 	};
 
 	const hasContent = content.length > 0;
+
+	// 音视频附件：文件名 tag（与待发送附件栏同风格），不展示路径/说明/内联内容。
+	if (isMedia) {
+		return (
+			<div className="flex max-w-full items-center gap-1.5 rounded-md border border-hairline bg-muted/60 py-1 pr-2 pl-2">
+				<FileVideo className="size-3.5 shrink-0 text-muted-foreground" />
+				<button
+					type="button"
+					onClick={() => void handleOpen()}
+					disabled={!canOpen}
+					className="min-w-0 cursor-pointer truncate font-mono text-xs text-foreground disabled:cursor-default"
+					title={canOpen ? t("chat.attachmentOpenHint") : undefined}
+				>
+					{name}
+				</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="overflow-hidden rounded-md border border-hairline bg-muted/60">
