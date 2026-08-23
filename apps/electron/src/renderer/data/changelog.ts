@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.5.1",
+		date: "2026-08-23",
+		items: [
+			{
+				zh: "修复模型下载长时间停留在 0% 的问题：官方源连接超时从 60 秒缩短到 10 秒，更快自动切换镜像源；新增下载停滞检测（30 秒无数据自动换源），下载建立连接期间显示「正在连接下载源…」而非误导性的 0%",
+				en: "Fixed model downloads getting stuck at 0%: the connection timeout to the primary source is cut from 60s to 10s so the mirror fallback kicks in much faster; added stall detection (auto-switch after 30s without data), and the UI now shows “Connecting to source…” while the download is establishing",
+				ja: "モデルダウンロードが 0% で止まる問題を修正：公式ソースの接続タイムアウトを 60 秒から 10 秒に短縮し、ミラーへの切替が素早く行われるように。30 秒データが届かないと自動でソースを切り替える停滞検知も追加し、接続中は「接続中…」と表示します",
+			},
+		],
+	},
+	{
 		version: "2.5.0",
 		date: "2026-08-23",
 		items: [
