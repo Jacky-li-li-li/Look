@@ -20,6 +20,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.5.0",
+		date: "2026-08-23",
+		items: [
+			{
+				zh: "本地语音转写：输入框新增麦克风按钮，支持边说边出字的流式听写与一次性转写，输出可切换简体/繁体中文；音视频文件也可直接转成文字稿并保存到项目共享区，全程本地推理、无需上传",
+				en: "On-device speech transcription: a new mic button in the composer supports live streaming dictation and one-shot transcription (Simplified/Traditional Chinese output); audio and video files can also be transcribed to text and saved to the project shared area — everything runs locally, nothing is uploaded",
+				ja: "ローカル音声文字起こし：入力欄にマイクボタンを追加。リアルタイムで文字化するストリーミング入力と一括文字起こしに対応し、簡体字／繁体字の出力を切り替え可能。音声・動画ファイルもテキスト化してプロジェクト共有エリアに保存。すべて端末内で処理され、アップロードはありません",
+			},
+			{
+				zh: "媒体附件支持：音视频文件以附件形式按字节导入聊天，消息区直接渲染播放，不再因按文本读取而损坏二进制内容",
+				en: "Media attachments: audio and video files attach to chat byte-for-byte, render and play inline in the message list, and are no longer corrupted by being read as text",
+				ja: "メディア添付：音声・動画ファイルをそのまま添付としてチャットに追加でき、メッセージ内で再生表示されます。テキストとして読み込まれて壊れることはなくなりました",
+			},
+			{
+				zh: "输入框新增附加文件按钮：点击即可选择文件转为附件，与拖拽共用同一附件通道",
+				en: "New attach-file button in the composer: pick a file and it becomes an attachment, sharing the same pipeline as drag-and-drop",
+				ja: "入力欄にファイル添付ボタンを追加：クリックでファイルを選択して添付に変換。ドラッグ＆ドロップと同じ仕組みで処理されます",
+			},
+			{
+				zh: "草稿便利贴展开状态持久化：重启后恢复上次的展开/收起偏好，随手点击聊天区不再覆盖你的展开选择",
+				en: "Draft sticky notes remember their expanded state across restarts; casually clicking elsewhere no longer overrides your pinned expansion preference",
+				ja: "下書き付箋の展開状態を記憶：再起動後も前回の展開／折りたたみ設定を復元。ほかの場所をクリックしても展開の選択が上書きされなくなりました",
+			},
+		],
+	},
+	{
 		version: "2.4.0",
 		date: "2026-08-22",
 		items: [
