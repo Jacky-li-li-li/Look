@@ -4,6 +4,7 @@
 
 import { app, protocol } from "electron";
 import { resolveDevLookHome } from "./system/dev-look-home.js";
+import { applyTranscribeLibraryOverride } from "./system/transcribe-library.js";
 
 // OAuth (Supabase GitHub/Google) redirects to look://auth/callback. Mark the
 // scheme standard + secure so https pages may navigate to it and Chromium
@@ -41,6 +42,11 @@ app.commandLine.appendSwitch("disable-features", "OverlayScrollbar");
 // 使用动态 import（不要改回静态 import，否则 LOOK_HOME 设置会失效）。
 const devLookHome = resolveDevLookHome(app.isPackaged, process.env.LOOK_HOME);
 if (devLookHome) process.env.LOOK_HOME = devLookHome;
+
+// 打包版 transcribe-cpp 原生库：koffi 原生 dlopen 不穿透 asar（会 ENOTDIR），
+// 把 TRANSCRIBE_LIBRARY 指到 asarUnpack 解包后的真实 dylib 路径。
+// 必须在首次转写调用前设置（transcribe-cpp 懒加载），这里在启动早期执行。
+applyTranscribeLibraryOverride();
 
 // Dynamic import ensures LOOK_HOME is set before look-storage evaluates.
 // NOTE: Do NOT use a top-level `await` here. In Electron 42 + ESM main-process
