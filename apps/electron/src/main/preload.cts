@@ -133,6 +133,20 @@ const api: LookAPI = {
 
 	resetGeneralSettings: () => invoke({ type: "settings:general:reset" }),
 
+	transcribeGetState: () => invoke({ type: "transcribe:get-state" }),
+
+	transcribeSetSettings: (patch) => invoke({ type: "transcribe:set-settings", patch }),
+
+	transcribeDownloadModel: (modelId) => invoke({ type: "transcribe:download-model", modelId }),
+
+	transcribeDeleteModel: (modelId) => invoke({ type: "transcribe:delete-model", modelId }),
+
+	transcribeRecordStart: () => invoke({ type: "transcribe:record-start" }),
+
+	transcribeRecordStop: () => invoke({ type: "transcribe:record-stop" }),
+
+	transcribeRecordState: () => invoke({ type: "transcribe:record-state" }),
+
 	compressSession: (agentId, customInstructions) => invoke({ type: "session:compress", agentId, customInstructions }),
 
 	abortCompressSession: (agentId) => invoke({ type: "session:abort-compress", agentId }),
@@ -265,6 +279,15 @@ const api: LookAPI = {
 	deleteAttachment: (projectId, sessionId, name) => invoke({ type: "attachment:delete", projectId, sessionId, name }),
 	resolveAttachmentPath: (projectId, sessionId, name) =>
 		invoke({ type: "attachment:resolve", projectId, sessionId, name }),
+	importAttachment: (projectId, sessionId, name, sourcePath, mimeType) =>
+		invoke({
+			type: "attachment:import",
+			projectId,
+			sessionId,
+			name,
+			sourcePath,
+			...(mimeType !== undefined ? { mimeType } : {}),
+		}),
 
 	// ---- File viewer window ----
 	openFileViewer: (path, fadeIn, diffPatch) =>

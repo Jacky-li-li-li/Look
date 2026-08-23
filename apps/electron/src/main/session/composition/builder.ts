@@ -45,6 +45,7 @@ import { createSkillInjectExtensionFactory } from "../../extensions/skill-inject
 import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
 import { createSubagentExtensionFactory } from "../../extensions/subagent/subagent-extension.js";
 import type { AgentConfig, SubagentProgress } from "../../extensions/subagent/types.js";
+import { createTranscribeExtensionFactory } from "../../extensions/transcribe-extension.js";
 import { MCPManager } from "../../mcp/manager.js";
 import { getAvailableModels } from "../../models/model-queries.js";
 import { PlanService } from "../../permissions/plan.js";
@@ -59,6 +60,7 @@ import { CustomProvidersStore } from "../../settings/custom-providers.js";
 import { migrateLegacySettings } from "../../settings/migrate.js";
 import { PromptStore } from "../../settings/prompt-store.js";
 import { UserSettingsStore } from "../../settings/store.js";
+import { getTranscriptionService, type TranscriptionService } from "../../transcribe/transcription-service.js";
 import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
 import { MAX_NAME_LENGTH } from "../constants.js";
@@ -117,6 +119,7 @@ export class CompositionBuilder {
 	mcpManager: MCPManager | null = null;
 	computerUseService: ComputerUseService | null = null;
 	browserService: BrowserService | null = null;
+	transcribeService: TranscriptionService | null = null;
 	sessionCatalog: SessionCatalog | null = null;
 	draftIndex: SessionDraftIndex = new SessionDraftIndex();
 	projectRuntimeService: ProjectRuntimeService | null = null;
@@ -197,6 +200,9 @@ export class CompositionBuilder {
 		// 空闲连接回收（Proma 式连接池）：5 分钟未调用的 MCP 连接断开并释放
 		// stdio 子进程；定时器 unref，不阻止应用退出。
 		this.mcpManager.startIdleReaper();
+
+		// 转写服务：进程级单例（模型加载很重，所有会话共享一个驻留模型 + 串行队列）。
+		this.transcribeService = getTranscriptionService();
 
 		// Computer Use 是进程级 OS 服务（截图/输入与具体会话无关），
 		// 与 MCPManager 同为全局共享服务；构造不触碰 Electron API，
@@ -412,6 +418,14 @@ export class CompositionBuilder {
 						(cwd) => this.projectService!.resolveProjectTrust(cwd),
 						cwd,
 					),
+					// 转录稿落盘到项目共享区 transcripts 目录（共享面板可见、
+					// 路径稳定可点）；无项目时不落盘到共享区，回退系统临时目录。
+					createTranscribeExtensionFactory({
+						service: this.transcribeService!,
+						sharedDir: resolvedProjectId
+							? path.join(getProjectSharedDir(resolvedProjectId), "transcripts")
+							: null,
+					}),
 				];
 			},
 		});

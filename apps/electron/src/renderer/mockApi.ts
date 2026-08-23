@@ -651,6 +651,48 @@ const mockApi: LookAPI = {
 	setGeneralSettings: () => ok,
 	resetGeneralSettings: () => ok,
 
+	transcribeGetState: async () => ({
+		success: true,
+		state: {
+			settings: { modelId: "Qwen3-ASR-0.6B", transcriptionLanguage: "auto", chineseOutput: "simplified" },
+			models: [
+				{
+					id: "Qwen3-ASR-0.6B",
+					name: "Qwen3-ASR 0.6B",
+					size: 850_423_456,
+					cached: true,
+					downloading: false,
+					progress: null,
+					languages: ["zh", "en", "yue"],
+					streaming: false,
+					highlights: ["settings.featAccurate", "settings.featMultilingual", "settings.featFileBest"],
+				},
+				{
+					id: "nemotron-3.5-asr-streaming-0.6b",
+					name: "Nemotron Streaming 3.5",
+					size: 751_094_240,
+					cached: false,
+					downloading: false,
+					progress: null,
+					languages: ["en-US", "zh-CN"],
+					streaming: true,
+					highlights: ["settings.featStreaming", "settings.featLowLatency", "settings.featMicBest"],
+				},
+			],
+		},
+	}),
+	transcribeSetSettings: () =>
+		Promise.resolve({
+			success: true,
+			settings: { modelId: "Qwen3-ASR-0.6B", transcriptionLanguage: "auto", chineseOutput: "simplified" },
+		}),
+	transcribeDownloadModel: () => Promise.resolve({ success: true, ok: true }),
+	transcribeDeleteModel: () => Promise.resolve({ success: true, ok: true }),
+	transcribeRecordStart: () => Promise.resolve({ success: true, ok: true }),
+	transcribeRecordStop: () => Promise.resolve({ success: true, text: "你好，这是语音输入测试。", seconds: 2.4 }),
+	transcribeRecordState: () =>
+		Promise.resolve({ success: true, recording: false, rms: 0, streaming: false, committed: "", tentative: "" }),
+
 	// ---- Custom providers ----
 	addCustomProvider: () => ok,
 	updateCustomProvider: () => ok,
@@ -913,6 +955,19 @@ const mockApi: LookAPI = {
 	updateAttachment: () => Promise.resolve({ success: true, sizeBytes: 0 }),
 	deleteAttachment: () => Promise.resolve({ success: true }),
 	resolveAttachmentPath: () => Promise.resolve({ success: true, path: "/mock/attachments/paste-1.md" }),
+	importAttachment: (_projectId, _sessionId, name) =>
+		Promise.resolve({
+			success: true,
+			attachment: {
+				projectId: "mock-project",
+				sessionId: "mock-session",
+				name,
+				path: `/mock/attachments/${name}`,
+				sizeBytes: 0,
+				mimeType: "video/mp4",
+				createdAt: Date.now(),
+			},
+		}),
 	openFileViewer: (_path, _fadeIn, _diffPatch) => Promise.resolve({ success: true }),
 	dockFileViewer: (_path, _diffPatch) => Promise.resolve({ success: true }),
 	resolveFileViewerDock: (_confirmed) => Promise.resolve({ success: true }),

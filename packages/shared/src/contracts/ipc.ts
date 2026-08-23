@@ -197,6 +197,16 @@ export interface LookAPI {
 	getGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
 	setGeneralSettings(settings: Partial<GeneralSettings>): Promise<IpcResult<{ settings?: GeneralSettings }>>;
 	resetGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
+	// ---- 语音助手（本地转写）----
+	transcribeGetState(): Promise<IpcResult<{ state: TranscribeState }>>;
+	transcribeSetSettings(patch: TranscribeSettingsPatch): Promise<IpcResult<{ settings: TranscribeSettingsDto }>>;
+	transcribeDownloadModel(modelId: string): Promise<IpcResult<{ ok: boolean }>>;
+	transcribeDeleteModel(modelId: string): Promise<IpcResult<{ ok: boolean }>>;
+	transcribeRecordStart(): Promise<IpcResult<{ ok: boolean }>>;
+	transcribeRecordStop(): Promise<IpcResult<{ text: string; seconds: number }>>;
+	transcribeRecordState(): Promise<
+		IpcResult<{ recording: boolean; rms: number; streaming: boolean; committed: string; tentative: string }>
+	>;
 	// ---- v0.3 skills ----
 	listSkills(): Promise<
 		IpcResult<{ skills?: SkillEntry[]; diagnostics?: SkillDiagnostic[]; importedPaths?: string[] }>
@@ -320,6 +330,14 @@ export interface LookAPI {
 	deleteAttachment(projectId: string, sessionId: string, name: string): Promise<IpcResult>;
 	/** 解析附件绝对路径（历史消息附件卡片打开查看器用）；文件不存在时返回 error。 */
 	resolveAttachmentPath(projectId: string, sessionId: string, name: string): Promise<IpcResult<{ path: string }>>;
+	/** 从本地路径按字节导入附件（音视频等二进制文件原样拷贝，不做文本解码损坏字节）。 */
+	importAttachment(
+		projectId: string,
+		sessionId: string,
+		name: string,
+		sourcePath: string,
+		mimeType?: string,
+	): Promise<IpcResult<{ attachment: PendingAttachment }>>;
 	// ---- File viewer window ----
 	/** 在独立查看器窗口中打开文件；diffPatch 随窗口传递（undock 时保留 diff 语义）。 */
 	openFileViewer(path: string, fadeIn?: boolean, diffPatch?: string): Promise<IpcResult>;
@@ -438,6 +456,42 @@ interface SkillDiagnostic {
 	type: "warning" | "collision";
 	message: string;
 	path?: string;
+}
+
+// ---- 语音助手（本地转写）----
+
+export interface TranscribeModelState {
+	id: string;
+	name: string;
+	size: number;
+	cached: boolean;
+	downloading: boolean;
+	/** 0-100，下载中有效。 */
+	progress: number | null;
+	/** 模型支持的语言代码列表（含变体，如 zh-CN）。 */
+	languages: string[];
+	/** 是否支持流式解码。 */
+	streaming: boolean;
+	/** 差异化亮点（i18n key）。 */
+	highlights: string[];
+	error?: string;
+}
+
+export interface TranscribeSettingsDto {
+	modelId: string;
+	transcriptionLanguage: string;
+	chineseOutput: string;
+}
+
+export interface TranscribeSettingsPatch {
+	modelId?: string;
+	transcriptionLanguage?: string;
+	chineseOutput?: "simplified" | "traditional-taiwan" | "traditional-hong-kong";
+}
+
+export interface TranscribeState {
+	settings: TranscribeSettingsDto;
+	models: TranscribeModelState[];
 }
 
 type GeneralSettings = UserSettings;

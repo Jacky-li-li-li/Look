@@ -32,10 +32,15 @@ asarUnpack:
   - "**/*.node"
   - "node_modules/@earendil-works/**/native/**"
   - "node_modules/@earendil-works/**/bin/**"
+  # transcribe-cpp 的 native 库（libtranscribe + ggml 各后端 dylib）
+  - "node_modules/transcribe-cpp/**"
+  - "node_modules/@transcribe-cpp/**"
 
 mac:
   category: public.app-category.developer-tools
   icon: assets/icon-1024.png
+  extendInfo:
+    NSMicrophoneUsageDescription: Look 需要使用麦克风进行本地语音输入（语音转写完全在设备本地处理）。
   target:
     - dmg
     - zip # zip 是 electron-updater 自动更新的载体，必须保留

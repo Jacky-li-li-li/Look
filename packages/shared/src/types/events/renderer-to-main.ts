@@ -1,4 +1,5 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
+import type { TranscribeSettingsPatch } from "../../contracts/ipc.js";
 import type { PermissionMode } from "../../contracts/permission.js";
 import type { UserSettings } from "../../contracts/settings.js";
 import type { DraftPatch } from "../../domain/drafts.js";
@@ -134,6 +135,15 @@ export type RendererToMainEvent =
 	| { type: "attachment:update"; projectId: string; sessionId: string; name: string; content: string }
 	| { type: "attachment:delete"; projectId: string; sessionId: string; name: string }
 	| { type: "attachment:resolve"; projectId: string; sessionId: string; name: string }
+	| {
+			type: "attachment:import";
+			projectId: string;
+			sessionId: string;
+			name: string;
+			/** 源文件绝对路径（渲染端经 webUtils.getPathForFile 恢复）。 */
+			sourcePath: string;
+			mimeType?: string;
+	  }
 	| { type: "fileViewer:open"; path: string; fadeIn?: boolean; diffPatch?: string }
 	| { type: "fileViewer:ready" }
 	| { type: "fileViewer:dock"; path: string; diffPatch?: string }
@@ -194,4 +204,12 @@ export type RendererToMainEvent =
 	| { type: "browser:panel-action"; kind: string; [key: string]: unknown }
 	| { type: "browser:open-panel"; force?: boolean }
 	| { type: "browser:close-panel" }
-	| { type: "browser:set-layout"; layout: unknown };
+	| { type: "browser:set-layout"; layout: unknown }
+	// ---- 语音助手（本地转写）----
+	| { type: "transcribe:get-state" }
+	| { type: "transcribe:set-settings"; patch: TranscribeSettingsPatch }
+	| { type: "transcribe:download-model"; modelId: string }
+	| { type: "transcribe:delete-model"; modelId: string }
+	| { type: "transcribe:record-start" }
+	| { type: "transcribe:record-stop" }
+	| { type: "transcribe:record-state" };

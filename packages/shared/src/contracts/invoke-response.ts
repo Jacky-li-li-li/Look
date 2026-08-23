@@ -41,7 +41,7 @@ import type {
 	UserProfile,
 	UserSettings,
 } from "../types.js";
-import type { IpcResult, LookAPI, ProviderSettingsData } from "./ipc.js";
+import type { IpcResult, LookAPI, ProviderSettingsData, TranscribeSettingsDto, TranscribeState } from "./ipc.js";
 
 // ── 自定义 provider 测试结果（成功分支的业务载荷） ──
 interface ApiKeyTestResult {
@@ -244,6 +244,7 @@ export interface InvokeResponseMap {
 	"attachment:update": { sizeBytes: number };
 	"attachment:delete": Record<string, unknown>;
 	"attachment:resolve": { path: string };
+	"attachment:import": { attachment: PendingAttachment };
 
 	// ── file viewer window ──
 	"fileViewer:open": Record<string, unknown>;
@@ -307,6 +308,21 @@ export interface InvokeResponseMap {
 	"browser:open-panel": Record<string, unknown>;
 	"browser:close-panel": Record<string, unknown>;
 	"browser:set-layout": Record<string, unknown>;
+
+	// ── 语音助手（本地转写）──
+	"transcribe:get-state": { state: TranscribeState };
+	"transcribe:set-settings": { settings: TranscribeSettingsDto };
+	"transcribe:download-model": { ok: boolean };
+	"transcribe:delete-model": { ok: boolean };
+	"transcribe:record-start": { ok: boolean };
+	"transcribe:record-stop": { text: string; seconds: number };
+	"transcribe:record-state": {
+		recording: boolean;
+		rms: number;
+		streaming: boolean;
+		committed: string;
+		tentative: string;
+	};
 
 	// ── event-channel types（无 invoke handler，映射占位以穷尽联合） ──
 	"app:ready": Record<string, unknown>;

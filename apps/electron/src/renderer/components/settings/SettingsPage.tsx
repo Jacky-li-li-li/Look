@@ -6,7 +6,7 @@
 import { Badge } from "@look/ui/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@look/ui/components/ui/tabs";
 import { useSetAtom } from "jotai";
-import { ArrowLeft, FileText, Key, MessageCircle, Palette, Server, UserRound, Zap } from "lucide-react";
+import { ArrowLeft, FileText, Key, MessageCircle, Mic, Palette, Server, UserRound, Zap } from "lucide-react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SettingsTab } from "../../store/atoms";
@@ -18,6 +18,7 @@ import ImChannelsTab from "./ImChannelsTab";
 import McpServersTab from "./McpServersTab";
 import ProfileTab from "./ProfileTab";
 import PromptTab from "./PromptTab";
+import TranscribeTab from "./TranscribeTab";
 import type { CustomProviderInput, CustomProviderStats, ProviderInfo } from "./types";
 
 interface SettingsPageProps {
@@ -78,6 +79,13 @@ const SettingsPage = memo(function SettingsPage({
 					>
 						<FileText className="size-3.5" />
 						{t("settings.chatPrompt")}
+					</TabsTrigger>
+					<TabsTrigger
+						value="transcribe"
+						className="!h-auto !flex-none !w-full justify-start gap-2.5 px-3 py-2.5 border-l-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-accent/30 data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-accent/20 data-[state=active]:shadow-none transition-all duration-200"
+					>
+						<Mic className="size-3.5" />
+						{t("settings.transcribe")}
 					</TabsTrigger>
 					<TabsTrigger
 						value="api-keys"
@@ -147,6 +155,13 @@ const SettingsPage = memo(function SettingsPage({
 
 				<TabsContent value="prompt" className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
 					<PromptTab />
+				</TabsContent>
+
+				<TabsContent
+					value="transcribe"
+					className="flex-1 min-w-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden"
+				>
+					<TranscribeTab />
 				</TabsContent>
 
 				<TabsContent

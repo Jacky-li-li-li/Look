@@ -1,0 +1,1 @@
+export const CAPTURE_SAMPLE_RATE = 16_000;

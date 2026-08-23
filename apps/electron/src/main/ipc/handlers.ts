@@ -39,6 +39,7 @@ import {
 	skillRouter,
 	subagentRouter,
 	systemRouter,
+	transcribeRouter,
 	updaterRouter,
 	workspaceRouter,
 } from "./routers/index.js";
@@ -67,6 +68,7 @@ const domainRouters = [
 	imRouter,
 	mcpRouter,
 	updaterRouter,
+	transcribeRouter,
 ];
 
 export function registerIpcHandlers(

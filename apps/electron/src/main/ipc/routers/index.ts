@@ -16,5 +16,6 @@ export { sharedRouter } from "./shared-router.js";
 export { skillRouter } from "./skill-router.js";
 export { subagentRouter } from "./subagent-router.js";
 export { systemRouter } from "./system-router.js";
+export { transcribeRouter } from "./transcribe-router.js";
 export { updaterRouter } from "./updater-router.js";
 export { workspaceRouter } from "./workspace-router.js";

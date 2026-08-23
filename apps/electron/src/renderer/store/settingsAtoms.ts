@@ -87,7 +87,15 @@ export const usageVersionAtom = atom(0);
 
 export const showSettingsAtom = atom(false);
 
-export type SettingsTab = "general" | "prompt" | "api-keys" | "im-channels" | "about" | "profile" | "mcp";
+export type SettingsTab =
+	| "general"
+	| "prompt"
+	| "api-keys"
+	| "im-channels"
+	| "about"
+	| "profile"
+	| "mcp"
+	| "transcribe";
 
 export const settingsTabAtom = atom<SettingsTab>("general");
 

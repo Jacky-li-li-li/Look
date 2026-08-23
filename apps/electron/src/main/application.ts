@@ -32,6 +32,9 @@ import { registerOAuthProtocol } from "./system/oauth-callback.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { TRAFFIC_LIGHT_INITIAL_Y, TRAFFIC_LIGHT_X } from "./system/traffic-light.js";
+import { getLiveStreamController } from "./transcribe/live-stream.js";
+import { getRecordingController } from "./transcribe/recording.js";
+import { getTranscriptionService } from "./transcribe/transcription-service.js";
 import { FileTaskLock } from "./utils/task-lock.js";
 import { closeViewerWindow } from "./viewer/viewer-window-manager.js";
 import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
@@ -718,6 +721,17 @@ export class Application {
 				console.error("[Look] runtimeManager dispose failed:", err);
 			}
 			this.services.runtimeManager = null;
+		}
+		// 语音转写清理：杀掉录音 worker（避免退出后孤儿进程继续占用麦克风）、
+		// 释放流式会话与驻留模型、拒绝挂起的转写任务。
+		try {
+			await Promise.allSettled([
+				getTranscriptionService().shutdown(),
+				Promise.resolve(getRecordingController().dispose()),
+				getLiveStreamController().dispose(),
+			]);
+		} catch (err) {
+			console.error("[Look] transcribe dispose failed:", err);
 		}
 	}
 

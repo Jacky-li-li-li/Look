@@ -10,7 +10,12 @@ import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState } f
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useChatInputMenus } from "../../hooks/useChatInputMenus";
-import { buildAttachmentName, sanitizeAttachmentName } from "../../lib/pasteAttachment";
+import {
+	buildAttachmentName,
+	buildMediaAttachmentName,
+	isMediaFile,
+	sanitizeAttachmentName,
+} from "../../lib/pasteAttachment";
 import { appStore } from "../../store/appStore";
 import {
 	activeAgentAtom,
@@ -70,6 +75,17 @@ const ChatInput = function ChatInput({
 	const [permissionMode, setPermissionMode] = useAtom(permissionModeAtomFamily(agentId));
 	const [insertRequest, setInsertRequest] = useAtom(chatInputInsertRequestAtom);
 	const [input, setInputState] = useState("");
+	// 语音输入：录音中状态（独立 worker 录音，停止后转写插入输入框）。
+	const [micRecording, setMicRecording] = useState(false);
+	const micRecordingRef = useRef(false);
+	const micBusyRef = useRef(false);
+	// 录音开始时输入框已有内容：流式转写追加在其后。
+	const micPrefixRef = useRef("");
+	// 上次由语音轮询写入输入框的完整文本：轮询/定稿时若用户已手动编辑过
+	// 输入框（当前值 ≠ 本 ref），就不再覆盖，改为把转写结果追加在其后。
+	const micLastWrittenRef = useRef<string | null>(null);
+	// 本地转写模型是否已下载（决定麦克风按钮是否显示；挂载时查询一次）。
+	const [micAvailable, setMicAvailable] = useState(false);
 	const inputRef = useRef<ContentEditableInputHandle>(null);
 	// Undo stack — user-driven edits push the previous text; Cmd+Z pops.
 	const undoStackRef = useRef<string[]>([]);
@@ -129,6 +145,117 @@ const ChatInput = function ChatInput({
 		}),
 		[setInput],
 	);
+
+	// ── 语音输入 ──
+	const micPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+	// 语音输入可用性：仅当本地转写模型已下载时显示麦克风按钮。
+	// 挂载时查询一次；模型在运行期下载后，下次挂载（切换会话）即出现。
+	useEffect(() => {
+		let cancelled = false;
+		window.look
+			.transcribeGetState()
+			.then((result) => {
+				if (!cancelled && result?.success) {
+					setMicAvailable(result.state.models.some((m) => m.cached));
+				}
+			})
+			.catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	// 卸载清理：录音中切换会话/关闭面板必须停掉主进程录音并清掉轮询，
+	// 否则 mic worker 会一直占用麦克风、500ms 轮询 interval 永久泄漏。
+	useEffect(() => {
+		return () => {
+			if (micPollRef.current) {
+				clearInterval(micPollRef.current);
+				micPollRef.current = null;
+			}
+			if (micRecordingRef.current) {
+				void window.look.transcribeRecordStop().catch(() => undefined);
+			}
+		};
+	}, []);
+
+	const handleMicToggle = useCallback(async () => {
+		if (micBusyRef.current) return;
+		micBusyRef.current = true;
+		try {
+			if (!micRecording) {
+				const result = await window.look.transcribeRecordStart();
+				if (!result.success || !result.ok) {
+					toast.error(result?.error ?? t("chat.micStartFailed", "Voice input unavailable"));
+					return;
+				}
+				setMicRecording(true);
+				micRecordingRef.current = true;
+				micPrefixRef.current = inputSnapshotRef.current.trim();
+				micLastWrittenRef.current = inputSnapshotRef.current;
+				// 录音期间轮询流式状态：流式模型实时把 committed 文本写入输入框。
+				micPollRef.current = setInterval(() => {
+					void window.look
+						.transcribeRecordState()
+						.then((stateResult) => {
+							if (!stateResult.success) return;
+							const committed = stateResult.committed?.trim();
+							if (stateResult.streaming && committed) {
+								// 用户录音期间手动编辑过输入框时不覆盖，等停止时追加。
+								if (inputSnapshotRef.current !== micLastWrittenRef.current) return;
+								const prefix = micPrefixRef.current;
+								const next = prefix ? `${prefix} ${committed}` : committed;
+								setInput(next);
+								micLastWrittenRef.current = next;
+							}
+						})
+						.catch(() => undefined);
+				}, 500);
+			} else {
+				setMicRecording(false);
+				micRecordingRef.current = false;
+				if (micPollRef.current) {
+					clearInterval(micPollRef.current);
+					micPollRef.current = null;
+				}
+				const result = await window.look.transcribeRecordStop();
+				if (!result.success) {
+					toast.error(result?.error ?? t("chat.micStopFailed", "Transcription failed"));
+					return;
+				}
+				const text = result.text?.trim() ?? "";
+				if (text) {
+					const current = inputSnapshotRef.current;
+					if (current === micLastWrittenRef.current) {
+						// 输入框没被手动改过：按录音开始前的内容拼上转写结果。
+						const prefix = micPrefixRef.current;
+						setInput(prefix ? `${prefix} ${text}` : text);
+					} else {
+						// 录音期间用户编辑过输入框：保留其内容，转写结果另起一段追加。
+						const separator = current.length > 0 && !/\s$/.test(current) ? "\n\n" : "";
+						setInput(`${current}${separator}${text}`);
+					}
+					inputRef.current?.focus();
+				} else {
+					// 流式已写入的 committed 视为有效输出；只有完全无语音才提示。
+					if (!inputSnapshotRef.current.trim()) {
+						toast.info(t("chat.micNoSpeech", "No speech detected"));
+					}
+				}
+			}
+		} catch (error) {
+			setMicRecording(false);
+			micRecordingRef.current = false;
+			if (micPollRef.current) {
+				clearInterval(micPollRef.current);
+				micPollRef.current = null;
+			}
+			toast.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			micBusyRef.current = false;
+		}
+	}, [micRecording, setInput, t]);
 
 	// ── slash / hash menus ──
 	const menus = useChatInputMenus({ input, setInput });
@@ -247,6 +374,32 @@ const ChatInput = function ChatInput({
 					]);
 				};
 				reader.readAsDataURL(file);
+				return;
+			}
+			// 音视频文件：按字节导入（readAsText 会按 UTF-8 解码毁掉二进制字节，
+			// 存下来的文件将不再是真实媒体，transcribe_file 等无法读取）。
+			if (isMediaFile(file)) {
+				try {
+					const sourcePath = window.look.getPathForFile(file);
+					const name =
+						sanitizeAttachmentName(file.name) ?? buildMediaAttachmentName(file.name, ++droppedSeqRef.current);
+					if (!sourcePath) {
+						toast.error(t("chat.mediaImportFailed"));
+						return;
+					}
+					if (!projectId) return;
+					const result = await window.look.importAttachment(
+						projectId,
+						agentId,
+						name,
+						sourcePath,
+						file.type || undefined,
+					);
+					if (!result?.success) throw new Error(result?.error ?? "Failed to import attachment");
+					handleAttachmentCreated(result.attachment);
+				} catch (error) {
+					toast.error(error instanceof Error ? error.message : t("chat.mediaImportFailed"));
+				}
 				return;
 			}
 			try {
@@ -443,6 +596,8 @@ const ChatInput = function ChatInput({
 					mcpTools: menus.mcpTools,
 				}}
 				onInsertToken={handleInsertToken}
+				micRecording={micRecording}
+				onMicToggle={micAvailable ? handleMicToggle : undefined}
 				onAttachClick={() => fileInputRef.current?.click()}
 			/>
 		</div>

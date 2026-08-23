@@ -3314,3 +3314,47 @@ html[data-platform="darwin"]:not([data-fullscreen="true"])
 	font-style: normal;
 	font-display: swap;
 }
+
+/* ============================================================
+   语音输入录音动效 — 麦克风按钮切换为动态均衡器柱
+   （每根柱子独立相位/周期，错峰跳动，形成声波效果）
+   ============================================================ */
+.mic-eq {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	height: 12px;
+}
+.mic-eq i {
+	width: 2.5px;
+	height: 100%;
+	border-radius: 2px;
+	background: currentColor;
+	transform-origin: center;
+	animation: mic-eq-bounce 0.85s ease-in-out infinite;
+}
+.mic-eq i:nth-child(2) {
+	animation-delay: -0.2s;
+	animation-duration: 0.7s;
+}
+.mic-eq i:nth-child(3) {
+	animation-delay: -0.42s;
+	animation-duration: 0.95s;
+}
+.mic-eq i:nth-child(4) {
+	animation-delay: -0.1s;
+	animation-duration: 0.78s;
+}
+.mic-eq i:nth-child(5) {
+	animation-delay: -0.32s;
+	animation-duration: 0.66s;
+}
+@keyframes mic-eq-bounce {
+	0%,
+	100% {
+		transform: scaleY(0.2);
+	}
+	50% {
+		transform: scaleY(1);
+	}
+}

@@ -11,5 +11,9 @@
 	     禁用 library validation 以允许加载未由同一团队签名的动态库 -->
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
+	<!-- 本地语音输入（PvRecorder 麦克风录音）：hardened runtime 下缺少该
+	     entitlement 会被 macOS TCC 直接拒绝，签名公证后的包无法录音 -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
 </dict>
 </plist>
