@@ -565,6 +565,7 @@
     "transcribeChineseOutputDesc": "中国語転写の簡体字/繁体字変換",
     "transcribeDownload": "ダウンロード",
     "transcribeDownloading": "ダウンロード中",
+    "transcribeConnecting": "接続中…",
     "transcribeDownloaded": "ダウンロード済み",
     "transcribeDownloadFailed": "ダウンロード失敗",
     "transcribeUse": "使用",

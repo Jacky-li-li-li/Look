@@ -565,6 +565,7 @@
     "transcribeChineseOutputDesc": "Simplified / Traditional conversion for Chinese transcripts",
     "transcribeDownload": "Download",
     "transcribeDownloading": "Downloading",
+    "transcribeConnecting": "Connecting to source…",
     "transcribeDownloaded": "Downloaded",
     "transcribeDownloadFailed": "Download failed",
     "transcribeUse": "Use",

@@ -565,6 +565,7 @@
     "transcribeChineseOutputDesc": "中文转写结果的简繁体转换",
     "transcribeDownload": "下载",
     "transcribeDownloading": "下载中",
+    "transcribeConnecting": "正在连接下载源…",
     "transcribeDownloaded": "已下载",
     "transcribeDownloadFailed": "下载失败",
     "transcribeUse": "使用",

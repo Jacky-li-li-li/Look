@@ -23,8 +23,24 @@ const MODEL_SOURCES: readonly string[] = [
 	"https://hf-mirror.com",
 ];
 
+/** 上次成功的源索引（模块级）：双源回退成功后记住，下次优先尝试，
+ *  避免在官方源黑洞的网络下每次下载都先干等一轮超时。 */
+let lastGoodSourceIndex = 0;
+
+/** 测试用：重置源偏好记忆。 */
+export function resetSourcePreference(): void {
+	lastGoodSourceIndex = 0;
+}
+
 const RETRY_DELAY_MS = 500;
-const DOWNLOAD_TIMEOUT_MS = 60_000; // 单次连接超时（响应头超时，非总时长）
+/** 单次连接超时（响应头阶段）。官方源在部分网络下是黑洞（TCP 无响应），
+ *  必须快速失败并回退镜像源，否则下载会长时间停在 0%。 */
+const CONNECT_TIMEOUT_MS = 10_000;
+/** 响应体停滞超时：连续多久收不到任何字节视为该源断流（如 CDN 黑洞），
+ *  中止本次尝试让外层回退下一源，避免进度永远卡住。 */
+const BODY_STALL_TIMEOUT_MS = 30_000;
+/** 停滞看门狗检查间隔。 */
+const BODY_STALL_CHECK_MS = 5_000;
 
 /** 下载完成但 size/sha256 校验失败 —— 已落盘内容不可信，断点必须作废。 */
 class VerificationError extends Error {}
@@ -37,6 +53,9 @@ export type DownloadProgress = { downloaded: number; total: number };
 export type DownloadOptions = {
 	signal?: AbortSignal;
 	onProgress?: (progress: DownloadProgress) => void;
+	/** 响应体停滞超时（ms）：连续该时长收不到任何字节即中止本源尝试、
+	 *  触发外层回退下一源。默认 30s；测试可传较小值加速。 */
+	bodyStallTimeoutMs?: number;
 };
 
 export function transcribeModelsDir(lookDir: string): string {
@@ -75,7 +94,7 @@ export async function downloadModel(
 	model: TranscribeModelInfo,
 	options: DownloadOptions = {},
 ): Promise<string> {
-	const { signal, onProgress } = options;
+	const { signal, onProgress, bodyStallTimeoutMs = BODY_STALL_TIMEOUT_MS } = options;
 	signal?.throwIfAborted();
 
 	const dir = transcribeModelDir(lookDir, model);
@@ -107,13 +126,24 @@ export async function downloadModel(
 	}
 
 	let lastError: unknown;
-	let sourceIndex = 0;
-	while (sourceIndex < MODEL_SOURCES.length) {
+	let attempts = 0;
+	// 从上次成功的源开始尝试（回退成功后下次优先），全部源都试过才放弃。
+	let sourceIndex = lastGoodSourceIndex;
+	while (attempts < MODEL_SOURCES.length) {
 		const source = MODEL_SOURCES[sourceIndex];
 		signal?.throwIfAborted();
 		try {
 			const digest = baseDigest.copy();
-			await downloadFromSource(source, model, incompletePath, resumeOffset, digest, signal, onProgress);
+			await downloadFromSource(
+				source,
+				model,
+				incompletePath,
+				resumeOffset,
+				digest,
+				signal,
+				onProgress,
+				bodyStallTimeoutMs,
+			);
 			// 校验
 			const finalStat = await stat(incompletePath);
 			if (finalStat.size !== model.size) {
@@ -124,6 +154,7 @@ export async function downloadModel(
 			}
 			await rename(incompletePath, finalPath);
 			onProgress?.({ downloaded: model.size, total: model.size });
+			lastGoodSourceIndex = sourceIndex;
 			return finalPath;
 		} catch (error) {
 			if (signal?.aborted) throw error;
@@ -153,7 +184,8 @@ export async function downloadModel(
 					resumeOffset = newSize;
 				}
 			}
-			sourceIndex += 1;
+			attempts += 1;
+			sourceIndex = (sourceIndex + 1) % MODEL_SOURCES.length;
 			await sleep(RETRY_DELAY_MS);
 		}
 	}
@@ -181,14 +213,16 @@ async function downloadFromSource(
 	digest: ReturnType<typeof createHash>,
 	signal: AbortSignal | undefined,
 	onProgress: DownloadOptions["onProgress"],
+	bodyStallTimeoutMs: number,
 ): Promise<void> {
 	const url = sourceUrl(source, model);
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(new Error("连接超时")), DOWNLOAD_TIMEOUT_MS);
+	// 外部中止（应用退出等）要贯穿到响应体阶段：连接建立后不能断开联动。
 	const onAbort = () => controller.abort(signal?.reason);
 	signal?.addEventListener("abort", onAbort, { once: true });
 
 	let resp: Response;
+	const connectTimeout = setTimeout(() => controller.abort(new Error("连接超时")), CONNECT_TIMEOUT_MS);
 	try {
 		resp = await fetch(url, {
 			signal: controller.signal,
@@ -196,29 +230,47 @@ async function downloadFromSource(
 			headers: resumeOffset > 0 ? { Range: `bytes=${resumeOffset}-` } : undefined,
 		});
 	} finally {
-		clearTimeout(timeout);
-		signal?.removeEventListener("abort", onAbort);
+		clearTimeout(connectTimeout);
 	}
 
 	if (
 		resp.status === 416 ||
 		(resumeOffset > 0 && resp.status === 200) // 正常 Range 续传应返回 206；200 表示服务端忽略 Range 回全量
 	) {
+		signal?.removeEventListener("abort", onAbort);
 		throw new ResumeNotSupportedError(`HTTP ${resp.status}: cannot resume from byte ${resumeOffset}`);
 	}
-	if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-	if (!resp.body) throw new Error("empty response body");
+	if (!resp.ok) {
+		signal?.removeEventListener("abort", onAbort);
+		throw new Error(`HTTP ${resp.status}`);
+	}
+	if (!resp.body) {
+		signal?.removeEventListener("abort", onAbort);
+		throw new Error("empty response body");
+	}
 
 	const total = resumeOffset + (Number(resp.headers.get("content-length")) || model.size - resumeOffset);
 	const ws = createWriteStream(targetPath, { flags: resumeOffset > 0 ? "a" : "w" });
 	let downloaded = resumeOffset;
 	let lastReport = 0;
+	let lastDataAt = Date.now();
 	const reader = resp.body.getReader();
+
+	// 响应体停滞看门狗：无数据超时即中止本源尝试（外层会回退下一源）。
+	// 黑洞网络（官方源、CDN 断流）下连接能建立但不再传数据，
+	// 没有这个看门狗进度会永远停在 0%（或某个百分比）。
+	const stallCheckMs = Math.max(50, Math.min(BODY_STALL_CHECK_MS, bodyStallTimeoutMs / 4));
+	const stallTimer = setInterval(() => {
+		if (Date.now() - lastDataAt > bodyStallTimeoutMs) {
+			controller.abort(new Error(`下载停滞（${bodyStallTimeoutMs / 1000}s 无数据）`));
+		}
+	}, stallCheckMs);
 
 	try {
 		for (;;) {
 			const { done, value } = await reader.read();
 			if (done) break;
+			lastDataAt = Date.now();
 			digest.update(value);
 			// 写背压：磁盘慢时暂停读取，避免 850MB 模型全量堆在写缓冲里。
 			if (!ws.write(value)) {
@@ -241,6 +293,9 @@ async function downloadFromSource(
 	} catch (error) {
 		await new Promise<void>((resolve) => ws.end(resolve));
 		throw error;
+	} finally {
+		clearInterval(stallTimer);
+		signal?.removeEventListener("abort", onAbort);
 	}
 }
 

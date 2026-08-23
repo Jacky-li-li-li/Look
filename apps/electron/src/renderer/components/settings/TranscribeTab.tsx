@@ -180,18 +180,28 @@ export default function TranscribeTab() {
 									<div className="flex shrink-0 items-center gap-2">
 										{model.downloading ? (
 											<div className="flex items-center gap-2">
-												<div
-													className="relative h-1.5 w-28 overflow-hidden rounded-full"
-													style={{ background: "var(--muted)" }}
-												>
-													<div
-														className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-200"
-														style={{ width: `${model.progress ?? 0}%`, background: "var(--primary)" }}
-													/>
-												</div>
-												<span className="w-10 text-right text-[11px] tabular-nums text-muted-foreground">
-													{model.progress ?? 0}%
-												</span>
+												{model.progress !== null && model.progress > 0 ? (
+													<>
+														<div
+															className="relative h-1.5 w-28 overflow-hidden rounded-full"
+															style={{ background: "var(--muted)" }}
+														>
+															<div
+																className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-200"
+																style={{ width: `${model.progress}%`, background: "var(--primary)" }}
+															/>
+														</div>
+														<span className="w-10 text-right text-[11px] tabular-nums text-muted-foreground">
+															{model.progress}%
+														</span>
+													</>
+												) : (
+													// 0% 通常是还在连接/切换下载源（官方源黑洞 → 镜像源），
+													// 直接展示"连接中"而不是误导性的 0%。
+													<span className="text-[11px] text-muted-foreground">
+														{t("settings.transcribeConnecting")}
+													</span>
+												)}
 											</div>
 										) : model.cached ? (
 											<>

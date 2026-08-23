@@ -8,7 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TranscribeModelInfo } from "../../src/main/transcribe/model-catalog.js";
-import { downloadModel, findDownloadedModel, transcribeModelPath } from "../../src/main/transcribe/model-downloader.js";
+import {
+	downloadModel,
+	findDownloadedModel,
+	resetSourcePreference,
+	transcribeModelPath,
+} from "../../src/main/transcribe/model-downloader.js";
 
 function makeModel(overrides: Partial<TranscribeModelInfo> = {}): TranscribeModelInfo {
 	const content = Buffer.from("fake-model-content-0123456789");
@@ -54,6 +59,9 @@ describe("model-downloader", () => {
 
 	beforeEach(async () => {
 		lookDir = await mkdtemp(join(tmpdir(), "look-transcribe-test-"));
+		// 源偏好记忆是模块级状态，测试间必须复位（否则上一用例记住镜像源会让
+		// "官方源先尝试"类断言失败）。
+		resetSourcePreference();
 		// 默认：官方源 404 → 自动回退镜像源成功（双源回退主路径）
 		const model = makeModel();
 		const mirrorUrl = `https://hf-mirror.com/${model.repository}/resolve/${model.revision}/${model.filename}`;
@@ -62,6 +70,7 @@ describe("model-downloader", () => {
 
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		vi.useRealTimers();
 	});
 
 	it("回退：官方源失败时自动从镜像源下载并校验", async () => {
@@ -225,5 +234,56 @@ describe("model-downloader", () => {
 		);
 		const path = await downloadModel(lookDir, model);
 		expect(await readFile(path, "utf8")).toBe("fake-model-content-0123456789");
+	});
+
+	it("响应体停滞（连接建立但无数据）超过阈值后回退下一源，不会永远卡住", async () => {
+		const model = makeModel();
+		const content = Buffer.from("fake-model-content-0123456789");
+		const officialUrl = `https://huggingface.co/${model.repository}/resolve/${model.revision}/${model.filename}`;
+		const mirrorUrl = `https://hf-mirror.com/${model.repository}/resolve/${model.revision}/${model.filename}`;
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: string | URL, init?: RequestInit) => {
+				const url = String(input);
+				if (url === officialUrl) {
+					// 只返回响应头，body 永不给数据：模拟黑洞网络（连接能建立、
+					// 但不传字节）。外部 abort（停滞看门狗触发）会 error 掉流，
+					// 与真实 undici fetch 行为一致。
+					return new Response(
+						new ReadableStream({
+							start(controller) {
+								init?.signal?.addEventListener("abort", () =>
+									controller.error(init.signal?.reason ?? new Error("aborted")),
+								);
+							},
+							pull() {
+								/* 不发数据 */
+							},
+						}),
+						{ status: 200, headers: { "content-length": String(content.length) } },
+					);
+				}
+				if (url === mirrorUrl) {
+					return new Response(new Uint8Array(content), {
+						status: 200,
+						headers: { "content-length": String(content.length) },
+					});
+				}
+				return new Response("not found", { status: 404 });
+			}),
+		);
+		const progress: number[] = [];
+		// 停滞超时注入 200ms（生产默认 30s）：看门狗应在 ~200ms 后中止官方源，
+		// 500ms 重试间隔后镜像源接管并完成下载。
+		const path = await downloadModel(lookDir, model, {
+			bodyStallTimeoutMs: 200,
+			onProgress: (p) => progress.push(p.downloaded),
+		});
+		expect(await readFile(path, "utf8")).toBe("fake-model-content-0123456789");
+		expect(progress.at(-1)).toBe(model.size);
+		const urls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
+		expect(urls).toHaveLength(2);
+		expect(urls[0]).toContain("huggingface.co");
+		expect(urls[1]).toContain("hf-mirror.com");
 	});
 });
