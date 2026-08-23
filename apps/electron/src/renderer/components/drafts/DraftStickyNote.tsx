@@ -81,6 +81,19 @@ export default function DraftStickyNote() {
 	const showDrafts = useAtomValue(showDraftsAtom);
 	const expandRequest = useAtomValue(stickyNoteExpandRequestAtom);
 	const [expanded, setExpanded] = useState<boolean>(() => loadExpanded());
+	// 展开偏好只在「显式操作」时持久化：展开（点击便利贴/顶部按钮/快捷键）
+	// 或收起（最小化按钮/Esc/快捷键）。点击空白处的自动收起是临时行为，不写入
+	// 偏好——否则展开过便利贴后随手点一下聊天区/侧栏，重启后就永远回到最小化。
+	// expandedRef 供一次性注册的快捷键处理器读取最新展开态。
+	const expandedRef = useRef(expanded);
+	const setExpandedExplicit = useCallback((next: boolean) => {
+		setExpanded(next);
+		try {
+			localStorage.setItem(STICKY_EXPANDED_KEY, next ? "1" : "0");
+		} catch {
+			// 忽略存储失败
+		}
+	}, []);
 	const [pinned, setPinned] = useState<boolean>(() => loadPinned());
 	const [drafts, setDrafts] = useState<Draft[]>([]);
 	const [input, setInput] = useState("");
@@ -101,23 +114,19 @@ export default function DraftStickyNote() {
 		if (!showDrafts) void refresh();
 	}, [showDrafts, refresh]);
 
-	// 顶部栏便利贴按钮：请求递增即展开
+	// 顶部栏便利贴按钮：请求递增即展开（显式操作 → 持久化偏好）
 	useEffect(() => {
-		if (expandRequest > 0) setExpanded(true);
-	}, [expandRequest]);
+		if (expandRequest > 0) setExpandedExplicit(true);
+	}, [expandRequest, setExpandedExplicit]);
 
 	// 展开后聚焦输入框
 	useEffect(() => {
 		if (expanded) inputRef.current?.focus();
 	}, [expanded]);
 
-	// 持久化用户的展开/收起选择（重启后恢复上次状态）
+	// 保持 expandedRef 与最新展开态同步（供一次性注册的快捷键处理器读取）
 	useEffect(() => {
-		try {
-			localStorage.setItem(STICKY_EXPANDED_KEY, expanded ? "1" : "0");
-		} catch {
-			// 忽略存储失败
-		}
+		expandedRef.current = expanded;
 	}, [expanded]);
 
 	// 持久化图钉选择
@@ -129,7 +138,9 @@ export default function DraftStickyNote() {
 		}
 	}, [pinned]);
 
-	// 点击空白处（便利贴外部）自动收起
+	// 点击空白处（便利贴外部）自动收起。注意：这是临时行为，直接 setExpanded
+	// 而不走 setExpandedExplicit——不覆盖持久化的展开偏好，避免"展开过→随手点
+	// 一下别处→重启后永远默认最小化"。
 	useEffect(() => {
 		if (!expanded) return;
 		const onPointerDown = (event: PointerEvent) => {
@@ -168,23 +179,23 @@ export default function DraftStickyNote() {
 		return () => window.removeEventListener("resize", clampAndPersist);
 	}, [expanded, hasPos]);
 
-	// ⌘⇧N / Ctrl+Shift+N 唤起，Esc 收起
+	// ⌘⇧N / Ctrl+Shift+N 唤起，Esc 收起（均为显式操作 → 持久化偏好）
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key === "Escape") {
-				setExpanded(false);
+				setExpandedExplicit(false);
 				return;
 			}
 			const isMac = navigator.platform.toUpperCase().includes("MAC");
 			const hotkey = isMac ? event.metaKey && event.shiftKey : event.ctrlKey && event.shiftKey;
 			if (hotkey && event.key.toLowerCase() === "n") {
 				event.preventDefault();
-				setExpanded((previous) => !previous);
+				setExpandedExplicit(!expandedRef.current);
 			}
 		};
 		window.addEventListener("keydown", onKeyDown, true);
 		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, []);
+	}, [setExpandedExplicit]);
 
 	const save = useCallback(async () => {
 		const text = input.trim();
@@ -244,11 +255,11 @@ export default function DraftStickyNote() {
 		// 点的是 button/textarea（未进入拖拽跟踪）→ 交给各自 onClick，不处理展开
 		if (!drag) return;
 		if (drag.moved) return;
-		// 未移动：视为点击 → 展开。必须在 pointerup 判定而非 onClick：
-		// 原生 click 只在按下/释放位移小于浏览器阈值（约 5px）时才派发，
-		// 手抖微动超过阈值后 click 不触发，onClick 里的展开逻辑会静默丢失。
-		setExpanded(true);
-	}, []);
+		// 未移动：视为点击 → 展开（显式操作 → 持久化偏好）。必须在 pointerup
+		// 判定而非 onClick：原生 click 只在按下/释放位移小于浏览器阈值（约 5px）
+		// 时才派发，手抖微动超过阈值后 click 不触发，onClick 里的展开逻辑会静默丢失。
+		setExpandedExplicit(true);
+	}, [setExpandedExplicit]);
 
 	// 指针被系统中断（窗口失焦/手势打断）时不残留 dragRef，避免下次交互状态错乱
 	const onPointerCancel = useCallback(() => {
@@ -282,7 +293,7 @@ export default function DraftStickyNote() {
 			onKeyDown={(event) => {
 				if (!expanded && (event.key === "Enter" || event.key === " ")) {
 					event.preventDefault();
-					setExpanded(true);
+					setExpandedExplicit(true);
 				}
 			}}
 		>
@@ -340,7 +351,7 @@ export default function DraftStickyNote() {
 									<button
 										type="button"
 										className="rounded p-1 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-										onClick={() => setExpanded(false)}
+										onClick={() => setExpandedExplicit(false)}
 										title={t("drafts.minimize")}
 										aria-label={t("drafts.minimize")}
 									>

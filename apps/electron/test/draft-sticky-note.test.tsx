@@ -159,6 +159,31 @@ describe("DraftStickyNote", () => {
 		expect(screen.getByRole("textbox", { name: /jot down/i })).toBeTruthy();
 	});
 
+	it("does not let an outside-click collapse overwrite the persisted expanded preference", async () => {
+		// 展开偏好为「展开」时：点击空白处本次收起，但持久化偏好保持展开——
+		// 否则展开过便利贴后随手点一下聊天区，重启后就永远默认最小化
+		localStorage.setItem("look-draft-sticky-expanded", "1");
+		renderNote();
+		await waitFor(() => expect(listDrafts).toHaveBeenCalled());
+		expect(screen.getByRole("textbox", { name: /jot down/i })).toBeTruthy();
+
+		fireEvent.pointerDown(document.body);
+		await waitFor(() => expect(screen.queryByRole("textbox", { name: /jot down/i })).toBeNull());
+		expect(localStorage.getItem("look-draft-sticky-expanded")).toBe("1");
+	});
+
+	it("persists an explicit Esc collapse as the new preference", async () => {
+		localStorage.setItem("look-draft-sticky-expanded", "1");
+		renderNote();
+		await waitFor(() => expect(listDrafts).toHaveBeenCalled());
+		expect(screen.getByRole("textbox", { name: /jot down/i })).toBeTruthy();
+
+		// Esc 是显式收起 → 覆盖持久化偏好
+		fireEvent.keyDown(window, { key: "Escape" });
+		await waitFor(() => expect(screen.queryByRole("textbox", { name: /jot down/i })).toBeNull());
+		expect(localStorage.getItem("look-draft-sticky-expanded")).toBe("0");
+	});
+
 	it("unpinned note disappears when minimized (back to the top bar button)", async () => {
 		// 未固定：展开 → 最小化 → 便利贴完全消失
 		localStorage.setItem("look-draft-sticky-pinned", "0");
