@@ -1,6 +1,7 @@
 {
   "welcome": {
     "title": "欢迎使用 Look",
+    "tagline": "所见即所思",
     "description": "选择项目文件夹以开始。所有对话将限定在该文件夹内。",
     "openProject": "打开项目"
   },

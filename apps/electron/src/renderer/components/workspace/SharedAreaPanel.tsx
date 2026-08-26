@@ -764,7 +764,7 @@ function FileCreationInput({
 function EmptySharedState({ onImport }: { onImport: () => void }) {
 	const { t } = useTranslation();
 	return (
-		<div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+		<div className="empty-hero flex flex-col items-center gap-2 px-3 py-8 text-center">
 			<UploadCloud className="size-5 text-muted-foreground" />
 			<p className="text-xs font-medium">{t("sharedArea.empty")}</p>
 			<p className="max-w-[200px] text-[10px] text-muted-foreground">{t("sharedArea.emptyHint")}</p>
@@ -878,8 +878,8 @@ function SharedAreaNode({
 			aria-expanded={isDirectory ? isExpanded : undefined}
 			aria-busy={isLoadingChildren || undefined}
 			style={{ paddingLeft: depth * INDENT_PX + 8 }}
-			className={`group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none ${
-				selected ? "bg-accent text-accent-foreground" : "text-foreground"
+			className={`tree-row group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs focus-visible:outline-none ${
+				selected ? "tree-row-selected" : "text-foreground"
 			}`}
 			onClick={handleSelect}
 			onKeyDown={handleKeyDown}
@@ -910,8 +910,16 @@ function SharedAreaNode({
 			) : (
 				<span className="size-4 shrink-0" />
 			)}
-			<FileIcon node={node} isExpanded={isExpanded} className="size-3.5 shrink-0" />
-			<span className="min-w-0 flex-1 truncate">{node.name}</span>
+			<FileIcon
+				node={node}
+				isExpanded={isExpanded}
+				className={`size-3.5 shrink-0 [&_svg]:fill-current transition-colors ${
+					selected
+						? "text-foreground/90"
+						: "text-muted-foreground/70 group-hover:text-foreground/90 group-focus-visible:text-foreground/90"
+				}`}
+			/>
+			<span className={`min-w-0 flex-1 truncate ${isDirectory ? "font-medium" : ""}`}>{node.name}</span>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button

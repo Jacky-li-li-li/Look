@@ -69,7 +69,7 @@ const SidebarInner = memo(function SidebarInner({
 
 			<ScrollArea
 				className="sidebar-scroll-area min-h-0 flex-1"
-				type="always"
+				hideScrollbar
 				aria-label={t("sidebar.projectsLabel", "Projects and sessions")}
 			>
 				<div className="space-y-1.5 px-2 py-2">

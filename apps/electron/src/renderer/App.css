@@ -1420,30 +1420,32 @@ body {
 		line-height: 1.35;
 	}
 
-	/* 文档路径芯片:类型图标 + 文件名为主,压缩目录为配角,hover 露出打开箭头 */
+	/* 文档路径芯片(极简引用式):常态几乎融入正文——彩色类型图标 + 文件名为主、
+	   压缩目录为配角,hover 才浮现交互感:极淡背景 + 文件名染主色。
+	   参考 Linear/Notion 的引用式设计,克制、无边框提亮。 */
 	.look-doc-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.38em;
+		gap: 0.35em;
 		max-width: 100%;
-		padding: 0.16em 0.5em 0.16em 0.34em;
-		margin: 0 0.08em;
-		border: 1px solid color-mix(in oklch, var(--foreground), transparent 88%);
-		border-radius: calc(var(--radius) * 0.75);
-		background: color-mix(in oklch, var(--muted), transparent 42%);
+		padding: 0.08em 0.28em;
+		margin: 0 -0.04em;
+		border: 1px solid transparent;
+		border-radius: calc(var(--radius) * 0.9);
+		background: transparent;
 		font: inherit;
-		line-height: 1.4;
+		line-height: 1.45;
 		text-align: left;
 		vertical-align: baseline;
 		cursor: pointer;
 		transition:
-			background-color 140ms ease,
-			border-color 140ms ease;
+			background-color 120ms ease,
+			border-color 120ms ease;
 	}
 
 	.look-doc-chip:hover {
-		background: color-mix(in oklch, var(--muted), transparent 8%);
-		border-color: color-mix(in oklch, var(--foreground), transparent 74%);
+		background: color-mix(in oklch, var(--muted), transparent 72%);
+		border-color: color-mix(in oklch, var(--foreground), transparent 93%);
 	}
 
 	.look-doc-chip:focus-visible {
@@ -1452,9 +1454,11 @@ body {
 	}
 
 	.look-doc-chip-icon {
-		width: 1.05em;
-		height: 1.05em;
+		width: 1.1em;
+		height: 1.1em;
 		flex-shrink: 0;
+		opacity: 0.9;
+		transition: opacity 120ms ease;
 	}
 
 	.look-doc-chip-icon svg {
@@ -1462,46 +1466,27 @@ body {
 		height: 100%;
 	}
 
+	.look-doc-chip:hover .look-doc-chip-icon {
+		opacity: 1;
+	}
+
 	.look-doc-chip-name {
 		font-weight: 500;
-		font-size: 0.92em;
+		font-size: 0.94em;
 		color: var(--foreground);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		max-width: 17em;
+		transition: color 120ms ease;
 	}
 
-	.look-doc-chip-dir {
-		font-family: var(--font-mono);
-		font-size: 0.76em;
-		color: var(--muted-foreground);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 15em;
-	}
-
-	.look-doc-chip-open {
-		width: 0.8em;
-		height: 0.8em;
-		flex-shrink: 0;
-		color: var(--muted-foreground);
-		opacity: 0;
-		transform: translate(-2px, 2px);
-		transition:
-			opacity 140ms ease,
-			transform 140ms ease;
-	}
-
-	.look-doc-chip:hover .look-doc-chip-open {
-		opacity: 1;
-		transform: translate(0, 0);
+	.look-doc-chip:hover .look-doc-chip-name {
+		color: color-mix(in oklch, var(--primary) 82%, var(--foreground));
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.look-doc-chip,
-		.look-doc-chip-open {
+		.look-doc-chip {
 			transition: none;
 		}
 	}
@@ -2129,6 +2114,8 @@ body {
 	}
 
 	.chat-composer {
+		/* 12px 圆角：与消息卡/现代桌面节奏对齐（原 rounded-lg 8px 被此处覆盖）。 */
+		border-radius: 12px;
 		border-color: var(--stroke-subtle);
 		background:
 			linear-gradient(180deg, var(--surface-sheen-strong), transparent 28%),
@@ -2140,10 +2127,21 @@ body {
 			0 12px 32px var(--material-shadow-soft);
 	}
 
+	/* 聚焦态：只加深阴影浮起，不加边框提亮/焦点光环（用户偏好）。 */
 	.chat-composer:focus-within {
 		box-shadow:
 			inset 0 1px 0 var(--surface-sheen-strong),
-			0 14px 36px var(--material-shadow);
+			0 16px 40px var(--material-shadow);
+	}
+
+	/* 有内容时输入区与工具栏之间出现 hairline 分隔，空态保持干净。 */
+	.chat-composer--has-content .chat-input-toolbar {
+		border-top: 1px solid var(--stroke-subtle);
+	}
+
+	/* 输入光标用主题色，输入框立刻“活”起来。 */
+	.chat-composer [contenteditable] {
+		caret-color: var(--primary);
 	}
 
 	.chat-composer--drag-active {
@@ -2226,17 +2224,6 @@ body {
 		border-radius: 999px;
 		background: var(--status-error);
 		pointer-events: none;
-	}
-
-	.sidebar-scroll-area [data-slot="scroll-area-scrollbar"] {
-		opacity: 0;
-		transition: opacity 140ms ease;
-	}
-
-	.sidebar-scroll-area [data-slot="scroll-area-scrollbar"][data-state="visible"],
-	.sidebar-scroll-area:hover [data-slot="scroll-area-scrollbar"],
-	.sidebar-scroll-area:focus-within [data-slot="scroll-area-scrollbar"] {
-		opacity: 1;
 	}
 
 	/* ============================================================
@@ -2667,12 +2654,43 @@ body {
 		box-shadow: 0 0 0 2px var(--focus-halo);
 	}
 
-	.session-ledger-row[data-active] {
-		border-color: color-mix(in oklch, var(--primary) 62%, var(--stroke-strong));
+	/* 选中底色走 ::after 覆盖层 + opacity 交叉淡化：background-image（渐变）
+	   本身不可过渡，直接换背景时取消/获得激活的那一帧会瞬跳（感知为闪烁）。
+	   z-index:-1 让覆盖层垫在文字之下。注意：负 z-index 伪元素绘制在行自身
+	   的 inset box-shadow 之上，覆盖层必须让出最左 2px 指示条带
+	   （inset: 0 0 0 2px），否则不透明底色会把 active/running/error/
+	   completed 左条整个盖住——仅在淡入期间半透可见（若隐若现）。 */
+	.session-ledger-row::after {
+		content: "";
+		position: absolute;
+		inset: 0 0 0 2px;
+		border-radius: inherit;
 		background: linear-gradient(180deg, var(--surface-sheen), transparent 70%), var(--surface-selection);
+		opacity: 0;
+		transition: opacity 130ms ease;
+		pointer-events: none;
+		z-index: -1;
+	}
+	/* 选中态：无四边主题色描边（用户偏好克制），只保留左侧状态条 + 顶部高光
+	   + 渐变底色；左条 80% 对比度保证选中可辨。
+	   transition 方向性：进入选中立即亮（缓出曲线跟手且收尾柔和），退出保持 130/180ms 淡出。 */
+	.session-ledger-row[data-active] {
+		transition:
+			background-color 90ms cubic-bezier(0.22, 1, 0.36, 1),
+			border-color 90ms cubic-bezier(0.22, 1, 0.36, 1),
+			box-shadow 100ms cubic-bezier(0.22, 1, 0.36, 1);
 		box-shadow:
-			inset 2px 0 0 color-mix(in oklch, var(--primary) 72%, transparent),
+			inset 2px 0 0 color-mix(in oklch, var(--primary) 80%, transparent),
 			inset 0 1px 0 var(--surface-sheen);
+	}
+	.session-ledger-row[data-active]::after {
+		opacity: 1;
+		/* 进入选中即点即亮（缓出曲线）；退出走基础规则 130ms 淡出。 */
+		transition: opacity 90ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	/* 旧行为中等特异性下 active 背景压过 hover；改覆盖层后需显式维持。 */
+	.session-ledger-row[data-active]:hover {
+		background: transparent;
 	}
 	.session-ledger-row[data-running][data-agent-status]:not([data-agent-status="idle"]):not(.subsession-tree-row) {
 		border-color: color-mix(in oklch, var(--status-running), transparent 62%);
@@ -3313,6 +3331,126 @@ html[data-platform="darwin"]:not([data-fullscreen="true"])
 	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
+}
+
+/* 右栏工具抽屉：玻璃材质 + 悬浮阴影。unlayered 双类名压过 Tailwind
+	 bg-background utility（项目惯例，参照 .glass-dialog.glass-dialog）。 */
+.right-panel-wrapper.right-panel-wrapper {
+	background: var(--glass-bg);
+	backdrop-filter: blur(14px) saturate(1.12);
+	-webkit-backdrop-filter: blur(14px) saturate(1.12);
+	box-shadow:
+		0 1px 2px var(--material-shadow-soft),
+		0 8px 24px var(--material-shadow-soft);
+}
+
+/* Changes 列表展开行：左侧 primary 指示条（Tailwind arbitrary shadow 对
+	 var() 组合解析不稳，改专用类；零布局影响的 inset 阴影） */
+.changes-row-expanded {
+	box-shadow: inset 2px 0 0 0 var(--primary);
+}
+
+/* 文件树行：悬停/聚焦用 surface 材质，选中用 selection 材质 + 左侧指示条 +
+	 顶部 sheen 高光（对齐 session-ledger-row 语言，替代 flat 灰/纯色块） */
+.tree-row {
+	transition:
+		background-color 130ms ease,
+		box-shadow 180ms ease;
+}
+
+.tree-row:hover,
+.tree-row:focus-visible {
+	background: var(--surface-hover);
+}
+
+.tree-row-selected {
+	box-shadow:
+		inset 2px 0 0 color-mix(in oklch, var(--primary) 80%, transparent),
+		inset 0 1px 0 var(--surface-sheen);
+}
+
+/* 选中行不叠 hover 背景（对齐 session-ledger-row[data-active] 语言：
+	 选中靠指示条 + 顶部微光区分，背景保持克制） */
+.tree-row-selected:hover,
+.tree-row-selected:focus-visible {
+	background: transparent;
+}
+
+/* ── Welcome / Empty state — 品牌时刻（衬线 display + 墨晕背景）──
+	 背景两层 radial-gradient：靛蓝微光 + 琥珀光斑，呼应登录页双色海报；
+	 display 字体栈为系统衬线（英文 Georgia / 中文宋体），零资源成本。 */
+.welcome-hero {
+	position: relative;
+	overflow: hidden;
+	background:
+		radial-gradient(120% 90% at 18% 12%, color-mix(in oklch, var(--theme-tint) 16%, transparent), transparent 55%),
+		radial-gradient(90% 70% at 82% 88%, color-mix(in oklch, var(--theme-tint) 10%, transparent), transparent 60%),
+		var(--background);
+}
+
+.welcome-hero::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(46rem 30rem at 24% 18%, oklch(0.62 0.1 252 / 0.16), transparent 62%);
+	pointer-events: none;
+}
+
+.welcome-hero::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(34rem 24rem at 76% 82%, oklch(0.72 0.11 70 / 0.13), transparent 60%);
+	pointer-events: none;
+	animation: welcome-breathe 7s ease-in-out infinite;
+}
+
+.tone-light .welcome-hero::before {
+	opacity: 0.65;
+}
+
+.tone-light .welcome-hero::after {
+	opacity: 0.6;
+}
+
+@keyframes welcome-breathe {
+	0%,
+	100% {
+		opacity: 0.72;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+/* 空状态：更克制的淡墨晕，不抢功能注意力 */
+.empty-hero {
+	position: relative;
+	overflow: hidden;
+	background:
+		radial-gradient(70% 60% at 50% 30%, color-mix(in oklch, var(--theme-tint) 9%, transparent), transparent 65%),
+		var(--background);
+}
+
+/* Display 排版 — 衬线家族（英文 Georgia、中文宋体回退） */
+.welcome-display {
+	font-family: Georgia, "Songti SC", "Noto Serif SC", "STSong", "SimSun", "Times New Roman", serif;
+	font-weight: 500;
+	letter-spacing: 0.01em;
+	line-height: 1.15;
+	color: var(--foreground);
+}
+
+.welcome-brand {
+	letter-spacing: 0.42em;
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.welcome-hero::after {
+		animation: none;
+	}
 }
 
 /* ============================================================

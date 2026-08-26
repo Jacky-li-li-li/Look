@@ -41,8 +41,10 @@ function SessionRowImpl({
 	const { t, i18n } = useTranslation();
 	const hasChildren = childrenList.length > 0;
 	const userCollapsed = collapsedSubSessions[agent.id] ?? false;
+	// childActive 不参与：选中是纯视图变化，不改变组的展开状态；激活子会话
+	// 时由 ProjectTree 的激活展示 effect 展开其所在组。
 	const hasAttentionChild = childrenList.some(
-		(child) => child.childRunning || child.childActive || child.childCompleted || child.childError,
+		(child) => child.childRunning || child.childCompleted || child.childError,
 	);
 	const isCollapsed = userCollapsed && !hasAttentionChild;
 	const activityAt = agent.lastActivityAt ?? agent.createdAt;
@@ -110,7 +112,9 @@ function SessionRowImpl({
 							</span>
 						)}
 						{statusLabel && (
-							<span className="block truncate font-mono text-[10px] leading-tight text-muted-foreground/50">
+							<span
+								className={`block truncate font-mono text-[10px] leading-tight ${isActive ? "text-muted-foreground/75" : "text-muted-foreground/50"}`}
+							>
 								{statusLabel}
 							</span>
 						)}

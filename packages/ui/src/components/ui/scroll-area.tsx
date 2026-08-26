@@ -4,7 +4,17 @@ import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
 import type * as React from "react";
 import { cn } from "../../lib/utils.js";
 
-function ScrollArea({ className, children, ...props }: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+function ScrollArea({
+	className,
+	children,
+	hideScrollbar = false,
+	...props
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root> & {
+	/** 隐藏滚动条但保留滚动。注意：不能不渲染 Scrollbar——Radix 仅在
+	 *  Scrollbar 挂载时才给 viewport 设置 overflow: scroll，不渲染会导致
+	 *  overflow: hidden（完全无法滚动）。所以只能渲染后视觉隐藏。 */
+	hideScrollbar?: boolean;
+}) {
 	return (
 		<ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn("relative", className)} {...props}>
 			<ScrollAreaPrimitive.Viewport
@@ -13,7 +23,7 @@ function ScrollArea({ className, children, ...props }: React.ComponentProps<type
 			>
 				{children}
 			</ScrollAreaPrimitive.Viewport>
-			<ScrollBar />
+			<ScrollBar className={hideScrollbar ? "hidden" : undefined} />
 			<ScrollAreaPrimitive.Corner />
 		</ScrollAreaPrimitive.Root>
 	);

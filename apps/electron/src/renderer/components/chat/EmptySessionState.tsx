@@ -16,12 +16,12 @@ export default function EmptySessionState({ handleCreateClick }: EmptySessionSta
 	const { t } = useTranslation();
 	const activeProject = useAtomValue(activeProjectAtom);
 	return (
-		<div className="flex flex-1 items-center justify-center p-10 text-center">
+		<div className="empty-hero flex flex-1 items-center justify-center p-10 text-center">
 			<div className="flex max-w-sm flex-col items-center gap-3">
 				<div className="animate-draw-in flex size-12 items-center justify-center rounded-xl border border-hairline bg-accent/20">
 					<FolderOpen className="size-5 text-muted-foreground" />
 				</div>
-				<p className="animate-draw-in text-sm font-medium" style={{ animationDelay: "80ms" }}>
+				<p className="welcome-display animate-draw-in text-lg" style={{ animationDelay: "80ms" }}>
 					{activeProject?.name ?? t("workspace.noSessionSelected", "No session selected")}
 				</p>
 				<p className="animate-draw-in text-xs text-muted-foreground" style={{ animationDelay: "160ms" }}>

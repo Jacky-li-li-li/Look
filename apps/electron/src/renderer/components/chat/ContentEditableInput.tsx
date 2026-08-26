@@ -399,7 +399,7 @@ export const ContentEditableInput = function ContentEditableInput({
 			{showPlaceholder && placeholder ? (
 				<div
 					aria-hidden
-					className="pointer-events-none absolute top-0 left-0 select-none px-3 py-2.5 text-[13px] leading-relaxed text-muted-foreground/50"
+					className="pointer-events-none absolute top-0 left-0 select-none px-3 py-2.5 text-[13px] leading-relaxed text-muted-foreground/80"
 				>
 					{placeholder}
 				</div>
@@ -433,7 +433,7 @@ export const ContentEditableInput = function ContentEditableInput({
 					.filter(Boolean)
 					.join(" ")}
 				style={{
-					minHeight: `${minRows * 1.625}rem`,
+					minHeight: `${minRows * 1.625 * 1.25}rem`,
 					maxHeight: "16rem",
 				}}
 			/>

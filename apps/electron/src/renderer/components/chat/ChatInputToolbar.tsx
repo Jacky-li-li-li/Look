@@ -71,7 +71,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 	const { t } = useTranslation();
 
 	return (
-		<div className="flex min-w-0 items-center gap-1.5 px-2 py-2">
+		<div className="chat-input-toolbar flex min-w-0 items-center gap-1.5 px-2 py-2">
 			<div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 				<ModelSelector
 					agentId={agentId}
@@ -190,7 +190,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 							onClick={() => void onSend()}
 							disabled={!hasContent}
 							aria-label={t("chat.send")}
-							className="shrink-0"
+							className={`shrink-0 ${hasContent ? "shadow-sm hover:shadow-md" : ""}`}
 						>
 							<Send data-icon="inline-start" className="size-3.5" />
 						</Button>
@@ -202,7 +202,7 @@ const ChatInputToolbar = memo(function ChatInputToolbar({
 						onClick={() => void onSend()}
 						disabled={!hasContent}
 						aria-label={t("chat.send")}
-						className="shrink-0"
+						className={`shrink-0 ${hasContent ? "shadow-sm hover:shadow-md" : ""}`}
 					>
 						<Send data-icon="inline-start" className="size-3.5" />
 					</Button>

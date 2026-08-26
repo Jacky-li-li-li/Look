@@ -26,7 +26,13 @@ import { navigateMainView } from "../../store/viewNavigation";
 import ProjectHeader from "./ProjectHeader";
 import SessionRow from "./SessionRow";
 import type { ChildSessionInfo, ProjectTreeProps } from "./types";
-import { getSessionActivityAt, SESSION_COLLAPSE_THRESHOLD, sortSessionsByActivity } from "./utils";
+import {
+	getCollapsedVisibleSessions,
+	getPrioritySessionIds,
+	getSessionActivityAt,
+	SESSION_COLLAPSE_THRESHOLD,
+	sortSessionsByActivity,
+} from "./utils";
 
 /** 稳定空数组引用，避免每次渲染创建新引用导致 memo 失效 */
 const EMPTY_CHILDREN: ChildSessionInfo[] = [];
@@ -287,21 +293,48 @@ export default function ProjectTree({
 		});
 	}, [activeAgentId, activeProjectId, agents, projects, runningAgents, setOpenProjectIds]);
 
-	// Keep scrolling synchronous: the row FLIP below is the single animated timeline.
-	// A second browser smooth-scroll animation would make a newly inserted row
-	// move on a different clock and can look like a two-stage transition.
-	useEffect(() => {
+	// ── 激活展示 ──
+	// 不变量：选中会话是纯视图变化，不改变任何行的成员/顺序——优先槽位不
+	// 跟随选中转移，否则切换时上一行瞬删、被顶出的行原地淡入（闪烁）。
+	// 「当前会话始终可见」改由粘性展开保证：激活的行会被折叠截断隐藏（或
+	// 其子会话组处于折叠）时，展开对应载体。与旧行为等价：含激活行的折叠
+	// 载体同样收不起来；区别是切换本身不再引起任何成员变化。
+	// useLayoutEffect：展开必须在绘制前生效，避免先渲染折叠态再展开的中间帧。
+	useLayoutEffect(() => {
 		if (!activeAgentId) return;
-		const frame = requestAnimationFrame(() => {
-			const element = document.querySelector<HTMLElement>(`[data-agent-id="${activeAgentId}"]`);
-			const viewport = element?.closest<HTMLElement>("[data-radix-scroll-area-viewport]");
-			if (element && viewport) {
-				element.scrollIntoView({ block: "nearest", inline: "nearest" });
-				viewport.scrollLeft = 0;
-			}
-		});
-		return () => cancelAnimationFrame(frame);
-	}, [activeAgentId]);
+		const agent = agents.find((a) => a.id === activeAgentId);
+		if (!agent?.projectId) return;
+		const parentId = agent.parentSessionId;
+		if (parentId && collapsedSubSessions[parentId]) {
+			setCollapsedSubSessions((previous) => ({ ...previous, [parentId]: false }));
+		}
+		const projectSessions = sessionsByProject.get(agent.projectId) ?? [];
+		const sortedTopLevel = [...projectSessions.filter((s) => !s.parentSessionId)].sort(
+			(a, b) => b.createdAt - a.createdAt,
+		);
+		const prioritySessionIds = getPrioritySessionIds(
+			projectSessions,
+			runningAgents,
+			recentlyCompleted,
+			errorAgentIds,
+		);
+		const targetId = parentId ?? agent.id;
+		const visibleInCollapsed = getCollapsedVisibleSessions(sortedTopLevel, prioritySessionIds);
+		if (!visibleInCollapsed.some((s) => s.id === targetId) && !expandedProjectIds.has(agent.projectId)) {
+			setExpandedProjectIds((previous) => new Set(previous).add(agent.projectId));
+		}
+	}, [
+		activeAgentId,
+		agents,
+		collapsedSubSessions,
+		errorAgentIds,
+		expandedProjectIds,
+		recentlyCompleted,
+		runningAgents,
+		sessionsByProject,
+	]);
+
+	// 滚动定位 effect 移至 FLIP effect 之后（需要读 sessionAnimationsRef 判断本次是否有结构动画）。
 
 	// Edit handlers
 	const beginEdit = useCallback((kind: "project" | "session", id: string, value: string) => {
@@ -482,6 +515,26 @@ export default function ProjectTree({
 		sortedProjects,
 	]);
 
+	// Keep scrolling synchronous: the row FLIP below is the single animated timeline.
+	// A second browser smooth-scroll animation would make a newly inserted row
+	// move on a different clock and can look like a two-stage transition.
+	// 所以：结构变化（FLIP 动画在跑）时瞬时定位；纯选中切换（无 FLIP）时平滑滚动，
+	// 点击视口外的会话不再“啪”地跳过去。
+	// 位置在 FLIP effect 之后：需要读取 sessionAnimationsRef 判断本次是否有结构动画。
+	useEffect(() => {
+		if (!activeAgentId) return;
+		const frame = requestAnimationFrame(() => {
+			const element = document.querySelector<HTMLElement>(`[data-agent-id="${activeAgentId}"]`);
+			const viewport = element?.closest<HTMLElement>("[data-radix-scroll-area-viewport]");
+			if (element && viewport) {
+				const behavior = sessionAnimationsRef.current.size > 0 ? "auto" : "smooth";
+				element.scrollIntoView({ behavior, block: "nearest", inline: "nearest" });
+				viewport.scrollLeft = 0;
+			}
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [activeAgentId]);
+
 	// Do not leave compositor animations attached to detached sidebar rows.
 	useEffect(() => () => cancelSessionRowAnimations(sessionAnimationsRef.current), []);
 
@@ -617,34 +670,17 @@ const ProjectTreeItem = memo(function ProjectTreeItem({
 	const { t } = useTranslation();
 	const topLevelSessions = sessions.filter((s) => !s.parentSessionId);
 	const isExpanded = expandedProjectIds.has(project.id);
-	const recentlyCompletedIds = new Set(recentlyCompleted);
-	const prioritySessionIds = new Set<string>();
-	for (const session of sessions) {
-		const needsAttention =
-			session.id === activeAgentId ||
-			runningAgents.has(session.id) ||
-			recentlyCompletedIds.has(session.id) ||
-			errorAgentIds.has(session.id);
-		if (needsAttention) prioritySessionIds.add(session.parentSessionId ?? session.id);
-	}
+	// 优先 = 需要注意的生命周期状态（运行中/刚完成/错误）及其父会话。
+	// 刻意不含「当前选中」：选中是纯视图变化，不得改变行的成员关系——
+	// 否则切换会话时优先槽位转移，上一行瞬删、被顶出的行原地淡入（闪烁）。
+	// 激活行的可见性由 ProjectTree 的激活展示 effect 用粘性展开保证。
+	const prioritySessionIds = getPrioritySessionIds(sessions, runningAgents, recentlyCompleted, errorAgentIds);
 	const sortedTopLevel = [...topLevelSessions].sort((a, b) => b.createdAt - a.createdAt);
-	const prioritySessions = sortedTopLevel.filter((session) => prioritySessionIds.has(session.id));
-	// 折叠时保持 createdAt 顺序：priority 会话（当前/运行中/刚完成/错误）只保证“不被隐藏”，
-	// 不改变相对位置——否则点击会话使其成为 active 后会跳到列表顶部（2026-08-09 修复）。
+	// 折叠时保持 createdAt 顺序：优先会话只保证“不被隐藏”，不改变相对位置
+	// ——否则点击会话使其成为 active 后会跳到列表顶部（2026-08-09 修复）。
 	const visibleSessions = isExpanded
 		? sortedTopLevel
-		: (() => {
-				const regularBudget = Math.max(0, SESSION_COLLAPSE_THRESHOLD - prioritySessions.length);
-				let regularShown = 0;
-				return sortedTopLevel.filter((session) => {
-					if (prioritySessionIds.has(session.id)) return true;
-					if (regularShown < regularBudget) {
-						regularShown += 1;
-						return true;
-					}
-					return false;
-				});
-			})();
+		: getCollapsedVisibleSessions(sortedTopLevel, prioritySessionIds);
 	const hiddenCount = Math.max(0, topLevelSessions.length - visibleSessions.length);
 	const hasOverflow = topLevelSessions.length > SESSION_COLLAPSE_THRESHOLD;
 	const shouldCollapse = !isExpanded && hiddenCount > 0;

@@ -25,6 +25,45 @@ export function sortSessionsByActivity<T extends Pick<AgentInfo, "createdAt" | "
 	});
 }
 
+/**
+ * 优先（需要注意）会话集合：运行中 / 刚完成 / 错误的会话及其父会话。
+ * 刻意不含「当前选中」：选中是纯视图变化，不得改变折叠列表的行成员，
+ * 否则切换会话时优先槽位转移，上一行瞬删、被顶出的行原地淡入（闪烁）。
+ * 激活行的可见性由 ProjectTree 的激活展示 effect 用粘性展开保证。
+ */
+export function getPrioritySessionIds(
+	sessions: readonly Pick<AgentInfo, "id" | "parentSessionId">[],
+	runningAgents: ReadonlySet<string>,
+	recentlyCompleted: readonly string[],
+	errorAgentIds: ReadonlySet<string>,
+): Set<string> {
+	const ids = new Set<string>();
+	for (const session of sessions) {
+		const needsAttention =
+			runningAgents.has(session.id) || recentlyCompleted.includes(session.id) || errorAgentIds.has(session.id);
+		if (needsAttention) ids.add(session.parentSessionId ?? session.id);
+	}
+	return ids;
+}
+
+/** 折叠态可见窗口：优先会话全部保留，其余按传入顺序（createdAt 降序）补足至阈值。 */
+export function getCollapsedVisibleSessions<T extends { id: string; createdAt: number }>(
+	sortedTopLevel: readonly T[],
+	prioritySessionIds: ReadonlySet<string>,
+): T[] {
+	const priorityCount = sortedTopLevel.filter((session) => prioritySessionIds.has(session.id)).length;
+	const regularBudget = Math.max(0, SESSION_COLLAPSE_THRESHOLD - priorityCount);
+	let regularShown = 0;
+	return sortedTopLevel.filter((session) => {
+		if (prioritySessionIds.has(session.id)) return true;
+		if (regularShown < regularBudget) {
+			regularShown += 1;
+			return true;
+		}
+		return false;
+	});
+}
+
 /** Keep provider prefixes out of the narrow secondary line while preserving the full value for a tooltip. */
 export function compactModelName(model: string): string {
 	const value = model.trim();

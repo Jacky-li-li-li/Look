@@ -513,8 +513,9 @@ const ChatInput = function ChatInput({
 	return (
 		<div
 			className={[
-				"chat-composer relative mx-5 mb-2.5 rounded-lg border transition-all",
+				"chat-composer relative mx-5 mb-2.5 rounded-[12px] border transition-all",
 				dragActive ? "chat-composer--drag-active" : "",
+				hasContent ? "chat-composer--has-content" : "",
 			].join(" ")}
 		>
 			{/* 「附加文件」按钮的文件选择器（hidden 原生 input，点击由工具栏按钮触发）。 */}

@@ -24,7 +24,16 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import type { FileTreeNode } from "@shared/types";
 import { useAtom, useSetAtom, useStore } from "jotai";
-import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, MoreHorizontal, RefreshCw } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronRight,
+	ChevronsDownUp,
+	Eye,
+	EyeOff,
+	FolderOpen,
+	MoreHorizontal,
+	RefreshCw,
+} from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
@@ -344,7 +353,10 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 						</Button>
 					</div>
 				) : rootChildren.length === 0 ? (
-					<div className="px-3 py-8 text-center text-xs text-muted-foreground">{t("workspaceTree.empty")}</div>
+					<div className="empty-hero flex flex-col items-center justify-center gap-2 px-3 py-8 text-center">
+						<FolderOpen className="size-5 text-muted-foreground" />
+						<p className="text-xs text-muted-foreground">{t("workspaceTree.empty")}</p>
+					</div>
 				) : (
 					<Virtuoso
 						data={flatRows}
@@ -524,7 +536,7 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 			draggable
 			onDragStart={handleDragStart}
 			style={{ paddingLeft: depth * INDENT_PX + 8 }}
-			className="group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+			className="tree-row group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs focus-visible:outline-none"
 			onClick={() => {
 				if (isDir) handleClickToggle();
 				else handleViewFile();
@@ -546,8 +558,12 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 			) : (
 				<span className="size-4 shrink-0" />
 			)}
-			<FileIcon node={node} isExpanded={isExpanded} className="size-3.5 shrink-0" />
-			<span className="min-w-0 flex-1 truncate">{node.name}</span>
+			<FileIcon
+				node={node}
+				isExpanded={isExpanded}
+				className="size-3.5 shrink-0 text-muted-foreground/70 transition-colors [&_svg]:fill-current group-hover:text-foreground/90 group-focus-visible:text-foreground/90"
+			/>
+			<span className={`min-w-0 flex-1 truncate ${isDir ? "font-medium" : ""}`}>{node.name}</span>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button

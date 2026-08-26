@@ -7,7 +7,6 @@
 // ============================================================
 
 import type { FileTreeNode } from "@shared/types";
-import { ArrowUpRight } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { FileIcon } from "../workspace/FileIcon";
@@ -76,8 +75,6 @@ export function DocPathChip({ rawPath, onOpen, atMention = false }: DocPathChipP
 		>
 			<FileIcon node={iconNode} className="look-doc-chip-icon" />
 			<span className="look-doc-chip-name">{primaryLabel}</span>
-			{!atMention && shortDir ? <span className="look-doc-chip-dir">{shortDir}</span> : null}
-			<ArrowUpRight className="look-doc-chip-open" aria-hidden="true" />
 		</button>
 	);
 }

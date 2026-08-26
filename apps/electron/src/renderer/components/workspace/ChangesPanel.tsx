@@ -100,7 +100,9 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 						</Button>
 					</div>
 				) : files.length === 0 ? (
-					<div className="px-3 py-2 text-[11px] text-muted-foreground">{t("changes.empty", "暂无文件变更")}</div>
+					<div className="empty-hero flex flex-col items-center gap-2 px-3 py-8 text-center">
+						<p className="text-[11px] text-muted-foreground">{t("changes.empty", "暂无文件变更")}</p>
+					</div>
 				) : (
 					files.map((file) => {
 						const Icon = STATUS_ICON[file.status];
@@ -116,7 +118,7 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 									onClick={() => setExpandedPath(isOpen ? null : file.path)}
 									aria-expanded={isOpen}
 									className={`flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition-colors ${
-										isOpen ? "bg-foreground/[0.07]" : "hover:bg-foreground/[0.04]"
+										isOpen ? "changes-row-expanded bg-foreground/[0.07]" : "hover:bg-foreground/[0.06]"
 									}`}
 								>
 									{isOpen ? (

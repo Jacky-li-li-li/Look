@@ -1,6 +1,7 @@
 {
   "welcome": {
     "title": "Welcome to Look",
+    "tagline": "What you see is what you think",
     "description": "Select a project folder to get started. All conversations will be scoped to this folder.",
     "openProject": "Open Project"
   },

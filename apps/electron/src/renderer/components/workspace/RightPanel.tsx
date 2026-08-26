@@ -6,7 +6,7 @@ import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { PanelRightClose } from "lucide-react";
+import { FolderTree, GitCommitHorizontal, PanelRightClose, Share2 } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -203,42 +203,45 @@ export function RightPanel() {
 						type="button"
 						role="tab"
 						aria-selected={tab === "workspace"}
-						className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+						className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
 							tab === "workspace"
 								? "bg-foreground/10 text-foreground"
 								: "text-muted-foreground hover:bg-foreground/5"
 						}`}
 						onClick={() => setTab("workspace")}
 					>
+						<FolderTree className="size-3.5 shrink-0" aria-hidden />
 						{t("rightPanel.workspace")}
 					</button>
 					<button
 						type="button"
 						role="tab"
 						aria-selected={tab === "shared"}
-						className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+						className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
 							tab === "shared"
 								? "bg-foreground/10 text-foreground"
 								: "text-muted-foreground hover:bg-foreground/5"
 						}`}
 						onClick={() => setTab("shared")}
 					>
+						<Share2 className="size-3.5 shrink-0" aria-hidden />
 						{t("rightPanel.shared")}
 					</button>
 					<button
 						type="button"
 						role="tab"
 						aria-selected={tab === "changes"}
-						className={`flex-1 rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+						className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
 							tab === "changes"
 								? "bg-foreground/10 text-foreground"
 								: "text-muted-foreground hover:bg-foreground/5"
 						}`}
 						onClick={() => setTab("changes")}
 					>
+						<GitCommitHorizontal className="size-3.5 shrink-0" aria-hidden />
 						{t("rightPanel.changes")}
 						{dirtyCount > 0 && (
-							<span className="ml-1 rounded bg-amber-500/15 px-1 font-mono text-[9px] text-amber-500">
+							<span className="ml-0.5 rounded-full bg-amber-500/15 px-1.5 py-px font-mono text-[9px] leading-none text-amber-500">
 								{dirtyCount}
 							</span>
 						)}
@@ -249,7 +252,7 @@ export function RightPanel() {
 						<Button
 							size="icon-sm"
 							variant="ghost"
-							className="shrink-0 rounded-md border border-hairline"
+							className="shrink-0 rounded-md"
 							onClick={() => setCollapsed(true)}
 							aria-label={t("rightPanel.collapse")}
 						>
@@ -259,28 +262,32 @@ export function RightPanel() {
 					<TooltipContent side="bottom">{t("rightPanel.collapse")}</TooltipContent>
 				</Tooltip>
 			</header>
-			{tab === "workspace" && activeProject && (
-				<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
-			)}
-			{tab === "shared" && activeProject && (
-				<SharedAreaPanel
-					projectId={activeProject.id}
-					files={sharedFiles}
-					isLoading={isLoading}
-					error={sharedFilesError}
-					onAfterChange={async () => {
-						const cancelled = { current: false };
-						await refreshSharedFiles(activeProject!.id, cancelled, { silent: true });
-						// 失败时向上抛出让操作方（创建/删除/导入等）收到错误并 toast（silent 已抑制本函数自身的 toast）。
-						if (appStore.get(sharedFilesErrorAtomFamily(activeProject!.id))) {
-							throw new Error(
-								appStore.get(sharedFilesErrorAtomFamily(activeProject!.id)) ?? t("rightPanel.loadFailed"),
-							);
-						}
-					}}
-				/>
-			)}
-			{tab === "changes" && activeProject && <ChangesPanel projectId={activeProject.id} cwd={activeProject.cwd} />}
+			<div key={tab} className="animate-draw-in flex min-h-0 flex-1 flex-col">
+				{tab === "workspace" && activeProject && (
+					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
+				)}
+				{tab === "shared" && activeProject && (
+					<SharedAreaPanel
+						projectId={activeProject.id}
+						files={sharedFiles}
+						isLoading={isLoading}
+						error={sharedFilesError}
+						onAfterChange={async () => {
+							const cancelled = { current: false };
+							await refreshSharedFiles(activeProject!.id, cancelled, { silent: true });
+							// 失败时向上抛出让操作方（创建/删除/导入等）收到错误并 toast（silent 已抑制本函数自身的 toast）。
+							if (appStore.get(sharedFilesErrorAtomFamily(activeProject!.id))) {
+								throw new Error(
+									appStore.get(sharedFilesErrorAtomFamily(activeProject!.id)) ?? t("rightPanel.loadFailed"),
+								);
+							}
+						}}
+					/>
+				)}
+				{tab === "changes" && activeProject && (
+					<ChangesPanel projectId={activeProject.id} cwd={activeProject.cwd} />
+				)}
+			</div>
 		</aside>
 	);
 }
