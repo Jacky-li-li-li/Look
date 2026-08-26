@@ -20,6 +20,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.6.0",
+		date: "2026-08-27",
+		items: [
+			{
+				zh: "界面全面焕新：欢迎页与空状态加入「所见即所思」衬线品牌标语与水墨晕染背景；右侧面板升级为玻璃材质抽屉，标签页带图标与胶囊徽标，变更列表与文件树交互更精致（悬停材质、选中指示条、图标随状态点亮）",
+				en: "A refreshed UI: the welcome and empty states now feature the serif “What you see is what you think” brand tagline over an ink-wash gradient; the right panel is a frosted-glass drawer with icon tabs and pill badges; the changes list and file trees got finer interactions (surface hover, selection indicator, state-aware icon tinting)",
+				ja: "UI を一新：ウェルカム・空状態にセリフ体のブランドタグラインと水墨グラデーション背景を追加。右パネルはガラス素材のドロワーに、タブにはアイコンとピル型バッジを採用。変更リストとファイルツリーのインタラクションも洗練されました（ホバー素材、選択インジケーター、状態に応じたアイコンのハイライト）",
+			},
+			{
+				zh: "修复切换会话时上一个会话短暂闪烁的问题：会话选中现在保持纯视图状态，不再参与侧栏排序计算，折叠项目内切换会话更稳定",
+				en: "Fixed a flicker of the previously selected session when switching sessions: selection is now a pure view state that no longer affects sidebar ordering, so switching inside collapsed projects is stable",
+				ja: "セッション切り替え時に前のセッションが一瞬ちらつく問題を修正：選択状態を純粋なビュー状態とし、サイドバーの並び順に影響しないようにしたため、折りたたみプロジェクト内での切り替えが安定しました",
+			},
+		],
+	},
+	{
 		version: "2.5.2",
 		date: "2026-08-23",
 		items: [
