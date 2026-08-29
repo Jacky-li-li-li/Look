@@ -5,7 +5,7 @@
 import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { type UsageAtomData, usageDataAtom } from "../../store/atoms";
+import { usageDataAtom } from "../../store/atoms";
 import UsageStackedChart from "./UsageStackedChart";
 
 const WEEK_DAYS = 7;
@@ -90,10 +90,9 @@ export default function UsageHeatmap() {
 	useEffect(() => {
 		window.look
 			.getUsage()
-			.then((result: unknown) => {
-				const r = result as { success: boolean; usage?: UsageAtomData; error?: string } | null | undefined;
-				if (r?.success && r.usage) {
-					setUsageData(r.usage);
+			.then((result) => {
+				if (result.success) {
+					setUsageData(result.usage);
 				}
 			})
 			.catch((err: unknown) => {

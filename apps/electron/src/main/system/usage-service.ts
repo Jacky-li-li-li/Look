@@ -9,49 +9,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getWorkspaceSessionsDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
-import type { ProjectInfo } from "@look/shared/types";
+import type { AggregatedUsage, ModelCostEntry, ProjectInfo, SdkUsage, UsageData } from "@look/shared/types";
 
 // ── SDK-aligned data model ──
 //
-// Mirrors the pi SDK's Usage type from session JSONL assistant messages.
-// The SDK persists usage.cost.{input,output,cacheRead,cacheWrite,total}
-// and usage.{input,output,cacheRead,cacheWrite,reasoning,totalTokens}.
-
-export interface SdkUsageCost {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	total: number;
-}
-
-export interface SdkUsage {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	reasoning?: number;
-	totalTokens: number;
-	cost: SdkUsageCost;
-}
-
-/** Aggregated daily usage: sums of raw SdkUsage objects per model. */
-export interface AggregatedUsage extends SdkUsage {
-	turns: number;
-}
-
-export interface ModelCostEntry {
-	turns: number;
-	cost: number;
-}
-
-export interface UsageData {
-	usage: Record<string, number>;
-	modelCost: Record<string, Record<string, ModelCostEntry>>;
-	/** Per-day per-model aggregated SDK Usage objects */
-	modelUsage: Record<string, Record<string, AggregatedUsage>>;
-	years: number[];
-}
+// 类型定义收敛在 shared `types/dto/usage.ts`（与 pi SDK 的 Usage 结构对齐，
+// SDK 持久化 usage.cost.{input,output,cacheRead,cacheWrite,total}
+// 及 usage.{input,output,cacheRead,cacheWrite,reasoning,totalTokens}）。
 
 // ── Internal cache ──
 

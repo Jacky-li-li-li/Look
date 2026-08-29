@@ -64,10 +64,9 @@ const ALL_ROUTERS: IpcRouter[] = [
 ];
 
 /**
- * Fire-and-forget event-channel types handled directly in handlers.ts
- * via `ipcMain.on("look:event", ...)` rather than the invoke dispatcher.
+ * Renderer→Main 只有单一 invoke 通道（fire-and-forget look:event 已移除），
+ * 所有事件类型都必须注册 invoke handler。
  */
-const EVENT_CHANNEL_TYPES = new Set<string>(["app:ready", "window:traffic-light-center"]);
 
 /**
  * Compile-time-checked exhaustive list of the RendererToMainEvent union.
@@ -84,19 +83,16 @@ const EXHAUSTIVE = {
 	"agent:switch-model": true,
 	"agent:update-thinking": true,
 	"model:list": true,
-	"model:providers": true,
 	"agents:list": true,
 	"scheduled-task:list": true,
 	"scheduled-task:create": true,
 	"scheduled-task:update": true,
 	"scheduled-task:start": true,
 	"scheduled-task:pause": true,
-	"scheduled-task:resume": true,
 	"scheduled-task:delete": true,
 	"scheduled-task:run-now": true,
 	"scheduled-task:test": true,
 	"scheduled-task:logs": true,
-	"scheduled-task:validate-cron": true,
 	"draft:list": true,
 	"draft:create": true,
 	"draft:update": true,
@@ -105,7 +101,6 @@ const EXHAUSTIVE = {
 	"settings:get-api-key": true,
 	"settings:set-api-key": true,
 	"settings:test-api-key": true,
-	"settings:test-env-key": true,
 	"login:prompt-respond": true,
 	"login:prompt-cancel": true,
 	"auth:open-oauth-url": true,
@@ -123,7 +118,6 @@ const EXHAUSTIVE = {
 	"agent:rename": true,
 	"agent:abort": true,
 	"settings:general:set": true,
-	"settings:general:reset": true,
 	"skills:list": true,
 	"skills:import-paths": true,
 	"skills:detect-common": true,
@@ -131,25 +125,21 @@ const EXHAUSTIVE = {
 	"dialog:open-files": true,
 	"shell:reveal-in-finder": true,
 	"shell:open-project-folder": true,
-	"app:ready": true,
-	"window:traffic-light-center": true,
+	"window:set-traffic-light-center": true,
 	"project:list": true,
 	"project:create": true,
 	"project:switch": true,
 	"project:rename": true,
 	"project:delete": true,
 	"project:confirm-delete-response": true,
-	"project:get-active": true,
 	"project:git-info": true,
 	"project:git-diff": true,
 	"project:git-file-head": true,
 	"git:file-head": true,
 	"agent:navigate-tree": true,
 	"agent:create-fork": true,
-	"agent:set-entry-label": true,
 	"user-profile:get": true,
 	"user-profile:update": true,
-	"user-profile:reset": true,
 	"user-profile:logout": true,
 	"usage:get": true,
 	"shared:list": true,
@@ -163,7 +153,6 @@ const EXHAUSTIVE = {
 	"shared:export": true,
 	"shared:write-content": true,
 	"workspace:list-children": true,
-	"workspace:stat": true,
 	"workspace:watch": true,
 	"workspace:unwatch": true,
 	"file:read": true,
@@ -184,15 +173,12 @@ const EXHAUSTIVE = {
 	"permission:respond": true,
 	"plan:question-respond": true,
 	"plan:approval-respond": true,
-	"agent:list-subagents": true,
-	"agent:get-parent-session": true,
 	"agent:set-subagent-enabled": true,
 	"agent:review-changes": true,
 	"agent-definitions:list": true,
 	"agent-definitions:create": true,
 	"agent-definitions:update": true,
 	"agent-definitions:delete": true,
-	"agent-definitions:install": true,
 	"agent-definitions:set-enabled": true,
 	"skills:set-enabled": true,
 	"im:get-channels": true,
@@ -202,19 +188,15 @@ const EXHAUSTIVE = {
 	"im:disconnect-channel": true,
 	"im:remove-channel": true,
 	"im:reconnect-channel": true,
-	"im:send-test-message": true,
 	"im:test-connection": true,
 	"im:test-connection-direct": true,
 	"im:update-channel": true,
 	"im:get-bindings": true,
-	"im:remove-binding": true,
-	"im:get-bridge-status": true,
 	"settings:prompts:list": true,
 	"settings:prompts:create": true,
 	"settings:prompts:update": true,
 	"settings:prompts:delete": true,
 	"settings:prompts:set-active": true,
-	"settings:project-prompts:list": true,
 	"settings:project-prompts:create": true,
 	"settings:project-prompts:update": true,
 	"settings:project-prompts:delete": true,
@@ -243,7 +225,7 @@ describe("IPC contract exhaustiveness", () => {
 		const ctx = makeMockContext();
 		for (const router of ALL_ROUTERS) dispatcher.install(router, ctx);
 
-		const registered = new Set([...dispatcher.registeredTypes, ...EVENT_CHANNEL_TYPES]);
+		const registered = new Set(dispatcher.registeredTypes);
 		const expected = new Set(Object.keys(EXHAUSTIVE));
 		expect(registered).toEqual(expected);
 	});

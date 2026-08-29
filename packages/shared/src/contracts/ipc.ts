@@ -15,17 +15,24 @@ import type {
 	GitRepoInfo,
 	ImageContent,
 	MainToRendererEvent,
+	McpServerStatusEntry,
+	McpToolDto,
+	McpToolWithServer,
 	PendingAttachment,
 	ProjectInfo,
-	ProviderInfo,
+	ProjectPromptDataDto,
+	PromptEntry,
 	RendererToMainEvent,
 	ScheduledTask,
 	ScheduledTaskInput,
 	ScheduledTaskRunLog,
 	ScheduledTaskTestResult,
 	SessionHistoryPage,
+	SkillDiagnostic,
+	SkillEntry,
 	TestCustomProviderResult,
 	ThinkingLevel,
+	UsageData,
 	UserProfile,
 	UserSettings,
 } from "../types.js";
@@ -90,7 +97,6 @@ export interface LookAPI {
 	/** Host platform (`process.platform`), injected by preload. Used for
 	 *  macOS-only chrome adjustments (hiddenInset traffic-light clearance). */
 	platform: string;
-	send(event: RendererToMainEvent): void;
 	invoke(event: RendererToMainEvent): Promise<unknown>;
 	onEvent(callback: (event: MainToRendererEvent) => void): () => void;
 
@@ -110,7 +116,6 @@ export interface LookAPI {
 	): Promise<IpcResult<{ agentId: string; agent?: AgentInfo }>>;
 	destroyAgent(agentId: string): Promise<IpcResult>;
 	getModels(): Promise<IpcResult<{ models: AvailableModel[] }>>;
-	getProviders(): Promise<IpcResult<{ providers: ProviderInfo[] }>>;
 	getAgents(): Promise<IpcResult<{ agents?: AgentInfo[] }>>;
 	listScheduledTasks(): Promise<IpcResult<{ tasks: ScheduledTask[] }>>;
 	listDrafts(): Promise<IpcResult<{ drafts: Draft[] }>>;
@@ -121,12 +126,10 @@ export interface LookAPI {
 	updateScheduledTask(taskId: string, patch: Partial<ScheduledTaskInput>): Promise<IpcResult<{ task: ScheduledTask }>>;
 	startScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;
 	pauseScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;
-	resumeScheduledTask(taskId: string): Promise<IpcResult<{ task: ScheduledTask }>>;
 	deleteScheduledTask(taskId: string): Promise<IpcResult>;
 	runScheduledTaskNow(taskId: string): Promise<IpcResult<{ accepted: true }>>;
 	testScheduledTask(task: ScheduledTaskInput, taskId?: string): Promise<IpcResult<ScheduledTaskTestResult>>;
 	listScheduledTaskLogs(taskId?: string, limit?: number): Promise<IpcResult<{ logs: ScheduledTaskRunLog[] }>>;
-	validateCron(cron: string, timezone?: string): Promise<IpcResult<{ valid: boolean; nextRunAt?: string }>>;
 	switchModel(agentId: string, model: string): Promise<IpcResult>;
 	updateThinking(agentId: string, level: ThinkingLevel): Promise<IpcResult>;
 	abortAgent(agentId: string): Promise<IpcResult>;
@@ -136,7 +139,6 @@ export interface LookAPI {
 		revision: string,
 		limit?: number,
 	): Promise<IpcResult<SessionHistoryPage>>;
-	setEntryLabel(agentId: string, entryId: string, label: string | null): Promise<IpcResult>;
 	renameAgent(agentId: string, name: string): Promise<IpcResult>;
 	compressSession(agentId: string, customInstructions?: string): Promise<IpcResult>;
 	abortCompressSession(agentId: string): Promise<IpcResult>;
@@ -151,6 +153,9 @@ export interface LookAPI {
 		options?: { name?: string },
 	): Promise<IpcResult<{ agentId: string; sessionFilePath: string }>>;
 	openDirectoryDialog(title?: string): Promise<IpcResult<{ path?: string; canceled?: boolean }>>;
+	/** macOS：渲染端实测顶部栏可视中心（CSS px）后回传，主进程校正
+	 *  hiddenInset 红绿灯垂直位置（换算见 main/system/traffic-light.ts）。 */
+	setTrafficLightCenter(centerCssPx: number): Promise<IpcResult>;
 	openFileDialog(options?: {
 		title?: string;
 		allowDirectories?: boolean;
@@ -165,7 +170,6 @@ export interface LookAPI {
 	createProject(cwd: string, name?: string): Promise<IpcResult<{ project: ProjectInfo; isDuplicate: boolean }>>;
 	renameProject(projectId: string, name: string): Promise<IpcResult>;
 	switchProject(projectId: string): Promise<IpcResult>;
-	getActiveProject(): Promise<IpcResult<{ project: ProjectInfo | null }>>;
 	getProjectGitInfo(projectId: string): Promise<IpcResult<{ info: GitRepoInfo | null }>>;
 	getProjectGitDiff(projectId: string): Promise<IpcResult<{ files: GitDiffFile[] }>>;
 	getProjectGitFileHead(projectId: string, absolutePath: string): Promise<IpcResult<{ content: string | null }>>;
@@ -184,11 +188,6 @@ export interface LookAPI {
 		provider: string,
 		opts?: { reveal?: boolean },
 	): Promise<IpcResult<{ key: string | null; masked?: boolean }>>;
-	testEnvKey(
-		provider: string,
-	): Promise<
-		IpcResult<{ result: { ok?: boolean; skipped?: boolean; status?: number; error?: string; reason?: string } }>
-	>;
 	addCustomProvider(input: CustomProviderInput): Promise<IpcResult>;
 	updateCustomProvider(name: string, patch: Partial<CustomProviderInput>): Promise<IpcResult>;
 	removeCustomProvider(name: string): Promise<IpcResult<{ removed: boolean }>>;
@@ -196,7 +195,6 @@ export interface LookAPI {
 	testCustomProvider(input: CustomProviderInput): Promise<IpcResult<{ result: TestCustomProviderResult }>>;
 	getGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
 	setGeneralSettings(settings: Partial<GeneralSettings>): Promise<IpcResult<{ settings?: GeneralSettings }>>;
-	resetGeneralSettings(): Promise<IpcResult<{ settings?: GeneralSettings }>>;
 	// ---- 语音助手（本地转写）----
 	transcribeGetState(): Promise<IpcResult<{ state: TranscribeState }>>;
 	transcribeSetSettings(patch: TranscribeSettingsPatch): Promise<IpcResult<{ settings: TranscribeSettingsDto }>>;
@@ -234,9 +232,7 @@ export interface LookAPI {
 		sessionId: string;
 		action: "approve" | "reject";
 	}): Promise<IpcResult>;
-	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
-	listSubSessions(parentSessionId: string): Promise<IpcResult<{ childSessionIds?: string[] }>>;
-	getParentSession(childSessionId: string): Promise<IpcResult<{ parentSessionId?: string | null }>>;
+	// ---- SubAgent：审核子会话 ----
 	/** 查找父会话已有的审核子会话（防重复）；未命中由渲染端注入 /subagent:reviewer 委派指令。 */
 	reviewChanges(payload: {
 		parentSessionId: string;
@@ -251,7 +247,6 @@ export interface LookAPI {
 		input: AgentDefinitionInput,
 	): Promise<IpcResult<{ agent?: AgentDefinitionInfo }>>;
 	deleteAgentDefinition(name: string): Promise<IpcResult>;
-	installAgentDefinition(name: string): Promise<IpcResult<{ agent?: AgentDefinitionInfo }>>;
 	// ---- SubAgent：Agent 开关（Stage 2） ----
 	setSubagentEnabled(enabled: boolean): Promise<IpcResult<{ enabled?: boolean }>>;
 	// ---- SubAgent：Agent 定义开关 ----
@@ -265,7 +260,6 @@ export interface LookAPI {
 	updateUserProfile(
 		patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>,
 	): Promise<IpcResult>;
-	resetUserProfile(): Promise<IpcResult>;
 	logout(): Promise<IpcResult>;
 	// ---- Shared area ----
 	listSharedFiles(projectId: string): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
@@ -291,7 +285,6 @@ export interface LookAPI {
 		relativePath: string,
 		showHiddenFiles?: boolean,
 	): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
-	statWorkspaceNode(projectId: string, relativePath: string): Promise<IpcResult<{ node?: FileTreeNode | null }>>;
 	startWorkspaceWatch(projectId: string, relativePath: string): Promise<IpcResult>;
 	stopWorkspaceWatch(projectId: string, relativePath: string): Promise<IpcResult>;
 	// ---- File content ----
@@ -347,33 +340,8 @@ export interface LookAPI {
 	resolveFileViewerDock(confirmed: boolean): Promise<IpcResult>;
 	fileViewerReady(): Promise<IpcResult<{ path?: string | null; diffPatch?: string | null }>>;
 	// ---- IM Channels ----
-	getImChannels(): Promise<
-		IpcResult<{
-			channels?: Array<{
-				provider: string;
-				appId: string;
-				name?: string;
-				status: string;
-				connected: boolean;
-				enabled: boolean;
-				error?: string;
-			}>;
-		}>
-	>;
-	getImBindings(): Promise<
-		IpcResult<{
-			bindings?: Array<{
-				chatId: string;
-				sessionId: string;
-				projectId: string;
-				createdAt: number;
-				appId?: string;
-				chatType?: "p2p" | "group";
-				senderOpenId?: string;
-				peerName?: string;
-			}>;
-		}>
-	>;
+	getImChannels(): Promise<IpcResult<{ channels?: ImChannelEntry[] }>>;
+	getImBindings(): Promise<IpcResult<{ bindings?: ImBindingEntry[] }>>;
 	connectFeishuChannel(options?: {
 		appName?: string;
 		description?: string;
@@ -383,12 +351,6 @@ export interface LookAPI {
 	disconnectImChannel(provider: string, appId?: string): Promise<IpcResult>;
 	removeImChannel(provider: string, appId: string): Promise<IpcResult>;
 	reconnectImChannel(provider: string, appId: string): Promise<IpcResult>;
-	sendImTestMessage(input: {
-		appId: string;
-		receiveIdType: string;
-		receiveId: string;
-		text: string;
-	}): Promise<IpcResult>;
 	testImConnection(appId: string): Promise<IpcResult<{ message?: string }>>;
 	testImConnectionDirect(appId: string, appSecret: string): Promise<IpcResult<{ message?: string }>>;
 	updateImChannel(appId: string, updates: { name?: string }): Promise<IpcResult>;
@@ -412,26 +374,33 @@ export interface LookAPI {
 	providerLogout(provider: string): Promise<IpcResult<ProviderSettingsData>>;
 
 	// ---- MCP tools ----
-	listAllMcpTools(): Promise<
-		IpcResult<{ tools?: Array<{ server: string; tool: { name: string; description?: string } }> }>
-	>;
+	listAllMcpTools(): Promise<IpcResult<{ tools?: McpToolWithServer[] }>>;
 	// ---- Usage ----
-	getUsage(): Promise<IpcResult<{ usage: unknown }>>;
-	listPrompts(): Promise<IpcResult<{ prompts: unknown[] }>>;
-	createPrompt(name: string, content: string): Promise<IpcResult>;
-	updatePrompt(id: string, patch: Record<string, unknown>): Promise<IpcResult>;
+	getUsage(): Promise<IpcResult<{ usage: UsageData }>>;
+	listPrompts(): Promise<
+		IpcResult<{
+			prompts: PromptEntry[];
+			activePromptId: string;
+			projectOverrides: Record<string, ProjectPromptDataDto>;
+		}>
+	>;
+	createPrompt(name: string, content: string): Promise<IpcResult<{ prompt: PromptEntry }>>;
+	updatePrompt(id: string, patch: { name?: string; content?: string }): Promise<IpcResult<{ prompt: PromptEntry }>>;
 	deletePrompt(id: string): Promise<IpcResult>;
 	setActivePrompt(id: string): Promise<IpcResult>;
-	listProjectPrompts(projectId: string): Promise<IpcResult<{ prompts: unknown[] }>>;
-	createProjectPrompt(projectId: string, name: string, content: string): Promise<IpcResult>;
-	updateProjectPrompt(projectId: string, id: string, patch: Record<string, unknown>): Promise<IpcResult>;
+	createProjectPrompt(projectId: string, name: string, content: string): Promise<IpcResult<{ prompt: PromptEntry }>>;
+	updateProjectPrompt(
+		projectId: string,
+		id: string,
+		patch: { name?: string; content?: string },
+	): Promise<IpcResult<{ prompt: PromptEntry }>>;
 	deleteProjectPrompt(projectId: string, id: string): Promise<IpcResult>;
 	setProjectActivePrompt(projectId: string, id: string): Promise<IpcResult>;
-	listMcpServers(): Promise<IpcResult<{ servers: unknown[] }>>;
-	listMcpTools(name: string): Promise<IpcResult<{ tools: unknown[] }>>;
+	listMcpServers(): Promise<IpcResult<{ servers: McpServerStatusEntry[] }>>;
+	listMcpTools(name: string): Promise<IpcResult<{ tools: McpToolDto[] }>>;
 	addMcpServer(config: Record<string, unknown>): Promise<IpcResult>;
 	removeMcpServer(name: string): Promise<IpcResult>;
-	testMcpServer(name: string): Promise<IpcResult<{ tools?: unknown[] }>>;
+	testMcpServer(name: string): Promise<IpcResult<{ tools?: McpToolDto[] }>>;
 	toggleMcpServer(name: string, enabled: boolean): Promise<IpcResult>;
 	updateMcpServer(name: string, config: Record<string, unknown>): Promise<IpcResult>;
 
@@ -442,20 +411,27 @@ export interface LookAPI {
 	installUpdate(): Promise<IpcResult>;
 }
 
-interface SkillEntry {
-	name: string;
-	description: string;
-	filePath: string;
-	baseDir: string;
-	source: "user" | "project" | "path";
-	disableModelInvocation: boolean;
-	category: "builtin" | "mine";
+/** IM 渠道条目（getImChannels 载荷元素；invoke-response.ts 复用同一类型）。 */
+export interface ImChannelEntry {
+	provider: string;
+	appId: string;
+	name?: string;
+	status: string;
+	connected: boolean;
+	enabled: boolean;
+	error?: string;
 }
 
-interface SkillDiagnostic {
-	type: "warning" | "collision";
-	message: string;
-	path?: string;
+/** IM 绑定条目（getImBindings 载荷元素）。 */
+export interface ImBindingEntry {
+	chatId: string;
+	sessionId: string;
+	projectId: string;
+	createdAt: number;
+	appId?: string;
+	chatType?: "p2p" | "group";
+	senderOpenId?: string;
+	peerName?: string;
 }
 
 // ---- 语音助手（本地转写）----

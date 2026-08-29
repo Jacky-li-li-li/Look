@@ -17,15 +17,6 @@ export const workspaceRouter: IpcRouter = (ctx, register) => {
 		return { success: true, nodes };
 	});
 
-	register("workspace:stat", async (data) => {
-		const projectId = guardString(data.projectId, "projectId");
-		const project = ctx.project.service.getProjectInfo(projectId);
-		if (!project) throw new Error(`Project not found: ${projectId}`);
-		const relativePath = guardString(data.relativePath, "relativePath");
-		const node = await ctx.workspace.treeService.statNode(project.cwd, relativePath);
-		return { success: true, node };
-	});
-
 	register("workspace:watch", async (data) => {
 		const projectId = guardString(data.projectId, "projectId");
 		const project = ctx.project.service.getProjectInfo(projectId);

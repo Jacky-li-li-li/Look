@@ -6,7 +6,6 @@
 // 有未保存修改时先确认再跳转。内容全部复用 FileViewerDialog(windowMode)。
 // ============================================================
 
-import type { MainToRendererEvent } from "@shared/types";
 import { useEffect } from "react";
 import FileViewerDialog from "./components/dialogs/FileViewerDialog";
 import i18n from "./i18n";
@@ -37,8 +36,7 @@ export default function FileViewerApp() {
 		});
 
 		// 后续打开请求(窗口已存在时主进程直接转发):脏状态先确认
-		const unsubscribe = api.onEvent((raw) => {
-			const event = raw as MainToRendererEvent;
+		const unsubscribe = api.onEvent((event) => {
 			if (event.type !== "fileViewer:open-path") return;
 			if (appStore.get(fileViewerDirtyAtom) && !window.confirm(i18n.t("fileViewer.unsavedConfirm"))) return;
 			appStore.set(fileViewerDirtyAtom, false);

@@ -1,4 +1,4 @@
-import type { AppUpdatePhase } from "@shared/types";
+import type { AppUpdatePhase, UsageData } from "@shared/types";
 import { atom } from "jotai";
 import type { CustomProviderInput, ProviderInfo } from "../lib/settings-provider-types.js";
 
@@ -48,38 +48,11 @@ export const mcpStatusVersionAtom = atom(0);
 /** Incremented on model:updated IPC event to trigger ModelSelector cache invalidation. */
 export const modelUpdatedVersionAtom = atom(0);
 
-// ── SDK-aligned usage types ──
-// Mirrors pi SDK's Usage type (from session JSONL assistant messages).
+// ── usage 类型已收敛到 shared types/dto/usage.ts ──
 
-export interface SdkUsageCost {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	total: number;
-}
-
-export interface SdkUsage {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	reasoning?: number;
-	totalTokens: number;
-	cost: SdkUsageCost;
-}
-
-/** Aggregated daily usage per model with turn count. */
-export interface AggregatedUsage extends SdkUsage {
-	turns: number;
-}
-
-export interface UsageAtomData {
-	usage: Record<string, number>;
-	modelCost: Record<string, Record<string, { turns: number; cost: number }>>;
-	modelUsage: Record<string, Record<string, AggregatedUsage>>;
-	years: number[];
-}
+/** usage:get 载荷（别名保留以兼容既有引用）。 */
+export type UsageAtomData = UsageData;
+export type { AggregatedUsage, SdkUsage, SdkUsageCost } from "@shared/types";
 
 export const usageDataAtom = atom<UsageAtomData | null>(null);
 

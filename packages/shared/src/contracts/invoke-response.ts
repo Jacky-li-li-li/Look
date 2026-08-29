@@ -29,19 +29,34 @@ import type {
 	ForkedSessionResult,
 	GitDiffFile,
 	GitRepoInfo,
+	McpServerStatusEntry,
+	McpToolDto,
+	McpToolWithServer,
 	NavigateTreeResult,
 	PendingAttachment,
 	ProjectInfo,
-	ProviderInfo,
+	ProjectPromptDataDto,
+	PromptEntry,
 	ScheduledTask,
 	ScheduledTaskRunLog,
 	ScheduledTaskTestResult,
 	SessionHistoryPage,
+	SkillDiagnostic,
+	SkillEntry,
 	TestCustomProviderResult,
+	UsageData,
 	UserProfile,
 	UserSettings,
 } from "../types.js";
-import type { IpcResult, LookAPI, ProviderSettingsData, TranscribeSettingsDto, TranscribeState } from "./ipc.js";
+import type {
+	ImBindingEntry,
+	ImChannelEntry,
+	IpcResult,
+	LookAPI,
+	ProviderSettingsData,
+	TranscribeSettingsDto,
+	TranscribeState,
+} from "./ipc.js";
 
 // ── 自定义 provider 测试结果（成功分支的业务载荷） ──
 interface ApiKeyTestResult {
@@ -50,47 +65,6 @@ interface ApiKeyTestResult {
 	status?: number;
 	error?: string;
 	reason?: string;
-}
-
-/** `settings:prompts:list` 返回的活动 prompt 标记（与全局跟随约定同源）。 */
-interface PromptsListPayload {
-	prompts: unknown[];
-	activePromptId: string;
-	projectOverrides: Record<string, unknown>;
-}
-
-interface ProjectPromptsListPayload {
-	prompts: unknown[];
-	activePromptId: string;
-}
-
-/** MCP 工具条目（router 返回的最小形状，与 `LookAPI.listAllMcpTools` 一致）。 */
-interface McpToolEntry {
-	server: string;
-	tool: { name: string; description?: string };
-}
-
-/** IM 渠道条目（与 `LookAPI.getImChannels` 内联声明一致）。 */
-interface ImChannelEntry {
-	provider: string;
-	appId: string;
-	name?: string;
-	status: string;
-	connected: boolean;
-	enabled: boolean;
-	error?: string;
-}
-
-/** IM 绑定条目（与 `LookAPI.getImBindings` 内联声明一致）。 */
-interface ImBindingEntry {
-	chatId: string;
-	sessionId: string;
-	projectId: string;
-	createdAt: number;
-	appId?: string;
-	chatType?: "p2p" | "group";
-	senderOpenId?: string;
-	peerName?: string;
 }
 
 /**
@@ -117,11 +91,9 @@ export interface InvokeResponseMap {
 	"agent:rename": Record<string, unknown>;
 	"agent:navigate-tree": { result: NavigateTreeResult };
 	"agent:create-fork": ForkedSessionResult;
-	"agent:set-entry-label": Record<string, unknown>;
 
 	// ── model ──
 	"model:list": { models: AvailableModel[] };
-	"model:providers": { providers: ProviderInfo[] };
 
 	// ── scheduled tasks ──
 	"scheduled-task:list": { tasks: ScheduledTask[] };
@@ -129,12 +101,10 @@ export interface InvokeResponseMap {
 	"scheduled-task:update": { task: ScheduledTask };
 	"scheduled-task:start": { task: ScheduledTask };
 	"scheduled-task:pause": { task: ScheduledTask };
-	"scheduled-task:resume": { task: ScheduledTask };
 	"scheduled-task:delete": Record<string, unknown>;
 	"scheduled-task:run-now": { accepted: true };
 	"scheduled-task:test": ScheduledTaskTestResult;
 	"scheduled-task:logs": { logs: ScheduledTaskRunLog[] };
-	"scheduled-task:validate-cron": { valid: boolean; nextRunAt?: string };
 
 	// ── drafts ──
 	"draft:list": { drafts: Draft[] };
@@ -147,7 +117,6 @@ export interface InvokeResponseMap {
 	"settings:get-api-key": { key: string | null; masked?: boolean };
 	"settings:set-api-key": ProviderSettingsData;
 	"settings:test-api-key": { result: ApiKeyTestResult };
-	"settings:test-env-key": { result: ApiKeyTestResult };
 	"login:prompt-respond": Record<string, unknown>;
 	"login:prompt-cancel": Record<string, unknown>;
 	"auth:open-oauth-url": { redirectUrl: string };
@@ -155,7 +124,6 @@ export interface InvokeResponseMap {
 	"settings:provider-logout": ProviderSettingsData;
 	"settings:general:get": { settings?: UserSettings };
 	"settings:general:set": { settings?: UserSettings };
-	"settings:general:reset": { settings?: UserSettings };
 	"settings:add-custom-provider": Record<string, unknown>;
 	"settings:update-custom-provider": Record<string, unknown>;
 	"settings:remove-custom-provider": { removed: boolean };
@@ -163,21 +131,24 @@ export interface InvokeResponseMap {
 	"settings:test-custom-provider": { result: TestCustomProviderResult };
 
 	// ── prompts ──
-	"settings:prompts:list": PromptsListPayload;
-	"settings:prompts:create": { prompt: unknown };
-	"settings:prompts:update": { prompt: unknown };
+	"settings:prompts:list": {
+		prompts: PromptEntry[];
+		activePromptId: string;
+		projectOverrides: Record<string, ProjectPromptDataDto>;
+	};
+	"settings:prompts:create": { prompt: PromptEntry };
+	"settings:prompts:update": { prompt: PromptEntry };
 	"settings:prompts:delete": Record<string, unknown>;
 	"settings:prompts:set-active": Record<string, unknown>;
-	"settings:project-prompts:list": ProjectPromptsListPayload;
-	"settings:project-prompts:create": { prompt: unknown };
-	"settings:project-prompts:update": { prompt: unknown };
+	"settings:project-prompts:create": { prompt: PromptEntry };
+	"settings:project-prompts:update": { prompt: PromptEntry };
 	"settings:project-prompts:delete": Record<string, unknown>;
 	"settings:project-prompts:set-active": Record<string, unknown>;
 
 	// ── skills ──
 	"skills:list": {
-		skills?: unknown[];
-		diagnostics?: unknown[];
+		skills?: SkillEntry[];
+		diagnostics?: SkillDiagnostic[];
 		importedPaths?: string[];
 	};
 	"skills:import-paths": { importedCount: number };
@@ -186,11 +157,12 @@ export interface InvokeResponseMap {
 	};
 	"skills:set-enabled": Record<string, unknown>;
 
-	// ── dialogs / shell ──
+	// ── dialogs / shell / window ──
 	"dialog:open-directory": { path?: string; canceled?: boolean };
 	"dialog:open-files": { paths?: string[]; canceled?: boolean };
 	"shell:reveal-in-finder": Record<string, unknown>;
 	"shell:open-project-folder": { path?: string };
+	"window:set-traffic-light-center": Record<string, unknown>;
 
 	// ── projects ──
 	"project:list": { projects: ProjectInfo[]; activeProjectId?: string | null };
@@ -199,7 +171,6 @@ export interface InvokeResponseMap {
 	"project:rename": Record<string, unknown>;
 	"project:delete": Record<string, unknown>;
 	"project:confirm-delete-response": Record<string, unknown>;
-	"project:get-active": { project: ProjectInfo | null };
 	"project:git-info": { info: GitRepoInfo | null };
 	"project:git-diff": { files: GitDiffFile[] };
 	"project:git-file-head": { content: string | null };
@@ -208,9 +179,8 @@ export interface InvokeResponseMap {
 	// ── user profile / usage ──
 	"user-profile:get": { profile: UserProfile | null };
 	"user-profile:update": Record<string, unknown>;
-	"user-profile:reset": Record<string, unknown>;
 	"user-profile:logout": Record<string, unknown>;
-	"usage:get": { usage: unknown };
+	"usage:get": { usage: UsageData };
 
 	// ── shared area ──
 	"shared:list": { nodes?: import("../types.js").FileTreeNode[] };
@@ -226,7 +196,6 @@ export interface InvokeResponseMap {
 
 	// ── workspace tree ──
 	"workspace:list-children": { nodes?: import("../types.js").FileTreeNode[] };
-	"workspace:stat": { node?: import("../types.js").FileTreeNode | null };
 	"workspace:watch": Record<string, unknown>;
 	"workspace:unwatch": Record<string, unknown>;
 
@@ -260,15 +229,12 @@ export interface InvokeResponseMap {
 	"plan:approval-respond": Record<string, unknown>;
 
 	// ── subagent / agent definitions ──
-	"agent:list-subagents": { childSessionIds?: string[] };
-	"agent:get-parent-session": { parentSessionId?: string | null };
 	"agent:set-subagent-enabled": { enabled?: boolean };
 	"agent:review-changes": { childSessionId: string | null; title: string };
 	"agent-definitions:list": { agents?: AgentDefinitionInfo[] };
 	"agent-definitions:create": { agent?: AgentDefinitionInfo };
 	"agent-definitions:update": { agent?: AgentDefinitionInfo };
 	"agent-definitions:delete": Record<string, unknown>;
-	"agent-definitions:install": { agent?: AgentDefinitionInfo };
 	"agent-definitions:set-enabled": Record<string, unknown>;
 
 	// ── IM ──
@@ -279,22 +245,19 @@ export interface InvokeResponseMap {
 	"im:disconnect-channel": Record<string, unknown>;
 	"im:remove-channel": Record<string, unknown>;
 	"im:reconnect-channel": Record<string, unknown>;
-	"im:send-test-message": Record<string, unknown>;
 	"im:test-connection": { message?: string };
 	"im:test-connection-direct": { message?: string };
 	"im:update-channel": Record<string, unknown>;
 	"im:get-bindings": { bindings?: ImBindingEntry[] };
-	"im:remove-binding": Record<string, unknown>;
-	"im:get-bridge-status": { bindings: number; runningSessions: string[]; status: "running" | "stopped" };
 
 	// ── MCP ──
-	"mcp:list-servers": { servers: unknown[] };
+	"mcp:list-servers": { servers: McpServerStatusEntry[] };
 	"mcp:add-server": Record<string, unknown>;
 	"mcp:remove-server": Record<string, unknown>;
-	"mcp:test-server": { tools?: McpToolEntry["tool"][] };
-	"mcp:list-tools": { tools: unknown[] };
+	"mcp:test-server": { tools?: McpToolDto[] };
+	"mcp:list-tools": { tools: McpToolDto[] };
 	"mcp:toggle-server": Record<string, unknown>;
-	"mcp:list-all-tools": { tools?: McpToolEntry[] };
+	"mcp:list-all-tools": { tools?: McpToolWithServer[] };
 	"mcp:update-server": Record<string, unknown>;
 
 	// ── auto updater ──
@@ -323,10 +286,6 @@ export interface InvokeResponseMap {
 		committed: string;
 		tentative: string;
 	};
-
-	// ── event-channel types（无 invoke handler，映射占位以穷尽联合） ──
-	"app:ready": Record<string, unknown>;
-	"window:traffic-light-center": Record<string, unknown>;
 }
 
 /**
@@ -347,21 +306,19 @@ export type InvokeResult<T extends keyof InvokeResponseMap> = IpcResult<InvokeRe
 // ============================================================
 // 编译期自检（零运行时产物，由 shared 的 typecheck 强制）
 //
-// 1. 键穷尽：映射键必须与 `RendererToMainEvent` 联合体完全一致——
-//    新增 invoke 事件漏登记、或映射键拼写错误/残留，以下 `_AssertNever`
-//    实例化即报错并指出具体键名。
-// 2. LookAPI ↔ 映射 漂移：渲染端契约声明的方法成功载荷必须与
-//    映射一致——`_AssertTrue` 在 `_Eq` 为 false 时报错。
+// 1. 键穷尽：InvokeResponseMap 键必须与 `RendererToMainEvent` 联合体完全一致。
+// 2. LookAPI ↔ 映射 全量漂移检查：`LookApiMethodEventMap` 显式登记每个
+//    invoke 方法对应的事件类型；`_AssertAllMethods` 对其逐一断言成功载荷
+//    与 `InvokeResponseMap` 一致。任一方法漏登记（键穷尽）、载荷漂移
+//    （_Eq 不成立）或事件漏映射，typecheck 即报错。
 //
-// 每条断言独立一个 `type _Xn = …` 别名，报错时定位到具体断言。
+// 不再抽样——全部方法参与断言。
 // ============================================================
 
 import type { RendererToMainEvent } from "../types/events/renderer-to-main.js";
 
 /** 断言 T 恰为 never（用于穷尽性：多余/缺失键 → 非 never → 不满足约束 → 报错）。 */
 type _AssertNever<T extends never> = T;
-/** 断言 T 恰为 true（用于载荷相等性：不相等 → false → 不满足 `extends true` → 报错）。 */
-type _AssertTrue<T extends true> = T;
 
 type _MissingFromMap = Exclude<RendererToMainEvent["type"], keyof InvokeResponseMap>;
 type _ExtraInMap = Exclude<keyof InvokeResponseMap, RendererToMainEvent["type"]>;
@@ -376,47 +333,234 @@ type _SuccessPayload<F extends (...args: never[]) => unknown> = ReturnType<F> ex
 
 type _Eq<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-type _X_Send = _AssertTrue<_Eq<_SuccessPayload<LookAPI["sendMessage"]>, InvokeResponseMap["agent:send-message"]>>;
-type _X_Create = _AssertTrue<_Eq<_SuccessPayload<LookAPI["createAgent"]>, InvokeResponseMap["agent:create"]>>;
-type _X_Models = _AssertTrue<_Eq<_SuccessPayload<LookAPI["getModels"]>, InvokeResponseMap["model:list"]>>;
-type _X_Providers = _AssertTrue<_Eq<_SuccessPayload<LookAPI["getProviders"]>, InvokeResponseMap["model:providers"]>>;
-type _X_Drafts = _AssertTrue<_Eq<_SuccessPayload<LookAPI["listDrafts"]>, InvokeResponseMap["draft:list"]>>;
-type _X_Fork = _AssertTrue<_Eq<_SuccessPayload<LookAPI["createFork"]>, InvokeResponseMap["agent:create-fork"]>>;
-type _X_Attachment = _AssertTrue<
-	_Eq<_SuccessPayload<LookAPI["createAttachment"]>, InvokeResponseMap["attachment:create"]>
->;
-type _X_ImChannels = _AssertTrue<_Eq<_SuccessPayload<LookAPI["getImChannels"]>, InvokeResponseMap["im:get-channels"]>>;
-type _X_ImBindings = _AssertTrue<_Eq<_SuccessPayload<LookAPI["getImBindings"]>, InvokeResponseMap["im:get-bindings"]>>;
-type _X_Review = _AssertTrue<_Eq<_SuccessPayload<LookAPI["reviewChanges"]>, InvokeResponseMap["agent:review-changes"]>>;
-type _X_Navigate = _AssertTrue<_Eq<_SuccessPayload<LookAPI["navigateTree"]>, InvokeResponseMap["agent:navigate-tree"]>>;
-type _X_History = _AssertTrue<
-	_Eq<_SuccessPayload<LookAPI["loadHistoryPage"]>, InvokeResponseMap["session:history-page"]>
->;
-type _X_ValidateCron = _AssertTrue<
-	_Eq<_SuccessPayload<LookAPI["validateCron"]>, InvokeResponseMap["scheduled-task:validate-cron"]>
->;
-type _X_FileWrite = _AssertTrue<_Eq<_SuccessPayload<LookAPI["writeFileContent"]>, InvokeResponseMap["file:write"]>>;
-type _X_BrowserState = _AssertTrue<
-	_Eq<_SuccessPayload<LookAPI["getBrowserPanelState"]>, InvokeResponseMap["browser:get-state"]>
->;
+/**
+ * LookAPI invoke 方法名 → RendererToMain 事件类型 的显式登记表。
+ *
+ * 这是三处契约（LookAPI / RendererToMainEvent / InvokeResponseMap）之间
+ * 唯一的"名字对应"来源：新增方法不登记 → 键穷尽报错；登记的事件不存在 →
+ * 键穷尽报错；载荷漂移 → 全量断言报错。
+ */
+export interface LookApiMethodEventMap {
+	// ── agent / session ──
+	sendMessage: "agent:send-message";
+	removeQueuedMessage: "agent:remove-queued-message";
+	insertQueuedMessage: "agent:insert-queued-message";
+	activateSession: "agent:activate";
+	createAgent: "agent:create";
+	destroyAgent: "agent:destroy";
+	abortAgent: "agent:abort";
+	switchModel: "agent:switch-model";
+	updateThinking: "agent:update-thinking";
+	getAgents: "agents:list";
+	compressSession: "session:compress";
+	abortCompressSession: "session:abort-compress";
+	loadHistoryPage: "session:history-page";
+	renameAgent: "agent:rename";
+	navigateTree: "agent:navigate-tree";
+	createFork: "agent:create-fork";
+
+	// ── model ──
+	getModels: "model:list";
+
+	// ── scheduled tasks ──
+	listScheduledTasks: "scheduled-task:list";
+	createScheduledTask: "scheduled-task:create";
+	updateScheduledTask: "scheduled-task:update";
+	startScheduledTask: "scheduled-task:start";
+	pauseScheduledTask: "scheduled-task:pause";
+	deleteScheduledTask: "scheduled-task:delete";
+	runScheduledTaskNow: "scheduled-task:run-now";
+	testScheduledTask: "scheduled-task:test";
+	listScheduledTaskLogs: "scheduled-task:logs";
+
+	// ── drafts ──
+	listDrafts: "draft:list";
+	createDraft: "draft:create";
+	updateDraft: "draft:update";
+	deleteDraft: "draft:delete";
+
+	// ── settings / providers / oauth ──
+	getSettings: "settings:get";
+	getApiKey: "settings:get-api-key";
+	setApiKey: "settings:set-api-key";
+	testApiKey: "settings:test-api-key";
+	respondLoginPrompt: "login:prompt-respond";
+	cancelLoginPrompt: "login:prompt-cancel";
+	openOAuthUrl: "auth:open-oauth-url";
+	providerLogin: "settings:provider-login";
+	providerLogout: "settings:provider-logout";
+	getGeneralSettings: "settings:general:get";
+	setGeneralSettings: "settings:general:set";
+	addCustomProvider: "settings:add-custom-provider";
+	updateCustomProvider: "settings:update-custom-provider";
+	removeCustomProvider: "settings:remove-custom-provider";
+	listCustomProviders: "settings:list-custom-providers";
+	testCustomProvider: "settings:test-custom-provider";
+
+	// ── prompts ──
+	listPrompts: "settings:prompts:list";
+	createPrompt: "settings:prompts:create";
+	updatePrompt: "settings:prompts:update";
+	deletePrompt: "settings:prompts:delete";
+	setActivePrompt: "settings:prompts:set-active";
+	createProjectPrompt: "settings:project-prompts:create";
+	updateProjectPrompt: "settings:project-prompts:update";
+	deleteProjectPrompt: "settings:project-prompts:delete";
+	setProjectActivePrompt: "settings:project-prompts:set-active";
+
+	// ── skills ──
+	listSkills: "skills:list";
+	importSkillPaths: "skills:import-paths";
+	detectCommonSkillPaths: "skills:detect-common";
+	setSkillEnabled: "skills:set-enabled";
+
+	// ── dialogs / shell / window ──
+	openDirectoryDialog: "dialog:open-directory";
+	openFileDialog: "dialog:open-files";
+	revealInFinder: "shell:reveal-in-finder";
+	openProjectFolder: "shell:open-project-folder";
+	setTrafficLightCenter: "window:set-traffic-light-center";
+
+	// ── projects ──
+	listProjects: "project:list";
+	createProject: "project:create";
+	switchProject: "project:switch";
+	renameProject: "project:rename";
+	deleteProject: "project:delete";
+	confirmDeleteProject: "project:confirm-delete-response";
+	getProjectGitInfo: "project:git-info";
+	getProjectGitDiff: "project:git-diff";
+	getProjectGitFileHead: "project:git-file-head";
+	getGitFileHead: "git:file-head";
+
+	// ── user profile / usage ──
+	getUserProfile: "user-profile:get";
+	updateUserProfile: "user-profile:update";
+	logout: "user-profile:logout";
+	getUsage: "usage:get";
+
+	// ── shared area ──
+	listSharedFiles: "shared:list";
+	listSharedChildren: "shared:list-children";
+	startSharedWatch: "shared:watch";
+	stopSharedWatch: "shared:unwatch";
+	writeSharedFile: "shared:write";
+	createSharedDir: "shared:mkdir";
+	deleteSharedItem: "shared:delete";
+	importToShared: "shared:import";
+	exportFromShared: "shared:export";
+	writeSharedContent: "shared:write-content";
+
+	// ── workspace tree ──
+	listWorkspaceChildren: "workspace:list-children";
+	startWorkspaceWatch: "workspace:watch";
+	stopWorkspaceWatch: "workspace:unwatch";
+
+	// ── file content ──
+	readFileContent: "file:read";
+	writeFileContent: "file:write";
+	statFilePath: "file:stat";
+
+	// ── attachments ──
+	createAttachment: "attachment:create";
+	readAttachment: "attachment:read";
+	updateAttachment: "attachment:update";
+	deleteAttachment: "attachment:delete";
+	resolveAttachmentPath: "attachment:resolve";
+	importAttachment: "attachment:import";
+
+	// ── file viewer window ──
+	openFileViewer: "fileViewer:open";
+	fileViewerReady: "fileViewer:ready";
+	dockFileViewer: "fileViewer:dock";
+	resolveFileViewerDock: "fileViewer:dock-result";
+
+	// ── permission / plan ──
+	setPermissionMode: "permission:set-mode";
+	getPermissionMode: "permission:get-mode";
+	respondPermission: "permission:respond";
+	respondPlanQuestion: "plan:question-respond";
+	respondPlanApproval: "plan:approval-respond";
+
+	// ── subagent / agent definitions ──
+	setSubagentEnabled: "agent:set-subagent-enabled";
+	reviewChanges: "agent:review-changes";
+	listAgentDefinitions: "agent-definitions:list";
+	createAgentDefinition: "agent-definitions:create";
+	updateAgentDefinition: "agent-definitions:update";
+	deleteAgentDefinition: "agent-definitions:delete";
+	setAgentDefinitionEnabled: "agent-definitions:set-enabled";
+
+	// ── IM ──
+	getImChannels: "im:get-channels";
+	connectFeishuChannel: "im:connect-feishu";
+	connectFeishuManualChannel: "im:connect-feishu-manual";
+	cancelFeishuRegistration: "im:cancel-registration";
+	disconnectImChannel: "im:disconnect-channel";
+	removeImChannel: "im:remove-channel";
+	reconnectImChannel: "im:reconnect-channel";
+	testImConnection: "im:test-connection";
+	testImConnectionDirect: "im:test-connection-direct";
+	updateImChannel: "im:update-channel";
+	getImBindings: "im:get-bindings";
+
+	// ── MCP ──
+	listMcpServers: "mcp:list-servers";
+	addMcpServer: "mcp:add-server";
+	removeMcpServer: "mcp:remove-server";
+	testMcpServer: "mcp:test-server";
+	listMcpTools: "mcp:list-tools";
+	toggleMcpServer: "mcp:toggle-server";
+	listAllMcpTools: "mcp:list-all-tools";
+	updateMcpServer: "mcp:update-server";
+
+	// ── auto updater ──
+	checkForUpdates: "update:check";
+	downloadUpdate: "update:download";
+	installUpdate: "update:install";
+
+	// ── browser panel ──
+	getBrowserPanelState: "browser:get-state";
+	browserPanelAction: "browser:panel-action";
+	openBrowserPanel: "browser:open-panel";
+	closeBrowserPanel: "browser:close-panel";
+	setAgentBrowserLayout: "browser:set-layout";
+
+	// ── 语音助手（本地转写）──
+	transcribeGetState: "transcribe:get-state";
+	transcribeSetSettings: "transcribe:set-settings";
+	transcribeDownloadModel: "transcribe:download-model";
+	transcribeDeleteModel: "transcribe:delete-model";
+	transcribeRecordStart: "transcribe:record-start";
+	transcribeRecordStop: "transcribe:record-stop";
+	transcribeRecordState: "transcribe:record-state";
+}
+
+/** LookAPI 中所有 invoke 方法（返回 Promise<IpcResult> 的成员）。 */
+type _InvokeMethods = {
+	[K in keyof LookAPI]: LookAPI[K] extends (...args: never[]) => Promise<IpcResult> ? K : never;
+}[keyof LookAPI];
+
+/** 方法登记表必须与 LookAPI 的 invoke 方法集合双向穷尽。 */
+type _UnmappedMethods = Exclude<_InvokeMethods, keyof LookApiMethodEventMap>;
+type _GhostMappedMethods = Exclude<keyof LookApiMethodEventMap, _InvokeMethods>;
+type _X_Unmapped = _AssertNever<_UnmappedMethods>;
+type _X_Ghost = _AssertNever<_GhostMappedMethods>;
+
+/**
+ * 全量载荷断言 + 漂移定位：对每个登记方法校验 LookAPI 成功载荷与
+ * InvokeResponseMap 一致。不一致的方法名进入集合，断言为 never——
+ * 报错时错误信息会直接列出具体的方法名，便于定位。
+ */
+type _FailingMethods = {
+	[K in keyof LookApiMethodEventMap]: _Eq<
+		_SuccessPayload<LookAPI[K]>,
+		InvokeResponseMap[LookApiMethodEventMap[K]]
+	> extends true
+		? never
+		: K;
+}[keyof LookApiMethodEventMap];
+type _X_Failing = _AssertNever<_FailingMethods>;
 
 // 汇总导出：引用全部断言别名，确保它们参与类型计算（未引用的别名不会被求值）。
-export type _InvokeResponseContractGuard = [
-	_X_Missing,
-	_X_Extra,
-	_X_Send,
-	_X_Create,
-	_X_Models,
-	_X_Providers,
-	_X_Drafts,
-	_X_Fork,
-	_X_Attachment,
-	_X_ImChannels,
-	_X_ImBindings,
-	_X_Review,
-	_X_Navigate,
-	_X_History,
-	_X_ValidateCron,
-	_X_FileWrite,
-	_X_BrowserState,
-];
+export type _InvokeResponseContractGuard = [_X_Missing, _X_Extra, _X_Unmapped, _X_Ghost, _X_Failing];

@@ -153,6 +153,7 @@ export class SessionRuntimeManager
 		}
 		await this.disposeAllRuntimes();
 		await this.mcpManager.stopAll();
+		this.mcpManager.stopIdleReaper();
 		this.composition.sessionEventEffects.dispose();
 		this.composition.sessionCatalog.clear();
 		this.composition.sessionNotifier.clear();

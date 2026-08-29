@@ -12,11 +12,20 @@ import type {
 	AgentDefinitionInfo,
 	Draft,
 	MainToRendererEvent,
+	PromptEntry,
 	ScheduledTask,
 	ScheduledTaskRunLog,
 } from "@shared/types";
 
-const noop = () => {};
+/** Prompts 区块的 mock 载荷（create/update 返回条目占位）。 */
+const mockPrompt: PromptEntry = {
+	id: "mock",
+	name: "mock",
+	content: "",
+	isBuiltin: false,
+	createdAt: 0,
+	updatedAt: 0,
+};
 
 const mockScenario = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mock") : null;
 const mockPageScenario = mockScenario === "pages";
@@ -46,11 +55,11 @@ let mockDraftSeq = 3;
 const MOCK_NOW = Date.now();
 const mockDate = (offsetMs: number) => new Date(MOCK_NOW + offsetMs).toISOString();
 const MOCK_PROJECTS = [
-	{ id: "dev-browser", name: "pi (浏览器预览)", cwd: "/Users/jacky/Desktop/pi", createdAt: MOCK_NOW, valid: true },
+	{ id: "dev-browser", name: "pi (浏览器预览)", cwd: "/Users/dev/Desktop/pi", createdAt: MOCK_NOW, valid: true },
 	{
 		id: "look-docs",
 		name: "Look 文档",
-		cwd: "/Users/jacky/Projects/look-docs",
+		cwd: "/Users/dev/Projects/look-docs",
 		createdAt: MOCK_NOW - 86_400_000,
 		valid: true,
 	},
@@ -499,8 +508,6 @@ const mockApi: LookAPI = {
 	homedir: "",
 	platform: "darwin",
 
-	send: noop,
-
 	invoke: () => Promise.resolve({ success: true }),
 
 	onEvent: (callback: (event: MainToRendererEvent) => void) => {
@@ -555,8 +562,6 @@ const mockApi: LookAPI = {
 		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[0] : (null as unknown as ScheduledTask) }),
 	pauseScheduledTask: () =>
 		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[1] : (null as unknown as ScheduledTask) }),
-	resumeScheduledTask: () =>
-		success({ task: mockPageScenario ? MOCK_SCHEDULED_TASKS[0] : (null as unknown as ScheduledTask) }),
 	deleteScheduledTask: () => ok,
 	runScheduledTaskNow: () => success({ accepted: true }),
 	testScheduledTask: () =>
@@ -579,7 +584,6 @@ const mockApi: LookAPI = {
 		success({
 			logs: mockPageScenario ? MOCK_TASK_LOGS.filter((log) => !taskId || log.taskId === taskId) : [],
 		}),
-	validateCron: () => success({ valid: true }),
 
 	// ---- Drafts (内存态 mock：浏览器预览用，刷新后重置) ----
 	listDrafts: () => success({ drafts: [...mockDrafts] }),
@@ -601,7 +605,6 @@ const mockApi: LookAPI = {
 		mockDrafts = mockDrafts.filter((item) => item.id !== draftId);
 		return ok;
 	},
-	getProviders: () => success({ providers: [] }),
 
 	// ---- Agents ----
 	getAgents: () =>
@@ -634,7 +637,6 @@ const mockApi: LookAPI = {
 		}),
 	getApiKey: (_provider?: string, _opts?: { reveal?: boolean }) => success({ key: "", masked: false }),
 	testApiKey: () => Promise.resolve({ success: true, result: { ok: true } }),
-	testEnvKey: () => success({ result: {} }),
 	setApiKey: () => success({ providers: [], customProviders: [], customStats: { configured: 0, totalModels: 0 } }),
 	getGeneralSettings: () =>
 		success({
@@ -649,7 +651,6 @@ const mockApi: LookAPI = {
 				: {}) as unknown as import("@shared/types").UserSettings,
 		}),
 	setGeneralSettings: () => ok,
-	resetGeneralSettings: () => ok,
 
 	transcribeGetState: async () => ({
 		success: true,
@@ -717,6 +718,7 @@ const mockApi: LookAPI = {
 
 	// ---- Dialog ----
 	openDirectoryDialog: () => Promise.resolve({ success: true, canceled: true }),
+	setTrafficLightCenter: () => Promise.resolve({ success: true }),
 	openFileDialog: () => Promise.resolve({ success: true, canceled: true }),
 
 	// ---- File ----
@@ -735,7 +737,7 @@ const mockApi: LookAPI = {
 						{
 							id: "dev-browser",
 							name: "pi (浏览器预览)",
-							cwd: "/Users/jacky/Desktop/pi",
+							cwd: "/Users/dev/Desktop/pi",
 							createdAt: Date.now(),
 							valid: true,
 						},
@@ -747,7 +749,7 @@ const mockApi: LookAPI = {
 			project: {
 				id: "dev-browser",
 				name: "pi (浏览器预览)",
-				cwd: "/Users/jacky/Desktop/pi",
+				cwd: "/Users/dev/Desktop/pi",
 				createdAt: Date.now(),
 				valid: true,
 			},
@@ -757,7 +759,6 @@ const mockApi: LookAPI = {
 	renameProject: () => ok,
 	deleteProject: () => ok,
 	confirmDeleteProject: () => ok,
-	getActiveProject: () => success({ project: null }),
 	// 浏览器 dev 模式返回固定假 git 信息，便于预览状态栏（真实环境由主进程探测）。
 	getProjectGitInfo: () =>
 		success({
@@ -802,7 +803,6 @@ const mockApi: LookAPI = {
 	// ---- Session tree ----
 	navigateTree: () => success({ result: { cancelled: true } }),
 	createFork: () => success({ agentId: MOCK_SESSION_ID, sessionFilePath: "" }),
-	setEntryLabel: () => ok,
 
 	// ---- Shared area ----
 	listSharedFiles: () => success({ nodes: [] }),
@@ -818,7 +818,6 @@ const mockApi: LookAPI = {
 
 	// ---- Workspace tree ----
 	listWorkspaceChildren: () => success({ nodes: [] }),
-	statWorkspaceNode: () => success({ node: null }),
 	startWorkspaceWatch: () => ok,
 	stopWorkspaceWatch: () => ok,
 
@@ -830,8 +829,6 @@ const mockApi: LookAPI = {
 	respondPlanApproval: () => ok,
 
 	// ---- SubAgent ----
-	listSubSessions: () => success({ sessions: [] }),
-	getParentSession: () => Promise.resolve({ success: true, parentSessionId: null }),
 	reviewChanges: () => success({ childSessionId: null, title: "审核本轮变更" }),
 
 	// ---- Agent Definitions ----
@@ -839,7 +836,6 @@ const mockApi: LookAPI = {
 	createAgentDefinition: () => ok,
 	updateAgentDefinition: () => ok,
 	deleteAgentDefinition: () => ok,
-	installAgentDefinition: () => ok,
 	setSubagentEnabled: () => ok,
 	setAgentDefinitionEnabled: () => ok,
 	setSkillEnabled: () => ok,
@@ -856,7 +852,6 @@ const mockApi: LookAPI = {
 			},
 		}),
 	updateUserProfile: () => ok,
-	resetUserProfile: () => ok,
 	logout: () => ok,
 
 	// ---- Usage ----
@@ -900,7 +895,6 @@ const mockApi: LookAPI = {
 	disconnectImChannel: () => ok,
 	removeImChannel: () => ok,
 	reconnectImChannel: () => ok,
-	sendImTestMessage: () => ok,
 	testImConnection: () => ok,
 	testImConnectionDirect: () => ok,
 	updateImChannel: () => ok,
@@ -913,14 +907,13 @@ const mockApi: LookAPI = {
 	setAgentBrowserLayout: () => ok,
 
 	// ---- Prompts ----
-	listPrompts: () => success({ prompts: [] }),
-	createPrompt: () => ok,
-	updatePrompt: () => ok,
+	listPrompts: () => success({ prompts: [], activePromptId: "builtin-default", projectOverrides: {} }),
+	createPrompt: () => success({ prompt: mockPrompt }),
+	updatePrompt: () => success({ prompt: mockPrompt }),
 	deletePrompt: () => ok,
 	setActivePrompt: () => ok,
-	listProjectPrompts: () => success({ prompts: [] }),
-	createProjectPrompt: () => ok,
-	updateProjectPrompt: () => ok,
+	createProjectPrompt: () => success({ prompt: mockPrompt }),
+	updateProjectPrompt: () => success({ prompt: mockPrompt }),
 	deleteProjectPrompt: () => ok,
 	setProjectActivePrompt: () => ok,
 

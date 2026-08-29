@@ -6,7 +6,7 @@ import type {
 } from "@shared/types";
 import { beforeEach, describe, expect, it } from "vitest";
 import { appStore } from "../src/renderer/store/appStore";
-import { sessionStateAtomFamily } from "../src/renderer/store/atoms";
+import { recentlyCompletedAtom, sessionStateAtomFamily } from "../src/renderer/store/atoms";
 import { emptyRendererSessionState } from "../src/renderer/store/sessionTypes";
 import {
 	applyHistoryPreview,
@@ -19,7 +19,7 @@ function userEntry(id: string): LookSessionEntry {
 	return { type: "message", id, message: { role: "user", content: `message ${id}` } } as LookSessionEntry;
 }
 
-function runtime(totalMessages: number) {
+function runtime(totalMessages: number, overrides: Partial<SessionSnapshotEnvelope["runtime"]> = {}) {
 	return {
 		thinkingLevel: "off" as const,
 		isStreaming: false,
@@ -29,6 +29,7 @@ function runtime(totalMessages: number) {
 		steering: [],
 		followUp: [],
 		stats: { totalMessages, totalTurns: 0, totalTokens: 0 },
+		...overrides,
 	};
 }
 
@@ -38,6 +39,7 @@ function snapshot(
 	partial = false,
 	history?: SessionSnapshotEnvelope["history"],
 	reason: SessionSnapshotEnvelope["reason"] = "activate",
+	runtimeOverrides: Partial<SessionSnapshotEnvelope["runtime"]> = {},
 ): SessionSnapshotEnvelope {
 	return {
 		type: "session:snapshot",
@@ -48,13 +50,14 @@ function snapshot(
 		history,
 		leafId: entries.at(-1)?.id ?? null,
 		entries,
-		runtime: runtime(entries.length),
+		runtime: runtime(entries.length, runtimeOverrides),
 	};
 }
 
 describe("session history snapshot state", () => {
 	beforeEach(() => {
 		appStore.set(sessionStateAtomFamily("session-a"), emptyRendererSessionState());
+		appStore.set(recentlyCompletedAtom, []);
 		resetSnapshotSequences();
 	});
 
@@ -254,5 +257,25 @@ describe("session history snapshot state", () => {
 		const state = appStore.get(sessionStateAtomFamily("session-a"));
 		expect(state.historyStatus).toBe("complete");
 		expect(state.entries.map((entry) => entry.id)).toEqual(["m1", "m2", "m3", "m4"]);
+	});
+
+	it("marks the session recently-completed on a terminal agent_end snapshot (idempotent)", () => {
+		const terminal = snapshot([userEntry("m1")], 1, false, undefined, "agent_end");
+		applySnapshot(terminal);
+		expect(appStore.get(recentlyCompletedAtom)).toEqual(["session-a"]);
+
+		// Duplicate terminal snapshots (same turn, higher sequence) must not duplicate the entry.
+		applySnapshot(snapshot([userEntry("m1")], 2, false, undefined, "agent_end"));
+		expect(appStore.get(recentlyCompletedAtom)).toEqual(["session-a"]);
+	});
+
+	it("does not mark recently-completed while a retry is pending on agent_end", () => {
+		applySnapshot(snapshot([userEntry("m1")], 1, false, undefined, "agent_end", { isRetrying: true }));
+		expect(appStore.get(recentlyCompletedAtom)).toEqual([]);
+	});
+
+	it("does not mark recently-completed for non-terminal snapshot reasons", () => {
+		applySnapshot(snapshot([userEntry("m1")], 1, false, undefined, "activate"));
+		expect(appStore.get(recentlyCompletedAtom)).toEqual([]);
 	});
 });

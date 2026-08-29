@@ -223,8 +223,8 @@ function waitForAppReady(api: Window["look"], timeoutMs = 2000): Promise<void> {
 			clearTimeout(timer);
 			resolve();
 		};
-		const unsubscribe = api.onEvent((rawEvent: unknown) => {
-			if ((rawEvent as { type?: string }).type === "app:ready") finish();
+		const unsubscribe = api.onEvent((event) => {
+			if (event.type === "app:ready") finish();
 		});
 		const timer = setTimeout(finish, timeoutMs);
 	});

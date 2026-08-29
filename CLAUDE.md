@@ -116,9 +116,8 @@ Root `package.json` is the npm workspace coordinator. Run contributor commands f
 Renderer (React 19, Jotai, Tailwind v4, shadcn/ui)
   │
   │  contextBridge (preload.cjs) — window.look
-  │    send(event)       → ipcRenderer.send("look:event", ...)
   │    invoke(event)     → ipcRenderer.invoke("look:invoke", ...)  → Promise
-  │    onEvent(callback) → ipcRenderer.on("look:event", ...)
+  │    onEvent(callback) → ipcRenderer.on("look:event", ...)   [main → renderer only]
   │
   ▼
 Main (Electron)
@@ -149,7 +148,7 @@ New/resume → `SessionManager.create` / `open` into a new runtime. Fork → `Se
 
 - Handlers: `apps/electron/src/main/ipc/handlers.ts` + `routers/`, `invoke-context.ts`.
 - **Main → Renderer**: `look:event` (lifecycle, stream snapshots, tools, usage, history, tree, …).
-- **Renderer → Main**: `look:invoke` (commands) and fire-and-forget `look:event` (e.g. `app:ready`).
+- **Renderer → Main**: `look:invoke` only — the fire-and-forget `look:event` path was removed (single request-response channel; every command goes through `LookAPI` methods with compile-time contract assertions in `contracts/invoke-response.ts`).
 - **Contract**: TypeScript-only — `const api: LookAPI = {…}` in `preload.cts` + `register<T extends RendererToMainEvent["type"]>` in invoke-context. Light guard: `test/preload-contract.test.ts`. Add IPC by editing `LookAPI` + preload + router. **Do not** introduce schema codegen.
 
 ### Skills

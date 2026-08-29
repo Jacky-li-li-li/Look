@@ -15,7 +15,6 @@ import { type BrowserWindow, ipcMain } from "electron";
 import { DraftStore } from "../drafts/draft-store.js";
 import { GitService } from "../git/git-service.js";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
-import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../system/traffic-light.js";
 import { ensureIpcEnvelopeShape } from "../utils/ipc-envelope.js";
 import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
@@ -191,42 +190,6 @@ export function registerIpcHandlers(
 
 	// 内置浏览器面板：启动即绑定 activity 推送（agent 用浏览器工具 → renderer 自动开面板）。
 	bindBrowserActivityToWindow(ctx.browser.service, ctx.mainWindow);
-
-	// Handle renderer → main events (fire-and-forget)
-	ipcMain.on("look:event", (_event, data: unknown) => {
-		try {
-			// 通道级硬化：payload 未经类型校验直接进 switch，非对象载荷会在这里
-			// 抛未捕获异常（ipcMain 监听器内 throw 无法被上方 handle() 的 catch
-			// 兜住）。先做形状校验，再按 type 分发。
-			const event = data as Partial<RendererToMainEvent> | null | undefined;
-			if (!event || typeof event !== "object" || typeof event.type !== "string") {
-				console.warn("[IPC] Ignoring malformed look:event payload:", typeof data);
-				return;
-			}
-			switch (event.type) {
-				case "app:ready":
-					break;
-				// 渲染端实测顶部栏可视中心(CSS px) → 校正 macOS 红绿灯垂直位置。
-				// CSS px 乘 zoomFactor 换算为 pt;仅 macOS 有 hiddenInset 红绿灯。
-				case "window:traffic-light-center": {
-					if (process.platform !== "darwin" || mainWindow.isDestroyed()) break;
-					const centerCssPx = (event as { centerCssPx?: unknown }).centerCssPx;
-					if (typeof centerCssPx !== "number" || !Number.isFinite(centerCssPx)) {
-						console.warn("[IPC] Ignoring malformed window:traffic-light-center payload");
-						break;
-					}
-					const zoom = mainWindow.webContents.zoomFactor || 1;
-					mainWindow.setWindowButtonPosition({
-						x: TRAFFIC_LIGHT_X,
-						y: trafficLightYForCenter(centerCssPx * zoom),
-					});
-					break;
-				}
-			}
-		} catch (error) {
-			console.error("[IPC] look:event handler failed:", error);
-		}
-	});
 
 	// Handle renderer → main invocations (request-response)
 	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {

@@ -27,12 +27,8 @@ export function handleSystemEvent(event: MainToRendererEvent): boolean {
 			void window.look
 				.getUsage()
 				.then((result) => {
-					const r = result as {
-						success: boolean;
-						usage?: import("../store/atoms").UsageAtomData;
-					};
-					if (r?.success && r.usage) {
-						appStore.set(usageDataAtom, r.usage);
+					if (result.success) {
+						appStore.set(usageDataAtom, result.usage);
 					}
 				})
 				.catch((err: unknown) => {

@@ -4,9 +4,17 @@
 
 import { dialog } from "electron";
 import { openOAuthWindow } from "../../system/oauth-window.js";
+import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../../system/traffic-light.js";
 import { getUsage } from "../../system/usage-service.js";
 import { getUserProfile, resetUserProfile, updateUserProfile } from "../../system/user-profile.js";
-import { guardObject, guardOptionalBoolean, guardOptionalString, guardPath, guardString } from "../guards.js";
+import {
+	guardNumber,
+	guardObject,
+	guardOptionalBoolean,
+	guardOptionalString,
+	guardPath,
+	guardString,
+} from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
 
 export const systemRouter: IpcRouter = (ctx, register) => {
@@ -55,6 +63,19 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 		return { success: true };
 	});
 
+	// macOS：渲染端实测顶部栏可视中心(CSS px) → 校正 hiddenInset 红绿灯垂直位置。
+	// CSS px 乘 zoomFactor 换算为 pt；非 macOS 无红绿灯，直接忽略。
+	register("window:set-traffic-light-center", async (data) => {
+		if (process.platform !== "darwin" || ctx.mainWindow.isDestroyed()) return { success: true };
+		const centerCssPx = guardNumber(data.centerCssPx, "centerCssPx");
+		const zoom = ctx.mainWindow.webContents.zoomFactor || 1;
+		ctx.mainWindow.setWindowButtonPosition({
+			x: TRAFFIC_LIGHT_X,
+			y: trafficLightYForCenter(centerCssPx * zoom),
+		});
+		return { success: true };
+	});
+
 	register("shell:open-project-folder", async (data) => {
 		const { shell } = await import("electron");
 		const project = data.projectId
@@ -72,11 +93,6 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 	register("user-profile:update", async (data) => {
 		guardObject(data.patch, "patch");
 		const profile = updateUserProfile(data.patch);
-		return { success: true, profile };
-	});
-
-	register("user-profile:reset", async () => {
-		const profile = resetUserProfile();
 		return { success: true, profile };
 	});
 

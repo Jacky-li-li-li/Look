@@ -1,4 +1,3 @@
-import type { MainToRendererEvent } from "@shared/types";
 import { handleAgentEvent } from "./agentHandlers";
 import { appStore } from "./appStore";
 import { appReadyPhaseAtom } from "./atoms";
@@ -8,6 +7,7 @@ import { handlePermissionEvent } from "./permissionHandlers";
 import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "./projectAtoms";
 import { handleProjectEvent } from "./projectHandlers";
 import { applyHistoryPreview, applySnapshot } from "./snapshot";
+import { initAppData, isStartupComplete } from "./startup";
 // ============================================================
 // IPC Handler — thin routing entry point for main→renderer events
 //
@@ -19,15 +19,16 @@ import { subagentCardStatusAtom } from "./subagentAtoms";
 import { handleSystemEvent } from "./systemHandlers";
 import { enqueueUiEvent } from "./ui-event-processor";
 
-export { initAppData, isStartupComplete } from "./startup";
+export { initAppData, isStartupComplete };
 
 const sharedRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Register all IPC event listeners. Call once at app startup. */
 export function initIpcHandlers(api: Window["look"]): () => void {
-	const unsub = api.onEvent((rawEvent: unknown) => {
-		const event = rawEvent as MainToRendererEvent;
-
+	const unsub = api.onEvent((event) => {
+		// 启动窗口内忽略 list 类 push：initAppData 的 pull 通道随后会写入权威全量，
+		// 避免 push/pull 双通道交错覆盖（_startupComplete 语义见 startup.ts）。
+		if (!isStartupComplete() && (event.type === "agent:list" || event.type === "project:list")) return;
 		if (handleAgentEvent(event)) return;
 		if (handleBrowserEvent(event)) return;
 		if (handleImEvent(event)) return;

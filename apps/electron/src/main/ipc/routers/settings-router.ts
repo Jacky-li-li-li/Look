@@ -5,7 +5,7 @@
 import { getLookThemeWindowBackground } from "@look/shared";
 import { maskSecret } from "@look/shared/secret-mask";
 import { getApiKey, getProviderSettings, setApiKey } from "../../models/model-queries.js";
-import { testApiKey, testConfiguredProvider, testCustomProvider } from "../../models/validator.js";
+import { testApiKey, testCustomProvider } from "../../models/validator.js";
 import type { CustomProviderInput } from "../../settings/custom-providers.js";
 import { assertValid, toProviderConfig } from "../../settings/custom-providers.js";
 import { OAuthLoginService } from "../../settings/oauth-login-service.js";
@@ -71,12 +71,6 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const _provider = guardProvider(data.provider);
 		guardString(data.key, "key");
 		const result = await testApiKey(_provider, data.key);
-		return { success: true, result };
-	});
-
-	register("settings:test-env-key", async (data) => {
-		const _provider = guardProvider(data.provider);
-		const result = await testConfiguredProvider(ctx.model.runtime, _provider);
 		return { success: true, result };
 	});
 
@@ -182,10 +176,6 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		return { success: true, settings: updated };
 	});
 
-	register("settings:general:reset", async () => {
-		return { success: true, settings: await ctx.session.settings.reset() };
-	});
-
 	register("settings:prompts:list", async () => {
 		return { success: true, ...ctx.settings.prompts.list() };
 	});
@@ -222,11 +212,6 @@ export const settingsRouter: IpcRouter = (ctx, register) => {
 		const ok = ctx.settings.prompts.setActive(id);
 		if (!ok) return { success: false, error: "Prompt not found" };
 		return { success: true };
-	});
-
-	register("settings:project-prompts:list", async (data) => {
-		const projectId = guardString(data.projectId, "projectId");
-		return { success: true, ...ctx.settings.prompts.listProjectPrompts(projectId) };
 	});
 
 	register("settings:project-prompts:create", async (data) => {

@@ -29,6 +29,11 @@ let activityPushTimer: ReturnType<typeof setTimeout> | null = null;
 /** 把 BrowserService 的 activity 回调转发为 renderer 事件（幂等，按窗口实例去重 + 去抖）。 */
 function ensureActivityPush(service: BrowserService, win: BrowserWindow): void {
 	if (activityBoundTo === win) return;
+	// 窗口重建重新绑定：清掉上一个窗口的待触发去抖定时器。
+	if (activityPushTimer) {
+		clearTimeout(activityPushTimer);
+		activityPushTimer = null;
+	}
 	activityBoundTo = win;
 	service.onPanelActivity(() => {
 		// 去抖合并连发的触碰事件；触发时再校验窗口存活。
@@ -72,6 +77,15 @@ export function parseAction(data: Record<string, unknown>, kind: string): Browse
 export function bindBrowserActivityToWindow(service: BrowserService, win: BrowserWindow): void {
 	service.setOwnerWindow(win);
 	ensureActivityPush(service, win);
+}
+
+/** 解绑 activity 推送（应用退出）：清理去抖定时器与已销毁窗口的引用。 */
+export function unbindBrowserActivity(): void {
+	if (activityPushTimer) {
+		clearTimeout(activityPushTimer);
+		activityPushTimer = null;
+	}
+	activityBoundTo = null;
 }
 
 /** 校验 browser:set-layout 载荷形状（renderer 输入不可信，测试导出）。 */

@@ -30,11 +30,6 @@ export const schedulerRouter: IpcRouter = (ctx, register) => {
 		return { success: true, task: await ctx.scheduler.pause(guardString(data.taskId, "taskId")) };
 	});
 
-	register("scheduled-task:resume", async (data) => {
-		await ctx.scheduler.waitUntilInitialized();
-		return { success: true, task: await ctx.scheduler.resume(guardString(data.taskId, "taskId")) };
-	});
-
 	register("scheduled-task:delete", async (data) => {
 		await ctx.scheduler.waitUntilInitialized();
 		await ctx.scheduler.delete(guardString(data.taskId, "taskId"));
@@ -55,13 +50,5 @@ export const schedulerRouter: IpcRouter = (ctx, register) => {
 	register("scheduled-task:logs", async (data) => {
 		await ctx.scheduler.waitUntilInitialized();
 		return { success: true, logs: ctx.scheduler.listLogs(data.taskId, data.limit) };
-	});
-
-	register("scheduled-task:validate-cron", async (data) => {
-		await ctx.scheduler.waitUntilInitialized();
-		// valid=false 是业务结果（走 success:true + valid 字段）；IpcResult 成功
-		// 分支禁止 error 字段，故丢弃 error 文本（当前无渲染端消费方）。
-		const { valid, nextRunAt } = ctx.scheduler.validateCron(data.cron, data.timezone);
-		return { success: true, valid, nextRunAt };
 	});
 };

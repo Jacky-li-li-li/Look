@@ -7,7 +7,7 @@ import type { AgentInfo, LookUiEvent, LookUiPhase, LookUiStreamBlock, LookUiTool
 import { toast } from "sonner";
 import { appStore } from "./appStore";
 import { trackAgentFamilyKey } from "./atomFamilyRegistry";
-import { sessionErrorsAtom, sessionStateAtomFamily, updateAgent } from "./atoms";
+import { recentlyCompletedAtom, sessionErrorsAtom, sessionStateAtomFamily, updateAgent } from "./atoms";
 import { subagentCardStatusAtom } from "./subagentAtoms";
 
 let _nextBlockUid = 0;
@@ -24,7 +24,8 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 	// Track this session ID for later atom-family prune cleanup.
 	trackAgentFamilyKey(sessionId);
 
-	if (typeof performance !== "undefined") {
+	// 仅开发环境打点：生产无需 Performance Timeline 条目。
+	if (import.meta.env.DEV) {
 		performance.mark(`look:ui-events:receive:${sessionId.slice(0, 6)}`);
 	}
 
@@ -246,6 +247,10 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 				phase = ev.status;
 				if (ev.status === "streaming" || ev.status === "working" || ev.status === "retrying") {
 					clearSessionError();
+					// 会话再次活跃：摘掉"刚完成"标记（对齐旧 agent:status 语义）。
+					appStore.set(recentlyCompletedAtom, (previous) =>
+						previous.includes(sessionId) ? previous.filter((id) => id !== sessionId) : previous,
+					);
 				}
 				if (ev.status === "streaming") {
 					blocks = [];
@@ -356,7 +361,7 @@ export function applyUiEventBatch(sessionId: string, events: LookUiEvent[]): voi
 		}));
 	}
 
-	if (typeof performance !== "undefined") {
+	if (import.meta.env.DEV) {
 		performance.mark(`look:ui-events:applied:${sessionId.slice(0, 6)}`);
 	}
 }

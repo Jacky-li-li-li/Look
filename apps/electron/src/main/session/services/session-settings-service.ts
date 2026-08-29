@@ -55,9 +55,14 @@ export class SessionSettingsService {
 		}
 
 		const settings = await this.options.userSettings.update(sanitized);
+		// 广播阶段（settings 已持久化成功，广播失败不应让 update 整体失败）。
 		if (sanitized.compactionEnabled !== undefined) {
 			for (const managed of this.options.listRuntimes()) {
-				managed.runtime.session.setAutoCompactionEnabled(sanitized.compactionEnabled);
+				try {
+					managed.runtime.session.setAutoCompactionEnabled(sanitized.compactionEnabled);
+				} catch (error) {
+					console.error("[Look] setAutoCompactionEnabled broadcast failed:", error);
+				}
 			}
 		}
 		if (sanitized.permissionMode !== undefined) {
@@ -65,7 +70,7 @@ export class SessionSettingsService {
 		}
 		if (sanitized.subagentEnabled !== undefined) {
 			this.options.sessionSubagentService.setDefaultEnabled(sanitized.subagentEnabled);
-			await Promise.all(
+			const results = await Promise.allSettled(
 				Array.from(this.options.listRuntimeIds()).map((sessionId) =>
 					this.options.sessionSubagentService.setEnabledForSession(
 						sessionId,
@@ -73,6 +78,11 @@ export class SessionSettingsService {
 					),
 				),
 			);
+			for (const result of results) {
+				if (result.status === "rejected") {
+					console.error("[Look] setEnabledForSession broadcast failed:", result.reason);
+				}
+			}
 		}
 		return settings;
 	}

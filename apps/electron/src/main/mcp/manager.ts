@@ -37,6 +37,8 @@ export class MCPManager {
 	 */
 	private readonly configLock = new SerialTail<"mcp-config">();
 	private onChange: (() => void) | null = null;
+	/** 空闲回收定时器句柄（应用退出前 stopIdleReaper 清理）。 */
+	private idleReaperTimer: NodeJS.Timeout | null = null;
 
 	private projectKey(projectId: string, name: string): string {
 		return `${projectId}:${name}`;
@@ -217,10 +219,21 @@ export class MCPManager {
 	/**
 	 * 空闲连接回收（Proma 式连接池）：超过 idleTtlMs 未调用工具的客户端
 	 * 断开并释放 stdio 子进程。周期清扫，定时器 unref 不阻止应用退出。
+	 * 重复调用幂等：先停掉既有定时器再重建。
 	 */
 	startIdleReaper(intervalMs = 60_000, idleTtlMs = 5 * 60_000): void {
+		this.stopIdleReaper();
 		const timer = setInterval(() => this.reapIdleClients(idleTtlMs), intervalMs);
 		timer.unref();
+		this.idleReaperTimer = timer;
+	}
+
+	/** 停止空闲回收定时器（应用退出/测试清理）。 */
+	stopIdleReaper(): void {
+		if (this.idleReaperTimer) {
+			clearInterval(this.idleReaperTimer);
+			this.idleReaperTimer = null;
+		}
 	}
 
 	/** 执行一次空闲清扫（周期回收的测试可观测入口）。 */
@@ -509,8 +522,10 @@ export class MCPManager {
 }
 
 async function loadConfigFile(filePath: string): Promise<McpServerConfig[]> {
+	// 只有文件不存在才静默（未配置是正常情况）；解析失败必须告警，
+	// 否则用户在项目里手写的 mcp.json 多一个逗号就会让全部 MCP server 无声消失。
+	if (!existsSync(filePath)) return [];
 	try {
-		if (!existsSync(filePath)) return [];
 		const raw = await readFile(filePath, "utf-8");
 		const parsed = JSON.parse(raw);
 		const servers = parsed.mcpServers ?? parsed.servers ?? {};
@@ -533,7 +548,11 @@ async function loadConfigFile(filePath: string): Promise<McpServerConfig[]> {
 			);
 		}
 		return results;
-	} catch {
+	} catch (error) {
+		console.warn(
+			`[MCP] 无法解析配置文件 ${filePath}，该文件的 MCP 配置已被跳过:`,
+			error instanceof Error ? error.message : String(error),
+		);
 		return [];
 	}
 }

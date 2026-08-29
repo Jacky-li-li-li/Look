@@ -1,6 +1,6 @@
 {
   "name": "look",
-  "version": "2.3.5",
+  "version": "0.0.0-workspace",
   "description": "Electron desktop agent app — Look",
   "private": true,
   "type": "module",

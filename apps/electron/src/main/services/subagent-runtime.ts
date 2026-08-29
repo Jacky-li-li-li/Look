@@ -113,6 +113,8 @@ export class SubAgentRuntimeService {
 
 		// 兜底 alarm：子会话超过 30 分钟仍未结算时发告警日志（不强制中止）。
 		// AbortSignal 不会触发的情况（父进程崩溃、IPC 断开）由 OS 回收连接。
+		// unref：纯可观测告警，不参与事件循环存活——否则每个结算过的子会话
+		// 都会遗留一个 ref'd 定时器把进程拖住最多 30 分钟。
 		const sanityTimer = setTimeout(() => {
 			if (this.registry.getPending(childSessionId) === pending) {
 				console.error(
@@ -123,14 +125,11 @@ export class SubAgentRuntimeService {
 				);
 			}
 		}, SUBAGENT_SANITY_TIMEOUT_MS);
-		const originalResolve = pending.resolve;
-		pending.resolve = (result: SubagentResult) => {
-			clearTimeout(sanityTimer);
-			(originalResolve as (r: SubagentResult) => void)(result);
-		};
+		sanityTimer.unref();
 
 		return new Promise<SubagentResult>((resolve) => {
 			pending.resolve = (result: SubagentResult) => {
+				clearTimeout(sanityTimer);
 				resolve(result);
 			};
 		});

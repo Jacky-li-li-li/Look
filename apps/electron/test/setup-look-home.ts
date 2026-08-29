@@ -15,9 +15,11 @@
 // vi.resetModules() and then dynamic-import (see
 // test/main/project-service-migration.test.ts).
 //
-// Exception: when LOOK_HOME is already set externally (e.g. CI's
-// seeded mock home in .github/workflows/nightly-e2e.yml), it is
-// respected as-is — no mkdtemp override, no cleanup.
+// Exception (narrow): only a CI-prested LOOK_HOME under the system
+// temp dir is respected as-is (nightly-e2e.yml's seeded mock home).
+// A LOOK_HOME leaked from a local shell could point at real user data
+// (~/.look or a live project home) — that is always overridden with a
+// mkdtemp home, so local runs stay hermetic.
 // ============================================================
 
 import fs from "node:fs";
@@ -26,12 +28,20 @@ import path from "node:path";
 import { afterAll } from "vitest";
 
 const externalLookHome = process.env.LOOK_HOME;
-const lookHome = externalLookHome ?? fs.mkdtempSync(path.join(os.tmpdir(), "look-test-home-"));
+// macOS 上 os.tmpdir() 是 /var/folders/...，而 nightly-e2e 硬编码 /tmp——
+// 两者都视为系统临时目录，平台差异不误伤 CI 豁免。
+const isTempPath = (p: string): boolean => {
+	const tempRoots = [os.tmpdir(), "/tmp", "/private/tmp"];
+	return tempRoots.some((root) => p === root || p.startsWith(`${root}${path.sep}`));
+};
+const exemptExternalHome =
+	externalLookHome && process.env.CI === "true" && isTempPath(externalLookHome) ? externalLookHome : undefined;
+const lookHome = exemptExternalHome ?? fs.mkdtempSync(path.join(os.tmpdir(), "look-test-home-"));
 process.env.LOOK_HOME = lookHome;
 
-// Only remove homes we created; an externally provided LOOK_HOME is
+// Only remove homes we created; an exempted external LOOK_HOME is
 // left untouched.
-if (!externalLookHome) {
+if (!exemptExternalHome) {
 	afterAll(() => {
 		fs.rmSync(lookHome, { recursive: true, force: true });
 	});

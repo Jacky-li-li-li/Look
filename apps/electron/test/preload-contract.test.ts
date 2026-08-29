@@ -25,6 +25,23 @@ describe("preload contract", () => {
 		}
 	});
 
+	it("rejects preload members that are not declared in the shared LookAPI contract", () => {
+		const contract = readFileSync(resolve(repositoryRoot, "packages/shared/src/contracts/ipc.ts"), "utf8");
+		const preload = read("src/main/preload.cts");
+		const lookApi = contract.match(/export interface LookAPI \{([\s\S]*?)\n\}/)?.[1] ?? "";
+		const declared = new Set([
+			"homedir",
+			"platform",
+			...[...lookApi.matchAll(/^\t([a-z][A-Za-z0-9]*)\(/gm)].map((match) => match[1]),
+		]);
+		const body = preload.match(/const api: LookAPI = \{([\s\S]*?)\n\};/)?.[1] ?? "";
+		const exposed = [...body.matchAll(/^\t([a-zA-Z][A-Za-z0-9]*):/gm)].map((match) => match[1]);
+		expect(exposed.length).toBeGreaterThan(0);
+		for (const member of exposed) {
+			expect(declared.has(member), `preload 暴露了 LookAPI 未声明的成员: ${member}`).toBe(true);
+		}
+	});
+
 	it("forwards every declared createAgent option to the IPC command", () => {
 		const preload = read("src/main/preload.cts");
 		const start = preload.indexOf("\tcreateAgent:");

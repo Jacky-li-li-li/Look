@@ -30,7 +30,7 @@ function measureTopBarCenter(): number | null {
 }
 
 /**
- * 实测顶部栏中心并通过 "window:traffic-light-center" 回传主进程。
+ * 实测顶部栏中心并通过 setTrafficLightCenter() 回传主进程。
  * 仅 macOS 需要（其他平台无 hiddenInset 红绿灯）；找不到顶部栏时
  * 保持主进程的初始估算值不动。
  *
@@ -41,6 +41,6 @@ export function syncTrafficLightPosition(): void {
 	if (window.look?.platform !== "darwin") return;
 	const center = measureTopBarCenter();
 	if (center != null) {
-		window.look.send({ type: "window:traffic-light-center", centerCssPx: center });
+		void window.look.setTrafficLightCenter(center);
 	}
 }

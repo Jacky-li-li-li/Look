@@ -77,18 +77,6 @@ export const imRouter: IpcRouter = (ctx, register) => {
 		}
 	});
 
-	register("im:send-test-message", async (data) => {
-		const appId = guardString(data.appId, "appId");
-		const receiveIdType = guardString(data.receiveIdType, "receiveIdType");
-		const receiveId = guardString(data.receiveId, "receiveId");
-		const text = guardString(data.text, "text");
-		if (!ctx.im.channelManager) {
-			return { success: false, error: "Feishu channel manager is not available" };
-		}
-		const sent = await ctx.im.channelManager.sendTestMessage({ appId, receiveIdType, receiveId, text });
-		return sent.success ? { success: true } : { success: false, error: sent.error ?? "send failed" };
-	});
-
 	register("im:test-connection", async (data) => {
 		const appId = guardString(data.appId, "appId");
 		if (!ctx.im.channelManager) {
@@ -126,21 +114,5 @@ export const imRouter: IpcRouter = (ctx, register) => {
 			return { success: false, error: "LarkBridgeService is not available" };
 		}
 		return { success: true, bindings: ctx.im.bridgeService.getBindings() };
-	});
-
-	register("im:remove-binding", async (data) => {
-		const chatId = guardString(data.chatId, "chatId");
-		if (!ctx.im.bridgeService) {
-			return { success: false, error: "LarkBridgeService is not available" };
-		}
-		ctx.im.bridgeService.removeBinding(chatId);
-		return { success: true };
-	});
-
-	register("im:get-bridge-status", async () => {
-		if (!ctx.im.bridgeService) {
-			return { success: false, error: "LarkBridgeService is not available" };
-		}
-		return { success: true, ...ctx.im.bridgeService.getStatus() };
 	});
 };

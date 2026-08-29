@@ -19,12 +19,14 @@ import { LarkChannelManager } from "./im/lark-channel-manager.js";
 import { registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
 import { BrowserWindowEventTransport } from "./ipc/renderer-event-transport.js";
+import { unbindBrowserActivity } from "./ipc/routers/browser-router.js";
 import { DesktopNotifierService } from "./notifications/desktop-notifier.js";
 import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
 import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
 import { SessionRuntimeManager } from "./session/runtime/runtime-manager.js";
+import type { RuntimeManagerComposition } from "./session/runtime-manager-composition.js";
 import { readThemeSettingsSync } from "./settings/store.js";
 import { initAppUpdater, replayUpdateStatus, requestFreshCheck } from "./system/app-updater.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
@@ -62,6 +64,11 @@ export class Application {
 	private _ipcRegistered = false;
 	/** 窗口是否已完成加载（did-finish-load 已触发，渲染进程 onEvent 就绪）。 */
 	private _rendererLoaded = false;
+
+	/** Runtime composition facade（bootstrap 前 / dispose 后可能为 undefined）。 */
+	private get composition(): RuntimeManagerComposition | undefined {
+		return this.services.runtimeManager?.composition;
+	}
 
 	constructor() {
 		this.services = {
@@ -270,6 +277,7 @@ export class Application {
 		this.services.mainWindow.on("closed", () => {
 			this.services.mainWindow = null;
 			closeViewerWindow();
+			unbindBrowserActivity();
 			// 窗口关闭即重置就绪标志：macOS activate 重建窗口时，避免残留的
 			// _rendererLoaded=true 导致 maybeSendAppReady 提前对未加载的新窗口
 			// 发 app:ready（webContents.send 不排队，会静默丢失）。
@@ -422,11 +430,10 @@ export class Application {
 		// （表现为「准备中」一直转圈）。超时后 in-flight settle，会话初始化
 		// 走本地 store 数据继续。
 		const backgroundRefreshStartedAt = Date.now();
-		void this.services
-			.runtimeManager!.composition.modelRuntime.refresh({ allowNetwork: true, signal: AbortSignal.timeout(30_000) })
+		void this.composition!.modelRuntime.refresh({ allowNetwork: true, signal: AbortSignal.timeout(30_000) })
 			.then(() => {
 				console.log(`[Look] Background model refresh done in ${Date.now() - backgroundRefreshStartedAt}ms`);
-				this.services.runtimeManager?.composition.sessionNotifier.emit({ type: "model:updated" });
+				this.composition?.sessionNotifier.emit({ type: "model:updated" });
 			})
 			.catch((err) => console.warn("[Look] Background model refresh failed:", err));
 	}
@@ -567,7 +574,7 @@ export class Application {
 
 	private registerIpcHandlersNow(): void {
 		registerIpcHandlers(
-			this.services.runtimeManager!.composition,
+			this.composition!,
 			this.services.mainWindow!,
 			this.rendererEvents,
 			this.services.larkChannelManager!,
@@ -616,11 +623,10 @@ export class Application {
 		if (!this.services.runtimeManager || this.services.desktopNotifier) return;
 		try {
 			this.services.desktopNotifier = new DesktopNotifierService({
-				eventBus: this.services.runtimeManager.composition.eventBus,
+				eventBus: this.composition!.eventBus,
 				getMainWindow: () => this.services.mainWindow,
-				getSettings: () => this.services.runtimeManager!.composition.userSettings.getAll(),
-				getAgentInfo: (sessionId) =>
-					this.services.runtimeManager!.composition.sessionInfoService.getAgentInfo(sessionId),
+				getSettings: () => this.composition!.userSettings.getAll(),
+				getAgentInfo: (sessionId) => this.composition!.sessionInfoService.getAgentInfo(sessionId),
 			});
 			this.services.desktopNotifier.subscribe();
 			console.log("[Look] DesktopNotifierService initialized");

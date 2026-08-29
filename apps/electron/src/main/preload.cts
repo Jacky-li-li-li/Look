@@ -29,7 +29,6 @@ const api: LookAPI = {
 	// titleBarStyle: "hiddenInset").
 	platform: process.platform,
 
-	send: (event) => ipcRenderer.send("look:event", event),
 	invoke: (event) => ipcRenderer.invoke("look:invoke", event),
 
 	onEvent: (callback) => {
@@ -71,8 +70,6 @@ const api: LookAPI = {
 
 	getModels: () => invoke({ type: "model:list" }),
 
-	getProviders: () => invoke({ type: "model:providers" }),
-
 	getAgents: () => invoke({ type: "agents:list" }),
 
 	// ---- Scheduled tasks ----
@@ -81,12 +78,10 @@ const api: LookAPI = {
 	updateScheduledTask: (taskId, patch) => invoke({ type: "scheduled-task:update", taskId, patch }),
 	startScheduledTask: (taskId) => invoke({ type: "scheduled-task:start", taskId }),
 	pauseScheduledTask: (taskId) => invoke({ type: "scheduled-task:pause", taskId }),
-	resumeScheduledTask: (taskId) => invoke({ type: "scheduled-task:resume", taskId }),
 	deleteScheduledTask: (taskId) => invoke({ type: "scheduled-task:delete", taskId }),
 	runScheduledTaskNow: (taskId) => invoke({ type: "scheduled-task:run-now", taskId }),
 	testScheduledTask: (task, taskId) => invoke({ type: "scheduled-task:test", task, taskId }),
 	listScheduledTaskLogs: (taskId, limit) => invoke({ type: "scheduled-task:logs", taskId, limit }),
-	validateCron: (cron, timezone) => invoke({ type: "scheduled-task:validate-cron", cron, timezone }),
 
 	// ---- Drafts ----
 	listDrafts: () => invoke({ type: "draft:list" }),
@@ -103,11 +98,6 @@ const api: LookAPI = {
 	getApiKey: (provider, opts) => invoke({ type: "settings:get-api-key", provider, reveal: opts?.reveal }),
 
 	testApiKey: (provider, key) => invoke({ type: "settings:test-api-key", provider, key }),
-
-	// Test the env-var credential for a provider (no key arg — the
-	// main process reads it from process.env itself, so the renderer
-	// never has to know the variable name).
-	testEnvKey: (provider) => invoke({ type: "settings:test-env-key", provider }),
 
 	// ---- Provider OAuth login ----
 	providerLogin: (provider) => invoke({ type: "settings:provider-login", provider }),
@@ -130,8 +120,6 @@ const api: LookAPI = {
 	getGeneralSettings: () => invoke({ type: "settings:general:get" }),
 
 	setGeneralSettings: (settings) => invoke({ type: "settings:general:set", settings }),
-
-	resetGeneralSettings: () => invoke({ type: "settings:general:reset" }),
 
 	transcribeGetState: () => invoke({ type: "transcribe:get-state" }),
 
@@ -166,6 +154,7 @@ const api: LookAPI = {
 	// Returns { success, path?, canceled?, error? }. The renderer
 	// is sandboxed, so it can't call `dialog.showOpenDialog` itself.
 	openDirectoryDialog: (title) => invoke({ type: "dialog:open-directory", title }),
+	setTrafficLightCenter: (centerCssPx) => invoke({ type: "window:set-traffic-light-center", centerCssPx }),
 	openFileDialog: (options) =>
 		invoke({
 			type: "dialog:open-files",
@@ -202,7 +191,6 @@ const api: LookAPI = {
 	deleteProject: (projectId) => invoke({ type: "project:delete", projectId }),
 	confirmDeleteProject: (projectId, confirmed) =>
 		invoke({ type: "project:confirm-delete-response", projectId, confirmed }),
-	getActiveProject: () => invoke({ type: "project:get-active" }),
 	getProjectGitInfo: (projectId) => invoke({ type: "project:git-info", projectId }),
 	getProjectGitDiff: (projectId) => invoke({ type: "project:git-diff", projectId }),
 	getProjectGitFileHead: (projectId, absolutePath) =>
@@ -234,15 +222,6 @@ const api: LookAPI = {
 			entryId,
 			name: opts?.name,
 		}),
-	// label: string | null — null/empty clears
-	setEntryLabel: (agentId, entryId, label) =>
-		invoke({
-			type: "agent:set-entry-label",
-			agentId,
-			entryId,
-			label,
-		}),
-
 	// ---- Shared area ----
 	listSharedFiles: (projectId) => invoke({ type: "shared:list", projectId }),
 	listSharedChildren: (projectId, relativePath) => invoke({ type: "shared:list-children", projectId, relativePath }),
@@ -261,7 +240,6 @@ const api: LookAPI = {
 	// ---- Workspace tree (v0.6) ----
 	listWorkspaceChildren: (projectId, relativePath, showHiddenFiles = true) =>
 		invoke({ type: "workspace:list-children", projectId, relativePath, showHiddenFiles }),
-	statWorkspaceNode: (projectId, relativePath) => invoke({ type: "workspace:stat", projectId, relativePath }),
 	startWorkspaceWatch: (projectId, relativePath) => invoke({ type: "workspace:watch", projectId, relativePath }),
 	stopWorkspaceWatch: (projectId, relativePath) => invoke({ type: "workspace:unwatch", projectId, relativePath }),
 
@@ -315,10 +293,6 @@ const api: LookAPI = {
 	respondPlanQuestion: (payload) => invoke({ type: "plan:question-respond", payload }),
 	respondPlanApproval: (payload) => invoke({ type: "plan:approval-respond", payload }),
 
-	// ---- SubAgent：子会话关系查询（Stage 4 嵌套） ----
-	listSubSessions: (parentSessionId) => invoke({ type: "agent:list-subagents", parentSessionId }),
-	getParentSession: (childSessionId) => invoke({ type: "agent:get-parent-session", childSessionId }),
-
 	reviewChanges: (payload) =>
 		invoke({
 			type: "agent:review-changes",
@@ -332,7 +306,6 @@ const api: LookAPI = {
 	createAgentDefinition: (input) => invoke({ type: "agent-definitions:create", input }),
 	updateAgentDefinition: (name, input) => invoke({ type: "agent-definitions:update", name, input }),
 	deleteAgentDefinition: (name) => invoke({ type: "agent-definitions:delete", name }),
-	installAgentDefinition: (name) => invoke({ type: "agent-definitions:install", name, source: "builtin" }),
 
 	// ---- SubAgent：Agent 开关（Stage 2，应用到所有活动会话 + 持久化为默认） ----
 	setSubagentEnabled: (enabled) => invoke({ type: "agent:set-subagent-enabled", enabled }),
@@ -356,7 +329,6 @@ const api: LookAPI = {
 
 	getUserProfile: () => invoke({ type: "user-profile:get" }),
 	updateUserProfile: (patch) => invoke({ type: "user-profile:update", patch }),
-	resetUserProfile: () => invoke({ type: "user-profile:reset" }),
 	logout: () => invoke({ type: "user-profile:logout" }),
 
 	// ---- Usage heatmap ----
@@ -386,14 +358,6 @@ const api: LookAPI = {
 	disconnectImChannel: (provider, appId) => invoke({ type: "im:disconnect-channel", provider, appId }),
 	removeImChannel: (provider, appId) => invoke({ type: "im:remove-channel", provider, appId }),
 	reconnectImChannel: (provider, appId) => invoke({ type: "im:reconnect-channel", provider, appId }),
-	sendImTestMessage: (input) =>
-		invoke({
-			type: "im:send-test-message",
-			appId: input.appId,
-			receiveIdType: input.receiveIdType,
-			receiveId: input.receiveId,
-			text: input.text,
-		}),
 	testImConnection: (appId) =>
 		invoke({
 			type: "im:test-connection",
@@ -446,7 +410,6 @@ const api: LookAPI = {
 	setActivePrompt: (id) => invoke({ type: "settings:prompts:set-active", id }),
 
 	// ---- Project-level Prompts ----
-	listProjectPrompts: (projectId) => invoke({ type: "settings:project-prompts:list", projectId }),
 	createProjectPrompt: (projectId, name, content) =>
 		invoke({ type: "settings:project-prompts:create", projectId, name, content }),
 	updateProjectPrompt: (projectId, id, patch) =>

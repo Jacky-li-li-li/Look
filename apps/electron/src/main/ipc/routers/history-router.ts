@@ -65,14 +65,4 @@ export const historyRouter: IpcRouter = (ctx, register) => {
 			return { success: false, error: e instanceof Error ? e.message : "Failed to create fork" };
 		}
 	});
-
-	register("agent:set-entry-label", async (data) => {
-		const _agentId = guardAgentId(data.agentId, "agentId");
-		const _entryId = guardString(data.entryId, "entryId");
-		if (data.label !== null) {
-			guardString(data.label, "label");
-		}
-		ctx.session.history.setEntryLabel(_agentId, _entryId, data.label);
-		return { success: true };
-	});
 };

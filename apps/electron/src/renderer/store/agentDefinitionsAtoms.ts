@@ -2,7 +2,7 @@
 // Agent Definitions — Agent 广场状态（Stage 3）
 // ============================================================
 
-import type { AgentDefinitionInfo } from "@shared/types";
+import type { AgentDefinitionInfo, SkillEntry } from "@shared/types";
 import { atom } from "jotai";
 
 /** 已加载的 Agent 定义列表（来自 listAgentDefinitions IPC） */
@@ -35,15 +35,8 @@ export const subagentSourceTabAtom = atom<"builtin" | "mine">("builtin");
 
 // ---- Skill 页面 ----
 
-export interface AgentSkillInfo {
-	name: string;
-	description: string;
-	category: "builtin" | "mine";
-	filePath?: string;
-	baseDir?: string;
-	source?: "user" | "project" | "path";
-	disableModelInvocation?: boolean;
-}
+/** 已加载的 Skill 列表（来自 listSkills IPC）；条目类型收敛为 shared SkillEntry。 */
+export type AgentSkillInfo = SkillEntry;
 
 /** 已加载的 Skill 列表（来自 listSkills IPC） */
 export const agentSkillsAtom = atom<AgentSkillInfo[]>([]);

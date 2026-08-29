@@ -66,6 +66,12 @@ export type {
 } from "./types/dto/browser.js";
 export type { GitDiffFile, GitRepoInfo } from "./types/dto/git.js";
 export type {
+	McpJsonSchemaPropertyDto,
+	McpServerStatusEntry,
+	McpToolDto,
+	McpToolWithServer,
+} from "./types/dto/mcp.js";
+export type {
 	AppUpdatePhase,
 	FileTreeNode,
 	ImSessionProvider,
@@ -87,6 +93,7 @@ export type {
 	ToolCallHandler,
 } from "./types/dto/permission.js";
 export type { ProjectInfo } from "./types/dto/project.js";
+export type { ProjectPromptDataDto, PromptEntry } from "./types/dto/prompt.js";
 export type {
 	AvailableModel,
 	CustomProviderInput,
@@ -105,7 +112,15 @@ export type {
 	SessionRuntimeSnapshot,
 	SessionSnapshotEnvelope,
 } from "./types/dto/session.js";
+export type { SkillDiagnostic, SkillEntry } from "./types/dto/skill.js";
 export type { SubagentCompletedEvent, SubagentProgressEvent } from "./types/dto/subagent.js";
+export type {
+	AggregatedUsage,
+	ModelCostEntry,
+	SdkUsage,
+	SdkUsageCost,
+	UsageData,
+} from "./types/dto/usage.js";
 export type { UserProfile } from "./types/dto/user.js";
 // Events
 export type { LoginPrompt, MainToRendererEvent } from "./types/events/main-to-renderer.js";

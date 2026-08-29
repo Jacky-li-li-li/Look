@@ -18,6 +18,7 @@ import { appStore } from "./appStore";
 import {
 	forkingEntryAtomFamily,
 	navigatingEntryAtomFamily,
+	recentlyCompletedAtom,
 	sessionLeafIdAtomFamily,
 	sessionStateAtomFamily,
 } from "./atoms";
@@ -263,6 +264,15 @@ export function applySnapshot(snapshot: SessionSnapshotEnvelope): void {
 	});
 	setLeafAndNavigationState(snapshot.sessionId, leafId);
 	applyAgentRuntimeProjection(snapshot);
+
+	// 回合终态：标记"刚完成"，供折叠侧栏优先槽位（getPrioritySessionIds）保底可见。
+	// 判据与 desktop-notifier 的完成通知一致：agent_end 快照且不流式、不重试
+	//（重试会在 retry 结束后再次到达 agent_end 快照）。
+	if (isAgentEnd && !snapshot.runtime.isStreaming && !snapshot.runtime.isRetrying) {
+		appStore.set(recentlyCompletedAtom, (previous) =>
+			previous.includes(snapshot.sessionId) ? previous : [...previous, snapshot.sessionId],
+		);
+	}
 }
 
 /**

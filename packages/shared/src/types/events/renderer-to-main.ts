@@ -29,19 +29,16 @@ export type RendererToMainEvent =
 	| { type: "agent:switch-model"; agentId: string; model: string }
 	| { type: "agent:update-thinking"; agentId: string; level: ThinkingLevel }
 	| { type: "model:list" }
-	| { type: "model:providers" }
 	| { type: "agents:list" }
 	| { type: "scheduled-task:list" }
 	| { type: "scheduled-task:create"; task: ScheduledTaskInput }
 	| { type: "scheduled-task:update"; taskId: string; patch: Partial<ScheduledTaskInput> }
 	| { type: "scheduled-task:start"; taskId: string }
 	| { type: "scheduled-task:pause"; taskId: string }
-	| { type: "scheduled-task:resume"; taskId: string }
 	| { type: "scheduled-task:delete"; taskId: string }
 	| { type: "scheduled-task:run-now"; taskId: string }
 	| { type: "scheduled-task:test"; task: ScheduledTaskInput; taskId?: string }
 	| { type: "scheduled-task:logs"; taskId?: string; limit?: number }
-	| { type: "scheduled-task:validate-cron"; cron: string; timezone?: string }
 	| { type: "draft:list" }
 	| { type: "draft:create"; text: string }
 	| { type: "draft:update"; draftId: string; patch: DraftPatch }
@@ -50,7 +47,6 @@ export type RendererToMainEvent =
 	| { type: "settings:get-api-key"; provider: string; reveal?: boolean }
 	| { type: "settings:set-api-key"; provider: string; key: string }
 	| { type: "settings:test-api-key"; provider: string; key: string }
-	| { type: "settings:test-env-key"; provider: string }
 	| { type: "login:prompt-respond"; promptId: string; value: string }
 	| { type: "login:prompt-cancel"; promptId: string }
 	| { type: "auth:open-oauth-url"; url: string; redirectTo: string }
@@ -74,7 +70,6 @@ export type RendererToMainEvent =
 	| { type: "agent:rename"; agentId: string; name: string }
 	| { type: "agent:abort"; agentId: string }
 	| { type: "settings:general:set"; settings: Partial<UserSettings> }
-	| { type: "settings:general:reset" }
 	| { type: "skills:list" }
 	| { type: "skills:import-paths"; paths: string[] }
 	| { type: "skills:detect-common" }
@@ -82,15 +77,13 @@ export type RendererToMainEvent =
 	| { type: "dialog:open-files"; title?: string; allowDirectories?: boolean; allowMultiple?: boolean }
 	| { type: "shell:reveal-in-finder"; path: string }
 	| { type: "shell:open-project-folder"; projectId?: string }
-	| { type: "app:ready" }
-	| { type: "window:traffic-light-center"; centerCssPx: number }
+	| { type: "window:set-traffic-light-center"; centerCssPx: number }
 	| { type: "project:list" }
 	| { type: "project:create"; cwd: string; name?: string }
 	| { type: "project:switch"; projectId: string }
 	| { type: "project:rename"; projectId: string; name: string }
 	| { type: "project:delete"; projectId: string }
 	| { type: "project:confirm-delete-response"; projectId: string; confirmed: boolean }
-	| { type: "project:get-active" }
 	| { type: "project:git-info"; projectId: string }
 	| { type: "project:git-diff"; projectId: string }
 	| { type: "project:git-file-head"; projectId: string; absolutePath: string }
@@ -104,13 +97,11 @@ export type RendererToMainEvent =
 			label?: string;
 	  }
 	| { type: "agent:create-fork"; agentId: string; entryId: string; name?: string }
-	| { type: "agent:set-entry-label"; agentId: string; entryId: string; label: string | null }
 	| { type: "user-profile:get" }
 	| {
 			type: "user-profile:update";
 			patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>;
 	  }
-	| { type: "user-profile:reset" }
 	| { type: "user-profile:logout" }
 	| { type: "usage:get" }
 	| { type: "shared:list"; projectId: string }
@@ -124,7 +115,6 @@ export type RendererToMainEvent =
 	| { type: "shared:export"; projectId: string; paths: string[]; destDir: string }
 	| { type: "shared:write-content"; projectId: string; path: string; content: string; encoding?: "base64" | "utf8" }
 	| { type: "workspace:list-children"; projectId: string; relativePath: string; showHiddenFiles?: boolean }
-	| { type: "workspace:stat"; projectId: string; relativePath: string }
 	| { type: "workspace:watch"; projectId: string; relativePath: string }
 	| { type: "workspace:unwatch"; projectId: string; relativePath: string }
 	| { type: "file:read"; path: string }
@@ -153,15 +143,12 @@ export type RendererToMainEvent =
 	| { type: "permission:respond"; payload: PermissionRespondPayload }
 	| { type: "plan:question-respond"; payload: PlanQuestionResponse }
 	| { type: "plan:approval-respond"; payload: PlanApprovalResponse }
-	| { type: "agent:list-subagents"; parentSessionId: string }
-	| { type: "agent:get-parent-session"; childSessionId: string }
 	| { type: "agent:set-subagent-enabled"; enabled: boolean }
 	| { type: "agent:review-changes"; parentSessionId: string; title: string; turnKey: string }
 	| { type: "agent-definitions:list" }
 	| { type: "agent-definitions:create"; input: AgentDefinitionInput }
 	| { type: "agent-definitions:update"; name: string; input: AgentDefinitionInput }
 	| { type: "agent-definitions:delete"; name: string }
-	| { type: "agent-definitions:install"; name: string; source: "builtin" }
 	| { type: "agent-definitions:set-enabled"; name: string; enabled: boolean }
 	| { type: "skills:set-enabled"; name: string; enabled: boolean }
 	| { type: "im:get-channels" }
@@ -171,19 +158,15 @@ export type RendererToMainEvent =
 	| { type: "im:disconnect-channel"; provider: string; appId?: string }
 	| { type: "im:remove-channel"; provider: string; appId: string }
 	| { type: "im:reconnect-channel"; provider: string; appId: string }
-	| { type: "im:send-test-message"; appId: string; receiveIdType: string; receiveId: string; text: string }
 	| { type: "im:test-connection"; appId: string }
 	| { type: "im:test-connection-direct"; appId: string; appSecret: string; name?: string }
 	| { type: "im:update-channel"; appId: string; name?: string }
 	| { type: "im:get-bindings" }
-	| { type: "im:remove-binding"; chatId: string }
-	| { type: "im:get-bridge-status" }
 	| { type: "settings:prompts:list" }
 	| { type: "settings:prompts:create"; name: string; content: string }
 	| { type: "settings:prompts:update"; id: string; name?: string; content?: string }
 	| { type: "settings:prompts:delete"; id: string }
 	| { type: "settings:prompts:set-active"; id: string }
-	| { type: "settings:project-prompts:list"; projectId: string }
 	| { type: "settings:project-prompts:create"; projectId: string; name: string; content: string }
 	| { type: "settings:project-prompts:update"; projectId: string; id: string; name?: string; content?: string }
 	| { type: "settings:project-prompts:delete"; projectId: string; id: string }

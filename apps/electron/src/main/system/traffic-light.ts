@@ -4,7 +4,7 @@
 // hiddenInset 红绿灯的位置由主进程控制，与渲染端 CSS 是两个互不知情
 // 的坐标系；硬编码 y 一旦遇到顶部栏高度/布局变化就会错位。因此采用
 // 正向推导：渲染端实测当前顶部栏的可视中心（CSS px），通过
-// "window:traffic-light-center" 事件回传，主进程换算后调用
+// window:set-traffic-light-center invoke 回传，主进程换算后调用
 // setTrafficLightPosition。此处的常量是该换算的唯一事实来源。
 // ============================================================
 

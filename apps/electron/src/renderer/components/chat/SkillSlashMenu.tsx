@@ -13,34 +13,14 @@
 // renders a focused list and fires callbacks.
 // ============================================================
 
+// 技能条目类型已收敛到 shared types/dto/skill.ts（镜像 pi SDK `Skill`
+// + Look 本地扫描分支）。legacy `source` 字段保留为自由格式 string，
+// 权威值在 `sourceInfo.source`（见 `sourceBadge`）。
+import type { SkillDiagnostic, SkillEntry } from "@shared/types";
 import { ChevronRight, FileCode2, FolderGit2, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { usePickerMenu } from "./usePickerMenu";
-
-/**
- * Mirrors pi SDK's `Skill` shape (from @earendil-works/pi-coding-agent).
- * The legacy `source: "user" | "project" | "path"` field is left as
- * a hint for callers that want to read it directly, but the
- * authoritative value lives on `sourceInfo.source` (a free-form
- * `string` — see `sourceBadge`).
- */
-export interface SkillEntry {
-	name: string;
-	description: string;
-	filePath: string;
-	baseDir: string;
-	/** @deprecated Read `sourceInfo.source` instead. */
-	source?: "user" | "project" | "path" | (string & {});
-	/** pi SDK's per-skill provenance. Always present at runtime. */
-	sourceInfo?: { source: string; scope?: string; origin?: string; baseDir?: string };
-	disableModelInvocation: boolean;
-}
-
-export interface SkillDiagnostic {
-	type: "warning" | "collision";
-	message: string;
-	path?: string;
-}
+export type { SkillDiagnostic, SkillEntry };
 
 export interface CommonSkillPath {
 	tool: string;
