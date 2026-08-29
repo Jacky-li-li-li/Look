@@ -20,6 +20,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.6.1",
+		date: "2026-08-30",
+		items: [
+			{
+				zh: "性能优化：长时间流式生成时侧栏与会话列表不再每帧重复渲染，界面更流畅；应用退出不再被子会话的告警定时器拖住",
+				en: "Performance: the sidebar and session list no longer re-render every frame during long streaming runs, keeping the UI smooth; quitting is no longer delayed by subagent alert timers",
+				ja: "パフォーマンス改善：長時間のストリーミング中もサイドバーとセッションリストが毎フレーム再描画されなくなり、UI が滑らかに。サブエージェントのアラートタイマーによってアプリ終了が遅れる問題も修正",
+			},
+			{
+				zh: "稳定性：修复启动窗口内会话/项目列表推送与拉取交错可能导致的列表闪变；MCP 配置文件解析错误现在会在 MCP 面板中显示，不再静默失效",
+				en: "Stability: fixed list flicker caused by push/pull interleaving during startup; MCP config parse errors are now shown in the MCP panel instead of failing silently",
+				ja: "安定性：起動時にセッション・プロジェクトリストのプッシュとプルの競合で発生し得たちらつきを修正。MCP 設定ファイルの解析エラーは MCP パネルに表示され、静かに無効化されることはなくなりました",
+			},
+		],
+	},
+	{
 		version: "2.6.0",
 		date: "2026-08-27",
 		items: [
