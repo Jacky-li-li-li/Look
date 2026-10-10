@@ -32,6 +32,7 @@ import { readThemeSettingsSync } from "./settings/store.js";
 import { initAppUpdater, replayUpdateStatus, requestFreshCheck } from "./system/app-updater.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { registerOAuthProtocol } from "./system/oauth-callback.js";
+import { disposeThenQuit } from "./system/quit-guard.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { TRAFFIC_LIGHT_INITIAL_Y, TRAFFIC_LIGHT_X } from "./system/traffic-light.js";
@@ -799,8 +800,10 @@ export class Application {
 			if (this._disposing) return;
 			event.preventDefault();
 			this._disposing = true;
-			void this.dispose().finally(() => {
-				app.quit();
+			void disposeThenQuit({
+				dispose: () => this.dispose(),
+				quit: () => app.quit(),
+				exit: (code) => app.exit(code),
 			});
 		});
 	}
