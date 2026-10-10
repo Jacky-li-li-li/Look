@@ -123,7 +123,8 @@ export function createMcpExtensionFactory(
 			// Gate project-level .look/mcp.json behind project trust. pi's own
 			// trust check only covers .pi/* — without this gate, an untrusted
 			// project's .look/mcp.json would still be loaded and spawned.
-			const loadProjectConfig = resolveProjectTrust?.(cwd) ?? true;
+			// fail-closed：未提供信任解析器时不加载项目级配置。
+			const loadProjectConfig = resolveProjectTrust?.(cwd) ?? false;
 			await mcpManager.loadConfig(projectId, cwd, { loadProjectConfig });
 			// 后台启动，不阻塞会话创建完成：MCP 连接（stdio spawn + 握手，最长
 			// 30s/服务器超时）一旦变慢，此前会让「新建会话」卡住无响应。

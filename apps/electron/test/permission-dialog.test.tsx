@@ -103,4 +103,31 @@ describe("permission dialog", () => {
 		await waitFor(() => expect(screen.getByText(/Session B/)).toBeTruthy());
 		expect(screen.getByText("mcp:github:create_issue")).toBeTruthy();
 	});
+
+	it("scopes always-allow to the bash program and never escalates the session mode", async () => {
+		const setPermissionMode = vi.fn();
+		Object.defineProperty(window, "look", { configurable: true, value: { respondPermission, setPermissionMode } });
+		appStore.set(permissionAskQueueAtom, [
+			{
+				...request("request-a", "session-a", "bash"),
+				toolInput: { command: "git status" },
+				alwaysAllowScope: "bash:git",
+			},
+		]);
+		renderDialog();
+		fireEvent.click(screen.getByRole("button", { name: "Always allow `git` commands this session" }));
+		await waitFor(() =>
+			expect(respondPermission).toHaveBeenCalledWith({ requestId: "request-a", action: "allow_always" }),
+		);
+		expect(setPermissionMode).not.toHaveBeenCalled();
+	});
+
+	it("hides always-allow for non-cacheable calls", () => {
+		appStore.set(permissionAskQueueAtom, [
+			{ ...request("request-a", "session-a", "bash"), toolInput: { command: "ls | sh" }, alwaysAllowScope: null },
+		]);
+		renderDialog();
+		expect(screen.queryByRole("button", { name: /Always allow/ })).toBeNull();
+		expect(screen.getByRole("button", { name: "Allow" })).toBeTruthy();
+	});
 });

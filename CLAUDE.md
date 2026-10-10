@@ -67,6 +67,7 @@ npm test                             # full suite — sparingly
 - Dev skips main-process CSP injection (Vite HMR). Packaged builds keep strict CSP in `apps/electron/src/renderer/index.html` + `onHeadersReceived`. `ELECTRON_DISABLE_SECURITY_WARNINGS=true` only when `app.isPackaged === false`.
 - Renderer dev server is fixed at **5174** (`apps/electron/vite.config.ts`). Main loads `http://localhost:5174` in dev. If startup is weird: `lsof -nP -iTCP:5174 -sTCP:LISTEN`.
 - Unpacked dev uses **`~/.look-dev/`** (see `system/dev-look-home.ts`) so dev data does not pollute production `~/.look/`. Explicit `LOOK_HOME` always wins. `look-storage` caches `LOOK_DIR` at module load — `LOOK_HOME` must be set before that module loads (`index.ts` dynamic-imports Application for this reason).
+- Dev mode opens DevTools automatically; set `LOOK_OPEN_DEVTOOLS=0` to suppress it.
 - Cleanup must target the Look dev tree only — do not kill the coding-agent process that happens to have this repo path in its argv.
 
 ```bash

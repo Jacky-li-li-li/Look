@@ -240,6 +240,22 @@ export class BrowserService implements BrowserHost {
 		return task;
 	}
 
+	/** 回收全部浏览器实例（应用退出时由 RuntimeManager.dispose 调用）。单个失败不阻塞其余。 */
+	async disposeAll(): Promise<void> {
+		for (const handle of [...this.browsers.keys()]) {
+			try {
+				await this.dispose(handle);
+			} catch (error) {
+				console.error("[Look] browser dispose failed:", handle, error);
+			}
+		}
+	}
+
+	/** 当前存活的浏览器实例数（测试/诊断用）。 */
+	get browserCount(): number {
+		return this.browsers.size;
+	}
+
 	async dispose(handle: string): Promise<void> {
 		const state = this.browsers.get(handle);
 		if (!state) return;

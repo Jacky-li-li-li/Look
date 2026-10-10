@@ -78,4 +78,47 @@ describe("session permission state", () => {
 		svc.handleResponse({ requestId: secondAsk.event.requestId, action: "deny" });
 		await expect(second).resolves.toMatchObject({ block: true });
 	});
+
+	it("scopes bash always-allow grants to argv0 and never caches metachar/wrapper commands", async () => {
+		const events: unknown[] = [];
+		const svc = new PermissionService(mockEventBus(events), "ask");
+		const handler = svc.createToolCallHandler("/tmp/project");
+		const lastAsk = () =>
+			events.filter((e) => (e as Record<string, unknown>)?.type === "permission:ask").pop() as Record<
+				string,
+				{ requestId: string; alwaysAllowScope: string | null }
+			>;
+
+		const first = handler({ toolName: "bash", input: { command: "git status" } }, context("s"));
+		expect(lastAsk().event.alwaysAllowScope).toBe("bash:git");
+		svc.handleResponse({ requestId: lastAsk().event.requestId, action: "allow_always" });
+		await expect(first).resolves.toEqual({});
+
+		// same program → auto allowed
+		const count = events.length;
+		await expect(handler({ toolName: "bash", input: { command: "git log -1" } }, context("s"))).resolves.toEqual({});
+		expect(events).toHaveLength(count);
+
+		// different program → asks again
+		const rm = handler({ toolName: "bash", input: { command: "rm -rf build" } }, context("s"));
+		expect(lastAsk().event.alwaysAllowScope).toBe("bash:rm");
+		svc.handleResponse({ requestId: lastAsk().event.requestId, action: "deny" });
+		await expect(rm).resolves.toMatchObject({ block: true });
+
+		// chained command starting with git → not cacheable, asks, allow_always only allows once
+		const chained = handler({ toolName: "bash", input: { command: "git status && rm -rf /" } }, context("s"));
+		expect(lastAsk().event.alwaysAllowScope).toBeNull();
+		svc.handleResponse({ requestId: lastAsk().event.requestId, action: "allow_always" });
+		await expect(chained).resolves.toEqual({});
+		const again = handler({ toolName: "bash", input: { command: "git status && rm -rf /" } }, context("s"));
+		expect(lastAsk().event.alwaysAllowScope).toBeNull();
+		svc.handleResponse({ requestId: lastAsk().event.requestId, action: "deny" });
+		await expect(again).resolves.toMatchObject({ block: true });
+
+		// wrapper programs are never cacheable
+		const sudo = handler({ toolName: "bash", input: { command: "sudo ls" } }, context("s"));
+		expect(lastAsk().event.alwaysAllowScope).toBeNull();
+		svc.handleResponse({ requestId: lastAsk().event.requestId, action: "deny" });
+		await sudo;
+	});
 });

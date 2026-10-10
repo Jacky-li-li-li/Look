@@ -148,7 +148,7 @@ function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-function tokenizeStrictCommand(command: string): string[] | null {
+export function tokenizeStrictCommand(command: string): string[] | null {
 	if (!command.trim() || command.length > 4096 || /[\0\r\n`]/.test(command) || command.includes("$(")) return null;
 	const tokens: string[] = [];
 	let token = "";
@@ -318,4 +318,54 @@ export function createPlanModeHandler(_cwd: string): ToolCallHandler {
 			reason: `[plan 模式] 未授权工具 ${toolName}。`,
 		};
 	};
+}
+
+// ── allow_always 授权范围 ──
+
+/** 会执行任意子命令的包装器：按 argv0 缓存授权等于放行一切，必须逐次询问。 */
+const NON_CACHEABLE_BASH_PROGRAMS = new Set([
+	"sudo",
+	"doas",
+	"su",
+	"env",
+	"bash",
+	"sh",
+	"zsh",
+	"fish",
+	"dash",
+	"eval",
+	"exec",
+	"xargs",
+	"nohup",
+	"time",
+	"timeout",
+	"nice",
+	"command",
+	"builtin",
+	"source",
+	".",
+	"npx",
+	"python",
+	"python3",
+	"node",
+	"perl",
+	"ruby",
+]);
+
+/**
+ * 计算「始终允许」的授权键。
+ * - 非 bash 工具：工具名（与旧行为一致）；
+ * - bash：`bash:<argv0>`，仅当命令可被严格分词（无管道/重定向/替换/串联等元字符）
+ *   且 argv0 不是可执行任意子命令的包装器/解释器；否则返回 null（不可缓存）。
+ */
+export function permissionGrantScope(toolName: string, input: unknown): string | null {
+	if (toolName !== "bash") return toolName;
+	const command = (input as { command?: unknown } | null)?.command;
+	if (typeof command !== "string") return null;
+	const tokens = tokenizeStrictCommand(command);
+	if (!tokens || tokens.length === 0) return null;
+	const program = tokens[0];
+	if (program.includes("/") || program.includes("=")) return null;
+	if (NON_CACHEABLE_BASH_PROGRAMS.has(program)) return null;
+	return `bash:${program}`;
 }

@@ -18,7 +18,7 @@ import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { PermissionAskEvent, PermissionMode, PermissionRespondPayload, ToolCallHandler } from "@look/shared/types";
 import { v4 as uuidv4 } from "uuid";
 import type { IEventBus, IPermissionService } from "../core/contracts.js";
-import { createPlanModeHandler } from "../extensions/permission-extension.js";
+import { createPlanModeHandler, permissionGrantScope } from "../extensions/permission-extension.js";
 import { type CapabilityRegistry, defaultCapabilityRegistry } from "./capability-registry.js";
 
 // ── Constants ──
@@ -142,8 +142,9 @@ export class PermissionService implements IPermissionService {
 				return planHandler(event, _ctx);
 			}
 
+			const grantScope = permissionGrantScope(toolName, event.input);
 			const allowedTools = this.allowedTools.get(sessionId);
-			if (allowedTools?.has(toolName)) return {};
+			if (grantScope !== null && allowedTools?.has(grantScope)) return {};
 
 			const requestId = uuidv4();
 			const expiresAt = Date.now() + PERMISSION_TIMEOUT_MS;
@@ -153,6 +154,7 @@ export class PermissionService implements IPermissionService {
 				toolDescription: capability.description,
 				requestId,
 				expiresAt,
+				alwaysAllowScope: grantScope,
 			};
 
 			const actionPromise = new Promise<PermissionAction>((resolve) => {
@@ -165,8 +167,10 @@ export class PermissionService implements IPermissionService {
 			const action = await actionPromise;
 
 			if (action === "allow_always") {
+				// 不可缓存的调用（含元字符/包装器的 bash）只放行这一次。
+				if (grantScope === null) return {};
 				const grants = this.allowedTools.get(sessionId) ?? new Set<string>();
-				grants.add(toolName);
+				grants.add(grantScope);
 				this.allowedTools.set(sessionId, grants);
 				return {};
 			}

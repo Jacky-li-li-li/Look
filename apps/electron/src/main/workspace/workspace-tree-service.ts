@@ -53,6 +53,8 @@ export class WorkspaceTreeService {
 	private readonly watchers = new Map<string, FSWatcher>(); // watcherKey → chokidar watcher
 	private readonly watchedByProject = new Map<string, Set<string>>(); // projectId → watcherKey 集合
 	private emitCallback: WorkspaceTreeEmitCallback | null = null;
+	/** watcherKey → 待触发的防抖计时器；实例级，stop/dispose 时统一清理，避免关闭后的幽灵 emit。 */
+	private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	setEmitCallback(callback: WorkspaceTreeEmitCallback): void {
 		this.emitCallback = callback;
@@ -184,18 +186,20 @@ export class WorkspaceTreeService {
 			// macOS fsevents 对 recursive depth 有限制,depth: 0 更稳
 		});
 
-		const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 		const DEBOUNCE_MS = 300;
 
 		watcher.on("all", (_event, changedName) => {
 			if (!changedName) return;
 			// 单一路径防抖:同一次批量变化只 emit 一次
-			const existing = debounceTimers.get(key);
+			// watcher 已被 stop（close 异步期间仍可能回调）→ 丢弃
+			if (this.watchers.get(key) !== watcher) return;
+			const existing = this.debounceTimers.get(key);
 			if (existing) clearTimeout(existing);
-			debounceTimers.set(
+			this.debounceTimers.set(
 				key,
 				setTimeout(() => {
-					debounceTimers.delete(key);
+					this.debounceTimers.delete(key);
+					if (this.watchers.get(key) !== watcher) return;
 					this.emit({ type: "workspace:updated", projectId, relativePath });
 				}, DEBOUNCE_MS),
 			);
@@ -221,6 +225,7 @@ export class WorkspaceTreeService {
 		const watcher = this.watchers.get(key);
 		if (!watcher) return;
 		this.watchers.delete(key);
+		this.clearDebounce(key);
 		void watcher.close();
 		const projectSet = this.watchedByProject.get(projectId);
 		if (projectSet) {
@@ -235,24 +240,38 @@ export class WorkspaceTreeService {
 		if (!keys) return;
 		await Promise.allSettled(
 			Array.from(keys).map(async (key) => {
+				this.clearDebounce(key);
 				const watcher = this.watchers.get(key);
 				if (watcher) {
-					await watcher.close();
 					this.watchers.delete(key);
+					await watcher.close();
 				}
 			}),
 		);
 		this.watchedByProject.delete(projectId);
 	}
 
+	/** 当前挂起的防抖计时器数量（测试/诊断用）。 */
+	get pendingDebounceCount(): number {
+		return this.debounceTimers.size;
+	}
+
+	private clearDebounce(key: string): void {
+		const timer = this.debounceTimers.get(key);
+		if (timer) clearTimeout(timer);
+		this.debounceTimers.delete(key);
+	}
+
 	async dispose(): Promise<void> {
+		for (const timer of this.debounceTimers.values()) clearTimeout(timer);
+		this.debounceTimers.clear();
 		const keys = Array.from(this.watchers.keys());
 		await Promise.allSettled(
 			keys.map(async (key) => {
 				const w = this.watchers.get(key);
 				if (w) {
-					await w.close();
 					this.watchers.delete(key);
+					await w.close();
 				}
 			}),
 		);

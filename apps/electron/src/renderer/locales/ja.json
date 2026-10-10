@@ -278,6 +278,7 @@
     "general": "一般",
     "apiKeys": "API キー",
     "apiKeysDescription": "カスタム互換エンドポイント。",
+    "secretStorageInsecure": "このマシンでは OS キーチェーンによる暗号化が使えず、API キーは平文で保存されます（ファイル権限は現在のユーザーのみに制限）。暗号化を有効にするにはシステムキーリング（gnome-keyring / KWallet など）を導入・解除してください。",
     "providers": {
       "title": "API Providers",
       "summary": "{{configured}}/{{total}} 設定済み"
@@ -986,6 +987,8 @@
     "queuedRequests": "・他 {{count}} 件のリクエスト待機中",
     "denyEsc": "拒否 (Esc)",
     "allowAlways": "このセッションでは常に許可",
+    "allowAlwaysTool": "このセッションでは {{tool}} を常に許可",
+    "allowAlwaysCommand": "このセッションでは `{{command}}` コマンドを常に許可",
     "allow": "許可",
     "permissionExpired": "権限リクエストは期限切れです",
     "modeSwitchFailed": "権限モードの切り替えに失敗しました",

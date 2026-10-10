@@ -14,6 +14,7 @@ import { getLookThemeWindowBackground } from "@look/shared";
 import { getUiSettingsPath } from "@look/shared/look-storage";
 import { app, type BrowserWindow, BrowserWindow as ElectronBrowserWindow } from "electron";
 import { BrowserWindowEventTransport } from "../ipc/renderer-event-transport.js";
+import { createTrustedWindowWebPreferences } from "../security/web-preferences.js";
 import { readThemeSettingsSync } from "../settings/store.js";
 import { getPackagedRendererIndexPath } from "../system/renderer-paths.js";
 
@@ -99,11 +100,7 @@ export function openViewerWindow(absolutePath: string, options?: { fadeIn?: bool
 		title: "文件查看器",
 		backgroundColor: getLookThemeWindowBackground(theme.themeStyle, theme.themeTone),
 		icon: path.join(__dirname, "../assets/icon-1024.png"),
-		webPreferences: {
-			preload: path.join(__dirname, "../preload.cjs"),
-			contextIsolation: true,
-			nodeIntegration: false,
-		},
+		webPreferences: createTrustedWindowWebPreferences(path.join(__dirname, "../preload.cjs")),
 	});
 
 	if (fadeIn) viewerWindow.setOpacity(0);
@@ -188,6 +185,12 @@ export function closeViewerWindow(): void {
 		viewerWindow.destroy();
 	}
 	viewerWindow = null;
+}
+
+/** 当前查看器窗口的 webContents id（IPC sender 校验用）;无窗口时返回 null。 */
+export function getViewerWebContentsId(): number | null {
+	if (!viewerWindow || viewerWindow.isDestroyed() || viewerWindow.webContents.isDestroyed()) return null;
+	return viewerWindow.webContents.id;
 }
 
 /** 测试与诊断用:当前窗口是否存活。 */

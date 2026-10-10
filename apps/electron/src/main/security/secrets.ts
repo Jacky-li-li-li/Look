@@ -11,6 +11,7 @@ import path from "node:path";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { safeStorage } from "electron";
 import { writeJsonFile } from "../utils/atomic-writer.js";
+import { notePlaintextFallback } from "./secret-storage-status.js";
 
 const ENCRYPTED_PREFIX = "enc:";
 
@@ -31,6 +32,7 @@ export function encryptApiKey(key: string): string {
 	} else {
 		console.warn("[Secrets] safeStorage is not available, storing API key as plain text");
 	}
+	notePlaintextFallback();
 	return key;
 }
 

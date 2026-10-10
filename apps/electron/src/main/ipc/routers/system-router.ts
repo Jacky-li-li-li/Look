@@ -3,6 +3,7 @@
 // ============================================================
 
 import { dialog } from "electron";
+import { getSecretStorageStatus } from "../../security/secret-storage-status.js";
 import { openOAuthWindow } from "../../system/oauth-window.js";
 import { TRAFFIC_LIGHT_X, trafficLightYForCenter } from "../../system/traffic-light.js";
 import { getUsage } from "../../system/usage-service.js";
@@ -107,6 +108,10 @@ export const systemRouter: IpcRouter = (ctx, register) => {
 
 		// 授权窗口编排（多路导航回调 + protocol 监听 + 超时）在 system/oauth-window。
 		return await openOAuthWindow(data.url, data.redirectTo);
+	});
+
+	register("secrets:storage-status", async () => {
+		return { success: true, status: getSecretStorageStatus() };
 	});
 
 	register("usage:get", async () => {

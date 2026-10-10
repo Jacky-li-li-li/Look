@@ -1,5 +1,5 @@
 import type { ContextUsage } from "@earendil-works/pi-coding-agent";
-import type { ThinkingLevel } from "../../types.js";
+import type { ThinkingLevel } from "./thinking.js";
 
 /** Runtime agent info sent to renderer */
 export interface AgentInfo {

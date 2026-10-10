@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: "npm"
 
       - name: Install dependencies
@@ -30,6 +30,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Circular dependency gate
+        run: npm run check:circular
 
       - name: Typecheck shared
         run: npm run typecheck --workspace=@look/shared

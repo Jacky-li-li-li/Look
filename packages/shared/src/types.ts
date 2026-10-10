@@ -7,7 +7,7 @@
 // ============================================================
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ImageContent, ModelThinkingLevel } from "@earendil-works/pi-ai";
+import type { ImageContent } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { MainToRendererEvent } from "./types/events/main-to-renderer.js";
 
@@ -15,7 +15,9 @@ import type { MainToRendererEvent } from "./types/events/main-to-renderer.js";
 // Core type aliases (kept here to avoid circular imports)
 // ============================================================
 
-export type ThinkingLevel = ModelThinkingLevel;
+import type { ThinkingLevel } from "./types/dto/thinking.js";
+
+export type { ThinkingLevel };
 export type { AgentMessage, ImageContent, SessionEntry };
 
 /** Event listener callback for event bus subscribers. */
@@ -102,6 +104,7 @@ export type {
 	ProviderInfo,
 	TestCustomProviderResult,
 } from "./types/dto/provider.js";
+export type { SecretStorageStatus } from "./types/dto/secrets.js";
 export type {
 	ForkedSessionResult,
 	LookSessionEntry,

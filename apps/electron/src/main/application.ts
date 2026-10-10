@@ -8,7 +8,7 @@
 import { getLookThemeWindowBackground } from "@look/shared";
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
-import { app, BrowserWindow, Notification, powerMonitor, session, shell } from "electron";
+import { app, BrowserWindow, dialog, Notification, powerMonitor, session, shell } from "electron";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
@@ -16,7 +16,7 @@ import { syncLookDefaultAgents } from "./agents/defaults.js";
 import { HeadlessAgentRunner } from "./execution/headless-agent-runner.js";
 import { LarkBridgeService } from "./im/lark-bridge-service.js";
 import { LarkChannelManager } from "./im/lark-channel-manager.js";
-import { registerIpcHandlers } from "./ipc/handlers.js";
+import { disposeIpcResources, registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
 import { BrowserWindowEventTransport } from "./ipc/renderer-event-transport.js";
 import { unbindBrowserActivity } from "./ipc/routers/browser-router.js";
@@ -25,12 +25,15 @@ import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
 import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
+import { openExternalWithPolicy } from "./security/external-url.js";
+import { createTrustedWindowWebPreferences } from "./security/web-preferences.js";
 import { SessionRuntimeManager } from "./session/runtime/runtime-manager.js";
 import type { RuntimeManagerComposition } from "./session/runtime-manager-composition.js";
 import { readThemeSettingsSync } from "./settings/store.js";
 import { initAppUpdater, replayUpdateStatus, requestFreshCheck } from "./system/app-updater.js";
 import { getBundledResourceRoot } from "./system/bundled-resource-paths.js";
 import { registerOAuthProtocol } from "./system/oauth-callback.js";
+import { disposeThenQuit } from "./system/quit-guard.js";
 import { getPackagedRendererIndexPath } from "./system/renderer-paths.js";
 import { loadShellEnv } from "./system/shell-env.js";
 import { TRAFFIC_LIGHT_INITIAL_Y, TRAFFIC_LIGHT_X } from "./system/traffic-light.js";
@@ -251,11 +254,7 @@ export class Application {
 			trafficLightPosition: { x: TRAFFIC_LIGHT_X, y: TRAFFIC_LIGHT_INITIAL_Y },
 			backgroundColor: getLookThemeWindowBackground(initialTheme.themeStyle, initialTheme.themeTone),
 			icon: path.join(__dirname, "assets/icon-1024.png"),
-			webPreferences: {
-				preload: path.join(__dirname, "preload.cjs"),
-				contextIsolation: true,
-				nodeIntegration: false,
-			},
+			webPreferences: createTrustedWindowWebPreferences(path.join(__dirname, "preload.cjs")),
 		});
 
 		if (!app.isPackaged) {
@@ -266,7 +265,8 @@ export class Application {
 			this.services.mainWindow.loadURL(
 				`http://localhost:5174?theme=${initialTheme.themeStyle}&tone=${initialTheme.themeTone}`,
 			);
-			this.services.mainWindow.webContents.openDevTools();
+			// 开发模式默认打开 DevTools；LOOK_OPEN_DEVTOOLS=0 可关闭（如录屏 / e2e）。
+			if (process.env.LOOK_OPEN_DEVTOOLS !== "0") this.services.mainWindow.webContents.openDevTools();
 		} else {
 			this.rendererEvents.buffer();
 			this.services.mainWindow.loadFile(getPackagedRendererIndexPath(__dirname), {
@@ -310,28 +310,38 @@ export class Application {
 		});
 
 		this.services.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-			if (this.isAllowedExternalUrl(url)) {
-				shell.openExternal(url).catch((error) => console.error("[Look] Failed to open external URL:", error));
-			}
+			void this.openExternalUrl(url);
 			return { action: "deny" };
 		});
 		this.services.mainWindow.webContents.on("will-navigate", (event, url) => {
 			if (!this.isAllowedNavigationUrl(url)) {
 				event.preventDefault();
-				if (this.isAllowedExternalUrl(url)) {
-					shell.openExternal(url).catch((error) => console.error("[Look] Failed to open external URL:", error));
-				}
+				void this.openExternalUrl(url);
 			}
 		});
 	}
 
-	private isAllowedExternalUrl(raw: string): boolean {
-		try {
-			const url = new URL(raw);
-			return url.protocol === "https:" || url.protocol === "http:";
-		} catch {
-			return false;
-		}
+	/** 外链策略：https 直接打开；http 需用户确认；其余协议拒绝（见 security/external-url.ts）。 */
+	private openExternalUrl(url: string): Promise<boolean> {
+		return openExternalWithPolicy(url, {
+			openExternal: (target) => shell.openExternal(target),
+			confirm: async (target) => {
+				const win = this.services.mainWindow;
+				const options = {
+					type: "warning" as const,
+					buttons: ["打开 / Open", "取消 / Cancel"],
+					defaultId: 1,
+					cancelId: 1,
+					message: "即将打开非加密 (http) 链接 / Open an unencrypted (http) link?",
+					detail: target,
+				};
+				const result =
+					win && !win.isDestroyed()
+						? await dialog.showMessageBox(win, options)
+						: await dialog.showMessageBox(options);
+				return result.response === 0;
+			},
+		});
 	}
 
 	private isAllowedNavigationUrl(raw: string): boolean {
@@ -728,6 +738,11 @@ export class Application {
 			}
 			this.services.runtimeManager = null;
 		}
+		try {
+			disposeIpcResources();
+		} catch (err) {
+			console.error("[Look] ipc resources dispose failed:", err);
+		}
 		// 语音转写清理：杀掉录音 worker（避免退出后孤儿进程继续占用麦克风）、
 		// 释放流式会话与驻留模型、拒绝挂起的转写任务。
 		try {
@@ -802,8 +817,10 @@ export class Application {
 			if (this._disposing) return;
 			event.preventDefault();
 			this._disposing = true;
-			void this.dispose().finally(() => {
-				app.quit();
+			void disposeThenQuit({
+				dispose: () => this.dispose(),
+				quit: () => app.quit(),
+				exit: (code) => app.exit(code),
 			});
 		});
 	}

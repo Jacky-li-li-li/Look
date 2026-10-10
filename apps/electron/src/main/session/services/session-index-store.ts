@@ -19,7 +19,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { getWorkspaceDir } from "@look/shared/look-storage";
 import { writeJsonFileAsync } from "../../utils/atomic-writer.js";
-import type { StoredSession } from "./session-catalog.js";
+import type { StoredSession } from "./stored-session.js";
 
 /** 索引版本：v2 起子会话 path 使用真实文件路径（v1 拼接 <sessionId>.jsonl 无时间戳，
  *  会导致 SessionManager.open 误生成新会话）。版本不符 → 全量重扫重建。 */

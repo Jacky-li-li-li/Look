@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "postinstall": "npx simple-git-hooks && npm run copy-file-icons --workspace=@look/electron && node scripts/patch-stick-to-bottom.mjs",
@@ -30,7 +30,8 @@
     "lint": "biome check apps/electron/src apps/electron/test packages",
     "lint:fix": "biome check --write --unsafe apps/electron/src apps/electron/test packages",
     "format": "biome format --write apps/electron/src apps/electron/test packages",
-    "check": "npm run lint && npm run typecheck --workspace=@look/shared && npm run typecheck --workspace=@look/electron && npm test"
+    "check:circular": "npx --yes madge@8 --circular --extensions ts,tsx --ts-config apps/electron/tsconfig.json apps/electron/src packages/shared/src",
+    "check": "npm run lint && npm run typecheck --workspace=@look/shared && npm run build:shared && npm run typecheck --workspace=@look/electron && npm test"
   },
   "simple-git-hooks": {
     "pre-commit": "npx biome check --no-errors-on-unmatched --files-ignore-unknown=true --staged"

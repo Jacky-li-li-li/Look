@@ -46,6 +46,10 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      # 发版前门禁：lint + typecheck + test，与 CI 一致，避免未通过检查的 tag 直接打包发布
+      - name: 质量检查 (npm run check)
+        run: npm run check
+
       # macOS 代码签名准备：把 Secrets 里的证书导入临时 keychain
       - name: 导入 macOS 签名证书
         env:

@@ -36,6 +36,7 @@ import type {
 	UserProfile,
 	UserSettings,
 } from "../types.js";
+import type { TranscribeSettingsPatch } from "./transcribe.js";
 
 /**
  * IPC 边界统一信封。对齐 pi SDK 的领域规范（方法返回业务值、错误 throw），
@@ -377,6 +378,8 @@ export interface LookAPI {
 	listAllMcpTools(): Promise<IpcResult<{ tools?: McpToolWithServer[] }>>;
 	// ---- Usage ----
 	getUsage(): Promise<IpcResult<{ usage: UsageData }>>;
+	/** 密钥落盘保护状态（safeStorage 是否真正加密、是否发生过明文回退）。 */
+	getSecretStorageStatus(): Promise<IpcResult<{ status: import("../types.js").SecretStorageStatus }>>;
 	listPrompts(): Promise<
 		IpcResult<{
 			prompts: PromptEntry[];
@@ -459,11 +462,7 @@ export interface TranscribeSettingsDto {
 	chineseOutput: string;
 }
 
-export interface TranscribeSettingsPatch {
-	modelId?: string;
-	transcriptionLanguage?: string;
-	chineseOutput?: "simplified" | "traditional-taiwan" | "traditional-hong-kong";
-}
+export type { TranscribeSettingsPatch } from "./transcribe.js";
 
 export interface TranscribeState {
 	settings: TranscribeSettingsDto;

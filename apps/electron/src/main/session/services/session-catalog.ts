@@ -10,19 +10,13 @@ import { createReadStream, existsSync } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import type { SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { ProjectInfo } from "@look/shared/types";
 import { computeSessionsFingerprint, SessionIndexStore } from "./session-index-store.js";
+import type { StoredSession } from "./stored-session.js";
 
-export interface StoredSession extends PiSessionInfo {
-	projectId: string;
-	/** 持久化的子会话父标记（来自 look.subagent-parent.v1），生命周期跟随 JSONL 文件本身。 */
-	parentSessionId?: string;
-	/** 子会话的 agent 名称（同上，来自 JSONL），registry 清理后仍可恢复展示。 */
-	subagentAgentName?: string;
-}
+export type { StoredSession } from "./stored-session.js";
 
 export interface SubsessionMetadata {
 	sessionId: string;

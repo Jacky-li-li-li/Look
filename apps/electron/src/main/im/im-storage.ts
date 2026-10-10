@@ -6,6 +6,7 @@ import { getLookDir } from "@look/shared/look-storage";
 import { safeStorage } from "electron";
 import fs from "fs";
 import path from "path";
+import { notePlaintextFallback } from "../security/secret-storage-status.js";
 import { writeJsonFile } from "../utils/atomic-writer.js";
 
 export type ImProvider = "feishu";
@@ -95,7 +96,8 @@ export function loadChannels(): ImChannelConfig[] {
 }
 
 export function saveChannels(channels: ImChannelConfig[]): void {
-	writeJsonFile(CHANNELS_FILE, channels, 2);
+	// 0o600：可能含明文回退的 appSecret，不给同组/其他用户读权限。
+	writeJsonFile(CHANNELS_FILE, channels, 2, 0o600);
 }
 
 export function encryptSecret(secret: string): EncryptedSecretResult {
@@ -109,6 +111,7 @@ export function encryptSecret(secret: string): EncryptedSecretResult {
 	} else {
 		console.warn("[IMStorage] safeStorage is not available, storing secret as plain text");
 	}
+	notePlaintextFallback();
 	return { plain: secret };
 }
 

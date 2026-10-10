@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { ProviderIcon } from "../ProviderIcon";
 import AddCustomProviderDialog from "./AddCustomProviderDialog";
 import CustomProvidersSection from "./CustomProvidersSection";
+import SecretStorageWarning from "./SecretStorageWarning";
 import type { CustomProviderInput, CustomProviderStats, ProviderInfo, ProviderModelInfo, TestVerdict } from "./types";
 
 const api = window.look;
@@ -841,6 +842,7 @@ export default function ApiKeysTab({ providers, customProviders, customStats, on
 					<h2 className="text-[13px] font-medium">{t("settings.apiKeys")}</h2>
 					<p className="text-[11px] text-muted-foreground">{t("settings.apiKeysDescription")}</p>
 				</div>
+				<SecretStorageWarning />
 				<div className="flex flex-col gap-2 p-3 pt-0">
 					<CustomProvidersSection
 						customProviders={custom.list}

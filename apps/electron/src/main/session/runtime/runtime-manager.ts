@@ -24,7 +24,6 @@ import type {
 	IProjectTrustManager,
 	IRuntimeLifecycle,
 	ISessionEventHost,
-	ISessionRuntimeBootstrap,
 	ISubAgentRuntimeHost,
 } from "../../core/contracts.js";
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../../extensions/subagent/types.js";
@@ -33,6 +32,7 @@ import type { WorkspaceFileService } from "../../workspace/workspace-file-servic
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
 import { RuntimeManagerComposition } from "../runtime-manager-composition.js";
 import type { StoredSession } from "../services/session-catalog.js";
+import type { ISessionRuntimeBootstrap } from "./bootstrap-contract.js";
 
 export type { EventCallback };
 
@@ -152,6 +152,15 @@ export class SessionRuntimeManager
 			}
 		}
 		await this.disposeAllRuntimes();
+		// 内置浏览器（WebContentsView + CDP）：runtime 回收后统一释放，避免退出时残留视图/调试连接。
+		const browserService = this.composition.browserService;
+		if (browserService) {
+			try {
+				await browserService.disposeAll();
+			} catch (error) {
+				console.error("[Look] browserService dispose failed:", error);
+			}
+		}
 		await this.mcpManager.stopAll();
 		this.mcpManager.stopIdleReaper();
 		this.composition.sessionEventEffects.dispose();

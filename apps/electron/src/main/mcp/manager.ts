@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { getLookDir } from "@look/shared/look-storage";
+import { getLookDir, getProjectsIndexPath } from "@look/shared/look-storage";
 import { writeJsonFileAsync } from "../utils/atomic-writer.js";
 import { SerialTail } from "../utils/serial-tail.js";
 import { McpClient } from "./client.js";
@@ -21,7 +21,22 @@ interface CircuitState {
 	openUntil: number;
 }
 
+export interface MCPManagerOptions {
+	/** 第三方 IDE 配置发现的 home 目录（测试注入；默认 os.homedir()）。 */
+	discoveryHome?: string;
+}
+
+/**
+ * 一次性迁移标记：记录"第三方 MCP 配置需显式启用"策略已对本机生效。
+ * 存在即表示迁移已完成（不论是否 grandfather 了任何服务器）。
+ */
+const DISCOVERY_CONSENT_MARKER = "mcp-discovery-consent.json";
+
 export class MCPManager {
+	constructor(private readonly options: MCPManagerOptions = {}) {}
+
+	/** 本进程内是否已完成发现配置的同意迁移检查。 */
+	private discoveryMigrationChecked = false;
 	private clients = new Map<string, McpClient>();
 	private configs = new Map<string, McpServerConfig>();
 	private clientStarts = new Map<string, Promise<McpClient>>();
@@ -67,17 +82,32 @@ export class MCPManager {
 		this.onChange?.();
 	}
 
-	async loadConfig(projectId: string, cwd?: string, options: { loadProjectConfig?: boolean } = {}): Promise<void> {
+	/**
+	 * 加载并合并 MCP 配置。
+	 *
+	 * - `loadProjectConfig` 必填（fail-closed）：项目级 .look/mcp.json 可 spawn 任意命令，
+	 *   调用方必须基于 project trust 显式决定是否加载。
+	 * - 第三方 IDE 全局配置（~/.claude|.cursor|.vscode/mcp.json）只作为"已发现"条目列出，
+	 *   一律 `enabled: false`；用户在设置页启用（toggleServer）后才会转为 user 配置并连接，
+	 *   即显式同意。升级前已在使用的老用户由 migrateDiscoveryConsent 一次性迁移保留。
+	 */
+	async loadConfig(
+		projectId: string,
+		cwd: string | undefined,
+		options: { loadProjectConfig: boolean },
+	): Promise<void> {
 		return this.configLock.run("mcp-config", async () => {
 			const merged = new Map<string, McpServerConfig>();
-			for (const config of await discoverCompatibleConfigs(cwd)) {
-				merged.set(config.name, { ...config, _source: "discovered" });
+			const discovered = await discoverCompatibleConfigs(this.options.discoveryHome ?? homedir());
+			await this.migrateDiscoveryConsent(discovered);
+			for (const config of discovered) {
+				merged.set(config.name, { ...config, enabled: false, _source: "discovered" });
 			}
 			// Project-level .look/mcp.json can spawn arbitrary stdio commands, so it
 			// must be gated by project trust. The caller (MCP extension) decides
 			// whether the project is trusted and passes loadProjectConfig=false
 			// otherwise — the same gate that blocks .pi/* resources.
-			if (cwd && options.loadProjectConfig !== false) {
+			if (cwd && options.loadProjectConfig === true) {
 				const projectConfigPath = path.join(cwd, ".look", "mcp.json");
 				for (const config of await loadConfigFile(projectConfigPath)) {
 					merged.set(config.name, { ...config, _source: "project" });
@@ -108,6 +138,47 @@ export class MCPManager {
 			}
 			if (changed) this.notifyChange();
 		});
+	}
+
+	/**
+	 * 向后兼容迁移（每台机器一次）：旧版本会自动启用第三方 IDE 的 MCP 配置。
+	 * 对**已有安装**（LOOK_HOME 下已存在 projects 索引），把当时已启用的发现配置
+	 * 写入 ~/.look/mcp.json 作为 user 配置，保持升级前行为；全新安装不做任何
+	 * 自动启用。完成后写入标记文件，之后新出现的第三方配置都需要用户显式启用。
+	 */
+	private async migrateDiscoveryConsent(discovered: McpServerConfig[]): Promise<void> {
+		if (this.discoveryMigrationChecked) return;
+		this.discoveryMigrationChecked = true;
+		const lookDir = getLookDir();
+		const markerPath = path.join(lookDir, DISCOVERY_CONSENT_MARKER);
+		if (existsSync(markerPath)) return;
+		const existingInstall = existsSync(getProjectsIndexPath());
+		const grandfathered: string[] = [];
+		if (existingInstall) {
+			const userConfigPath = path.join(lookDir, "mcp.json");
+			let raw: { mcpServers?: Record<string, unknown> } = {};
+			if (existsSync(userConfigPath)) {
+				try {
+					raw = JSON.parse(await readFile(userConfigPath, "utf-8"));
+				} catch {
+					// 用户配置损坏：不迁移、不覆盖（loadConfigFile 会告警），也不写标记，下次重试
+					this.discoveryMigrationChecked = false;
+					return;
+				}
+			}
+			const servers: Record<string, unknown> = { ...(raw.mcpServers ?? {}) };
+			for (const config of discovered) {
+				if (!config.enabled || config.name in servers) continue;
+				const { name: _n, _source: _s, _discoveredFrom: _d, ...rest } = config;
+				servers[config.name] = rest;
+				grandfathered.push(config.name);
+			}
+			if (grandfathered.length > 0) {
+				await writeJsonFileAsync(userConfigPath, { ...raw, mcpServers: servers }, 2);
+				console.log(`[Look][MCP] 已将升级前自动启用的第三方 MCP 配置迁移为用户配置: ${grandfathered.join(", ")}`);
+			}
+		}
+		await writeJsonFileAsync(markerPath, { version: 1, migratedAt: new Date().toISOString(), grandfathered }, 2);
 	}
 
 	async persistConfig(projectId = "global"): Promise<void> {
@@ -154,7 +225,7 @@ export class MCPManager {
 		if (!options.force && this.prewarmedProjects.has(projectId)) return;
 		this.prewarmedProjects.add(projectId);
 		try {
-			await this.loadConfig(projectId, cwd, { loadProjectConfig: options.loadProjectConfig });
+			await this.loadConfig(projectId, cwd, { loadProjectConfig: options.loadProjectConfig === true });
 			const { started, failed } = await this.startEnabled(projectId);
 			if (failed.length > 0) {
 				const detail = failed.map((f) => `${f.name} (${f.error})`).join(", ");
@@ -602,8 +673,7 @@ function sortRecord(record: Record<string, string> | undefined): Record<string, 
 	return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
 }
 
-async function discoverCompatibleConfigs(_cwd?: string): Promise<McpServerConfig[]> {
-	const home = homedir();
+async function discoverCompatibleConfigs(home: string): Promise<McpServerConfig[]> {
 	const sources = [
 		{ file: path.join(home, ".claude", "mcp.json"), label: "Claude Code" },
 		{ file: path.join(home, ".cursor", "mcp.json"), label: "Cursor" },

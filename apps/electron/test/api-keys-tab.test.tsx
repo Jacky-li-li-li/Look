@@ -51,6 +51,9 @@ Object.defineProperty(window, "look", {
 		setApiKey,
 		removeCustomProvider: vi.fn(),
 		getSettings: vi.fn(),
+		getSecretStorageStatus: vi
+			.fn()
+			.mockResolvedValue({ success: true, status: { secure: true, backend: null, plaintextFallbackUsed: false } }),
 	},
 });
 
