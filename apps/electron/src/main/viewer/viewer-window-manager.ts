@@ -14,6 +14,7 @@ import { getLookThemeWindowBackground } from "@look/shared";
 import { getUiSettingsPath } from "@look/shared/look-storage";
 import { app, type BrowserWindow, BrowserWindow as ElectronBrowserWindow } from "electron";
 import { BrowserWindowEventTransport } from "../ipc/renderer-event-transport.js";
+import { createTrustedWindowWebPreferences } from "../security/web-preferences.js";
 import { readThemeSettingsSync } from "../settings/store.js";
 import { getPackagedRendererIndexPath } from "../system/renderer-paths.js";
 
@@ -99,11 +100,7 @@ export function openViewerWindow(absolutePath: string, options?: { fadeIn?: bool
 		title: "文件查看器",
 		backgroundColor: getLookThemeWindowBackground(theme.themeStyle, theme.themeTone),
 		icon: path.join(__dirname, "../assets/icon-1024.png"),
-		webPreferences: {
-			preload: path.join(__dirname, "../preload.cjs"),
-			contextIsolation: true,
-			nodeIntegration: false,
-		},
+		webPreferences: createTrustedWindowWebPreferences(path.join(__dirname, "../preload.cjs")),
 	});
 
 	if (fadeIn) viewerWindow.setOpacity(0);

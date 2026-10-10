@@ -25,6 +25,7 @@ import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
 import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
+import { createTrustedWindowWebPreferences } from "./security/web-preferences.js";
 import { SessionRuntimeManager } from "./session/runtime/runtime-manager.js";
 import type { RuntimeManagerComposition } from "./session/runtime-manager-composition.js";
 import { readThemeSettingsSync } from "./settings/store.js";
@@ -251,11 +252,7 @@ export class Application {
 			trafficLightPosition: { x: TRAFFIC_LIGHT_X, y: TRAFFIC_LIGHT_INITIAL_Y },
 			backgroundColor: getLookThemeWindowBackground(initialTheme.themeStyle, initialTheme.themeTone),
 			icon: path.join(__dirname, "assets/icon-1024.png"),
-			webPreferences: {
-				preload: path.join(__dirname, "preload.cjs"),
-				contextIsolation: true,
-				nodeIntegration: false,
-			},
+			webPreferences: createTrustedWindowWebPreferences(path.join(__dirname, "preload.cjs")),
 		});
 
 		if (!app.isPackaged) {
