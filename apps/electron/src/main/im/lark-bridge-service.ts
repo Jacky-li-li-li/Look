@@ -18,7 +18,8 @@ import type { ChatBinding } from "./im-storage.js";
 import { LarkBindingStore } from "./lark-binding-store.js";
 import type { LarkChannelManager } from "./lark-channel-manager.js";
 import { LarkChatTaskQueue } from "./lark-chat-queue.js";
-import { LarkReplyPresenter, type ReplyAccumulator } from "./lark-reply-presenter.js";
+import { LarkReplyPresenter } from "./lark-reply-presenter.js";
+import { LarkReplyRegistry } from "./lark-reply-registry.js";
 
 /**
  * 消息级跟踪日志。生产默认关闭——飞书消息流每进来一条消息会产生多条
@@ -39,6 +40,10 @@ export interface LarkBridgeServiceOptions {
 
 export class LarkBridgeService {
 	private readonly replyPresenter = new LarkReplyPresenter();
+	private readonly replyRegistry = new LarkReplyRegistry(this.replyPresenter, {
+		onAgentEnd: (sessionId) => this.persistBindingIfRecoverable(sessionId),
+		extractTerminalAssistantText: (entries) => this.extractTerminalAssistantText(entries),
+	});
 	private readonly replyTimeoutMs: number;
 	/**
 	 * Agent host for session lifecycle. Depends on the narrow IImAgentHost
@@ -52,10 +57,7 @@ export class LarkBridgeService {
 	private readonly bindingStore = new LarkBindingStore((sessionId, reason) =>
 		this.releaseAccumulator(sessionId, reason),
 	);
-	/** sessionId → 回复累积器 */
-	private replyAccumulators = new Map<string, ReplyAccumulator>();
-	/** sessionId → 该回复所属的 bot appId（用于按 bot 释放在途回复） */
-	private accumulatorAppIds = new Map<string, string>();
+	/** sessionId → 回复累积器 / 事件终结（见 LarkReplyRegistry）。 */
 	/**
 	 * (appId, chatId) 串行化队列。同一 chat 的用户消息严格按到达顺序处理：
 	 * 前一条消息的 Agent 轮次结束后才处理下一条，保证每条消息拥有独立的
@@ -117,8 +119,7 @@ export class LarkBridgeService {
 		this.initialized = false;
 		this.bindingStore.clear();
 		this.chatQueue.clear();
-		this.accumulatorAppIds.clear();
-		this.releaseAllAccumulators("飞书连接已关闭");
+		this.replyRegistry.releaseAll("飞书连接已关闭");
 	}
 
 	/**
@@ -129,13 +130,11 @@ export class LarkBridgeService {
 		if (!appId) {
 			this.bindingStore.clearPending();
 			this.chatQueue.clear();
-			this.releaseAllAccumulators("飞书连接已断开");
+			this.replyRegistry.releaseAll("飞书连接已断开");
 			return;
 		}
 		this.chatQueue.clearForApp(appId);
-		for (const [sessionId, owner] of Array.from(this.accumulatorAppIds.entries())) {
-			if (owner === appId) this.releaseAccumulator(sessionId, "飞书连接已断开");
-		}
+		this.replyRegistry.releaseOwnedByApp(appId, "飞书连接已断开");
 	}
 
 	/** 同一 (appId, chatId) 的入站用户消息串行化执行（见 LarkChatTaskQueue）。 */
@@ -220,13 +219,9 @@ export class LarkBridgeService {
 
 	/** 获取桥接运行状态 */
 	getStatus(): { bindings: number; runningSessions: string[]; status: "running" | "stopped" } {
-		const runningSessions: string[] = [];
-		for (const [sessionId, acc] of this.replyAccumulators) {
-			if (!acc.done) runningSessions.push(sessionId);
-		}
 		return {
 			bindings: this.bindingStore.size,
-			runningSessions,
+			runningSessions: this.replyRegistry.runningSessionIds(),
 			status: (this.channelManager?.getConnectedAppIds().length ?? 0) > 0 ? "running" : "stopped",
 		};
 	}
@@ -241,10 +236,7 @@ export class LarkBridgeService {
 	}
 
 	private releaseAccumulator(sessionId: string, reason: string): void {
-		const acc = this.replyAccumulators.get(sessionId);
-		if (acc) this.replyPresenter.disposeAccumulator(acc, reason);
-		this.replyAccumulators.delete(sessionId);
-		this.accumulatorAppIds.delete(sessionId);
+		this.replyRegistry.release(sessionId, reason);
 	}
 
 	private saveDurableBindings(): void {
@@ -261,14 +253,6 @@ export class LarkBridgeService {
 
 	private backfillBindingMetadata(binding: ChatBinding, appId: string, msg: NormalizedMessage): void {
 		this.bindingStore.backfillBindingMetadata(binding, appId, msg);
-	}
-
-	private releaseAllAccumulators(reason: string): void {
-		for (const acc of this.replyAccumulators.values()) {
-			this.replyPresenter.disposeAccumulator(acc, reason);
-		}
-		this.replyAccumulators.clear();
-		this.accumulatorAppIds.clear();
 	}
 
 	/**
@@ -614,16 +598,7 @@ export class LarkBridgeService {
 		// 先终结累加器：与卡片「停止」按钮同一套语义——标记 done、resolveDone、
 		// 刷新最终卡片后释放。abortAgent 可能因会话已 idle 而不发出 error/agent_end
 		// 事件，靠 SDK 事件回收累加器会让该会话的回复卡占着内存直到 5 分钟超时。
-		const acc = this.replyAccumulators.get(sessionId);
-		if (acc && !acc.done) {
-			acc.status = "error";
-			acc.error = "已停止";
-			acc.logs.push("用户通过 /stop 停止了会话。");
-			acc.done = true;
-			acc.resolveDone();
-			await this.replyPresenter.flushUpdate(acc, true);
-			this.releaseAccumulator(sessionId, "用户已停止");
-		}
+		await this.replyRegistry.finalizeStopped(sessionId, "用户通过 /stop 停止了会话。", "用户已停止");
 
 		try {
 			await this.runtimeManager.abortAgent(sessionId);
@@ -734,14 +709,7 @@ export class LarkBridgeService {
 		const sessionId = binding.sessionId;
 
 		// 建立回复累积器（若已有则复用）
-		let acc = this.replyAccumulators.get(sessionId);
-		if (!acc || acc.done) {
-			acc = this.replyPresenter.createAccumulator(sessionId, text);
-			this.replyAccumulators.set(sessionId, acc);
-			this.accumulatorAppIds.set(sessionId, appId);
-		} else {
-			acc.userText = text;
-		}
+		const acc = this.replyRegistry.ensure(sessionId, appId, text);
 
 		// 使用 channel.stream() 发送流式卡片（固定走接收到消息的 bot 的连接）
 		try {
@@ -749,8 +717,8 @@ export class LarkBridgeService {
 				card: {
 					initial: this.replyPresenter.buildStreamCard(acc),
 					producer: async (ctrl) => {
-						acc!.controller = ctrl;
-						await this.replyPresenter.flushUpdate(acc!, true);
+						acc.controller = ctrl;
+						await this.replyPresenter.flushUpdate(acc, true);
 						trace("Stream producer started for session", sessionId);
 						// 发送消息给 Agent
 						try {
@@ -759,10 +727,10 @@ export class LarkBridgeService {
 						} catch (err) {
 							const errorMsg = err instanceof Error ? err.message : String(err);
 							console.error("[LarkBridgeService] sendMessage failed:", errorMsg);
-							acc!.status = "error";
-							acc!.error = `发送消息失败: ${errorMsg}`;
-							acc!.logs.push(`发送消息失败: ${errorMsg}`);
-							await this.replyPresenter.flushUpdate(acc!, true);
+							acc.status = "error";
+							acc.error = `发送消息失败: ${errorMsg}`;
+							acc.logs.push(`发送消息失败: ${errorMsg}`);
+							await this.replyPresenter.flushUpdate(acc, true);
 							return;
 						}
 
@@ -776,7 +744,7 @@ export class LarkBridgeService {
 						});
 
 						try {
-							await Promise.race([acc!.donePromise, timeout]);
+							await Promise.race([acc.donePromise, timeout]);
 							trace("Agent reply ready for session", sessionId);
 						} catch (err) {
 							const errorMsg = err instanceof Error ? err.message : String(err);
@@ -786,18 +754,18 @@ export class LarkBridgeService {
 							} catch (abortErr) {
 								console.error("[LarkBridgeService] abortAgent failed:", abortErr);
 							}
-							acc!.status = "error";
-							acc!.error = errorMsg;
-							acc!.done = true;
-							acc!.logs.push(errorMsg);
-							await this.replyPresenter.flushUpdate(acc!, true);
+							acc.status = "error";
+							acc.error = errorMsg;
+							acc.done = true;
+							acc.logs.push(errorMsg);
+							await this.replyPresenter.flushUpdate(acc, true);
 							return;
 						} finally {
 							if (timeoutId) clearTimeout(timeoutId);
 						}
 
-						trace("Reply length:", acc!.text.length, "chars, finalizing card");
-						await this.replyPresenter.flushUpdate(acc!, true);
+						trace("Reply length:", acc.text.length, "chars, finalizing card");
+						await this.replyPresenter.flushUpdate(acc, true);
 					},
 				},
 			});
@@ -830,17 +798,7 @@ export class LarkBridgeService {
 		if (!binding) return;
 		const sessionId = binding.sessionId;
 
-		const acc = this.replyAccumulators.get(sessionId);
-		if (acc && !acc.done) {
-			acc.status = "error";
-			acc.error = "已停止";
-			acc.logs.push("用户点击了停止按钮。");
-			acc.done = true;
-			acc.resolveDone();
-			// 先刷新最终卡片（按钮消失、红色头部），再释放累积器。
-			await this.replyPresenter.flushUpdate(acc, true);
-			this.releaseAccumulator(sessionId, "用户已停止");
-		}
+		await this.replyRegistry.finalizeStopped(sessionId, "用户点击了停止按钮。", "用户已停止");
 		try {
 			await this.runtimeManager.abortAgent(sessionId);
 		} catch (err) {
@@ -852,68 +810,6 @@ export class LarkBridgeService {
 	// Agent 事件 → 累积回复文本
 	// ============================================================
 	private handleAgentEvent(event: MainToRendererEvent): void {
-		if (event.type === "session:ui-event") {
-			const acc = this.replyAccumulators.get(event.sessionId);
-			if (!acc) return;
-
-			let immediateUpdate = false;
-			for (const uiEvent of event.events) {
-				this.replyPresenter.applyUiEvent(acc, uiEvent);
-				if (
-					uiEvent.type === "tool_exec_start" ||
-					uiEvent.type === "tool_exec_end" ||
-					uiEvent.type === "error" ||
-					(uiEvent.type === "run_status" && uiEvent.status === "idle")
-				) {
-					immediateUpdate = true;
-				}
-			}
-			if (immediateUpdate) this.replyPresenter.scheduleUpdate(acc, 0);
-			else this.replyPresenter.scheduleUpdate(acc);
-		}
-
-		// agent_end 时标记回复就绪
-		if (event.type === "session:snapshot" && event.reason === "agent_end") {
-			this.persistBindingIfRecoverable(event.sessionId);
-			// willRetry 的自动重试也会发出 agent_end，此时 runtime.isStreaming 仍为 true。
-			// 跳过终结与 fallback，等待真正的最终 agent_end，否则重试后的文本事件找不到 accumulator。
-			const acc = this.replyAccumulators.get(event.sessionId);
-			if (acc && !acc.done && !event.runtime.isStreaming) {
-				this.replyPresenter.applyFinalTextFallback(acc, this.extractTerminalAssistantText(event.entries));
-				console.log(
-					"[LarkBridgeService] Agent turn ended for session",
-					event.sessionId,
-					"accumulated text length:",
-					acc.text.length,
-				);
-				// 捕获模型和 token 统计
-				if (event.runtime.model) {
-					acc.model = `${event.runtime.model.provider}/${event.runtime.model.id}`;
-				}
-				const tokens = event.runtime.stats?.tokens;
-				if (tokens) {
-					acc.inputTokens = tokens.input;
-					acc.outputTokens = tokens.output;
-				}
-				acc.status = acc.error ? "error" : "done";
-				acc.done = true;
-				acc.resolveDone();
-				this.replyPresenter.scheduleUpdate(acc, 0);
-			}
-		}
-
-		// 处理错误
-		if (event.type === "error" && event.agentId) {
-			const acc = this.replyAccumulators.get(event.agentId);
-			if (acc && !acc.done) {
-				console.warn("[LarkBridgeService] Agent error for session", event.agentId, ":", event.message);
-				acc.error = event.message;
-				acc.status = "error";
-				acc.logs.push(event.message);
-				acc.done = true;
-				acc.resolveDone();
-				this.replyPresenter.scheduleUpdate(acc, 0);
-			}
-		}
+		this.replyRegistry.handleAgentEvent(event);
 	}
 }

@@ -478,7 +478,10 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 	const SRC =
 		readFileSync(resolve(chatDir, "ChatMessageList.tsx"), "utf8") +
 		readFileSync(resolve(chatDir, "ChatMessagesInner.tsx"), "utf8") +
-		readFileSync(resolve(chatDir, "useScrollToMessage.ts"), "utf8");
+		readFileSync(resolve(chatDir, "useScrollToMessage.ts"), "utf8") +
+		readFileSync(resolve(chatDir, "useOlderHistoryLoader.ts"), "utf8") +
+		readFileSync(resolve(chatDir, "useBranchForkActions.ts"), "utf8") +
+		readFileSync(resolve(chatDir, "TimelineItemRow.tsx"), "utf8");
 
 	it("uses Conversation as the scroll container", () => {
 		expect(SRC).toMatch(/<Conversation\b/);
@@ -508,6 +511,12 @@ describe("ChatMessageList source (scroll container wiring)", () => {
 		expect(SRC).not.toMatch(/<Virtuoso\b/);
 		expect(SRC).not.toMatch(/followOutput/);
 		expect(SRC).not.toMatch(/atBottomStateChange/);
+	});
+
+	it("delegates history/branch/timeline row to extracted modules", () => {
+		expect(SRC).toMatch(/useOlderHistoryLoader/);
+		expect(SRC).toMatch(/useBranchForkActions/);
+		expect(SRC).toMatch(/TimelineItemRow/);
 	});
 
 	it("no longer imports use-stick-to-bottom", () => {
