@@ -987,6 +987,8 @@
     "queuedRequests": "· {{count}} more request(s) queued",
     "denyEsc": "Deny (Esc)",
     "allowAlways": "Always allow this session",
+    "allowAlwaysTool": "Always allow {{tool}} this session",
+    "allowAlwaysCommand": "Always allow `{{command}}` commands this session",
     "allow": "Allow",
     "permissionExpired": "Permission request is no longer pending",
     "modeSwitchFailed": "Failed to change permission mode",

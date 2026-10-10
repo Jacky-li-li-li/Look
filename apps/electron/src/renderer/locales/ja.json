@@ -987,6 +987,8 @@
     "queuedRequests": "・他 {{count}} 件のリクエスト待機中",
     "denyEsc": "拒否 (Esc)",
     "allowAlways": "このセッションでは常に許可",
+    "allowAlwaysTool": "このセッションでは {{tool}} を常に許可",
+    "allowAlwaysCommand": "このセッションでは `{{command}}` コマンドを常に許可",
     "allow": "許可",
     "permissionExpired": "権限リクエストは期限切れです",
     "modeSwitchFailed": "権限モードの切り替えに失敗しました",

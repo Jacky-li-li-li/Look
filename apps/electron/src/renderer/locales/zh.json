@@ -987,6 +987,8 @@
     "queuedRequests": "· 另有 {{count}} 个请求排队",
     "denyEsc": "拒绝 (Esc)",
     "allowAlways": "本次会话始终允许",
+    "allowAlwaysTool": "本次会话始终允许 {{tool}}",
+    "allowAlwaysCommand": "本次会话始终允许 `{{command}}` 命令",
     "allow": "允许",
     "permissionExpired": "权限请求已失效",
     "modeSwitchFailed": "权限模式切换失败",

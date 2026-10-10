@@ -14,19 +14,18 @@ import {
 	DialogTitle,
 } from "@look/ui/components/ui/dialog";
 import type { PermissionRespondPayload } from "@shared/types";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { AlertTriangle, Check, Shield, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { agentsAtom, permissionAskQueueAtom, permissionModeAtomFamily } from "../../store/atoms";
+import { agentsAtom, permissionAskQueueAtom } from "../../store/atoms";
 
 export default function PermissionDialog() {
 	const { t } = useTranslation();
 	const [queue, setQueue] = useAtom(permissionAskQueueAtom);
 	const agents = useAtomValue(agentsAtom);
 	const event = queue[0] ?? null;
-	const setPermissionMode = useSetAtom(permissionModeAtomFamily(event?.agentId ?? ""));
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const respondingRef = useRef<string | null>(null);
 	const [responding, setResponding] = useState(false);
@@ -34,6 +33,15 @@ export default function PermissionDialog() {
 	const agentName = event
 		? (agents.find((agent) => agent.id === event.agentId)?.name ?? event.agentId.slice(0, 8))
 		: "";
+
+	// 旧主进程未下发 alwaysAllowScope（undefined）时退回工具级文案；null = 不可缓存，隐藏按钮。
+	const scope = event?.alwaysAllowScope === undefined ? (event?.toolName ?? null) : event.alwaysAllowScope;
+	const alwaysLabel =
+		scope === null
+			? null
+			: scope.startsWith("bash:")
+				? t("planDialogs.allowAlwaysCommand", { command: scope.slice("bash:".length) })
+				: t("planDialogs.allowAlwaysTool", { tool: scope });
 
 	const respond = useCallback(
 		async (action: "allow" | "deny" | "allow_always") => {
@@ -52,16 +60,8 @@ export default function PermissionDialog() {
 					return;
 				}
 				setQueue((items) => items.filter((item) => item.requestId !== event.requestId));
-				if (action === "allow_always") {
-					// 「本次会话始终允许」= 把当前会话提升为 always（不动全局默认）。
-					// 先切主进程，成功后再更新渲染端指示，避免两边状态分叉。
-					const modeResult = await window.look.setPermissionMode(event.agentId, "always", false);
-					if (modeResult?.success) {
-						setPermissionMode("always");
-					} else {
-						toast.error(modeResult?.error ?? t("planDialogs.modeSwitchFailed"));
-					}
-				}
+				// 「始终允许」只在主进程按 alwaysAllowScope 记录本会话的工具/命令级授权，
+				// 不再把整个会话提升为 always 模式（旧行为会放行之后所有工具调用）。
 			} catch (error) {
 				toast.error(error instanceof Error ? error.message : t("planDialogs.operationFailed"));
 			} finally {
@@ -69,7 +69,7 @@ export default function PermissionDialog() {
 				setResponding(false);
 			}
 		},
-		[event, setQueue, setPermissionMode, t],
+		[event, setQueue, t],
 	);
 
 	// Keep respond in a ref so effects don't re-subscribe when it changes
@@ -147,16 +147,18 @@ export default function PermissionDialog() {
 						<X className="size-3" />
 						{t("planDialogs.denyEsc")}
 					</Button>
-					<Button
-						variant="line"
-						size="sm"
-						disabled={responding}
-						onClick={() => void respond("allow_always")}
-						className="h-8 text-[11px] text-emerald-600"
-					>
-						<Check className="size-3" />
-						{t("planDialogs.allowAlways")}
-					</Button>
+					{alwaysLabel !== null && (
+						<Button
+							variant="line"
+							size="sm"
+							disabled={responding}
+							onClick={() => void respond("allow_always")}
+							className="h-8 text-[11px] text-emerald-600"
+						>
+							<Check className="size-3" />
+							{alwaysLabel}
+						</Button>
+					)}
 					<Button
 						disabled={responding}
 						variant="line-filled"

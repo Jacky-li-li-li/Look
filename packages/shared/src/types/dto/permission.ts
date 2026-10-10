@@ -10,6 +10,12 @@ export interface PermissionAskEvent {
 	toolDescription: string;
 	requestId: string;
 	expiresAt: number;
+	/**
+	 * 「本次会话始终允许」的授权范围：普通工具为工具名；bash 为 `bash:<argv0>`
+	 * （只放行同一可执行文件的后续命令）；null 表示该调用不可缓存授权
+	 * （含 shell 元字符/包装器命令），UI 不应提供"始终允许"。
+	 */
+	alwaysAllowScope?: string | null;
 }
 
 export interface PermissionAskQueueItem extends PermissionAskEvent {
