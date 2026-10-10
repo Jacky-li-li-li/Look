@@ -190,7 +190,7 @@ Look 的主进程结构已经比较成熟：`Application`（生命周期）→ `
 | P1-7 allow_always 粒度 | ✅ 已修 | bash 按 argv0 授权；含元字符或包装器的命令不缓存；不再把会话提升为 always |
 | P1-8 release 无检查 | ✅ 已修 | 打包前运行 `npm run check` |
 | P1-9 循环依赖 | ✅ 已修 | madge 结果为 0；CI 增加 `check:circular` |
-| P2-1 大文件拆分 | 🟡 部分 | 已拆 browser-helpers、ChatMessageList 子组件、LarkChatTaskQueue；builder/lark-bridge 主体与 ChatMessagesInner 留待后续 |
+| P2-1 大文件拆分 | ✅ 已修 | #4–#6：browser-helpers、Chat 子组件/hooks/TimelineItemRow、LarkChatTaskQueue、LarkBindingStore、LarkReplyRegistry、builder-phases + builder-context（无循环） |
 | P2-2 非空断言 | ✅ 已修 | composition `required()` + builder `this.req()` 取代全部 `!` 断言 |
 | P2-3 DraftStore / GitService | ✅ 已修 | DraftStore 复用单实例；退出时 dispose GitService |
 | P2-4 http 外链 | ✅ 已修 | http 链接需用户确认，其他协议拒绝 |
@@ -198,3 +198,9 @@ Look 的主进程结构已经比较成熟：`Application`（生命周期）→ `
 | P2-6 DevTools | ✅ 已修 | 支持 `LOOK_OPEN_DEVTOOLS=0` |
 | P2-7 测试外网 | ↩️ 撤回 | 复核后确认为误报 |
 | P2-8 旧文档 | ✅ 已修 | 旧报告移入 `docs/archive/`，本报告放在 `docs/` 下 |
+
+### 补充（2026-10-11）
+
+- **PR #1**（旧布局 debounce/共享区）已过时：debounceTimers 已在 main 修复；共享区 `onAfterChange` + `shared:updated` 双刷新本身在“变更后 await 再 list”路径上不构成陈旧覆盖。真正的竞态是 **重叠的 `listSharedFiles` 后写覆盖**：`shared:updated` 处理已加 per-project generation，丢弃过期响应。
+- Nightly LLM E2E：未配置 `OPENAI_API_KEY` 时 workflow 与测试均 skip（成功退出），避免空密钥红失败。
+

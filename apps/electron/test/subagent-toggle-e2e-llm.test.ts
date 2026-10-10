@@ -16,6 +16,8 @@ interface TestManagerInternals {
 }
 
 const RUN = process.env.LOOK_E2E_LLM === "1";
+/** Nightly injects OPENAI_API_KEY; without it pi-ai fails mid-prompt — skip instead of red. */
+const HAS_API_KEY = Boolean(process.env.OPENAI_API_KEY?.trim());
 const TIMEOUT = 180_000;
 
 function waitForEnd(manager: SessionRuntimeManager, parentId: string, timeout: number) {
@@ -37,7 +39,7 @@ function waitForEnd(manager: SessionRuntimeManager, parentId: string, timeout: n
 	});
 }
 
-describe.skipIf(!RUN)("SubAgent toggle real-LLM E2E", () => {
+describe.skipIf(!RUN || !HAS_API_KEY)("SubAgent toggle real-LLM E2E", () => {
 	it(
 		"关闭开关 → LLM 看不到 subagent 工具 → 不创建子会话",
 		async () => {

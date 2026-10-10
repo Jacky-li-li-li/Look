@@ -4,7 +4,10 @@
 # These consume real API tokens and are gated by LOOK_E2E_LLM=1.
 #
 # Secrets required:
-#   OPENAI_API_KEY — provider key used by the tests
+#   OPENAI_API_KEY — provider key used by the tests (pi-ai reads this from the
+#     environment). When the secret is unset/empty the job skips successfully
+#     instead of red-failing, so scheduled runs stay green until keys are
+#     configured. Manual workflow_dispatch with a key still runs the suite.
 #
 # The mock home below must contain:
 #   - projects.json with a valid project named "pi" pointing at the
@@ -36,16 +39,31 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Check OPENAI_API_KEY secret
+        id: api_key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=LLM E2E skipped::OPENAI_API_KEY secret is unset/empty — skipping real-LLM E2E (configure the secret to enable)."
+          else
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node.js
+        if: steps.api_key.outputs.has_key == 'true'
         uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.api_key.outputs.has_key == 'true'
         run: npm ci
 
       - name: Set up mock look home
+        if: steps.api_key.outputs.has_key == 'true'
         run: |
           mkdir -p /tmp/look-e2e-home/agents/marketplace
           printf '{"projects":[{"id":"e2e00001","name":"pi","cwd":"%s","createdAt":0}]}' "$GITHUB_WORKSPACE" > /tmp/look-e2e-home/projects.json
@@ -53,6 +71,7 @@ jobs:
           cp apps/electron/default-agents/*.md /tmp/look-e2e-home/agents/marketplace/
 
       - name: Run LLM E2E tests
+        if: steps.api_key.outputs.has_key == 'true'
         env:
           LOOK_E2E_LLM: "1"
           LOOK_HOME: /tmp/look-e2e-home
