@@ -30,7 +30,7 @@
     "lint": "biome check apps/electron/src apps/electron/test packages",
     "lint:fix": "biome check --write --unsafe apps/electron/src apps/electron/test packages",
     "format": "biome format --write apps/electron/src apps/electron/test packages",
-    "check": "npm run lint && npm run typecheck --workspace=@look/shared && npm run typecheck --workspace=@look/electron && npm test"
+    "check": "npm run lint && npm run typecheck --workspace=@look/shared && npm run build:shared && npm run typecheck --workspace=@look/electron && npm test"
   },
   "simple-git-hooks": {
     "pre-commit": "npx biome check --no-errors-on-unmatched --files-ignore-unknown=true --staged"
