@@ -31,6 +31,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Circular dependency gate
+        run: npm run check:circular
+
       - name: Typecheck shared
         run: npm run typecheck --workspace=@look/shared
 

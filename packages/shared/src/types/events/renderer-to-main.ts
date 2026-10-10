@@ -1,15 +1,15 @@
 import type { ImageContent } from "@earendil-works/pi-ai";
-import type { TranscribeSettingsPatch } from "../../contracts/ipc.js";
 import type { PermissionMode } from "../../contracts/permission.js";
 import type { UserSettings } from "../../contracts/settings.js";
+import type { TranscribeSettingsPatch } from "../../contracts/transcribe.js";
 import type { DraftPatch } from "../../domain/drafts.js";
 import type { ScheduledTaskInput } from "../../domain/scheduler.js";
-import type { ThinkingLevel } from "../../types.js";
 import type { AgentDefinitionInput } from "../dto/agent.js";
 import type { AttachmentRef } from "../dto/attachment.js";
 import type { ImSessionProvider } from "../dto/misc.js";
 import type { PermissionRespondPayload, PlanApprovalResponse, PlanQuestionResponse } from "../dto/permission.js";
 import type { CustomProviderInput } from "../dto/provider.js";
+import type { ThinkingLevel } from "../dto/thinking.js";
 
 /** Events sent from renderer to main process */
 export type RendererToMainEvent =

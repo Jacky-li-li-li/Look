@@ -30,6 +30,7 @@
     "lint": "biome check apps/electron/src apps/electron/test packages",
     "lint:fix": "biome check --write --unsafe apps/electron/src apps/electron/test packages",
     "format": "biome format --write apps/electron/src apps/electron/test packages",
+    "check:circular": "npx --yes madge@8 --circular --extensions ts,tsx --ts-config apps/electron/tsconfig.json apps/electron/src packages/shared/src",
     "check": "npm run lint && npm run typecheck --workspace=@look/shared && npm run build:shared && npm run typecheck --workspace=@look/electron && npm test"
   },
   "simple-git-hooks": {

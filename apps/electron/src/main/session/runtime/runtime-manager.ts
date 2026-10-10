@@ -24,7 +24,6 @@ import type {
 	IProjectTrustManager,
 	IRuntimeLifecycle,
 	ISessionEventHost,
-	ISessionRuntimeBootstrap,
 	ISubAgentRuntimeHost,
 } from "../../core/contracts.js";
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../../extensions/subagent/types.js";
@@ -33,6 +32,7 @@ import type { WorkspaceFileService } from "../../workspace/workspace-file-servic
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
 import { RuntimeManagerComposition } from "../runtime-manager-composition.js";
 import type { StoredSession } from "../services/session-catalog.js";
+import type { ISessionRuntimeBootstrap } from "./bootstrap-contract.js";
 
 export type { EventCallback };
 

@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import type { AgentSession, ContextUsage, SessionStats } from "@earendil-works/pi-coding-agent";
-import type { ThinkingLevel } from "../../types.js";
+import type { ThinkingLevel } from "./thinking.js";
 
 export interface SessionRuntimeSnapshot {
 	// biome-ignore lint/suspicious/noExplicitAny: Model generic parameter not relevant at shared type layer.
