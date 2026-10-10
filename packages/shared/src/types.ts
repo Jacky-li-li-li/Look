@@ -102,6 +102,7 @@ export type {
 	ProviderInfo,
 	TestCustomProviderResult,
 } from "./types/dto/provider.js";
+export type { SecretStorageStatus } from "./types/dto/secrets.js";
 export type {
 	ForkedSessionResult,
 	LookSessionEntry,

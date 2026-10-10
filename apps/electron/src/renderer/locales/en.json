@@ -278,6 +278,7 @@
     "general": "General",
     "apiKeys": "API Keys",
     "apiKeysDescription": "Custom compatible endpoints.",
+    "secretStorageInsecure": "API keys are stored on disk WITHOUT OS keychain encryption on this machine (file permissions are restricted to your user). Install/unlock a system keyring (e.g. gnome-keyring or KWallet) to enable encryption.",
     "chatPrompt": "Chat Prompt",
     "about": "About",
     "imChannels": "IM Channels",

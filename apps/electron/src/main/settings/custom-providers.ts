@@ -268,6 +268,7 @@ export class CustomProvidersStore {
 			...p,
 			apiKey: p.apiKey ? encryptApiKey(p.apiKey) : undefined,
 		}));
-		writeJsonFile(this.filePath, { providers: persisted }, 2);
+		// 0o600：apiKey 在 safeStorage 不可用时可能为明文。
+		writeJsonFile(this.filePath, { providers: persisted }, 2, 0o600);
 	}
 }

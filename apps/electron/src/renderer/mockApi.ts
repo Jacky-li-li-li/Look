@@ -855,6 +855,7 @@ const mockApi: LookAPI = {
 	logout: () => ok,
 
 	// ---- Usage ----
+	getSecretStorageStatus: () => success({ status: { secure: true, backend: null, plaintextFallbackUsed: false } }),
 	getUsage: () => success({ usage: { usage: {}, modelCost: {}, modelUsage: {}, years: [] } }),
 
 	// ---- IM Channels ----

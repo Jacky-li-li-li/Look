@@ -377,6 +377,8 @@ export interface LookAPI {
 	listAllMcpTools(): Promise<IpcResult<{ tools?: McpToolWithServer[] }>>;
 	// ---- Usage ----
 	getUsage(): Promise<IpcResult<{ usage: UsageData }>>;
+	/** 密钥落盘保护状态（safeStorage 是否真正加密、是否发生过明文回退）。 */
+	getSecretStorageStatus(): Promise<IpcResult<{ status: import("../types.js").SecretStorageStatus }>>;
 	listPrompts(): Promise<
 		IpcResult<{
 			prompts: PromptEntry[];

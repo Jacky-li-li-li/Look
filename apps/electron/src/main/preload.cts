@@ -333,6 +333,7 @@ const api: LookAPI = {
 
 	// ---- Usage heatmap ----
 	getUsage: () => invoke({ type: "usage:get" }),
+	getSecretStorageStatus: () => invoke({ type: "secrets:storage-status" }),
 
 	// ---- IM Channels ----
 	getImChannels: () => invoke({ type: "im:get-channels" }),

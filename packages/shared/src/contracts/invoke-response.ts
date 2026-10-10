@@ -181,6 +181,7 @@ export interface InvokeResponseMap {
 	"user-profile:update": Record<string, unknown>;
 	"user-profile:logout": Record<string, unknown>;
 	"usage:get": { usage: UsageData };
+	"secrets:storage-status": { status: import("../types.js").SecretStorageStatus };
 
 	// ── shared area ──
 	"shared:list": { nodes?: import("../types.js").FileTreeNode[] };
@@ -438,6 +439,7 @@ export interface LookApiMethodEventMap {
 	updateUserProfile: "user-profile:update";
 	logout: "user-profile:logout";
 	getUsage: "usage:get";
+	getSecretStorageStatus: "secrets:storage-status";
 
 	// ── shared area ──
 	listSharedFiles: "shared:list";

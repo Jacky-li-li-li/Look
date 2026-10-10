@@ -104,6 +104,7 @@ export type RendererToMainEvent =
 	  }
 	| { type: "user-profile:logout" }
 	| { type: "usage:get" }
+	| { type: "secrets:storage-status" }
 	| { type: "shared:list"; projectId: string }
 	| { type: "shared:list-children"; projectId: string; relativePath: string }
 	| { type: "shared:watch"; projectId: string }

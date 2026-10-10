@@ -278,6 +278,7 @@
     "general": "一般",
     "apiKeys": "API キー",
     "apiKeysDescription": "カスタム互換エンドポイント。",
+    "secretStorageInsecure": "このマシンでは OS キーチェーンによる暗号化が使えず、API キーは平文で保存されます（ファイル権限は現在のユーザーのみに制限）。暗号化を有効にするにはシステムキーリング（gnome-keyring / KWallet など）を導入・解除してください。",
     "providers": {
       "title": "API Providers",
       "summary": "{{configured}}/{{total}} 設定済み"
