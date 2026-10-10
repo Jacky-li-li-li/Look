@@ -8,7 +8,13 @@ const read = (file: string) => readFileSync(resolve(appRoot, file), "utf8");
 const readRepositoryFile = (file: string) => readFileSync(resolve(repositoryRoot, file), "utf8");
 const runtime = read("src/main/session/runtime/runtime-manager.ts");
 const runtimeComposition = read("src/main/session/runtime-manager-composition.ts");
-const compositionBuilder = read("src/main/session/composition/builder.ts");
+const compositionBuilder =
+	read("src/main/session/composition/builder.ts") +
+	read("src/main/session/composition/builder-phases/infra.ts") +
+	read("src/main/session/composition/builder-phases/model.ts") +
+	read("src/main/session/composition/builder-phases/extensions.ts") +
+	read("src/main/session/composition/builder-phases/core.ts") +
+	read("src/main/session/composition/builder-phases/ui.ts");
 const ipc =
 	read("src/main/ipc/handlers.ts") +
 	read("src/main/ipc/routers/permission-router.ts") +

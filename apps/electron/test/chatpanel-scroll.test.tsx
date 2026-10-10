@@ -474,7 +474,11 @@ describe("Conversation syncSticky (streaming same-frame stick)", () => {
 });
 
 describe("ChatMessageList source (scroll container wiring)", () => {
-	const SRC = readFileSync(resolve(__dirname, "../src/renderer/components/chat/ChatMessageList.tsx"), "utf8");
+	const chatDir = resolve(__dirname, "../src/renderer/components/chat");
+	const SRC =
+		readFileSync(resolve(chatDir, "ChatMessageList.tsx"), "utf8") +
+		readFileSync(resolve(chatDir, "ChatMessagesInner.tsx"), "utf8") +
+		readFileSync(resolve(chatDir, "useScrollToMessage.ts"), "utf8");
 
 	it("uses Conversation as the scroll container", () => {
 		expect(SRC).toMatch(/<Conversation\b/);
