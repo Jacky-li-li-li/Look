@@ -1,98 +1,67 @@
-// ============================================================
-// CompositionBuilder — mutable builder for RuntimeManagerComposition
-//
-// Owns all services as mutable nullable fields during construction.
-// Phase methods populate fields in dependency order. Closures handle
-// forward references (circular deps) naturally — the captured `this`
-// is resolved at call time, not at capture time.
-//
-// Once all phases complete, `build()` validates and freezes into an
-// immutable RuntimeManagerComposition. This eliminates the definite-assignment
-// assertion hack from the previous two-phase constructor pattern.
-// ============================================================
-
 import { existsSync } from "node:fs";
-import path from "node:path";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
-	ModelRegistry,
-	ModelRuntime,
-	ProjectTrustStore,
+	type ModelRegistry,
+	type ModelRuntime,
+	type ProjectTrustStore,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import {
-	ensureLookDir,
-	getAuthPath,
-	getCustomProvidersPath,
-	getLookDir,
-	getModelsPath,
-	getProjectSharedDir,
-	getUiSettingsPath,
-	resetLegacySessionsOnce,
-} from "@look/shared/look-storage";
+import { getLookDir } from "@look/shared/look-storage";
 import type { ThinkingLevel } from "@look/shared/types";
-import { AgentDefinitionService } from "../../agents/definition-service.js";
-import { BrowserService } from "../../browser/browser-service.js";
-import { ComputerUseService } from "../../computer-use/computer-use-service.js";
-import { createBrowserExtensionFactory } from "../../extensions/browser-extension.js";
-import { createComputerUseExtensionFactory } from "../../extensions/computer-use-extension.js";
-import { createMcpExtensionFactory } from "../../extensions/mcp-extension.js";
-import { createModelListExtensionFactory } from "../../extensions/model-extension.js";
-import { createPermissionExtensionFactory } from "../../extensions/permission-extension.js";
-import { createPlanExtensionFactory } from "../../extensions/plan-extension.js";
-import { createSkillInjectExtensionFactory } from "../../extensions/skill-inject-extension.js";
-import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
-import { createSubagentExtensionFactory } from "../../extensions/subagent/subagent-extension.js";
-import type { AgentConfig, SubagentProgress } from "../../extensions/subagent/types.js";
-import { createTranscribeExtensionFactory } from "../../extensions/transcribe-extension.js";
-import { MCPManager } from "../../mcp/manager.js";
+import type { AgentDefinitionService } from "../../agents/definition-service.js";
+import type { BrowserService } from "../../browser/browser-service.js";
+import type { ComputerUseService } from "../../computer-use/computer-use-service.js";
+import type { MCPManager } from "../../mcp/manager.js";
 import { getAvailableModels } from "../../models/model-queries.js";
-import { PlanService } from "../../permissions/plan.js";
-import { PermissionService } from "../../permissions/service.js";
-import { ProjectDeletionService } from "../../projects/project-deletion-service.js";
-import { ProjectService } from "../../projects/project-service.js";
+import type { PlanService } from "../../permissions/plan.js";
+import type { PermissionService } from "../../permissions/service.js";
+import type { ProjectDeletionService } from "../../projects/project-deletion-service.js";
+import type { ProjectService } from "../../projects/project-service.js";
 import type { SchedulerService } from "../../scheduler/scheduler-service.js";
-import { EncryptedCredentialStore } from "../../security/secrets.js";
-import { AutoTitleService } from "../../services/auto-title.js";
-import { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
-import { CustomProvidersStore } from "../../settings/custom-providers.js";
-import { migrateLegacySettings } from "../../settings/migrate.js";
-import { PromptStore } from "../../settings/prompt-store.js";
-import { UserSettingsStore } from "../../settings/store.js";
-import { getTranscriptionService, type TranscriptionService } from "../../transcribe/transcription-service.js";
+import type { EncryptedCredentialStore } from "../../security/secrets.js";
+import type { AutoTitleService } from "../../services/auto-title.js";
+import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
+import type { CustomProvidersStore } from "../../settings/custom-providers.js";
+import type { PromptStore } from "../../settings/prompt-store.js";
+import type { UserSettingsStore } from "../../settings/store.js";
+import type { TranscriptionService } from "../../transcribe/transcription-service.js";
 import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
-import { MAX_NAME_LENGTH } from "../constants.js";
 import { SessionEventBus } from "../events/session-event-bus.js";
-import { SessionEventEffects } from "../events/session-event-effects.js";
-import { SessionEventProcessor } from "../events/session-event-processor.js";
-import { SessionNotifier } from "../events/session-notifier.js";
-import { SessionRuntimeFactory } from "../runtime/runtime-factory.js";
-import { RuntimeLifecycleCoordinator } from "../runtime/runtime-lifecycle-coordinator.js";
+import type { SessionEventEffects } from "../events/session-event-effects.js";
+import type { SessionEventProcessor } from "../events/session-event-processor.js";
+import type { SessionNotifier } from "../events/session-notifier.js";
+import type { SessionRuntimeFactory } from "../runtime/runtime-factory.js";
+import type { RuntimeLifecycleCoordinator } from "../runtime/runtime-lifecycle-coordinator.js";
 import { RuntimeRegistry } from "../runtime/runtime-registry.js";
 import { ActiveSessionSelection } from "../scope/active-session-selection.js";
 import { SessionScopeRegistry } from "../scope/scope-registry.js";
 import { SessionPendingIntents } from "../scope/session-pending-intents.js";
-import { AttachmentService } from "../services/attachment-service.js";
+import type { AttachmentService } from "../services/attachment-service.js";
 import { type ExpectedSessionDefaults, resolveExpectedSessionDefaults } from "../services/expected-session-defaults.js";
-import { ProjectApplicationService } from "../services/project-application-service.js";
-import { ProjectRuntimeService } from "../services/project-runtime-service.js";
-import { SessionCatalog } from "../services/session-catalog.js";
-import { SessionControlService } from "../services/session-control-service.js";
+import type { ProjectApplicationService } from "../services/project-application-service.js";
+import type { ProjectRuntimeService } from "../services/project-runtime-service.js";
+import type { SessionCatalog } from "../services/session-catalog.js";
+import type { SessionControlService } from "../services/session-control-service.js";
 import { SessionDraftIndex } from "../services/session-draft-index.js";
-import { SessionHistoryService } from "../services/session-history-service.js";
-import { SessionInfoService } from "../services/session-info-service.js";
-import { ensureSessionModel, SessionLifecycleService } from "../services/session-lifecycle-service.js";
-import { SessionMessagingService } from "../services/session-messaging-service.js";
-import { SessionPermissionOrchestrator } from "../services/session-permission-orchestrator.js";
-import { SessionSettingsService } from "../services/session-settings-service.js";
-import { SessionSubagentService } from "../services/session-subagent-service.js";
-import { SkillManagementService } from "../services/skill-management-service.js";
+import type { SessionHistoryService } from "../services/session-history-service.js";
+import type { SessionInfoService } from "../services/session-info-service.js";
+import type { SessionLifecycleService } from "../services/session-lifecycle-service.js";
+import type { SessionMessagingService } from "../services/session-messaging-service.js";
+import type { SessionPermissionOrchestrator } from "../services/session-permission-orchestrator.js";
+import type { SessionSettingsService } from "../services/session-settings-service.js";
+import type { SessionSubagentService } from "../services/session-subagent-service.js";
+import type { SkillManagementService } from "../services/skill-management-service.js";
 import { SubAgentRegistry } from "../subagent-registry.js";
-import { CompositionHost } from "./composition-host.js";
+import { buildCorePhase } from "./builder-phases/core.js";
+import { buildExtensionsPhase } from "./builder-phases/extensions.js";
+import { buildInfraPhase } from "./builder-phases/infra.js";
+import { buildModelPhase } from "./builder-phases/model.js";
+import { buildUIPhase } from "./builder-phases/ui.js";
+import type { CompositionHost } from "./composition-host.js";
 
-const MAX_SUBAGENT_DEPTH = 5;
+export const MAX_SUBAGENT_DEPTH = 5;
 
 /**
  * Mutable builder that orchestrates service creation in dependency order.
@@ -105,7 +74,8 @@ export class CompositionBuilder {
 	 * 模糊的 `undefined is not a function`。闭包在 Phase 4 之后才调用，
 	 * 因此在闭包体内使用同样安全。
 	 */
-	private req<T>(value: T | null | undefined, name: string): T {
+	/** @internal */
+	req<T>(value: T | null | undefined, name: string): T {
 		if (value === null || value === undefined) {
 			throw new Error(`[CompositionBuilder] "${name}" is not initialized yet`);
 		}
@@ -172,136 +142,22 @@ export class CompositionBuilder {
 	// ── Mutable cross-cutting reference (shared with composition after build) ──
 	readonly schedulerRef: { current: SchedulerService | null } = { current: null };
 
-	private host: CompositionHost | null = null;
-	private workspaceFileServiceRef: WorkspaceFileService | null = null;
-	private workspaceTreeServiceRef: WorkspaceTreeService | null = null;
+	/** @internal */
+	host: CompositionHost | null = null;
+	/** @internal */
+	workspaceFileServiceRef: WorkspaceFileService | null = null;
+	/** @internal */
+	workspaceTreeServiceRef: WorkspaceTreeService | null = null;
 
 	// ── Phase 1: Infrastructure (sync) ──
-
 	buildInfra(
 		workspaceFileService: WorkspaceFileService | null,
 		workspaceTreeService: WorkspaceTreeService | null,
 	): void {
-		this.workspaceFileServiceRef = workspaceFileService;
-		this.workspaceTreeServiceRef = workspaceTreeService;
-
-		ensureLookDir();
-		resetLegacySessionsOnce();
-		const migration = migrateLegacySettings();
-		if (migration.migrated && migration.keys.length > 0) {
-			console.log(`[Look] Migrated settings: ${migration.keys.join(", ")}`);
-		}
-
-		this.trustStore = new ProjectTrustStore(getLookDir());
-		this.globalSettingsManager = SettingsManager.create(getLookDir(), getLookDir());
-		this.projectService = new ProjectService(this.trustStore, this.globalSettingsManager);
-		this.userSettings = new UserSettingsStore(this.globalSettingsManager, getUiSettingsPath());
-		// NOTE: userSettings MUST be created before permissionService — the
-		// PermissionService constructor reads userSettings.getAll().permissionMode.
-		// If these lines are reordered, PermissionService will crash on a null ref.
-		this.permissionService = new PermissionService(this.eventBus, this.userSettings.getAll().permissionMode);
-		// Default to "ask" only when the user has not chosen a policy;
-		// setDefaultProjectTrust persists, so an unconditional call would reset
-		// an explicitly configured "always"/"never" on every launch.
-		if (this.globalSettingsManager.getGlobalSettings().defaultProjectTrust === undefined) {
-			this.globalSettingsManager.setDefaultProjectTrust("ask");
-		}
-		this.promptStore = new PromptStore();
-
-		this.mcpManager = new MCPManager();
-		// 空闲连接回收（Proma 式连接池）：5 分钟未调用的 MCP 连接断开并释放
-		// stdio 子进程；定时器 unref，不阻止应用退出。
-		this.mcpManager.startIdleReaper();
-
-		// 转写服务：进程级单例（模型加载很重，所有会话共享一个驻留模型 + 串行队列）。
-		this.transcribeService = getTranscriptionService();
-
-		// Computer Use 是进程级 OS 服务（截图/输入与具体会话无关），
-		// 与 MCPManager 同为全局共享服务；构造不触碰 Electron API，
-		// 真正的 desktopCapturer/nut-js 调用发生在工具执行时（app ready 后）。
-		// v1 仅支持 macOS：服务依赖 macOS 专属 TCC API
-		// （getMediaAccessStatus("screen") / isTrustedAccessibilityClient），
-		// 且输入坐标按主屏全局原点设计；非 macOS 不构造服务、不注册
-		// computer_* 工具，避免暴露必然失败的入口。
-		this.computerUseService = process.platform === "darwin" ? new ComputerUseService() : null;
-		this.browserService = new BrowserService();
-
-		this.sessionCatalog = new SessionCatalog((metadata) => {
-			// Captures CompositionBuilder's subAgentRegistry field (assigned above).
-			// `this` refers to the builder, not the SessionCatalog instance.
-			if (metadata.parentSessionId) {
-				this.subAgentRegistry.register(metadata.parentSessionId, metadata.sessionId, metadata.agentName ?? "");
-			}
-		});
-		this.host = new CompositionHost(
-			this.eventBus,
-			this.runtimeRegistry,
-			this.sessionCatalog,
-			this.projectService,
-			this.activeSessionSelection,
-		);
-		const host = this.host;
-		this.mcpManager.setOnChange(() => host.emit({ type: "mcp:status-changed" }));
-		// 项目激活即后台预热 MCP（应用启动/切项目/跨项目切会话都会经过
-		// setActiveId）：把冷启动挪到用户还在浏览界面的空闲窗口，首个
-		// 新建会话直接命中已连接客户端。信任门与 mcp-extension 的
-		// session_start 一致——项目级 .look/mcp.json 仅受信任时加载。
-		this.projectService.setOnActiveProjectChanged((projectId) => {
-			if (!projectId) return;
-			const project = this.req(this.projectService, "projectService").getProjectInfo(projectId);
-			if (!project?.valid) return;
-			const loadProjectConfig = this.req(this.projectService, "projectService").resolveProjectTrust(project.cwd);
-			void this.req(this.mcpManager, "mcpManager").prewarmProject(projectId, project.cwd, { loadProjectConfig });
-		});
-		// 信任授予 → 强制重踢预热，补载项目级 .look/mcp.json（信任前的预热
-		// 出于安全门跳过了它）。挂在 projectRuntimeService 总闸，覆盖启动
-		// 弹窗与 IPC 两条信任落地路径。
-		this.projectRuntimeService = new ProjectRuntimeService({
-			projectService: this.projectService,
-			sessionCatalog: this.sessionCatalog,
-			runtimeRegistry: this.runtimeRegistry,
-		});
-		this.projectRuntimeService.setOnProjectTrusted((projectId, cwd) => {
-			void this.req(this.mcpManager, "mcpManager").prewarmProject(projectId, cwd, {
-				loadProjectConfig: true,
-				force: true,
-			});
-		});
-		this.sessionInfoService = new SessionInfoService({
-			runtimeRegistry: this.runtimeRegistry,
-			sessionCatalog: this.sessionCatalog,
-			draftIndex: this.draftIndex,
-			subAgentRegistry: this.subAgentRegistry,
-			scopeRegistry: this.scopeRegistry,
-			maxNameLength: MAX_NAME_LENGTH,
-			listProjects: () => host.listProjects(),
-			// 草稿行预期默认值（延迟执行，modelRegistry 在 Phase 2 就位）。
-			getExpectedSessionDefaults: (projectId) => this.resolveExpectedSessionDefaults(projectId),
-			// 挂起意图覆盖：runtime 未就绪时用户已切换的模型/思考立即上屏。
-			getPendingIntentOverrides: (sessionId) => this.resolvePendingIntentOverrides(sessionId),
-		});
-		this.sessionNotifier = new SessionNotifier(this.eventBus, {
-			sessionInfoService: this.sessionInfoService,
-			scopeRegistry: this.scopeRegistry,
-			listProjects: () => host.listProjects(),
-			getActiveProjectId: () => this.req(this.projectService, "projectService").activeId,
-		});
-
-		this.eventProcessor = new SessionEventProcessor(host, this.scopeRegistry, host);
-		this.subAgentRuntimeService = new SubAgentRuntimeService(host, this.subAgentRegistry);
-
-		this.projectApplicationService = new ProjectApplicationService({
-			projectService: this.projectService,
-			projectRuntimeService: this.projectRuntimeService,
-			sessionCatalog: this.sessionCatalog,
-			runtimeRegistry: this.runtimeRegistry,
-			sessionNotifier: this.sessionNotifier,
-			eventBus: this.eventBus,
-		});
+		buildInfraPhase(this, workspaceFileService, workspaceTreeService);
 	}
 
 	// ── Phase 2: Model runtime (async) ──
-
 	/**
 	 * Phase 2: Build the model layer.
 	 *
@@ -314,35 +170,10 @@ export class CompositionBuilder {
 	 * Outputs: modelRuntime, modelRegistry, credentialStore, customProviders, autoTitleService
 	 */
 	async buildModel(): Promise<void> {
-		const credentials = new EncryptedCredentialStore(getAuthPath());
-		this.credentialStore = credentials;
-		this.modelRuntime = await ModelRuntime.create({
-			credentials,
-			modelsPath: getModelsPath(),
-			// 启动只做本地磁盘加载：网络刷新（最长 15s）若在此 await 会挡住
-			// IPC 注册与项目加载，冷启动时侧边栏长时间为空。网络刷新由
-			// Application 在启动序列完成后后台补齐并广播 model:updated。
-			allowModelNetwork: false,
-		});
-		this.modelRegistry = new ModelRegistry(this.modelRuntime);
-
-		this.customProviders = new CustomProvidersStore(this.modelRuntime, getCustomProvidersPath());
-		this.customProviders.load();
-
-		this.autoTitleService = new AutoTitleService({
-			modelRuntime: this.modelRuntime,
-			getUserSettings: () => this.req(this.userSettings, "userSettings").getAll(),
-		});
+		return buildModelPhase(this);
 	}
 
 	// ── Phase 3: Extensions (runtimeFactory + extension factories) ──
-	//
-	// IMPORTANT: Closures below capture `this` and reference planService /
-	// sessionSubagentService via this.req(...). These fields are null NOW but
-	// will be set in buildCore() (Phase 4) BEFORE any closure is invoked.
-	// The closures are stored in runtimeFactory and only called during
-	// session creation, which happens after all phases complete.
-
 	/**
 	 * Phase 3: Build extension factories and the runtime factory.
 	 *
@@ -355,109 +186,10 @@ export class CompositionBuilder {
 	 * Outputs: runtimeFactory containing createAgentSessionRuntime flow
 	 */
 	buildExtensions(): void {
-		const modelRuntime = this.req(this.modelRuntime, "modelRuntime");
-
-		this.runtimeFactory = new SessionRuntimeFactory({
-			agentDir: getLookDir(),
-			modelRuntime,
-			findProjectIdByCwd: (cwd) => this.findProjectIdByCwd(cwd),
-			resolveProjectTrust: (cwd) => this.req(this.projectService, "projectService").resolveProjectTrust(cwd),
-			buildExtensionFactories: async (cwd, sessionId, projectId) => {
-				const resolvedProjectId = projectId ?? this.runtimeRegistry.get(sessionId)?.projectId ?? "";
-				const permissionHandler = this.req(this.permissionService, "permissionService").createToolCallHandler(cwd);
-				return [
-					createPermissionExtensionFactory(permissionHandler),
-					createPlanExtensionFactory(sessionId, {
-						getMode: (id) => this.req(this.permissionService, "permissionService").getMode(id),
-						askQuestions: (id, questions, signal) =>
-							this.req(this.planService, "planService").requestQuestions(id, questions, signal),
-						submitPlan: (id, plan, signal) =>
-							this.req(this.planService, "planService").requestApproval(id, plan, signal),
-					}),
-					createModelListExtensionFactory(async () =>
-						getAvailableModels(this.req(this.modelRegistry, "modelRegistry")),
-					),
-					await createSubagentExtensionFactory(
-						sessionId,
-						{
-							discoverAgents: async (_projectId, scope) => {
-								const result = await discoverAgents(resolvedProjectId, scope);
-								const enabled = this.req(this.userSettings, "userSettings").getAll().enabledAgentDefinitions;
-								if (enabled === null) return result;
-								// discoverAgents 有短 TTL 缓存且按引用返回：不能原地改写
-								// result.agents（会毒化缓存，其他调用方 5s 内看到过滤后的
-								// 列表），必须克隆一份再过滤。
-								return {
-									...result,
-									agents: result.agents.filter((agent) => enabled.includes(agent.name)),
-								};
-							},
-							runSubSession: (
-								parentId: string,
-								agent: AgentConfig,
-								task: string,
-								signal: AbortSignal | undefined,
-								title: string,
-								toolCallId: string,
-								taskTitle: string,
-								onUpdate?: (progress: SubagentProgress) => void,
-							) =>
-								this.req(this.sessionSubagentService, "sessionSubagentService").runSubSession(
-									parentId,
-									agent,
-									task,
-									signal,
-									title,
-									toolCallId,
-									taskTitle,
-									onUpdate,
-								),
-							isSubagentEnabled: (id) =>
-								this.req(this.sessionSubagentService, "sessionSubagentService").isEnabled(id),
-						},
-						resolvedProjectId,
-					),
-					createMcpExtensionFactory(
-						sessionId,
-						this.req(this.mcpManager, "mcpManager"),
-						cwd,
-						resolvedProjectId,
-						(cwd) => this.req(this.projectService, "projectService").resolveProjectTrust(cwd),
-					),
-					createSkillInjectExtensionFactory(),
-					// 截图落盘到项目共享区（守卫白名单内，共享面板可见，
-					// 路径芯片点击可预览）；无项目时不落盘，仅内联返回。
-					// 非 macOS 不注册：computer-use 服务依赖 macOS 专属 TCC API，
-					// 见构造处注释（computerUseService 为 null 时跳过）。
-					...(this.computerUseService
-						? [
-								createComputerUseExtensionFactory(
-									this.computerUseService,
-									resolvedProjectId ? path.join(getProjectSharedDir(resolvedProjectId), "screenshots") : null,
-								),
-							]
-						: []),
-					createBrowserExtensionFactory(
-						this.req(this.browserService, "browserService"),
-						(cwd) => this.req(this.projectService, "projectService").resolveProjectTrust(cwd),
-						cwd,
-					),
-					// 转录稿落盘到项目共享区 transcripts 目录（共享面板可见、
-					// 路径稳定可点）；无项目时不落盘到共享区，回退系统临时目录。
-					createTranscribeExtensionFactory({
-						service: this.req(this.transcribeService, "transcribeService"),
-						sharedDir: resolvedProjectId
-							? path.join(getProjectSharedDir(resolvedProjectId), "transcripts")
-							: null,
-					}),
-				];
-			},
-		});
+		buildExtensionsPhase(this);
 	}
 
 	// ── Phase 4: Core services (plan, agentDef, subagent, lifecycle) ──
-	// Circular deps are resolved via closures on `this`.
-
 	/**
 	 * Phase 4: Build the core session orchestrators.
 	 *
@@ -475,136 +207,10 @@ export class CompositionBuilder {
 	 * Outputs: planService, agentDefinitionService, sessionSubagentService, runtimeLifecycleCoordinator
 	 */
 	buildCore(): void {
-		const host = this.req(this.host, "host");
-		const modelRegistry = this.req(this.modelRegistry, "modelRegistry");
-
-		// planService — created first; sessionPermissionOrchestrator is forward-referenced via closure
-		this.planService = new PlanService(
-			host,
-			host,
-			this.req(this.permissionService, "permissionService"),
-			async (sessionId) => {
-				await this.req(this.sessionPermissionOrchestrator, "sessionPermissionOrchestrator").applyMode(
-					sessionId,
-					"always",
-					{
-						internal: true,
-						updateDefault: false,
-					},
-				);
-			},
-		);
-
-		// agentDefinitionService — sessionSubagentService forward-referenced via closure
-		this.agentDefinitionService = new AgentDefinitionService(() =>
-			this.req(this.sessionSubagentService, "sessionSubagentService").reloadAllSessionsForAgents(),
-		);
-
-		// sessionSubagentService — runtimeLifecycle forward-referenced via closures in host
-		this.sessionSubagentService = new SessionSubagentService({
-			host: {
-				createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
-					this.req(this.runtimeLifecycle, "runtimeLifecycle").createManagedRuntime(
-						cwd,
-						manager,
-						projectId,
-						createdAt,
-						startEvent,
-						options,
-					),
-				disposeRuntime: (sessionId, abort) =>
-					this.req(this.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
-				getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
-				reloadSession: async (sessionId) => {
-					const managed = this.runtimeRegistry.get(sessionId);
-					if (managed) await managed.runtime.session.reload();
-				},
-				listRuntimeIds: () => this.runtimeRegistry.keys(),
-				getProjectInfo: (projectId) => this.req(this.projectService, "projectService").getProjectInfo(projectId),
-				emit: (event) => host.emit(event),
-				emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
-				getScope: (sessionId) => this.scopeRegistry.get(sessionId),
-				acquireScope: (sessionId, projectId) => this.scopeRegistry.acquire(sessionId, projectId),
-				runtimeInfo: (sessionId) => this.req(this.sessionInfoService, "sessionInfoService").getAgentInfo(sessionId),
-			},
-			modelRegistry,
-			subAgentRegistry: this.subAgentRegistry,
-			subAgentRuntimeService: this.req(this.subAgentRuntimeService, "subAgentRuntimeService"),
-			permissionService: this.req(this.permissionService, "permissionService"),
-			planService: this.planService,
-			userSettings: this.req(this.userSettings, "userSettings"),
-			agentDefinitionService: this.agentDefinitionService,
-			maxSubagentDepth: MAX_SUBAGENT_DEPTH,
-			maxNameLength: MAX_NAME_LENGTH,
-		});
-		this.sessionSubagentService.loadDefaultFromSettings();
-
-		// runtimeLifecycle — references sessionSubagentService (already assigned)
-		this.runtimeLifecycle = new RuntimeLifecycleCoordinator({
-			ensureSessionModel: (session) =>
-				ensureSessionModel(session, {
-					getAvailableModelsSync: () => getAvailableModels(this.req(this.modelRegistry, "modelRegistry")),
-					modelRegistry: this.req(this.modelRegistry, "modelRegistry"),
-					userSettings: this.req(this.userSettings, "userSettings"),
-				}),
-			runtimeFactory: this.req(this.runtimeFactory, "runtimeFactory"),
-			runtimeRegistry: this.runtimeRegistry,
-			scopeRegistry: this.scopeRegistry,
-			permissionService: this.req(this.permissionService, "permissionService"),
-			planService: this.planService,
-			sessionPermissionOrchestrator: {
-				disposeSession: (sessionId) => this.sessionPermissionOrchestrator?.disposeSession(sessionId),
-			},
-			subAgentRegistry: this.subAgentRegistry,
-			subAgentRuntimeService: this.req(this.subAgentRuntimeService, "subAgentRuntimeService"),
-			autoTitleService: this.req(this.autoTitleService, "autoTitleService"),
-			eventProcessor: this.req(this.eventProcessor, "eventProcessor"),
-			sessionSubagentService: this.sessionSubagentService,
-			sessionNotifier: this.req(this.sessionNotifier, "sessionNotifier"),
-			selection: this.activeSessionSelection,
-			getStoredSession: (sessionId) => this.req(this.sessionCatalog, "sessionCatalog").get(sessionId),
-			getDraft: (sessionId) => {
-				const entry = this.draftIndex.get(sessionId);
-				if (!entry) return undefined;
-				const project = this.req(this.projectService, "projectService").getProjectInfo(entry.projectId);
-				if (!project?.valid) return undefined;
-				return { cwd: project.cwd, projectId: entry.projectId, name: entry.name };
-			},
-			emitSessionPreview: (sessionId, stored) =>
-				this.req(this.sessionNotifier, "sessionNotifier").emitSessionPreview(sessionId, stored),
-			openSessionManager: (stored) => SessionManager.open(stored.path),
-			pendingIntents: this.sessionPendingIntents,
-			resolveModel: (modelKey) => {
-				const slash = modelKey.indexOf("/");
-				if (slash <= 0) return undefined;
-				return this.req(this.modelRegistry, "modelRegistry").find(
-					modelKey.slice(0, slash),
-					modelKey.slice(slash + 1),
-				);
-			},
-			// runtime 绑定完成 → flush 挂起消息（messaging service 在 Phase 5 就位，
-			// 闭包延迟解析；flush 内部自管异常，不影响绑定路径）。
-			onSessionBound: (managed) => {
-				void this.sessionMessagingService?.flushPending(managed);
-			},
-			onSessionDisposed: (sessionId) => this.sessionMessagingService?.disposeSession(sessionId),
-			handleSessionEvent: (sessionId, event) =>
-				this.req(this.eventProcessor, "eventProcessor").handle(sessionId, event),
-			setActiveProjectId: (projectId) => this.req(this.projectService, "projectService").setActiveId(projectId),
-			getActiveProjectId: () => this.req(this.projectService, "projectService").activeId,
-			refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
-			events: {
-				emit: (event) => host.emit(event),
-				emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason ?? "activate"),
-				emitSessionList: (projectId) =>
-					this.req(this.sessionNotifier, "sessionNotifier").emitSessionList(projectId),
-				emitProjectList: () => this.req(this.sessionNotifier, "sessionNotifier").emitProjectList(),
-			},
-		});
+		buildCorePhase(this);
 	}
 
 	// ── Phase 5: UI-facing services ──
-
 	/**
 	 * Phase 5: Build the UI-facing services.
 	 *
@@ -616,195 +222,8 @@ export class CompositionBuilder {
 	 * Outputs: sessionHistoryService, sessionControlService, sessionLifecycleService, etc.
 	 */
 	buildUI(): void {
-		const host = this.req(this.host, "host");
-		const modelRegistry = this.req(this.modelRegistry, "modelRegistry");
-
-		this.sessionHistoryService = new SessionHistoryService({
-			ensureRuntime: (sessionId) => this.req(this.runtimeLifecycle, "runtimeLifecycle").ensureRuntime(sessionId),
-			createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent) =>
-				this.req(this.runtimeLifecycle, "runtimeLifecycle").createManagedRuntime(
-					cwd,
-					manager,
-					projectId,
-					createdAt,
-					startEvent,
-				),
-			withSessionLock: (sessionId, task) => this.runtimeRegistry.withExclusive(sessionId, task),
-			disposeRuntime: (sessionId, abort) =>
-				this.req(this.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
-			getRuntime: (sessionId) => host.getRuntime(sessionId),
-			getSessionManager: (sessionId) => this.sessionManagerFor(sessionId),
-			refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
-			activateForkedSession: (projectId, sessionId) => {
-				this.req(this.projectService, "projectService").setActiveId(projectId);
-				this.activeSessionSelection.setCurrent(sessionId);
-			},
-			markSessionDefaultName: (sessionId) => {
-				const scope = this.scopeRegistry.get(sessionId);
-				if (scope) scope.isDefaultName = true;
-			},
-			emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason),
-		});
-
-		this.sessionControlService = new SessionControlService(
-			{
-				ensureRuntime: (sessionId) => this.req(this.runtimeLifecycle, "runtimeLifecycle").ensureRuntime(sessionId),
-				getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
-				getSessionManager: (sessionId) => this.sessionManagerFor(sessionId),
-				sessionExists: (sessionId) => this.sessionExists(sessionId),
-				setPendingModel: (sessionId, modelKey) => this.sessionPendingIntents.setModel(sessionId, modelKey),
-				setPendingThinkingLevel: (sessionId, level) =>
-					this.sessionPendingIntents.setThinkingLevel(sessionId, level),
-				updateStoredName: (sessionId, name) => {
-					const stored = this.req(this.sessionCatalog, "sessionCatalog").get(sessionId);
-					if (stored) stored.name = name;
-					return stored;
-				},
-				closeDefaultNameGate: (sessionId) => {
-					const scope = this.scopeRegistry.get(sessionId);
-					if (scope) scope.isDefaultName = false;
-				},
-				emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
-				emitSessionList: (projectId) =>
-					this.req(this.sessionNotifier, "sessionNotifier").emitSessionList(projectId),
-				emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason ?? "activate"),
-			},
-			modelRegistry,
-			this.scopeRegistry,
-			MAX_NAME_LENGTH,
-		);
-
-		// 必须先构造再注入：SessionLifecycleService / ProjectDeletionService 在下方
-		// 以 `!` 取用该字段，若此行晚于注入点，null 会在运行期才暴露（validate 拦不住）。
-		this.attachmentService = new AttachmentService();
-
-		this.sessionLifecycleService = new SessionLifecycleService({
-			host: {
-				createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
-					this.req(this.runtimeLifecycle, "runtimeLifecycle").createManagedRuntime(
-						cwd,
-						manager,
-						projectId,
-						createdAt,
-						startEvent,
-						options,
-					),
-				disposeRuntime: (sessionId, abort) =>
-					this.req(this.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
-				refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
-				getStoredSession: (sessionId) => this.req(this.sessionCatalog, "sessionCatalog").get(sessionId),
-				removeStoredSession: (sessionId) => {
-					this.req(this.sessionCatalog, "sessionCatalog").remove(sessionId);
-				},
-				emit: (event) => host.emit(event),
-				emitSessionState: (sessionId, reason) => host.emitSessionState(sessionId, reason ?? "activate"),
-				emitSessionList: (projectId) =>
-					this.req(this.sessionNotifier, "sessionNotifier").emitSessionList(projectId),
-				setActiveProjectId: (projectId) => this.req(this.projectService, "projectService").setActiveId(projectId),
-				setActiveSessionId: (sessionId) => this.activeSessionSelection.setCurrent(sessionId),
-				getActiveSessionId: () => this.activeSessionSelection.currentId,
-			},
-			projectService: this.req(this.projectService, "projectService"),
-			draftIndex: this.draftIndex,
-			runtimeRegistry: this.runtimeRegistry,
-			scopeRegistry: this.scopeRegistry,
-			subAgentRuntimeService: this.req(this.subAgentRuntimeService, "subAgentRuntimeService"),
-			sessionInfoService: this.req(this.sessionInfoService, "sessionInfoService"),
-			permissionService: this.req(this.permissionService, "permissionService"),
-			planService: this.req(this.planService, "planService"),
-			userSettings: this.req(this.userSettings, "userSettings"),
-			modelRegistry,
-			attachments: this.req(this.attachmentService, "attachmentService"),
-			getAvailableModelsSync: () => getAvailableModels(modelRegistry),
-		});
-
-		this.projectDeletionService = new ProjectDeletionService({
-			projectService: this.req(this.projectService, "projectService"),
-			sessionCatalog: this.req(this.sessionCatalog, "sessionCatalog"),
-			draftIndex: this.draftIndex,
-			runtimeRegistry: this.runtimeRegistry,
-			disposeRuntime: (sessionId, abort) =>
-				this.req(this.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
-			workspaceFileService: this.workspaceFileServiceRef,
-			workspaceTreeService: this.workspaceTreeServiceRef,
-			emitSessionList: (projectId) => this.req(this.sessionNotifier, "sessionNotifier").emitSessionList(projectId),
-			emitProjectList: () => this.req(this.sessionNotifier, "sessionNotifier").emitProjectList(),
-			getActiveSessionId: () => this.activeSessionSelection.currentId,
-			setActiveSessionId: (sessionId) => this.activeSessionSelection.setCurrent(sessionId),
-			attachments: this.req(this.attachmentService, "attachmentService"),
-			deleteScheduledTasksByProject: async (projectId) => this.schedulerRef.current?.deleteTasksByProject(projectId),
-		});
-
-		this.sessionMessagingService = new SessionMessagingService({
-			getManagedRuntime: (sessionId) => this.runtimeRegistry.get(sessionId),
-			ensureRuntime: (sessionId) => this.req(this.runtimeLifecycle, "runtimeLifecycle").ensureRuntime(sessionId),
-			sessionExists: (sessionId) => this.sessionExists(sessionId),
-			ensureMcpReady: async (projectId) => {
-				await this.req(this.mcpManager, "mcpManager").ensureRequiredReady(projectId);
-			},
-			emitError: (error, sessionId) => this.req(this.sessionNotifier, "sessionNotifier").emitError(error, sessionId),
-			attachments: this.req(this.attachmentService, "attachmentService"),
-		});
-
-		this.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({
-			host: {
-				ensureRuntime: (sessionId) => this.req(this.runtimeLifecycle, "runtimeLifecycle").ensureRuntime(sessionId),
-				emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
-				sessionExists: (sessionId) => this.req(this.sessionCatalog, "sessionCatalog").get(sessionId) !== undefined,
-			},
-			eventBus: this.req(this.eventBus, "eventBus"),
-			permissionService: this.req(this.permissionService, "permissionService"),
-			planService: this.req(this.planService, "planService"),
-			userSettings: this.req(this.userSettings, "userSettings"),
-			modelRegistry: this.req(this.modelRegistry, "modelRegistry"),
-		});
-
-		this.sessionEventEffects = new SessionEventEffects({
-			runtimeRegistry: this.runtimeRegistry,
-			scopeRegistry: this.scopeRegistry,
-			permissionService: this.req(this.permissionService, "permissionService"),
-			planService: this.req(this.planService, "planService"),
-			subAgentRuntimeService: this.req(this.subAgentRuntimeService, "subAgentRuntimeService"),
-			subAgentRegistry: this.subAgentRegistry,
-			autoTitleService: this.req(this.autoTitleService, "autoTitleService"),
-			emitUsageUpdated: () => host.emit({ type: "usage:updated" }),
-			getStoredProjectId: (sessionId) => this.req(this.sessionCatalog, "sessionCatalog").get(sessionId)?.projectId,
-			refreshProjectSessions: (projectId) => this.refreshProjectSessions(projectId),
-			emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
-			emitSessionList: (projectId) => this.req(this.sessionNotifier, "sessionNotifier").emitSessionList(projectId),
-			emitError: (error, sessionId) => this.req(this.sessionNotifier, "sessionNotifier").emitError(error, sessionId),
-		});
-		host.bindRuntimeServices({
-			runtimeLifecycle: this.req(this.runtimeLifecycle, "runtimeLifecycle"),
-			sessionNotifier: this.req(this.sessionNotifier, "sessionNotifier"),
-			sessionEventEffects: this.sessionEventEffects,
-			subAgentRuntimeService: this.req(this.subAgentRuntimeService, "subAgentRuntimeService"),
-		});
-
-		this.sessionSettingsService = new SessionSettingsService({
-			userSettings: this.req(this.userSettings, "userSettings"),
-			listProjects: () => this.req(this.projectService, "projectService").listProjects(),
-			getActiveProject: () => this.req(this.projectService, "projectService").getActiveProject(),
-			listSessionIds: () =>
-				this.req(this.sessionInfoService, "sessionInfoService")
-					.listAgents()
-					.map((agent) => agent.id),
-			listRuntimes: () => this.runtimeRegistry.values(),
-			listRuntimeIds: () => this.runtimeRegistry.keys(),
-			permissionService: this.req(this.permissionService, "permissionService"),
-			sessionSubagentService: this.req(this.sessionSubagentService, "sessionSubagentService"),
-			projectTrustDefaults: this.req(this.globalSettingsManager, "globalSettingsManager"),
-		});
-
-		this.skillManagementService = new SkillManagementService({
-			runtimeRegistry: this.runtimeRegistry,
-			selection: this.activeSessionSelection,
-			globalSettingsManager: this.req(this.globalSettingsManager, "globalSettingsManager"),
-			userSettings: this.req(this.userSettings, "userSettings"),
-		});
+		buildUIPhase(this);
 	}
-
-	// ── Validate ──
 
 	/**
 	 * Validate and freeze into an immutable RuntimeManagerComposition.
@@ -882,7 +301,8 @@ export class CompositionBuilder {
 	 * 草稿行预期默认值（延迟执行，modelRegistry 在 Phase 2 就位）。
 	 * 解析序与 pi findInitialModel 对齐，见 expected-session-defaults.ts。
 	 */
-	private resolveExpectedSessionDefaults(projectId?: string): ExpectedSessionDefaults {
+	/** @internal */
+	resolveExpectedSessionDefaults(projectId?: string): ExpectedSessionDefaults {
 		const projectSettings = projectId ? this.createProjectSettingsManager(projectId) : undefined;
 		return resolveExpectedSessionDefaults({
 			globalSettingsManager: this.req(this.globalSettingsManager, "globalSettingsManager"),
@@ -899,7 +319,8 @@ export class CompositionBuilder {
 	}
 
 	/** Read the same trusted project settings that SessionRuntimeFactory uses. */
-	private createProjectSettingsManager(projectId: string): SettingsManager | undefined {
+	/** @internal */
+	createProjectSettingsManager(projectId: string): SettingsManager | undefined {
 		const project = this.projectService?.getProjectInfo(projectId);
 		if (!project) return undefined;
 		const settings = SettingsManager.create(project.cwd, getLookDir());
@@ -912,7 +333,8 @@ export class CompositionBuilder {
 	 * 重算思考档位表（默认档与 SDK 显式 model 路径一致：medium 就近收敛）；
 	 * 思考切换覆盖档位（有挂起模型时按其档位表钳制，否则物化时由 SDK 钳制）。
 	 */
-	private resolvePendingIntentOverrides(sessionId: string): Partial<ExpectedSessionDefaults> | undefined {
+	/** @internal */
+	resolvePendingIntentOverrides(sessionId: string): Partial<ExpectedSessionDefaults> | undefined {
 		const modelKey = this.sessionPendingIntents.peekModel(sessionId);
 		const pendingThinking = this.sessionPendingIntents.peekThinkingLevel(sessionId);
 		if (modelKey === undefined && pendingThinking === undefined) return undefined;
@@ -940,7 +362,8 @@ export class CompositionBuilder {
 	}
 
 	/** 会话存在性（live runtime 之外）：catalog stored / 草稿索引 / 在途初始化。 */
-	private sessionExists(sessionId: string): boolean {
+	/** @internal */
+	sessionExists(sessionId: string): boolean {
 		return (
 			this.req(this.sessionCatalog, "sessionCatalog").get(sessionId) !== undefined ||
 			this.draftIndex.get(sessionId) !== undefined ||
@@ -948,18 +371,21 @@ export class CompositionBuilder {
 		);
 	}
 
-	private findProjectIdByCwd(cwd: string): string | undefined {
+	/** @internal */
+	findProjectIdByCwd(cwd: string): string | undefined {
 		return this.req(this.projectService, "projectService")
 			.listProjects()
 			.find((project) => project.cwd === cwd)?.id;
 	}
 
-	private refreshProjectSessions(projectId: string) {
+	/** @internal */
+	refreshProjectSessions(projectId: string) {
 		const project = this.req(this.projectService, "projectService").getProjectInfo(projectId);
 		return project?.valid ? this.req(this.sessionCatalog, "sessionCatalog").refresh(project) : Promise.resolve([]);
 	}
 
-	private sessionManagerFor(sessionId: string): SessionManager | undefined {
+	/** @internal */
+	sessionManagerFor(sessionId: string): SessionManager | undefined {
 		const managed = this.runtimeRegistry.get(sessionId);
 		if (managed) return managed.binding.sessionManager;
 		const stored = this.req(this.sessionCatalog, "sessionCatalog").get(sessionId);
