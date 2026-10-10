@@ -1,8 +1,15 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(resolve(import.meta.dirname, "../src/main/session/composition/builder.ts"), "utf8");
+const compositionDir = resolve(import.meta.dirname, "../src/main/session/composition");
+const builderSource = readFileSync(resolve(compositionDir, "builder.ts"), "utf8");
+const phaseSource = readdirSync(resolve(compositionDir, "builder-phases"))
+	.filter((name) => name.endsWith(".ts"))
+	.map((name) => readFileSync(resolve(compositionDir, "builder-phases", name), "utf8"))
+	.join("\n");
+/** builder.ts thin wrappers + phase bodies — 顺序断言扫整个装配源码。 */
+const source = `${builderSource}\n${phaseSource}`;
 const runtimeManagerSource = readFileSync(
 	resolve(import.meta.dirname, "../src/main/session/runtime/runtime-manager.ts"),
 	"utf8",
@@ -14,11 +21,11 @@ const compositionSource = readFileSync(
 
 describe("RuntimeManagerComposition", () => {
 	it("constructs agent definitions before injecting them into the subagent service", () => {
-		const definitionIndex = source.indexOf("this.agentDefinitionService = new AgentDefinitionService");
-		const subagentIndex = source.indexOf("this.sessionSubagentService = new SessionSubagentService");
+		const definitionIndex = source.indexOf("b.agentDefinitionService = new AgentDefinitionService");
+		const subagentIndex = source.indexOf("b.sessionSubagentService = new SessionSubagentService");
 		expect(definitionIndex).toBeGreaterThan(-1);
 		expect(subagentIndex).toBeGreaterThan(definitionIndex);
-		expect(source.slice(subagentIndex)).toContain("agentDefinitionService: this.agentDefinitionService");
+		expect(source.slice(subagentIndex)).toContain("agentDefinitionService: b.agentDefinitionService");
 	});
 
 	it("builds with an internal CompositionHost instead of escaping the partially initialized manager", () => {
@@ -29,13 +36,11 @@ describe("RuntimeManagerComposition", () => {
 	});
 
 	it("constructs AttachmentService before every injection site reads it", () => {
-		const constructionIndex = source.indexOf("this.attachmentService = new AttachmentService()");
+		const constructionIndex = source.indexOf("b.attachmentService = new AttachmentService()");
 		expect(constructionIndex).toBeGreaterThan(-1);
 
-		// this.req(this.attachmentService, ...) 与直接引用均计为注入点
-		const injectionPattern = /attachments: this\.(?:req\(this\.)?attachmentService/g;
+		const injectionPattern = /attachments: b\.(?:req\(b\.)?attachmentService/g;
 		const injections = source.match(injectionPattern) ?? [];
-		// lifecycle / project-deletion / messaging 三处注入都必须出现在构造之后
 		expect(injections.length).toBeGreaterThanOrEqual(3);
 		for (const match of injections) {
 			const index = source.indexOf(match);
@@ -44,14 +49,25 @@ describe("RuntimeManagerComposition", () => {
 	});
 
 	it("only requires the platform-optional computerUseService in validate() on darwin", () => {
-		// computerUseService 在非 darwin 上合法为 null；必填表必须按平台条件收录，
-		// 否则 Windows/Linux 会在 CompositionBuilder.validate() 直接启动失败。
-		expect(source).toContain(
+		expect(builderSource).toContain(
 			'...(process.platform === "darwin" ? { computerUseService: this.computerUseService } : {})',
 		);
-		const validateStart = source.indexOf("validate(): this {");
+		const validateStart = builderSource.indexOf("validate(): this {");
 		expect(validateStart).toBeGreaterThan(-1);
 		const unconditionalEntry = /^\t\t\tcomputerUseService: this\.computerUseService,$/m;
-		expect(unconditionalEntry.test(source.slice(validateStart))).toBe(false);
+		expect(unconditionalEntry.test(builderSource.slice(validateStart))).toBe(false);
+	});
+
+	it("delegates each build phase to a dedicated module", () => {
+		for (const phase of [
+			"buildInfraPhase",
+			"buildModelPhase",
+			"buildExtensionsPhase",
+			"buildCorePhase",
+			"buildUIPhase",
+		]) {
+			expect(builderSource).toContain(phase);
+			expect(phaseSource).toContain(`function ${phase}`);
+		}
 	});
 });
