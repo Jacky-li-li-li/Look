@@ -32,7 +32,8 @@ describe("RuntimeManagerComposition", () => {
 		const constructionIndex = source.indexOf("this.attachmentService = new AttachmentService()");
 		expect(constructionIndex).toBeGreaterThan(-1);
 
-		const injectionPattern = /attachments: this\.attachmentService/g;
+		// this.req(this.attachmentService, ...) 与直接引用均计为注入点
+		const injectionPattern = /attachments: this\.(?:req\(this\.)?attachmentService/g;
 		const injections = source.match(injectionPattern) ?? [];
 		// lifecycle / project-deletion / messaging 三处注入都必须出现在构造之后
 		expect(injections.length).toBeGreaterThanOrEqual(3);
