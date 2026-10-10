@@ -190,11 +190,11 @@ Look 的主进程结构已经比较成熟：`Application`（生命周期）→ `
 | P1-7 allow_always 粒度 | ✅ 已修 | bash 按 argv0 授权；含元字符或包装器的命令不缓存；不再把会话提升为 always |
 | P1-8 release 无检查 | ✅ 已修 | 打包前运行 `npm run check` |
 | P1-9 循环依赖 | ✅ 已修 | madge 结果为 0；CI 增加 `check:circular` |
-| P2-1 大文件拆分 | ⏸ 未做 | 改动面大、回归风险高，需要单独规划 |
-| P2-2 非空断言 | 🟡 部分 | composition 的 35 处改为 `required()` 校验；builder 内部的 119 处保留 |
+| P2-1 大文件拆分 | 🟡 部分 | 已拆 browser-helpers、ChatMessageList 子组件、LarkChatTaskQueue；builder/lark-bridge 主体与 ChatMessagesInner 留待后续 |
+| P2-2 非空断言 | ✅ 已修 | composition `required()` + builder `this.req()` 取代全部 `!` 断言 |
 | P2-3 DraftStore / GitService | ✅ 已修 | DraftStore 复用单实例；退出时 dispose GitService |
 | P2-4 http 外链 | ✅ 已修 | http 链接需用户确认，其他协议拒绝 |
-| P2-5 CSP img-src | ⏸ 未做 | 收紧会影响 Markdown 远程图片，属于产品决策 |
+| P2-5 CSP img-src | ↩️ 维持现状 | Agent Markdown 需要任意 https 图；`script-src 'self'` 已挡脚本。代码与文档已注明取舍 |
 | P2-6 DevTools | ✅ 已修 | 支持 `LOOK_OPEN_DEVTOOLS=0` |
 | P2-7 测试外网 | ↩️ 撤回 | 复核后确认为误报 |
 | P2-8 旧文档 | ✅ 已修 | 旧报告移入 `docs/archive/`，本报告放在 `docs/` 下 |

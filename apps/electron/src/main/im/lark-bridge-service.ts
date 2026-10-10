@@ -16,6 +16,7 @@ import type { IImAgentHost } from "../core/contracts.js";
 import { getAvailableModels } from "../models/model-queries.js";
 import { type ChatBinding, loadBindings, saveBindings } from "./im-storage.js";
 import type { LarkChannelManager } from "./lark-channel-manager.js";
+import { LarkChatTaskQueue } from "./lark-chat-queue.js";
 import { LarkReplyPresenter, type ReplyAccumulator } from "./lark-reply-presenter.js";
 
 /**
@@ -57,12 +58,12 @@ export class LarkBridgeService {
 	/** sessionId → 该回复所属的 bot appId（用于按 bot 释放在途回复） */
 	private accumulatorAppIds = new Map<string, string>();
 	/**
-	 * (appId, chatId) → 串行化链。同一 chat 的用户消息严格按到达顺序处理：
+	 * (appId, chatId) 串行化队列。同一 chat 的用户消息严格按到达顺序处理：
 	 * 前一条消息的 Agent 轮次结束后才处理下一条，保证每条消息拥有独立的
 	 * 回复累积器与流式卡片。SDK 侧 chatQueue 已关闭（避免消息合并与
 	 * cardAction 被排到轮次之后），这里是唯一的 per-chat 串行点。
 	 */
-	private chatQueues = new Map<string, Promise<void>>();
+	private readonly chatQueue = new LarkChatTaskQueue((appId, chatId) => this.keyFor(appId, chatId));
 	/** 运行时事件取消订阅 */
 	private unsubscribeEvents?: () => void;
 	private initialized = false;
@@ -118,7 +119,7 @@ export class LarkBridgeService {
 		this.bindings.clear();
 		this.pendingBindings.clear();
 		this.pendingDurableBindingSessionIds.clear();
-		this.chatQueues.clear();
+		this.chatQueue.clear();
 		this.accumulatorAppIds.clear();
 		this.releaseAllAccumulators("飞书连接已关闭");
 	}
@@ -130,38 +131,19 @@ export class LarkBridgeService {
 	detachChannel(appId?: string): void {
 		if (!appId) {
 			this.pendingBindings.clear();
-			this.chatQueues.clear();
+			this.chatQueue.clear();
 			this.releaseAllAccumulators("飞书连接已断开");
 			return;
 		}
-		for (const key of Array.from(this.chatQueues.keys())) {
-			if (key.startsWith(`${appId}::`)) this.chatQueues.delete(key);
-		}
+		this.chatQueue.clearForApp(appId);
 		for (const [sessionId, owner] of Array.from(this.accumulatorAppIds.entries())) {
 			if (owner === appId) this.releaseAccumulator(sessionId, "飞书连接已断开");
 		}
 	}
 
-	/**
-	 * 同一 (appId, chatId) 的入站用户消息串行化执行：前序任务完成后才执行
-	 * 下一个（前序失败不阻塞）。返回的 promise 随任务结束而 resolve。
-	 */
+	/** 同一 (appId, chatId) 的入站用户消息串行化执行（见 LarkChatTaskQueue）。 */
 	private enqueueChatTask(appId: string, chatId: string, task: () => Promise<void>): Promise<void> {
-		const key = this.keyFor(appId, chatId);
-		const prev = this.chatQueues.get(key) ?? Promise.resolve();
-		const run = async (): Promise<void> => {
-			try {
-				await task();
-			} catch (err) {
-				console.warn("[LarkBridgeService] Chat task failed:", key, err);
-			}
-		};
-		const next = prev.then(run, run);
-		this.chatQueues.set(key, next);
-		void next.finally(() => {
-			if (this.chatQueues.get(key) === next) this.chatQueues.delete(key);
-		});
-		return next;
+		return this.chatQueue.enqueue(appId, chatId, task);
 	}
 
 	// ============================================================

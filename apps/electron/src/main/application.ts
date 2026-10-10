@@ -205,6 +205,8 @@ export class Application {
 			"default-src 'self'",
 			"script-src 'self'",
 			"style-src 'self' 'unsafe-inline'",
+			// 保留 https:：Agent/Markdown 会渲染任意远程文档图（头像、截图、README）。
+			// 收紧到白名单会打断正常会话；远程图仅加载资源，不执行脚本（script-src 'self'）。
 			"img-src 'self' data: blob: file: https:",
 			"font-src 'self' data:",
 			`connect-src ${connectSrc}`,
