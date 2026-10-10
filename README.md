@@ -1,7 +1,7 @@
 # Look — 看得见的 AI 伙伴
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.19-brightgreen.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-lightgrey.svg)](https://github.com/Jacky-li-li-li/Look/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/Jacky-li-li-li/Look)](https://github.com/Jacky-li-li-li/Look/releases)
 
@@ -78,7 +78,7 @@ Windows / Linux / macOS Intel **尚无预构建包**，可从源码构建（见�
 
 | 环境 | 最低版本 |
 | --- | --- |
-| [Node.js](https://nodejs.org/) | >= 20.19.0（推荐 v22 LTS，可用 `nvm use` 读 `.nvmrc`） |
+| [Node.js](https://nodejs.org/) | >= 22.19.0（`@earendil-works/pi-*` SDK 要求；可用 `nvm use` 读 `.nvmrc`） |
 | npm | 建议 >= 10.x |
 | macOS | 较新版本 + Apple Silicon（预构建包）；源码构建可在本机验证的 macOS 上尝试 |
 | Windows / Linux | 源码构建（尚无预构建安装包） |

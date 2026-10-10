@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "postinstall": "npx simple-git-hooks && npm run copy-file-icons --workspace=@look/electron && node scripts/patch-stick-to-bottom.mjs",
