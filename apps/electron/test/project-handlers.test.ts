@@ -231,4 +231,72 @@ describe("handleProjectEvent", () => {
 		expect(listWorkspaceChildren).not.toHaveBeenCalled();
 		vi.unstubAllGlobals();
 	});
+	/**
+	 * Architecture-review P0-5 follow-up (2026-10):
+	 * - onAfterChange immediate list + watcher shared:updated are redundant but
+	 *   both run after awaited mutations, so they are not the stale-overwrite bug.
+	 * - Overlapping watcher lists (slow first + fast second) could last-write-wins
+	 *   with stale data; generation tokens drop outdated responses.
+	 */
+	it("shared:updated coalesces rapid events to a single listSharedFiles", async () => {
+		const nodes = [{ name: "a.txt", path: "a.txt", type: "file" as const }];
+		const listSharedFiles = vi.fn().mockResolvedValue({ success: true, nodes });
+		vi.stubGlobal("window", { look: { listSharedFiles } });
+		appStore.set(sharedFilesAtomFamily(projectId), []);
+
+		handleProjectEvent(
+			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
+			sharedRefreshTimers,
+		);
+		handleProjectEvent(
+			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
+			sharedRefreshTimers,
+		);
+		expect(sharedRefreshTimers.size).toBe(1);
+
+		await new Promise((resolve) => setTimeout(resolve, 250));
+		expect(listSharedFiles).toHaveBeenCalledTimes(1);
+		expect(appStore.get(sharedFilesAtomFamily(projectId))).toEqual(nodes);
+		vi.unstubAllGlobals();
+	});
+
+	it("ignores a stale in-flight listSharedFiles when a newer shared:updated already applied (P0-5)", async () => {
+		let resolveEarly!: (value: { success: true; nodes: { name: string; path: string; type: "file" }[] }) => void;
+		const early = new Promise<{ success: true; nodes: { name: string; path: string; type: "file" }[] }>((r) => {
+			resolveEarly = r;
+		});
+		const lateNodes = [{ name: "new.txt", path: "new.txt", type: "file" as const }];
+		const earlyNodes = [{ name: "stale.txt", path: "stale.txt", type: "file" as const }];
+		const listSharedFiles = vi
+			.fn()
+			.mockImplementationOnce(() => early)
+			.mockResolvedValueOnce({ success: true, nodes: lateNodes });
+		vi.stubGlobal("window", { look: { listSharedFiles } });
+		appStore.set(sharedFilesAtomFamily(projectId), []);
+
+		// First event starts a debounced list that we keep pending.
+		handleProjectEvent(
+			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
+			sharedRefreshTimers,
+		);
+		await new Promise((resolve) => setTimeout(resolve, 250));
+		expect(listSharedFiles).toHaveBeenCalledTimes(1);
+
+		// Second event after the first list started: schedules another list.
+		handleProjectEvent(
+			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
+			sharedRefreshTimers,
+		);
+		await new Promise((resolve) => setTimeout(resolve, 250));
+		expect(listSharedFiles).toHaveBeenCalledTimes(2);
+		// Late (second) list resolves first with the fresh tree.
+		await Promise.resolve();
+		expect(appStore.get(sharedFilesAtomFamily(projectId))).toEqual(lateNodes);
+		// Early (first) list resolves later with stale nodes — generation guard must drop it.
+		resolveEarly({ success: true, nodes: earlyNodes });
+		await early;
+		await Promise.resolve();
+		expect(appStore.get(sharedFilesAtomFamily(projectId))).toEqual(lateNodes);
+		vi.unstubAllGlobals();
+	});
 });

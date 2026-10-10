@@ -14,6 +14,9 @@ import {
 	showHiddenFilesAtom,
 } from "./atoms";
 
+/** Monotonic per-project token so an older in-flight listSharedFiles cannot overwrite a newer refresh. */
+const sharedRefreshGenerations = new Map<string, number>();
+
 export function handleProjectEvent(
 	event: MainToRendererEvent,
 	sharedRefreshTimers: Map<string, ReturnType<typeof setTimeout>>,
@@ -37,6 +40,7 @@ export function handleProjectEvent(
 						clearTimeout(pendingTimer);
 						sharedRefreshTimers.delete(projectId);
 					}
+					sharedRefreshGenerations.delete(projectId);
 				}
 			}
 			if (event.activeProjectId !== undefined) {
@@ -73,9 +77,13 @@ export function handleProjectEvent(
 				projectId,
 				setTimeout(() => {
 					sharedRefreshTimers.delete(projectId);
+					const generation = (sharedRefreshGenerations.get(projectId) ?? 0) + 1;
+					sharedRefreshGenerations.set(projectId, generation);
 					void window.look
 						.listSharedFiles(projectId)
 						.then((result) => {
+							// Drop stale responses: a newer shared:updated may have started another list.
+							if (sharedRefreshGenerations.get(projectId) !== generation) return;
 							if (result?.success && result.nodes) {
 								appStore.set(filesAtom, result.nodes);
 							} else if (result && !result.success) {
@@ -83,6 +91,7 @@ export function handleProjectEvent(
 							}
 						})
 						.catch((error: unknown) => {
+							if (sharedRefreshGenerations.get(projectId) !== generation) return;
 							const message = error instanceof Error ? error.message : "刷新共享区失败";
 							toast.error(message);
 						});

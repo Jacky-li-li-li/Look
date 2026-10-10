@@ -18,9 +18,11 @@ import { describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime/runtime-manager.js";
 
 const RUN = process.env.LOOK_E2E_LLM === "1";
+/** Nightly injects OPENAI_API_KEY; without it pi-ai fails mid-prompt — skip instead of red. */
+const HAS_API_KEY = Boolean(process.env.OPENAI_API_KEY?.trim());
 const TIMEOUT = 240_000; // 父+子 LLM 调用，给足 4 分钟
 
-describe.skipIf(!RUN)("SubAgent real-LLM E2E", () => {
+describe.skipIf(!RUN || !HAS_API_KEY)("SubAgent real-LLM E2E", () => {
 	it(
 		"LLM 调用 subagent 工具 → 创建真实子会话并落盘",
 		async () => {
