@@ -265,7 +265,8 @@ export class Application {
 			this.services.mainWindow.loadURL(
 				`http://localhost:5174?theme=${initialTheme.themeStyle}&tone=${initialTheme.themeTone}`,
 			);
-			this.services.mainWindow.webContents.openDevTools();
+			// 开发模式默认打开 DevTools；LOOK_OPEN_DEVTOOLS=0 可关闭（如录屏 / e2e）。
+			if (process.env.LOOK_OPEN_DEVTOOLS !== "0") this.services.mainWindow.webContents.openDevTools();
 		} else {
 			this.rendererEvents.buffer();
 			this.services.mainWindow.loadFile(getPackagedRendererIndexPath(__dirname), {
