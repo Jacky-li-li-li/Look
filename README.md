@@ -241,7 +241,8 @@ npm run build && npm start
 | [Scheduled tasks](docs/scheduled-tasks.md) | 定时任务架构、创建与排障 |
 | [Session Runtime Manager](docs/session-runtime-manager-architecture.md) | 多会话运行时 |
 | [Todo 面板设计](docs/todo-panel-design.md) | Todo 面板 |
-| [架构审查报告](docs/architecture-review.md) | 历史架构审查（部分结论可能已过期） |
+| [架构审查报告（2026-10）](docs/architecture-review-2026-10.md) | 当前架构质量审查与修复状态（v2.6.1 基线） |
+| [历史架构审查（2026-07）](docs/archive/architecture-review-2026-07.md) | 历史快照，部分结论已过期 |
 | [贡献指南](CONTRIBUTING.md) | 提 issue / PR、提交规范 |
 | [项目记忆 AGENTS.md](AGENTS.md) | 给 Agent 的运行时与扩展约定 |
 

@@ -1,6 +1,6 @@
 # Look 项目架构审查报告
 
-> ⚠️ **历史文档**：本报告为 2026-07 时期的架构审查快照，文中引用的部分路径为拆分前布局（如 `src/main/ipc-handlers.ts`、根级 `session/*.ts`；现分布在 `src/main/ipc/routers/` 与 `src/main/session/{runtime,services,events}/`）。原计划的后续审计文档未归档，阅读时以 [`CLAUDE.md`](../CLAUDE.md) 的当前架构图为准。
+> ⚠️ **历史文档**：本报告为 2026-07 时期的架构审查快照，文中引用的部分路径为拆分前布局（如 `src/main/ipc-handlers.ts`、根级 `session/*.ts`；现分布在 `src/main/ipc/routers/` 与 `src/main/session/{runtime,services,events}/`）。阅读时以 [`CLAUDE.md`](../../CLAUDE.md) 的当前架构图为准；最新审查见 [`docs/architecture-review-2026-10.md`](../architecture-review-2026-10.md)。
 
 **审查对象**：Look（基于 Electron + React 的 pi SDK 桌面客户端）  
 **审查版本**：`v1.0.0`（commit 基线：当前工作区）  
