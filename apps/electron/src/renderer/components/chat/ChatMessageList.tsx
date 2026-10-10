@@ -1,9 +1,8 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { TextContent } from "@earendil-works/pi-ai";
 import { cn } from "@look/ui";
 import type { LookSessionEntry, LookUiToolExecState } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
-import { Check, ChevronDown, ChevronUp, Loader2, MessageSquare } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -20,7 +19,6 @@ import {
 	recentlyCompletedAtom,
 	sessionStateAtomFamily,
 } from "../../store/atoms";
-import { isLoggedInAtom, userProfileAtom } from "../../store/authAtoms";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
 import { messageAlignmentAtom } from "../../store/settingsAtoms";
 import { prependHistoryPage } from "../../store/snapshot";
@@ -30,14 +28,16 @@ import {
 	type BranchConfirmRequest,
 	type BranchConfirmResult,
 } from "../dialogs/BranchConfirmDialog";
-import LookMarkdown from "../markdown/LookMarkdown";
 import type { ChatInputHandle } from "./ChatInput";
+import { CompactionStatusCard } from "./CompactionStatusCard";
 import { Conversation, ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
 import { MessageItem } from "./MessageItem";
 import { MessageTicks, userMessagePreview } from "./MessageTicks";
 import { MessageActions } from "./message-elements/MessageActions";
+import { messageText } from "./message-text";
 import SessionChangesCard, { collectChangedFiles } from "./SessionChangesCard";
 import { SessionEntryBubble } from "./SessionEntryBubble";
+import { TimeGreeting } from "./TimeGreeting";
 
 /** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
 const EMPTY_TOOL_EXECUTIONS: Record<string, LookUiToolExecState> = {};
@@ -53,141 +53,6 @@ interface ChatMessageListProps {
 	isBusy: boolean;
 	inputRef: React.RefObject<ChatInputHandle | null>;
 	onSend: (text: string) => Promise<boolean>;
-}
-
-function fmtTokens(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-	return `${n}`;
-}
-
-function messageText(message: AgentMessage): string {
-	if (message.role === "bashExecution") return `$ ${message.command}\n${message.output}`.trim();
-	if (message.role === "branchSummary" || message.role === "compactionSummary") return message.summary.trim();
-	if (!("content" in message)) return "";
-	if (typeof message.content === "string") return message.content.trim();
-	return message.content
-		.filter((block): block is TextContent => block.type === "text")
-		.map((block) => block.text)
-		.join("\n\n")
-		.trim();
-}
-
-// ============================================================
-// TimeGreeting — 空状态的时段问候
-// 每 60s 刷新一次，跨时段（如半夜跨入清晨）自动切换文案；
-// 0–5 点归入"深夜"档，不再误判为早上。
-// ============================================================
-
-function TimeGreeting() {
-	const { t } = useTranslation();
-	const isLoggedIn = useAtomValue(isLoggedInAtom);
-	const { userName } = useAtomValue(userProfileAtom);
-	const [hour, setHour] = useState(() => new Date().getHours());
-
-	useEffect(() => {
-		const id = setInterval(() => setHour(new Date().getHours()), 60_000);
-		return () => clearInterval(id);
-	}, []);
-
-	const hourKey =
-		hour < 5
-			? "chat.greetingNight"
-			: hour < 12
-				? "chat.greetingMorning"
-				: hour < 18
-					? "chat.greetingAfternoon"
-					: "chat.greetingEvening";
-
-	return (
-		<h3 className="text-[13px] font-semibold text-foreground">
-			{isLoggedIn && userName ? t(hourKey, { name: userName }) : t("chat.greetingNoName")}
-		</h3>
-	);
-}
-
-// ============================================================
-// CompactionStatusCard — 压缩状态指示条
-// ============================================================
-
-function CompactionStatusCard({
-	phase,
-	summary,
-	tokensBefore,
-	estimatedTokensAfter,
-	sessionId,
-}: {
-	phase: "compacting" | "done";
-	summary?: string;
-	tokensBefore?: number;
-	estimatedTokensAfter?: number;
-	sessionId?: string;
-}) {
-	const [expanded, setExpanded] = useState(false);
-	const { t } = useTranslation();
-
-	const handleAbort = useCallback(() => {
-		if (sessionId) {
-			window.look
-				.abortCompressSession(sessionId)
-				.catch((err: unknown) => console.error("[CompactionStatusCard] abort failed:", err));
-		}
-	}, [sessionId]);
-
-	if (phase === "compacting") {
-		return (
-			<div className="px-msg-item-x py-msg-item-y">
-				<div className="flex select-none items-center gap-3 text-[11px] text-muted-foreground/60">
-					<div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/30 to-muted-foreground/10" />
-					<Loader2 className="size-3 animate-spin" />
-					<span>{t("context.compressing")}</span>
-					<button
-						type="button"
-						onClick={handleAbort}
-						className="ml-2 rounded-xs px-1.5 py-0.5 text-[10px] text-muted-foreground/40 transition-colors hover:bg-destructive/10 hover:text-destructive"
-					>
-						{t("common.cancel")}
-					</button>
-					<div className="h-px flex-1 bg-gradient-to-r from-muted-foreground/10 via-muted-foreground/30 to-transparent" />
-				</div>
-			</div>
-		);
-	}
-
-	return (
-		<div className="px-msg-item-x py-msg-item-y">
-			<button type="button" onClick={() => setExpanded(!expanded)} className="group w-full text-left">
-				<div className="flex select-none items-center gap-3 text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground/80">
-					<div className="h-px flex-1 bg-gradient-to-r from-transparent via-muted-foreground/20 to-muted-foreground/10" />
-					<div className="flex items-center gap-1.5">
-						<Check className="size-3 text-emerald-400" />
-						<span>{t("context.compressed")}</span>
-						{tokensBefore != null && tokensBefore > 0 && (
-							<span className="ml-1 font-mono text-[10px] tabular-nums text-muted-foreground/40">
-								{estimatedTokensAfter != null
-									? `${fmtTokens(tokensBefore)} → ${fmtTokens(estimatedTokensAfter)}`
-									: `-${fmtTokens(tokensBefore)}`}
-							</span>
-						)}
-						{summary &&
-							(expanded ? (
-								<ChevronUp className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
-							) : (
-								<ChevronDown className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
-							))}
-					</div>
-					<div className="h-px flex-1 bg-gradient-to-r from-muted-foreground/10 via-muted-foreground/20 to-transparent" />
-				</div>
-			</button>
-			{expanded && summary && (
-				<div className="mt-2 overflow-hidden rounded-md border border-hairline bg-muted/20 p-3">
-					<div className="max-h-80 overflow-auto">
-						<LookMarkdown content={summary} />
-					</div>
-				</div>
-			)}
-		</div>
-	);
 }
 
 // ============================================================
