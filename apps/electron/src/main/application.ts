@@ -8,7 +8,7 @@
 import { getLookThemeWindowBackground } from "@look/shared";
 import { getScheduledTaskLocksDir, getScheduledTasksPath, getUiSettingsPath } from "@look/shared/look-storage";
 import type { MainToRendererEvent, ScheduledTaskNotification } from "@look/shared/types";
-import { app, BrowserWindow, Notification, powerMonitor, session, shell } from "electron";
+import { app, BrowserWindow, dialog, Notification, powerMonitor, session, shell } from "electron";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { syncLookDefaultSkills } from "./agents/default-skills.js";
@@ -25,6 +25,7 @@ import { AgentScheduledTaskExecutor } from "./scheduler/agent-task-executor.js";
 import { buildTaskFinishedNotification } from "./scheduler/notification-builder.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { ScheduledTaskStore } from "./scheduler/task-store.js";
+import { openExternalWithPolicy } from "./security/external-url.js";
 import { createTrustedWindowWebPreferences } from "./security/web-preferences.js";
 import { SessionRuntimeManager } from "./session/runtime/runtime-manager.js";
 import type { RuntimeManagerComposition } from "./session/runtime-manager-composition.js";
@@ -308,28 +309,38 @@ export class Application {
 		});
 
 		this.services.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-			if (this.isAllowedExternalUrl(url)) {
-				shell.openExternal(url).catch((error) => console.error("[Look] Failed to open external URL:", error));
-			}
+			void this.openExternalUrl(url);
 			return { action: "deny" };
 		});
 		this.services.mainWindow.webContents.on("will-navigate", (event, url) => {
 			if (!this.isAllowedNavigationUrl(url)) {
 				event.preventDefault();
-				if (this.isAllowedExternalUrl(url)) {
-					shell.openExternal(url).catch((error) => console.error("[Look] Failed to open external URL:", error));
-				}
+				void this.openExternalUrl(url);
 			}
 		});
 	}
 
-	private isAllowedExternalUrl(raw: string): boolean {
-		try {
-			const url = new URL(raw);
-			return url.protocol === "https:" || url.protocol === "http:";
-		} catch {
-			return false;
-		}
+	/** 外链策略：https 直接打开；http 需用户确认；其余协议拒绝（见 security/external-url.ts）。 */
+	private openExternalUrl(url: string): Promise<boolean> {
+		return openExternalWithPolicy(url, {
+			openExternal: (target) => shell.openExternal(target),
+			confirm: async (target) => {
+				const win = this.services.mainWindow;
+				const options = {
+					type: "warning" as const,
+					buttons: ["打开 / Open", "取消 / Cancel"],
+					defaultId: 1,
+					cancelId: 1,
+					message: "即将打开非加密 (http) 链接 / Open an unencrypted (http) link?",
+					detail: target,
+				};
+				const result =
+					win && !win.isDestroyed()
+						? await dialog.showMessageBox(win, options)
+						: await dialog.showMessageBox(options);
+				return result.response === 0;
+			},
+		});
 	}
 
 	private isAllowedNavigationUrl(raw: string): boolean {
