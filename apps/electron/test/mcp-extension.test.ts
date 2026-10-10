@@ -112,7 +112,8 @@ describe("createMcpExtensionFactory", () => {
 
 		await triggerSessionStart(api);
 
-		expect(mcpManager.loadConfig).toHaveBeenCalledWith(TEST_PROJECT_ID, "/test/cwd", { loadProjectConfig: true });
+		// 未提供 resolveProjectTrust → fail-closed，不加载项目级 .look/mcp.json
+		expect(mcpManager.loadConfig).toHaveBeenCalledWith(TEST_PROJECT_ID, "/test/cwd", { loadProjectConfig: false });
 		expect(mcpManager.startEnabled).toHaveBeenCalledWith(TEST_PROJECT_ID);
 		expect(api.registerTool).toHaveBeenCalled();
 		expect(api.tools.length).toBe(2);
