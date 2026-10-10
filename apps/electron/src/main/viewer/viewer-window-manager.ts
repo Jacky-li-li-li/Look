@@ -187,6 +187,12 @@ export function closeViewerWindow(): void {
 	viewerWindow = null;
 }
 
+/** 当前查看器窗口的 webContents id（IPC sender 校验用）;无窗口时返回 null。 */
+export function getViewerWebContentsId(): number | null {
+	if (!viewerWindow || viewerWindow.isDestroyed() || viewerWindow.webContents.isDestroyed()) return null;
+	return viewerWindow.webContents.id;
+}
+
 /** 测试与诊断用:当前窗口是否存活。 */
 export function hasViewerWindow(): boolean {
 	return viewerWindow !== null && !viewerWindow.isDestroyed();

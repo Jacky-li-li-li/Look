@@ -9,13 +9,17 @@
 // keeps IPC routing decoupled from the bootstrap facade.
 // ============================================================
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getDraftsPath } from "@look/shared";
 import type { RendererToMainEvent } from "@look/shared/types";
-import { type BrowserWindow, ipcMain } from "electron";
+import { app, type BrowserWindow, ipcMain } from "electron";
 import { DraftStore } from "../drafts/draft-store.js";
 import { GitService } from "../git/git-service.js";
 import type { RuntimeManagerComposition } from "../session/runtime-manager-composition.js";
+import { getPackagedRendererIndexPath } from "../system/renderer-paths.js";
 import { ensureIpcEnvelopeShape } from "../utils/ipc-envelope.js";
+import { getViewerWebContentsId } from "../viewer/viewer-window-manager.js";
 import { type InvokeContext, InvokeDispatcher } from "./invoke-context.js";
 import type { RendererEventTransport } from "./renderer-event-transport.js";
 import { bindBrowserActivityToWindow } from "./routers/browser-router.js";
@@ -42,6 +46,9 @@ import {
 	updaterRouter,
 	workspaceRouter,
 } from "./routers/index.js";
+import { checkIpcSender, type IpcSenderEventLike } from "./sender-guard.js";
+
+const MAIN_MODULE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** 模块级 GitService：窗口重建（registerIpcHandlers 重跑）时先 dispose 旧实例的 watcher。 */
 let gitService: GitService | null = null;
@@ -192,7 +199,21 @@ export function registerIpcHandlers(
 	bindBrowserActivityToWindow(ctx.browser.service, ctx.mainWindow);
 
 	// Handle renderer → main invocations (request-response)
-	ipcMain.handle("look:invoke", async (_event, data: RendererToMainEvent) => {
+	const mainWebContentsId = mainWindow.webContents.id;
+	const rendererUrlPolicy = {
+		isPackaged: app.isPackaged,
+		packagedEntryPath: getPackagedRendererIndexPath(MAIN_MODULE_DIR),
+	};
+	ipcMain.handle("look:invoke", async (event, data: RendererToMainEvent) => {
+		// 调用方校验：只接受主窗口 / 文件查看器顶层 frame 且来自 Look renderer 入口。
+		const trusted = new Set<number>([mainWebContentsId]);
+		const viewerId = getViewerWebContentsId();
+		if (viewerId !== null) trusted.add(viewerId);
+		const senderCheck = checkIpcSender(event as unknown as IpcSenderEventLike, trusted, rendererUrlPolicy);
+		if (!senderCheck.ok) {
+			console.warn("[IPC] rejected invoke from untrusted sender:", data?.type, senderCheck.reason);
+			return { success: false, error: "Forbidden: untrusted IPC sender", errorCode: "EIPCSENDER" };
+		}
 		try {
 			// 信封守卫：handler 返回类型是 unknown，typecheck 覆盖不到返回值形状，
 			// 这里运行时校验失败分支必须带 error（违反时抛错走统一 catch）。
