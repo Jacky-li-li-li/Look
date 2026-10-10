@@ -52,6 +52,23 @@ const MAIN_MODULE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 
 
 /** 模块级 GitService：窗口重建（registerIpcHandlers 重跑）时先 dispose 旧实例的 watcher。 */
 let gitService: GitService | null = null;
+/**
+ * 模块级 DraftStore：窗口重建时复用同一实例。每次 new 会得到各自独立的
+ * 写锁，旧实例在途写入与新实例并发写同一 drafts.json 会互相覆盖。
+ */
+let draftStore: DraftStore | null = null;
+
+function getDraftStore(): DraftStore {
+	if (!draftStore) draftStore = new DraftStore(getDraftsPath());
+	return draftStore;
+}
+
+/** 应用退出时释放 IPC 层持有的模块级资源（GitService 的 HEAD watcher）。 */
+export function disposeIpcResources(): void {
+	gitService?.dispose();
+	gitService = null;
+	draftStore = null;
+}
 
 const domainRouters = [
 	agentRouter,
@@ -183,7 +200,7 @@ export function registerIpcHandlers(
 
 		mcp: composition.mcpManager,
 		scheduler: schedulerService,
-		drafts: new DraftStore(getDraftsPath()),
+		drafts: getDraftStore(),
 		skill: composition.skillManagementService,
 		settings: { prompts: composition.promptStore },
 		attachments: composition.attachmentService,

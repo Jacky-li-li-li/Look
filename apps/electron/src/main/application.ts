@@ -16,7 +16,7 @@ import { syncLookDefaultAgents } from "./agents/defaults.js";
 import { HeadlessAgentRunner } from "./execution/headless-agent-runner.js";
 import { LarkBridgeService } from "./im/lark-bridge-service.js";
 import { LarkChannelManager } from "./im/lark-channel-manager.js";
-import { registerIpcHandlers } from "./ipc/handlers.js";
+import { disposeIpcResources, registerIpcHandlers } from "./ipc/handlers.js";
 import { promptForProjectTrust } from "./ipc/project-trust.js";
 import { BrowserWindowEventTransport } from "./ipc/renderer-event-transport.js";
 import { unbindBrowserActivity } from "./ipc/routers/browser-router.js";
@@ -725,6 +725,11 @@ export class Application {
 				console.error("[Look] runtimeManager dispose failed:", err);
 			}
 			this.services.runtimeManager = null;
+		}
+		try {
+			disposeIpcResources();
+		} catch (err) {
+			console.error("[Look] ipc resources dispose failed:", err);
 		}
 		// 语音转写清理：杀掉录音 worker（避免退出后孤儿进程继续占用麦克风）、
 		// 释放流式会话与驻留模型、拒绝挂起的转写任务。
