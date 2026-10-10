@@ -20,6 +20,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.7.0",
+		date: "2026-10-11",
+		items: [
+			{
+				zh: "安全加固：主窗口与文件查看器开启沙箱，并校验来自界面的调用；打开 http 外链前会先确认，密钥无法加密保存时设置页会明确提示",
+				en: "Security hardening: the main window and file viewer now run sandboxed with sender checks on UI calls; opening http links asks for confirmation, and Settings warns when secrets cannot be stored encrypted",
+				ja: "セキュリティ強化：メインウィンドウとファイルビューアをサンドボックス化し、UI からの呼び出しを検証。http の外部リンクは確認後に開き、秘密情報を暗号化保存できない場合は設定画面で明示的に警告します",
+			},
+			{
+				zh: "MCP 与权限更稳妥：自动发现的第三方 MCP 默认关闭（已有安装会保留你原先启用的项）；危险 shell 命令不再支持「始终允许」，也不会一键放开整场会话的全部工具",
+				en: "Safer MCP and permissions: auto-discovered third-party MCP configs stay off by default (existing installs keep what you already enabled); dangerous shell commands no longer support Always Allow, and one-click elevating an entire session is gone",
+				ja: "MCP と権限をより安全に：自動検出したサードパーティ MCP は既定でオフ（既存インストールでは以前有効にしたものは維持）。危険なシェルコマンドは「常に許可」できず、セッション全体のツールを一括解放する操作もなくなりました",
+			},
+			{
+				zh: "退出与资源更干净：内置浏览器等资源会在退出时回收；若清理卡住，约 5 秒后会强制退出，避免应用挂住",
+				en: "Cleaner shutdown: built-in browser and related resources are disposed on quit; if cleanup stalls, the app force-exits after about 5 seconds instead of hanging",
+				ja: "終了時のリソース回収を改善：内蔵ブラウザなどを終了時に解放。クリーンアップが止まっても約 5 秒後に強制終了し、アプリがハングしにくくなりました",
+			},
+			{
+				zh: "工程门槛升级：开发与发布统一要求 Node 22.19；正式发版前会跑完整检查，nightly 在无 API 密钥时自动跳过相关测试",
+				en: "Higher engineering bar: Node 22.19 is required for development and release; full checks run before shipping, and nightly LLM tests skip cleanly when no API key is set",
+				ja: "開発・リリースの基準を引き上げ：Node 22.19 を統一要件に。正式リリース前にフルチェックを実行し、API キーがない場合は nightly の LLM テストを安全にスキップします",
+			},
+		],
+	},
+	{
 		version: "2.6.1",
 		date: "2026-08-30",
 		items: [
