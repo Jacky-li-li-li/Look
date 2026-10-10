@@ -7,8 +7,8 @@ import { MAX_NAME_LENGTH } from "../../constants.js";
 import { RuntimeLifecycleCoordinator } from "../../runtime/runtime-lifecycle-coordinator.js";
 import { ensureSessionModel } from "../../services/session-lifecycle-service.js";
 import { SessionSubagentService } from "../../services/session-subagent-service.js";
-import type { CompositionBuilder } from "../builder.js";
-import { MAX_SUBAGENT_DEPTH } from "../builder.js";
+import type { CompositionBuilder } from "../builder-context.js";
+import { MAX_SUBAGENT_DEPTH } from "../builder-context.js";
 
 export function buildCorePhase(b: CompositionBuilder): void {
 	const host = b.req(b.host, "host");

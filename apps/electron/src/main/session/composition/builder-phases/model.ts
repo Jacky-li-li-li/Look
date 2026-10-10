@@ -4,7 +4,7 @@ import { getAuthPath, getCustomProvidersPath, getModelsPath } from "@look/shared
 import { EncryptedCredentialStore } from "../../../security/secrets.js";
 import { AutoTitleService } from "../../../services/auto-title.js";
 import { CustomProvidersStore } from "../../../settings/custom-providers.js";
-import type { CompositionBuilder } from "../builder.js";
+import type { CompositionBuilder } from "../builder-context.js";
 
 export async function buildModelPhase(b: CompositionBuilder): Promise<void> {
 	const credentials = new EncryptedCredentialStore(getAuthPath());

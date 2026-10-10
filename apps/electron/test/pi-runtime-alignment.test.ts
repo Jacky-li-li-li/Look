@@ -10,6 +10,7 @@ const runtime = read("src/main/session/runtime/runtime-manager.ts");
 const runtimeComposition = read("src/main/session/runtime-manager-composition.ts");
 const compositionBuilder =
 	read("src/main/session/composition/builder.ts") +
+	read("src/main/session/composition/builder-context.ts") +
 	read("src/main/session/composition/builder-phases/infra.ts") +
 	read("src/main/session/composition/builder-phases/model.ts") +
 	read("src/main/session/composition/builder-phases/extensions.ts") +

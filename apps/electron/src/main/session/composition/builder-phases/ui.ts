@@ -11,7 +11,7 @@ import { SessionMessagingService } from "../../services/session-messaging-servic
 import { SessionPermissionOrchestrator } from "../../services/session-permission-orchestrator.js";
 import { SessionSettingsService } from "../../services/session-settings-service.js";
 import { SkillManagementService } from "../../services/skill-management-service.js";
-import type { CompositionBuilder } from "../builder.js";
+import type { CompositionBuilder } from "../builder-context.js";
 
 export function buildUIPhase(b: CompositionBuilder): void {
 	const host = b.req(b.host, "host");

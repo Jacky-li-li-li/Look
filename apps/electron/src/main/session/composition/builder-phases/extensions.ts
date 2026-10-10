@@ -14,7 +14,7 @@ import type { AgentConfig, SubagentProgress } from "../../../extensions/subagent
 import { createTranscribeExtensionFactory } from "../../../extensions/transcribe-extension.js";
 import { getAvailableModels } from "../../../models/model-queries.js";
 import { SessionRuntimeFactory } from "../../runtime/runtime-factory.js";
-import type { CompositionBuilder } from "../builder.js";
+import type { CompositionBuilder } from "../builder-context.js";
 
 export function buildExtensionsPhase(b: CompositionBuilder): void {
 	const modelRuntime = b.req(b.modelRuntime, "modelRuntime");

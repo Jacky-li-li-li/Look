@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const compositionDir = resolve(import.meta.dirname, "../src/main/session/composition");
-const builderSource = readFileSync(resolve(compositionDir, "builder.ts"), "utf8");
+const builderSource =
+	readFileSync(resolve(compositionDir, "builder.ts"), "utf8") +
+	readFileSync(resolve(compositionDir, "builder-context.ts"), "utf8");
 const phaseSource = readdirSync(resolve(compositionDir, "builder-phases"))
 	.filter((name) => name.endsWith(".ts"))
 	.map((name) => readFileSync(resolve(compositionDir, "builder-phases", name), "utf8"))

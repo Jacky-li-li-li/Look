@@ -20,7 +20,7 @@ import { ProjectApplicationService } from "../../services/project-application-se
 import { ProjectRuntimeService } from "../../services/project-runtime-service.js";
 import { SessionCatalog } from "../../services/session-catalog.js";
 import { SessionInfoService } from "../../services/session-info-service.js";
-import type { CompositionBuilder } from "../builder.js";
+import type { CompositionBuilder } from "../builder-context.js";
 import { CompositionHost } from "../composition-host.js";
 
 export function buildInfraPhase(
