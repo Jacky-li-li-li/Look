@@ -1,9 +1,9 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { cn } from "@look/ui";
-import type { LookSessionEntry, LookUiToolExecState } from "@shared/types";
+import type { LookSessionEntry } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { Loader2, MessageSquare } from "lucide-react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useScrollPositionManager } from "../../hooks/useScrollPositionMemory";
@@ -14,35 +14,24 @@ import {
 	activeAgentIdAtom,
 	activeChatAtBottomAtom,
 	activeProjectAtom,
-	forkingEntryAtomFamily,
-	navigatingEntryAtomFamily,
 	recentlyCompletedAtom,
 	sessionStateAtomFamily,
 } from "../../store/atoms";
 import type { RendererSessionPhase, RendererSessionState } from "../../store/sessionTypes";
 import { messageAlignmentAtom } from "../../store/settingsAtoms";
-import { prependHistoryPage } from "../../store/snapshot";
 import { AiAvatar } from "../AiAvatar";
-import {
-	BranchConfirmDialog,
-	type BranchConfirmRequest,
-	type BranchConfirmResult,
-} from "../dialogs/BranchConfirmDialog";
+import { BranchConfirmDialog } from "../dialogs/BranchConfirmDialog";
 import type { ChatInputHandle } from "./ChatInput";
-import { CompactionStatusCard } from "./CompactionStatusCard";
 import { ConversationContent, ConversationScrollButton, useConversationContext } from "./conversation";
-import { MessageItem } from "./MessageItem";
 import { MessageTicks, userMessagePreview } from "./MessageTicks";
-import { MessageActions } from "./message-elements/MessageActions";
 import { messageText } from "./message-text";
-import SessionChangesCard, { collectChangedFiles } from "./SessionChangesCard";
-import { SessionEntryBubble } from "./SessionEntryBubble";
+import { collectChangedFiles } from "./SessionChangesCard";
 import { TimeGreeting } from "./TimeGreeting";
+import { TimelineItemRow } from "./TimelineItemRow";
+import { useBranchForkActions } from "./useBranchForkActions";
+import { useOlderHistoryLoader } from "./useOlderHistoryLoader";
 import { useProgressiveTimeline } from "./useProgressiveTimeline";
 import { useScrollToMessage } from "./useScrollToMessage";
-
-/** 模块级空对象常量，避免 JSX 内联 {} 破坏 React.memo */
-const EMPTY_TOOL_EXECUTIONS: Record<string, LookUiToolExecState> = {};
 
 // ============================================================
 // ChatMessagesInner
@@ -104,94 +93,15 @@ export const ChatMessagesInner = memo(function ChatMessagesInner({
 	// 使用 ref 追踪 isAtBottom 最新值，避免 stale closure
 	const isAtBottomRef = useRef(isAtBottom);
 	isAtBottomRef.current = isAtBottom;
-	const renderMetricsRef = useRef<{ scrollHeight: number; renderedCount: number } | null>(null);
 
 	// === 按需加载更早历史 ===
-	const [historyLoading, setHistoryLoading] = useState(false);
-	const historyRequestRef = useRef<string | null>(null);
-	const historyErrorRef = useRef<string | null>(null);
-	const prependAnchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
-
-	const requestOlderHistory = useCallback(async () => {
-		if (historyLoading || sessionState.historyStatus !== "partial") return;
-		const cursor = sessionState.historyCursor;
-		const revision = sessionState.historyRevision;
-		if (!cursor || !revision) return;
-		const requestKey = `${revision}:${cursor}`;
-		if (historyRequestRef.current === requestKey || historyErrorRef.current === requestKey) return;
-		const loadHistoryPage = window.look?.loadHistoryPage;
-		if (typeof loadHistoryPage !== "function") return;
-		historyRequestRef.current = requestKey;
-		setHistoryLoading(true);
-		try {
-			const result = await loadHistoryPage(agentId, cursor, revision);
-			if (!result?.success) {
-				historyErrorRef.current = requestKey;
-				return;
-			}
-			// Re-sample the scroll anchor immediately before applying the page: the
-			// user may have kept scrolling while the request was in flight, so the
-			// anchor captured at request time would be stale and cause a jump.
-			const scrollElNow = scrollRef.current;
-			if (scrollElNow) {
-				prependAnchorRef.current = { scrollTop: scrollElNow.scrollTop, scrollHeight: scrollElNow.scrollHeight };
-			}
-			const accepted = prependHistoryPage(agentId, result, cursor, revision);
-			if (!accepted) prependAnchorRef.current = null;
-			historyErrorRef.current = null;
-		} catch (error) {
-			console.warn(`[ChatMessageList] failed to load older history for ${agentId}:`, error);
-		} finally {
-			historyRequestRef.current = null;
-			setHistoryLoading(false);
-		}
-	}, [
+	const { historyLoading, requestOlderHistory } = useOlderHistoryLoader({
 		agentId,
-		historyLoading,
+		sessionState,
 		scrollRef,
-		sessionState.historyCursor,
-		sessionState.historyRevision,
-		sessionState.historyStatus,
-	]);
-
-	// When older rows are inserted above the viewport, retain the user's visual
-	// anchor. At the bottom use-stick-to-bottom remains the source of truth.
-	useLayoutEffect(() => {
-		const scrollEl = scrollRef.current;
-		if (!scrollEl) return;
-		const pageAnchor = prependAnchorRef.current;
-		const previousMetrics = renderMetricsRef.current;
-		if (pageAnchor) {
-			prependAnchorRef.current = null;
-			if (!isAtBottomRef.current) {
-				const delta = scrollEl.scrollHeight - pageAnchor.scrollHeight;
-				if (delta > 0) scrollEl.scrollTop = pageAnchor.scrollTop + delta;
-			}
-		} else if (previousMetrics && visibleTimeline.length > previousMetrics.renderedCount && !isAtBottomRef.current) {
-			const delta = scrollEl.scrollHeight - previousMetrics.scrollHeight;
-			if (delta > 0) scrollEl.scrollTop += delta;
-		}
-		renderMetricsRef.current = { scrollHeight: scrollEl.scrollHeight, renderedCount: visibleTimeline.length };
-	}, [scrollRef, visibleTimeline.length]);
-
-	useEffect(() => {
-		const scrollEl = scrollRef.current;
-		if (!scrollEl) return;
-		const onScroll = (): void => {
-			if (scrollEl.scrollTop < 180) void requestOlderHistory();
-		};
-		scrollEl.addEventListener("scroll", onScroll, { passive: true });
-		return () => scrollEl.removeEventListener("scroll", onScroll);
-	}, [requestOlderHistory, scrollRef]);
-
-	// A short tail may not fill the viewport. Pull another page until the user
-	// has a meaningful scroll surface or the branch is exhausted.
-	useLayoutEffect(() => {
-		const scrollEl = scrollRef.current;
-		if (!scrollEl || sessionState.historyStatus !== "partial" || historyLoading) return;
-		const renderedLength = visibleTimeline.length;
-		if (scrollEl.scrollHeight <= scrollEl.clientHeight + 24 || renderedLength === 0) void requestOlderHistory();
-	}, [historyLoading, requestOlderHistory, scrollRef, sessionState.historyStatus, visibleTimeline.length]);
+		isAtBottomRef,
+		visibleTimelineLength: visibleTimeline.length,
+	});
 
 	// === Sync isAtBottom to global atom (debounced to avoid state churn while scrolling) ===
 	const setAtBottomAtom = useSetAtom(activeChatAtBottomAtom);
@@ -238,12 +148,6 @@ export const ChatMessagesInner = memo(function ChatMessagesInner({
 		wasBusyRef.current = isBusy;
 	}, [isBusy, followToBottom]);
 
-	// === Branch / fork state ===
-	const navigatingEntry = useAtomValue(navigatingEntryAtomFamily(agentId));
-	const forkingEntry = useAtomValue(forkingEntryAtomFamily(agentId));
-	const [pendingConfirm, setPendingConfirm] = useState<BranchConfirmRequest | null>(null);
-	const [pendingBranchEntryId, setPendingBranchEntryId] = useState<string | null>(null);
-
 	// === Scroll position memory ===
 	useScrollPositionManager(agentId, ready, sessionState.historyStatus);
 
@@ -258,78 +162,22 @@ export const ChatMessagesInner = memo(function ChatMessagesInner({
 		stopScroll,
 	});
 
-	const handleBranchFromHere = useCallback(
-		(entryId: string) => {
-			if (isBusy) return void toast(t("chat.stopFirstToNavigate"));
-			if (navigatingEntry || forkingEntry) return;
-			setPendingBranchEntryId(entryId);
-			setPendingConfirm(inputRef.current?.getText().trim() ? { kind: "input-not-empty" } : { kind: "summary" });
-		},
-		[isBusy, navigatingEntry, forkingEntry, inputRef, t],
-	);
-
-	const handleForkToNewChat = useCallback(
-		async (entryId: string) => {
-			if (isBusy) return void toast(t("chat.stopFirstToNavigate"));
-			if (navigatingEntry || forkingEntry) return;
-			appStore.set(forkingEntryAtomFamily(agentId), entryId);
-			const toastId = toast.loading(t("chat.forking"));
-			try {
-				const result = await window.look.createFork(agentId, entryId, {});
-				toast.dismiss(toastId);
-				if (!result?.success) throw new Error(result?.error ?? "unknown");
-				if (result.agentId) appStore.set(activeAgentIdAtom, result.agentId);
-				toast.success(t("chat.forkCreated"), { duration: 1500 });
-			} catch (error) {
-				toast.dismiss(toastId);
-				toast.error(t("chat.forkFailed", { message: error instanceof Error ? error.message : "unknown" }));
-			} finally {
-				// 成功/失败都必须复位：旧实现只在失败路径复位，成功路径残留
-				// entryId，后续所有分支/复刻操作被 if (navigatingEntry || forkingEntry) 静默拦截。
-				appStore.set(forkingEntryAtomFamily(agentId), null);
-			}
-		},
-		[agentId, forkingEntry, isBusy, navigatingEntry, t],
-	);
-
-	const handleConfirmResolve = useCallback(
-		async (result: BranchConfirmResult) => {
-			const entryId = pendingBranchEntryId;
-			const confirm = pendingConfirm;
-			setPendingConfirm(null);
-			setPendingBranchEntryId(null);
-			if (!entryId || !confirm || result.kind === "summary-cancel" || result.kind === "input-cancel") return;
-			if (confirm.kind === "input-not-empty" && result.kind === "input-send-first") {
-				const draft = inputRef.current?.getText().trim() ?? "";
-				if (draft && (await onSend(draft))) inputRef.current?.setText("");
-				setPendingBranchEntryId(entryId);
-				setPendingConfirm({ kind: "summary" });
-				return;
-			}
-			appStore.set(navigatingEntryAtomFamily(agentId), entryId);
-			const toastId = toast.loading(t("chat.navigating"));
-			try {
-				const response = await window.look.navigateTree(agentId, entryId, {
-					summarize: result.kind === "summary-generate",
-				});
-				toast.dismiss(toastId);
-				if (!response?.success) throw new Error(response?.error ?? "unknown");
-				if (response.result?.cancelled) return;
-				if (typeof response.result?.editorText === "string") {
-					inputRef.current?.setText(response.result.editorText);
-					inputRef.current?.focus();
-				}
-				scrollToMessage(entryId);
-				flashEntry(entryId);
-				toast.success(t("chat.branched"), { duration: 1500 });
-			} catch (error) {
-				toast.dismiss(toastId);
-				toast.error(t("chat.navigatingFailed", { message: error instanceof Error ? error.message : "unknown" }));
-				appStore.set(navigatingEntryAtomFamily(agentId), null);
-			}
-		},
-		[pendingBranchEntryId, pendingConfirm, inputRef, onSend, agentId, t, scrollToMessage, flashEntry],
-	);
+	// === Branch / fork state ===
+	const {
+		navigatingEntry,
+		forkingEntry,
+		pendingConfirm,
+		handleBranchFromHere,
+		handleForkToNewChat,
+		handleConfirmResolve,
+	} = useBranchForkActions({
+		agentId,
+		isBusy,
+		inputRef,
+		onSend,
+		scrollToMessage,
+		flashEntry,
+	});
 
 	// === User message ticks（右侧垂直刻度：悬停预览 + 点击跳转）===
 	const userTicks = useMemo(
@@ -373,147 +221,6 @@ export const ChatMessagesInner = memo(function ChatMessagesInner({
 			}
 		},
 		[t],
-	);
-
-	// === Render timeline item ===
-	const renderTimelineItem = useCallback(
-		(item: TimelineItem, turnCard?: { entries: LookSessionEntry[]; projectCwd?: string; turnKey?: string }) => {
-			if (!item) return null;
-
-			// Compaction status card (live or persisted).
-			if (item.compactionPhase) {
-				return (
-					<CompactionStatusCard
-						key={item.id}
-						phase={item.compactionPhase}
-						summary={item.compactionSummary}
-						tokensBefore={item.compactionTokensBefore}
-						estimatedTokensAfter={item.compactionEstimatedTokensAfter}
-						sessionId={agentId}
-					/>
-				);
-			}
-
-			if (item.entry) {
-				return (
-					<div key={item.id} className="px-msg-item-x py-msg-item-y">
-						<SessionEntryBubble entry={item.entry} />
-					</div>
-				);
-			}
-
-			// 统一消息渲染：快照 / live / 纯 live 全部走 MessageItem。
-			// MessageItem 内部用原语组装，isStreaming 与 liveBlocks 是状态而非另一棵树。
-			// 注意 live 用 item.isLive 而非 Boolean(uiBlocks?.length)：纯 live 且
-			// 空数组（assistant_message_start 后、首个 block 前）也要传 liveBlocks=[]，
-			// 由 StreamingBlocksBubble 显示 loading 指示（与旧行为一致）。
-			if (item.message || (item.isLive && item.uiBlocks)) {
-				const itemEntryId = item.entryId;
-				const actionEntryId = item.secondaryEntryIds?.at(-1) ?? itemEntryId;
-				const anchorEntryIds = [item.id, itemEntryId, ...(item.secondaryEntryIds ?? [])].filter(
-					(id): id is string => Boolean(id),
-				);
-				const live = item.isLive;
-				return (
-					<div key={item.id} className="msg-row px-msg-item-x py-msg-item-y">
-						<div
-							data-message-id={item.id}
-							data-entry-ids={anchorEntryIds.join(" ")}
-							className="group/message flex flex-col"
-						>
-							<MessageItem
-								message={item.message}
-								entryId={itemEntryId}
-								blockCacheKey={
-									itemEntryId
-										? `${agentId}:${[itemEntryId, ...(item.secondaryEntryIds ?? [])].join("|")}`
-										: undefined
-								}
-								agentName={agentName}
-								sessionId={agentId}
-								projectId={activeAgent?.projectId}
-								isStreaming={live ? isBusy : false}
-								toolExecutions={EMPTY_TOOL_EXECUTIONS}
-								toolResultMap={item.toolResultMap}
-								isActiveLeaf={Boolean(actionEntryId && actionEntryId === leafId)}
-								flash={flashEntryId === item.id}
-								liveBlocks={live ? item.uiBlocks : undefined}
-								liveToolExecutions={live ? (item.uiTools ?? EMPTY_TOOL_EXECUTIONS) : EMPTY_TOOL_EXECUTIONS}
-							/>
-							{turnCard && (
-								<div className="flex w-full max-w-[98%] gap-msg-bubble">
-									<div className="mt-msg-avatar size-7 shrink-0" aria-hidden="true" />
-									<div className="min-w-0 flex-1">
-										<SessionChangesCard
-											entries={turnCard.entries}
-											projectCwd={turnCard.projectCwd}
-											agentId={agentId}
-											turnKey={turnCard.turnKey}
-										/>
-									</div>
-								</div>
-							)}
-							<MessageActions
-								// 旧版仅 assistant/user 显示操作按钮；live 项只保留占位（reserve），
-								// 快照落定前不显示可操作按钮。
-								show={
-									!live &&
-									Boolean(itemEntryId) &&
-									Boolean(item.message) &&
-									(item.message?.role === "assistant" || item.message?.role === "user")
-								}
-								isUser={item.message?.role === "user"}
-								alignment={messageAlignment}
-								busy={isBusy || Boolean(navigatingEntry || forkingEntry)}
-								onBranch={actionEntryId ? () => handleBranchFromHere(actionEntryId) : undefined}
-								onFork={
-									item.message && item.message.role !== "user" && actionEntryId
-										? () => handleForkToNewChat(actionEntryId)
-										: undefined
-								}
-								onCopy={item.message ? () => handleCopyMessage(item.id, item.message!) : undefined}
-								copied={copiedEntryId === item.id}
-								labels={{
-									branch: t("chat.branchFromHere"),
-									fork: t("chat.forkToNewChat"),
-									copy: t("chat.copyMessage"),
-								}}
-								meta={
-									item.message &&
-									item.message.role === "assistant" &&
-									item.turnDurationMs != null &&
-									item.turnDurationMs > 0 ? (
-										<span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums">
-											{item.turnDurationMs >= 60_000
-												? `${(item.turnDurationMs / 60_000).toFixed(1)}m`
-												: `${(item.turnDurationMs / 1_000).toFixed(1)}s`}
-										</span>
-									) : undefined
-								}
-							/>
-						</div>
-					</div>
-				);
-			}
-
-			return null;
-		},
-		[
-			agentName,
-			flashEntryId,
-			isBusy,
-			leafId,
-			copiedEntryId,
-			navigatingEntry,
-			forkingEntry,
-			handleBranchFromHere,
-			handleForkToNewChat,
-			handleCopyMessage,
-			t,
-			agentId,
-			messageAlignment,
-			activeAgent?.projectId,
-		],
 	);
 
 	const isLoading =
@@ -615,7 +322,25 @@ export const ChatMessagesInner = memo(function ChatMessagesInner({
 									turnCardCache.map.set(turnKey, turnCard ?? null);
 								}
 							}
-							return renderTimelineItem(item, turnCard);
+							return (
+								<TimelineItemRow
+									key={item.id}
+									item={item}
+									turnCard={turnCard}
+									agentId={agentId}
+									agentName={agentName}
+									projectId={activeAgent?.projectId}
+									leafId={leafId}
+									isBusy={isBusy}
+									flashEntryId={flashEntryId}
+									copiedEntryId={copiedEntryId}
+									messageAlignment={messageAlignment}
+									branchBusy={Boolean(navigatingEntry || forkingEntry)}
+									onBranch={handleBranchFromHere}
+									onFork={handleForkToNewChat}
+									onCopy={handleCopyMessage}
+								/>
+							);
 						})}
 					</>
 				)}
