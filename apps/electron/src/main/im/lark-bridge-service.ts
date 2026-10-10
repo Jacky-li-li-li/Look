@@ -14,7 +14,8 @@ import type { NormalizedMessage } from "@larksuiteoapi/node-sdk";
 import type { MainToRendererEvent, ProjectInfo } from "@look/shared/types";
 import type { IImAgentHost } from "../core/contracts.js";
 import { getAvailableModels } from "../models/model-queries.js";
-import { type ChatBinding, loadBindings, saveBindings } from "./im-storage.js";
+import type { ChatBinding } from "./im-storage.js";
+import { LarkBindingStore } from "./lark-binding-store.js";
 import type { LarkChannelManager } from "./lark-channel-manager.js";
 import { LarkChatTaskQueue } from "./lark-chat-queue.js";
 import { LarkReplyPresenter, type ReplyAccumulator } from "./lark-reply-presenter.js";
@@ -47,12 +48,10 @@ export class LarkBridgeService {
 	 */
 	private runtimeManager!: IImAgentHost;
 	private channelManager?: LarkChannelManager;
-	/** `appId::chatId` → ChatBinding（无 appId 的 legacy 绑定以裸 chatId 为键） */
-	private bindings = new Map<string, ChatBinding>();
-	/** 绑定键 → in-flight binding creation */
-	private pendingBindings = new Map<string, Promise<ChatBinding>>();
-	/** Newly created bindings that must not outlive an unflushed pi session. */
-	private pendingDurableBindingSessionIds = new Set<string>();
+	/** chat↔session 绑定表（持久化 + legacy 认领）。 */
+	private readonly bindingStore = new LarkBindingStore((sessionId, reason) =>
+		this.releaseAccumulator(sessionId, reason),
+	);
 	/** sessionId → 回复累积器 */
 	private replyAccumulators = new Map<string, ReplyAccumulator>();
 	/** sessionId → 该回复所属的 bot appId（用于按 bot 释放在途回复） */
@@ -83,7 +82,7 @@ export class LarkBridgeService {
 		this.initialized = true;
 
 		// 恢复持久化的 ChatBinding
-		this.bindings = new Map(loadBindings().map((b) => [this.keyFor(b.appId, b.chatId), b]));
+		this.bindingStore.loadFromDisk();
 
 		// 注册飞书归一化消息 → 桥接（appId 标识接收消息的 bot）
 		channelManager.onMessage((appId, msg) => this.handleMessage(appId, msg));
@@ -103,7 +102,7 @@ export class LarkBridgeService {
 		}
 		console.log(
 			"[LarkBridgeService] Initialized, bindings:",
-			this.bindings.size,
+			this.bindingStore.size,
 			"project:",
 			activeProject?.name ?? "(none)",
 		);
@@ -116,9 +115,7 @@ export class LarkBridgeService {
 		this.channelManager?.onMessage(undefined);
 		this.channelManager?.onCardAction(undefined);
 		this.initialized = false;
-		this.bindings.clear();
-		this.pendingBindings.clear();
-		this.pendingDurableBindingSessionIds.clear();
+		this.bindingStore.clear();
 		this.chatQueue.clear();
 		this.accumulatorAppIds.clear();
 		this.releaseAllAccumulators("飞书连接已关闭");
@@ -130,7 +127,7 @@ export class LarkBridgeService {
 	 */
 	detachChannel(appId?: string): void {
 		if (!appId) {
-			this.pendingBindings.clear();
+			this.bindingStore.clearPending();
 			this.chatQueue.clear();
 			this.releaseAllAccumulators("飞书连接已断开");
 			return;
@@ -152,7 +149,7 @@ export class LarkBridgeService {
 
 	/** 获取所有 ChatBinding */
 	getBindings(): ChatBinding[] {
-		return Array.from(this.bindings.values());
+		return this.bindingStore.list();
 	}
 
 	/**
@@ -163,7 +160,7 @@ export class LarkBridgeService {
 	 * user must message the bot privately at least once.
 	 */
 	async resolveP2pBinding(appId: string): Promise<ChatBinding | null> {
-		const candidates = Array.from(this.bindings.values()).filter((b) => !b.appId || b.appId === appId);
+		const candidates = Array.from(this.bindingStore.values()).filter((b) => !b.appId || b.appId === appId);
 		if (candidates.length === 0) return null;
 		let healed = false;
 		for (const binding of candidates) {
@@ -176,8 +173,8 @@ export class LarkBridgeService {
 			// heal 前是 legacy 绑定（以裸 chatId 为键）：认领 appId 后必须删掉旧键，
 			// 否则同一 binding 会以两个键同时存在于 map，getBindings()/saveDurableBindings()
 			// 会返回/持久化重复条目（转规后 loadBindings 又被 key 覆盖合并，但内存期不一致）。
-			if (wasLegacy) this.bindings.delete(binding.chatId);
-			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
+			if (wasLegacy) this.bindingStore.deleteKey(binding.chatId);
+			this.bindingStore.set(this.keyFor(binding.appId, binding.chatId), binding);
 			healed = true;
 		}
 		if (healed) this.saveDurableBindings();
@@ -200,7 +197,7 @@ export class LarkBridgeService {
 			const info = await this.channelManager?.getChatInfo(binding.chatId, binding.appId ?? appId).catch(() => null);
 			if (info?.chatType) {
 				binding.chatType = info.chatType;
-				this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
+				this.bindingStore.set(this.keyFor(binding.appId, binding.chatId), binding);
 				this.saveDurableBindings();
 			}
 		}
@@ -210,12 +207,12 @@ export class LarkBridgeService {
 	/** 手动解绑 chatId；指定 appId 时只解该 bot 的绑定，否则解该 chatId 的全部绑定。 */
 	removeBinding(chatId: string, appId?: string): void {
 		let changed = false;
-		for (const [key, binding] of Array.from(this.bindings.entries())) {
+		for (const [key, binding] of Array.from(this.bindingStore.entries())) {
 			if (binding.chatId !== chatId) continue;
 			if (appId && binding.appId && binding.appId !== appId) continue;
 			this.releaseAccumulator(binding.sessionId, "飞书会话已解绑");
-			this.pendingDurableBindingSessionIds.delete(binding.sessionId);
-			this.bindings.delete(key);
+			this.bindingStore.clearPendingDurable(binding.sessionId);
+			this.bindingStore.deleteKey(key);
 			changed = true;
 		}
 		if (changed) this.saveDurableBindings();
@@ -228,7 +225,7 @@ export class LarkBridgeService {
 			if (!acc.done) runningSessions.push(sessionId);
 		}
 		return {
-			bindings: this.bindings.size,
+			bindings: this.bindingStore.size,
 			runningSessions,
 			status: (this.channelManager?.getConnectedAppIds().length ?? 0) > 0 ? "running" : "stopped",
 		};
@@ -236,25 +233,11 @@ export class LarkBridgeService {
 
 	/** 绑定键：`appId::chatId`；无 appId 的 legacy 绑定保持裸 chatId 键以便认领。 */
 	private keyFor(appId: string | undefined, chatId: string): string {
-		return appId ? `${appId}::${chatId}` : chatId;
+		return this.bindingStore.keyFor(appId, chatId);
 	}
 
-	/**
-	 * 按 bot + chatId 查绑定。查不到时尝试认领一条无主的 legacy 绑定
-	 * （键为裸 chatId、未记录 appId）——首个在该 chatId 收到消息的 bot 认领它。
-	 */
 	private findBinding(appId: string, chatId: string): ChatBinding | undefined {
-		const direct = this.bindings.get(this.keyFor(appId, chatId));
-		if (direct) return direct;
-		const legacy = this.bindings.get(chatId);
-		if (legacy && !legacy.appId) {
-			legacy.appId = appId;
-			this.bindings.delete(chatId);
-			this.bindings.set(this.keyFor(appId, chatId), legacy);
-			this.saveDurableBindings();
-			return legacy;
-		}
-		return undefined;
+		return this.bindingStore.findBinding(appId, chatId);
 	}
 
 	private releaseAccumulator(sessionId: string, reason: string): void {
@@ -264,87 +247,20 @@ export class LarkBridgeService {
 		this.accumulatorAppIds.delete(sessionId);
 	}
 
-	/** Persist only bindings whose native pi session file can be recovered after a restart. */
 	private saveDurableBindings(): void {
-		saveBindings(
-			Array.from(this.bindings.values()).filter(
-				(binding) => !this.pendingDurableBindingSessionIds.has(binding.sessionId),
-			),
-		);
-	}
-
-	private removeBindingRecord(binding: ChatBinding): void {
-		for (const [key, candidate] of this.bindings.entries()) {
-			if (candidate !== binding) continue;
-			this.bindings.delete(key);
-			break;
-		}
-		this.pendingDurableBindingSessionIds.delete(binding.sessionId);
-		this.releaseAccumulator(binding.sessionId, "飞书会话绑定已失效");
-		this.saveDurableBindings();
+		this.bindingStore.saveDurableBindings();
 	}
 
 	private validateBinding(binding: ChatBinding): boolean {
-		const session = this.runtimeManager.getAgentInfo(binding.sessionId);
-		if (!session) {
-			console.warn("[LarkBridgeService] Discarding stale binding for missing session:", binding.sessionId);
-			this.removeBindingRecord(binding);
-			return false;
-		}
-		if (binding.projectId !== session.projectId) {
-			binding.projectId = session.projectId;
-			this.saveDurableBindings();
-		}
-		return true;
+		return this.bindingStore.validateBinding(binding, (sessionId) => this.runtimeManager.getAgentInfo(sessionId));
 	}
 
 	private persistBindingIfRecoverable(sessionId: string): void {
-		if (!this.pendingDurableBindingSessionIds.has(sessionId)) return;
-		const session = this.runtimeManager.getAgentInfo(sessionId);
-		if (!session?.sessionFilePath) return;
-
-		const binding = Array.from(this.bindings.values()).find((candidate) => candidate.sessionId === sessionId);
-		if (!binding) {
-			this.pendingDurableBindingSessionIds.delete(sessionId);
-			return;
-		}
-		binding.projectId = session.projectId;
-		this.pendingDurableBindingSessionIds.delete(sessionId);
-		this.saveDurableBindings();
+		this.bindingStore.persistBindingIfRecoverable(sessionId, (id) => this.runtimeManager.getAgentInfo(id));
 	}
 
-	/**
-	 * Backfill chat metadata (chatType/sender) on bindings saved before these
-	 * fields were captured, using the current inbound message.
-	 */
 	private backfillBindingMetadata(binding: ChatBinding, appId: string, msg: NormalizedMessage): void {
-		let changed = false;
-		// appId 从 undefined → 有值时需要 rekey（删掉裸 chatId 旧键）。
-		// 正常路径下 backfill 接收的 binding 已由 findBinding 认领过（appId 已设），
-		// 此分支为防御性死代码；仍保处理以免未来调用方不走 findBinding 时产生重复键。
-		let rekey = false;
-		if (!binding.appId) {
-			binding.appId = appId;
-			changed = true;
-			rekey = true;
-		}
-		if (!binding.chatType && msg.chatType) {
-			binding.chatType = msg.chatType;
-			changed = true;
-		}
-		if (!binding.senderOpenId && msg.senderId) {
-			binding.senderOpenId = msg.senderId;
-			changed = true;
-		}
-		if (!binding.peerName && msg.senderName) {
-			binding.peerName = msg.senderName;
-			changed = true;
-		}
-		if (changed) {
-			if (rekey) this.bindings.delete(binding.chatId);
-			this.bindings.set(this.keyFor(binding.appId, binding.chatId), binding);
-			this.saveDurableBindings();
-		}
+		this.bindingStore.backfillBindingMetadata(binding, appId, msg);
 	}
 
 	private releaseAllAccumulators(reason: string): void {
@@ -498,7 +414,7 @@ export class LarkBridgeService {
 		const oldBinding = this.findBinding(appId, chatId);
 		if (oldBinding) {
 			// 清理旧绑定
-			this.bindings.delete(this.keyFor(appId, chatId));
+			this.bindingStore.deleteKey(this.keyFor(appId, chatId));
 			this.releaseAccumulator(oldBinding.sessionId, "已创建新的飞书会话");
 		}
 
@@ -650,7 +566,7 @@ export class LarkBridgeService {
 		context?: Pick<ChatBinding, "chatType" | "senderOpenId" | "peerName">,
 	): Promise<ChatBinding> {
 		const key = this.keyFor(appId, chatId);
-		const existingPending = this.pendingBindings.get(key);
+		const existingPending = this.bindingStore.getPending(key);
 		if (existingPending) return existingPending;
 
 		const pending = (async () => {
@@ -660,7 +576,7 @@ export class LarkBridgeService {
 				background: true,
 			});
 			// Re-created bindings (e.g. /new) inherit the chat metadata captured earlier.
-			const previous = this.bindings.get(key);
+			const previous = this.bindingStore.get(key);
 			const binding: ChatBinding = {
 				chatId,
 				sessionId,
@@ -671,18 +587,18 @@ export class LarkBridgeService {
 				senderOpenId: context?.senderOpenId ?? previous?.senderOpenId,
 				peerName: context?.peerName ?? previous?.peerName,
 			};
-			this.bindings.set(key, binding);
-			this.pendingDurableBindingSessionIds.add(sessionId);
+			this.bindingStore.set(key, binding);
+			this.bindingStore.markPendingDurable(sessionId);
 			this.persistBindingIfRecoverable(sessionId);
 			return binding;
 		})();
 
-		this.pendingBindings.set(key, pending);
+		this.bindingStore.setPending(key, pending);
 		try {
 			return await pending;
 		} finally {
-			if (this.pendingBindings.get(key) === pending) {
-				this.pendingBindings.delete(key);
+			if (this.bindingStore.getPending(key) === pending) {
+				this.bindingStore.deletePending(key);
 			}
 		}
 	}
@@ -776,7 +692,7 @@ export class LarkBridgeService {
 		const key = this.keyFor(appId, chatId);
 		let binding = this.findBinding(appId, chatId);
 		if (!binding) {
-			binding = await this.pendingBindings.get(key)?.catch((err: unknown) => {
+			binding = await this.bindingStore.getPending(key)?.catch((err: unknown) => {
 				console.warn("[LarkBridgeService] pendingBindings.get failed:", err);
 				return undefined;
 			});
