@@ -14,6 +14,18 @@ import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.j
 import { CompositionBuilder } from "./composition/builder.js";
 
 /**
+ * builder 阶段产物的运行时必填校验：把"某个服务漏装配"从下游的
+ * `undefined is not a function` 提前为启动期带字段名的明确错误，
+ * 取代原先 35 处非空断言 `builder.x!`。
+ */
+function required<T>(value: T | null | undefined, name: string): T {
+	if (value === null || value === undefined) {
+		throw new Error(`[RuntimeManagerComposition] builder did not initialize "${name}"`);
+	}
+	return value;
+}
+
+/**
  * Immutable holder of all domain services for the session runtime.
  *
  * Construction is orchestrated by CompositionBuilder; use the static
@@ -90,46 +102,49 @@ export class RuntimeManagerComposition {
 		this.subAgentRegistry = builder.subAgentRegistry;
 		this.activeSessionSelection = builder.activeSessionSelection;
 
-		this.trustStore = builder.trustStore!;
-		this.globalSettingsManager = builder.globalSettingsManager!;
-		this.projectService = builder.projectService!;
-		this.userSettings = builder.userSettings!;
-		this.permissionService = builder.permissionService!;
-		this.promptStore = builder.promptStore!;
-		this.mcpManager = builder.mcpManager!;
-		this.browserService = builder.browserService!;
-		this.sessionCatalog = builder.sessionCatalog!;
+		this.trustStore = required(builder.trustStore, "trustStore");
+		this.globalSettingsManager = required(builder.globalSettingsManager, "globalSettingsManager");
+		this.projectService = required(builder.projectService, "projectService");
+		this.userSettings = required(builder.userSettings, "userSettings");
+		this.permissionService = required(builder.permissionService, "permissionService");
+		this.promptStore = required(builder.promptStore, "promptStore");
+		this.mcpManager = required(builder.mcpManager, "mcpManager");
+		this.browserService = required(builder.browserService, "browserService");
+		this.sessionCatalog = required(builder.sessionCatalog, "sessionCatalog");
 		this.draftIndex = builder.draftIndex;
-		this.projectRuntimeService = builder.projectRuntimeService!;
-		this.sessionInfoService = builder.sessionInfoService!;
-		this.sessionNotifier = builder.sessionNotifier!;
-		this.eventProcessor = builder.eventProcessor!;
-		this.subAgentRuntimeService = builder.subAgentRuntimeService!;
-		this.projectApplicationService = builder.projectApplicationService!;
+		this.projectRuntimeService = required(builder.projectRuntimeService, "projectRuntimeService");
+		this.sessionInfoService = required(builder.sessionInfoService, "sessionInfoService");
+		this.sessionNotifier = required(builder.sessionNotifier, "sessionNotifier");
+		this.eventProcessor = required(builder.eventProcessor, "eventProcessor");
+		this.subAgentRuntimeService = required(builder.subAgentRuntimeService, "subAgentRuntimeService");
+		this.projectApplicationService = required(builder.projectApplicationService, "projectApplicationService");
 
-		this.modelRuntime = builder.modelRuntime!;
-		this.modelRegistry = builder.modelRegistry!;
-		this.credentialStore = builder.credentialStore!;
-		this.customProviders = builder.customProviders!;
+		this.modelRuntime = required(builder.modelRuntime, "modelRuntime");
+		this.modelRegistry = required(builder.modelRegistry, "modelRegistry");
+		this.credentialStore = required(builder.credentialStore, "credentialStore");
+		this.customProviders = required(builder.customProviders, "customProviders");
 
-		this.autoTitleService = builder.autoTitleService!;
-		this.runtimeFactory = builder.runtimeFactory!;
+		this.autoTitleService = required(builder.autoTitleService, "autoTitleService");
+		this.runtimeFactory = required(builder.runtimeFactory, "runtimeFactory");
 
-		this.planService = builder.planService!;
-		this.agentDefinitionService = builder.agentDefinitionService!;
-		this.sessionSubagentService = builder.sessionSubagentService!;
-		this.runtimeLifecycle = builder.runtimeLifecycle!;
+		this.planService = required(builder.planService, "planService");
+		this.agentDefinitionService = required(builder.agentDefinitionService, "agentDefinitionService");
+		this.sessionSubagentService = required(builder.sessionSubagentService, "sessionSubagentService");
+		this.runtimeLifecycle = required(builder.runtimeLifecycle, "runtimeLifecycle");
 
-		this.sessionHistoryService = builder.sessionHistoryService!;
-		this.sessionControlService = builder.sessionControlService!;
-		this.sessionLifecycleService = builder.sessionLifecycleService!;
-		this.projectDeletionService = builder.projectDeletionService!;
-		this.sessionMessagingService = builder.sessionMessagingService!;
-		this.sessionPermissionOrchestrator = builder.sessionPermissionOrchestrator!;
-		this.sessionEventEffects = builder.sessionEventEffects!;
-		this.sessionSettingsService = builder.sessionSettingsService!;
-		this.skillManagementService = builder.skillManagementService!;
-		this.attachmentService = builder.attachmentService!;
+		this.sessionHistoryService = required(builder.sessionHistoryService, "sessionHistoryService");
+		this.sessionControlService = required(builder.sessionControlService, "sessionControlService");
+		this.sessionLifecycleService = required(builder.sessionLifecycleService, "sessionLifecycleService");
+		this.projectDeletionService = required(builder.projectDeletionService, "projectDeletionService");
+		this.sessionMessagingService = required(builder.sessionMessagingService, "sessionMessagingService");
+		this.sessionPermissionOrchestrator = required(
+			builder.sessionPermissionOrchestrator,
+			"sessionPermissionOrchestrator",
+		);
+		this.sessionEventEffects = required(builder.sessionEventEffects, "sessionEventEffects");
+		this.sessionSettingsService = required(builder.sessionSettingsService, "sessionSettingsService");
+		this.skillManagementService = required(builder.skillManagementService, "skillManagementService");
+		this.attachmentService = required(builder.attachmentService, "attachmentService");
 	}
 
 	// ── Static async factory ──
