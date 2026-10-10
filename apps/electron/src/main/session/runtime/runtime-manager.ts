@@ -152,6 +152,15 @@ export class SessionRuntimeManager
 			}
 		}
 		await this.disposeAllRuntimes();
+		// 内置浏览器（WebContentsView + CDP）：runtime 回收后统一释放，避免退出时残留视图/调试连接。
+		const browserService = this.composition.browserService;
+		if (browserService) {
+			try {
+				await browserService.disposeAll();
+			} catch (error) {
+				console.error("[Look] browserService dispose failed:", error);
+			}
+		}
 		await this.mcpManager.stopAll();
 		this.mcpManager.stopIdleReaper();
 		this.composition.sessionEventEffects.dispose();

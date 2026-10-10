@@ -183,6 +183,15 @@ describe("BrowserService (WebContentsView + CDP)", () => {
 		return registry.views[registry.views.length - 1];
 	}
 
+	it("disposeAll releases every browser and its tabs", async () => {
+		const second = await service.launch();
+		await service.openTab(second, "main");
+		expect(service.browserCount).toBe(2);
+		await service.disposeAll();
+		expect(service.browserCount).toBe(0);
+		expect(service.getActiveTarget()).toBeNull();
+	});
+
 	it("launch requires an owner window", async () => {
 		const orphan = new BrowserService();
 		await expect(orphan.launch()).rejects.toThrow(/主窗口尚未就绪/);
