@@ -99,6 +99,11 @@ export class SessionRuntimeManager
 		return this.composition.mcpManager;
 	}
 
+	/** Phase 1 RuntimePort seam (default PiAdapter). */
+	get runtimePort() {
+		return this.composition.runtimePort;
+	}
+
 	getWorkspaceFileService(): WorkspaceFileService {
 		if (this.disposed) {
 			throw new Error("SessionRuntimeManager has been disposed");

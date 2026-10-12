@@ -13,6 +13,7 @@ import { createSubagentExtensionFactory } from "../../../extensions/subagent/sub
 import type { AgentConfig, SubagentProgress } from "../../../extensions/subagent/types.js";
 import { createTranscribeExtensionFactory } from "../../../extensions/transcribe-extension.js";
 import { getAvailableModels } from "../../../models/model-queries.js";
+import { PiAdapter, RuntimePortRegistry } from "../../../runtime-port/index.js";
 import { SessionRuntimeFactory } from "../../runtime/runtime-factory.js";
 import type { CompositionBuilder } from "../builder-context.js";
 
@@ -98,4 +99,34 @@ export function buildExtensionsPhase(b: CompositionBuilder): void {
 			];
 		},
 	});
+
+	// RuntimePort seam (Phase 1): default PiAdapter wraps the factory + live registry.
+	// Session*Service call sites still use AgentSessionRuntime directly; later phases
+	// redirect through runtimePort without forking session services.
+	const portRegistry = new RuntimePortRegistry();
+	const piAdapter = new PiAdapter({
+		factory: b.req(b.runtimeFactory, "runtimeFactory"),
+		getRuntime: (sessionId) => b.runtimeRegistry.get(sessionId)?.runtime,
+		disposeSession: async (sessionId) => {
+			const lifecycle = b.runtimeLifecycle;
+			if (lifecycle) {
+				await lifecycle.disposeRuntime(sessionId, true);
+				return;
+			}
+			const managed = b.runtimeRegistry.get(sessionId);
+			if (managed) await managed.runtime.dispose();
+		},
+		resumeSession: async (sessionId) => {
+			const lifecycle = b.runtimeLifecycle;
+			if (!lifecycle) {
+				throw new Error(`[PiAdapter] resumeSession: runtimeLifecycle not ready for ${sessionId}`);
+			}
+			await lifecycle.ensureRuntime(sessionId);
+		},
+		resolvePermission: (decision) => b.req(b.permissionService, "permissionService").handleResponse(decision),
+	});
+	portRegistry.setDefault(piAdapter);
+	b.piAdapter = piAdapter;
+	b.runtimePort = piAdapter;
+	b.runtimePortRegistry = portRegistry;
 }
