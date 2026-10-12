@@ -9,12 +9,14 @@ Hard invariants for agents editing this repo. Prefer these over improvising.
 - **Commands, layout, module map** → [`CLAUDE.md`](CLAUDE.md)
 - **This file** → runtime / trust / renderer traps / test isolation / release must-not-break
 - **pi SDK first** → wrap `@earendil-works/pi-*`; do not reimplement session lifecycle, tools, skills, or event streaming
+- **RuntimePort long-term** → host code should target `RuntimePort` (default `PiAdapter`). See `docs/runtime-adapter.md`. **Until other adapters exist, the pi SDK rules above still apply** — do not delete or weaken them.
 
 Key code anchors:
 
 | Concern | Where |
 |--------|--------|
 | Multi-session host | `apps/electron/src/main/session/runtime/` |
+| RuntimePort / adapters | `apps/electron/src/main/runtime-port/` |
 | Runtime wiring | `apps/electron/src/main/session/composition/` |
 | Session use-cases | `apps/electron/src/main/session/services/` |
 | Paths / `LOOK_HOME` | `packages/shared/src/look-storage.ts` |

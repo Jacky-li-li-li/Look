@@ -64,6 +64,10 @@ export class RuntimeManagerComposition {
 
 	readonly autoTitleService;
 	readonly runtimeFactory;
+	/** Phase 1 RuntimePort — default PiAdapter; Session*Service redirect is later. */
+	readonly runtimePort;
+	readonly runtimePortRegistry;
+	readonly piAdapter;
 
 	readonly planService;
 	readonly agentDefinitionService;
@@ -126,6 +130,9 @@ export class RuntimeManagerComposition {
 
 		this.autoTitleService = required(builder.autoTitleService, "autoTitleService");
 		this.runtimeFactory = required(builder.runtimeFactory, "runtimeFactory");
+		this.runtimePort = required(builder.runtimePort, "runtimePort");
+		this.runtimePortRegistry = required(builder.runtimePortRegistry, "runtimePortRegistry");
+		this.piAdapter = required(builder.piAdapter, "piAdapter");
 
 		this.planService = required(builder.planService, "planService");
 		this.agentDefinitionService = required(builder.agentDefinitionService, "agentDefinitionService");

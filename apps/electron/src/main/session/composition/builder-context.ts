@@ -18,6 +18,7 @@ import type { PlanService } from "../../permissions/plan.js";
 import type { PermissionService } from "../../permissions/service.js";
 import type { ProjectDeletionService } from "../../projects/project-deletion-service.js";
 import type { ProjectService } from "../../projects/project-service.js";
+import type { PiAdapter, RuntimePort, RuntimePortRegistry } from "../../runtime-port/index.js";
 import type { SchedulerService } from "../../scheduler/scheduler-service.js";
 import type { EncryptedCredentialStore } from "../../security/secrets.js";
 import type { AutoTitleService } from "../../services/auto-title.js";
@@ -115,6 +116,11 @@ export class CompositionBuilder {
 	// ── Extensions ──
 	autoTitleService: AutoTitleService | null = null;
 	runtimeFactory: SessionRuntimeFactory | null = null;
+	/** Phase 1 RuntimePort seam — default PiAdapter; later engines plug in here. */
+	runtimePort: RuntimePort | null = null;
+	runtimePortRegistry: RuntimePortRegistry | null = null;
+	/** Concrete default adapter (same instance as runtimePort when engine is pi). */
+	piAdapter: PiAdapter | null = null;
 
 	// ── Core (plan, agentDef, subagent, lifecycle — circular via closures) ──
 	planService: PlanService | null = null;
@@ -179,6 +185,8 @@ export class CompositionBuilder {
 			customProviders: this.customProviders,
 			autoTitleService: this.autoTitleService,
 			runtimeFactory: this.runtimeFactory,
+			runtimePort: this.runtimePort,
+			runtimePortRegistry: this.runtimePortRegistry,
 			planService: this.planService,
 			agentDefinitionService: this.agentDefinitionService,
 			sessionSubagentService: this.sessionSubagentService,
