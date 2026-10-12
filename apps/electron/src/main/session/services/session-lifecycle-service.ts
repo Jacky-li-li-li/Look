@@ -14,6 +14,7 @@ import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import type { AgentInfo, ImSessionProvider, MainToRendererEvent, SessionSnapshotEnvelope } from "@look/shared/types";
 import type { IPermissionService, IPlanService } from "../../core/contracts.js";
 import type { ProjectService } from "../../projects/project-service.js";
+import type { RuntimePort } from "../../runtime-port/index.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import { withDeadline } from "../../utils/with-deadline.js";
@@ -74,6 +75,11 @@ export interface SessionLifecycleServiceDependencies {
 	/** 粘贴附件服务：会话销毁时级联清理附件目录。 */
 	attachments: AttachmentService;
 	getAvailableModelsSync(): AvailableModel[];
+	/**
+	 * Phase 2: when set, session abort routes through RuntimePort.abort
+	 * (same behavior as managed.runtime.session.abort via PiAdapter).
+	 */
+	runtimePort?: Pick<RuntimePort, "abort" | "engineId">;
 }
 
 export interface EnsureSessionModelDeps {
@@ -354,6 +360,12 @@ export class SessionLifecycleService {
 		await this.deps.subAgentRuntimeService.abortSubSessions(sessionId);
 		this.deps.permissionService.cancelPending(sessionId);
 		this.deps.planService.cancelInteractions(sessionId, "Stopped by user");
+		// Phase 2 seam: prefer RuntimePort.abort when the composition root wired one.
+		const port = this.deps.runtimePort;
+		if (port) {
+			await port.abort({ engineId: port.engineId, sessionId });
+			return;
+		}
 		await managed.runtime.session.abort();
 	}
 }

@@ -118,6 +118,14 @@ describe("SessionLifecycleService", () => {
 					deleteProjectAttachments: vi.fn(),
 				} as unknown as import("../src/main/session/services/attachment-service.js").AttachmentService,
 				getAvailableModelsSync: vi.fn().mockReturnValue(overrides?.availableModels ?? []),
+				runtimePort: {
+					engineId: "pi" as const,
+					abort: vi.fn(async ({ sessionId }: { sessionId: string }) => {
+						const managed = runtime;
+						if (!managed || managed.runtime.session.sessionId !== sessionId) return;
+						await managed.runtime.session.abort();
+					}),
+				},
 			}),
 			host,
 			runtime,
@@ -372,11 +380,12 @@ describe("SessionLifecycleService", () => {
 		rmSync(dir, { recursive: true, force: true });
 	});
 
-	it("abortAgent cascades to sub-sessions and aborts the session", async () => {
+	it("abortAgent cascades to sub-sessions and aborts via RuntimePort", async () => {
 		const { service, runtime } = makeService();
 
 		await service.abortAgent("session-1");
 
+		// Phase 2: abort routes through runtimePort.abort → PiAdapter → session.abort
 		expect(runtime.runtime.session.abort).toHaveBeenCalled();
 	});
 

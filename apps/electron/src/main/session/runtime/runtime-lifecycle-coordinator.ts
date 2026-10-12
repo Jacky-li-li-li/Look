@@ -66,6 +66,12 @@ export interface RuntimeLifecycleCoordinatorOptions {
 	onSessionBound?(managed: ManagedRuntime): void;
 	/** 会话销毁/初始化失败后回调：用于丢弃挂起消息等随会话生灭的状态。 */
 	onSessionDisposed?(sessionId: string): void;
+	/**
+	 * Phase 2: keep RuntimePortRegistry associated with the live session id.
+	 * Called after bindRuntime and after a successful rebind when the id changes.
+	 * Unbind stays on onSessionDisposed / dispose paths.
+	 */
+	associateRuntimePort?(sessionId: string): void;
 	/** Optional cold-start fast path; runtime activation remains authoritative. */
 	emitSessionPreview?(sessionId: string, stored: StoredSession): Promise<void>;
 	openSessionManager(stored: StoredSession): SessionManager;
@@ -452,6 +458,10 @@ export class RuntimeLifecycleCoordinator {
 			throw error;
 		}
 		this.options.selection.replaceIfCurrent(previousSessionId, session.sessionId);
+		if (session.sessionId !== previousSessionId) {
+			// previous id was unbound via cleanupSessionState → onSessionDisposed
+			this.options.associateRuntimePort?.(session.sessionId);
+		}
 		this.emitRuntimeDiagnostics(session.sessionId, runtime);
 	}
 

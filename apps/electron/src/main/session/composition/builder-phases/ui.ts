@@ -102,6 +102,8 @@ export function buildUIPhase(b: CompositionBuilder): void {
 		modelRegistry,
 		attachments: b.req(b.attachmentService, "attachmentService"),
 		getAvailableModelsSync: () => getAvailableModels(modelRegistry),
+		// Phase 2: abortAgent redirects through RuntimePort when live.
+		runtimePort: b.req(b.runtimePort, "runtimePort"),
 	});
 
 	b.projectDeletionService = new ProjectDeletionService({

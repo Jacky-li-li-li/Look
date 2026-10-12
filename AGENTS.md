@@ -44,6 +44,7 @@ Type: rule
 - `AuthStorage`, `ModelRegistry`, and `ProjectTrustStore` are **process-global**. Cwd-bound services and extension bindings stay **runtime-local**.
 - Resource initialization is serialized **only when `packages` are configured** (npm install races); otherwise session inits run concurrently with no app-level hard cap.
 - **Intent first, materialize later**: model/thinking switches and message sends must not wait on `ensureRuntime`. When no live runtime exists, record the intent — `SessionPendingIntents` (model/thinking, applied via the factory's `modelKey`/`thinkingLevel` options at creation, or by `bindRuntime` for intents arriving mid-init) and `SessionMessagingService`'s pending queue (flushed on `onSessionBound`). Never extend the draft index for this; intents are in-memory only.
+- **Lark per-chat queue abort**: `LarkChatTaskQueue` must abort in-flight (`AbortSignal`) and drop pending on stop / unbind / dispose / `clearForApp` — **before** (or together with) `abortAgent`. Do not only delete map entries.
 
 ---
 
