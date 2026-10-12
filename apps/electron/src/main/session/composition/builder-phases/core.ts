@@ -104,9 +104,19 @@ export function buildCorePhase(b: CompositionBuilder): void {
 		// runtime 绑定完成 → flush 挂起消息（messaging service 在 Phase 5 就位，
 		// 闭包延迟解析；flush 内部自管异常，不影响绑定路径）。
 		onSessionBound: (managed) => {
+			// Phase 2: associate live session with the default RuntimePort (multi-engine later).
+			const port = b.runtimePort;
+			if (port) b.runtimePortRegistry?.bind(managed.binding.sessionId, port);
 			void b.sessionMessagingService?.flushPending(managed);
 		},
-		onSessionDisposed: (sessionId) => b.sessionMessagingService?.disposeSession(sessionId),
+		onSessionDisposed: (sessionId) => {
+			b.runtimePortRegistry?.unbind(sessionId);
+			b.sessionMessagingService?.disposeSession(sessionId);
+		},
+		associateRuntimePort: (sessionId) => {
+			const port = b.runtimePort;
+			if (port) b.runtimePortRegistry?.bind(sessionId, port);
+		},
 		handleSessionEvent: (sessionId, event) => b.req(b.eventProcessor, "eventProcessor").handle(sessionId, event),
 		setActiveProjectId: (projectId) => b.req(b.projectService, "projectService").setActiveId(projectId),
 		getActiveProjectId: () => b.req(b.projectService, "projectService").activeId,

@@ -63,6 +63,7 @@ export class LarkBridgeService {
 	 * 前一条消息的 Agent 轮次结束后才处理下一条，保证每条消息拥有独立的
 	 * 回复累积器与流式卡片。SDK 侧 chatQueue 已关闭（避免消息合并与
 	 * cardAction 被排到轮次之后），这里是唯一的 per-chat 串行点。
+	 * stop / unbind / dispose 会 abort 对应 AbortController（先于 abortAgent）。
 	 */
 	private readonly chatQueue = new LarkChatTaskQueue((appId, chatId) => this.keyFor(appId, chatId));
 	/** 运行时事件取消订阅 */
@@ -138,8 +139,18 @@ export class LarkBridgeService {
 	}
 
 	/** 同一 (appId, chatId) 的入站用户消息串行化执行（见 LarkChatTaskQueue）。 */
-	private enqueueChatTask(appId: string, chatId: string, task: () => Promise<void>): Promise<void> {
+	private enqueueChatTask(appId: string, chatId: string, task: (signal: AbortSignal) => Promise<void>): Promise<void> {
 		return this.chatQueue.enqueue(appId, chatId, task);
+	}
+
+	/**
+	 * Abort the per-chat queue (pending + in-flight signal) then abort the agent.
+	 * Order: queue signal first so pending turns never start; abortAgent still
+	 * stops the live pi session (and cascades sub-agents / permission cancels).
+	 */
+	private async abortChatWork(appId: string, chatId: string, sessionId: string): Promise<void> {
+		this.chatQueue.abort(appId, chatId);
+		await this.runtimeManager.abortAgent(sessionId);
 	}
 
 	// ============================================================
@@ -209,6 +220,9 @@ export class LarkBridgeService {
 		for (const [key, binding] of Array.from(this.bindingStore.entries())) {
 			if (binding.chatId !== chatId) continue;
 			if (appId && binding.appId && binding.appId !== appId) continue;
+			// Abort queued/in-flight chat work before dropping the binding.
+			const bindingAppId = binding.appId ?? appId;
+			if (bindingAppId) this.chatQueue.abort(bindingAppId, chatId);
 			this.releaseAccumulator(binding.sessionId, "飞书会话已解绑");
 			this.bindingStore.clearPendingDurable(binding.sessionId);
 			this.bindingStore.deleteKey(key);
@@ -330,7 +344,7 @@ export class LarkBridgeService {
 			// 结束后才处理下一条，避免并发 stream 覆盖 controller（孤儿卡片）
 			// 与累积器提前释放（后续回复丢失）。
 			trace("Queueing user message for chat", msg.chatId, "appId:", appId);
-			await this.enqueueChatTask(appId, msg.chatId, () => this.handleUserMessage(appId, msg, text));
+			await this.enqueueChatTask(appId, msg.chatId, (signal) => this.handleUserMessage(appId, msg, text, signal));
 		}
 	}
 
@@ -601,7 +615,8 @@ export class LarkBridgeService {
 		await this.replyRegistry.finalizeStopped(sessionId, "用户通过 /stop 停止了会话。", "用户已停止");
 
 		try {
-			await this.runtimeManager.abortAgent(sessionId);
+			// Queue abort first (pending turns), then agent abort — see abortChatWork.
+			await this.abortChatWork(appId, chatId, sessionId);
 			await channel.send(chatId, { text: "⏹️ 已停止当前 Agent 会话。" });
 		} catch {
 			await channel.send(chatId, { text: "⚠️ 停止会话时出错（可能已经处于空闲状态）。" });
@@ -653,7 +668,13 @@ export class LarkBridgeService {
 	// ============================================================
 	// 普通用户消息 → Agent 桥接
 	// ============================================================
-	private async handleUserMessage(appId: string, msg: NormalizedMessage, text: string): Promise<void> {
+	private async handleUserMessage(
+		appId: string,
+		msg: NormalizedMessage,
+		text: string,
+		signal?: AbortSignal,
+	): Promise<void> {
+		if (signal?.aborted) return;
 		const chatId = msg.chatId;
 		// 队列内执行时连接可能已断开/重连，重新解析当前连接，避免使用陈旧 channel。
 		const channel = this.channelManager?.getLarkChannel(appId);
@@ -787,9 +808,10 @@ export class LarkBridgeService {
 	// ============================================================
 
 	/**
-	 * 处理流式卡片上的按钮点击。当前唯一动作是「停止」：中止对应 Agent
-	 * 会话并终结其回复卡片（移除按钮、红色头部、标记已停止）。SDK 侧
-	 * chatQueue 已关闭，因此该动作不会被排在运行中的消息轮次之后。
+	 * 处理流式卡片上的按钮点击。当前唯一动作是「停止」：先 abort 本 chat
+	 * 的串行队列（取消 pending + 通知 in-flight），再 abortAgent，并终结
+	 * 回复卡片（移除按钮、红色头部、标记已停止）。SDK 侧 chatQueue 已关闭，
+	 * 因此该动作不会被排在运行中的消息轮次之后。
 	 */
 	private async handleCardAction(appId: string, evt: lark.CardActionEvent): Promise<void> {
 		const value = evt.action?.value;
@@ -800,7 +822,8 @@ export class LarkBridgeService {
 
 		await this.replyRegistry.finalizeStopped(sessionId, "用户点击了停止按钮。", "用户已停止");
 		try {
-			await this.runtimeManager.abortAgent(sessionId);
+			// Queue abort first (pending turns), then agent abort — see abortChatWork.
+			await this.abortChatWork(appId, evt.chatId, sessionId);
 		} catch (err) {
 			console.warn("[LarkBridgeService] abortAgent on stop click failed:", err);
 		}
