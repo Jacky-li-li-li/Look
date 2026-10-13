@@ -7,7 +7,6 @@
 // ============================================================
 
 import { existsSync } from "node:fs";
-import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import type { AgentInfo, ImSessionProvider, ProjectInfo, ThinkingLevel } from "@look/shared/types";
 import { loadBindings } from "../../im/im-storage.js";
@@ -185,7 +184,7 @@ export class SessionInfoService {
 
 	private runtimeInfo(
 		sessionId: string,
-		managed: { runtime: AgentSessionRuntime; projectId: string; createdAt: number },
+		managed: Pick<ManagedRuntime, "runtime" | "projectId" | "createdAt">,
 	): AgentInfo {
 		const session = managed.runtime.session;
 		const stats = session.getSessionStats();

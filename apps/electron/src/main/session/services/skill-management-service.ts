@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { SettingsManager } from "@earendil-works/pi-coding-agent";
+import type { SkillPathsSettings } from "../../runtime-port/look-types.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import {
 	detectCommonSkillPaths,
@@ -14,7 +14,7 @@ import type { ActiveSessionSelection } from "../scope/active-session-selection.j
 export interface SkillManagementServiceOptions {
 	runtimeRegistry: Pick<RuntimeRegistry, "get" | "values">;
 	selection: ActiveSessionSelection;
-	globalSettingsManager: Pick<SettingsManager, "getSkillPaths" | "setSkillPaths" | "flush">;
+	globalSettingsManager: SkillPathsSettings;
 	userSettings: Pick<UserSettingsStore, "getAll" | "update">;
 }
 

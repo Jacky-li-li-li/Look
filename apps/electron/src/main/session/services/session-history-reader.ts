@@ -7,8 +7,7 @@
 // ============================================================
 
 import { open } from "node:fs/promises";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { SessionHistoryWindow } from "@look/shared/types";
+import type { SessionEntry, SessionHistoryWindow } from "@look/shared/types";
 
 const READ_CHUNK_BYTES = 64 * 1024;
 const MAX_PREVIEW_BYTES = 8 * 1024 * 1024;

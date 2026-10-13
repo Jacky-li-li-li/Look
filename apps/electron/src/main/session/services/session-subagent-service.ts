@@ -8,8 +8,6 @@
 // ============================================================
 
 import { randomUUID } from "node:crypto";
-import type { AgentSession, ModelRegistry, SessionStartEvent } from "@earendil-works/pi-coding-agent";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { AgentInfo, MainToRendererEvent } from "@look/shared/types";
 import type { AgentDefinitionService } from "../../agents/definition-service.js";
@@ -17,6 +15,8 @@ import type { IPermissionService, IPlanService, ISessionScope } from "../../core
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../../extensions/subagent/types.js";
 import { SUBAGENT_TOOL_NAMES } from "../../extensions/subagent/types.js";
 import type { ProjectService } from "../../projects/project-service.js";
+import type { EngineSessionHandle, EngineSessionStartEvent, ModelLookup } from "../../runtime-port/look-types.js";
+import { createEngineSession } from "../../runtime-port/pi-session-ops.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import { waitForPromptAccepted } from "../../utils/prompt-accepted.js";
@@ -27,10 +27,10 @@ import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-cat
 export interface SessionSubagentHost {
 	createManagedRuntime(
 		cwd: string,
-		sessionManager: SessionManager,
+		sessionManager: EngineSessionHandle,
 		projectId: string,
 		createdAt: number,
-		sessionStartEvent?: SessionStartEvent,
+		sessionStartEvent?: EngineSessionStartEvent,
 		options?: { appendSystemPrompt?: string[] },
 	): Promise<ManagedRuntime>;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
@@ -47,7 +47,7 @@ export interface SessionSubagentHost {
 
 export interface SessionSubagentServiceDependencies {
 	host: SessionSubagentHost;
-	modelRegistry: Pick<ModelRegistry, "find">;
+	modelRegistry: Pick<ModelLookup, "find">;
 	subAgentRegistry: SubAgentRegistry;
 	subAgentRuntimeService: SubAgentRuntimeService;
 	permissionService: IPermissionService;
@@ -124,7 +124,13 @@ export class SessionSubagentService {
 	 * Called once when a runtime is bound. Applies per-session override if one
 	 * exists, otherwise falls back to the global default.
 	 */
-	applyDefaultOnBind(sessionId: string, session: AgentSession): void {
+	applyDefaultOnBind(
+		sessionId: string,
+		session: {
+			getActiveToolNames(): string[];
+			setActiveToolsByName(names: string[]): void;
+		},
+	): void {
 		const perSession = this.enabledBySession.get(sessionId);
 		const enabled = perSession ?? this.defaultEnabled;
 		if (!enabled) {
@@ -215,7 +221,7 @@ export class SessionSubagentService {
 		const cwd = parentManaged.cwd;
 
 		const subsessionDir = ensureWorkspaceSubsessionsDir(projectId);
-		const sessionManager = SessionManager.create(cwd, subsessionDir);
+		const sessionManager = createEngineSession(cwd, subsessionDir);
 		const managed = await this.deps.host.createManagedRuntime(
 			cwd,
 			sessionManager,
@@ -272,7 +278,7 @@ export class SessionSubagentService {
 					if (slash > 0) {
 						const model = this.deps.modelRegistry.find(agent.model.slice(0, slash), agent.model.slice(slash + 1));
 						if (model) {
-							await session.setModel(model);
+							await session.setModel(model as never);
 							this.deps.host.emitSessionUpdated(childSessionId);
 						}
 					}

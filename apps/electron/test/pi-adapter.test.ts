@@ -85,6 +85,28 @@ describe("PiAdapter", () => {
 		expect(runtime.session.prompt).toHaveBeenCalledWith("hello", {
 			images: undefined,
 			source: "rpc",
+			streamingBehavior: undefined,
+			preflightResult: undefined,
+		});
+	});
+
+	it("forwards streamingBehavior and onPreflight through send", async () => {
+		const runtime = mockRuntime("sess-send-opts");
+		const adapter = new PiAdapter({
+			factory: { create: vi.fn() },
+			getRuntime: (id) => (id === "sess-send-opts" ? (runtime as never) : undefined),
+			resolvePermission: () => true,
+		});
+		const onPreflight = vi.fn();
+		await adapter.send(
+			{ engineId: "pi", sessionId: "sess-send-opts" },
+			{ text: "hello", streamingBehavior: "steer", onPreflight },
+		);
+		expect(runtime.session.prompt).toHaveBeenCalledWith("hello", {
+			images: undefined,
+			source: "rpc",
+			streamingBehavior: "steer",
+			preflightResult: onPreflight,
 		});
 	});
 

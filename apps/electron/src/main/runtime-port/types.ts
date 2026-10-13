@@ -49,6 +49,10 @@ export interface UserMessage {
 	text: string;
 	/** Optional image parts; shape matches pi ImageContent when using PiAdapter. */
 	images?: unknown[];
+	/** How to queue when the engine is already streaming (pi: steer | followUp). */
+	streamingBehavior?: "steer" | "followUp";
+	/** Engine prompt preflight callback (pi preflightResult). */
+	onPreflight?: (success: boolean) => void;
 }
 
 /**

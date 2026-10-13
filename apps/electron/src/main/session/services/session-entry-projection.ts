@@ -2,8 +2,7 @@
 // Session entry projection shared by snapshots, previews and pages.
 // ============================================================
 
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { LookSessionEntry } from "@look/shared/types";
+import type { LookSessionEntry, SessionEntry } from "@look/shared/types";
 
 /** Keep the IPC payload independent from pi's full SessionEntry shape. */
 export function toLookSessionEntry(entry: SessionEntry): LookSessionEntry {

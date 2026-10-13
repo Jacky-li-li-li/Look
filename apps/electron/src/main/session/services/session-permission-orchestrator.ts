@@ -15,9 +15,9 @@
 //      and restore the global default model around every plan switch.
 // ============================================================
 
-import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "@look/shared/types";
 import type { IEventBus, IPermissionService, IPlanService } from "../../core/contracts.js";
+import type { ModelLookup } from "../../runtime-port/look-types.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
@@ -35,7 +35,7 @@ export interface SessionPermissionOrchestratorDependencies {
 	permissionService: IPermissionService;
 	planService: IPlanService;
 	userSettings: UserSettingsStore;
-	modelRegistry: Pick<ModelRegistry, "find">;
+	modelRegistry: Pick<ModelLookup, "find">;
 }
 
 /** Everything needed to restore the pre-plan state of one session. */
@@ -173,7 +173,7 @@ export class SessionPermissionOrchestrator {
 			planModelKey: settings.planModel,
 		});
 		try {
-			await managed.runtime.session.setModel(planModel);
+			await managed.runtime.session.setModel(planModel as never);
 			// SDK setModel persists setDefaultModelAndProvider as a side effect;
 			// a temporary Plan switch must not pollute the user's global default.
 			await this.restoreDefaultModel(settings.preferredModel);
@@ -214,7 +214,7 @@ export class SessionPermissionOrchestrator {
 			return;
 		}
 		try {
-			await managed.runtime.session.setModel(previousModel);
+			await managed.runtime.session.setModel(previousModel as never);
 			// Only remove the restore point after a successful restore so a
 			// transient failure can be retried on a later exit.
 			this.prePlanModel.delete(sessionId);

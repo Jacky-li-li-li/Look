@@ -30,6 +30,20 @@ function mockPrompt() {
 	});
 }
 
+function portForSession(session: AgentSession): SessionMessagingHost["runtimePort"] {
+	return {
+		engineId: "pi",
+		send: async (_ref, message) => {
+			await session.prompt(message.text, {
+				images: message.images,
+				source: "rpc",
+				streamingBehavior: message.streamingBehavior,
+				preflightResult: message.onPreflight,
+			});
+		},
+	};
+}
+
 function createHost(overrides: Partial<SessionMessagingHost> = {}): SessionMessagingHost {
 	return {
 		getManagedRuntime: () => undefined,
@@ -38,6 +52,12 @@ function createHost(overrides: Partial<SessionMessagingHost> = {}): SessionMessa
 		ensureMcpReady: () => Promise.resolve(),
 		emitError: () => {},
 		attachments: { buildPrompt: (text: string) => text } as unknown as SessionMessagingHost["attachments"],
+		runtimePort: {
+			engineId: "pi",
+			send: async () => {
+				throw new Error("runtimePort.send not configured");
+			},
+		},
 		...overrides,
 	};
 }
@@ -46,7 +66,7 @@ function liveHost(session: AgentSession, overrides: Partial<SessionMessagingHost
 	const managed = makeManagedRuntime(session);
 	return {
 		managed,
-		host: createHost({ getManagedRuntime: () => managed, ...overrides }),
+		host: createHost({ getManagedRuntime: () => managed, runtimePort: portForSession(session), ...overrides }),
 	};
 }
 
@@ -128,6 +148,7 @@ describe("SessionMessagingService", () => {
 			sessionExists: () => true,
 			ensureRuntime: () => new Promise<ManagedRuntime>(() => {}),
 			getManagedRuntime: () => managed,
+			runtimePort: portForSession(session),
 		});
 		const service = new SessionMessagingService(host);
 		await service.sendMessage("s1", "first");

@@ -1,6 +1,6 @@
 # Look Runtime Adapter
 
-状态：**Phase 1 + Phase 2 已在 main**（零用户可见行为变化；版本/changelog 口径仍属 **2.7.x**）· 默认引擎仍为 **pi**  
+状态：**Phase 1 + Phase 2 已在 main**；**Phase 3b（Session* 去 pi import）本 PR**（零用户可见行为变化；版本/changelog 口径仍属 **2.7.x**）· 默认引擎仍为 **pi**  
 叙事目标：**2.8** = 可选执行基座可宣称之时（DshAdapter 真能开、用户可切引擎）——**尚未到**  
 关联：deepseek-harness（dsh）、后续 Claude Code SDK 等  
 权威设计草案来源：仓库外设计稿；本文为落地文档。
@@ -52,6 +52,7 @@ PiAdapter  DshAdapter  （+ 未来 ClaudeCodeAdapter）
 | 组合根装配 | `apps/electron/src/main/session/composition/builder-phases/extensions.ts` |
 | abort 缝 | `SessionLifecycleService.abortAgent` → `runtimePort.abort` |
 | Lark 队列 abort | `apps/electron/src/main/im/lark-chat-queue.ts` |
+| Look 侧类型 / ops | `look-types.ts` · `pi-session-ops.ts` · `thinking.ts`（Phase 3b） |
 | 既有 pi 工厂 | `apps/electron/src/main/session/runtime/runtime-factory.ts` |
 | 既有活实例表 | `apps/electron/src/main/session/runtime/runtime-registry.ts` |
 
@@ -94,19 +95,28 @@ interface RuntimePort {
 - **Registry 与活会话对齐**：`onSessionBound` / `associateRuntimePort`（rebind 换 id）`bind`；`onSessionDisposed` `unbind`
 - **Lark chat queue in-flight abort**：`LarkChatTaskQueue` 每 key 持有 `AbortController`；`enqueue(task: (signal) => …)`；`abort` / `clear` / `clearForApp` 会 abort in-flight 并跳过 pending；桥接 stop / unbind / dispose 路径 **先** abort 队列信号再 `abortAgent`
 
+### Phase 3b — Session* 解耦（本 PR；口径仍 2.7.x）
+
+- **`apps/electron/src/main/session/services/` 不再直接 import `@earendil-works/pi-*`**（`rg` 该目录应为空）
+- 新增 Look 侧边界：`look-types.ts`（opaque handle / ModelLookup / PersistedSessionRow 等）、`pi-session-ops.ts`（SessionManager create/open/list/fork 唯一入口）、`thinking.ts`（clamp / supported levels）
+- **`SessionMessagingService` 发送走 `RuntimePort.send`**（组合根注入；PiAdapter → `session.prompt`，含 `streamingBehavior` / `onPreflight`）
+- 组合根 `builder-phases/core.ts` / `ui.ts` 在交给 lifecycle coordinator 前用 `asPiSessionManager` 收窄 opaque handle
+- **仍在 adapter / factory / translator / composition / extensions 等处保留 pi**——有意为之；IPC 形状不变；**不是**可切换引擎
+
 ### 已落地 vs 尚未落地
 
-| 已在 main | 尚未（勿对外宣称） |
+| 已落地（main + 本 PR） | 尚未（勿对外宣称） |
 |-----------|-------------------|
 | RuntimePort + PiAdapter 骨架 | DshAdapter / ClaudeCodeAdapter |
 | abort 生产路径经 RuntimePort | 设置项 `executionEngine` + capabilities 灰显 UI |
-| Registry bind/unbind 与活会话对齐 | Session*Service 批量去 `@earendil-works/pi-*` import |
-| Lark 队列可 abort in-flight / pending | 生产事件路径改走 `Port.subscribe` |
-| 默认仍是 pi；零行为变化（除有意 abortability） | 用户可切引擎 / 「可选执行基座」产品口径 |
+| Registry bind/unbind 与活会话对齐 | 生产事件路径改走 `Port.subscribe` |
+| Lark 队列可 abort in-flight / pending | 用户可切引擎 / 「可选执行基座」产品口径 |
+| Session*Service 无直接 `@earendil-works/pi-*` import（Phase 3b） | factory / translator / composition / extensions 去 pi（后续） |
+| 默认仍是 pi；零行为变化（除有意 abortability） |  |
 
 ## 6. 版本与 2.8 叙事（发版口径）
 
-- **2.7.x**：Phase 1+2 落地期间的 hotfix / 常规发版线。Port 缝与 PiAdapter **不**单独构成版本叙事；changelog 不写「已进入可选执行基座」。
+- **2.7.x**：Phase 1+2+3b 落地期间的 hotfix / 常规发版线。Port 缝、PiAdapter、Session* 去直接 pi import **不**单独构成版本叙事；changelog 不写「已进入可选执行基座」。
 - **2.8（预留）**：仅在 **DshAdapter 真能开**（用户可切引擎、capabilities 诚实灰显）时，再宣称「可选执行基座 / RuntimePort-first，默认 PiAdapter」。在此之前文档与发版话术都不要抢先。
 - 本文件的更新是文档对齐；**不 bump** `package.json` / 不打 tag / 不发 Release。
 
@@ -114,23 +124,26 @@ interface RuntimePort {
 
 - **零用户可见行为变化**（除有意的 abortability）：默认路径仍是 pi；活会话生命周期仍由 `RuntimeLifecycleCoordinator` 拥有。
 - Lark：**stop / 解绑 / dispose 现在会取消同 chat 的 pending 队列任务**，并 abort in-flight 信号；与既有 `abortAgent` 一起使用。
-- Port 是组合边界上的缝；除 abort 外，其它 call site 仍可直接走 pi。`Session*Service` 大多仍 pi-coupled——这是已知现状，不是 2.8 已完成的标志。
+- Port 是组合边界上的缝。Phase 3b 后 Session*Service 经 RuntimePort / pi-session-ops / look-types 访问引擎；**adapter、runtime-factory、event-translator、composition、extensions** 仍直接依赖 pi——有意为之，不是 2.8 已完成的标志。
 
 ## 8. 后续顺序
 
 1. ~~抽 Port + PiAdapter 包装现网~~ ← Phase 1（main）
 2. ~~abort 缝 + Lark queue abort + registry 对齐~~ ← Phase 2（main）
-3. 设置项 `executionEngine` + capabilities 灰显
-4. **DshAdapter MVP**：create / send / stream / abort / 基础 tool-approval → **此时才进入 2.8 产品叙事**
-5. Session*Service 逐步只依赖 RuntimePort；AGENTS.md 已先立 RuntimePort-first 长期规则（pi 不变量在默认 PiAdapter 下仍适用）
-6. Claude Code 另 PR
+3. ~~Session*Service 去直接 `@earendil-works/pi-*` import；messaging 经 RuntimePort.send~~ ← Phase 3b（本 PR；仍 2.7.x）
+4. 设置项 `executionEngine` + capabilities 灰显
+5. **DshAdapter MVP**：create / send / stream / abort / 基础 tool-approval → **此时才进入 2.8 产品叙事**
+6. 更深解耦（factory / translator / composition 只经 Port）；AGENTS.md 已先立 RuntimePort-first 长期规则（pi 不变量在默认 PiAdapter 下仍适用）
+7. Claude Code 另 PR
 
 ## 9. 评审检查清单
 
 - [x] Port 覆盖 create/resume/send/abort/subscribe/tool-approval（Phase 1 表面）
 - [x] abort 生产路径经 RuntimePort（Phase 2）
 - [x] Lark 队列可 abort in-flight / pending（Phase 2）
-- [x] 默认 pi；Phase 1+2 不宣称已进 2.8
-- [ ] 事件映射进现有 session UI 事件、IPC 形状不变（生产路径未改；后续引擎必须遵守）
+- [x] 默认 pi；Phase 1+2+3b 不宣称已进 2.8
+- [x] Session*Service 无直接 `@earendil-works/pi-*` import（Phase 3b）
+- [x] messaging / abort 生产路径经 RuntimePort；IPC 形状不变
+- [ ] 事件映射进现有 session UI 事件经 `Port.subscribe`（生产路径未改；后续引擎必须遵守）
 - [ ] dsh/Claude 可插拔而非 fork 一套 session（尚未实现）
 - [ ] changelog / 发版表述「可选执行基座」（**仅当 Dsh 可开 → 2.8**）

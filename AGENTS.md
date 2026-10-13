@@ -8,7 +8,7 @@ Hard invariants for agents editing this repo. Prefer these over improvising.
 
 - **Commands, layout, module map** → [`CLAUDE.md`](CLAUDE.md)
 - **This file** → runtime / trust / renderer traps / test isolation / release must-not-break
-- **RuntimePort-first (long-term rule)** → new host / Session* call sites should target `RuntimePort` (default adapter = `PiAdapter`). Do not add a parallel engine path or fork session lifecycle. Details: [`docs/runtime-adapter.md`](docs/runtime-adapter.md). **2.8 product claim** (“optional execution base / switchable engine”) waits until a second adapter (e.g. Dsh) can actually be enabled — Phase 1+2 on main are still **2.7.x** zero-behavior seams.
+- **RuntimePort-first (long-term rule)** → new host / Session* call sites should target `RuntimePort` (default adapter = `PiAdapter`). Do not add a parallel engine path or fork session lifecycle. Details: [`docs/runtime-adapter.md`](docs/runtime-adapter.md). **2.8 product claim** (“optional execution base / switchable engine”) waits until a second adapter (e.g. Dsh) can actually be enabled — Phase 1+2 on main and Phase 3b (Session* decouple from direct `@earendil-works/pi-*`) are still **2.7.x** zero-behavior seams.
 - **pi SDK invariants (default-adapter reality)** → today the only adapter is PiAdapter; wrap `@earendil-works/pi-*`; do not reimplement session lifecycle, tools, skills, or event streaming. **Keep every pi rule below** until another adapter owns those concerns — do not delete or weaken them just because RuntimePort exists.
 
 Key code anchors:

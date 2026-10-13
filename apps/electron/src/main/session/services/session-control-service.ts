@@ -5,16 +5,16 @@
 // receives only a narrow lifecycle/query port, never the full façade.
 // ============================================================
 
-import type { ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { SessionSnapshotEnvelope, ThinkingLevel } from "@look/shared/types";
 import type { ISessionScopeRegistry } from "../../core/contracts.js";
+import type { EngineSessionManagerView, ModelLookup } from "../../runtime-port/look-types.js";
 import { MAX_NAME_LENGTH } from "../constants.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 
 export interface SessionControlHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
 	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
-	getSessionManager(sessionId: string): SessionManager | undefined;
+	getSessionManager(sessionId: string): EngineSessionManagerView | undefined;
 	/** 会话存在性（live runtime 之外）：catalog stored / 草稿索引 / 在途初始化。 */
 	sessionExists(sessionId: string): boolean;
 	/** 挂起意图：runtime 未就绪时的模型/思考切换暂存，物化时应用。 */
@@ -30,7 +30,7 @@ export interface SessionControlHost {
 export class SessionControlService {
 	constructor(
 		private readonly host: SessionControlHost,
-		private readonly modelRegistry: Pick<ModelRegistry, "find">,
+		private readonly modelRegistry: Pick<ModelLookup, "find">,
 		private readonly scopeRegistry: Pick<ISessionScopeRegistry, "get">,
 		private readonly maxNameLength = MAX_NAME_LENGTH,
 	) {}
@@ -43,7 +43,7 @@ export class SessionControlService {
 		const managed = this.host.getManagedRuntime(sessionId);
 		if (managed) {
 			// runtime 就绪：直接切换（checkAuth 无网络、JSONL/设置写入均同步）。
-			await managed.runtime.session.setModel(model);
+			await managed.runtime.session.setModel(model as never);
 			this.host.emitSessionUpdated(sessionId);
 			return;
 		}

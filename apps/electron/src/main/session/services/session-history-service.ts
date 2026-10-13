@@ -7,13 +7,23 @@
 // ============================================================
 
 import fs, { existsSync } from "node:fs";
-import { type AgentSessionRuntime, SessionManager, type SessionStartEvent } from "@earendil-works/pi-coding-agent";
 import type {
 	ForkedSessionResult,
 	NavigateTreeResult,
 	SessionHistoryPage,
 	SessionSnapshotEnvelope,
 } from "@look/shared/types";
+import type {
+	EngineSessionHandle,
+	EngineSessionManagerView,
+	EngineSessionStartEvent,
+} from "../../runtime-port/look-types.js";
+import {
+	createBranchedEngineSession,
+	engineSessionCwd,
+	engineSessionId,
+	openEngineSessionForFork,
+} from "../../runtime-port/pi-session-ops.js";
 import { MAX_NAME_LENGTH } from "../constants.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 import { toLookSessionEntries } from "./session-entry-projection.js";
@@ -23,15 +33,15 @@ export interface SessionHistoryHost {
 	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
 	createManagedRuntime(
 		cwd: string,
-		sessionManager: SessionManager,
+		sessionManager: EngineSessionHandle,
 		projectId: string,
 		createdAt: number,
-		sessionStartEvent: SessionStartEvent,
+		sessionStartEvent: EngineSessionStartEvent,
 	): Promise<ManagedRuntime>;
 	withSessionLock<T>(sessionId: string, task: () => Promise<T>): Promise<T>;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
-	getRuntime(sessionId: string): AgentSessionRuntime | undefined;
-	getSessionManager(sessionId: string): SessionManager | undefined;
+	getRuntime(sessionId: string): object | undefined;
+	getSessionManager(sessionId: string): EngineSessionManagerView | undefined;
 	refreshProjectSessions(projectId: string): Promise<unknown>;
 	activateForkedSession(projectId: string, sessionId: string): void;
 	markSessionDefaultName(sessionId: string): void;
@@ -104,15 +114,15 @@ export class SessionHistoryService {
 				if (hookResult?.cancel === true) throw new Error("Fork was cancelled by an extension");
 			}
 
-			const forkManager = SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir());
+			const forkManager = openEngineSessionForFork(sourceFile, sourceSession.sessionManager.getSessionDir());
 			let forkedPath: string | undefined;
 			let forkedSessionId: string | undefined;
 			try {
-				forkedPath = forkManager.createBranchedSession(entryId);
+				forkedPath = createBranchedEngineSession(forkManager, entryId);
 				if (!forkedPath) throw new Error("Failed to create forked session");
-				forkedSessionId = forkManager.getSessionId();
+				forkedSessionId = engineSessionId(forkManager);
 				const forkedManaged = await this.host.createManagedRuntime(
-					forkManager.getCwd(),
+					engineSessionCwd(forkManager),
 					forkManager,
 					managed.projectId,
 					Date.now(),
