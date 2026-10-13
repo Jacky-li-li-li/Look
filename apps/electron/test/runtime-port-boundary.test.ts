@@ -3,6 +3,8 @@
 //
 // - apps/electron/src/main/session/services/** must not import @earendil-works/pi-*
 //   and must not reach the raw pi runtime (`managed.runtime` / `.runtime.session`).
+// - apps/electron/src/main/ipc/** likewise (queue ops go through runtime-port/pi-queue-ops,
+//   model handles through runtime-port/model-host-types).
 // - packages/shared/src/** must not import or re-export @earendil-works/pi-*.
 // ============================================================
 
@@ -33,16 +35,28 @@ function offenders(dir: string, pattern: RegExp): string[] {
 }
 
 const servicesDir = resolve(repositoryRoot, "apps/electron/src/main/session/services");
+const ipcDir = resolve(repositoryRoot, "apps/electron/src/main/ipc");
 const sharedDir = resolve(repositoryRoot, "packages/shared/src");
 
 describe("runtime-port boundary", () => {
 	it("scans non-empty source trees", () => {
 		expect(sourceFiles(servicesDir).length).toBeGreaterThan(5);
 		expect(sourceFiles(sharedDir).length).toBeGreaterThan(5);
+		expect(sourceFiles(ipcDir).length).toBeGreaterThan(5);
 	});
 
 	it("session/services does not import @earendil-works/pi-*", () => {
 		expect(offenders(servicesDir, PI_IMPORT)).toEqual([]);
+	});
+
+	it("ipc does not import @earendil-works/pi-*", () => {
+		expect(offenders(ipcDir, PI_IMPORT)).toEqual([]);
+	});
+
+	it("ipc does not reach the raw engine runtime", () => {
+		const rawRuntime = /\.runtime\.(session|services)\b|\bAgentSessionRuntime\b|\bAgentSession\b/;
+		const hits = offenders(ipcDir, rawRuntime).filter((hit) => !/:\s*(\/\/|\*|\/\*)/.test(hit));
+		expect(hits).toEqual([]);
 	});
 
 	it("packages/shared does not import or re-export @earendil-works/pi-*", () => {

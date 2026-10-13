@@ -5,8 +5,6 @@
 // grouped by domain so routers depend on minimal service surfaces.
 // ============================================================
 
-import type { CredentialStore } from "@earendil-works/pi-ai";
-import type { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { InvokeResult } from "@look/shared";
 import type { RendererToMainEvent } from "@look/shared/types";
 import type { BrowserWindow } from "electron";
@@ -19,6 +17,11 @@ import type { PlanService } from "../permissions/plan.js";
 import type { PermissionService } from "../permissions/service.js";
 import type { ProjectDeletionService } from "../projects/project-deletion-service.js";
 import type { ProjectService } from "../projects/project-service.js";
+import type {
+	EngineCredentialStore,
+	EngineModelRegistry,
+	EngineModelRuntime,
+} from "../runtime-port/model-host-types.js";
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
 import type { SessionNotifier } from "../session/events/session-notifier.js";
 import type { RuntimeLifecycleCoordinator } from "../session/runtime/runtime-lifecycle-coordinator.js";
@@ -51,9 +54,9 @@ export interface InvokeContext {
 
 	// ── Model ──
 	model: {
-		runtime: ModelRuntime;
-		registry: ModelRegistry;
-		credentials: CredentialStore;
+		runtime: EngineModelRuntime;
+		registry: EngineModelRegistry;
+		credentials: EngineCredentialStore;
 		customProviders: CustomProvidersStore;
 	};
 
