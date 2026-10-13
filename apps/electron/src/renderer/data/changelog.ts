@@ -20,6 +20,27 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
 	{
+		version: "2.7.1",
+		date: "2026-10-13",
+		items: [
+			{
+				zh: "运行时底座收敛：会话与界面调用统一经 RuntimePort，默认仍用现有引擎，行为与 2.7.0 一致",
+				en: "Runtime foundation tightened: session and UI calls go through RuntimePort; the default engine is unchanged, so behavior matches 2.7.0",
+				ja: "ランタイム基盤を整理：セッションと UI 呼び出しを RuntimePort 経由に統一。既定エンジンは従来どおりで、挙動は 2.7.0 と同じです",
+			},
+			{
+				zh: "飞书消息队列停止更干净：停止会话时会先取消排队中的任务，再中止进行中的回复",
+				en: "Cleaner Lark stop: aborting a session cancels queued chat tasks first, then stops the in-flight reply",
+				ja: "Lark の停止をより確実に：セッション中止時は待機中のチャットタスクを先に取り消し、進行中の返信を止めます",
+			},
+			{
+				zh: "工程护栏加强：业务层与共享包不得直接依赖引擎实现，降低误改边界的风险",
+				en: "Stronger engineering guards: services and shared packages must not import the engine implementation directly, reducing accidental boundary leaks",
+				ja: "エンジニアリングガードを強化：サービス層と共有パッケージがエンジン実装を直接依存できないようにし、境界の誤変更リスクを下げます",
+			},
+		],
+	},
+	{
 		version: "2.7.0",
 		date: "2026-10-11",
 		items: [
