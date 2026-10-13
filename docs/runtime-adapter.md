@@ -3,7 +3,8 @@
 状态：**Phase 1 + Phase 2 + Phase 3b 已在 main**（Phase 3b = Session* / shared 去 pi，经 PR #11；零用户可见行为变化；版本/changelog 口径仍属 **2.7.x**）· 默认引擎仍为 **pi**  
 叙事目标：**2.8** = 可选执行基座可宣称之时（DshAdapter 真能开、用户可切引擎）——**尚未到**  
 关联：deepseek-harness（dsh）、后续 Claude Code SDK 等  
-权威设计草案来源：仓库外设计稿；本文为落地文档。
+权威设计草案来源：仓库外设计稿；本文为落地文档。  
+**§10** = 换底座 **design / prep only**（缺口清单 · 组合根选型约定 · 映射表含 TBD · 刻意不做）——**无** Dsh 实现、**无** 可切换引擎宣称。
 
 ## 1. 问题
 
@@ -135,10 +136,11 @@ interface RuntimePort {
 1. ~~抽 Port + PiAdapter 包装现网~~ ← Phase 1（已在 main）
 2. ~~abort 缝 + Lark queue abort + registry 对齐~~ ← Phase 2（已在 main）
 3. ~~Session*Service 去直接 `@earendil-works/pi-*` import；messaging 经 RuntimePort.send~~ ← Phase 3b（已在 main，PR #11；仍 2.7.x）
-4. 设置项 `executionEngine` + capabilities 灰显
-5. **DshAdapter MVP**：create / send / stream / abort / 基础 tool-approval → **此时才进入 2.8 产品叙事**
-6. 更深解耦（factory / translator / composition 只经 Port）；AGENTS.md 已先立 RuntimePort-first 长期规则（pi 不变量在默认 PiAdapter 下仍适用）
-7. Claude Code 另 PR
+4. ~~换底座 design / prep（缺口清单 · 选型约定 · 契约测试文档）~~ ← §10（本设计；仍 2.7.x，**不可**对外宣称可切换）
+5. 设置项 `executionEngine` + capabilities 灰显（另 PR）
+6. **DshAdapter MVP**：create / send / stream / abort / 基础 tool-approval → **此时才进入 2.8 产品叙事**
+7. 更深解耦（factory / translator / composition 只经 Port）；AGENTS.md 已先立 RuntimePort-first 长期规则（pi 不变量在默认 PiAdapter 下仍适用）
+8. Claude Code 另 PR
 
 ## 9. 评审检查清单
 
@@ -148,6 +150,165 @@ interface RuntimePort {
 - [x] 默认 pi；Phase 1+2+3b 不宣称已进 2.8
 - [x] Session*Service 无直接 `@earendil-works/pi-*` import（Phase 3b）
 - [x] messaging / abort 生产路径经 RuntimePort；IPC 形状不变
+- [x] §10 换底座 design / prep：完整缺口清单 + 刻意不做 + 默认 pi/回退 + 映射表 TBD + 契约测试（skip）文档化
 - [ ] 事件映射进现有 session UI 事件经 `Port.subscribe`（生产路径未改；后续引擎必须遵守）
 - [ ] dsh/Claude 可插拔而非 fork 一套 session（尚未实现）
 - [ ] changelog / 发版表述「可选执行基座」（**仅当 Dsh 可开 → 2.8**）
+
+---
+
+## 10. 换底座设计（design / prep only · 2.7.x）
+
+> **本文档定位**：长期可维护的引擎基座替换（换底座 / 未来 `DshAdapter`）的**设计与缺口清单**。  
+> **不是**：可切换引擎产品能力、Dsh 实现、版本 bump、或 changelog「可选执行基座」宣称。  
+> **默认引擎仍为 pi**；enablement 另 PR，且仅在第二适配器真能开时才进入 **2.8** 产品叙事。
+
+### 10.1 刻意不做（本设计 PR / 当前阶段边界）
+
+| 刻意不做 | 说明 |
+|----------|------|
+| 不实现 `DshAdapter` / ClaudeCodeAdapter | 无 SDK 依赖、无子进程、无 feature flag 接线 |
+| 不改 IPC 形状 | `look:invoke`、`MainToRendererEvent`、renderer 契约保持原样；不为第二引擎开平行通道 |
+| 不 bump 版本 / 不改 changelog 产品口径 | 仍属 **2.7.x** 文档与契约 prep；禁止写「已支持切换引擎 / 2.8」 |
+| 不热切换 live turn 中的引擎 | 即便日后 enable，也只作用于新会话或显式迁移 |
+| 不统一 pi JSONL 与 dsh SessionEvent 物理格式 | 会话分仓；Look 只持有元数据 → 引擎句柄映射 |
+| 不把 factory / event-translator / composition / extensions 一次去 pi | 仍属后续解耦；本设计只列缺口 |
+| 不宣称 `Port.subscribe` 已是生产事件路径 | 生产 UI 事件仍经 `SessionEventProcessor` |
+| 不引入设置项 `executionEngine` UI | 组合根选型设计可写，产品开关另 PR |
+
+### 10.2 现状缺口清单（相对第二适配器必须实现的面）
+
+以下方法名均来自仓库实码（`runtime-port/`、`session/`、`ipc/`），第二适配器（如 Dsh）要对齐或显式声明不支持。
+
+#### A. `RuntimePort`（`types.ts` → `PiAdapter`）
+
+| 成员 | 现状（pi） | 第二适配器要求 | 缺口 / 备注 |
+|------|------------|----------------|-------------|
+| `engineId` | `"pi"` | 返回真实 id（如 `"dsh"`） | 类型已含 `"dsh" \| "claude-code"`，无实现 |
+| `capabilities` | `PI_ENGINE_CAPABILITIES` 全 `true` | 诚实声明；不支持则 `false` + UI 灰显 | dsh 首期多半 fork/skillsSlash/mcp/computerUse/sessionTree = false |
+| `create(input)` | 需 `engine: PiEngineCreateOptions`（`sessionManager` + 可选 start/factory） | 自有 create；`CreateSessionInput.engine` 不透明 | **缺口**：Port 层 create 仍强耦合 pi SessionManager 载荷 |
+| `resume(ref)` | `resumeSession` → `lifecycle.ensureRuntime` 或已 live 则 no-op | 同语义 resume / ensure | **缺口**：dsh 会话句柄与 Look sessionId 映射未设计落地 |
+| `dispose(ref)` | `disposeSession` → lifecycle / `runtime.dispose` | 释放引擎资源 | OK 作为契约；实现 TBD |
+| `send(ref, message)` | → `session.prompt`（`streamingBehavior` / `onPreflight` / images） | 用户 turn 入引擎 | **TBD**：dsh 是否有 steer/followUp 等价；images 形状 |
+| `abort(ref)` | → `session.abort()` | 取消 in-flight turn | 生产路径已经 Port（Phase 2） |
+| `subscribe(ref, sink)` | 仅挂 pi `session.subscribe`；**不向 sink 投递 LookSessionEvent** | 必须映射为 `LookSessionEvent`（=`MainToRendererEvent`） | **大缺口**：生产事件仍在 `SessionEventProcessor` / event-translator |
+| `resolveToolApproval(ref, decision)` | → Look `permissionService.handleResponse` | Look 守门后回灌；引擎侧沙箱非替代 | **TBD**：dsh tool waterfall 如何挂 Look gate |
+
+#### B. `EngineSessionView`（`look-types.ts` → `PiSessionView`）
+
+Session*Service 经 `ManagedSession.session` 调用，**不经** `RuntimePort`。第二引擎若复用现有 Session* 路径，必须提供同等 view（或把这些能力逐步收进 Port）。
+
+| 类别 | 实码成员 |
+|------|----------|
+| 只读状态 | `sessionId`, `sessionFile`, `model`, `thinkingLevel`, `isStreaming`, `isRetrying`, `isCompacting`, `sessionManager`, `settings` |
+| 模型 / thinking | `setModel`, `setThinkingLevel`, `supportsThinking`, `getAvailableThinkingLevels` |
+| 统计 | `getSessionStats`, `getContextUsage` |
+| Turn / 控制 | `prompt`, `abort`, `compact`, `abortCompaction`, `reload`, `navigateTree` |
+| 元数据 / 工具 | `setSessionName`, `setAutoCompactionEnabled`, `getAllTools`, `getActiveToolNames`, `setActiveToolsByName` |
+| Skills / hooks | `getLoadedSkills`, `runBeforeForkHooks` |
+
+**缺口：** 多数 view 方法仍是 pi 语义（JSONL tree、`/skill:name`、extension hooks）。dsh 需逐项：实现 / `capabilities` 关闭 / 或从 Session* 调用点拆除。
+
+#### C. 会话持久化 ops（`pi-session-ops.ts`）
+
+`createEngineSession` · `openEngineSession` · `openEngineSessionForFork` · `listEngineSessions` · `engineSessionId` / `Cwd` / `Dir` · `createBranchedEngineSession` · `asPiSessionManager`
+
+**缺口：** 名称已是 Engine*，实现 100% `SessionManager`。第二引擎需要平行 ops 或 Port 级 persistence；**禁止**跨引擎 resume 同一物理日志。
+
+#### D. 队列（`pi-queue-ops.ts` + IPC）
+
+- `replayQueue(managed, excludeText?)` · `insertQueuedAsSteer(managed, text)`  
+- IPC：`agent-router` 经上述 helpers；Lark：`LarkChatTaskQueue`（`AbortController` per key）
+
+**缺口：** queue ops 仍吃 `PiRuntimeHolder.runtime.session`（`clearQueue` / `steer` / `followUp` / `prompt`）。dsh 无对等 API 则需 Port 级 queue 面或 capabilities 关闭队列编辑。
+
+#### E. 事件 / 翻译
+
+- 生产：`SessionEventProcessor` + `event-translator` → `session:ui-event` 等 `MainToRendererEvent`
+- Port：`LookSessionEvent = MainToRendererEvent`，但 `PiAdapter.subscribe` **故意不映射**
+
+**缺口：** 第二适配器必须自备 translator → 现有 UI 事件；缺映射则丢弃/debug，**不得**新开 IPC。
+
+#### F. 模型 / thinking / host 句柄
+
+- `thinking.ts`：`getSupportedThinkingLevels` · `clampThinkingLevel`（经 `toPiModel`）
+- `model-host-types.ts`：`EngineModelRuntime` / `EngineModelRegistry` / `EngineCredentialStore`（仍是 pi 类型别名）
+- IPC invoke-context 暴露上述句柄
+
+**缺口：** 模型目录与凭据是否 per-engine、dsh 模型 id 如何映射 `LookModelRef` —— **TBD**。
+
+#### G. 组合根 / Registry（已有缝，未选型）
+
+- 装配：`builder-phases/extensions.ts` 固定 `new PiAdapter(...)` + `portRegistry.setDefault(piAdapter)`
+- `RuntimePortRegistry`：`setDefault` / `getDefault` / `bind` / `unbind` / `get`（fallback default）
+- lifecycle：`onSessionBound` → `bind`；`onSessionDisposed` → `unbind`；`associateRuntimePort`（rebind）
+
+**缺口：** 无 `engineId` 配置读取、无失败回退逻辑、无 per-session 非 pi bind 的生产路径。
+
+### 10.3 组合根引擎选型（设计约定 · 尚未接线）
+
+```
+composition root (extensions.ts 一带)
+        │
+        ├─ 读配置 / flag（尚未存在）→ 目标 engineId
+        ├─ 尝试构造对应 Adapter
+        │     └─ 失败 → 记录原因 → 回退 PiAdapter
+        ├─ portRegistry.setDefault(selectedPort)   // 默认必须能落到 pi
+        └─ b.runtimePort = selectedPort
+```
+
+| 规则 | 约定 |
+|------|------|
+| 默认 | **pi**（`PiAdapter`）；无配置 = 现网行为 |
+| 失败回退 | 任一非 pi 适配器构造/探活失败 → **回退 pi**，不阻断启动 |
+| IPC | **形状不变**；renderer 不因引擎更换改 invoke/event 协议 |
+| 绑定 | 新会话 `bind(sessionId, port)`；未 bind 时 `registry.get` fallback default |
+| 本阶段 | **只文档化**；代码路径继续只构造 `PiAdapter` |
+
+### 10.4 映射表（lifecycle / events / abort / permissions / model / thinking）
+
+| Look 概念 | pi（现网） | dsh（目标示意） | 状态 |
+|-----------|------------|-----------------|------|
+| 创建会话 | `createEngineSession` + factory.create / `RuntimePort.create` | dsh session / SDK create | **TBD** 句柄与 Look sessionId |
+| resume | `openEngineSession` + `ensureRuntime` / `Port.resume` | dsh resume by ref | **TBD**；禁止跨引擎打开 pi JSONL |
+| dispose | lifecycle.disposeRuntime / `Port.dispose` | 释放 dsh 资源 | 契约有；实现 **TBD** |
+| 用户消息 | `Port.send` → `session.prompt` | agent turn / prompt API | **TBD** steer/followUp/images |
+| abort turn | `Port.abort` → `session.abort`；Lark 队列先 abort signal | dsh cancel | 契约清晰；dsh API **TBD** |
+| 流式 / UI 事件 | `SessionEventProcessor` → `session:ui-event`（assistant_* / tool_* / run_status / …） | 映射进同一 `MainToRendererEvent` | **TBD** 事件字典；`Port.subscribe` 生产化未做 |
+| 队列编辑 | `replayQueue` / `insertQueuedAsSteer` | ？ | **TBD** 或 capabilities 关闭 |
+| tool-approval | Look `permissionService` + `Port.resolveToolApproval` | tools waterfall → Look gate | **TBD** 挂接点 |
+| plan / ask 模式 | Look permission orchestrator + `session.abort` / `setModel` | ？ | **TBD**（可能首期不支持） |
+| 模型切换 | `EngineSessionView.setModel(LookModelRef)` | dsh model id？ | **TBD** |
+| thinking | `setThinkingLevel` / `clampThinkingLevel` / `getSupportedThinkingLevels` | ？ | **TBD**；无则 `supportsThinking() === false` |
+| compaction | `compact` / `abortCompaction` | ？ | capabilities.compaction |
+| session tree / fork | `navigateTree` / `createBranchedEngineSession` / before-fork hooks | 通常无 | capabilities.sessionTree / fork = false |
+| skills | `getLoadedSkills` + `/skill:name` | ？ | capabilities.skillsSlash |
+| MCP / CU | pi extensions | ？ | capabilities.mcp / computerUse |
+
+规则：Adapter 只输出已有 Look DTO / `MainToRendererEvent`；**不清空缺口装成已完成**。
+
+### 10.5 验收标准（本设计 + 后续实现 PR）
+
+**文档 / 设计 PR（本 PR）应满足：**
+
+1. 缺口清单覆盖 Port + View + queue + events + ops，且方法名为实码名  
+2. 明确「刻意不做」与「默认 pi + 失败回退 + IPC 不变」  
+3. 映射表含 **TBD**，不假装完整  
+4. 不 bump 版本；不在 changelog / 用户向文档宣称可切换引擎或 2.8 已交付  
+
+**守卫（已有，必须保持绿）：**
+
+- `apps/electron/test/runtime-port-boundary.test.ts`  
+  - `session/services/**`、`ipc/**`、`packages/shared/src/**` 无 `@earendil-works/pi-*` import/re-export  
+  - services / ipc 不触达 `.runtime.session` / `AgentSessionRuntime` / `AgentSession`
+
+**规划中的 Port 契约测试（文档化契约，非红灯）：**
+
+- `apps/electron/test/runtime-port-contract.test.ts`（`describe.skip`）列出 `RuntimePort` 必选成员与 `EngineCapabilities` 键，作为第二适配器 checklist  
+- 实现 Dsh 的 PR 再去掉 skip，并对假适配器做编译期 / 运行期断言  
+
+**第二适配器落地 PR 另需（非本 PR）：**
+
+- 组合根选型 + 失败回退 pi  
+- 事件映射进现有 UI 事件（或证明走共享 translator）  
+- capabilities 诚实；IPC diff 为空  
