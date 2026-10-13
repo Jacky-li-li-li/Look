@@ -99,14 +99,15 @@ describe("production composition root", () => {
 	});
 });
 
-describe("IPC shape is independent of the selected engine", () => {
+describe("IPC registration smoke (real guard: ipc/** grep + InvokeContext has no port)", () => {
 	function ipcShape(port: RuntimePort): string[] {
 		const dispatcher = new InvokeDispatcher();
 		const ctx = makeMockContext();
 		for (const router of Object.values(routers)) {
 			if (typeof router === "function") dispatcher.install(router as Parameters<typeof dispatcher.install>[0], ctx);
 		}
-		void port; // InvokeContext carries no RuntimePort; selection cannot leak into IPC.
+		void port; // Smoke only: port is not wired into routers, so this cannot fail by itself.
+		// The real guards are the ipc/** import grep and the InvokeContext-has-no-port check.
 		return [...dispatcher.registeredTypes].sort();
 	}
 

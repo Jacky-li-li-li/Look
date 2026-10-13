@@ -320,8 +320,9 @@ composition root (extensions.ts 一带)
 | 测试专用假适配器 `test/helpers/fake-runtime-adapter.ts`（`RuntimePort` + `EngineSessionView`，capabilities 全 `false`，不支持即抛错） | ✅ 已完成；**不是** DshAdapter，不进 `src/`、不进生产注册 |
 | `runtime-port-contract.test.ts` 去 skip，对 `PiAdapter`（mock runtime）与假适配器跑同一套契约 | ✅ 已完成 |
 | 组合根选型缝 `selectRuntimeEngine`：默认 pi；未知 / 未注册 / 初始化失败 / engineId 不符 → warn + 回退 pi | ✅ 已完成（生产只注册 pi，行为不变） |
-| IPC 形状与所选引擎无关（invoke 通道集合一致；`InvokeContext` 不含 port；`ipc/**` 不 import 选型/适配器） | ✅ 测试守护 |
+| IPC 形状与所选引擎无关（真正守护：`InvokeContext` 不含 port + `ipc/**` 不 import 选型/适配器；通道集合比对仅为冒烟） | ✅ 测试守护 |
 | `PiAdapter.subscribe` 投递 `LookSessionEvent`（生产事件路径改走 Port） | ⏳ TBD（契约测试中 `it.todo`） |
 | 真实 Dsh：事件字典映射、sessionId↔句柄、steer/followUp/images、tool waterfall → Look gate | ⏳ TBD（无 Dsh 协议，未实现） |
 | `CreateSessionInput.engine` 去 pi 载荷耦合、persistence/queue ops 平行实现、模型/thinking per-engine | ⏳ TBD |
+| 组合根仍单独暴露 `b.piAdapter`：接真 Dsh 前，所有直接用 `piAdapter` 的调用点须改走 `runtimePort` | ⏳ TBD |
 | 设置项 / 产品开关、版本与 changelog 口径 | ❌ 刻意不做（仍 2.7.x） |

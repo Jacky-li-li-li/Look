@@ -149,6 +149,8 @@ export class FakeRuntimeAdapter implements RuntimePort {
 	private seq = 0;
 
 	constructor(options: FakeRuntimeAdapterOptions = {}) {
+		// NOTE: "dsh" here is only a placeholder slot because EngineId has no "fake" member
+		// (we do not widen the production type for tests). This is NOT the real Dsh engine.
 		this.engineId = options.engineId ?? "dsh";
 	}
 
