@@ -245,7 +245,7 @@ Session*Service 经 `ManagedSession.session` 调用，**不经** `RuntimePort`�
 
 **缺口：** 无 `engineId` 配置读取、无失败回退逻辑、无 per-session 非 pi bind 的生产路径。
 
-### 10.3 组合根引擎选型（设计约定 · 尚未接线）
+### 10.3 组合根引擎选型（选型缝已接线 · 生产只注册 pi）
 
 ```
 composition root (extensions.ts 一带)
@@ -263,7 +263,7 @@ composition root (extensions.ts 一带)
 | 失败回退 | 任一非 pi 适配器构造/探活失败 → **回退 pi**，不阻断启动 |
 | IPC | **形状不变**；renderer 不因引擎更换改 invoke/event 协议 |
 | 绑定 | 新会话 `bind(sessionId, port)`；未 bind 时 `registry.get` fallback default |
-| 本阶段 | **只文档化**；代码路径继续只构造 `PiAdapter` |
+| 本阶段 | `runtime-port/engine-selection.ts` 的 `selectRuntimeEngine` 已接入 `extensions.ts`；生产 `factories` **只有 `pi`**，请求其它 id（`LOOK_RUNTIME_ENGINE`，仅开发/测试）一律 warn 后回退 pi；无设置 UI |
 
 ### 10.4 映射表（lifecycle / events / abort / permissions / model / thinking）
 
@@ -312,3 +312,17 @@ composition root (extensions.ts 一带)
 - 组合根选型 + 失败回退 pi  
 - 事件映射进现有 UI 事件（或证明走共享 translator）  
 - capabilities 诚实；IPC diff 为空  
+
+### 10.6 实施状态（`feat/runtime-engine-selection`）
+
+| 项 | 状态 |
+|----|------|
+| 测试专用假适配器 `test/helpers/fake-runtime-adapter.ts`（`RuntimePort` + `EngineSessionView`，capabilities 全 `false`，不支持即抛错） | ✅ 已完成；**不是** DshAdapter，不进 `src/`、不进生产注册 |
+| `runtime-port-contract.test.ts` 去 skip，对 `PiAdapter`（mock runtime）与假适配器跑同一套契约 | ✅ 已完成 |
+| 组合根选型缝 `selectRuntimeEngine`：默认 pi；未知 / 未注册 / 初始化失败 / engineId 不符 → warn + 回退 pi | ✅ 已完成（生产只注册 pi，行为不变） |
+| IPC 形状与所选引擎无关（真正守护：`InvokeContext` 不含 port + `ipc/**` 不 import 选型/适配器；通道集合比对仅为冒烟） | ✅ 测试守护 |
+| `PiAdapter.subscribe` 投递 `LookSessionEvent`（生产事件路径改走 Port） | ⏳ TBD（契约测试中 `it.todo`） |
+| 真实 Dsh：事件字典映射、sessionId↔句柄、steer/followUp/images、tool waterfall → Look gate | ⏳ TBD（无 Dsh 协议，未实现） |
+| `CreateSessionInput.engine` 去 pi 载荷耦合、persistence/queue ops 平行实现、模型/thinking per-engine | ⏳ TBD |
+| 组合根仍单独暴露 `b.piAdapter`：接真 Dsh 前，所有直接用 `piAdapter` 的调用点须改走 `runtimePort` | ⏳ TBD |
+| 设置项 / 产品开关、版本与 changelog 口径 | ❌ 刻意不做（仍 2.7.x） |
