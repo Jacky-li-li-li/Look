@@ -1,12 +1,18 @@
 // ============================================================
 // Session entry projection shared by snapshots, previews and pages.
+//
+// pi adapter boundary: converts pi SessionEntry (seen by services only as the
+// opaque EngineSessionEntry) into the Look-owned LookSessionEntry DTO.
 // ============================================================
 
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { LookSessionEntry } from "@look/shared/types";
+import type { EngineSessionEntry } from "./look-types.js";
 
 /** Keep the IPC payload independent from pi's full SessionEntry shape. */
-export function toLookSessionEntry(entry: SessionEntry): LookSessionEntry {
+export function toLookSessionEntry(engineEntry: EngineSessionEntry): LookSessionEntry {
+	// Entries come from pi SessionManager / pi JSONL, so this narrowing is exact.
+	const entry = engineEntry as SessionEntry;
 	switch (entry.type) {
 		case "message":
 			return { type: "message", id: entry.id, message: entry.message };
@@ -35,6 +41,6 @@ export function toLookSessionEntry(entry: SessionEntry): LookSessionEntry {
 	}
 }
 
-export function toLookSessionEntries(entries: readonly SessionEntry[]): LookSessionEntry[] {
+export function toLookSessionEntries(entries: readonly EngineSessionEntry[]): LookSessionEntry[] {
 	return entries.map(toLookSessionEntry);
 }

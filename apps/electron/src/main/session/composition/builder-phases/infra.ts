@@ -128,6 +128,7 @@ export function buildInfraPhase(
 	});
 	b.sessionNotifier = new SessionNotifier(b.eventBus, {
 		sessionInfoService: b.sessionInfoService,
+		getManagedRuntime: (sessionId) => b.runtimeRegistry.get(sessionId),
 		scopeRegistry: b.scopeRegistry,
 		listProjects: () => host.listProjects(),
 		getActiveProjectId: () => b.req(b.projectService, "projectService").activeId,

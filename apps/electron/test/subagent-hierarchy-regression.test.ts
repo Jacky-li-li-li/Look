@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { SessionCatalog } from "../src/main/session/services/session-catalog.js";
 import { SessionInfoService } from "../src/main/session/services/session-info-service.js";
 import { SubAgentRegistry } from "../src/main/session/subagent-registry.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 function makeLiveChildSession(childId: string) {
 	return {
@@ -54,7 +55,7 @@ describe("subagent hierarchy: runSubSession → agent:created payload", () => {
 
 		// 子会话 runtime 已在运行时注册表中（live）。
 		const childSession = makeLiveChildSession(childId);
-		const managed = { runtime: { session: childSession }, projectId, createdAt: 123 };
+		const managed = withSessionView({ runtime: { session: childSession }, projectId, createdAt: 123 });
 		const runtimeMap = new Map<string, typeof managed>([[childId, managed]]);
 
 		// 与 builder.ts 接线一致：host.runtimeInfo = sessionInfoService.getAgentInfo
@@ -107,7 +108,7 @@ describe("subagent hierarchy: runSubSession → agent:created payload", () => {
 		registry.register(parentId, childId, "Agent：review");
 
 		const childSession = makeLiveChildSession(childId);
-		const managed = { runtime: { session: childSession }, projectId, createdAt: 456 };
+		const managed = withSessionView({ runtime: { session: childSession }, projectId, createdAt: 456 });
 		const runtimeMap = new Map<string, typeof managed>([[childId, managed]]);
 
 		const sessionInfoService = new SessionInfoService({

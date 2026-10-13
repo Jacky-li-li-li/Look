@@ -8,6 +8,7 @@ import {
 import { ensureWorkspaceDir } from "@look/shared/look-storage";
 import type { MainToRendererEvent, SessionSnapshotEnvelope } from "@look/shared/types";
 import type { IPermissionService, IPlanService, ISessionScopeRegistry } from "../../core/contracts.js";
+import { createPiSessionView } from "../../runtime-port/pi-session-view.js";
 import type { AutoTitleService } from "../../services/auto-title.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import { withDeadline } from "../../utils/with-deadline.js";
@@ -367,6 +368,7 @@ export class RuntimeLifecycleCoordinator {
 		await this.bindExtensions(session);
 		const managed: ManagedRuntime = {
 			runtime,
+			session: createPiSessionView(runtime),
 			projectId,
 			cwd: runtime.cwd,
 			createdAt,

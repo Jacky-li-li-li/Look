@@ -13,7 +13,7 @@
 // ============================================================
 
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import type { ToolCallHandler } from "@look/shared/types";
+import type { ToolCallHandler } from "../permissions/tool-call-handler.js";
 import { isApprovalRequiredTool } from "./tool-permission-registry.js";
 
 // ---- Constants ----

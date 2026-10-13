@@ -7,31 +7,41 @@
 // ============================================================
 
 import fs, { existsSync } from "node:fs";
-import { type AgentSessionRuntime, SessionManager, type SessionStartEvent } from "@earendil-works/pi-coding-agent";
 import type {
 	ForkedSessionResult,
 	NavigateTreeResult,
 	SessionHistoryPage,
 	SessionSnapshotEnvelope,
 } from "@look/shared/types";
+import type {
+	EngineSessionHandle,
+	EngineSessionManagerView,
+	EngineSessionStartEvent,
+} from "../../runtime-port/look-types.js";
+import {
+	createBranchedEngineSession,
+	engineSessionCwd,
+	engineSessionId,
+	openEngineSessionForFork,
+} from "../../runtime-port/pi-session-ops.js";
+import { toLookSessionEntries } from "../../runtime-port/session-entry-projection.js";
 import { MAX_NAME_LENGTH } from "../constants.js";
-import type { ManagedRuntime } from "../runtime/runtime-registry.js";
-import { toLookSessionEntries } from "./session-entry-projection.js";
+import type { ManagedSession } from "../runtime/runtime-registry.js";
 import { DEFAULT_HISTORY_PAGE_SIZE } from "./session-history-reader.js";
 
 export interface SessionHistoryHost {
-	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
+	ensureRuntime(sessionId: string): Promise<ManagedSession>;
 	createManagedRuntime(
 		cwd: string,
-		sessionManager: SessionManager,
+		sessionManager: EngineSessionHandle,
 		projectId: string,
 		createdAt: number,
-		sessionStartEvent: SessionStartEvent,
-	): Promise<ManagedRuntime>;
+		sessionStartEvent: EngineSessionStartEvent,
+	): Promise<ManagedSession>;
 	withSessionLock<T>(sessionId: string, task: () => Promise<T>): Promise<T>;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
-	getRuntime(sessionId: string): AgentSessionRuntime | undefined;
-	getSessionManager(sessionId: string): SessionManager | undefined;
+	getRuntime(sessionId: string): object | undefined;
+	getSessionManager(sessionId: string): EngineSessionManagerView | undefined;
 	refreshProjectSessions(projectId: string): Promise<unknown>;
 	activateForkedSession(projectId: string, sessionId: string): void;
 	markSessionDefaultName(sessionId: string): void;
@@ -46,7 +56,7 @@ export class SessionHistoryService {
 		entryId: string,
 		opts?: { summarize?: boolean; customInstructions?: string; label?: string },
 	): Promise<NavigateTreeResult> {
-		const session = (await this.host.ensureRuntime(sessionId)).runtime.session;
+		const session = (await this.host.ensureRuntime(sessionId)).session;
 		const result = await session.navigateTree(entryId, opts);
 		if (!result.cancelled) this.host.emitSessionState(sessionId, "navigate");
 		return result;
@@ -59,7 +69,7 @@ export class SessionHistoryService {
 		limit = DEFAULT_HISTORY_PAGE_SIZE,
 	): Promise<SessionHistoryPage> {
 		const managed = await this.host.ensureRuntime(sessionId);
-		const manager = managed.runtime.session.sessionManager;
+		const manager = managed.session.sessionManager;
 		const branch = manager.getBranch();
 		const leafId = manager.getLeafId();
 		const currentRevision = leafId ?? branch.at(-1)?.id ?? "root";
@@ -90,7 +100,7 @@ export class SessionHistoryService {
 	async fork(sessionId: string, entryId: string, opts?: { name?: string }): Promise<ForkedSessionResult> {
 		return this.host.withSessionLock(sessionId, async () => {
 			const managed = await this.host.ensureRuntime(sessionId);
-			const sourceSession = managed.runtime.session;
+			const sourceSession = managed.session;
 			if (sourceSession.isStreaming || sourceSession.isRetrying || sourceSession.isCompacting) {
 				throw new Error("Stop the session before forking");
 			}
@@ -98,27 +108,23 @@ export class SessionHistoryService {
 			if (!sourceFile) throw new Error("Source session not persisted");
 			if (!sourceSession.sessionManager.getEntry(entryId)) throw new Error("Invalid entry ID for forking");
 
-			const runner = sourceSession.extensionRunner;
-			if (runner.hasHandlers("session_before_fork")) {
-				const hookResult = await runner.emit({ type: "session_before_fork", entryId, position: "at" as const });
-				if (hookResult?.cancel === true) throw new Error("Fork was cancelled by an extension");
-			}
+			if (await sourceSession.runBeforeForkHooks(entryId)) throw new Error("Fork was cancelled by an extension");
 
-			const forkManager = SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir());
+			const forkManager = openEngineSessionForFork(sourceFile, sourceSession.sessionManager.getSessionDir());
 			let forkedPath: string | undefined;
 			let forkedSessionId: string | undefined;
 			try {
-				forkedPath = forkManager.createBranchedSession(entryId);
+				forkedPath = createBranchedEngineSession(forkManager, entryId);
 				if (!forkedPath) throw new Error("Failed to create forked session");
-				forkedSessionId = forkManager.getSessionId();
+				forkedSessionId = engineSessionId(forkManager);
 				const forkedManaged = await this.host.createManagedRuntime(
-					forkManager.getCwd(),
+					engineSessionCwd(forkManager),
 					forkManager,
 					managed.projectId,
 					Date.now(),
 					{ type: "session_start", reason: "fork", previousSessionFile: sourceFile },
 				);
-				const session = forkedManaged.runtime.session;
+				const session = forkedManaged.session;
 				if (opts?.name?.trim()) session.setSessionName(opts.name.trim().slice(0, MAX_NAME_LENGTH));
 				else this.host.markSessionDefaultName(session.sessionId);
 				if (!session.sessionFile) throw new Error("Forked session was not persisted");

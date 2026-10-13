@@ -107,7 +107,6 @@ export type {
 	TaskRun,
 	TaskRunSource,
 	ThinkingLevel,
-	ToolCallHandler,
 	UILanguage,
 	UserProfile,
 	UserSettings,

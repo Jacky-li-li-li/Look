@@ -1,9 +1,9 @@
 // ============================================================
 // PiAdapter — RuntimePort implementation wrapping the existing pi path
 //
-// Phase 1: thin delegate to SessionRuntimeFactory + live AgentSessionRuntime.
-// Production create/bind/dispose/event wiring still owns the lifecycle
-// coordinator; this Port is the composition seam for future engines.
+// Phase 3b: production send/abort (and create when engine payload is supplied)
+// go through this Port. Lifecycle coordinator still owns bind/event wiring;
+// Session*Service no longer imports @earendil-works/pi-* directly.
 // ============================================================
 
 import type { ImageContent } from "@earendil-works/pi-ai";
@@ -102,6 +102,8 @@ export class PiAdapter implements RuntimePort {
 		await session.prompt(message.text, {
 			images: message.images as ImageContent[] | undefined,
 			source: "rpc",
+			streamingBehavior: message.streamingBehavior,
+			preflightResult: message.onPreflight,
 		});
 	}
 

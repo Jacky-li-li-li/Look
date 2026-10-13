@@ -3,6 +3,7 @@ import type { UserSettings } from "@look/shared/types";
 import { describe, expect, it, vi } from "vitest";
 import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
 import { SessionSettingsService } from "../src/main/session/services/session-settings-service.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 const SETTINGS: UserSettings = {
 	language: "en",
@@ -27,14 +28,14 @@ const SETTINGS: UserSettings = {
 
 function makeService() {
 	const setAutoCompactionEnabled = vi.fn();
-	const runtime = {
+	const runtime = withSessionView({
 		runtime: { session: { setAutoCompactionEnabled } } as unknown as AgentSessionRuntime,
 		projectId: "project-1",
 		cwd: "/project",
 		createdAt: 1,
 		binding: { sessionId: "session-1", sessionManager: {} as SessionManager },
 		unsubscribe: vi.fn(),
-	} satisfies ManagedRuntime;
+	}) as ManagedRuntime;
 	const userSettings = {
 		getAll: vi.fn(() => structuredClone(SETTINGS)),
 		update: vi.fn(async (partial: Partial<UserSettings>) => ({ ...SETTINGS, ...partial })),

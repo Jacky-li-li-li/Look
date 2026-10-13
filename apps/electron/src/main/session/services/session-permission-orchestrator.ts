@@ -15,14 +15,14 @@
 //      and restore the global default model around every plan switch.
 // ============================================================
 
-import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "@look/shared/types";
 import type { IEventBus, IPermissionService, IPlanService } from "../../core/contracts.js";
+import type { ModelLookup } from "../../runtime-port/look-types.js";
 import type { UserSettingsStore } from "../../settings/store.js";
-import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { ManagedSession } from "../runtime/runtime-registry.js";
 
 export interface SessionPermissionOrchestratorHost {
-	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
+	ensureRuntime(sessionId: string): Promise<ManagedSession>;
 	/** Push a fresh agent snapshot so the renderer reflects the model switch immediately. */
 	emitSessionUpdated(sessionId: string): void;
 	/** Whether the session still exists in the catalog (false while being deleted). */
@@ -35,7 +35,7 @@ export interface SessionPermissionOrchestratorDependencies {
 	permissionService: IPermissionService;
 	planService: IPlanService;
 	userSettings: UserSettingsStore;
-	modelRegistry: Pick<ModelRegistry, "find">;
+	modelRegistry: Pick<ModelLookup, "find">;
 }
 
 /** Everything needed to restore the pre-plan state of one session. */
@@ -128,8 +128,8 @@ export class SessionPermissionOrchestrator {
 			}
 		}
 
-		if (!options.internal && managed.runtime.session.isStreaming && (previousMode === "plan" || mode === "plan")) {
-			await managed.runtime.session.abort();
+		if (!options.internal && managed.session.isStreaming && (previousMode === "plan" || mode === "plan")) {
+			await managed.session.abort();
 		}
 
 		// Broadcast mode change so the renderer can sync permissionModeAtomFamily.
@@ -138,7 +138,7 @@ export class SessionPermissionOrchestrator {
 
 	// ── Plan model helpers ──
 
-	private currentModelKey(session: ManagedRuntime["runtime"]["session"]): string | null {
+	private currentModelKey(session: ManagedSession["session"]): string | null {
 		return session.model ? `${session.model.provider}/${session.model.id}` : null;
 	}
 
@@ -151,7 +151,7 @@ export class SessionPermissionOrchestrator {
 		}
 	}
 
-	private async applyPlanModel(sessionId: string, managed: ManagedRuntime): Promise<void> {
+	private async applyPlanModel(sessionId: string, managed: ManagedSession): Promise<void> {
 		const settings = this.deps.userSettings.getAll();
 		if (!settings.planModel) return;
 		const [provider, ...parts] = settings.planModel.split("/");
@@ -168,12 +168,12 @@ export class SessionPermissionOrchestrator {
 		// The restore point is saved synchronously before the async switch so an
 		// exit that runs right after (e.g. a queued applyMode("ask")) always sees it.
 		this.prePlanModel.set(sessionId, {
-			modelKey: this.currentModelKey(managed.runtime.session),
+			modelKey: this.currentModelKey(managed.session),
 			defaultModelKey: settings.preferredModel,
 			planModelKey: settings.planModel,
 		});
 		try {
-			await managed.runtime.session.setModel(planModel);
+			await managed.session.setModel(planModel);
 			// SDK setModel persists setDefaultModelAndProvider as a side effect;
 			// a temporary Plan switch must not pollute the user's global default.
 			await this.restoreDefaultModel(settings.preferredModel);
@@ -187,14 +187,14 @@ export class SessionPermissionOrchestrator {
 		this.deps.host.emitSessionUpdated(sessionId);
 	}
 
-	private async restorePlanModel(sessionId: string, managed: ManagedRuntime): Promise<void> {
+	private async restorePlanModel(sessionId: string, managed: ManagedSession): Promise<void> {
 		const restore = this.prePlanModel.get(sessionId);
 		if (!restore) return;
 		// Global default model is always restored to the pre-plan value.
 		await this.restoreDefaultModel(restore.defaultModelKey);
 		// Session model is restored only when the user did not manually switch
 		// models while in Plan mode (current model is still the planModel).
-		if (this.currentModelKey(managed.runtime.session) !== restore.planModelKey) {
+		if (this.currentModelKey(managed.session) !== restore.planModelKey) {
 			this.prePlanModel.delete(sessionId);
 			return;
 		}
@@ -214,7 +214,7 @@ export class SessionPermissionOrchestrator {
 			return;
 		}
 		try {
-			await managed.runtime.session.setModel(previousModel);
+			await managed.session.setModel(previousModel);
 			// Only remove the restore point after a successful restore so a
 			// transient failure can be retried on a later exit.
 			this.prePlanModel.delete(sessionId);

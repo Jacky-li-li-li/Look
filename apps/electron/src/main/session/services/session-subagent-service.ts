@@ -8,8 +8,6 @@
 // ============================================================
 
 import { randomUUID } from "node:crypto";
-import type { AgentSession, ModelRegistry, SessionStartEvent } from "@earendil-works/pi-coding-agent";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { AgentInfo, MainToRendererEvent } from "@look/shared/types";
 import type { AgentDefinitionService } from "../../agents/definition-service.js";
@@ -17,24 +15,26 @@ import type { IPermissionService, IPlanService, ISessionScope } from "../../core
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../../extensions/subagent/types.js";
 import { SUBAGENT_TOOL_NAMES } from "../../extensions/subagent/types.js";
 import type { ProjectService } from "../../projects/project-service.js";
+import type { EngineSessionHandle, EngineSessionStartEvent, ModelLookup } from "../../runtime-port/look-types.js";
+import { createEngineSession } from "../../runtime-port/pi-session-ops.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import { waitForPromptAccepted } from "../../utils/prompt-accepted.js";
-import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { ManagedSession } from "../runtime/runtime-registry.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
 import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
 
 export interface SessionSubagentHost {
 	createManagedRuntime(
 		cwd: string,
-		sessionManager: SessionManager,
+		sessionManager: EngineSessionHandle,
 		projectId: string,
 		createdAt: number,
-		sessionStartEvent?: SessionStartEvent,
+		sessionStartEvent?: EngineSessionStartEvent,
 		options?: { appendSystemPrompt?: string[] },
-	): Promise<ManagedRuntime>;
+	): Promise<ManagedSession>;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
-	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
+	getManagedRuntime(sessionId: string): ManagedSession | undefined;
 	reloadSession(sessionId: string): Promise<void>;
 	listRuntimeIds(): IterableIterator<string>;
 	getProjectInfo(projectId: string): ReturnType<ProjectService["getProjectInfo"]>;
@@ -47,7 +47,7 @@ export interface SessionSubagentHost {
 
 export interface SessionSubagentServiceDependencies {
 	host: SessionSubagentHost;
-	modelRegistry: Pick<ModelRegistry, "find">;
+	modelRegistry: Pick<ModelLookup, "find">;
 	subAgentRegistry: SubAgentRegistry;
 	subAgentRuntimeService: SubAgentRuntimeService;
 	permissionService: IPermissionService;
@@ -103,7 +103,7 @@ export class SessionSubagentService {
 		this.enabledBySession.set(sessionId, enabled);
 		const managed = this.deps.host.getManagedRuntime(sessionId);
 		if (!managed) return;
-		const session = managed.runtime.session;
+		const session = managed.session;
 		if (this.deps.permissionService.getMode(sessionId) === "plan") {
 			this.deps.planService.syncToolState(sessionId);
 			return;
@@ -124,7 +124,13 @@ export class SessionSubagentService {
 	 * Called once when a runtime is bound. Applies per-session override if one
 	 * exists, otherwise falls back to the global default.
 	 */
-	applyDefaultOnBind(sessionId: string, session: AgentSession): void {
+	applyDefaultOnBind(
+		sessionId: string,
+		session: {
+			getActiveToolNames(): string[];
+			setActiveToolsByName(names: string[]): void;
+		},
+	): void {
 		const perSession = this.enabledBySession.get(sessionId);
 		const enabled = perSession ?? this.defaultEnabled;
 		if (!enabled) {
@@ -215,7 +221,7 @@ export class SessionSubagentService {
 		const cwd = parentManaged.cwd;
 
 		const subsessionDir = ensureWorkspaceSubsessionsDir(projectId);
-		const sessionManager = SessionManager.create(cwd, subsessionDir);
+		const sessionManager = createEngineSession(cwd, subsessionDir);
 		const managed = await this.deps.host.createManagedRuntime(
 			cwd,
 			sessionManager,
@@ -224,7 +230,7 @@ export class SessionSubagentService {
 			undefined,
 			agent.systemPrompt.trim() ? { appendSystemPrompt: [agent.systemPrompt] } : undefined,
 		);
-		const session = managed.runtime.session;
+		const session = managed.session;
 		const childSessionId = session.sessionId;
 
 		// delegation entry 提升到 try 外：初始化中途抛错（如 runtimeInfo missing）时，
@@ -283,7 +289,7 @@ export class SessionSubagentService {
 				// 设计意图:子会话继承父会话当前模型(含用户中途切换)。
 				// agent.model 未显式配置时,SDK 会按 settings 默认解析(不跟随父会话),
 				// 这里显式继承;父会话也无模型则保持现状(bindRuntime 已有 ensureSessionModel 兜底)。
-				const parentModel = parentManaged.runtime.session.model;
+				const parentModel = parentManaged.session.model;
 				if (parentModel) {
 					try {
 						await session.setModel(parentModel);

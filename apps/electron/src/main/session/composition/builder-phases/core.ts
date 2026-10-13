@@ -3,6 +3,7 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { AgentDefinitionService } from "../../../agents/definition-service.js";
 import { getAvailableModels } from "../../../models/model-queries.js";
 import { PlanService } from "../../../permissions/plan.js";
+import { asPiSessionManager } from "../../../runtime-port/pi-session-ops.js";
 import { MAX_NAME_LENGTH } from "../../constants.js";
 import { RuntimeLifecycleCoordinator } from "../../runtime/runtime-lifecycle-coordinator.js";
 import { ensureSessionModel } from "../../services/session-lifecycle-service.js";
@@ -33,7 +34,7 @@ export function buildCorePhase(b: CompositionBuilder): void {
 			createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
 				b
 					.req(b.runtimeLifecycle, "runtimeLifecycle")
-					.createManagedRuntime(cwd, manager, projectId, createdAt, startEvent, options),
+					.createManagedRuntime(cwd, asPiSessionManager(manager), projectId, createdAt, startEvent, options),
 			disposeRuntime: (sessionId, abort) =>
 				b.req(b.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
 			getManagedRuntime: (sessionId) => b.runtimeRegistry.get(sessionId),

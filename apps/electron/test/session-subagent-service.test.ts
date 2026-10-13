@@ -14,6 +14,7 @@ import type { SessionSubagentHost } from "../src/main/session/services/session-s
 import { SessionSubagentService } from "../src/main/session/services/session-subagent-service.js";
 import type { SubAgentRegistry } from "../src/main/session/subagent-registry.js";
 import type { UserSettingsStore } from "../src/main/settings/store.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 function makeSession(sessionId: string, activeTools: string[] = [], allTools: string[] = []): AgentSession {
 	return {
@@ -33,13 +34,13 @@ function makeSession(sessionId: string, activeTools: string[] = [], allTools: st
 }
 
 function makeManagedRuntime(session: AgentSession, projectId = "p1"): ManagedRuntime {
-	return {
+	return withSessionView({
 		runtime: { session, cwd: "/tmp" },
 		projectId,
 		cwd: "/tmp",
 		createdAt: 1,
 		unsubscribe: () => {},
-	} as unknown as ManagedRuntime;
+	}) as unknown as ManagedRuntime;
 }
 
 function makeHost(overrides: Partial<SessionSubagentHost> = {}): SessionSubagentHost {

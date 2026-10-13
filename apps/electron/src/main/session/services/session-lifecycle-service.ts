@@ -7,19 +7,19 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir, getWorkspaceSessionsDir } from "@look/shared/look-storage";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
 import type { AgentInfo, ImSessionProvider, MainToRendererEvent, SessionSnapshotEnvelope } from "@look/shared/types";
 import type { IPermissionService, IPlanService } from "../../core/contracts.js";
 import type { ProjectService } from "../../projects/project-service.js";
 import type { RuntimePort } from "../../runtime-port/index.js";
+import type { EngineSessionHandle, EngineSessionStartEvent, ModelLookup } from "../../runtime-port/look-types.js";
+import { createEngineSession, engineSessionId } from "../../runtime-port/pi-session-ops.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import { withDeadline } from "../../utils/with-deadline.js";
 import { MAX_NAME_LENGTH, SESSION_INIT_TIMEOUT_MS } from "../constants.js";
-import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ManagedSession, ManagedSessionRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { AttachmentService } from "./attachment-service.js";
 import { selectSdkFallbackModel } from "./expected-session-defaults.js";
@@ -40,12 +40,12 @@ type AvailableModel = {
 export interface SessionLifecycleHost {
 	createManagedRuntime(
 		cwd: string,
-		sessionManager: SessionManager,
+		sessionManager: EngineSessionHandle,
 		projectId: string,
 		createdAt: number,
-		sessionStartEvent?: import("@earendil-works/pi-coding-agent").SessionStartEvent,
+		sessionStartEvent?: EngineSessionStartEvent,
 		options?: { appendSystemPrompt?: string[] },
-	): Promise<ManagedRuntime>;
+	): Promise<ManagedSession>;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
 	refreshProjectSessions(projectId: string): Promise<StoredSession[]>;
 	getStoredSession(sessionId: string): StoredSession | undefined;
@@ -64,27 +64,27 @@ export interface SessionLifecycleServiceDependencies {
 	projectService: ProjectService;
 	/** 未落盘会话的草稿索引（创建即持久、重启可恢复）。 */
 	draftIndex: SessionDraftIndex;
-	runtimeRegistry: Pick<RuntimeRegistry, "get">;
+	runtimeRegistry: Pick<ManagedSessionRegistry, "get">;
 	scopeRegistry: Pick<SessionScopeRegistry, "get">;
 	subAgentRuntimeService: SubAgentRuntimeService;
 	sessionInfoService: SessionInfoService;
 	permissionService: IPermissionService;
 	planService: IPlanService;
 	userSettings: UserSettingsStore;
-	modelRegistry: Pick<ModelRegistry, "find">;
+	modelRegistry: Pick<ModelLookup, "find">;
 	/** 粘贴附件服务：会话销毁时级联清理附件目录。 */
 	attachments: AttachmentService;
 	getAvailableModelsSync(): AvailableModel[];
 	/**
 	 * Phase 2: when set, session abort routes through RuntimePort.abort
-	 * (same behavior as managed.runtime.session.abort via PiAdapter).
+	 * (same behavior as managed.session.abort via PiAdapter).
 	 */
 	runtimePort?: Pick<RuntimePort, "abort" | "engineId">;
 }
 
 export interface EnsureSessionModelDeps {
 	getAvailableModelsSync(): AvailableModel[];
-	modelRegistry: Pick<ModelRegistry, "find">;
+	modelRegistry: Pick<ModelLookup, "find">;
 	userSettings: Pick<UserSettingsStore, "getAll" | "update">;
 }
 
@@ -150,7 +150,7 @@ export class SessionLifecycleService {
 	 *
 	 * 此前整条链路（串行资源锁 + 扩展/包/agent 目录扫描 + bind）都在 IPC
 	 * 返回前 await，慢速 MCP / 缺包 npm install / 排队中的其他初始化会让
-	 * 「新建会话」点击后长时间无响应。现在 SessionManager.create（同步、
+	 * 「新建会话」点击后长时间无响应。现在 createEngineSession（同步、
 	 * 不落盘）+ 草稿索引落盘后马上发出与正式行一致的草稿行（模型/思考
 	 * 同步解析）并返回；runtime 就绪后只补发 session:snapshot，不再补发
 	 * agent:created——渲染端零跳变。初始化期间渲染端的发送/激活经
@@ -165,8 +165,8 @@ export class SessionLifecycleService {
 		const project = this.deps.projectService.getProjectInfo(projectId);
 		if (!project?.valid) throw new Error(`Project path does not exist: ${project?.cwd ?? projectId}`);
 
-		const sessionManager = SessionManager.create(project.cwd, ensureWorkspaceDir(projectId));
-		const sessionId = sessionManager.getSessionId();
+		const sessionManager = createEngineSession(project.cwd, ensureWorkspaceDir(projectId));
+		const sessionId = engineSessionId(sessionManager);
 		const name = (input.name?.trim() || DEFAULT_SESSION_NAME).slice(0, MAX_NAME_LENGTH);
 		// 草稿投影内部解析预期默认值（模型/思考与 pi findInitialModel 同序），
 		// 第一帧即与正式行一致。
@@ -213,7 +213,7 @@ export class SessionLifecycleService {
 
 	private async initializeCreatedSession(args: {
 		cwd: string;
-		sessionManager: SessionManager;
+		sessionManager: EngineSessionHandle;
 		sessionId: string;
 		projectId: string;
 		name: string;
@@ -226,7 +226,7 @@ export class SessionLifecycleService {
 				SESSION_INIT_TIMEOUT_MS,
 				`Session ${sessionId} initialization timed out after ${SESSION_INIT_TIMEOUT_MS / 1000}s`,
 			);
-			const session = managed.runtime.session;
+			const session = managed.session;
 			session.setSessionName(name);
 
 			const scope = this.deps.scopeRegistry.get(sessionId);
@@ -366,6 +366,6 @@ export class SessionLifecycleService {
 			await port.abort({ engineId: port.engineId, sessionId });
 			return;
 		}
-		await managed.runtime.session.abort();
+		await managed.session.abort();
 	}
 }

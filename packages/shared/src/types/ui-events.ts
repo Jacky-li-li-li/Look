@@ -1,4 +1,4 @@
-import type { ImageContent } from "@earendil-works/pi-ai";
+import type { LookImageContent as ImageContent } from "./dto/engine.js";
 // ============================================================
 // LookUiEvent — 离散 UI 事件翻译层
 //

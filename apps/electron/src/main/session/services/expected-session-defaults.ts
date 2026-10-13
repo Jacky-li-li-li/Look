@@ -14,9 +14,9 @@
 // 越级值用 clampThinkingLevel 就近收敛。
 // ============================================================
 
-import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
-import type { ModelRegistry, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@look/shared/types";
+import type { GlobalSettingsReader, ModelLookup } from "../../runtime-port/look-types.js";
+import { clampThinkingLevel, getSupportedThinkingLevels } from "../../runtime-port/thinking.js";
 
 /** 新建会话草稿行的「预期」模型/思考投影（runtime 绑定前的占位真值）。 */
 export interface ExpectedSessionDefaults {
@@ -27,14 +27,14 @@ export interface ExpectedSessionDefaults {
 }
 
 export interface ExpectedSessionDefaultsDeps {
-	globalSettingsManager: Pick<SettingsManager, "getGlobalSettings">;
+	globalSettingsManager: GlobalSettingsReader;
 	/** Optional project-scoped defaults from the SettingsManager used by runtime creation. */
 	getDefaultSettings?: () => {
 		defaultProvider?: string;
 		defaultModel?: string;
 		defaultThinkingLevel?: string;
 	};
-	modelRegistry: Pick<ModelRegistry, "find" | "hasConfiguredAuth">;
+	modelRegistry: Required<Pick<ModelLookup, "find" | "hasConfiguredAuth">>;
 	/** 可用模型来源（builder 传 getAvailableModels(modelRegistry)）。 */
 	getAvailableModels(): Array<{ provider: string; id: string }>;
 }
@@ -123,14 +123,14 @@ export function resolveExpectedSessionDefaults(deps: ExpectedSessionDefaultsDeps
 	}
 	if (!resolved) return EMPTY_DEFAULTS;
 
-	const levels = getSupportedThinkingLevels(resolved) as ThinkingLevel[];
+	const levels = getSupportedThinkingLevels(resolved);
 	const rawLevel =
 		resolved === saved && typeof sdk.defaultThinkingLevel === "string"
 			? (sdk.defaultThinkingLevel as ThinkingLevel)
 			: "medium";
 	return {
 		model: `${resolved.provider}/${resolved.id}`,
-		thinkingLevel: clampThinkingLevel(resolved, rawLevel) as ThinkingLevel,
+		thinkingLevel: clampThinkingLevel(resolved, rawLevel),
 		modelSupportsThinking: !!resolved.reasoning,
 		availableThinkingLevels: levels,
 	};

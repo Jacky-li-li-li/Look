@@ -1,6 +1,7 @@
 // CompositionBuilder phase
 import { getAvailableModels } from "../../../models/model-queries.js";
 import { ProjectDeletionService } from "../../../projects/project-deletion-service.js";
+import { asPiSessionManager } from "../../../runtime-port/pi-session-ops.js";
 import { MAX_NAME_LENGTH } from "../../constants.js";
 import { SessionEventEffects } from "../../events/session-event-effects.js";
 import { AttachmentService } from "../../services/attachment-service.js";
@@ -22,7 +23,7 @@ export function buildUIPhase(b: CompositionBuilder): void {
 		createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent) =>
 			b
 				.req(b.runtimeLifecycle, "runtimeLifecycle")
-				.createManagedRuntime(cwd, manager, projectId, createdAt, startEvent),
+				.createManagedRuntime(cwd, asPiSessionManager(manager), projectId, createdAt, startEvent),
 		withSessionLock: (sessionId, task) => b.runtimeRegistry.withExclusive(sessionId, task),
 		disposeRuntime: (sessionId, abort) =>
 			b.req(b.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
@@ -75,7 +76,7 @@ export function buildUIPhase(b: CompositionBuilder): void {
 			createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
 				b
 					.req(b.runtimeLifecycle, "runtimeLifecycle")
-					.createManagedRuntime(cwd, manager, projectId, createdAt, startEvent, options),
+					.createManagedRuntime(cwd, asPiSessionManager(manager), projectId, createdAt, startEvent, options),
 			disposeRuntime: (sessionId, abort) =>
 				b.req(b.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
 			refreshProjectSessions: (projectId) => b.refreshProjectSessions(projectId),
@@ -132,6 +133,8 @@ export function buildUIPhase(b: CompositionBuilder): void {
 		},
 		emitError: (error, sessionId) => b.req(b.sessionNotifier, "sessionNotifier").emitError(error, sessionId),
 		attachments: b.req(b.attachmentService, "attachmentService"),
+		// Phase 3b: prompt transport through RuntimePort (PiAdapter → session.prompt).
+		runtimePort: b.req(b.runtimePort, "runtimePort"),
 	});
 
 	b.sessionPermissionOrchestrator = new SessionPermissionOrchestrator({

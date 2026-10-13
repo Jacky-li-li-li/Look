@@ -5,6 +5,7 @@ import {
 	type SessionControlHost,
 	SessionControlService,
 } from "../src/main/session/services/session-control-service.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 const scopeRegistry: Pick<ISessionScopeRegistry, "get"> = { get: () => undefined };
 
@@ -42,7 +43,7 @@ describe("SessionControlService", () => {
 	it("sets a resolved model and emits exactly one agent update", async () => {
 		const setModel = vi.fn().mockResolvedValue(undefined);
 		const emitSessionUpdated = vi.fn();
-		const runtime = { runtime: { session: { setModel } } } as unknown as ManagedRuntime;
+		const runtime = withSessionView({ runtime: { session: { setModel } } }) as unknown as ManagedRuntime;
 		const model = { provider: "openai", id: "gpt-test" };
 		const service = new SessionControlService(
 			createHost({ getManagedRuntime: () => runtime, emitSessionUpdated }),
@@ -106,7 +107,7 @@ describe("SessionControlService", () => {
 		const updateStoredName = vi.fn(() => ({ projectId: "project-a" }));
 		const emitSessionUpdated = vi.fn();
 		const emitSessionList = vi.fn();
-		const runtime = { runtime: { session: { setSessionName } } } as unknown as ManagedRuntime;
+		const runtime = withSessionView({ runtime: { session: { setSessionName } } }) as unknown as ManagedRuntime;
 		const service = new SessionControlService(
 			createHost({
 				getManagedRuntime: () => runtime,
@@ -131,7 +132,9 @@ describe("SessionControlService", () => {
 
 	it("does not compact a streaming session", async () => {
 		const compact = vi.fn();
-		const runtime = { runtime: { session: { isStreaming: true, compact } } } as unknown as ManagedRuntime;
+		const runtime = withSessionView({
+			runtime: { session: { isStreaming: true, compact } },
+		}) as unknown as ManagedRuntime;
 		const service = new SessionControlService(
 			createHost({ ensureRuntime: async () => runtime }),
 			{

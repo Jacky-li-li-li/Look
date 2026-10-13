@@ -7,11 +7,10 @@
 // ============================================================
 
 import { existsSync } from "node:fs";
-import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_SESSION_NAME } from "@look/shared/session-defaults";
-import type { AgentInfo, ImSessionProvider, ProjectInfo, ThinkingLevel } from "@look/shared/types";
+import type { AgentInfo, ImSessionProvider, ProjectInfo } from "@look/shared/types";
 import { loadBindings } from "../../im/im-storage.js";
-import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ManagedSession, ManagedSessionRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
 import type { ExpectedSessionDefaults } from "./expected-session-defaults.js";
@@ -19,7 +18,7 @@ import type { SessionCatalog, StoredSession } from "./session-catalog.js";
 import type { SessionDraftIndex } from "./session-draft-index.js";
 
 export interface SessionInfoServiceDependencies {
-	runtimeRegistry: Pick<RuntimeRegistry, "get" | "entries">;
+	runtimeRegistry: Pick<ManagedSessionRegistry, "get" | "entries">;
 	sessionCatalog: Pick<SessionCatalog, "listByProject" | "get">;
 	/** 未落盘草稿会话索引（列表合并与 getAgentInfo 兜底）。 */
 	draftIndex: SessionDraftIndex;
@@ -62,7 +61,7 @@ export class SessionInfoService {
 		return this.imBindingsCache;
 	}
 
-	getManagedRuntime(sessionId: string): ManagedRuntime | undefined {
+	getManagedRuntime(sessionId: string): ManagedSession | undefined {
 		return this.deps.runtimeRegistry.get(sessionId);
 	}
 
@@ -185,9 +184,9 @@ export class SessionInfoService {
 
 	private runtimeInfo(
 		sessionId: string,
-		managed: { runtime: AgentSessionRuntime; projectId: string; createdAt: number },
+		managed: Pick<ManagedSession, "session" | "projectId" | "createdAt">,
 	): AgentInfo {
-		const session = managed.runtime.session;
+		const session = managed.session;
 		const stats = session.getSessionStats();
 		const model = session.model;
 		// 对齐 Proma：lastActivityAt 只反映内容落盘时间（文件 mtime）。
@@ -200,9 +199,9 @@ export class SessionInfoService {
 			name: (session.sessionManager.getSessionName() || DEFAULT_SESSION_NAME).slice(0, this.deps.maxNameLength),
 			imProvider: this.getImProvider(sessionId),
 			model: model ? `${model.provider}/${model.id}` : "",
-			thinkingLevel: session.thinkingLevel as ThinkingLevel,
+			thinkingLevel: session.thinkingLevel,
 			modelSupportsThinking: session.supportsThinking(),
-			availableThinkingLevels: session.getAvailableThinkingLevels() as ThinkingLevel[],
+			availableThinkingLevels: session.getAvailableThinkingLevels(),
 			isStreaming: session.isStreaming || session.isRetrying,
 			isRetrying: session.isRetrying,
 			isCompacting: session.isCompacting,

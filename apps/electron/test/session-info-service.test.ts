@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import { SessionCatalog } from "../src/main/session/services/session-catalog.js";
 import { SessionInfoService } from "../src/main/session/services/session-info-service.js";
 import { SubAgentRegistry } from "../src/main/session/subagent-registry.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 function writeSubsession(projectId: string, file: string): void {
 	ensureWorkspaceDir(projectId);
@@ -139,11 +140,11 @@ describe("SessionInfoService subagent markers", () => {
 			getContextUsage: () => undefined,
 			sessionFile: undefined,
 		};
-		const managed = {
+		const managed = withSessionView({
 			runtime: { session },
 			projectId,
 			createdAt: 123,
-		};
+		});
 		const runtimeMap = new Map<string, typeof managed>([[childId, managed]]);
 
 		const service = new SessionInfoService({
@@ -204,7 +205,7 @@ describe("SessionInfoService subagent markers", () => {
 			getContextUsage: () => undefined,
 			sessionFile: undefined,
 		};
-		const managed = { runtime: { session }, projectId, createdAt: 456 };
+		const managed = withSessionView({ runtime: { session }, projectId, createdAt: 456 });
 		const runtimeMap = new Map<string, typeof managed>([[draftId, managed]]);
 
 		const draftEntries = [{ id: draftId, projectId, name: "新会话", createdAt: 1, updatedAt: 1 }];

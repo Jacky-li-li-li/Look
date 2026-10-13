@@ -1,7 +1,7 @@
-import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "../../contracts/permission.js";
 import type { SessionUiEventEnvelope } from "../../types/ui-events.js";
 import type { AgentInfo } from "../dto/agent.js";
+import type { LookContextUsage } from "../dto/engine.js";
 import type { GitRepoInfo } from "../dto/git.js";
 import type { AppUpdatePhase, TodoItem } from "../dto/misc.js";
 import type { PermissionAskEvent, PlanApprovalRequest, PlanQuestionRequest } from "../dto/permission.js";
@@ -94,7 +94,7 @@ export type MainToRendererEvent =
 	// ---- Model list refreshed (API key changed / OAuth login / startup) ----
 	| { type: "model:updated" }
 	// ---- Usage data updated ----
-	| WithAgentId<{ type: "agent:context-usage"; contextUsage: ContextUsage }>
+	| WithAgentId<{ type: "agent:context-usage"; contextUsage: LookContextUsage }>
 	| { type: "usage:updated" }
 	// ---- OAuth login prompt (main → renderer) ----
 	| { type: "login:prompt"; providerId: string; promptId: string; prompt: LoginPrompt }

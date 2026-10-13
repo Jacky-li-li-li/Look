@@ -1,11 +1,8 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Model } from "@earendil-works/pi-ai";
-import type { AgentSession, ContextUsage, SessionStats } from "@earendil-works/pi-coding-agent";
+import type { LookAgentMessage, LookContextUsage, LookModelInfo, LookSessionStats } from "./engine.js";
 import type { ThinkingLevel } from "./thinking.js";
 
 export interface SessionRuntimeSnapshot {
-	// biome-ignore lint/suspicious/noExplicitAny: Model generic parameter not relevant at shared type layer.
-	model?: Model<any>;
+	model?: LookModelInfo;
 	thinkingLevel: ThinkingLevel;
 	isStreaming: boolean;
 	isRetrying: boolean;
@@ -13,8 +10,8 @@ export interface SessionRuntimeSnapshot {
 	retryAttempt: number;
 	steering: readonly string[];
 	followUp: readonly string[];
-	stats: SessionStats;
-	contextUsage?: ContextUsage;
+	stats: LookSessionStats;
+	contextUsage?: LookContextUsage;
 	/** Captured from CompactionResult.estimatedTokensAfter after manual compaction. */
 	compactionEstimatedTokensAfter?: number;
 }
@@ -75,7 +72,7 @@ export interface SessionSnapshotEnvelope {
 // ============================================================
 
 export type LookSessionEntry =
-	| { type: "message"; id: string; message: AgentMessage }
+	| { type: "message"; id: string; message: LookAgentMessage }
 	| { type: "compaction"; id: string; summary: string; tokensBefore?: number }
 	| { type: "branch_summary"; id: string; summary: string }
 	| { type: "custom"; id: string; customType: string; data?: unknown }
@@ -92,4 +89,4 @@ export interface ForkedSessionResult {
 	sessionFilePath: string;
 }
 
-export type NavigateTreeResult = Awaited<ReturnType<AgentSession["navigateTree"]>>;
+export type { NavigateTreeResult } from "./engine.js";

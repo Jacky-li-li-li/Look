@@ -9,6 +9,7 @@ import type { IEventBus, IPlanService } from "../src/main/core/contracts.js";
 import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
 import { SessionPermissionOrchestrator } from "../src/main/session/services/session-permission-orchestrator.js";
 import type { UserSettingsStore } from "../src/main/settings/store.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 function makeEventBus(): IEventBus {
 	return { emit: vi.fn(), onEvent: vi.fn() };
@@ -51,13 +52,13 @@ function makeManagedRuntime(overrides: RuntimeOverrides = {}): ManagedRuntime {
 		},
 		setModel,
 	};
-	return {
+	return withSessionView({
 		runtime: { session },
 		projectId: "p1",
 		binding: { sessionId: "s1", sessionManager: {} as SessionManager },
 		createdAt: 1,
 		unsubscribe: () => {},
-	} as unknown as ManagedRuntime;
+	}) as unknown as ManagedRuntime;
 }
 
 function makePermissionService(initial: PermissionMode = "ask") {

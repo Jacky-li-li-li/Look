@@ -6,9 +6,6 @@
 // to preserve backward compatibility with all existing imports.
 // ============================================================
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ImageContent } from "@earendil-works/pi-ai";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { MainToRendererEvent } from "./types/events/main-to-renderer.js";
 
 // ============================================================
@@ -18,7 +15,30 @@ import type { MainToRendererEvent } from "./types/events/main-to-renderer.js";
 import type { ThinkingLevel } from "./types/dto/thinking.js";
 
 export type { ThinkingLevel };
-export type { AgentMessage, ImageContent, SessionEntry };
+
+// Look-owned engine DTOs (no engine SDK re-exports; the pi adapter converts).
+export type {
+	LookAgentMessage,
+	LookAssistantMessage,
+	LookBashExecutionMessage,
+	LookBranchSummaryEntry,
+	LookBranchSummaryMessage,
+	LookCompactionSummaryMessage,
+	LookContextUsage,
+	LookCustomMessage,
+	LookImageContent,
+	LookImageContent as ImageContent,
+	LookModelInfo,
+	LookSessionStats,
+	LookSourceInfo,
+	LookStopReason,
+	LookTextContent,
+	LookThinkingContent,
+	LookToolCall,
+	LookToolResultMessage,
+	LookUsage,
+	LookUserMessage,
+} from "./types/dto/engine.js";
 
 /** Event listener callback for event bus subscribers. */
 export type EventCallback = (event: MainToRendererEvent) => void;
@@ -92,7 +112,6 @@ export type {
 	PlanQuestionOutcome,
 	PlanQuestionRequest,
 	PlanQuestionResponse,
-	ToolCallHandler,
 } from "./types/dto/permission.js";
 export type { ProjectInfo } from "./types/dto/project.js";
 export type { ProjectPromptDataDto, PromptEntry } from "./types/dto/prompt.js";

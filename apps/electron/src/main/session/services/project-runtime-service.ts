@@ -9,13 +9,13 @@
 import fs, { existsSync } from "node:fs";
 import type { ProjectInfo } from "@look/shared/types";
 import type { ProjectService } from "../../projects/project-service.js";
-import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ManagedSessionRegistry } from "../runtime/runtime-registry.js";
 import type { SessionCatalog } from "./session-catalog.js";
 
 export interface ProjectRuntimeServiceDependencies {
 	projectService: ProjectService;
 	sessionCatalog: Pick<SessionCatalog, "replace">;
-	runtimeRegistry: Pick<RuntimeRegistry, "values">;
+	runtimeRegistry: Pick<ManagedSessionRegistry, "values">;
 }
 
 export class ProjectRuntimeService {
@@ -55,8 +55,8 @@ export class ProjectRuntimeService {
 			if (managed.cwd !== project.cwd) continue;
 			reloadPromises.push(
 				(async () => {
-					managed.runtime.services.settingsManager.setProjectTrusted(trusted);
-					await managed.runtime.session.reload();
+					managed.session.settings.setProjectTrusted(trusted);
+					await managed.session.reload();
 				})(),
 			);
 		}

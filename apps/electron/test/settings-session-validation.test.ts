@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { withSessionView } from "./helpers/managed-session.js";
 
 /** Test-only access to SessionRuntimeManager internals. */
 interface TestManagerInternals {
@@ -45,14 +46,17 @@ function installFakeRuntime(
 		dispose: () => Promise.resolve(),
 		sessionManager,
 	};
-	(manager.composition as unknown as TestManagerInternals).runtimeRegistry.set(sessionId, {
-		runtime: { session, dispose: () => Promise.resolve() } as unknown as Record<string, unknown>,
-		projectId,
-		cwd: "/project",
-		createdAt: Date.now(),
-		binding: { sessionId, sessionManager },
-		unsubscribe: () => {},
-	});
+	(manager.composition as unknown as TestManagerInternals).runtimeRegistry.set(
+		sessionId,
+		withSessionView({
+			runtime: { session, dispose: () => Promise.resolve() } as unknown as { session: Record<string, unknown> },
+			projectId,
+			cwd: "/project",
+			createdAt: Date.now(),
+			binding: { sessionId, sessionManager },
+			unsubscribe: () => {},
+		}),
+	);
 }
 
 describe("Settings session/project reference validation", () => {

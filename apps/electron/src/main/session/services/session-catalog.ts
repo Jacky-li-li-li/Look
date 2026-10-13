@@ -10,9 +10,9 @@ import { createReadStream, existsSync } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ensureWorkspaceDir, getWorkspaceSubsessionsDir } from "@look/shared/look-storage";
 import type { ProjectInfo } from "@look/shared/types";
+import { listEngineSessions } from "../../runtime-port/pi-session-ops.js";
 import { computeSessionsFingerprint, SessionIndexStore } from "./session-index-store.js";
 import type { StoredSession } from "./stored-session.js";
 
@@ -213,8 +213,8 @@ export class SessionCatalog {
 		sessionsDir: string,
 		subsessionsDir: string,
 	): Promise<StoredSession[]> {
-		// Use pi SDK SessionManager.list() for main sessions instead of custom JSONL scanning.
-		const mainSessions = await SessionManager.list(project.cwd, sessionsDir);
+		// List main sessions via runtime-port (PiAdapter-backed SessionManager.list).
+		const mainSessions = await listEngineSessions(project.cwd, sessionsDir);
 
 		// Collect subsession metadata (Look custom entries not visible to SessionManager.list()).
 		const subsessionMetas: SubsessionMetadata[] = [];

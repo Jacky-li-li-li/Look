@@ -31,6 +31,7 @@ const runtimeRegistry = read("src/main/session/runtime/runtime-registry.ts");
 const runtimeFactory = read("src/main/session/runtime/runtime-factory.ts");
 const runtimeLifecycle = read("src/main/session/runtime/runtime-lifecycle-coordinator.ts");
 const sessionHistory = read("src/main/session/services/session-history-service.ts");
+const piSessionOps = read("src/main/runtime-port/pi-session-ops.ts");
 const sessionNotifier = read("src/main/session/events/session-notifier.ts");
 const sessionLifecycle = read("src/main/session/services/session-lifecycle-service.ts");
 
@@ -75,7 +76,9 @@ describe("pi runtime architecture regressions", () => {
 				sessionNotifier.includes("toLookSessionEntries(entries)"),
 		).toBe(true);
 		expect(runtime).not.toContain("streamId");
-		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
+		// @look/shared/types owns its DTOs; pi types stay behind the runtime-port adapter.
+		expect(types).not.toContain("@earendil-works/pi");
+		expect(types).toContain("LookAgentMessage");
 		expect(existsSync(resolve(repositoryRoot, "packages/shared/src/message-convert.ts"))).toBe(false);
 	});
 
@@ -101,8 +104,12 @@ describe("pi runtime architecture regressions", () => {
 	});
 
 	it("6b. creates parallel forks through an independent SessionManager", () => {
-		expect(sessionHistory).toContain("SessionManager.open(sourceFile, sourceSession.sessionManager.getSessionDir())");
-		expect(sessionHistory).toContain("forkManager.createBranchedSession(entryId)");
+		// Phase 3b: services call openEngineSessionForFork (runtime-port), which wraps SessionManager.open.
+		expect(sessionHistory).toContain(
+			"openEngineSessionForFork(sourceFile, sourceSession.sessionManager.getSessionDir())",
+		);
+		expect(sessionHistory).toContain("createBranchedEngineSession(forkManager, entryId)");
+		expect(piSessionOps).toContain("SessionManager.open(sourceFile, sessionDir)");
 		expect(sessionHistory).not.toContain("sourceSession.sessionManager.createBranchedSession");
 		expect(sessionHistory).not.toContain("managed.runtime.fork(");
 		expect(sessionHistory).toContain('reason: "fork"');

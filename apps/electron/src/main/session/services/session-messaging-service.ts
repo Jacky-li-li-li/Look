@@ -11,17 +11,17 @@
 // MCP 必需预检在 flush 路径内完成，不再挡 invoke 返回。
 // ============================================================
 
-import type { ImageContent } from "@earendil-works/pi-ai";
-import type { AttachmentRef } from "@look/shared/types";
+import type { AttachmentRef, ImageContent } from "@look/shared/types";
 import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
+import type { RuntimePort } from "../../runtime-port/index.js";
 import { waitForPromptAccepted } from "../../utils/prompt-accepted.js";
-import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { ManagedSession } from "../runtime/runtime-registry.js";
 import type { AttachmentService } from "./attachment-service.js";
 
 export interface SessionMessagingHost {
-	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
+	getManagedRuntime(sessionId: string): ManagedSession | undefined;
 	/** 后台拉起 runtime（不等待）：IM/headless/定时任务路径没有 UI 激活来触发物化。 */
-	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
+	ensureRuntime(sessionId: string): Promise<ManagedSession>;
 	/** 会话存在性（live runtime 之外）：catalog stored / 草稿索引 / 在途初始化。 */
 	sessionExists(sessionId: string): boolean;
 	/** 首条消息前等待「必需」MCP 服务器连接（Proma 式 required 预检，预算内不阻塞）。 */
@@ -29,6 +29,11 @@ export interface SessionMessagingHost {
 	emitError(error: unknown, sessionId?: string): void;
 	/** 粘贴附件服务：发送时重新读取磁盘内容并组装 prompt（决策 D2 内联注入）。 */
 	attachments: AttachmentService;
+	/**
+	 * Phase 3b: prompt transport through RuntimePort.send (PiAdapter → session.prompt).
+	 * Required in production; unit tests may omit and stub via a test double port.
+	 */
+	runtimePort: Pick<RuntimePort, "send" | "engineId">;
 }
 
 /** 挂起消息：runtime 未就绪时入队，绑定后按序 flush。 */
@@ -85,8 +90,8 @@ export class SessionMessagingService {
 	}
 
 	/** runtime 绑定完成后的挂起消息冲刷（coordinator onSessionBound 回调）。 */
-	async flushPending(managed: ManagedRuntime): Promise<void> {
-		const sessionId = managed.runtime.session.sessionId;
+	async flushPending(managed: ManagedSession): Promise<void> {
+		const sessionId = managed.session.sessionId;
 		const queue = this.pendingMessages.get(sessionId);
 		if (!queue || queue.length === 0) return;
 		this.pendingMessages.delete(sessionId);
@@ -112,9 +117,8 @@ export class SessionMessagingService {
 		this.pendingMessages.set(sessionId, queue);
 	}
 
-	private async deliver(managed: ManagedRuntime, message: PendingMessage): Promise<void> {
-		const sessionId = managed.runtime.session.sessionId;
-		const session = managed.runtime.session;
+	private async deliver(managed: ManagedSession, message: PendingMessage): Promise<void> {
+		const sessionId = managed.session.sessionId;
 		let text = message.text;
 
 		// Parse /agent:name chips: /skill remains a pi skill command, lone @ is kept for pi file refs.
@@ -140,21 +144,25 @@ export class SessionMessagingService {
 		// 每次发送都重读磁盘，查看器里的编辑自然生效。无附件时文本原样返回。
 		const promptText = this.host.attachments.buildPrompt(text, message.attachments ?? []);
 
+		const port = this.host.runtimePort;
 		await waitForPromptAccepted(
 			(onPreflight) =>
-				session.prompt(promptText, {
-					images: message.images,
-					source: "rpc",
-					// Always pass the send-mode behavior instead of reading session.isStreaming
-					// here: the SDK's prompt() re-checks isStreaming internally and decides
-					// whether to queue. Reading it here too creates a TOCTOU window where
-					// the session becomes streaming between the two reads — prompt() then
-					// throws "Agent is already processing" and the message is lost. Passing
-					// sendMode unconditionally is safe: it is ignored on the direct path
-					// (idle → normal send) and used to queue when the SDK is actually busy.
-					streamingBehavior: message.sendMode ?? "followUp",
-					preflightResult: onPreflight,
-				}),
+				port.send(
+					{ engineId: port.engineId, sessionId },
+					{
+						text: promptText,
+						images: message.images,
+						// Always pass the send-mode behavior instead of reading session.isStreaming
+						// here: the SDK's prompt() re-checks isStreaming internally and decides
+						// whether to queue. Reading it here too creates a TOCTOU window where
+						// the session becomes streaming between the two reads — prompt() then
+						// throws "Agent is already processing" and the message is lost. Passing
+						// sendMode unconditionally is safe: it is ignored on the direct path
+						// (idle → normal send) and used to queue when the SDK is actually busy.
+						streamingBehavior: message.sendMode ?? "followUp",
+						onPreflight,
+					},
+				),
 			(error) => this.host.emitError(error, sessionId),
 		);
 	}

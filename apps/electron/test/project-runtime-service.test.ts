@@ -7,6 +7,7 @@ import type { ProjectService } from "../src/main/projects/project-service.js";
 import type { ManagedRuntime } from "../src/main/session/runtime/runtime-registry.js";
 import { ProjectRuntimeService } from "../src/main/session/services/project-runtime-service.js";
 import type { SessionCatalog } from "../src/main/session/services/session-catalog.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 describe("ProjectRuntimeService", () => {
 	function makeProjectService(): ProjectService {
@@ -37,7 +38,7 @@ describe("ProjectRuntimeService", () => {
 	}
 
 	function makeManagedRuntime(cwd: string): ManagedRuntime {
-		return {
+		return withSessionView({
 			runtime: {
 				cwd,
 				services: { settingsManager: { setProjectTrusted: vi.fn() } },
@@ -47,7 +48,7 @@ describe("ProjectRuntimeService", () => {
 			cwd,
 			createdAt: Date.now(),
 			unsubscribe: vi.fn(),
-		} as unknown as ManagedRuntime;
+		}) as unknown as ManagedRuntime;
 	}
 
 	it("rejects non-directory project paths", async () => {

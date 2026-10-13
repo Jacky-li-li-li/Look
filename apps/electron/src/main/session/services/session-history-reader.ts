@@ -7,8 +7,8 @@
 // ============================================================
 
 import { open } from "node:fs/promises";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { SessionHistoryWindow } from "@look/shared/types";
+import type { EngineSessionEntry } from "../../runtime-port/look-types.js";
 
 const READ_CHUNK_BYTES = 64 * 1024;
 const MAX_PREVIEW_BYTES = 8 * 1024 * 1024;
@@ -28,7 +28,7 @@ export const DEFAULT_HISTORY_WINDOW_SIZE = 80;
 export const DEFAULT_HISTORY_PAGE_SIZE = 60;
 
 export interface SessionTailReadResult {
-	entries: SessionEntry[];
+	entries: EngineSessionEntry[];
 	leafId: string | null;
 	history: SessionHistoryWindow;
 }
@@ -51,14 +51,14 @@ async function startsAtLineBoundary(handle: Awaited<ReturnType<typeof open>>, po
 	const result = await handle.read(previous, 0, 1, position - 1);
 	return result.bytesRead === 1 && previous[0] === 0x0a;
 }
-function parseProjectableLines(lines: string[]): SessionEntry[] {
-	const entries: SessionEntry[] = [];
+function parseProjectableLines(lines: string[]): EngineSessionEntry[] {
+	const entries: EngineSessionEntry[] = [];
 	for (const line of lines) {
 		if (!line.trim()) continue;
 		try {
 			const value: unknown = JSON.parse(line);
 			if (!isProjectableRecord(value) || !PROJECTABLE_ENTRY_TYPES.has(value.type)) continue;
-			entries.push(value as unknown as SessionEntry);
+			entries.push(value as unknown as EngineSessionEntry);
 		} catch {
 			// An active JSONL writer may leave a truncated final line. Ignore it.
 		}

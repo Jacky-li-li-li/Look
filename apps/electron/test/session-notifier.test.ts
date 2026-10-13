@@ -27,6 +27,7 @@ function createQueries(runtime: ManagedRuntime | undefined): SessionNotifierQuer
 	} as unknown as SessionInfoService;
 	return {
 		sessionInfoService,
+		getManagedRuntime: () => runtime,
 		scopeRegistry: { get: () => undefined },
 		listProjects: () => [],
 		getExpectedSessionDefaults: () => ({

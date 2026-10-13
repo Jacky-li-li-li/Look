@@ -8,6 +8,7 @@ import type { StoredSession } from "../src/main/session/services/session-catalog
 import { SessionDraftIndex } from "../src/main/session/services/session-draft-index.js";
 import type { SessionLifecycleHost } from "../src/main/session/services/session-lifecycle-service.js";
 import { ensureSessionModel, SessionLifecycleService } from "../src/main/session/services/session-lifecycle-service.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 describe("SessionLifecycleService", () => {
 	function makeSession(id = "session-1", model?: unknown) {
@@ -26,13 +27,13 @@ describe("SessionLifecycleService", () => {
 		cwd = "/project",
 		model?: unknown,
 	): ManagedRuntime {
-		return {
+		return withSessionView({
 			runtime: { session: makeSession(sessionId, model), cwd } as unknown as AgentSessionRuntime,
 			projectId,
 			cwd,
 			createdAt: Date.now(),
 			unsubscribe: vi.fn(),
-		};
+		}) as ManagedRuntime;
 	}
 
 	function makeService(overrides?: {
