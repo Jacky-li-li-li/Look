@@ -87,7 +87,7 @@ curl -fsS http://localhost:5174/
 
 pi owns agent runtime: model registry, session management, tool execution, retry, project trust, resources, event streaming. Look owns the desktop shell, project bookmarks, multi-session host, UI, scheduler, browser/desktop automation, and IM bridge.
 
-**Execution seam (RuntimePort):** Application → Session* services → `RuntimePort` → default `PiAdapter` (pi SDK). Phase 1+2 are on main as zero-behavior seams under **2.7.x**; claiming an optional / switchable execution base is reserved for **2.8** when a second adapter (e.g. Dsh) can actually be enabled. See [`docs/runtime-adapter.md`](docs/runtime-adapter.md) and the RuntimePort-first rule in [`AGENTS.md`](AGENTS.md).
+**Execution seam (RuntimePort):** Application → Session* services → `RuntimePort` → default `PiAdapter` (pi SDK). Phase 1+2 are 已在 main as zero-behavior seams under **2.7.x** (Phase 3b — Session* / `@look/shared` off pi, services see only `EngineSessionView` — is PR #11, same 2.7.x line); claiming an optional / switchable execution base is reserved for **2.8** when a second adapter (e.g. Dsh) can actually be enabled. See [`docs/runtime-adapter.md`](docs/runtime-adapter.md) and the RuntimePort-first rule in [`AGENTS.md`](AGENTS.md).
 
 ### Workspace layout
 
