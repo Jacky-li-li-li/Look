@@ -8,7 +8,8 @@
 // - discrete-event streaming blocks are appended as a single live item
 
 import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
-import type { LookUiStreamBlock, LookUiToolExecState, SessionEntry } from "@shared/types";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { describe, expect, it } from "vitest";
 import { buildTimeline } from "../src/renderer/lib/timeline";
 

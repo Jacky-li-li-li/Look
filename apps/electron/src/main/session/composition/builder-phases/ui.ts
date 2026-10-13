@@ -23,13 +23,7 @@ export function buildUIPhase(b: CompositionBuilder): void {
 		createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent) =>
 			b
 				.req(b.runtimeLifecycle, "runtimeLifecycle")
-				.createManagedRuntime(
-					cwd,
-					asPiSessionManager(manager),
-					projectId,
-					createdAt,
-					startEvent as import("@earendil-works/pi-coding-agent").SessionStartEvent,
-				),
+				.createManagedRuntime(cwd, asPiSessionManager(manager), projectId, createdAt, startEvent),
 		withSessionLock: (sessionId, task) => b.runtimeRegistry.withExclusive(sessionId, task),
 		disposeRuntime: (sessionId, abort) =>
 			b.req(b.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
@@ -82,14 +76,7 @@ export function buildUIPhase(b: CompositionBuilder): void {
 			createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
 				b
 					.req(b.runtimeLifecycle, "runtimeLifecycle")
-					.createManagedRuntime(
-						cwd,
-						asPiSessionManager(manager),
-						projectId,
-						createdAt,
-						startEvent as import("@earendil-works/pi-coding-agent").SessionStartEvent | undefined,
-						options,
-					),
+					.createManagedRuntime(cwd, asPiSessionManager(manager), projectId, createdAt, startEvent, options),
 			disposeRuntime: (sessionId, abort) =>
 				b.req(b.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
 			refreshProjectSessions: (projectId) => b.refreshProjectSessions(projectId),

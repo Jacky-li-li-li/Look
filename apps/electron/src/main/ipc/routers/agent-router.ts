@@ -82,7 +82,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		// Serialize against agent:insert-queued-message and concurrent remove
 		// calls to prevent clearQueue() interleaving that would drop messages.
 		return ctx.runtime.registry.withExclusive(_agentId, async () => {
-			const managed = ctx.session.info.getManagedRuntime(_agentId);
+			const managed = ctx.runtime.registry.get(_agentId);
 			if (!managed) return { success: false, error: "Session not found" };
 			await replayQueue(managed.runtime.session, data.text);
 			return { success: true };
@@ -93,7 +93,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		const _agentId = guardAgentId(data.agentId, "agentId");
 		guardString(data.text, "text");
 		return ctx.runtime.registry.withExclusive(_agentId, async () => {
-			const managed = ctx.session.info.getManagedRuntime(_agentId);
+			const managed = ctx.runtime.registry.get(_agentId);
 			if (!managed) return { success: false, error: "Session not found" };
 			const session = managed.runtime.session;
 			await replayQueue(session, data.text);

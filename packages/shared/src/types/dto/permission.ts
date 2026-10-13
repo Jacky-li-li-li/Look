@@ -1,8 +1,3 @@
-import type { ExtensionContext, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
-
-/** pi SDK tool_call handler — returned by IPermissionService.createToolCallHandler. */
-export type ToolCallHandler = (event: ToolCallEvent, ctx: ExtensionContext) => Promise<ToolCallEventResult>;
-
 /** Permission ask event — sent from main to renderer when a tool needs approval */
 export interface PermissionAskEvent {
 	toolName: string;

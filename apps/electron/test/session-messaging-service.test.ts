@@ -10,18 +10,19 @@ import {
 	type SessionMessagingHost,
 	SessionMessagingService,
 } from "../src/main/session/services/session-messaging-service.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 vi.mock("../src/main/extensions/subagent/agent-discovery.js", () => ({
 	discoverAgents: vi.fn(() => Promise.resolve({ agents: [{ name: "test", description: "", systemPrompt: "" }] })),
 }));
 
 function makeManagedRuntime(session: AgentSession): ManagedRuntime {
-	return {
+	return withSessionView({
 		runtime: { session },
 		projectId: "p1",
 		createdAt: 1,
 		unsubscribe: () => {},
-	} as unknown as ManagedRuntime;
+	}) as unknown as ManagedRuntime;
 }
 
 function mockPrompt() {

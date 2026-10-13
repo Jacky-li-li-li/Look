@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillManagementService } from "../src/main/session/services/skill-management-service.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -26,7 +27,7 @@ function createService(initialPaths: string[]) {
 	const service = new SkillManagementService({
 		runtimeRegistry: {
 			get: () => undefined,
-			values: () => [{ runtime: { session: { reload } } }],
+			values: () => [withSessionView({ runtime: { session: { reload } } })],
 		},
 		selection: { currentId: undefined },
 		globalSettingsManager: settingsManager,

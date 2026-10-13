@@ -14,7 +14,7 @@ import type { ProjectInfo } from "@look/shared/types";
 import type { IEventBus } from "../../core/contracts.js";
 import type { ProjectService } from "../../projects/project-service.js";
 import type { SessionNotifier } from "../events/session-notifier.js";
-import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ManagedSessionRegistry } from "../runtime/runtime-registry.js";
 import type { ProjectRuntimeService } from "./project-runtime-service.js";
 import type { SessionCatalog } from "./session-catalog.js";
 
@@ -22,7 +22,7 @@ export interface ProjectApplicationServiceDependencies {
 	projectService: Pick<ProjectService, "getProjectInfo" | "setActiveId" | "renameProject">;
 	projectRuntimeService: Pick<ProjectRuntimeService, "createProject">;
 	sessionCatalog: Pick<SessionCatalog, "refresh" | "listByProject">;
-	runtimeRegistry: Pick<RuntimeRegistry, "entries" | "get">;
+	runtimeRegistry: Pick<ManagedSessionRegistry, "entries" | "get">;
 	sessionNotifier: Pick<SessionNotifier, "emitProjectList" | "emitSessionList">;
 	eventBus: Pick<IEventBus, "emit">;
 }
@@ -73,7 +73,7 @@ export class ProjectApplicationService {
 			projectName: project.name,
 			agentCount: new Set([...persisted.map((session) => session.id), ...runtimeIds]).size,
 			runningCount: runtimeIds.filter((sessionId) => {
-				const session = this.deps.runtimeRegistry.get(sessionId)?.runtime.session;
+				const session = this.deps.runtimeRegistry.get(sessionId)?.session;
 				return Boolean(session && (session.isStreaming || session.isRetrying || session.isCompacting));
 			}).length,
 		});

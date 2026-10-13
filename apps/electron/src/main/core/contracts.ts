@@ -23,8 +23,8 @@ import type {
 	PlanQuestionOutcome,
 	PlanQuestionResponse,
 	SessionSnapshotEnvelope,
-	ToolCallHandler,
 } from "@look/shared/types";
+import type { ToolCallHandler } from "../permissions/tool-call-handler.js";
 import type { ContentBlockTracker } from "../session/events/event-translator.js";
 
 // ═══════════════════════════════════════════════════════════

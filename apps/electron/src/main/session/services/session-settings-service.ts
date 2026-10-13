@@ -1,7 +1,7 @@
 import type { ProjectInfo, UserSettings } from "@look/shared/types";
 import type { IPermissionService } from "../../core/contracts.js";
 import type { UserSettingsStore } from "../../settings/store.js";
-import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { ManagedSession } from "../runtime/runtime-registry.js";
 import type { SessionSubagentService } from "./session-subagent-service.js";
 
 interface ProjectTrustDefaults {
@@ -13,7 +13,7 @@ export interface SessionSettingsServiceOptions {
 	listProjects(): ProjectInfo[];
 	getActiveProject(): ProjectInfo | null;
 	listSessionIds(): string[];
-	listRuntimes(): IterableIterator<ManagedRuntime>;
+	listRuntimes(): IterableIterator<ManagedSession>;
 	listRuntimeIds(): IterableIterator<string>;
 	permissionService: Pick<IPermissionService, "setDefaultMode">;
 	sessionSubagentService: Pick<SessionSubagentService, "setDefaultEnabled" | "setEnabledForSession">;
@@ -59,7 +59,7 @@ export class SessionSettingsService {
 		if (sanitized.compactionEnabled !== undefined) {
 			for (const managed of this.options.listRuntimes()) {
 				try {
-					managed.runtime.session.setAutoCompactionEnabled(sanitized.compactionEnabled);
+					managed.session.setAutoCompactionEnabled(sanitized.compactionEnabled);
 				} catch (error) {
 					console.error("[Look] setAutoCompactionEnabled broadcast failed:", error);
 				}

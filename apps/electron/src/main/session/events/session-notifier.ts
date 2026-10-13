@@ -14,9 +14,9 @@ import type {
 	SessionSnapshotEnvelope,
 } from "@look/shared/types";
 import type { IEventBus, ISessionScopeRegistry } from "../../core/contracts.js";
+import { toLookSessionEntries } from "../../runtime-port/session-entry-projection.js";
 import type { ManagedRuntime } from "../runtime/runtime-registry.js";
 import type { StoredSession } from "../services/session-catalog.js";
-import { toLookSessionEntries } from "../services/session-entry-projection.js";
 import { DEFAULT_HISTORY_WINDOW_SIZE, readSessionTail } from "../services/session-history-reader.js";
 import type { SessionInfoService } from "../services/session-info-service.js";
 import { parseTodoFile } from "../services/todo-parser.js";
@@ -37,6 +37,8 @@ function historyWindow(
 
 export interface SessionNotifierQueries {
 	sessionInfoService: SessionInfoService;
+	/** Live runtime lookup (host-internal; the notifier reads pi session state for snapshots). */
+	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
 	scopeRegistry: Pick<ISessionScopeRegistry, "get">;
 	listProjects(): ProjectInfo[];
 	getActiveProjectId(): string | null;
@@ -204,6 +206,6 @@ export class SessionNotifier {
 	}
 
 	private getManagedRuntime(sessionId: string): ManagedRuntime | undefined {
-		return this.queries.sessionInfoService.getManagedRuntime(sessionId);
+		return this.queries.getManagedRuntime(sessionId);
 	}
 }

@@ -5,6 +5,7 @@ import {
 	type SessionHistoryHost,
 	SessionHistoryService,
 } from "../src/main/session/services/session-history-service.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 function createHost(overrides: Partial<SessionHistoryHost> = {}): SessionHistoryHost {
 	return {
@@ -30,7 +31,7 @@ describe("SessionHistoryService", () => {
 	it("navigates a live session and publishes a snapshot only after a successful navigation", async () => {
 		const navigateTree = vi.fn().mockResolvedValue({ cancelled: false });
 		const emitSessionState = vi.fn();
-		const runtime = { runtime: { session: { navigateTree } } } as unknown as ManagedRuntime;
+		const runtime = withSessionView({ runtime: { session: { navigateTree } } }) as unknown as ManagedRuntime;
 		const service = new SessionHistoryService(createHost({ ensureRuntime: async () => runtime, emitSessionState }));
 
 		await expect(service.navigate("session-a", "entry-a", { label: "checkpoint" })).resolves.toEqual({
@@ -51,7 +52,9 @@ describe("SessionHistoryService", () => {
 			getBranch: () => branch,
 			getLeafId: () => "m4",
 		} as unknown as SessionManager;
-		const runtime = { runtime: { session: { sessionManager: manager } } } as unknown as ManagedRuntime;
+		const runtime = withSessionView({
+			runtime: { session: { sessionManager: manager } },
+		}) as unknown as ManagedRuntime;
 		const service = new SessionHistoryService(createHost({ ensureRuntime: async () => runtime }));
 
 		const page = await service.loadPage("session-a", "m3", "m4", 2);
@@ -80,9 +83,9 @@ describe("SessionHistoryService", () => {
 	});
 
 	it("rejects a fork before mutating a source session that is still streaming", async () => {
-		const runtime = {
+		const runtime = withSessionView({
 			runtime: { session: { isStreaming: true, isRetrying: false, isCompacting: false } },
-		} as unknown as ManagedRuntime;
+		}) as unknown as ManagedRuntime;
 		const service = new SessionHistoryService(createHost({ ensureRuntime: async () => runtime }));
 
 		await expect(service.fork("session-a", "entry-a")).rejects.toThrow("Stop the session before forking");

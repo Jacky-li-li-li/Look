@@ -5,6 +5,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime/runtime-manager.js";
+import { withSessionView } from "./helpers/managed-session.js";
 
 /** Test-only access to SessionRuntimeManager internals. */
 interface TestManagerInternals {
@@ -44,14 +45,17 @@ function installFakeRuntime(
 		sessionManager,
 	};
 	const internal = manager.composition as unknown as TestManagerInternals;
-	internal.runtimeRegistry.set(sessionId, {
-		runtime: { session },
-		projectId: "test-project",
-		cwd: "/project",
-		createdAt: Date.now(),
-		binding: { sessionId, sessionManager },
-		unsubscribe: () => {},
-	});
+	internal.runtimeRegistry.set(
+		sessionId,
+		withSessionView({
+			runtime: { session },
+			projectId: "test-project",
+			cwd: "/project",
+			createdAt: Date.now(),
+			binding: { sessionId, sessionManager },
+			unsubscribe: () => {},
+		}),
+	);
 	internal.permissionService.setMode(sessionId, "ask");
 	return {
 		getActiveTools: () => [...active],

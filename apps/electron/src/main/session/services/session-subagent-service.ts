@@ -20,7 +20,7 @@ import { createEngineSession } from "../../runtime-port/pi-session-ops.js";
 import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import { waitForPromptAccepted } from "../../utils/prompt-accepted.js";
-import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { ManagedSession } from "../runtime/runtime-registry.js";
 import type { SubAgentRegistry } from "../subagent-registry.js";
 import { DELEGATION_ENTRY_TYPE, SUBAGENT_PARENT_ENTRY_TYPE } from "./session-catalog.js";
 
@@ -32,9 +32,9 @@ export interface SessionSubagentHost {
 		createdAt: number,
 		sessionStartEvent?: EngineSessionStartEvent,
 		options?: { appendSystemPrompt?: string[] },
-	): Promise<ManagedRuntime>;
+	): Promise<ManagedSession>;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
-	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
+	getManagedRuntime(sessionId: string): ManagedSession | undefined;
 	reloadSession(sessionId: string): Promise<void>;
 	listRuntimeIds(): IterableIterator<string>;
 	getProjectInfo(projectId: string): ReturnType<ProjectService["getProjectInfo"]>;
@@ -103,7 +103,7 @@ export class SessionSubagentService {
 		this.enabledBySession.set(sessionId, enabled);
 		const managed = this.deps.host.getManagedRuntime(sessionId);
 		if (!managed) return;
-		const session = managed.runtime.session;
+		const session = managed.session;
 		if (this.deps.permissionService.getMode(sessionId) === "plan") {
 			this.deps.planService.syncToolState(sessionId);
 			return;
@@ -230,7 +230,7 @@ export class SessionSubagentService {
 			undefined,
 			agent.systemPrompt.trim() ? { appendSystemPrompt: [agent.systemPrompt] } : undefined,
 		);
-		const session = managed.runtime.session;
+		const session = managed.session;
 		const childSessionId = session.sessionId;
 
 		// delegation entry 提升到 try 外：初始化中途抛错（如 runtimeInfo missing）时，
@@ -278,7 +278,7 @@ export class SessionSubagentService {
 					if (slash > 0) {
 						const model = this.deps.modelRegistry.find(agent.model.slice(0, slash), agent.model.slice(slash + 1));
 						if (model) {
-							await session.setModel(model as never);
+							await session.setModel(model);
 							this.deps.host.emitSessionUpdated(childSessionId);
 						}
 					}
@@ -289,7 +289,7 @@ export class SessionSubagentService {
 				// 设计意图:子会话继承父会话当前模型(含用户中途切换)。
 				// agent.model 未显式配置时,SDK 会按 settings 默认解析(不跟随父会话),
 				// 这里显式继承;父会话也无模型则保持现状(bindRuntime 已有 ensureSessionModel 兜底)。
-				const parentModel = parentManaged.runtime.session.model;
+				const parentModel = parentManaged.session.model;
 				if (parentModel) {
 					try {
 						await session.setModel(parentModel);

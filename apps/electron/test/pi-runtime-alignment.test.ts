@@ -76,7 +76,9 @@ describe("pi runtime architecture regressions", () => {
 				sessionNotifier.includes("toLookSessionEntries(entries)"),
 		).toBe(true);
 		expect(runtime).not.toContain("streamId");
-		expect(types).toContain('import type { AgentMessage } from "@earendil-works/pi-agent-core"');
+		// @look/shared/types owns its DTOs; pi types stay behind the runtime-port adapter.
+		expect(types).not.toContain("@earendil-works/pi");
+		expect(types).toContain("LookAgentMessage");
 		expect(existsSync(resolve(repositoryRoot, "packages/shared/src/message-convert.ts"))).toBe(false);
 	});
 

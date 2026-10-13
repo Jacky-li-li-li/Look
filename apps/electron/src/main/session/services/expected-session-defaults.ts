@@ -123,14 +123,14 @@ export function resolveExpectedSessionDefaults(deps: ExpectedSessionDefaultsDeps
 	}
 	if (!resolved) return EMPTY_DEFAULTS;
 
-	const levels = getSupportedThinkingLevels(resolved) as ThinkingLevel[];
+	const levels = getSupportedThinkingLevels(resolved);
 	const rawLevel =
 		resolved === saved && typeof sdk.defaultThinkingLevel === "string"
 			? (sdk.defaultThinkingLevel as ThinkingLevel)
 			: "medium";
 	return {
 		model: `${resolved.provider}/${resolved.id}`,
-		thinkingLevel: clampThinkingLevel(resolved, rawLevel) as ThinkingLevel,
+		thinkingLevel: clampThinkingLevel(resolved, rawLevel),
 		modelSupportsThinking: !!resolved.reasoning,
 		availableThinkingLevels: levels,
 	};

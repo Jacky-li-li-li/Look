@@ -34,14 +34,7 @@ export function buildCorePhase(b: CompositionBuilder): void {
 			createManagedRuntime: (cwd, manager, projectId, createdAt, startEvent, options) =>
 				b
 					.req(b.runtimeLifecycle, "runtimeLifecycle")
-					.createManagedRuntime(
-						cwd,
-						asPiSessionManager(manager),
-						projectId,
-						createdAt,
-						startEvent as import("@earendil-works/pi-coding-agent").SessionStartEvent | undefined,
-						options,
-					),
+					.createManagedRuntime(cwd, asPiSessionManager(manager), projectId, createdAt, startEvent, options),
 			disposeRuntime: (sessionId, abort) =>
 				b.req(b.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
 			getManagedRuntime: (sessionId) => b.runtimeRegistry.get(sessionId),

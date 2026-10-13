@@ -15,13 +15,13 @@ import type { AttachmentRef, ImageContent } from "@look/shared/types";
 import { discoverAgents } from "../../extensions/subagent/agent-discovery.js";
 import type { RuntimePort } from "../../runtime-port/index.js";
 import { waitForPromptAccepted } from "../../utils/prompt-accepted.js";
-import type { ManagedRuntime } from "../runtime/runtime-registry.js";
+import type { ManagedSession } from "../runtime/runtime-registry.js";
 import type { AttachmentService } from "./attachment-service.js";
 
 export interface SessionMessagingHost {
-	getManagedRuntime(sessionId: string): ManagedRuntime | undefined;
+	getManagedRuntime(sessionId: string): ManagedSession | undefined;
 	/** 后台拉起 runtime（不等待）：IM/headless/定时任务路径没有 UI 激活来触发物化。 */
-	ensureRuntime(sessionId: string): Promise<ManagedRuntime>;
+	ensureRuntime(sessionId: string): Promise<ManagedSession>;
 	/** 会话存在性（live runtime 之外）：catalog stored / 草稿索引 / 在途初始化。 */
 	sessionExists(sessionId: string): boolean;
 	/** 首条消息前等待「必需」MCP 服务器连接（Proma 式 required 预检，预算内不阻塞）。 */
@@ -90,8 +90,8 @@ export class SessionMessagingService {
 	}
 
 	/** runtime 绑定完成后的挂起消息冲刷（coordinator onSessionBound 回调）。 */
-	async flushPending(managed: ManagedRuntime): Promise<void> {
-		const sessionId = managed.runtime.session.sessionId;
+	async flushPending(managed: ManagedSession): Promise<void> {
+		const sessionId = managed.session.sessionId;
 		const queue = this.pendingMessages.get(sessionId);
 		if (!queue || queue.length === 0) return;
 		this.pendingMessages.delete(sessionId);
@@ -117,8 +117,8 @@ export class SessionMessagingService {
 		this.pendingMessages.set(sessionId, queue);
 	}
 
-	private async deliver(managed: ManagedRuntime, message: PendingMessage): Promise<void> {
-		const sessionId = managed.runtime.session.sessionId;
+	private async deliver(managed: ManagedSession, message: PendingMessage): Promise<void> {
+		const sessionId = managed.session.sessionId;
 		let text = message.text;
 
 		// Parse /agent:name chips: /skill remains a pi skill command, lone @ is kept for pi file refs.

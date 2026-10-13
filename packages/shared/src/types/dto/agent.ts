@@ -1,4 +1,4 @@
-import type { ContextUsage } from "@earendil-works/pi-coding-agent";
+import type { LookContextUsage } from "./engine.js";
 import type { ThinkingLevel } from "./thinking.js";
 
 /** Runtime agent info sent to renderer */
@@ -35,7 +35,7 @@ export interface AgentInfo {
 	/** Agent definition name that triggered this sub-session (e.g. "scout"). */
 	agentConfigName?: string;
 	/** Current context usage (live-updating, used by ContextRing). */
-	contextUsage?: ContextUsage;
+	contextUsage?: LookContextUsage;
 }
 
 /** Agent definition source. */

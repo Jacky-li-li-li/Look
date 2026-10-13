@@ -19,7 +19,7 @@ import type { SubAgentRuntimeService } from "../../services/subagent-runtime.js"
 import type { UserSettingsStore } from "../../settings/store.js";
 import { withDeadline } from "../../utils/with-deadline.js";
 import { MAX_NAME_LENGTH, SESSION_INIT_TIMEOUT_MS } from "../constants.js";
-import type { ManagedRuntime, RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ManagedSession, ManagedSessionRegistry } from "../runtime/runtime-registry.js";
 import type { SessionScopeRegistry } from "../scope/scope-registry.js";
 import type { AttachmentService } from "./attachment-service.js";
 import { selectSdkFallbackModel } from "./expected-session-defaults.js";
@@ -45,7 +45,7 @@ export interface SessionLifecycleHost {
 		createdAt: number,
 		sessionStartEvent?: EngineSessionStartEvent,
 		options?: { appendSystemPrompt?: string[] },
-	): Promise<ManagedRuntime>;
+	): Promise<ManagedSession>;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
 	refreshProjectSessions(projectId: string): Promise<StoredSession[]>;
 	getStoredSession(sessionId: string): StoredSession | undefined;
@@ -64,7 +64,7 @@ export interface SessionLifecycleServiceDependencies {
 	projectService: ProjectService;
 	/** 未落盘会话的草稿索引（创建即持久、重启可恢复）。 */
 	draftIndex: SessionDraftIndex;
-	runtimeRegistry: Pick<RuntimeRegistry, "get">;
+	runtimeRegistry: Pick<ManagedSessionRegistry, "get">;
 	scopeRegistry: Pick<SessionScopeRegistry, "get">;
 	subAgentRuntimeService: SubAgentRuntimeService;
 	sessionInfoService: SessionInfoService;
@@ -77,7 +77,7 @@ export interface SessionLifecycleServiceDependencies {
 	getAvailableModelsSync(): AvailableModel[];
 	/**
 	 * Phase 2: when set, session abort routes through RuntimePort.abort
-	 * (same behavior as managed.runtime.session.abort via PiAdapter).
+	 * (same behavior as managed.session.abort via PiAdapter).
 	 */
 	runtimePort?: Pick<RuntimePort, "abort" | "engineId">;
 }
@@ -226,7 +226,7 @@ export class SessionLifecycleService {
 				SESSION_INIT_TIMEOUT_MS,
 				`Session ${sessionId} initialization timed out after ${SESSION_INIT_TIMEOUT_MS / 1000}s`,
 			);
-			const session = managed.runtime.session;
+			const session = managed.session;
 			session.setSessionName(name);
 
 			const scope = this.deps.scopeRegistry.get(sessionId);
@@ -366,6 +366,6 @@ export class SessionLifecycleService {
 			await port.abort({ engineId: port.engineId, sessionId });
 			return;
 		}
-		await managed.runtime.session.abort();
+		await managed.session.abort();
 	}
 }

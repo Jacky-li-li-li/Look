@@ -7,6 +7,7 @@
 // ============================================================
 
 import type { AgentSessionRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { EngineSessionView } from "../../runtime-port/look-types.js";
 import { SerialTail } from "../../utils/serial-tail.js";
 
 /** Stable host-owned identity for the session currently bound to a mutable SDK runtime. */
@@ -15,8 +16,14 @@ export interface RuntimeSessionBinding {
 	readonly sessionManager: SessionManager;
 }
 
-export interface ManagedRuntime {
-	readonly runtime: AgentSessionRuntime;
+/**
+ * Service-facing view of a live runtime entry. Session*Service only sees this:
+ * the engine session is reached through {@link EngineSessionView}, never the
+ * raw pi `AgentSessionRuntime`.
+ */
+export interface ManagedSession {
+	/** Look-facing view over the runtime's current engine session. */
+	readonly session: EngineSessionView;
 	readonly projectId: string;
 	/** Immutable cwd captured when this live runtime is registered. */
 	readonly cwd: string;
@@ -24,6 +31,20 @@ export interface ManagedRuntime {
 	/** Updated only when a replacement session has been accepted by the host. */
 	binding: RuntimeSessionBinding;
 	unsubscribe: () => void;
+}
+
+/** Host-internal runtime entry (lifecycle coordinator / composition / events only). */
+export interface ManagedRuntime extends ManagedSession {
+	readonly runtime: AgentSessionRuntime;
+}
+
+/** Read-only registry surface handed to Session*Service (no raw runtime). */
+export interface ManagedSessionRegistry {
+	get(sessionId: string): ManagedSession | undefined;
+	has(sessionId: string): boolean;
+	entries(): IterableIterator<[string, ManagedSession]>;
+	values(): IterableIterator<ManagedSession>;
+	keys(): IterableIterator<string>;
 }
 
 export class RuntimeRegistry {

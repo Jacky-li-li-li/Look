@@ -8,11 +8,11 @@ import {
 	discoverSkillsFromPaths,
 	isBuiltinSkillPath,
 } from "../../skills/skill-discovery-service.js";
-import type { RuntimeRegistry } from "../runtime/runtime-registry.js";
+import type { ManagedSessionRegistry } from "../runtime/runtime-registry.js";
 import type { ActiveSessionSelection } from "../scope/active-session-selection.js";
 
 export interface SkillManagementServiceOptions {
-	runtimeRegistry: Pick<RuntimeRegistry, "get" | "values">;
+	runtimeRegistry: Pick<ManagedSessionRegistry, "get" | "values">;
 	selection: ActiveSessionSelection;
 	globalSettingsManager: SkillPathsSettings;
 	userSettings: Pick<UserSettingsStore, "getAll" | "update">;
@@ -24,11 +24,10 @@ export class SkillManagementService {
 
 	listForUI() {
 		const activeRuntime = this.options.selection.currentId
-			? this.options.runtimeRegistry.get(this.options.selection.currentId)?.runtime
+			? this.options.runtimeRegistry.get(this.options.selection.currentId)?.session
 			: undefined;
-		const skillPaths =
-			activeRuntime?.services.settingsManager.getSkillPaths() ?? this.options.globalSettingsManager.getSkillPaths();
-		const loaded = activeRuntime?.services.resourceLoader.getSkills() ?? { skills: [], diagnostics: [] };
+		const skillPaths = activeRuntime?.settings.getSkillPaths() ?? this.options.globalSettingsManager.getSkillPaths();
+		const loaded = activeRuntime?.getLoadedSkills() ?? { skills: [], diagnostics: [] };
 		const rawSkills = loaded.skills.length > 0 ? loaded.skills : discoverSkillsFromPaths(skillPaths);
 		// Deduplicate by name: the same skill can be discovered from multiple paths,
 		// and the pi SDK may also return duplicates across its scan roots.
@@ -66,9 +65,9 @@ export class SkillManagementService {
 	async importPaths(paths: string[]): Promise<{ success: boolean; importedCount: number; error?: string }> {
 		try {
 			const activeRuntime = this.options.selection.currentId
-				? this.options.runtimeRegistry.get(this.options.selection.currentId)?.runtime
+				? this.options.runtimeRegistry.get(this.options.selection.currentId)?.session
 				: undefined;
-			const settingsManager = activeRuntime?.services.settingsManager ?? this.options.globalSettingsManager;
+			const settingsManager = activeRuntime?.settings ?? this.options.globalSettingsManager;
 			const currentPaths = new Set(
 				settingsManager.getSkillPaths().flatMap((item) => {
 					const resolved = item.startsWith("~") ? join(homedir(), item.slice(1)) : item;
@@ -92,7 +91,7 @@ export class SkillManagementService {
 				await settingsManager.flush();
 			}
 			await Promise.all(
-				Array.from(this.options.runtimeRegistry.values()).map((managed) => managed.runtime.session.reload()),
+				Array.from(this.options.runtimeRegistry.values()).map((managed) => managed.session.reload()),
 			);
 			return { success: true, importedCount };
 		} catch (error) {
