@@ -95,7 +95,7 @@ interface RuntimePort {
 - **Registry 与活会话对齐**：`onSessionBound` / `associateRuntimePort`（rebind 换 id）`bind`；`onSessionDisposed` `unbind`
 - **Lark chat queue in-flight abort**：`LarkChatTaskQueue` 每 key 持有 `AbortController`；`enqueue(task: (signal) => …)`；`abort` / `clear` / `clearForApp` 会 abort in-flight 并跳过 pending；桥接 stop / unbind / dispose 路径 **先** abort 队列信号再 `abortAgent`
 
-### Phase 3b — Session* 解耦（PR #11，待合入 main；口径仍 2.7.x）
+### Phase 3b — Session* 解耦（PR #11，已在 main；口径仍 2.7.x）
 
 - **`apps/electron/src/main/session/services/` 不再直接 import `@earendil-works/pi-*`**（`rg` 该目录应为空）
 - 新增 Look 侧边界：`look-types.ts`（opaque handle / ModelLookup / PersistedSessionRow 等）、`pi-session-ops.ts`（SessionManager create/open/list/fork 唯一入口）、`thinking.ts`（clamp / supported levels）
