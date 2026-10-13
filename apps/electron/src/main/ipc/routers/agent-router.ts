@@ -2,8 +2,8 @@
 // Agent router — session send/activate/create/destroy/abort
 // ============================================================
 
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { AttachmentRef, ThinkingLevel } from "@look/shared/types";
+import { insertQueuedAsSteer, replayQueue } from "../../runtime-port/pi-queue-ops.js";
 import { assertAttachmentName } from "../../session/services/attachment-service.js";
 import { guardAgentId, guardEnum, guardObject, guardOptionalString, guardString } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
@@ -26,21 +26,6 @@ const THINKING_LEVELS = [
 	"xhigh",
 	"max",
 ] as const satisfies readonly ThinkingLevel[];
-
-/**
- * 清空队列并按原顺序重放除 excludeText 外的消息。
- * remove-queued-message 与 insert-queued-message 共用：insert 在重放后
- * 再以 steer 插入新消息，保证队列顺序正确。
- */
-async function replayQueue(session: AgentSession, excludeText?: string): Promise<void> {
-	const { steering, followUp } = session.clearQueue();
-	for (const t of steering) {
-		if (t !== excludeText) await session.steer(t);
-	}
-	for (const t of followUp) {
-		if (t !== excludeText) await session.followUp(t);
-	}
-}
 
 /**
  * 校验渲染端传来的附件引用数组（agent:send-message 使用）。
@@ -84,7 +69,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		return ctx.runtime.registry.withExclusive(_agentId, async () => {
 			const managed = ctx.runtime.registry.get(_agentId);
 			if (!managed) return { success: false, error: "Session not found" };
-			await replayQueue(managed.runtime.session, data.text);
+			await replayQueue(managed, data.text);
 			return { success: true };
 		});
 	});
@@ -95,9 +80,7 @@ export const agentRouter: IpcRouter = (ctx, register) => {
 		return ctx.runtime.registry.withExclusive(_agentId, async () => {
 			const managed = ctx.runtime.registry.get(_agentId);
 			if (!managed) return { success: false, error: "Session not found" };
-			const session = managed.runtime.session;
-			await replayQueue(session, data.text);
-			await session.prompt(data.text, { streamingBehavior: "steer" });
+			await insertQueuedAsSteer(managed, data.text);
 			return { success: true };
 		});
 	});

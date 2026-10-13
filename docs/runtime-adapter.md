@@ -1,6 +1,6 @@
 # Look Runtime Adapter
 
-状态：**Phase 1 + Phase 2 已在 main**；**Phase 3b（Session* / shared 去 pi）在 PR #11，尚未合入 main**（零用户可见行为变化；版本/changelog 口径仍属 **2.7.x**）· 默认引擎仍为 **pi**  
+状态：**Phase 1 + Phase 2 + Phase 3b 已在 main**（Phase 3b = Session* / shared 去 pi，经 PR #11；零用户可见行为变化；版本/changelog 口径仍属 **2.7.x**）· 默认引擎仍为 **pi**  
 叙事目标：**2.8** = 可选执行基座可宣称之时（DshAdapter 真能开、用户可切引擎）——**尚未到**  
 关联：deepseek-harness（dsh）、后续 Claude Code SDK 等  
 权威设计草案来源：仓库外设计稿；本文为落地文档。
@@ -95,7 +95,7 @@ interface RuntimePort {
 - **Registry 与活会话对齐**：`onSessionBound` / `associateRuntimePort`（rebind 换 id）`bind`；`onSessionDisposed` `unbind`
 - **Lark chat queue in-flight abort**：`LarkChatTaskQueue` 每 key 持有 `AbortController`；`enqueue(task: (signal) => …)`；`abort` / `clear` / `clearForApp` 会 abort in-flight 并跳过 pending；桥接 stop / unbind / dispose 路径 **先** abort 队列信号再 `abortAgent`
 
-### Phase 3b — Session* 解耦（PR #11，待合入 main；口径仍 2.7.x）
+### Phase 3b — Session* 解耦（PR #11，已在 main；口径仍 2.7.x）
 
 - **`apps/electron/src/main/session/services/` 不再直接 import `@earendil-works/pi-*`**（`rg` 该目录应为空）
 - 新增 Look 侧边界：`look-types.ts`（opaque handle / ModelLookup / PersistedSessionRow 等）、`pi-session-ops.ts`（SessionManager create/open/list/fork 唯一入口）、`thinking.ts`（clamp / supported levels）
@@ -109,13 +109,13 @@ interface RuntimePort {
 
 ### 已落地 vs 尚未落地
 
-| 已落地（Phase 1+2 已在 main；Phase 3b 见 PR #11） | 尚未（勿对外宣称） |
+| 已落地（Phase 1+2+3b 已在 main） | 尚未（勿对外宣称） |
 |-----------|-------------------|
 | RuntimePort + PiAdapter 骨架 | DshAdapter / ClaudeCodeAdapter |
 | abort 生产路径经 RuntimePort | 设置项 `executionEngine` + capabilities 灰显 UI |
 | Registry bind/unbind 与活会话对齐 | 生产事件路径改走 `Port.subscribe` |
 | Lark 队列可 abort in-flight / pending | 用户可切引擎 / 「可选执行基座」产品口径 |
-| Session*Service / `@look/shared` 无直接 `@earendil-works/pi-*` import，services 不见 `AgentSessionRuntime`（Phase 3b，PR #11） | factory / translator / composition / extensions 去 pi（后续） |
+| Session*Service / `@look/shared` 无直接 `@earendil-works/pi-*` import，services 不见 `AgentSessionRuntime`（Phase 3b，已在 main，PR #11） | factory / translator / composition / extensions 去 pi（后续） |
 | 默认仍是 pi；零行为变化（除有意 abortability） |  |
 
 ## 6. 版本与 2.8 叙事（发版口径）
@@ -134,7 +134,7 @@ interface RuntimePort {
 
 1. ~~抽 Port + PiAdapter 包装现网~~ ← Phase 1（已在 main）
 2. ~~abort 缝 + Lark queue abort + registry 对齐~~ ← Phase 2（已在 main）
-3. ~~Session*Service 去直接 `@earendil-works/pi-*` import；messaging 经 RuntimePort.send~~ ← Phase 3b（PR #11；仍 2.7.x）
+3. ~~Session*Service 去直接 `@earendil-works/pi-*` import；messaging 经 RuntimePort.send~~ ← Phase 3b（已在 main，PR #11；仍 2.7.x）
 4. 设置项 `executionEngine` + capabilities 灰显
 5. **DshAdapter MVP**：create / send / stream / abort / 基础 tool-approval → **此时才进入 2.8 产品叙事**
 6. 更深解耦（factory / translator / composition 只经 Port）；AGENTS.md 已先立 RuntimePort-first 长期规则（pi 不变量在默认 PiAdapter 下仍适用）
