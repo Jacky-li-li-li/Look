@@ -1,3 +1,12 @@
+export {
+	DEFAULT_ENGINE_ID,
+	type EngineAdapterFactory,
+	type EngineSelectionInput,
+	type EngineSelectionResult,
+	RUNTIME_ENGINE_ENV,
+	readRequestedEngineId,
+	selectRuntimeEngine,
+} from "./engine-selection.js";
 export type {
 	EngineSessionHandle,
 	EngineSessionManagerView,

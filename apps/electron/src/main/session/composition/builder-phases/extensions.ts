@@ -13,7 +13,12 @@ import { createSubagentExtensionFactory } from "../../../extensions/subagent/sub
 import type { AgentConfig, SubagentProgress } from "../../../extensions/subagent/types.js";
 import { createTranscribeExtensionFactory } from "../../../extensions/transcribe-extension.js";
 import { getAvailableModels } from "../../../models/model-queries.js";
-import { PiAdapter, RuntimePortRegistry } from "../../../runtime-port/index.js";
+import {
+	PiAdapter,
+	RuntimePortRegistry,
+	readRequestedEngineId,
+	selectRuntimeEngine,
+} from "../../../runtime-port/index.js";
 import { SessionRuntimeFactory } from "../../runtime/runtime-factory.js";
 import type { CompositionBuilder } from "../builder-context.js";
 
@@ -125,8 +130,14 @@ export function buildExtensionsPhase(b: CompositionBuilder): void {
 		},
 		resolvePermission: (decision) => b.req(b.permissionService, "permissionService").handleResponse(decision),
 	});
-	portRegistry.setDefault(piAdapter);
+	// Engine selection seam (§10.3): production registers only pi, so any
+	// requested non-pi engine falls back to pi with a warning.
+	const { port: selectedPort } = selectRuntimeEngine({
+		requested: readRequestedEngineId(),
+		factories: { pi: () => piAdapter },
+	});
+	portRegistry.setDefault(selectedPort);
 	b.piAdapter = piAdapter;
-	b.runtimePort = piAdapter;
+	b.runtimePort = selectedPort;
 	b.runtimePortRegistry = portRegistry;
 }
