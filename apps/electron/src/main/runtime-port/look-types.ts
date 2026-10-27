@@ -127,11 +127,17 @@ export interface EngineRuntimeSettings extends SkillPathsSettings {
 	setProjectTrusted(trusted: boolean): void;
 }
 
+/**
+ * How an accepted prompt was dispatched (pi PromptDisposition).
+ * The preflight callback is not invoked when the prompt is rejected.
+ */
+export type LookPromptDisposition = "handled" | "queued" | "started";
+
 /** Prompt options Look passes to the engine. */
 export interface EnginePromptOptions {
 	source: "rpc";
 	streamingBehavior?: "steer" | "followUp";
-	preflightResult?: (success: boolean) => void;
+	preflightResult?: (disposition: LookPromptDisposition) => void;
 }
 
 /**

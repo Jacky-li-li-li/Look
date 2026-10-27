@@ -51,8 +51,8 @@ export interface UserMessage {
 	images?: unknown[];
 	/** How to queue when the engine is already streaming (pi: steer | followUp). */
 	streamingBehavior?: "steer" | "followUp";
-	/** Engine prompt preflight callback (pi preflightResult). */
-	onPreflight?: (success: boolean) => void;
+	/** Engine prompt preflight callback (pi preflightResult / PromptDisposition). */
+	onPreflight?: (disposition: import("./look-types.js").LookPromptDisposition) => void;
 }
 
 /**

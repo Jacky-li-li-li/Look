@@ -172,7 +172,7 @@ export class FakeRuntimeAdapter implements RuntimePort {
 	async send(ref: EngineSessionRef, message: UserMessage): Promise<void> {
 		const s = this.require(ref);
 		s.sent.push(message);
-		message.onPreflight?.(true);
+		message.onPreflight?.("started");
 		await s.view.prompt(message.text, { source: "rpc", streamingBehavior: message.streamingBehavior });
 		const now = Date.now();
 		const events: LookUiEvent[] = [
