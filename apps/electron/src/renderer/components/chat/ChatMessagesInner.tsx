@@ -1,6 +1,5 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { cn } from "@look/ui";
-import type { LookSessionEntry } from "@shared/types";
+import type { LookAgentMessage, LookSessionEntry } from "@shared/types";
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { Loader2, MessageSquare } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -208,7 +207,7 @@ export const ChatMessagesInner = memo(function ChatMessagesInner({
 	}, []);
 
 	const handleCopyMessage = useCallback(
-		async (id: string, message: AgentMessage) => {
+		async (id: string, message: LookAgentMessage) => {
 			const text = messageText(message);
 			if (!text) return;
 			try {

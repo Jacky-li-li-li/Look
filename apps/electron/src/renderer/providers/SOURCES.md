@@ -22,7 +22,7 @@ Every Lobe Icon SVG uses `fill="currentColor"` (single-color path). The actual r
 | `google` | `gemini.svg` |
 | `google-vertex` | `vertexai.svg` |
 | `openai` | `openai.svg` |
-| `azure-openai-responses` | `azure.svg` |
+| `azure` | `azure.svg` |
 | `openai-codex` | `codex.svg` |
 | `deepseek` | `deepseek.svg` |
 | `github-copilot` | `githubcopilot.svg` |

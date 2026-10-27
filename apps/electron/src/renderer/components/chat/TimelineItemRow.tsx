@@ -1,5 +1,4 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { LookSessionEntry, LookUiToolExecState } from "@shared/types";
+import type { LookAgentMessage, LookSessionEntry, LookUiToolExecState } from "@shared/types";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { TimelineItem } from "../../lib/timeline";
@@ -33,7 +32,7 @@ export type TimelineItemRowProps = {
 	branchBusy: boolean;
 	onBranch?: (entryId: string) => void;
 	onFork?: (entryId: string) => void;
-	onCopy?: (id: string, message: AgentMessage) => void;
+	onCopy?: (id: string, message: LookAgentMessage) => void;
 };
 
 /**

@@ -8,6 +8,7 @@ import { PermissionService } from "../../../permissions/service.js";
 import { ProjectService } from "../../../projects/project-service.js";
 import { SubAgentRuntimeService } from "../../../services/subagent-runtime.js";
 import { migrateLegacySettings } from "../../../settings/migrate.js";
+import { migrateAzureProviderId } from "../../../settings/migrate-azure-provider.js";
 import { PromptStore } from "../../../settings/prompt-store.js";
 import { UserSettingsStore } from "../../../settings/store.js";
 import { getTranscriptionService } from "../../../transcribe/transcription-service.js";
@@ -36,6 +37,11 @@ export function buildInfraPhase(
 	const migration = migrateLegacySettings();
 	if (migration.migrated && migration.keys.length > 0) {
 		console.log(`[Look] Migrated settings: ${migration.keys.join(", ")}`);
+	}
+	// pi 1.0.3: azure-openai-responses → azure (auth/models/settings + session JSONL provider).
+	const azureMigration = migrateAzureProviderId();
+	if (azureMigration.migrated && azureMigration.keys.length > 0) {
+		console.log(`[Look] Migrated azure provider id: ${azureMigration.keys.join(", ")}`);
 	}
 
 	b.trustStore = new ProjectTrustStore(getLookDir());
