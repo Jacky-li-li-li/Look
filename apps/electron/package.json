@@ -29,9 +29,9 @@
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "1.1.0",
-    "@earendil-works/pi-ai": "1.1.0",
-    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-agent-core": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@larksuiteoapi/node-sdk": "^1.73.0",
     "@look/shared": "*",
