@@ -254,9 +254,9 @@ describe("SessionSubagentService 子会话模型继承（2026-08-08）", () => {
 			service,
 			childSession: child,
 			agent,
-		} = makeService({ provider: "deepseek", id: "deepseek-v4-flash" }, childSession);
+		} = makeService({ provider: "deepseek", id: "deepseek-flash" }, childSession);
 		await service.runSubSession("parent", agent, "task", undefined, "标题");
-		expect(child.setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-v4-flash" });
+		expect(child.setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-flash" });
 	});
 
 	it("父会话无模型时不 setModel(保持 SDK 解析/bindRuntime 兜底)", async () => {
@@ -272,7 +272,7 @@ describe("SessionSubagentService 子会话模型继承（2026-08-08）", () => {
 			service,
 			childSession: child,
 			agent,
-		} = makeService({ provider: "deepseek", id: "deepseek-v4-flash" }, childSession, "anthropic/claude-opus-4-8");
+		} = makeService({ provider: "deepseek", id: "deepseek-flash" }, childSession, "anthropic/claude-opus-4-8");
 		await service.runSubSession("parent", agent, "task", undefined, "标题");
 		expect(child.setModel).toHaveBeenCalledWith({ provider: "anthropic", id: "claude-opus-4-8" });
 	});

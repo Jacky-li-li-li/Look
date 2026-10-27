@@ -1,4 +1,4 @@
-import type { LookAgentMessage, LookContextUsage, LookModelInfo, LookSessionStats } from "./engine.js";
+import type { LookAgentMessage, LookContextUsage, LookModelInfo, LookSessionStats, LookUsage } from "./engine.js";
 import type { ThinkingLevel } from "./thinking.js";
 
 export interface SessionRuntimeSnapshot {
@@ -80,7 +80,11 @@ export type LookSessionEntry =
 	| { type: "model_change"; id: string; provider: string; modelId: string }
 	| { type: "thinking_level_change"; id: string; thinkingLevel: string }
 	| { type: "label"; id: string; label?: string }
-	| { type: "session_info"; id: string; name?: string };
+	| { type: "session_info"; id: string; name?: string }
+	/** Non-assistant usage (e.g. cache_warm); contributes to totals, not chat UI. */
+	| { type: "usage"; id: string; kind: string; provider: string; model: string; usage: LookUsage; note?: string }
+	/** Append-only model-context edit; replacement null omits target from future context. */
+	| { type: "context_edit"; id: string; targetId: string; replacement: { content: unknown } | null };
 
 export interface ForkedSessionResult {
 	/** New pi session ID created for the forked branch. */

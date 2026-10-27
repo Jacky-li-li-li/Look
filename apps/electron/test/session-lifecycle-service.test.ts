@@ -417,17 +417,17 @@ describe("SessionLifecycleService", () => {
 
 		it("SDK 未解析出模型时用可用模型兜底 setModel", async () => {
 			const { session, setModel, deps } = makeDeps({
-				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
-				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+				available: [{ provider: "deepseek", id: "deepseek-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-flash" },
 			});
 			await ensureSessionModel(session, deps);
-			expect(setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-v4-flash" });
+			expect(setModel).toHaveBeenCalledWith({ provider: "deepseek", id: "deepseek-flash" });
 		});
 
 		it("同一 provider 有多个模型时按 pi 默认模型表兜底", async () => {
 			const { session, setModel, deps } = makeDeps({
 				available: [
-					{ provider: "deepseek", id: "deepseek-v4-flash" },
+					{ provider: "deepseek", id: "deepseek-flash" },
 					{ provider: "deepseek", id: "deepseek-v4-pro" },
 				],
 				findResult: { provider: "deepseek", id: "deepseek-v4-pro" },
@@ -439,7 +439,7 @@ describe("SessionLifecycleService", () => {
 		it("已解析出模型时跳过(即使有可用模型)", async () => {
 			const { session, setModel, deps } = makeDeps({
 				model: { provider: "anthropic", id: "claude-opus-4-8" },
-				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
+				available: [{ provider: "deepseek", id: "deepseek-flash" }],
 			});
 			await ensureSessionModel(session, deps);
 			expect(setModel).not.toHaveBeenCalled();
@@ -447,8 +447,8 @@ describe("SessionLifecycleService", () => {
 
 		it("兜底 setModel 抛错时不向上抛", async () => {
 			const { session, deps } = makeDeps({
-				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
-				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+				available: [{ provider: "deepseek", id: "deepseek-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-flash" },
 				setModelImpl: async () => {
 					throw new Error("No API key for provider/model");
 				},
@@ -465,8 +465,8 @@ describe("SessionLifecycleService", () => {
 		it("兜底模型与用户全局默认不同时恢复原默认(防污染)", async () => {
 			const { session, setModel, update, deps } = makeDeps({
 				preferredModel: "anthropic/claude-opus-4-8",
-				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
-				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+				available: [{ provider: "deepseek", id: "deepseek-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-flash" },
 			});
 			await ensureSessionModel(session, deps);
 			expect(setModel).toHaveBeenCalledTimes(1);
@@ -476,9 +476,9 @@ describe("SessionLifecycleService", () => {
 
 		it("兜底模型与用户默认一致时不恢复", async () => {
 			const { session, update, deps } = makeDeps({
-				preferredModel: "deepseek/deepseek-v4-flash",
-				available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
-				findResult: { provider: "deepseek", id: "deepseek-v4-flash" },
+				preferredModel: "deepseek/deepseek-flash",
+				available: [{ provider: "deepseek", id: "deepseek-flash" }],
+				findResult: { provider: "deepseek", id: "deepseek-flash" },
 			});
 			await ensureSessionModel(session, deps);
 			expect(update).not.toHaveBeenCalled();

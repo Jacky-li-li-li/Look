@@ -31,12 +31,19 @@ export interface LookThinkingContent {
 }
 
 /** Assistant tool invocation content block. */
+/** JSON-compatible value (mirrors pi JsonValue; arrays are readonly). */
+export type LookJsonValue = null | boolean | number | string | readonly LookJsonValue[] | LookJsonObject;
+
+export type LookJsonObject = {
+	[key: string]: LookJsonValue;
+};
+
 export interface LookToolCall {
 	type: "toolCall";
 	id: string;
 	name: string;
-	// biome-ignore lint/suspicious/noExplicitAny: mirrors engine tool-argument payloads.
-	arguments: Record<string, any>;
+	/** JSON-compatible tool arguments (mirrors pi ToolCall.arguments / JsonObject). */
+	arguments: LookJsonObject;
 	thoughtSignature?: string;
 	namespace?: string;
 }
@@ -120,7 +127,7 @@ export interface LookCustomMessage<T = unknown> {
 export interface LookBranchSummaryMessage {
 	role: "branchSummary";
 	summary: string;
-	fromId: string;
+	fromId: string | null;
 	timestamp: number;
 }
 
@@ -131,8 +138,27 @@ export interface LookCompactionSummaryMessage {
 	timestamp: number;
 }
 
+export interface LookSystemMessage {
+	role: "system";
+	/** Instruction text. Leading message = base prompt; later messages append. */
+	content: string | LookTextContent[];
+	/** Named prompt sections; `null` removes a section. */
+	sections?: Record<string, string | null>;
+	/** Tools that become available at this point in the transcript. */
+	toolsAdded?: Array<{
+		name: string;
+		description: string;
+		parameters: unknown;
+		constrainedSampling?: unknown;
+	}>;
+	/** Tools that stop being available at this point. */
+	toolsRemoved?: Array<{ name: string }>;
+	timestamp: number;
+}
+
 /** Conversation message as persisted in a session entry / streamed to the renderer. */
 export type LookAgentMessage =
+	| LookSystemMessage
 	| LookUserMessage
 	| LookAssistantMessage
 	| LookToolResultMessage

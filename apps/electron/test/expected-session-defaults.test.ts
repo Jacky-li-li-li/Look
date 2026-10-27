@@ -94,14 +94,14 @@ describe("resolveExpectedSessionDefaults", () => {
 			sdkSettings: { defaultProvider: "anthropic", defaultModel: "claude-opus-4-8" },
 			models: [
 				model({ provider: "anthropic", id: "claude-opus-4-8", reasoning: true }),
-				model({ provider: "deepseek", id: "deepseek-v4-flash", reasoning: true }),
+				model({ provider: "deepseek", id: "deepseek-flash", reasoning: true }),
 			],
 			authProviders: ["deepseek"],
 			// getAvailableModels 的真实语义已按凭据过滤——未授权模型不在列。
-			available: [{ provider: "deepseek", id: "deepseek-v4-flash" }],
+			available: [{ provider: "deepseek", id: "deepseek-flash" }],
 		});
 		const result = resolveExpectedSessionDefaults(deps);
-		expect(result.model).toBe("deepseek/deepseek-v4-flash");
+		expect(result.model).toBe("deepseek/deepseek-flash");
 		// 兜底路径：pi 用 DEFAULT_THINKING_LEVEL（"medium"），不用 settings 存量
 		expect(result.thinkingLevel).toBe("medium");
 	});
@@ -109,12 +109,12 @@ describe("resolveExpectedSessionDefaults", () => {
 	it("provider 有多个可用模型时遵循 pi 的默认模型表，而不是列表第一项", () => {
 		const deps = makeDeps({
 			models: [
-				model({ provider: "deepseek", id: "deepseek-v4-flash", reasoning: true }),
+				model({ provider: "deepseek", id: "deepseek-flash", reasoning: true }),
 				model({ provider: "deepseek", id: "deepseek-v4-pro", reasoning: true }),
 			],
 			// 运行时的可用列表当前按 flash 在前返回，但 pi 默认是 pro。
 			available: [
-				{ provider: "deepseek", id: "deepseek-v4-flash" },
+				{ provider: "deepseek", id: "deepseek-flash" },
 				{ provider: "deepseek", id: "deepseek-v4-pro" },
 			],
 		});
