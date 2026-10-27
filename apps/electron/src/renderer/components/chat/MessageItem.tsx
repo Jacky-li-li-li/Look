@@ -9,9 +9,8 @@
 // 流式与否是同一组件的 prop 状态，而非另一棵树。
 // ============================================================
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
+import type { TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { LookAgentMessage, LookAssistantMessage, LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
 import { useAtomValue } from "jotai";
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,7 +24,7 @@ import { StreamingBlocksBubble } from "./StreamingBlocksBubble";
 
 export interface MessageItemProps {
 	/** 持久化消息（纯 live 时为 undefined）。 */
-	message?: AgentMessage;
+	message?: LookAgentMessage;
 	/** 持久化条目的稳定 ID（纯 live 时为 undefined）。 */
 	entryId?: string;
 	/** Scope-aware aggregate key for the persisted block cache. */
@@ -45,7 +44,7 @@ export interface MessageItemProps {
 }
 
 function senderFor(
-	message: AgentMessage | undefined,
+	message: LookAgentMessage | undefined,
 	agentName: string | undefined,
 	userName: string,
 	fallbackAgent: string,
@@ -77,7 +76,7 @@ export const MessageItem = memo(function MessageItem({
 	const messageAlignment = useAtomValue(messageAlignmentAtom);
 
 	const isUser = message?.role === "user";
-	const assistant = message?.role === "assistant" ? (message as AssistantMessage) : null;
+	const assistant = message?.role === "assistant" ? (message as LookAssistantMessage) : null;
 	const sender = senderFor(message, agentName, userProfile.userName || t("chat.you"), t("chat.agent"));
 
 	// hasLive 基于「是否传入 liveBlocks」而非长度：空数组也要走流式分支，
@@ -136,7 +135,7 @@ export const MessageItem = memo(function MessageItem({
 // MessageBlockList memoizes each unified block; keep conversion separate from the row.
 const messageSignatureCache = new WeakMap<object, string>();
 
-function messageSignature(message: AgentMessage | undefined): string {
+function messageSignature(message: LookAgentMessage | undefined): string {
 	if (!message) return "";
 	const cached = messageSignatureCache.get(message);
 	if (cached) return cached;
@@ -242,7 +241,7 @@ const MessageBlockListForMessage = memo(function MessageBlockListForMessage({
 	attachmentSessionId,
 	attachmentProjectId,
 }: {
-	message: AgentMessage;
+	message: LookAgentMessage;
 	cacheKey?: string;
 	isStreaming: boolean;
 	toolExecutions: Record<string, LookUiToolExecState>;
@@ -266,7 +265,7 @@ const MessageBlockListForMessage = memo(function MessageBlockListForMessage({
 });
 
 function messageBlocks(
-	message: AgentMessage,
+	message: LookAgentMessage,
 ): Array<
 	| import("@earendil-works/pi-ai").TextContent
 	| import("@earendil-works/pi-ai").ThinkingContent

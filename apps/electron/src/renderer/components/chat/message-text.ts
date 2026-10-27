@@ -1,8 +1,8 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { TextContent } from "@earendil-works/pi-ai";
+import type { LookAgentMessage } from "@shared/types";
 
-/** 从 AgentMessage 提取可显示的纯文本（fork 预览、复制等共用）。 */
-export function messageText(message: AgentMessage): string {
+/** 从 LookAgentMessage 提取可显示的纯文本（fork 预览、复制等共用）。 */
+export function messageText(message: LookAgentMessage): string {
 	if (message.role === "bashExecution") return `$ ${message.command}\n${message.output}`.trim();
 	if (message.role === "branchSummary" || message.role === "compactionSummary") return message.summary.trim();
 	if (!("content" in message)) return "";

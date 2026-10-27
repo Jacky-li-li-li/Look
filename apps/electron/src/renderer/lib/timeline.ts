@@ -1,17 +1,24 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, ImageContent, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { LookSessionEntry, LookUiPhase, LookUiStreamBlock, LookUiToolExecState } from "@shared/types";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
+import type {
+	LookAgentMessage,
+	LookAssistantMessage,
+	LookSessionEntry,
+	LookToolResultMessage,
+	LookUiPhase,
+	LookUiStreamBlock,
+	LookUiToolExecState,
+} from "@shared/types";
 
 export interface TimelineItem {
 	id: string;
 	entryId?: string;
 	/** Other assistant entry IDs merged into this bubble, for diagnostics / future navigation. */
 	secondaryEntryIds?: string[];
-	message?: AgentMessage;
+	message?: LookAgentMessage;
 	entry?: Exclude<LookSessionEntry, { type: "message" }>;
 	isLive: boolean;
 	/** toolResult messages keyed by toolCallId, attached to the preceding assistant. */
-	toolResultMap?: Record<string, ToolResultMessage>;
+	toolResultMap?: Record<string, LookToolResultMessage>;
 	/** Finalized turn duration for this persisted assistant bubble, in milliseconds. */
 	turnDurationMs?: number;
 	/** Discrete-event streaming blocks for the active assistant message. */
@@ -28,15 +35,15 @@ export interface TimelineItem {
 	compactionEstimatedTokensAfter?: number;
 }
 
-function isToolResultMessage(msg: AgentMessage): msg is ToolResultMessage {
+function isToolResultMessage(msg: LookAgentMessage): msg is LookToolResultMessage {
 	return msg.role === "toolResult";
 }
 
-function isAssistantMessage(msg: AgentMessage): msg is AssistantMessage {
+function isAssistantMessage(msg: LookAgentMessage): msg is LookAssistantMessage {
 	return msg.role === "assistant";
 }
 
-function mergeAssistantContent(target: AssistantMessage, source: AssistantMessage): AssistantMessage {
+function mergeAssistantContent(target: LookAssistantMessage, source: LookAssistantMessage): LookAssistantMessage {
 	return {
 		...target,
 		content: [...target.content, ...source.content],
@@ -53,7 +60,7 @@ export function buildPersistedTimeline(
 	compactionEstimatedTokensAfter?: number,
 ): TimelineItem[] {
 	const items: TimelineItem[] = [];
-	let pendingToolResults: ToolResultMessage[] = [];
+	let pendingToolResults: LookToolResultMessage[] = [];
 	let currentAssistant: TimelineItem | null = null;
 
 	const flushToolResults = (): void => {
@@ -169,7 +176,7 @@ export function applyLiveTimeline(
 		items.push({
 			id: "pending-user",
 			isLive: false,
-			message: { role: "user", content: [...textBlock, ...imageBlocks] } as AgentMessage,
+			message: { role: "user", content: [...textBlock, ...imageBlocks] } as LookAgentMessage,
 		});
 	}
 

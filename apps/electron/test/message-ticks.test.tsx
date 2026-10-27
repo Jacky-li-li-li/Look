@@ -11,7 +11,7 @@
 // scrollHeight/clientHeight（HTMLElement.prototype 注入 mock）；
 // Conversation 的 ResizeObserver 保持惰性 stub，避免库动画干扰。
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { LookAgentMessage } from "@shared/types";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -148,7 +148,7 @@ describe("userMessagePreview", () => {
 	});
 
 	it("returns empty string for non-user messages", () => {
-		expect(userMessagePreview({ role: "assistant" } as unknown as AgentMessage)).toBe("");
+		expect(userMessagePreview({ role: "assistant" } as unknown as LookAgentMessage)).toBe("");
 	});
 });
 

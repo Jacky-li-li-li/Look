@@ -19,9 +19,9 @@
 // （内容全部可见时刻度无意义）。
 // ============================================================
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { TextContent } from "@earendil-works/pi-ai";
 import { cn } from "@look/ui";
+import type { LookAgentMessage } from "@shared/types";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useConversationContext } from "./conversation";
@@ -49,7 +49,7 @@ const MIN_BAR_HEIGHT = 32;
 const MAX_BAR_HEIGHT = 280;
 
 /** 提取 user 消息的文本预览：string 直接取，blocks 取 text block 拼接 */
-export function userMessagePreview(message: AgentMessage): string {
+export function userMessagePreview(message: LookAgentMessage): string {
 	if (message.role !== "user") return "";
 	const content = message.content;
 	if (typeof content === "string") return content.trim();

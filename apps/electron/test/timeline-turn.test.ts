@@ -2,13 +2,12 @@
 // timeline.ts — collectTurnEntryIds / collectTurnEntries（轮次变更卡片插入点）
 // ============================================================
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { LookSessionEntry } from "@shared/types";
+import type { LookAgentMessage, LookSessionEntry } from "@shared/types";
 import { describe, expect, it } from "vitest";
 import { collectTurnEntries, collectTurnEntryIds, type TimelineItem } from "../src/renderer/lib/timeline";
 
 function userItem(id: string): TimelineItem {
-	return { id, entryId: id, message: { role: "user", content: [] } as AgentMessage, isLive: false };
+	return { id, entryId: id, message: { role: "user", content: [] } as LookAgentMessage, isLive: false };
 }
 
 function assistantItem(id: string, secondary: string[] = []): TimelineItem {
@@ -16,7 +15,7 @@ function assistantItem(id: string, secondary: string[] = []): TimelineItem {
 		id,
 		entryId: id,
 		secondaryEntryIds: secondary,
-		message: { role: "assistant", content: [] } as AgentMessage,
+		message: { role: "assistant", content: [] } as LookAgentMessage,
 		isLive: false,
 	};
 }
@@ -25,7 +24,7 @@ function messageEntry(id: string, role: "user" | "assistant"): LookSessionEntry 
 	return {
 		type: "message",
 		id,
-		message: { role, content: [] } as AgentMessage,
+		message: { role, content: [] } as LookAgentMessage,
 	};
 }
 

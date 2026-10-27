@@ -82,6 +82,8 @@ export interface LookAssistantMessage {
 	model: string;
 	responseModel?: string;
 	responseId?: string;
+	/** Provider/stream diagnostics when the engine surfaces them. */
+	diagnostics?: unknown[];
 	usage: LookUsage;
 	stopReason: LookStopReason;
 	errorMessage?: string;
