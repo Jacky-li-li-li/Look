@@ -56,6 +56,8 @@ export function createSkillInjectExtensionFactory(): ExtensionFactory {
 
 		// ── Step 2: inject expanded skill content for the LLM ──
 		api.on("before_agent_start", async (event) => {
+			// 1.2.0+: BeforeAgentStartEvent is a union — only user prompts carry `prompt`.
+			if (event.messageType !== "user") return;
 			// 从当前 prompt 文本（transform 后）解析 skill 引用，天然与本轮对应。
 			const match = event.prompt.match(SKILL_TAG_RE);
 			if (!match) return;

@@ -54,6 +54,7 @@ describe("SkillInjectExtension", () => {
 		const dir = makeSkillDir();
 		const beforeStartHandler = api.handlers.get("before_agent_start")!;
 		const result = (await beforeStartHandler({
+			messageType: "user",
 			prompt: '<skill-tag data-look-name="test-skill"></skill-tag> extra args',
 			systemPromptOptions: {
 				skills: [{ name: "test-skill", filePath: path.join(dir, "test-skill.md") }],
@@ -81,6 +82,7 @@ describe("SkillInjectExtension", () => {
 		const beforeStartHandler = api.handlers.get("before_agent_start")!;
 		// 模拟快速连发：prompt 里各自带自己的 skill-tag，注入必须与当前 prompt 匹配
 		const result = (await beforeStartHandler({
+			messageType: "user",
 			prompt: '<skill-tag data-look-name="other-skill"></skill-tag>',
 			systemPromptOptions: {
 				skills: [
@@ -101,6 +103,7 @@ describe("SkillInjectExtension", () => {
 
 		const beforeStartHandler = api.handlers.get("before_agent_start")!;
 		const result = await beforeStartHandler({
+			messageType: "user",
 			prompt: "just a normal message",
 			systemPromptOptions: { skills: [] },
 		});
@@ -114,7 +117,22 @@ describe("SkillInjectExtension", () => {
 
 		const beforeStartHandler = api.handlers.get("before_agent_start")!;
 		const result = await beforeStartHandler({
+			messageType: "user",
 			prompt: '<skill-tag data-look-name="missing-skill"></skill-tag>',
+			systemPromptOptions: { skills: [] },
+		});
+		expect(result).toBeUndefined();
+	});
+
+	it("skips custom before_agent_start events (no prompt)", async () => {
+		const api = makeApi();
+		const instance = createSkillInjectExtensionFactory();
+		instance(api as never);
+
+		const beforeStartHandler = api.handlers.get("before_agent_start")!;
+		const result = await beforeStartHandler({
+			messageType: "custom",
+			message: { customType: "look.plan-context.v1", content: "x", display: false },
 			systemPromptOptions: { skills: [] },
 		});
 		expect(result).toBeUndefined();
