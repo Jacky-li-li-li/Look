@@ -66,8 +66,8 @@ describe("buildModelColorMap", () => {
 	});
 
 	it("keeps fixed colors for known models", () => {
-		const map = buildModelColorMap(["deepseek-v4-flash", "deepseek-v4-pro"]);
-		expect(map["deepseek-v4-flash"]).not.toBe(map["deepseek-v4-pro"]);
+		const map = buildModelColorMap(["deepseek-flash", "deepseek-v4-pro"]);
+		expect(map["deepseek-flash"]).not.toBe(map["deepseek-v4-pro"]);
 	});
 
 	it("wraps the palette without crashing when models outnumber colors", () => {

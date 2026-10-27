@@ -71,6 +71,10 @@ export function buildPersistedTimeline(
 	for (const entry of entries) {
 		if (entry.type === "message") {
 			const msg = entry.message;
+			// System messages are prompt/tool checkpoints in the transcript, not chat bubbles.
+			if (msg.role === "system") {
+				continue;
+			}
 			if (isToolResultMessage(msg)) {
 				pendingToolResults.push(msg);
 				continue;
@@ -131,6 +135,8 @@ export function buildPersistedTimeline(
 			entry.type === "session_info" ||
 			entry.type === "label" ||
 			entry.type === "branch_summary" ||
+			entry.type === "usage" ||
+			entry.type === "context_edit" ||
 			(entry.type === "custom" && entry.customType?.startsWith("look."));
 
 		if (isLookSystemEntry) continue;

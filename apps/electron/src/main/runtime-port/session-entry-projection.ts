@@ -38,6 +38,23 @@ export function toLookSessionEntry(engineEntry: EngineSessionEntry): LookSession
 			return { type: "label", id: entry.id, label: entry.label };
 		case "session_info":
 			return { type: "session_info", id: entry.id, name: entry.name };
+		case "usage":
+			return {
+				type: "usage",
+				id: entry.id,
+				kind: entry.kind,
+				provider: entry.provider,
+				model: entry.model,
+				usage: entry.usage,
+				note: entry.note,
+			};
+		case "context_edit":
+			return {
+				type: "context_edit",
+				id: entry.id,
+				targetId: entry.targetId,
+				replacement: entry.replacement,
+			};
 	}
 }
 
