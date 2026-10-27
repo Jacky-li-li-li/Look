@@ -6,20 +6,22 @@
 // 回调是"已接受"的唯一可靠信号。本助手把该模式收敛到一处，避免多个
 // 服务各自手写同款 Promise 包装。
 //
-// 语义：
-//   - preflight 成功 → 返回的 Promise resolve
-//   - 接受前失败 → 返回的 Promise reject（调用方决定如何处置）
-//   - 接受后失败 → onAcceptedError 收到错误（turn 内异步错误，不应再 reject）
+// 语义（pi 0.99+ PromptDisposition）：
+//   - preflight 回调被调用（handled | queued | started）→ resolve
+//   - 拒绝时不调用回调；接受前失败 → reject
+//   - 接受后失败 → onAcceptedError（turn 内异步错误，不应再 reject）
 // ============================================================
 
+import type { LookPromptDisposition } from "../runtime-port/look-types.js";
+
 export function waitForPromptAccepted(
-	startPrompt: (onPreflight: (success: boolean) => void) => Promise<unknown>,
+	startPrompt: (onPreflight: (disposition: LookPromptDisposition) => void) => Promise<unknown>,
 	onAcceptedError: (error: unknown) => void,
 ): Promise<void> {
 	return new Promise<void>((resolve, reject) => {
 		let accepted = false;
-		void startPrompt((success) => {
-			if (!success || accepted) return;
+		void startPrompt((_disposition) => {
+			if (accepted) return;
 			accepted = true;
 			resolve();
 		}).catch((error) => {

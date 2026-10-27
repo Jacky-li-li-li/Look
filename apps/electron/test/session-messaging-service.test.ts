@@ -26,9 +26,11 @@ function makeManagedRuntime(session: AgentSession): ManagedRuntime {
 }
 
 function mockPrompt() {
-	return vi.fn(async (_text: string, opts: { preflightResult?: (success: boolean) => void }) => {
-		opts.preflightResult?.(true);
-	});
+	return vi.fn(
+		async (_text: string, opts: { preflightResult?: (disposition: "handled" | "queued" | "started") => void }) => {
+			opts.preflightResult?.("started");
+		},
+	);
 }
 
 function portForSession(session: AgentSession): SessionMessagingHost["runtimePort"] {

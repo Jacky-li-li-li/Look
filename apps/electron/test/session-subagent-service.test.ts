@@ -24,10 +24,15 @@ function makeSession(sessionId: string, activeTools: string[] = [], allTools: st
 		getActiveToolNames: vi.fn(() => activeTools),
 		getAllTools: vi.fn(() => allTools.map((name) => ({ name }))),
 		sessionManager: { appendCustomEntry: vi.fn() },
-		prompt: vi.fn(async (_task: string, opts?: { preflightResult?: (success: boolean) => void }) => {
-			opts?.preflightResult?.(true);
-			return { messages: [] };
-		}),
+		prompt: vi.fn(
+			async (
+				_task: string,
+				opts?: { preflightResult?: (disposition: "handled" | "queued" | "started") => void },
+			) => {
+				opts?.preflightResult?.("started");
+				return { messages: [] };
+			},
+		),
 		isStreaming: false,
 		setModel: vi.fn(),
 	} as unknown as AgentSession;
