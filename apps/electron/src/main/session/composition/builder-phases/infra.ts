@@ -38,7 +38,7 @@ export function buildInfraPhase(
 	if (migration.migrated && migration.keys.length > 0) {
 		console.log(`[Look] Migrated settings: ${migration.keys.join(", ")}`);
 	}
-	// pi 1.0.3: azure-openai-responses → azure (auth/models/settings keys).
+	// pi 1.0.3: azure-openai-responses → azure (auth/models/settings + session JSONL provider).
 	const azureMigration = migrateAzureProviderId();
 	if (azureMigration.migrated && azureMigration.keys.length > 0) {
 		console.log(`[Look] Migrated azure provider id: ${azureMigration.keys.join(", ")}`);

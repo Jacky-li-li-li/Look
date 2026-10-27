@@ -3,17 +3,24 @@
 //
 // pi renamed `azure-openai-responses` → `azure` (auth.json key,
 // models.json providers key, settings.json defaultProvider /
-// enabledModels / modelThinkingLevels). Look stores the same
-// files under LOOK_HOME; migrate once on boot so existing Azure
-// keys and defaults keep working without a manual /login.
+// enabledModels / modelThinkingLevels, and session JSONL
+// model_change / usage `provider` fields). Look stores these
+// under LOOK_HOME; migrate once on boot so existing Azure keys,
+// defaults, and session resume keep working without a manual
+// /login. Nested `api: "azure-openai-responses"` is an API type,
+// NOT a provider id — leave it alone.
 // ============================================================
 
 import fs from "node:fs";
 import path from "node:path";
-import { getAuthPath, getModelsPath, getSettingsPath } from "@look/shared/look-storage";
+import { getAuthPath, getModelsPath, getSettingsPath, getWorkspacesDir } from "@look/shared/look-storage";
+import { writeTextFile } from "../utils/atomic-writer.js";
 
 const OLD_ID = "azure-openai-responses";
 const NEW_ID = "azure";
+
+/** Session JSONL entry types whose top-level `provider` is a provider id. */
+const SESSION_PROVIDER_ENTRY_TYPES = new Set(["model_change", "usage"]);
 
 export interface AzureProviderMigrationResult {
 	migrated: boolean;
@@ -78,6 +85,100 @@ function rewriteThinkingLevelKeys(values: unknown): { next: unknown; changed: bo
 	return { next, changed };
 }
 
+/**
+ * Remap top-level provider id on session JSONL entries.
+ * Never touches nested `api` (API type, still azure-openai-responses).
+ */
+export function remapSessionEntryProvider(entry: Record<string, unknown>): boolean {
+	const type = entry.type;
+	if (typeof type !== "string" || !SESSION_PROVIDER_ENTRY_TYPES.has(type)) return false;
+	if (entry.provider !== OLD_ID) return false;
+	entry.provider = NEW_ID;
+	return true;
+}
+
+/** Rewrite one JSONL session file in place when it stores the old provider id. */
+export function migrateAzureProviderInSessionFile(filePath: string): boolean {
+	let raw: string;
+	try {
+		raw = fs.readFileSync(filePath, "utf-8");
+	} catch {
+		return false;
+	}
+	if (!raw.includes(OLD_ID)) return false;
+
+	const lines = raw.split("\n");
+	let changed = false;
+	const nextLines = lines.map((line) => {
+		if (!line.trim() || !line.includes(OLD_ID)) return line;
+		try {
+			const parsed: unknown = JSON.parse(line);
+			if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return line;
+			const entry = parsed as Record<string, unknown>;
+			if (!remapSessionEntryProvider(entry)) return line;
+			changed = true;
+			return JSON.stringify(entry);
+		} catch {
+			return line;
+		}
+	});
+
+	if (!changed) return false;
+	// split/join preserves whether the source ended with a trailing newline.
+	writeTextFile(filePath, nextLines.join("\n"));
+	return true;
+}
+
+function listSessionJsonlFiles(): string[] {
+	const workspacesDir = getWorkspacesDir();
+	if (!fs.existsSync(workspacesDir)) return [];
+
+	const files: string[] = [];
+	let projectDirs: string[];
+	try {
+		projectDirs = fs.readdirSync(workspacesDir);
+	} catch {
+		return [];
+	}
+
+	for (const projectId of projectDirs) {
+		const projectRoot = path.join(workspacesDir, projectId);
+		let isDir = false;
+		try {
+			isDir = fs.statSync(projectRoot).isDirectory();
+		} catch {
+			continue;
+		}
+		if (!isDir) continue;
+
+		for (const sub of ["sessions", "subsessions"]) {
+			const dir = path.join(projectRoot, sub);
+			if (!fs.existsSync(dir)) continue;
+			let names: string[];
+			try {
+				names = fs.readdirSync(dir);
+			} catch {
+				continue;
+			}
+			for (const name of names) {
+				if (!name.endsWith(".jsonl")) continue;
+				files.push(path.join(dir, name));
+			}
+		}
+	}
+	return files;
+}
+
+function migrateSessionFiles(keys: string[]): void {
+	let count = 0;
+	for (const filePath of listSessionJsonlFiles()) {
+		if (migrateAzureProviderInSessionFile(filePath)) count += 1;
+	}
+	if (count > 0) {
+		keys.push(`session jsonl provider ${OLD_ID} → ${NEW_ID} (${count} file${count === 1 ? "" : "s"})`);
+	}
+}
+
 /** Rename stored Azure provider id from azure-openai-responses → azure. */
 export function migrateAzureProviderId(): AzureProviderMigrationResult {
 	const keys: string[] = [];
@@ -126,6 +227,8 @@ export function migrateAzureProviderId(): AzureProviderMigrationResult {
 		}
 		if (changed) writeJsonObject(settingsPath, settings);
 	}
+
+	migrateSessionFiles(keys);
 
 	return { migrated: keys.length > 0, keys };
 }
