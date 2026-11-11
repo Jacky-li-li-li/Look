@@ -442,16 +442,6 @@ export interface LookApiMethodEventMap {
 	getSecretStorageStatus: "secrets:storage-status";
 
 	// ── shared area ──
-	listSharedFiles: "shared:list";
-	listSharedChildren: "shared:list-children";
-	startSharedWatch: "shared:watch";
-	stopSharedWatch: "shared:unwatch";
-	writeSharedFile: "shared:write";
-	createSharedDir: "shared:mkdir";
-	deleteSharedItem: "shared:delete";
-	importToShared: "shared:import";
-	exportFromShared: "shared:export";
-	writeSharedContent: "shared:write-content";
 
 	// ── workspace tree ──
 	listWorkspaceChildren: "workspace:list-children";

@@ -28,7 +28,6 @@ import type {
 } from "../../core/contracts.js";
 import type { AgentConfig, SubagentProgress, SubagentResult } from "../../extensions/subagent/types.js";
 import type { UserSettings } from "../../settings/store.js";
-import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
 import { RuntimeManagerComposition } from "../runtime-manager-composition.js";
 import type { StoredSession } from "../services/session-catalog.js";
@@ -65,15 +64,9 @@ export class SessionRuntimeManager
 	private constructor() {}
 
 	/** Create and initialize a SessionRuntimeManager. Replaces `new SRT()` + `initAsync()`. */
-	static async create(
-		workspaceFileService?: WorkspaceFileService,
-		workspaceTreeService?: WorkspaceTreeService,
-	): Promise<SessionRuntimeManager> {
+	static async create(workspaceTreeService?: WorkspaceTreeService): Promise<SessionRuntimeManager> {
 		const srt = new SessionRuntimeManager();
-		const composition = await RuntimeManagerComposition.create(
-			workspaceFileService ?? null,
-			workspaceTreeService ?? null,
-		);
+		const composition = await RuntimeManagerComposition.create(workspaceTreeService ?? null);
 		srt.composition = composition;
 		return srt;
 	}
@@ -104,16 +97,6 @@ export class SessionRuntimeManager
 		return this.composition.runtimePort;
 	}
 
-	getWorkspaceFileService(): WorkspaceFileService {
-		if (this.disposed) {
-			throw new Error("SessionRuntimeManager has been disposed");
-		}
-		if (!this.composition.workspaceFileService) {
-			throw new Error("WorkspaceFileService is not configured for this SessionRuntimeManager");
-		}
-		return this.composition.workspaceFileService;
-	}
-
 	getWorkspaceTreeService(): WorkspaceTreeService {
 		if (this.disposed) {
 			throw new Error("SessionRuntimeManager has been disposed");
@@ -140,15 +123,7 @@ export class SessionRuntimeManager
 
 		// Access composition services directly — the public getters
 		// check `this.disposed` and would throw here.
-		const wsFile = this.composition.workspaceFileService;
 		const wsTree = this.composition.workspaceTreeService;
-		if (wsFile) {
-			try {
-				await wsFile.dispose();
-			} catch (error) {
-				console.error("[Look] workspaceFileService dispose failed:", error);
-			}
-		}
 		if (wsTree) {
 			try {
 				await wsTree.dispose();

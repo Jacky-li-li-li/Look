@@ -12,7 +12,6 @@ export { permissionRouter } from "./permission-router.js";
 export { projectRouter } from "./project-router.js";
 export { schedulerRouter } from "./scheduler-router.js";
 export { settingsRouter } from "./settings-router.js";
-export { sharedRouter } from "./shared-router.js";
 export { skillRouter } from "./skill-router.js";
 export { subagentRouter } from "./subagent-router.js";
 export { systemRouter } from "./system-router.js";

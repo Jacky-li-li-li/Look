@@ -222,21 +222,6 @@ const api: LookAPI = {
 			entryId,
 			name: opts?.name,
 		}),
-	// ---- Shared area ----
-	listSharedFiles: (projectId) => invoke({ type: "shared:list", projectId }),
-	listSharedChildren: (projectId, relativePath) => invoke({ type: "shared:list-children", projectId, relativePath }),
-	startSharedWatch: (projectId) => invoke({ type: "shared:watch", projectId }),
-	stopSharedWatch: (projectId) => invoke({ type: "shared:unwatch", projectId }),
-	writeSharedFile: (projectId, path, content) => invoke({ type: "shared:write", projectId, path, content }),
-	createSharedDir: (projectId, path) => invoke({ type: "shared:mkdir", projectId, path }),
-	deleteSharedItem: (projectId, path) => invoke({ type: "shared:delete", projectId, path }),
-	importToShared: (projectId, sources, targetDir) => invoke({ type: "shared:import", projectId, sources, targetDir }),
-	exportFromShared: (projectId, paths, destDir) => invoke({ type: "shared:export", projectId, paths, destDir }),
-	// Drag-drop fallback: write base64/utf8 content when no absolute path
-	// is available (e.g. dropped into a sandboxed renderer).
-	writeSharedContent: (projectId, path, content, encoding = "utf8") =>
-		invoke({ type: "shared:write-content", projectId, path, content, encoding }),
-
 	// ---- Workspace tree (v0.6) ----
 	listWorkspaceChildren: (projectId, relativePath, showHiddenFiles = true) =>
 		invoke({ type: "workspace:list-children", projectId, relativePath, showHiddenFiles }),

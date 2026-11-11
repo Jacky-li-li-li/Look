@@ -5,7 +5,6 @@
 // (no back-edge to phases). This module one-way depends on phases.
 // ============================================================
 
-import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
 import { CompositionBuilder as CompositionBuilderBase } from "./builder-context.js";
 import { buildCorePhase } from "./builder-phases/core.js";
@@ -22,11 +21,8 @@ export { MAX_SUBAGENT_DEPTH } from "./builder-context.js";
  */
 export class CompositionBuilder extends CompositionBuilderBase {
 	// ── Phase 1: Infrastructure (sync) ──
-	buildInfra(
-		workspaceFileService: WorkspaceFileService | null,
-		workspaceTreeService: WorkspaceTreeService | null,
-	): void {
-		buildInfraPhase(this, workspaceFileService, workspaceTreeService);
+	buildInfra(workspaceTreeService: WorkspaceTreeService | null): void {
+		buildInfraPhase(this, workspaceTreeService);
 	}
 
 	// ── Phase 2: Model runtime (async) ──

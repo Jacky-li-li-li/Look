@@ -1,7 +1,7 @@
 // ============================================================
 // flattenTree 单测 — 文件树压平工具
 //
-// WorkspaceTreePanel 与 SharedAreaPanel 共享的虚拟列表行生成逻辑。
+// WorkspaceTreePanel 的虚拟列表行生成逻辑。
 // ============================================================
 
 import type { FileTreeNode } from "@shared/types";

@@ -28,8 +28,6 @@
 //   │       ├── SYSTEM.md   → 项目级 system prompt
 //   │       ├── settings.json → 项目级 settings
 //   │       └── agents/     → 项目级 Agent 定义
-//   ├── shared/
-//   │   └── <project-id>/   → 项目共享区
 //   └── workspaces/
 //       └── <project-id>/   → 项目工作区（按稳定 projectId，避免重命名/删除后复活）
 //           ├── sessions/   → pi SessionManager .jsonl
@@ -238,27 +236,6 @@ export function getSessionsDir(): string {
 	return path.join(LOOK_DIR, "sessions");
 }
 
-// ── Shared area (project-level file storage, stable by project id) ──
-
-/** Root directory for all project shared areas. */
-export function getSharedAreasDir(): string {
-	return path.join(LOOK_DIR, "shared");
-}
-
-/** Shared area directory for a specific project. Bound to the stable
- *  project id so renaming the project display name does not break the path. */
-export function getProjectSharedDir(projectId: string): string {
-	assertSafeProjectId(projectId);
-	return path.join(getSharedAreasDir(), projectId);
-}
-
-/** Ensure the shared area directory for a project exists. */
-export function ensureProjectSharedDir(projectId: string): string {
-	const dir = getProjectSharedDir(projectId);
-	fs.mkdirSync(dir, { recursive: true });
-	return dir;
-}
-
 // ── Attachments (paste-to-attachment session files) ──
 //
 // 附件是 Look 管理的会话级数据，位于 $LOOK_HOME/attachments/ 下（与 JSONL
@@ -298,7 +275,6 @@ export function ensureLookDir(): void {
 	const projectsDir = path.join(LOOK_DIR, "projects");
 	fs.mkdirSync(projectsDir, { recursive: true });
 	fs.mkdirSync(getWorkspacesDir(), { recursive: true });
-	fs.mkdirSync(getSharedAreasDir(), { recursive: true });
 	fs.mkdirSync(getAttachmentsRootDir(), { recursive: true });
 }
 

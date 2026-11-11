@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getProjectSharedDir, getWorkspaceSubsessionsDir, sanitiseWorkspaceName } from "@shared/look-storage";
+import { getWorkspaceSubsessionsDir, sanitiseWorkspaceName } from "@shared/look-storage";
 import { afterEach, describe, expect, it } from "vitest";
 import { SessionRuntimeManager } from "../src/main/session/runtime/runtime-manager.js";
 
@@ -85,10 +85,8 @@ describe("SubAgent deletion cleanup", () => {
 				projectName,
 			);
 			const createdId = created.id;
-			const sharedDir = getProjectSharedDir(createdId);
 			const actualSubsessionsDir = getWorkspaceSubsessionsDir(createdId);
-			cleanup.push(sharedDir, join(actualSubsessionsDir, ".."));
-			await mkdir(sharedDir, { recursive: true });
+			cleanup.push(join(actualSubsessionsDir, ".."));
 			await mkdir(actualSubsessionsDir, { recursive: true });
 			await writeFile(join(actualSubsessionsDir, "child.jsonl"), "", "utf8");
 			(manager.composition as unknown as TestManagerInternals).sessionCatalog.replace(createdId, [
@@ -109,7 +107,6 @@ describe("SubAgent deletion cleanup", () => {
 			await manager.executeDeleteProject(createdId);
 
 			expect(existsSync(sessionPath)).toBe(false);
-			expect(existsSync(sharedDir)).toBe(false);
 			expect(existsSync(actualSubsessionsDir)).toBe(false);
 			expect((manager.composition as unknown as TestManagerInternals).projectService.has(createdId)).toBe(false);
 			expect(sanitiseWorkspaceName(projectName)).toBe(projectName);

@@ -9,7 +9,6 @@
 // ============================================================
 
 import type { SchedulerService } from "../scheduler/scheduler-service.js";
-import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 import { CompositionBuilder } from "./composition/builder.js";
 
@@ -85,18 +84,12 @@ export class RuntimeManagerComposition {
 	readonly skillManagementService;
 	readonly attachmentService;
 
-	readonly workspaceFileService;
 	readonly workspaceTreeService;
 
 	private readonly schedulerRef: { current: SchedulerService | null };
 
-	private constructor(
-		workspaceFileService: WorkspaceFileService | null,
-		workspaceTreeService: WorkspaceTreeService | null,
-		builder: CompositionBuilder,
-	) {
+	private constructor(workspaceTreeService: WorkspaceTreeService | null, builder: CompositionBuilder) {
 		this.schedulerRef = builder.schedulerRef;
-		this.workspaceFileService = workspaceFileService;
 		this.workspaceTreeService = workspaceTreeService;
 
 		// Copy validated fields from builder — guaranteed non-null by builder.build()
@@ -156,24 +149,17 @@ export class RuntimeManagerComposition {
 
 	// ── Static async factory ──
 
-	static async create(
-		workspaceFileService: WorkspaceFileService | null,
-		workspaceTreeService: WorkspaceTreeService | null,
-	): Promise<RuntimeManagerComposition> {
+	static async create(workspaceTreeService: WorkspaceTreeService | null): Promise<RuntimeManagerComposition> {
 		const builder = new CompositionBuilder();
 
-		builder.buildInfra(workspaceFileService, workspaceTreeService);
+		builder.buildInfra(workspaceTreeService);
 		await builder.buildModel();
 		builder.buildExtensions();
 		builder.buildCore();
 		builder.buildUI();
 		builder.validate();
 
-		return new RuntimeManagerComposition(
-			builder.getWorkspaceFileService(),
-			builder.getWorkspaceTreeService(),
-			builder,
-		);
+		return new RuntimeManagerComposition(builder.getWorkspaceTreeService(), builder);
 	}
 
 	// ── Mutable cross-cutting ──

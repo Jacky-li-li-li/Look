@@ -9,7 +9,6 @@ import { ProjectDeletionService } from "../src/main/projects/project-deletion-se
 import type { ProjectService } from "../src/main/projects/project-service.js";
 import type { RuntimeRegistry } from "../src/main/session/runtime/runtime-registry.js";
 import type { SessionCatalog, StoredSession } from "../src/main/session/services/session-catalog.js";
-import type { WorkspaceFileService } from "../src/main/workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../src/main/workspace/workspace-tree-service.js";
 
 function makeStoredSession(id: string, projectId: string): StoredSession {
@@ -57,10 +56,6 @@ describe("ProjectDeletionService", () => {
 
 		const _eventBus = { emit: vi.fn((e: unknown) => events.push(e)) } as unknown as IEventBus;
 
-		const workspaceFileService = {
-			stopWatching: vi.fn(),
-		} as unknown as WorkspaceFileService;
-
 		const workspaceTreeService = {
 			stopAllWatchesForProject: vi.fn(),
 		} as unknown as WorkspaceTreeService;
@@ -71,7 +66,6 @@ describe("ProjectDeletionService", () => {
 			draftIndex: { prunePersisted: vi.fn() },
 			runtimeRegistry,
 			disposeRuntime: async (sessionId: string) => disposed.push(sessionId),
-			workspaceFileService,
 			workspaceTreeService,
 			emitSessionList: (id: string) => events.push({ type: "agent:list", projectId: id }),
 			emitProjectList: () => events.push({ type: "project:list" }),
@@ -86,7 +80,6 @@ describe("ProjectDeletionService", () => {
 
 		expect(projectService.removeProject).toHaveBeenCalledWith(projectId);
 		expect(sessionCatalog.removeProject).toHaveBeenCalledWith(projectId);
-		expect(workspaceFileService.stopWatching).toHaveBeenCalledWith(projectId);
 		expect(workspaceTreeService.stopAllWatchesForProject).toHaveBeenCalledWith(projectId);
 		expect(projectService.saveProjects).toHaveBeenCalled();
 		expect(events).toContainEqual({ type: "agent:list", projectId });
@@ -118,7 +111,6 @@ describe("ProjectDeletionService", () => {
 				"entries"
 			>,
 			disposeRuntime: vi.fn(),
-			workspaceFileService: null,
 			workspaceTreeService: null,
 			emitSessionList: vi.fn(),
 			emitProjectList: vi.fn(),
@@ -166,7 +158,6 @@ describe("ProjectDeletionService", () => {
 			draftIndex: { prunePersisted: vi.fn() },
 			runtimeRegistry,
 			disposeRuntime: vi.fn(),
-			workspaceFileService: null,
 			workspaceTreeService: null,
 			emitSessionList: vi.fn(),
 			emitProjectList: vi.fn(),

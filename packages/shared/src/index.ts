@@ -20,7 +20,6 @@ export {
 export {
 	ensureLookDir,
 	ensureProjectDir,
-	ensureProjectSharedDir,
 	ensureWorkspaceDir,
 	ensureWorkspaceSubsessionsDir,
 	getAuthPath,
@@ -31,7 +30,6 @@ export {
 	getModelsPath,
 	getProjectDir,
 	getProjectSettingsPath,
-	getProjectSharedDir,
 	getProjectSystemPromptPath,
 	getProjectsIndexPath,
 	getPromptsPath,
@@ -39,7 +37,6 @@ export {
 	getScheduledTasksPath,
 	getSessionsDir,
 	getSettingsPath,
-	getSharedAreasDir,
 	getSystemPromptPath,
 	getUiSettingsPath,
 	getUserProfilePath,

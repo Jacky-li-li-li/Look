@@ -1,15 +1,14 @@
 // ============================================================
-// RightPanel — 右侧边栏容器(v0.6:共享区 + 工作区 双 tab)
+// RightPanel — 右侧边栏容器(工作区 / 变更 双 tab)
 // ============================================================
 
 import { cn } from "@look/ui";
 import { Button } from "@look/ui/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@look/ui/components/ui/tooltip";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { FolderTree, GitCommitHorizontal, PanelRightClose, Share2 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { FolderTree, GitCommitHorizontal, PanelRightClose } from "lucide-react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { useViewportWidth } from "../../hooks/useViewportWidth";
 import { linkedDockTrack, PANEL_LAYOUT, resolvePanelTracks } from "../../lib/panelLayout";
 import { appStore } from "../../store/appStore";
@@ -22,15 +21,11 @@ import {
 	rightPanelEffectiveCollapsedAtom,
 	rightPanelTabAtom,
 	rightPanelWidthAtom,
-	sharedFilesAtomFamily,
-	sharedFilesErrorAtomFamily,
-	sharedFilesLoadingAtomFamily,
 	sidebarEffectiveCollapsedAtom,
 } from "../../store/atoms";
 import { browserPanelOpenAtom } from "../../store/browserAtoms";
 import ChangesPanel from "./ChangesPanel";
 import { PanelResizeHandle } from "./PanelResizeHandle";
-import { SharedAreaPanel } from "./SharedAreaPanel";
 import { WorkspaceTreePanel } from "./WorkspaceTreePanel";
 
 // 没有 active project 时使用的占位 projectId,避免 hook 调用顺序不稳定
@@ -54,82 +49,6 @@ export function RightPanel() {
 	const dockOpen = !!dockedFile || browserOpen;
 	const gitInfo = useAtomValue(projectGitInfoAtomFamily(projectId));
 	const dirtyCount = gitInfo?.dirtyCount ?? 0;
-
-	// 始终调用 hooks;在 effect 内判断 projectId 是否有效
-	const filesAtom = sharedFilesAtomFamily(projectId);
-	const loadingAtom = sharedFilesLoadingAtomFamily(projectId);
-	const errorAtom = sharedFilesErrorAtomFamily(projectId);
-	const sharedFiles = useAtomValue(filesAtom);
-	const isLoading = useAtomValue(loadingAtom);
-	const sharedFilesError = useAtomValue(errorAtom);
-	const setIsLoading = useSetAtom(loadingAtom);
-
-	const refreshSharedFiles = useCallback(
-		async (pid: string, cancelled: { current: boolean }, opts?: { silent?: boolean }) => {
-			setIsLoading(true);
-			try {
-				const result = await window.look.listSharedFiles(pid);
-				if (cancelled.current) return;
-				if (result?.success) {
-					appStore.set(sharedFilesAtomFamily(pid), result.nodes ?? []);
-					appStore.set(sharedFilesErrorAtomFamily(pid), null);
-				} else {
-					const message = result?.error ?? t("rightPanel.loadFailed");
-					appStore.set(sharedFilesErrorAtomFamily(pid), message);
-					// silent:调用方(如 onAfterChange 的 throw→操作 handler)自己负责 toast,避免同一条错误弹两遍。
-					if (!opts?.silent) toast.error(message);
-				}
-			} catch (error: unknown) {
-				if (cancelled.current) return;
-				const message = error instanceof Error ? error.message : t("rightPanel.loadFailed");
-				appStore.set(sharedFilesErrorAtomFamily(pid), message);
-				if (!opts?.silent) toast.error(message);
-			} finally {
-				if (!cancelled.current) setIsLoading(false);
-			}
-		},
-		[setIsLoading, t],
-	);
-
-	// 切换项目时拉取新文件树（占位 projectId 时跳过）。
-	useEffect(() => {
-		if (projectId === PLACEHOLDER_PROJECT_ID) return;
-		const cancelled = { current: false };
-		void refreshSharedFiles(projectId, cancelled);
-		return () => {
-			cancelled.current = true;
-		};
-	}, [projectId, refreshSharedFiles]);
-
-	// 切换到共享区 tab 时主动刷新：watcher 实时推送在部分环境下可能
-	// 未触发（chokidar 跨进程/跨卷限制），切 tab 时补偿拉取保证数据新鲜。
-	useEffect(() => {
-		if (tab !== "shared" || projectId === PLACEHOLDER_PROJECT_ID) return;
-		const cancelled = { current: false };
-		void refreshSharedFiles(projectId, cancelled);
-		return () => {
-			cancelled.current = true;
-		};
-	}, [tab, projectId, refreshSharedFiles]);
-
-	// 启动共享区 watcher。切项目时显式 stop 旧 watcher 避免资源泄漏；
-	// 主进程 startWatching 幂等，重新进入同一项目无副作用。
-	useEffect(() => {
-		if (projectId === PLACEHOLDER_PROJECT_ID) return;
-		const pid = projectId;
-		window.look
-			.startSharedWatch(pid)
-			.then((result) => {
-				if (!result?.success) toast.error(result?.error ?? t("rightPanel.watchFailed"));
-			})
-			.catch((error: unknown) => {
-				const message = error instanceof Error ? error.message : t("rightPanel.watchFailed");
-				toast.error(message);
-			});
-		return () => {
-			window.look.stopSharedWatch(pid).catch(() => {});
-		};
-	}, [projectId, t]);
 
 	// 「变更」tab 徽标的脏文件计数数据：不依赖 GitStatusBar 是否挂载（无会话、
 	// 草稿/广场等非聊天视图下 GitStatusBar 不存在，徽标会缺失），右栏自行拉取一次；
@@ -166,6 +85,11 @@ export function RightPanel() {
 	// 拖拽期间通过 linked 同步改写 Dock track：main 触底（340）后 Dock 才让位，
 	// 与松手后 resolve 的 dock 口径完全一致（linkedDockTrack 镜像同一公式）。
 
+	const rightPanelTabs = [
+		{ id: "workspace" as const, icon: FolderTree, label: t("rightPanel.workspace"), count: 0 },
+		{ id: "changes" as const, icon: GitCommitHorizontal, label: t("rightPanel.changes"), count: dirtyCount },
+	];
+
 	return (
 		<aside
 			className={cn(
@@ -197,55 +121,30 @@ export function RightPanel() {
 					ariaLabel={t("rightPanel.resize")}
 				/>
 			)}
-			<header className="flex h-12 shrink-0 items-center gap-1 border-b px-2">
-				<div role="tablist" className="flex flex-1 gap-1" aria-label={t("rightPanel.tabsLabel")}>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={tab === "workspace"}
-						className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-							tab === "workspace"
-								? "bg-foreground/10 text-foreground"
-								: "text-muted-foreground hover:bg-foreground/5"
-						}`}
-						onClick={() => setTab("workspace")}
-					>
-						<FolderTree className="size-3.5 shrink-0" aria-hidden />
-						{t("rightPanel.workspace")}
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={tab === "shared"}
-						className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-							tab === "shared"
-								? "bg-foreground/10 text-foreground"
-								: "text-muted-foreground hover:bg-foreground/5"
-						}`}
-						onClick={() => setTab("shared")}
-					>
-						<Share2 className="size-3.5 shrink-0" aria-hidden />
-						{t("rightPanel.shared")}
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={tab === "changes"}
-						className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-							tab === "changes"
-								? "bg-foreground/10 text-foreground"
-								: "text-muted-foreground hover:bg-foreground/5"
-						}`}
-						onClick={() => setTab("changes")}
-					>
-						<GitCommitHorizontal className="size-3.5 shrink-0" aria-hidden />
-						{t("rightPanel.changes")}
-						{dirtyCount > 0 && (
-							<span className="ml-0.5 rounded-full bg-amber-500/15 px-1.5 py-px font-mono text-[9px] leading-none text-amber-500">
-								{dirtyCount}
-							</span>
-						)}
-					</button>
+			<header className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+				<div role="tablist" className="flex flex-1 self-stretch" aria-label={t("rightPanel.tabsLabel")}>
+					{rightPanelTabs.map(({ id, icon: Icon, label, count }) => {
+						const active = tab === id;
+						return (
+							<button
+								key={id}
+								type="button"
+								role="tab"
+								aria-selected={active}
+								className={`relative flex items-center gap-1.5 px-2.5 text-[11px] font-medium transition-colors ${
+									active ? "text-foreground" : "text-muted-foreground hover:text-foreground/80"
+								}`}
+								onClick={() => setTab(id)}
+							>
+								<Icon className="size-3.5 shrink-0" aria-hidden />
+								{label}
+								{count > 0 && (
+									<span className="ml-0.5 font-mono text-[10px] text-[var(--status-warning)]">{count}</span>
+								)}
+								{active && <span className="absolute inset-x-2 -bottom-px h-px bg-foreground" aria-hidden />}
+							</button>
+						);
+					})}
 				</div>
 				<Tooltip>
 					<TooltipTrigger asChild>
@@ -265,24 +164,6 @@ export function RightPanel() {
 			<div key={tab} className="animate-draw-in flex min-h-0 flex-1 flex-col">
 				{tab === "workspace" && activeProject && (
 					<WorkspaceTreePanel projectId={activeProject.id} cwd={activeProject.cwd} />
-				)}
-				{tab === "shared" && activeProject && (
-					<SharedAreaPanel
-						projectId={activeProject.id}
-						files={sharedFiles}
-						isLoading={isLoading}
-						error={sharedFilesError}
-						onAfterChange={async () => {
-							const cancelled = { current: false };
-							await refreshSharedFiles(activeProject!.id, cancelled, { silent: true });
-							// 失败时向上抛出让操作方（创建/删除/导入等）收到错误并 toast（silent 已抑制本函数自身的 toast）。
-							if (appStore.get(sharedFilesErrorAtomFamily(activeProject!.id))) {
-								throw new Error(
-									appStore.get(sharedFilesErrorAtomFamily(activeProject!.id)) ?? t("rightPanel.loadFailed"),
-								);
-							}
-						}}
-					/>
 				)}
 				{tab === "changes" && activeProject && (
 					<ChangesPanel projectId={activeProject.id} cwd={activeProject.cwd} />

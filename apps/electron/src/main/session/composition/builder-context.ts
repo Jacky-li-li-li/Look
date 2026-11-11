@@ -27,7 +27,6 @@ import type { CustomProvidersStore } from "../../settings/custom-providers.js";
 import type { PromptStore } from "../../settings/prompt-store.js";
 import type { UserSettingsStore } from "../../settings/store.js";
 import type { TranscriptionService } from "../../transcribe/transcription-service.js";
-import type { WorkspaceFileService } from "../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../workspace/workspace-tree-service.js";
 import { SessionEventBus } from "../events/session-event-bus.js";
 import type { SessionEventEffects } from "../events/session-event-effects.js";
@@ -146,7 +145,6 @@ export class CompositionBuilder {
 	/** @internal */
 	host: CompositionHost | null = null;
 	/** @internal */
-	workspaceFileServiceRef: WorkspaceFileService | null = null;
 	/** @internal */
 	workspaceTreeServiceRef: WorkspaceTreeService | null = null;
 
@@ -215,9 +213,6 @@ export class CompositionBuilder {
 	}
 
 	/** Accessors for RuntimeManagerComposition constructor. */
-	getWorkspaceFileService(): WorkspaceFileService | null {
-		return this.workspaceFileServiceRef;
-	}
 	getWorkspaceTreeService(): WorkspaceTreeService | null {
 		return this.workspaceTreeServiceRef;
 	}

@@ -38,7 +38,6 @@ import {
 	projectRouter,
 	schedulerRouter,
 	settingsRouter,
-	sharedRouter,
 	skillRouter,
 	subagentRouter,
 	systemRouter,
@@ -85,7 +84,6 @@ const domainRouters = [
 	permissionRouter,
 	subagentRouter,
 	skillRouter,
-	sharedRouter,
 	workspaceRouter,
 	systemRouter,
 	imRouter,
@@ -106,12 +104,6 @@ export function registerIpcHandlers(
 	// Clean up previous registrations to support macOS activate re-creation
 	ipcMain.removeHandler("look:invoke");
 	ipcMain.removeAllListeners("look:event");
-
-	const workspaceFileService = composition.workspaceFileService;
-	if (!workspaceFileService) throw new Error("Workspace file service is not initialized");
-	// 重建窗口时先清旧 callback,避免 chokidar emit 同时打到新/旧 window(M-7)。
-	workspaceFileService.clearEmitCallback();
-	workspaceFileService.setEmitCallback((event) => rendererEvents.send(event));
 
 	const workspaceTreeService = composition.workspaceTreeService;
 	if (!workspaceTreeService) throw new Error("Workspace tree service is not initialized");
@@ -185,7 +177,6 @@ export function registerIpcHandlers(
 		},
 
 		workspace: {
-			fileService: workspaceFileService,
 			treeService: workspaceTreeService,
 		},
 

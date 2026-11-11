@@ -114,7 +114,6 @@ export function buildUIPhase(b: CompositionBuilder): void {
 		runtimeRegistry: b.runtimeRegistry,
 		disposeRuntime: (sessionId, abort) =>
 			b.req(b.runtimeLifecycle, "runtimeLifecycle").disposeRuntime(sessionId, abort),
-		workspaceFileService: b.workspaceFileServiceRef,
 		workspaceTreeService: b.workspaceTreeServiceRef,
 		emitSessionList: (projectId) => b.req(b.sessionNotifier, "sessionNotifier").emitSessionList(projectId),
 		emitProjectList: () => b.req(b.sessionNotifier, "sessionNotifier").emitProjectList(),

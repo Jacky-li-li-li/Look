@@ -9,7 +9,6 @@ import {
 	projectGitInfoAtomFamily,
 	projectsAtom,
 	removeProjectAtoms,
-	sharedFilesAtomFamily,
 	showHiddenFilesAtom,
 } from "../src/renderer/store/atoms";
 import { handleProjectEvent } from "../src/renderer/store/projectHandlers";
@@ -22,18 +21,11 @@ function makeProject(id: string) {
 }
 
 describe("handleProjectEvent", () => {
-	let sharedRefreshTimers: Map<string, ReturnType<typeof setTimeout>>;
-
 	beforeEach(() => {
-		sharedRefreshTimers = new Map();
 		appStore.set(projectsAtom, [makeProject(projectId), makeProject(otherProjectId)]);
 	});
 
 	afterEach(() => {
-		for (const timer of sharedRefreshTimers.values()) {
-			clearTimeout(timer);
-		}
-		sharedRefreshTimers.clear();
 		appStore.set(projectsAtom, []);
 		appStore.set(activeProjectIdAtom, null);
 		appStore.set(openProjectIdsAtom, []);
@@ -45,22 +37,18 @@ describe("handleProjectEvent", () => {
 	});
 
 	it("returns false for unhandled event types", () => {
-		const result = handleProjectEvent(
-			{ type: "session:snapshot" } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
+		const result = handleProjectEvent({
+			type: "session:snapshot",
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(result).toBe(false);
 	});
 
 	it("project:list replaces projects and advances ready phase", () => {
-		const handled = handleProjectEvent(
-			{
-				type: "project:list",
-				projects: [makeProject("project-c")],
-				activeProjectId: "project-c",
-			} as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
+		const handled = handleProjectEvent({
+			type: "project:list",
+			projects: [makeProject("project-c")],
+			activeProjectId: "project-c",
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(handled).toBe(true);
 		expect(appStore.get(projectsAtom)).toHaveLength(1);
 		expect(appStore.get(appReadyPhaseAtom)).toBe(1);
@@ -68,37 +56,19 @@ describe("handleProjectEvent", () => {
 	});
 
 	it("project:list removes per-project atoms for deleted projects", () => {
-		appStore.set(sharedFilesAtomFamily(projectId), [{ name: "x", path: "x", type: "file" }]);
 		appStore.set(loadedWorkspaceChildrenAtomFamily(projectId), new Map([["", []]]));
-		handleProjectEvent(
-			{
-				type: "project:list",
-				projects: [makeProject(otherProjectId)],
-			} as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
-		expect(appStore.get(sharedFilesAtomFamily(projectId))).toEqual([]);
+		handleProjectEvent({
+			type: "project:list",
+			projects: [makeProject(otherProjectId)],
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(appStore.get(loadedWorkspaceChildrenAtomFamily(projectId)).size).toBe(0);
 	});
 
-	it("project:list clears shared refresh timers for deleted projects", () => {
-		const timer = setTimeout(() => {}, 10000);
-		sharedRefreshTimers.set(projectId, timer);
-		handleProjectEvent(
-			{
-				type: "project:list",
-				projects: [makeProject(otherProjectId)],
-			} as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
-		expect(sharedRefreshTimers.has(projectId)).toBe(false);
-	});
-
 	it("project:active-changed updates active project", () => {
-		handleProjectEvent(
-			{ type: "project:active-changed", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
+		handleProjectEvent({
+			type: "project:active-changed",
+			projectId,
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(appStore.get(activeProjectIdAtom)).toBe(projectId);
 	});
 
@@ -114,10 +84,11 @@ describe("handleProjectEvent", () => {
 			dirtyAddedLines: 2,
 			dirtyDeletedLines: 1,
 		};
-		handleProjectEvent(
-			{ type: "project:git-info", projectId, info: gitInfo } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
+		handleProjectEvent({
+			type: "project:git-info",
+			projectId,
+			info: gitInfo,
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(appStore.get(projectGitInfoAtomFamily(projectId))).toEqual(gitInfo);
 		expect(appStore.get(projectGitInfoAtomFamily(otherProjectId))).toBeNull();
 	});
@@ -134,45 +105,28 @@ describe("handleProjectEvent", () => {
 			dirtyAddedLines: 0,
 			dirtyDeletedLines: 0,
 		});
-		handleProjectEvent(
-			{ type: "project:git-info", projectId, info: null } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
+		handleProjectEvent({
+			type: "project:git-info",
+			projectId,
+			info: null,
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(appStore.get(projectGitInfoAtomFamily(projectId))).toBeNull();
 	});
 
 	it("project:confirm-delete sets pending delete state", () => {
-		handleProjectEvent(
-			{
-				type: "project:confirm-delete",
-				projectId,
-				projectName: "Project A",
-				agentCount: 3,
-				runningCount: 1,
-			} as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
+		handleProjectEvent({
+			type: "project:confirm-delete",
+			projectId,
+			projectName: "Project A",
+			agentCount: 3,
+			runningCount: 1,
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(appStore.get(pendingDeleteProjectAtom)).toEqual({
 			projectId,
 			projectName: "Project A",
 			agentCount: 3,
 			runningCount: 1,
 		});
-	});
-
-	it("shared:updated debounces listSharedFiles refresh", async () => {
-		const listSharedFiles = vi.fn().mockResolvedValue({ success: true, nodes: [] });
-		vi.stubGlobal("window", { look: { listSharedFiles } });
-
-		handleProjectEvent(
-			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
-		expect(sharedRefreshTimers.has(projectId)).toBe(true);
-
-		await new Promise((resolve) => setTimeout(resolve, 250));
-		expect(listSharedFiles).toHaveBeenCalledWith(projectId);
-		vi.unstubAllGlobals();
 	});
 
 	it("workspace:updated refetches children when path is expanded", async () => {
@@ -185,12 +139,11 @@ describe("handleProjectEvent", () => {
 			.mockResolvedValue({ success: true, nodes: [{ name: "b", path: "b", type: "file" }] });
 		vi.stubGlobal("window", { look: { listWorkspaceChildren } });
 
-		handleProjectEvent(
-			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<
-				typeof handleProjectEvent
-			>[0],
-			sharedRefreshTimers,
-		);
+		handleProjectEvent({
+			type: "workspace:updated",
+			projectId,
+			relativePath: "src",
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(listWorkspaceChildren).toHaveBeenCalledWith(projectId, "src", false);
@@ -206,12 +159,11 @@ describe("handleProjectEvent", () => {
 		const listWorkspaceChildren = vi.fn().mockResolvedValue({ success: true, nodes: [] });
 		vi.stubGlobal("window", { look: { listWorkspaceChildren } });
 
-		handleProjectEvent(
-			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<
-				typeof handleProjectEvent
-			>[0],
-			sharedRefreshTimers,
-		);
+		handleProjectEvent({
+			type: "workspace:updated",
+			projectId,
+			relativePath: "src",
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(listWorkspaceChildren).toHaveBeenCalledWith(projectId, "src", true);
@@ -222,81 +174,12 @@ describe("handleProjectEvent", () => {
 		const listWorkspaceChildren = vi.fn();
 		vi.stubGlobal("window", { look: { listWorkspaceChildren } });
 
-		handleProjectEvent(
-			{ type: "workspace:updated", projectId, relativePath: "src" } as unknown as Parameters<
-				typeof handleProjectEvent
-			>[0],
-			sharedRefreshTimers,
-		);
+		handleProjectEvent({
+			type: "workspace:updated",
+			projectId,
+			relativePath: "src",
+		} as unknown as Parameters<typeof handleProjectEvent>[0]);
 		expect(listWorkspaceChildren).not.toHaveBeenCalled();
-		vi.unstubAllGlobals();
-	});
-	/**
-	 * Architecture-review P0-5 follow-up (2026-10):
-	 * - onAfterChange immediate list + watcher shared:updated are redundant but
-	 *   both run after awaited mutations, so they are not the stale-overwrite bug.
-	 * - Overlapping watcher lists (slow first + fast second) could last-write-wins
-	 *   with stale data; generation tokens drop outdated responses.
-	 */
-	it("shared:updated coalesces rapid events to a single listSharedFiles", async () => {
-		const nodes = [{ name: "a.txt", path: "a.txt", type: "file" as const }];
-		const listSharedFiles = vi.fn().mockResolvedValue({ success: true, nodes });
-		vi.stubGlobal("window", { look: { listSharedFiles } });
-		appStore.set(sharedFilesAtomFamily(projectId), []);
-
-		handleProjectEvent(
-			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
-		handleProjectEvent(
-			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
-		expect(sharedRefreshTimers.size).toBe(1);
-
-		await new Promise((resolve) => setTimeout(resolve, 250));
-		expect(listSharedFiles).toHaveBeenCalledTimes(1);
-		expect(appStore.get(sharedFilesAtomFamily(projectId))).toEqual(nodes);
-		vi.unstubAllGlobals();
-	});
-
-	it("ignores a stale in-flight listSharedFiles when a newer shared:updated already applied (P0-5)", async () => {
-		let resolveEarly!: (value: { success: true; nodes: { name: string; path: string; type: "file" }[] }) => void;
-		const early = new Promise<{ success: true; nodes: { name: string; path: string; type: "file" }[] }>((r) => {
-			resolveEarly = r;
-		});
-		const lateNodes = [{ name: "new.txt", path: "new.txt", type: "file" as const }];
-		const earlyNodes = [{ name: "stale.txt", path: "stale.txt", type: "file" as const }];
-		const listSharedFiles = vi
-			.fn()
-			.mockImplementationOnce(() => early)
-			.mockResolvedValueOnce({ success: true, nodes: lateNodes });
-		vi.stubGlobal("window", { look: { listSharedFiles } });
-		appStore.set(sharedFilesAtomFamily(projectId), []);
-
-		// First event starts a debounced list that we keep pending.
-		handleProjectEvent(
-			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
-		await new Promise((resolve) => setTimeout(resolve, 250));
-		expect(listSharedFiles).toHaveBeenCalledTimes(1);
-
-		// Second event after the first list started: schedules another list.
-		handleProjectEvent(
-			{ type: "shared:updated", projectId } as unknown as Parameters<typeof handleProjectEvent>[0],
-			sharedRefreshTimers,
-		);
-		await new Promise((resolve) => setTimeout(resolve, 250));
-		expect(listSharedFiles).toHaveBeenCalledTimes(2);
-		// Late (second) list resolves first with the fresh tree.
-		await Promise.resolve();
-		expect(appStore.get(sharedFilesAtomFamily(projectId))).toEqual(lateNodes);
-		// Early (first) list resolves later with stale nodes — generation guard must drop it.
-		resolveEarly({ success: true, nodes: earlyNodes });
-		await early;
-		await Promise.resolve();
-		expect(appStore.get(sharedFilesAtomFamily(projectId))).toEqual(lateNodes);
 		vi.unstubAllGlobals();
 	});
 });

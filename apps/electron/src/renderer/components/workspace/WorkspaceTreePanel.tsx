@@ -310,9 +310,9 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
+			<div className="flex h-8 shrink-0 items-center gap-0.5 border-b px-1.5">
 				<Button variant="ghost" size="icon-xs" onClick={handleRefresh} aria-label={t("workspaceTree.refresh")}>
-					<RefreshCw className="size-3.5" />
+					<RefreshCw className="size-3" />
 				</Button>
 				<Button
 					variant="ghost"
@@ -320,7 +320,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 					onClick={handleCollapseAll}
 					aria-label={t("workspaceTree.collapseAll")}
 				>
-					<ChevronsDownUp className="size-3.5" />
+					<ChevronsDownUp className="size-3" />
 				</Button>
 				<div className="flex-1" />
 				<Tooltip>
@@ -331,7 +331,7 @@ export function WorkspaceTreePanel({ projectId, cwd: _cwd }: WorkspaceTreePanelP
 							onClick={handleToggleShowHidden}
 							aria-label={t(showHiddenFiles ? "workspaceTree.hideHidden" : "workspaceTree.showHidden")}
 						>
-							{showHiddenFiles ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+							{showHiddenFiles ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">
@@ -536,7 +536,7 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 			draggable
 			onDragStart={handleDragStart}
 			style={{ paddingLeft: depth * INDENT_PX + 8 }}
-			className="tree-row group flex h-6 cursor-pointer items-center gap-1 pr-2 text-xs focus-visible:outline-none"
+			className="tree-row group flex h-[26px] cursor-pointer items-center gap-1.5 pr-1.5 text-xs focus-visible:outline-none"
 			onClick={() => {
 				if (isDir) handleClickToggle();
 				else handleViewFile();
@@ -550,7 +550,7 @@ function WorkspaceTreeNodeRowImpl({ row, isExpanded, onToggle }: WorkspaceTreeNo
 						e.stopPropagation();
 						handleClickToggle();
 					}}
-					className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-foreground/10"
+					className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-[var(--surface-hover)]"
 					aria-label={isExpanded ? "折叠" : "展开"}
 				>
 					{isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}

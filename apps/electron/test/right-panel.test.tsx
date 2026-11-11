@@ -2,7 +2,7 @@
 
 import { TooltipProvider } from "@look/ui/components/ui/tooltip";
 import type { ProjectInfo } from "@shared/types";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "jotai";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,8 +32,8 @@ vi.mock("sonner", () => ({
 vi.mock("../src/renderer/components/workspace/WorkspaceTreePanel", () => ({
 	WorkspaceTreePanel: () => <div data-testid="workspace-tree" />,
 }));
-vi.mock("../src/renderer/components/workspace/SharedAreaPanel", () => ({
-	SharedAreaPanel: () => <div data-testid="shared-area" />,
+vi.mock("../src/renderer/components/workspace/ChangesPanel", () => ({
+	default: () => <div data-testid="changes-panel" />,
 }));
 
 const projects: ProjectInfo[] = [
@@ -53,33 +53,22 @@ function renderPanel() {
 	);
 }
 
-describe("RightPanel 共享区 watcher", () => {
-	const listSharedFiles = vi.fn();
-	const startSharedWatch = vi.fn();
-	const stopSharedWatch = vi.fn();
+describe("RightPanel", () => {
 	const getProjectGitInfo = vi.fn();
 
 	beforeEach(async () => {
 		await i18n.changeLanguage("en");
 		toastError.mockReset();
-		listSharedFiles.mockReset().mockResolvedValue({ success: true, nodes: [] });
-		startSharedWatch.mockReset().mockResolvedValue({ success: true });
-		stopSharedWatch.mockReset().mockResolvedValue({ success: true });
 		getProjectGitInfo.mockReset().mockResolvedValue({ success: true, info: null });
 		Object.defineProperty(window, "look", {
 			configurable: true,
-			value: { listSharedFiles, startSharedWatch, stopSharedWatch, getProjectGitInfo },
+			value: { getProjectGitInfo },
 		});
 		appStore.set(projectsAtom, projects);
 		appStore.set(activeProjectIdAtom, "project-1");
 	});
 
 	afterEach(async () => {
-		// 先重置 atom，再冲刷 effect 链上仍在途中的 promise
-		// （listSharedFiles/startSharedWatch 的 .then 回调会触发 jotai 更新
-		// 并排入 React 调度器）。若放任不管，它们会在 jsdom 拆除后才执行，
-		// react-dom 访问 window 抛出 "window is not defined" 的
-		// unhandled error（CI 上偶发退出码 1）。
 		appStore.set(projectsAtom, []);
 		appStore.set(activeProjectIdAtom, null);
 		appStore.set(rightPanelCollapsedAtom, false);
@@ -88,23 +77,16 @@ describe("RightPanel 共享区 watcher", () => {
 		document.body.replaceChildren();
 	});
 
-	it("切换项目时停止旧项目 watcher,并启动新项目 watcher", async () => {
+	it("只保留「工作区 / 变更」两个页签（共享区已移除）", () => {
 		renderPanel();
-		await waitFor(() => expect(startSharedWatch).toHaveBeenCalledWith("project-1"));
-
-		act(() => appStore.set(activeProjectIdAtom, "project-2"));
-
-		await waitFor(() => expect(startSharedWatch).toHaveBeenCalledWith("project-2"));
-		expect(stopSharedWatch).toHaveBeenCalledWith("project-1");
+		const tabs = screen.getAllByRole("tab");
+		expect(tabs).toHaveLength(2);
+		expect(tabs.map((tab) => tab.textContent)).toEqual(["Workspace", "Changes"]);
 	});
 
-	it("组件卸载时停止当前项目 watcher", async () => {
-		const { unmount } = renderPanel();
-		await waitFor(() => expect(startSharedWatch).toHaveBeenCalledWith("project-1"));
-
-		unmount();
-
-		expect(stopSharedWatch).toHaveBeenCalledWith("project-1");
+	it("默认渲染工作区树", () => {
+		renderPanel();
+		expect(screen.getByTestId("workspace-tree")).toBeTruthy();
 	});
 
 	it("切换项目时拉取 git info 填充「变更」tab 徽标数据（不依赖 GitStatusBar 挂载）", async () => {

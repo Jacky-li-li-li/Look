@@ -7,7 +7,7 @@
 //   - Proma ignore 硬编码 4 套 Set(隐藏 + node_modules + 系统垃圾 + 高噪音)
 //   - Proma 安全边界靠白名单(非 ignore)— 我们走 resolveWorkspacePath realpath 校验
 //
-// 关键差异 vs WorkspaceFileService(v0.5):
+// 设计要点:
 //   - 根目录是 ProjectInfo.cwd(动态)而非 ~/.look/shared(固定)
 //   - 列表策略:单层 lazy(工作区项目可能有 50k+ 文件)
 //   - ignore 列表更激进(共享区只允许用户文件)

@@ -1,5 +1,4 @@
 import type { MainToRendererEvent } from "@shared/types";
-import { toast } from "sonner";
 import { appStore } from "./appStore";
 import {
 	activeProjectIdAtom,
@@ -10,17 +9,10 @@ import {
 	projectGitInfoAtomFamily,
 	projectsAtom,
 	removeProjectAtoms,
-	sharedFilesAtomFamily,
 	showHiddenFilesAtom,
 } from "./atoms";
 
-/** Monotonic per-project token so an older in-flight listSharedFiles cannot overwrite a newer refresh. */
-const sharedRefreshGenerations = new Map<string, number>();
-
-export function handleProjectEvent(
-	event: MainToRendererEvent,
-	sharedRefreshTimers: Map<string, ReturnType<typeof setTimeout>>,
-): boolean {
+export function handleProjectEvent(event: MainToRendererEvent): boolean {
 	switch (event.type) {
 		case "project:list": {
 			const previous = appStore.get(projectsAtom);
@@ -33,15 +25,7 @@ export function handleProjectEvent(
 				appStore.get(openProjectIdsAtom).filter((projectId) => projectIds.has(projectId)),
 			);
 			for (const projectId of previousIds) {
-				if (!projectIds.has(projectId)) {
-					removeProjectAtoms(projectId);
-					const pendingTimer = sharedRefreshTimers.get(projectId);
-					if (pendingTimer) {
-						clearTimeout(pendingTimer);
-						sharedRefreshTimers.delete(projectId);
-					}
-					sharedRefreshGenerations.delete(projectId);
-				}
+				if (!projectIds.has(projectId)) removeProjectAtoms(projectId);
 			}
 			if (event.activeProjectId !== undefined) {
 				appStore.set(activeProjectIdAtom, event.activeProjectId);
@@ -67,38 +51,6 @@ export function handleProjectEvent(
 				runningCount: event.runningCount,
 			});
 			return true;
-
-		case "shared:updated": {
-			const projectId = event.projectId;
-			const filesAtom = sharedFilesAtomFamily(projectId);
-			const existing = sharedRefreshTimers.get(projectId);
-			if (existing) clearTimeout(existing);
-			sharedRefreshTimers.set(
-				projectId,
-				setTimeout(() => {
-					sharedRefreshTimers.delete(projectId);
-					const generation = (sharedRefreshGenerations.get(projectId) ?? 0) + 1;
-					sharedRefreshGenerations.set(projectId, generation);
-					void window.look
-						.listSharedFiles(projectId)
-						.then((result) => {
-							// Drop stale responses: a newer shared:updated may have started another list.
-							if (sharedRefreshGenerations.get(projectId) !== generation) return;
-							if (result?.success && result.nodes) {
-								appStore.set(filesAtom, result.nodes);
-							} else if (result && !result.success) {
-								toast.error(result.error ?? "刷新共享区失败");
-							}
-						})
-						.catch((error: unknown) => {
-							if (sharedRefreshGenerations.get(projectId) !== generation) return;
-							const message = error instanceof Error ? error.message : "刷新共享区失败";
-							toast.error(message);
-						});
-				}, 200),
-			);
-			return true;
-		}
 
 		case "workspace:updated": {
 			const { projectId, relativePath } = event;

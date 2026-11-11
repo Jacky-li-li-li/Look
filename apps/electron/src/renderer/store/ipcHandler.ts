@@ -21,8 +21,6 @@ import { enqueueUiEvent } from "./ui-event-processor";
 
 export { initAppData, isStartupComplete };
 
-const sharedRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
 /** Register all IPC event listeners. Call once at app startup. */
 export function initIpcHandlers(api: Window["look"]): () => void {
 	const unsub = api.onEvent((event) => {
@@ -32,7 +30,7 @@ export function initIpcHandlers(api: Window["look"]): () => void {
 		if (handleAgentEvent(event)) return;
 		if (handleBrowserEvent(event)) return;
 		if (handleImEvent(event)) return;
-		if (handleProjectEvent(event, sharedRefreshTimers)) return;
+		if (handleProjectEvent(event)) return;
 		if (handlePermissionEvent(event)) return;
 		if (handleSystemEvent(event)) return;
 

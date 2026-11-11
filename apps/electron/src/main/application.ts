@@ -42,7 +42,6 @@ import { getRecordingController } from "./transcribe/recording.js";
 import { getTranscriptionService } from "./transcribe/transcription-service.js";
 import { FileTaskLock } from "./utils/task-lock.js";
 import { closeViewerWindow } from "./viewer/viewer-window-manager.js";
-import { WorkspaceFileService } from "./workspace/workspace-file-service.js";
 import { WorkspaceTreeService } from "./workspace/workspace-tree-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,7 +51,6 @@ export interface ApplicationServices {
 	mainWindow: BrowserWindow | null;
 	runtimeManager: SessionRuntimeManager | null;
 	schedulerService: SchedulerService | null;
-	workspaceFileService: WorkspaceFileService | null;
 	workspaceTreeService: WorkspaceTreeService | null;
 	larkChannelManager: LarkChannelManager | null;
 	larkBridgeService: LarkBridgeService | null;
@@ -78,7 +76,6 @@ export class Application {
 			mainWindow: null,
 			runtimeManager: null,
 			schedulerService: null,
-			workspaceFileService: null,
 			workspaceTreeService: null,
 			larkChannelManager: null,
 			larkBridgeService: null,
@@ -464,12 +461,8 @@ export class Application {
 	// ── Phase 1: Core runtime ──
 
 	private async bootstrapCoreRuntime(): Promise<void> {
-		this.services.workspaceFileService = new WorkspaceFileService();
 		this.services.workspaceTreeService = new WorkspaceTreeService();
-		this.services.runtimeManager = await SessionRuntimeManager.create(
-			this.services.workspaceFileService,
-			this.services.workspaceTreeService,
-		);
+		this.services.runtimeManager = await SessionRuntimeManager.create(this.services.workspaceTreeService);
 	}
 
 	// ── Phase 2: Scheduler ──

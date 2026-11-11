@@ -804,18 +804,6 @@ const mockApi: LookAPI = {
 	navigateTree: () => success({ result: { cancelled: true } }),
 	createFork: () => success({ agentId: MOCK_SESSION_ID, sessionFilePath: "" }),
 
-	// ---- Shared area ----
-	listSharedFiles: () => success({ nodes: [] }),
-	listSharedChildren: () => success({ nodes: [] }),
-	startSharedWatch: () => ok,
-	stopSharedWatch: () => ok,
-	writeSharedFile: () => ok,
-	createSharedDir: () => ok,
-	deleteSharedItem: () => ok,
-	importToShared: () => ok,
-	exportFromShared: () => ok,
-	writeSharedContent: () => ok,
-
 	// ---- Workspace tree ----
 	listWorkspaceChildren: () => success({ nodes: [] }),
 	startWorkspaceWatch: () => ok,

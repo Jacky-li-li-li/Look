@@ -12,25 +12,25 @@ import "@pierre/diffs/dist/components/web-components.js";
 import { Button } from "@look/ui/components/ui/button";
 import { PatchDiff } from "@pierre/diffs/react";
 import type { GitDiffFile } from "@shared/types";
-import { ChevronDown, ChevronRight, FileDiff, FilePlus2, FileX2, FolderOpen, LoaderCircle } from "lucide-react";
+import { ChevronRight, FolderOpen, LoaderCircle } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLookTheme } from "../../hooks/useLookTheme";
 import { appStore } from "../../store/appStore";
 import { confirmDockFileSwapIfDirty, dockedFileAtom, fileViewerDirtyAtom } from "../../store/atoms";
 
-const STATUS_ICON = {
-	added: FilePlus2,
-	modified: FileDiff,
-	deleted: FileX2,
-	untracked: FilePlus2,
+const STATUS_LETTER = {
+	added: "A",
+	modified: "M",
+	deleted: "D",
+	untracked: "U",
 } as const;
 
 const STATUS_COLOR = {
-	added: "text-emerald-500",
-	modified: "text-amber-500",
-	deleted: "text-red-500",
-	untracked: "text-emerald-500",
+	added: "text-[var(--status-success)]",
+	modified: "text-[var(--status-warning)]",
+	deleted: "text-[var(--status-error)]",
+	untracked: "text-[var(--status-success)]",
 } as const;
 
 interface ChangesPanelProps {
@@ -105,7 +105,7 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 					</div>
 				) : (
 					files.map((file) => {
-						const Icon = STATUS_ICON[file.status];
+						const letter = STATUS_LETTER[file.status];
 						const isOpen = file.path === expandedPath;
 						// 主行展示文件名，副行展示所在目录路径（git 相对路径，/ 分隔）
 						const slash = file.path.lastIndexOf("/");
@@ -117,18 +117,22 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 									type="button"
 									onClick={() => setExpandedPath(isOpen ? null : file.path)}
 									aria-expanded={isOpen}
-									className={`flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition-colors ${
-										isOpen ? "changes-row-expanded bg-foreground/[0.07]" : "hover:bg-foreground/[0.06]"
+									className={`flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors ${
+										isOpen ? "bg-[var(--surface-control)]" : "hover:bg-[var(--surface-hover)]"
 									}`}
 								>
-									{isOpen ? (
-										<ChevronDown className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-									) : (
-										<ChevronRight className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-									)}
-									<Icon className={`size-3 shrink-0 ${STATUS_COLOR[file.status]}`} aria-hidden />
+									<ChevronRight
+										className={`size-3 shrink-0 text-muted-foreground/60 transition-transform ${isOpen ? "rotate-90" : ""}`}
+										aria-hidden
+									/>
+									<span
+										className={`w-2.5 shrink-0 font-mono text-[10px] leading-none font-medium ${STATUS_COLOR[file.status]}`}
+										aria-hidden
+									>
+										{letter}
+									</span>
 									<span className="flex min-w-0 flex-1 flex-col gap-0.5">
-										<span className="truncate text-[11px] leading-none font-medium">{fileName}</span>
+										<span className="truncate text-[12px] leading-tight font-medium">{fileName}</span>
 										{fileDir && (
 											<span
 												className="truncate font-mono text-[10px] leading-none text-muted-foreground/60"
@@ -138,12 +142,12 @@ const ChangesPanel = memo(function ChangesPanel({ projectId, cwd }: ChangesPanel
 											</span>
 										)}
 									</span>
-									<span className="shrink-0 font-mono text-[10px] text-muted-foreground/60">
+									<span className="shrink-0 font-mono text-[10px] leading-none">
 										{file.addedLines > 0 && (
-											<span className="text-emerald-600 dark:text-emerald-400">+{file.addedLines}</span>
+											<span className="text-[var(--status-success)]">+{file.addedLines}</span>
 										)}
 										{file.deletedLines > 0 && (
-											<span className="text-red-600 dark:text-red-400"> -{file.deletedLines}</span>
+											<span className="text-[var(--status-error)]"> −{file.deletedLines}</span>
 										)}
 									</span>
 								</button>

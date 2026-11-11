@@ -1,7 +1,7 @@
 // ============================================================
 // fileTreeUtils — 文件树压平工具
 //
-// WorkspaceTreePanel 与 SharedAreaPanel 各自实现了近乎逐行复制的
+// WorkspaceTreePanel 的虚拟列表行生成逻辑。
 // flattenTree + FlatRow + INDENT_PX。此处合并为单一事实源。
 //
 // FlatRow.parentPath 目前无消费方（WorkspaceTreePanel 解构后即弃置，

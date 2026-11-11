@@ -1,6 +1,6 @@
 // CompositionBuilder phase
 import path from "node:path";
-import { getLookDir, getProjectSharedDir } from "@look/shared/look-storage";
+import { getLookDir } from "@look/shared/look-storage";
 import { createBrowserExtensionFactory } from "../../../extensions/browser-extension.js";
 import { createComputerUseExtensionFactory } from "../../../extensions/computer-use-extension.js";
 import { createMcpExtensionFactory } from "../../../extensions/mcp-extension.js";
@@ -78,15 +78,15 @@ export function buildExtensionsPhase(b: CompositionBuilder): void {
 					b.req(b.projectService, "projectService").resolveProjectTrust(cwd),
 				),
 				createSkillInjectExtensionFactory(),
-				// 截图落盘到项目共享区（守卫白名单内，共享面板可见，
-				// 路径芯片点击可预览）；无项目时不落盘，仅内联返回。
+				// 截图落盘到项目内的 artifacts/screenshots（守卫白名单内，路径芯片可点开）；
+				// 无项目时不落盘，仅内联返回。
 				// 非 macOS 不注册：computer-use 服务依赖 macOS 专属 TCC API，
 				// 见构造处注释（computerUseService 为 null 时跳过）。
 				...(b.computerUseService
 					? [
 							createComputerUseExtensionFactory(
 								b.computerUseService,
-								resolvedProjectId ? path.join(getProjectSharedDir(resolvedProjectId), "screenshots") : null,
+								resolvedProjectId ? path.join(cwd, "artifacts", "screenshots") : null,
 							),
 						]
 					: []),
@@ -95,11 +95,11 @@ export function buildExtensionsPhase(b: CompositionBuilder): void {
 					(cwd) => b.req(b.projectService, "projectService").resolveProjectTrust(cwd),
 					cwd,
 				),
-				// 转录稿落盘到项目共享区 transcripts 目录（共享面板可见、
-				// 路径稳定可点）；无项目时不落盘到共享区，回退系统临时目录。
+				// 转录稿落盘到项目内的 artifacts/transcripts（路径稳定可点）；
+				// 无项目时不落盘，回退系统临时目录。
 				createTranscribeExtensionFactory({
 					service: b.req(b.transcribeService, "transcribeService"),
-					sharedDir: resolvedProjectId ? path.join(getProjectSharedDir(resolvedProjectId), "transcripts") : null,
+					sharedDir: resolvedProjectId ? path.join(cwd, "artifacts", "transcripts") : null,
 				}),
 			];
 		},

@@ -53,7 +53,6 @@ export type MainToRendererEvent =
 			runningCount: number;
 	  }
 	// ---- Shared area events ----
-	| { type: "shared:updated"; projectId: string }
 	// ---- Workspace tree events ----
 	| { type: "workspace:updated"; projectId: string; relativePath: string }
 	// ---- IM / Feishu channel events ----

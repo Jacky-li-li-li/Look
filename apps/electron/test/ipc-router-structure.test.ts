@@ -24,7 +24,6 @@ describe("IPC router structure", () => {
 			"permission-router",
 			"subagent-router",
 			"skill-router",
-			"shared-router",
 			"workspace-router",
 			"system-router",
 			"im-router",

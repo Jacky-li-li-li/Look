@@ -151,11 +151,11 @@ describe("pi runtime architecture regressions", () => {
 		expect(tsconfig).not.toContain("orchestration.ts");
 	});
 
-	it("13. steers session-generated files to the project shared area", () => {
-		// 共享区提示必须是指引性的：明确要求把生成文件存进共享区、
+	it("13. steers session-generated files into the project directory", () => {
+		// 产物提示必须是指引性的：明确要求把生成文件存进项目目录、
 		// 不要存 ~/Desktop，否则模型按训练习惯把产物写到项目外。
-		expect(runtimeFactory).toContain("getProjectSharedDir");
-		expect(runtimeFactory).toContain("共享区（Shared Area）");
+		expect(runtimeFactory).toContain("产物保存");
+		expect(runtimeFactory).toContain("项目目录内的合适位置");
 		expect(runtimeFactory).toContain("不要保存到 ~/Desktop");
 		expect(runtimeFactory).toContain("除非用户明确要求");
 	});

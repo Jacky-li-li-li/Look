@@ -41,7 +41,6 @@ import type { SkillManagementService } from "../session/services/skill-managemen
 import type { SubAgentRegistry } from "../session/subagent-registry.js";
 import type { CustomProvidersStore } from "../settings/custom-providers.js";
 import type { PromptStore } from "../settings/prompt-store.js";
-import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 
 // ============================================================
@@ -111,7 +110,6 @@ export interface InvokeContext {
 
 	// ── Workspace ──
 	workspace: {
-		fileService: WorkspaceFileService;
 		treeService: WorkspaceTreeService;
 	};
 

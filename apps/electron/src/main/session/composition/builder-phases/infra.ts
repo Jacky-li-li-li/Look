@@ -12,7 +12,6 @@ import { migrateAzureProviderId } from "../../../settings/migrate-azure-provider
 import { PromptStore } from "../../../settings/prompt-store.js";
 import { UserSettingsStore } from "../../../settings/store.js";
 import { getTranscriptionService } from "../../../transcribe/transcription-service.js";
-import type { WorkspaceFileService } from "../../../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../../../workspace/workspace-tree-service.js";
 import { MAX_NAME_LENGTH } from "../../constants.js";
 import { SessionEventProcessor } from "../../events/session-event-processor.js";
@@ -24,12 +23,7 @@ import { SessionInfoService } from "../../services/session-info-service.js";
 import type { CompositionBuilder } from "../builder-context.js";
 import { CompositionHost } from "../composition-host.js";
 
-export function buildInfraPhase(
-	b: CompositionBuilder,
-	workspaceFileService: WorkspaceFileService | null,
-	workspaceTreeService: WorkspaceTreeService | null,
-): void {
-	b.workspaceFileServiceRef = workspaceFileService;
+export function buildInfraPhase(b: CompositionBuilder, workspaceTreeService: WorkspaceTreeService | null): void {
 	b.workspaceTreeServiceRef = workspaceTreeService;
 
 	ensureLookDir();

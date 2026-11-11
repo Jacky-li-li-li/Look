@@ -4,7 +4,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { getProjectSharedDir } from "@look/shared/look-storage";
 import { isSensitivePath } from "../../security/sensitive-paths.js";
 import { guardPath } from "../guards.js";
 import type { IpcRouter } from "../invoke-context.js";
@@ -180,10 +179,8 @@ export async function statPathKind(filePath: string): Promise<PathStatContentRes
 }
 
 export const fileRouter: IpcRouter = (ctx, register) => {
-	// Allowed roots: every project cwd plus each project's shared area
-	// (~/.look/shared/<projectId>). Keeping the shared area inside the allowlist
-	// preserves the shared-file viewer without opening arbitrary home paths.
-	const projectRoots = () => ctx.project.service.listProjects().flatMap((p) => [p.cwd, getProjectSharedDir(p.id)]);
+	// Allowed roots: every project cwd.
+	const projectRoots = () => ctx.project.service.listProjects().map((p) => p.cwd);
 
 	register("file:read", async (data) => {
 		const filePath = await guardAnyPath(data.path, "path");

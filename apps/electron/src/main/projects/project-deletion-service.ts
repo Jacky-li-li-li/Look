@@ -8,13 +8,12 @@
 // ============================================================
 
 import fs, { existsSync } from "node:fs";
-import { assertSafeProjectId, getProjectSharedDir, getWorkspaceDir } from "@look/shared/look-storage";
+import { assertSafeProjectId, getWorkspaceDir } from "@look/shared/look-storage";
 import { DEFAULT_PROJECT_ID } from "@look/shared/types";
 import type { RuntimeRegistry } from "../session/runtime/runtime-registry.js";
 import type { AttachmentService } from "../session/services/attachment-service.js";
 import type { SessionCatalog } from "../session/services/session-catalog.js";
 import type { SessionDraftIndex } from "../session/services/session-draft-index.js";
-import type { WorkspaceFileService } from "../workspace/workspace-file-service.js";
 import type { WorkspaceTreeService } from "../workspace/workspace-tree-service.js";
 import type { ProjectService } from "./project-service.js";
 
@@ -28,7 +27,6 @@ export interface ProjectDeletionDependencies {
 	draftIndex: Pick<SessionDraftIndex, "prunePersisted">;
 	runtimeRegistry: Pick<RuntimeRegistry, "entries">;
 	disposeRuntime(sessionId: string, abort?: boolean): Promise<void>;
-	workspaceFileService: WorkspaceFileService | null;
 	workspaceTreeService: WorkspaceTreeService | null;
 	emitSessionList(projectId: string): void;
 	emitProjectList(): void;
@@ -55,19 +53,11 @@ export class ProjectDeletionService {
 		for (const [sessionId, managed] of this.deps.runtimeRegistry.entries()) {
 			if (managed.projectId === projectId) runtimeIds.push(sessionId);
 		}
-		const sharedDir = getProjectSharedDir(projectId);
 		const workspaceDir = getWorkspaceDir(project.id);
 
 		await Promise.all(runtimeIds.map((sessionId) => this.deps.disposeRuntime(sessionId, true)));
 
 		// Stop watchers before deleting directories to avoid chokidar errors on deleted inodes.
-		if (this.deps.workspaceFileService) {
-			try {
-				await this.deps.workspaceFileService.stopWatching(projectId);
-			} catch (error) {
-				console.error(`[Look] Failed to stop shared area watcher for ${projectId}:`, error);
-			}
-		}
 		if (this.deps.workspaceTreeService) {
 			try {
 				await this.deps.workspaceTreeService.stopAllWatchesForProject(projectId);
@@ -94,16 +84,7 @@ export class ProjectDeletionService {
 			}
 		}
 
-		// Remove shared area and the entire workspace directory (sessions/subsessions/schedule-sessions).
-		if (existsSync(sharedDir)) {
-			try {
-				fs.rmSync(sharedDir, { recursive: true, force: true });
-			} catch (error) {
-				if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
-					console.error(`Failed to remove shared area for project ${projectId}:`, error);
-				}
-			}
-		}
+		// Remove the entire workspace directory (sessions/subsessions/schedule-sessions).
 		if (existsSync(workspaceDir)) {
 			try {
 				fs.rmSync(workspaceDir, { recursive: true, force: true });

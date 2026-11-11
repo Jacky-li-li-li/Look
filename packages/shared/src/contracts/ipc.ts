@@ -262,24 +262,6 @@ export interface LookAPI {
 		patch: Partial<{ userId: string; email: string; userName: string; avatar: string }>,
 	): Promise<IpcResult>;
 	logout(): Promise<IpcResult>;
-	// ---- Shared area ----
-	listSharedFiles(projectId: string): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
-	listSharedChildren(projectId: string, relativePath: string): Promise<IpcResult<{ nodes?: FileTreeNode[] }>>;
-	startSharedWatch(projectId: string): Promise<IpcResult>;
-	stopSharedWatch(projectId: string): Promise<IpcResult>;
-	writeSharedFile(projectId: string, path: string, content: string): Promise<IpcResult>;
-	createSharedDir(projectId: string, path: string): Promise<IpcResult>;
-	deleteSharedItem(projectId: string, path: string): Promise<IpcResult>;
-	importToShared(projectId: string, sources: string[], targetDir?: string): Promise<IpcResult>;
-	exportFromShared(projectId: string, paths: string[], destDir: string): Promise<IpcResult>;
-	/** Drag-drop fallback: write base64/utf8 content to shared area when
-	 *  absolute path is unavailable. */
-	writeSharedContent(
-		projectId: string,
-		path: string,
-		content: string,
-		encoding?: "base64" | "utf8",
-	): Promise<IpcResult>;
 	// ---- Workspace tree (v0.6) ----
 	listWorkspaceChildren(
 		projectId: string,
