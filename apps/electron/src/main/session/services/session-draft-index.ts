@@ -14,7 +14,7 @@
 import { statSync } from "node:fs";
 import { getSessionDraftsIndexPath } from "@look/shared/look-storage";
 import type { ImSessionProvider } from "@look/shared/types";
-import { readJsonFile, writeJsonFile } from "../../utils/atomic-writer.js";
+import { readJsonFileWithCorruptBackup, writeJsonFile } from "../../utils/atomic-writer.js";
 
 export interface SessionDraftEntry {
 	/** pi 会话 ID（SessionManager.create 分配，重启恢复时用同 ID 重建）。 */
@@ -53,7 +53,7 @@ export class SessionDraftIndex {
 			return this.cache.file;
 		}
 		const fallback: SessionDraftsFile = { version: 1, entries: [] };
-		const data = readJsonFile<SessionDraftsFile>(this.filePath, fallback);
+		const data = readJsonFileWithCorruptBackup<SessionDraftsFile>(this.filePath, fallback);
 		// 版本/结构防御：任何不合预期的形状都视为空索引，不抛出。
 		const file: SessionDraftsFile =
 			!data || !Array.isArray(data.entries) ? fallback : { version: 1, entries: data.entries };

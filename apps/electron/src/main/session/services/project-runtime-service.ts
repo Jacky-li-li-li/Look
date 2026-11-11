@@ -9,6 +9,7 @@
 import fs, { existsSync } from "node:fs";
 import type { ProjectInfo } from "@look/shared/types";
 import type { ProjectService } from "../../projects/project-service.js";
+import { isSensitivePath } from "../../security/sensitive-paths.js";
 import type { ManagedSessionRegistry } from "../runtime/runtime-registry.js";
 import type { SessionCatalog } from "./session-catalog.js";
 
@@ -33,6 +34,11 @@ export class ProjectRuntimeService {
 			throw new Error(`Project path is not a directory: ${cwd}`);
 		}
 		const canonicalCwd = fs.realpathSync(cwd);
+		// 项目根会成为 file:write 的白名单。允许注册敏感目录（~/.ssh、~/.aws、
+		// LOOK_HOME …）等于把任意用户可写文件重新暴露给渲染端。
+		if (isSensitivePath(canonicalCwd)) {
+			throw new Error("Project path is in a protected location");
+		}
 		const existing = this.deps.projectService.findByCwd(canonicalCwd);
 		if (existing) {
 			return { project: existing, isDuplicate: true };

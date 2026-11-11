@@ -10,7 +10,7 @@
 // 子类只需提供归一化逻辑（normalizeDatabase）与业务方法。
 // ============================================================
 
-import { readJsonFile, writeJsonFileAsync } from "./atomic-writer.js";
+import { readJsonFileWithCorruptBackup, writeJsonFileAsync } from "./atomic-writer.js";
 import { type AcquiredTaskLock, FileTaskLock } from "./task-lock.js";
 
 export abstract class LockedJsonStore<T extends object> {
@@ -28,12 +28,12 @@ export abstract class LockedJsonStore<T extends object> {
 		this.mutationLock = new FileTaskLock(`${filePath}.locks`, `${process.pid}:${crypto.randomUUID()}`);
 	}
 
-	/** 从磁盘读取（失败回退空库）并归一化为合法的数据库形状。 */
+	/** 从磁盘读取并归一化为合法的数据库形状。损坏文件先备份，绝不静默写回空库。 */
 	protected abstract normalizeDatabase(raw: unknown): T;
 
 	/** 重新读盘并归一化；查询方法与跨进程临界区都会调用。 */
 	load(): void {
-		this.database = this.normalizeDatabase(readJsonFile<unknown>(this.filePath, null));
+		this.database = this.normalizeDatabase(readJsonFileWithCorruptBackup<unknown>(this.filePath, null));
 	}
 
 	/** 串行化变更 + 落盘：队列内加载最新文件、应用变更并等待写盘完成。 */

@@ -140,7 +140,9 @@ export function buildUIPhase(b: CompositionBuilder): void {
 		host: {
 			ensureRuntime: (sessionId) => b.req(b.runtimeLifecycle, "runtimeLifecycle").ensureRuntime(sessionId),
 			emitSessionUpdated: (sessionId) => host.emitSessionUpdated(sessionId),
-			sessionExists: (sessionId) => b.req(b.sessionCatalog, "sessionCatalog").get(sessionId) !== undefined,
+			// 必须与 SessionControl/Messaging 使用同一判定：草稿期（pi 未落盘）
+			// 会话只在 draftIndex / 在途创建里，catalog-only 会静默丢弃权限模式。
+			sessionExists: (sessionId) => b.sessionExists(sessionId),
 		},
 		eventBus: b.req(b.eventBus, "eventBus"),
 		permissionService: b.req(b.permissionService, "permissionService"),

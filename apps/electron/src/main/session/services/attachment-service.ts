@@ -20,6 +20,7 @@ import {
 	getAttachmentsRootDir,
 } from "@look/shared/look-storage";
 import type { AttachmentRef, PendingAttachment } from "@look/shared/types";
+import { isSensitivePath } from "../../security/sensitive-paths.js";
 
 /** 附件内容字节上限（与 file:write 的 10MB 对齐）。 */
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -142,16 +143,26 @@ export class AttachmentService {
 		mimeType?: string,
 	): PendingAttachment {
 		assertAttachmentName(name);
-		const srcStat = fs.statSync(sourcePath); // ENOENT 原样抛出
+		const resolvedSource = path.resolve(sourcePath);
+		const srcStat = fs.statSync(resolvedSource); // ENOENT 原样抛出
 		if (!srcStat.isFile()) {
 			throw new Error(`Attachment source is not a regular file: ${sourcePath}`);
 		}
 		if (srcStat.size > ATTACHMENT_MAX_BYTES) {
 			throw new Error(`Attachment exceeds max size ${ATTACHMENT_MAX_BYTES} bytes`);
 		}
+		// 渲染端可用任意 sourcePath 触发主进程拷贝：与 file:read 共用同一敏感区
+		// 边界。否则 ~/.ssh/id_rsa 可被导入附件区，再由 attachment:read 原样读回。
+		if (isSensitivePath(resolvedSource)) {
+			throw new Error("Attachment source is in a protected location");
+		}
+		const realSource = fs.realpathSync(resolvedSource);
+		if (isSensitivePath(realSource)) {
+			throw new Error("Attachment source resolves to a protected location");
+		}
 		const dir = ensureAttachmentsDir(projectId, sessionId);
 		const filePath = path.join(dir, name);
-		fs.copyFileSync(sourcePath, filePath);
+		fs.copyFileSync(realSource, filePath);
 		return {
 			projectId,
 			sessionId,

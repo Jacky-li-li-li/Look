@@ -9,7 +9,7 @@
 import { getProjectSystemPromptPath, getPromptsPath, getSystemPromptPath } from "@look/shared/look-storage";
 import fs from "fs";
 import path from "path";
-import { writeJsonFile, writeTextFile } from "../utils/atomic-writer.js";
+import { backupCorruptFile, writeJsonFile, writeTextFile } from "../utils/atomic-writer.js";
 
 /** 表示"跟随全局"的哨兵值 */
 const FOLLOW_GLOBAL = "__follow_global__";
@@ -82,6 +82,8 @@ export class PromptStore {
 	private data: PromptsFile;
 	private readonly filePath: string;
 	private readonly systemPromptPath: string;
+	/** prompts.json 损坏时不要用 builtin 覆盖 SYSTEM.md（原文件已备份）。 */
+	private loadedFromCorruptFile = false;
 
 	constructor() {
 		this.filePath = getPromptsPath();
@@ -89,7 +91,7 @@ export class PromptStore {
 		this.data = this.load();
 		this.migrateOldFormat();
 		this.ensureBuiltin();
-		this.syncSystemFile();
+		if (!this.loadedFromCorruptFile) this.syncSystemFile();
 	}
 
 	// ============================================================
@@ -412,21 +414,29 @@ export class PromptStore {
 	// ============================================================
 
 	private load(): PromptsFile {
+		const empty: PromptsFile = { prompts: [], activePromptId: "builtin-default", projectOverrides: {} };
+		if (!fs.existsSync(this.filePath)) return empty;
 		try {
-			if (fs.existsSync(this.filePath)) {
-				const raw = fs.readFileSync(this.filePath, "utf-8");
-				const parsed = JSON.parse(raw);
-				if (Array.isArray(parsed.prompts) && typeof parsed.activePromptId === "string") {
-					if (!parsed.projectOverrides || typeof parsed.projectOverrides !== "object") {
-						parsed.projectOverrides = {};
-					}
-					return parsed as PromptsFile;
-				}
+			const raw = fs.readFileSync(this.filePath, "utf-8");
+			const parsed = JSON.parse(raw);
+			if (!Array.isArray(parsed.prompts) || typeof parsed.activePromptId !== "string") {
+				throw new Error("unexpected prompts.json shape");
 			}
+			if (!parsed.projectOverrides || typeof parsed.projectOverrides !== "object") {
+				parsed.projectOverrides = {};
+			}
+			return parsed as PromptsFile;
 		} catch (err) {
-			console.warn("[Look] Failed to load prompts.json, using defaults:", err);
+			// 损坏内容先备份。否则 ensureBuiltin() 会用 builtin 覆盖原文件，
+			// 用户全部自定义 prompt 变体永久消失。
+			const backupPath = backupCorruptFile(this.filePath);
+			this.loadedFromCorruptFile = true;
+			console.error(
+				`[Look] prompts.json is corrupt${backupPath ? ` (backup: ${backupPath})` : ""}; rebuilding defaults:`,
+				err,
+			);
+			return empty;
 		}
-		return { prompts: [], activePromptId: "builtin-default", projectOverrides: {} };
 	}
 
 	/**

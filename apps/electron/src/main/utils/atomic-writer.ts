@@ -81,6 +81,43 @@ export function readJsonFile<T>(filePath: string, fallback: T): T {
 	}
 }
 
+/**
+ * 把损坏文件改名保留（`<file>.corrupt-<timestamp>`），返回备份路径。
+ * 解析失败时调用：宁可留下可人工恢复的备份，也不要让下一次写回静默覆盖原件。
+ */
+export function backupCorruptFile(filePath: string): string | null {
+	const backupPath = `${filePath}.corrupt-${Date.now()}`;
+	try {
+		fs.renameSync(filePath, backupPath);
+		return backupPath;
+	} catch (error) {
+		console.error(`[Look] Failed to back up corrupt file ${filePath}:`, error);
+		return null;
+	}
+}
+
+/**
+ * 读取用户数据 JSON。文件缺失时返回 fallback；解析失败时先备份原件再返回
+ * fallback，避免后续 save() 把空库/默认值写回、永久丢掉用户数据。
+ * 其余 IO 错误（权限、EISDIR …）照常抛出，不做静默降级。
+ */
+export function readJsonFileWithCorruptBackup<T>(filePath: string, fallback: T): T {
+	let raw: string;
+	try {
+		raw = fs.readFileSync(filePath, "utf8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return fallback;
+		throw error;
+	}
+	try {
+		return JSON.parse(raw) as T;
+	} catch (error) {
+		const backupPath = backupCorruptFile(filePath);
+		console.error(`[Look] Corrupt JSON at ${filePath}${backupPath ? ` (backup: ${backupPath})` : ""}:`, error);
+		return fallback;
+	}
+}
+
 export function readJsonFileOptional<T>(filePath: string): T | null {
 	try {
 		const raw = fs.readFileSync(filePath, "utf8");

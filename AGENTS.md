@@ -99,6 +99,7 @@ Type: rule
 - Enforce the preload surface with TypeScript: `LookAPI` in shared contracts + `const api: LookAPI = {…}` in `apps/electron/src/main/preload.cts` + typed `register<…>` in invoke-context. Guard: `apps/electron/test/preload-contract.test.ts`.
 - Add IPC by editing types + preload + router. **Do not** introduce schema/codegen pipelines for IPC.
 - Prefer `IpcResult<T>` at the boundary; callers narrow explicitly.
+- **Path-bearing IPC shares one sensitive-path boundary** → `file:read` / `file:write` / `attachment:import` / `project:create` all run user-supplied absolute paths through `security/sensitive-paths.ts` (`isSensitivePath`, lexical + realpath). Project roots are the `file:write` allowlist, so `project:create` rejects sensitive directories. Do not add a path-accepting channel without this check.
 
 ---
 

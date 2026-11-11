@@ -30,9 +30,9 @@ afterEach(async () => {
 	for (const d of [lookHome, fakeHome, cwd]) await rm(d, { recursive: true, force: true });
 });
 
-async function newManager() {
+async function newManager(options: { hadPriorUserData?: () => boolean } = {}) {
 	const { MCPManager } = await import("../src/main/mcp/manager.js");
-	return new MCPManager({ discoveryHome: fakeHome });
+	return new MCPManager({ discoveryHome: fakeHome, ...options });
 }
 
 function configsOf(manager: unknown, projectId: string) {
@@ -42,7 +42,7 @@ function configsOf(manager: unknown, projectId: string) {
 
 describe("MCP discovered configs require explicit consent", () => {
 	it("fresh install: discovered servers are listed but disabled; marker written", async () => {
-		const manager = await newManager();
+		const manager = await newManager({ hadPriorUserData: () => false });
 		await manager.loadConfig("p", cwd, { loadProjectConfig: false });
 		const cursor = configsOf(manager, "p").find((c) => c.name === "cursorTool");
 		expect(cursor).toMatchObject({ enabled: false, _source: "discovered" });
@@ -51,9 +51,8 @@ describe("MCP discovered configs require explicit consent", () => {
 	});
 
 	it("existing install: previously auto-enabled discovered servers are grandfathered once into user config", async () => {
-		writeFileSync(join(lookHome, "projects.json"), "[]");
 		vi.spyOn(console, "log").mockImplementation(() => {});
-		const manager = await newManager();
+		const manager = await newManager({ hadPriorUserData: () => true });
 		await manager.loadConfig("p", cwd, { loadProjectConfig: false });
 		const userCfg = JSON.parse(readFileSync(join(lookHome, "mcp.json"), "utf8"));
 		expect(userCfg.mcpServers.cursorTool).toMatchObject({ command: "node", enabled: true });
@@ -65,7 +64,7 @@ describe("MCP discovered configs require explicit consent", () => {
 			join(fakeHome, ".cursor", "mcp.json"),
 			JSON.stringify({ mcpServers: { cursorTool: { command: "node" }, laterTool: { command: "node" } } }),
 		);
-		const again = await newManager();
+		const again = await newManager({ hadPriorUserData: () => true });
 		await again.loadConfig("p", cwd, { loadProjectConfig: false });
 		expect(configsOf(again, "p").find((c) => c.name === "laterTool")).toMatchObject({ enabled: false });
 	});

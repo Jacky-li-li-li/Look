@@ -5,11 +5,11 @@
 // 工具聚合、状态查询、熔断保护。
 // ============================================================
 
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { getLookDir, getProjectsIndexPath } from "@look/shared/look-storage";
+import { getLookDir } from "@look/shared/look-storage";
 import { writeJsonFileAsync } from "../utils/atomic-writer.js";
 import { SerialTail } from "../utils/serial-tail.js";
 import { McpClient } from "./client.js";
@@ -24,6 +24,36 @@ interface CircuitState {
 export interface MCPManagerOptions {
 	/** 第三方 IDE 配置发现的 home 目录（测试注入；默认 os.homedir()）。 */
 	discoveryHome?: string;
+	/**
+	 * 一次性迁移判定：本机在本次启动前是否已有 Look 用户数据。
+	 * 默认按候选配置文件的 ctime 与进程启动时间比较（见实现）。
+	 * 测试可注入固定值。
+	 */
+	hadPriorUserData?: () => boolean;
+}
+
+/**
+ * 「本次启动前已有 Look 用户数据」判定。
+ *
+ * 不能用 projects.json：Application 启动时 ensureDefaultProject() 会先写出它，
+ * 于是全新安装也会被误判为老用户，第三方 MCP 命令被自动启用并 spawn。
+ * 改为比较候选配置文件的 ctime 与进程启动时间：本次启动写入的文件必然
+ * 晚于启动时刻；任一文件早于启动时刻，才说明是上一版本遗留的数据。
+ * 判定失败方向是「不做迁移」，不会误启用第三方配置。
+ */
+function hasLookUserDataFromPreviousLaunch(): boolean {
+	const lookDir = getLookDir();
+	if (!lookDir) return false;
+	const bootTimeMs = Date.now() - Math.round(process.uptime() * 1000);
+	const cutoff = bootTimeMs - 5_000;
+	const candidates = ["settings.json", "auth.json", "ui-settings.json", "custom-providers.json", "user-profile.json"];
+	return candidates.some((name) => {
+		try {
+			return statSync(path.join(lookDir, name)).ctimeMs < cutoff;
+		} catch {
+			return false;
+		}
+	});
 }
 
 /**
@@ -142,7 +172,7 @@ export class MCPManager {
 
 	/**
 	 * 向后兼容迁移（每台机器一次）：旧版本会自动启用第三方 IDE 的 MCP 配置。
-	 * 对**已有安装**（LOOK_HOME 下已存在 projects 索引），把当时已启用的发现配置
+	 * 对**已有安装**（本次启动前已存在 Look 用户数据），把当时已启用的发现配置
 	 * 写入 ~/.look/mcp.json 作为 user 配置，保持升级前行为；全新安装不做任何
 	 * 自动启用。完成后写入标记文件，之后新出现的第三方配置都需要用户显式启用。
 	 */
@@ -152,7 +182,7 @@ export class MCPManager {
 		const lookDir = getLookDir();
 		const markerPath = path.join(lookDir, DISCOVERY_CONSENT_MARKER);
 		if (existsSync(markerPath)) return;
-		const existingInstall = existsSync(getProjectsIndexPath());
+		const existingInstall = (this.options.hadPriorUserData ?? hasLookUserDataFromPreviousLaunch)();
 		const grandfathered: string[] = [];
 		if (existingInstall) {
 			const userConfigPath = path.join(lookDir, "mcp.json");

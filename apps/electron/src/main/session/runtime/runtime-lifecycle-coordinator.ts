@@ -101,6 +101,12 @@ enum RebindErrorAction {
  */
 export class RuntimeLifecycleCoordinator {
 	private readonly disposals = new Map<string, Promise<void>>();
+	/**
+	 * 初始化未完成即被处置的会话。处置等待超时后 registry 里还没有 entry，
+	 * 若直接返回，迟到的 bindRuntime 会把用户已删除的会话重新注册成活 runtime。
+	 * bindRuntime 在注册前消费该 tombstone 并拆毁迟到的 runtime。
+	 */
+	private readonly disposedDuringInitialization = new Set<string>();
 	private readonly creationTargets = new Map<string, { cwd: string; projectId: string }>();
 	/** Latest activation request wins for selection and renderer-facing broadcasts. */
 	private activationEpoch = 0;
@@ -362,6 +368,11 @@ export class RuntimeLifecycleCoordinator {
 		createdAt: number,
 	): Promise<ManagedRuntime> {
 		const session = runtime.session;
+		// 处置等待超时后才完成初始化的会话：这里直接失败，交由
+		// discardFailedCreation 拆毁 runtime，绝不让已删除会话重新注册。
+		if (this.disposedDuringInitialization.delete(session.sessionId)) {
+			throw new Error(`Session ${session.sessionId} was disposed while initializing`);
+		}
 		const existing = this.options.runtimeRegistry.get(session.sessionId);
 		if (existing) throw new Error(`Session ${session.sessionId} already has a live runtime`);
 		this.restoreSessionState(session);
@@ -570,8 +581,9 @@ export class RuntimeLifecycleCoordinator {
 
 	private async performDisposeRuntime(sessionId: string, abort: boolean): Promise<void> {
 		// 等待 in-flight 初始化必须有界：销毁（删除会话/关停）不该为挂死的
-		// 初始化永久等待。超时后处置当前已注册状态；迟到的初始化结果由
-		// bindRuntime 的冲突检测去重（后到者被 dispose）。
+		// 初始化永久等待。超时后处置当前已注册状态；若此时仍未注册，则留
+		// tombstone，由迟到的 bindRuntime 拆毁（见 disposedDuringInitialization）。
+		let initTimedOut = false;
 		try {
 			await withDeadline(
 				this.options.runtimeRegistry.awaitInitialization(sessionId),
@@ -579,10 +591,14 @@ export class RuntimeLifecycleCoordinator {
 				`Session ${sessionId} initialization did not settle within ${DISPOSE_AWAIT_TIMEOUT_MS / 1000}s before dispose`,
 			);
 		} catch {
+			initTimedOut = true;
 			console.error(`[Look] Timed out waiting for initialization before disposing session ${sessionId}`);
 		}
 		const managed = this.options.runtimeRegistry.get(sessionId);
-		if (!managed) return;
+		if (!managed) {
+			if (initTimedOut) this.disposedDuringInitialization.add(sessionId);
+			return;
+		}
 		const errors: unknown[] = [];
 		const attempt = (task: () => void) => {
 			try {
