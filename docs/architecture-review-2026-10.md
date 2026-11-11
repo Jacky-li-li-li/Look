@@ -204,3 +204,8 @@ Look 的主进程结构已经比较成熟：`Application`（生命周期）→ `
 - **PR #1**（旧布局 debounce/共享区）已过时：debounceTimers 已在 main 修复；共享区 `onAfterChange` + `shared:updated` 双刷新本身在“变更后 await 再 list”路径上不构成陈旧覆盖。真正的竞态是 **重叠的 `listSharedFiles` 后写覆盖**：`shared:updated` 处理已加 per-project generation，丢弃过期响应。
 - Nightly LLM E2E：未配置 `OPENAI_API_KEY` 时 workflow 与测试均 skip（成功退出），避免空密钥红失败。
 
+### 补记（2026-11-12）
+
+- **共享区已整体移除**：`shared-router`（9 个 `shared:*` IPC）、`WorkspaceFileService`、`SharedAreaPanel` 与 `~/.look/shared/` 目录在 `feat!: 移除共享区` 中删除，`file:read` / `file:write` 白名单收敛为项目 cwd。上文与共享区相关的段落（P0-5、P2-1 中 `SharedAreaPanel.tsx` 的行数、本条上一段 `listSharedFiles` 竞态）保留为**当时的审查记录**，不再对应现行代码。
+- 旧版本遗留的 `~/.look/shared/<projectId>/` 数据不会被自动删除（也不再被读取），需要用户自行清理。
+

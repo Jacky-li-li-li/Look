@@ -51,8 +51,8 @@
 | 图片附件栏 | `ImagePreviewBar.tsx` + `ChatInput.pendingImages` | 「待发送附件」交互先例：缩略图 + 移除按钮 |
 | 文件查看器/编辑器 | `FileViewerDialog.tsx`（windowMode / dockMode） | textarea 编辑 + Cmd+S、markdown 预览、shiki 高亮、diff、`viewingFileAtom` 驱动 |
 | `@path` 文件引用 chip | `contentEditableUtils.ts` | 输入框内 `@path` 渲染为 file chip；聊天内路径/`@` 引用芯片可点击打开查看器 |
-| 文件读写 IPC | `file-router.ts` | `file:read`（任意非敏感路径）、`file:write`（**仅项目根 + 共享区白名单**）、`file:stat` |
-| 会话工作区目录 | `look-storage.ts` | `workspaces/<projectId>/sessions/<sessionId>/*.jsonl`（pi JSONL）、`shared/<projectId>/`（共享区） |
+| 文件读写 IPC | `file-router.ts` | `file:read`（任意非敏感路径）、`file:write`（**仅项目根白名单**）、`file:stat` |
+| 会话工作区目录 | `look-storage.ts` | `workspaces/<projectId>/sessions/<sessionId>/*.jsonl`（pi JSONL） |
 
 ---
 
@@ -74,10 +74,10 @@
 
 ### 2.2 `file:write` 有项目白名单守卫（硬约束）
 
-`file-router.ts`：`file:write` 只允许写入**项目 cwd 或共享区**（`guardProjectPath`），且禁止敏感路径、防 symlink 逃逸。这意味着：
+`file-router.ts`：`file:write` 只允许写入**项目 cwd**（`guardProjectPath`），且禁止敏感路径、防 symlink 逃逸。这意味着：
 
 - 若附件存放在项目外（如 `~/.look/attachments/`），**不能复用 `file:write`** 让查看器保存；
-- 需要新增专有 IPC（`attachment:create/read/update/list`），或把附件放进项目共享区走现有守卫。
+- 必须新增专有 IPC（`attachment:create/read/update/list`）。（历史上可以「把附件放进项目共享区」以复用 `file:write` 守卫，共享区移除后这条捷径不再存在。）
 
 ### 2.3 附件内容必须可编辑、可保存、可随会话回放
 
@@ -94,7 +94,7 @@
 |---|---|---|---|---|
 | A. `<cwd>/.pi/attachments/` | 是（在项目根内） | 是（git 可见） | pi CLI 区，Look 不该写（AGENTS.md） | ✗ |
 | B. `<cwd>/.look-attachments/` | 是 | 是 | 自定义隐藏目录，污染仓库 | ✗ |
-| C. `$LOOK_HOME/shared/<projectId>/attachments/` | 是（共享区在白名单） | 否 | 语义是「项目共享文件」，自动写入会弄脏用户共享区 | △ |
+| C. `$LOOK_HOME/shared/<projectId>/attachments/` | 曾可复用 | 否 | 语义错位（会弄脏用户手动整理的文件）；共享区已移除，此路不通 | ✗ |
 | **D. `$LOOK_HOME/attachments/<projectId>/<sessionId>/`** | 需新 IPC | 否 | 会话级 Look 管理数据，与 JSONL 同区，清理策略一致 | ✅ 推荐 |
 
 选择 D 的理由：
@@ -105,7 +105,7 @@
 4. 不触碰用户 git 仓库，无提交噪音；
 5. 代价是新增少量 IPC —— 这正是 §2.2 的必然推论。
 
-> **明确澄清：附件保存路径不是共享区（`shared/<projectId>/`）**。共享区虽然在 `file:write` 白名单内（省 IPC 是它唯一的优点），但它是用户手动共享项目文件的地方，自动写入会弄脏共享区；且附件是会话级数据，放共享区会跨会话混杂、无法跟随会话生命周期清理。若产品上接受这些代价，备选 F（共享区）可作为省 IPC 的变体。
+> **明确澄清：附件保存路径不是共享区（`shared/<projectId>/`）**（补记：共享区已在「移除共享区」变更中删除，以下为当时的取舍记录）。共享区当时在 `file:write` 白名单内（省 IPC 是它唯一的优点），但它是用户手动整理项目文件的地方，自动写入会弄脏共享区；且附件是会话级数据，放共享区会跨会话混杂、无法跟随会话生命周期清理。备选 F（共享区）曾作为省 IPC 的变体，现已不可用。
 
 ### 决策 D2：附件怎么“发给”模型 → 默认内联注入，超大文件降级为引用
 
@@ -368,7 +368,7 @@ async sendMessage(sessionId, text, images, attachments?, sendMode?) {
 | C. 用户手动建文件再 `@` 引用 | 复用现有机制 | 多步骤、不自动，用户诉求就是“自动判断” | ✗ |
 | D. 扩展 pi SDK 增加 file part | 消息模型原生支持 | 需上游改动（`@earendil-works/pi-*`），发布节奏不可控，风险高 | ✗（远期可提案） |
 | E. 附件存 `<cwd>` 隐藏目录 | file:write 白名单内 | 污染用户 git 仓库 | ✗ |
-| F. 附件存 `shared/<projectId>` | 白名单内、零新 IPC | 语义错位（共享区是给用户手动共享用的），跨会话混杂 | △ |
+| F. 附件存 `shared/<projectId>` | 曾可零新 IPC | 语义错位（共享区是给用户手动整理用的），跨会话混杂；共享区已移除 | ✗ |
 
 ---
 
