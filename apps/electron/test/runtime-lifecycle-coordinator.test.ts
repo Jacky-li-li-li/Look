@@ -617,6 +617,41 @@ describe("RuntimeLifecycleCoordinator", () => {
 		}
 	});
 
+	it("disposes a runtime that finishes initializing after a timed-out dispose", async () => {
+		const session = makeSession("session-late");
+		const runtime = makeRuntime(session);
+		const fixture = makeCoordinator(runtime);
+		let releaseCreate!: () => void;
+		const createGate = new Promise<void>((resolve) => {
+			releaseCreate = resolve;
+		});
+		vi.mocked(fixture.dependencies.runtimeFactory.create).mockImplementation(async () => {
+			await createGate;
+			return runtime.runtime;
+		});
+
+		const creation = fixture.coordinator.createManagedRuntime(
+			"/project",
+			session.session.sessionManager,
+			"project-1",
+		);
+		vi.useFakeTimers();
+		try {
+			const disposal = fixture.coordinator.disposeRuntime("session-late");
+			await vi.advanceTimersByTimeAsync(DISPOSE_AWAIT_TIMEOUT_MS + 100);
+			await disposal;
+
+			// 处置已放弃等待，初始化此时才完成：不得注册已删除的会话。
+			releaseCreate();
+			await expect(creation).rejects.toThrow(/disposed while initializing/);
+		} finally {
+			vi.useRealTimers();
+		}
+
+		expect(runtime.dispose).toHaveBeenCalledTimes(1);
+		expect(fixture.runtimeRegistry.has("session-late")).toBe(false);
+	});
+
 	it("finishes teardown when abort fails and reports the disposal error", async () => {
 		const session = makeSession("session-1", true);
 		session.abort.mockRejectedValueOnce(new Error("abort failed"));

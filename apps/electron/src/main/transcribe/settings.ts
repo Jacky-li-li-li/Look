@@ -7,7 +7,7 @@
 
 import { join } from "node:path";
 import { getLookDir } from "@look/shared";
-import { readJsonFileOptional, writeJsonFileAsync } from "../utils/atomic-writer.js";
+import { readJsonFileWithCorruptBackup, writeJsonFileAsync } from "../utils/atomic-writer.js";
 
 export type ChineseOutput = "simplified" | "traditional-taiwan" | "traditional-hong-kong";
 
@@ -66,7 +66,7 @@ function normalize(value: unknown): TranscribeSettings {
 }
 
 export function readTranscribeSettings(): TranscribeSettings {
-	const raw = readJsonFileOptional<unknown>(transcribeSettingsPath());
+	const raw = readJsonFileWithCorruptBackup<unknown>(transcribeSettingsPath(), null);
 	return normalize(raw);
 }
 

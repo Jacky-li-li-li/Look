@@ -22,7 +22,7 @@ import {
 } from "@look/shared/look-storage";
 import { DEFAULT_PROJECT_ID, type ProjectInfo } from "@look/shared/types";
 import { v4 as uuidv4 } from "uuid";
-import { writeJsonFile } from "../utils/atomic-writer.js";
+import { backupCorruptFile, writeJsonFile } from "../utils/atomic-writer.js";
 
 export class ProjectService {
 	private readonly projects = new Map<string, ProjectInfo>();
@@ -61,29 +61,40 @@ export class ProjectService {
 				() => false,
 			);
 			if (indexExists) {
-				const raw = JSON.parse(await fsp.readFile(this.projectsIndexPath, "utf8"));
-				const seenCwds = new Set<string>();
-				for (const item of Array.isArray(raw.projects) ? raw.projects : []) {
-					let valid = false;
-					let cwd = item.cwd;
-					if (item.id === DEFAULT_PROJECT_ID) {
-						valid = true;
-					} else {
-						try {
-							await fsp.access(cwd);
-							const stat = await fsp.stat(cwd);
-							valid = stat.isDirectory();
-							if (valid) cwd = await fsp.realpath(cwd);
-						} catch {
-							valid = false;
-						}
-					}
-					const info: ProjectInfo = { ...item, cwd, valid };
-					if (seenCwds.has(info.cwd)) continue;
-					seenCwds.add(info.cwd);
-					this.projects.set(info.id, info);
+				let raw: { projects?: unknown } | null = null;
+				try {
+					raw = JSON.parse(await fsp.readFile(this.projectsIndexPath, "utf8"));
+				} catch (error) {
+					// 索引损坏：先备份原件再重建。否则 ensureDefaultProject →
+					// saveProjects 会用「只剩默认项目」覆盖用户全部书签。
+					const backupPath = backupCorruptFile(this.projectsIndexPath);
+					console.error(`[Look] projects.json is corrupt${backupPath ? ` (backup: ${backupPath})` : ""}:`, error);
 				}
-				this.saveProjects();
+				if (raw) {
+					const items = Array.isArray(raw.projects) ? raw.projects : [];
+					const seenCwds = new Set<string>();
+					for (const item of items) {
+						let valid = false;
+						let cwd = item.cwd;
+						if (item.id === DEFAULT_PROJECT_ID) {
+							valid = true;
+						} else {
+							try {
+								await fsp.access(cwd);
+								const stat = await fsp.stat(cwd);
+								valid = stat.isDirectory();
+								if (valid) cwd = await fsp.realpath(cwd);
+							} catch {
+								valid = false;
+							}
+						}
+						const info: ProjectInfo = { ...item, cwd, valid };
+						if (seenCwds.has(info.cwd)) continue;
+						seenCwds.add(info.cwd);
+						this.projects.set(info.id, info);
+					}
+					this.saveProjects();
+				}
 			}
 		} catch (error) {
 			console.error("[Look] Failed to load projects:", error);

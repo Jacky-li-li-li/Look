@@ -35,7 +35,7 @@ import type {
 	UserSettings,
 } from "@look/shared/types";
 import fs from "fs";
-import { writeJsonFile } from "../utils/atomic-writer.js";
+import { backupCorruptFile, writeJsonFile } from "../utils/atomic-writer.js";
 
 export type { LookTone, UILanguage, UserSettings } from "@look/shared/types";
 
@@ -256,7 +256,12 @@ export class UserSettingsStore {
 				return { settings: { ...UI_DEFAULTS, ...parsed }, migrated };
 			}
 		} catch (err) {
-			console.warn("[Look] Failed to load ui-settings.json, using defaults:", err);
+			// 损坏内容先备份，避免后续 writeUi() 用默认值覆盖原件。
+			const backupPath = backupCorruptFile(this.uiSettingsPath);
+			console.warn(
+				`[Look] ui-settings.json is corrupt${backupPath ? ` (backup: ${backupPath})` : ""}, using defaults:`,
+				err,
+			);
 		}
 		return { settings: { ...UI_DEFAULTS }, migrated: false };
 	}

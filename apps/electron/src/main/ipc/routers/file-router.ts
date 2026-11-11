@@ -53,10 +53,15 @@ async function guardProjectPath(rawPath: unknown, label: string, projectRoots: s
 	if (!isInsideAnyRoot(resolved, roots)) {
 		throw new Error(`Path denied for ${label}: outside allowed project directories`);
 	}
+	// 项目根可能指向敏感目录（例如用户把 ~/.ssh 注册为项目）：写入路径必须与
+	// file:read 使用同一敏感区边界，否则「项目内」就能改写 authorized_keys。
+	if (isSensitivePath(resolved)) {
+		throw new Error(`Path denied for ${label}: sensitive location`);
+	}
 	// Reject symlinks that escape the allowed roots.
 	try {
 		const real = await fs.promises.realpath(resolved);
-		if (!isInsideAnyRoot(real, roots)) {
+		if (!isInsideAnyRoot(real, roots) || isSensitivePath(real)) {
 			throw new Error(`Path denied for ${label}: symlink escapes allowed project directories`);
 		}
 	} catch (error) {

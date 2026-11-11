@@ -2,7 +2,7 @@
 // Electron Main Process Entry Point
 // ============================================================
 
-import { app, protocol } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import { resolveDevLookHome } from "./system/dev-look-home.js";
 import { applyTranscribeLibraryOverride } from "./system/transcribe-library.js";
 
@@ -48,14 +48,29 @@ if (devLookHome) process.env.LOOK_HOME = devLookHome;
 // 必须在首次转写调用前设置（transcribe-cpp 懒加载），这里在启动早期执行。
 applyTranscribeLibraryOverride();
 
-// Dynamic import ensures LOOK_HOME is set before look-storage evaluates.
-// NOTE: Do NOT use a top-level `await` here. In Electron 42 + ESM main-process
-// entry, awaiting `application.start()` at the module top level deadlocks
-// `app.whenReady()` (the module evaluation is suspended before the ready event
-// can be delivered). Run startup asynchronously instead.
-void import("./application.js").then(({ Application }) => {
-	const application = new Application();
-	void application.start().catch((error) => {
-		console.error("[Look] Fatal: Application start failed", error);
+// 单实例锁必须在创建任何窗口/写入任何状态之前取得。两个实例共享同一
+// LOOK_HOME 时，projects.json / ui-settings.json 会整文件互相覆盖，且
+// look:// 回调只会送达其中一个实例。第二个实例直接退出，并聚焦已有窗口。
+if (!app.requestSingleInstanceLock()) {
+	app.quit();
+} else {
+	app.on("second-instance", () => {
+		const [window] = BrowserWindow.getAllWindows();
+		if (!window) return;
+		if (window.isMinimized()) window.restore();
+		window.show();
+		window.focus();
 	});
-});
+
+	// Dynamic import ensures LOOK_HOME is set before look-storage evaluates.
+	// NOTE: Do NOT use a top-level `await` here. In Electron 42 + ESM main-process
+	// entry, awaiting `application.start()` at the module top level deadlocks
+	// `app.whenReady()` (the module evaluation is suspended before the ready event
+	// can be delivered). Run startup asynchronously instead.
+	void import("./application.js").then(({ Application }) => {
+		const application = new Application();
+		void application.start().catch((error) => {
+			console.error("[Look] Fatal: Application start failed", error);
+		});
+	});
+}

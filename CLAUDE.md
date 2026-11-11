@@ -197,7 +197,6 @@ No Look-managed user data is written into `<cwd>/.pi/`. Dev unpacked → `~/.loo
 | `agents/` + `agents/marketplace/` | User + built-in Agent definitions |
 | `builtin-skills/` | Built-in Skills (synced from `default-skills/`) |
 | `projects/<id>/` | Per-project SYSTEM.md, settings, agents |
-| `shared/<id>/` | Per-project shared area |
 | `workspaces/<id>/sessions/` | pi SessionManager JSONL |
 | `workspaces/<id>/subsessions/` | SubAgent child sessions |
 

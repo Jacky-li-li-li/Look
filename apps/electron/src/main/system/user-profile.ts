@@ -3,7 +3,7 @@
 // ============================================================
 
 import { getUserProfilePath } from "@look/shared/look-storage";
-import { readJsonFile, writeJsonFile } from "../utils/atomic-writer.js";
+import { readJsonFileWithCorruptBackup, writeJsonFile } from "../utils/atomic-writer.js";
 
 export interface UserProfile {
 	userId: string;
@@ -24,7 +24,7 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 function readRaw(): Partial<UserProfile> {
-	return readJsonFile<Partial<UserProfile>>(getUserProfilePath(), {});
+	return readJsonFileWithCorruptBackup<Partial<UserProfile>>(getUserProfilePath(), {});
 }
 
 function writeRaw(profile: UserProfile): void {

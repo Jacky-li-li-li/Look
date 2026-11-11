@@ -51,6 +51,25 @@ describe("ProjectRuntimeService", () => {
 		}) as unknown as ManagedRuntime;
 	}
 
+	it("rejects sensitive project paths", async () => {
+		const home = mkdtempSync(join(tmpdir(), "look-sensitive-home-"));
+		const ssh = join(home, ".ssh");
+		mkdirSync(ssh);
+		vi.stubEnv("HOME", realpathSync(home));
+		try {
+			const service = new ProjectRuntimeService({
+				projectService: makeProjectService(),
+				sessionCatalog: makeSessionCatalog(),
+				runtimeRegistry: { values: () => [][Symbol.iterator]() },
+			});
+			// 项目根会成为 file:write 白名单，敏感目录不得注册。
+			await expect(service.createProject(ssh)).rejects.toThrow("protected location");
+		} finally {
+			vi.unstubAllEnvs();
+			rmSync(home, { recursive: true, force: true });
+		}
+	});
+
 	it("rejects non-directory project paths", async () => {
 		const service = new ProjectRuntimeService({
 			projectService: makeProjectService(),

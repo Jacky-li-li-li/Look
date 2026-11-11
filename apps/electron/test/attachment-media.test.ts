@@ -2,11 +2,12 @@
 // attachment-service buildPrompt — 音视频附件不按文本读取
 // ============================================================
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
-import { getAttachmentsDir } from "@look/shared/look-storage";
+import { getAttachmentsDir, getLookDir } from "@look/shared/look-storage";
 import type { AttachmentRef } from "@look/shared/types";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	ATTACHMENT_MAX_BYTES,
 	AttachmentService,
@@ -57,9 +58,20 @@ describe("attachment-service importAttachmentFromPath（按字节导入媒体）
 	const projectId = "p-media";
 	const sessionId = "s-media";
 	const dir = getAttachmentsDir(projectId, sessionId);
+	// 源文件不能放在 LOOK_HOME 内：导入守卫与 file:read 共用敏感区边界，
+	// 真实场景里用户从项目/下载目录选择源文件。
+	let sourceDir: string;
+
+	beforeAll(async () => {
+		sourceDir = await mkdtemp(path.join(os.tmpdir(), "look-attachment-src-"));
+	});
+
+	afterAll(async () => {
+		await rm(sourceDir, { recursive: true, force: true });
+	});
 
 	it("源文件字节原样拷贝，不经过文本解码", async () => {
-		const src = path.join(dir, "source.mp4");
+		const src = path.join(sourceDir, "source.mp4");
 		const bytes = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x88, 0x42, 0x11, 0x22]);
 		await mkdir(dir, { recursive: true });
 		await writeFile(src, bytes);
@@ -74,7 +86,7 @@ describe("attachment-service importAttachmentFromPath（按字节导入媒体）
 	});
 
 	it("未传 mimeType 时按扩展名推导", async () => {
-		const src = path.join(dir, "source.m4a");
+		const src = path.join(sourceDir, "source.m4a");
 		const bytes = Buffer.from([0x00, 0xff, 0x13, 0x37]);
 		await mkdir(dir, { recursive: true });
 		await writeFile(src, bytes);
@@ -85,8 +97,19 @@ describe("attachment-service importAttachmentFromPath（按字节导入媒体）
 		expect(att.mimeType).toBe("text/plain");
 	});
 
+	it("拒绝从 LOOK_HOME 敏感区导入源文件", async () => {
+		const sensitiveDir = path.join(getLookDir(), "secrets");
+		await mkdir(sensitiveDir, { recursive: true });
+		const src = path.join(sensitiveDir, "auth.json");
+		await writeFile(src, "{}");
+
+		expect(() => attachmentService.importAttachmentFromPath(projectId, sessionId, "leak.json", src)).toThrow(
+			/protected location/,
+		);
+	});
+
 	it("超过上限的源文件拒绝导入", async () => {
-		const src = path.join(dir, "big.mp4");
+		const src = path.join(sourceDir, "big.mp4");
 		await mkdir(dir, { recursive: true });
 		await writeFile(src, Buffer.alloc(ATTACHMENT_MAX_BYTES + 1));
 
